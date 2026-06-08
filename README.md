@@ -29,6 +29,8 @@ npm run cli -- ask "compute 3 / 4 + 5 / 8"
 npm run cli -- ask "for all integers n, n^2+n+1 is even"
 npm run cli -- ask "for all integers n, n^2+n+1 is even" -- --out receipts/false-parity.json
 npm run cli -- replay receipts/false-parity.json
+npm run cli -- render receipts/false-parity.json markdown receipts/false-parity.md
+npm run cli -- render receipts/false-parity.json html receipts/false-parity.html
 npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json
 npm run cli -- bench run packages/benchmarks/suites/physics-seed.json
 npm run cli -- bench run packages/benchmarks/suites/symbolic-seed.json
@@ -38,7 +40,7 @@ npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
 npm run cli -- check docs/examples/strict-claims.md
 ```
 
-The current MVP is intentionally small and honest. It supports exact rational arithmetic, finite counterexample search, dimensional analysis, a local SymPy symbolic adapter, receipt replay, benchmark runs, and a local MCP server. Lean, Sage, SMT, and RAG adapters are planned as modular packages.
+The current MVP is intentionally small and honest. It supports exact rational arithmetic, finite counterexample search, dimensional analysis, a local SymPy symbolic adapter, receipt replay, Markdown/HTML receipt export, benchmark runs, and a local MCP server. Lean, Sage, SMT, and RAG adapters are planned as modular packages.
 
 Symbolic prompts use a local Python subprocess and require SymPy:
 

@@ -6,9 +6,11 @@ import { parseBenchmarkSuite, runBenchmarkSuite, type BenchmarkRun } from "@theo
 import {
   checkClaimFile,
   createReceipt,
+  renderReceipt,
   replayReceipt,
   type ClaimFileCheck,
   type Receipt,
+  type ReceiptRenderFormat,
   type ReplayResult
 } from "@theorem-workbench/core";
 
@@ -98,6 +100,36 @@ program
   });
 
 program
+  .command("render")
+  .description("Render a saved receipt JSON file as Markdown or HTML.")
+  .argument("<receipt>", "Path to a receipt JSON file")
+  .argument("[format]", "Optional render format: markdown or html")
+  .argument("[out]", "Optional output path")
+  .option("--format <format>", "markdown or html")
+  .option("--out <path>", "Write rendered output to a file")
+  .action(
+    async (
+      receiptPath: string,
+      formatArg: string | undefined,
+      outArg: string | undefined,
+      options: { format?: string; out?: string }
+    ) => {
+      const receipt = JSON.parse(await readFile(resolve(receiptPath), "utf8")) as Receipt;
+      const format = parseRenderFormat(options.format ?? formatArg ?? "markdown");
+      const outPath = options.out ?? outArg;
+      const rendered = renderReceipt(receipt, format);
+
+      if (outPath) {
+        await writeText(outPath, rendered);
+        console.log(`Wrote ${format} receipt: ${outPath}`);
+        return;
+      }
+
+      console.log(rendered);
+    }
+  );
+
+program
   .command("check")
   .description("Check theorem-workbench fenced claim blocks in Markdown files.")
   .argument("<files...>", "Markdown files to check")
@@ -181,6 +213,14 @@ function parseAskArgs(tokens: string[]): { problem: string; json: boolean; out?:
   }
 
   return { problem, json, out };
+}
+
+function parseRenderFormat(format: string): ReceiptRenderFormat {
+  if (format === "markdown" || format === "html") {
+    return format;
+  }
+
+  throw new Error(`Unsupported receipt render format ${JSON.stringify(format)}. Use markdown or html.`);
 }
 
 function printReceipt(receipt: Receipt, outPath?: string): void {
@@ -278,4 +318,10 @@ async function writeJson(path: string, value: unknown): Promise<void> {
   const target = resolve(path);
   await mkdir(dirname(target), { recursive: true });
   await writeFile(target, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function writeText(path: string, value: string): Promise<void> {
+  const target = resolve(path);
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, value);
 }

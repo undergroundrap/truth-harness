@@ -77,10 +77,11 @@ The version that a serious AI lab notices is not a slick chat UI. It is a trust 
 2. `theorem ask` can write a JSON receipt with `--out`. Status: done.
 3. `theorem replay` can replay a saved receipt. Status: done.
 4. `theorem bench run` produces readable math, physics, and symbolic score reports. Status: done.
-5. README explains the trust labels in plain language. Status: done.
-6. One GIF or terminal recording shows refutation and honest uncertainty. Status: pending.
-7. At least 25 seed benchmark tasks exist. Status: done.
-8. GitHub repo has issues labeled `good first proof`, `adapter`, `benchmark`, and `trust-model`. Status: pending.
+5. `theorem render` can export receipts as Markdown and HTML. Status: done.
+6. README explains the trust labels in plain language. Status: done.
+7. One GIF or terminal recording shows refutation and honest uncertainty. Status: pending.
+8. At least 25 seed benchmark tasks exist. Status: done.
+9. GitHub repo has issues labeled `good first proof`, `adapter`, `benchmark`, and `trust-model`. Status: pending.
 
 ## What To Build Next
 
@@ -88,7 +89,7 @@ Priority 1: make the demo undeniable.
 
 - Add 25 benchmark tasks.
 - Add receipt JSON schema.
-- Add HTML receipt renderer or Markdown export.
+- Add HTML receipt renderer or Markdown export. Status: done.
 - Add `theorem replay`.
 
 Priority 2: become useful to real math users.

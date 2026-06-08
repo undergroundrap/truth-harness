@@ -16,6 +16,7 @@ describe("Theorem MCP server", () => {
       expect(tools.tools.map((tool) => tool.name).sort()).toEqual([
         "theorem_ask",
         "theorem_benchmark_run",
+        "theorem_render_receipt",
         "theorem_replay"
       ]);
 
@@ -27,16 +28,30 @@ describe("Theorem MCP server", () => {
       });
 
       expect(result.isError).toBe(false);
-      const content = Array.isArray(result.content) ? result.content : [];
-      const first = content[0];
-      const text =
-        first && typeof first === "object" && "type" in first && first.type === "text" && "text" in first
-          ? String(first.text)
-          : "";
+      const text = firstText(result.content);
       expect(text).toContain("\"trust\": \"refuted\"");
+
+      const renderResult = await client.callTool({
+        name: "theorem_render_receipt",
+        arguments: {
+          receiptJson: JSON.stringify(JSON.parse(text).receipt),
+          format: "markdown"
+        }
+      });
+      const renderedText = firstText(renderResult.content);
+      expect(renderedText).toContain("# Theorem Receipt");
+      expect(renderedText).toContain("refuted");
     } finally {
       await client.close();
       await server.close();
     }
   });
 });
+
+function firstText(content: unknown): string {
+  const items = Array.isArray(content) ? content : [];
+  const first = items[0];
+  return first && typeof first === "object" && "type" in first && first.type === "text" && "text" in first
+    ? String(first.text)
+    : "";
+}

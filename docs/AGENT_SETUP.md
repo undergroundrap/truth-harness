@@ -24,6 +24,7 @@ node packages/mcp-server/dist/index.js
 | `theorem_ask` | Create a receipt for a math prompt, with optional strict mode. |
 | `theorem_benchmark_run` | Run the seed benchmark suite or a workspace-local suite path. |
 | `theorem_replay` | Replay a receipt from JSON or a workspace-local receipt path. |
+| `theorem_render_receipt` | Render a receipt as Markdown or HTML for reports and documents. |
 
 Strict mode is useful when an agent must not proceed from unverified claims. If `theorem_ask` returns `unverified` and `strict` is true, the MCP tool response is marked as an error.
 

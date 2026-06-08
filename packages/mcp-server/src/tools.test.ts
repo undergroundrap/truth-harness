@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   handleTheoremAsk,
   handleTheoremBenchmarkRun,
+  handleTheoremRenderReceipt,
   handleTheoremReplay,
   toolJson
 } from "./tools.js";
@@ -54,6 +55,17 @@ describe("MCP tool handlers", () => {
 
     expect(replay.passed).toBe(true);
     expect(JSON.parse(await readFile(receiptPath, "utf8")).runId).toBe(receipt.runId);
+  });
+
+  it("renders receipts for agent reports", async () => {
+    const receipt = handleTheoremAsk({ problem: "compute 2 + 2" }).receipt;
+    const result = await handleTheoremRenderReceipt({
+      receiptJson: JSON.stringify(receipt),
+      format: "markdown"
+    });
+
+    expect(result.rendered).toContain(`# Theorem Receipt ${receipt.runId}`);
+    expect(result.rendered).toContain("exact-computed");
   });
 
   it("returns MCP-compatible JSON content", () => {

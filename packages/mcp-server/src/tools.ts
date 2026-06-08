@@ -2,7 +2,14 @@ import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseBenchmarkSuite, runBenchmarkSuite, type BenchmarkRun } from "@theorem-workbench/benchmarks";
-import { createReceipt, replayReceipt, type Receipt, type ReplayResult } from "@theorem-workbench/core";
+import {
+  createReceipt,
+  renderReceipt,
+  replayReceipt,
+  type Receipt,
+  type ReceiptRenderFormat,
+  type ReplayResult
+} from "@theorem-workbench/core";
 
 export interface TheoremAskInput {
   problem: string;
@@ -22,6 +29,19 @@ export interface TheoremBenchmarkRunInput {
 export interface TheoremReplayInput {
   receiptJson?: string;
   receiptPath?: string;
+}
+
+export interface TheoremRenderReceiptInput {
+  receiptJson?: string;
+  receiptPath?: string;
+  format?: ReceiptRenderFormat;
+}
+
+export interface TheoremRenderReceiptOutput {
+  runId: string;
+  trust: Receipt["trust"];
+  format: ReceiptRenderFormat;
+  rendered: string;
 }
 
 export function handleTheoremAsk(input: TheoremAskInput): TheoremAskOutput {
@@ -44,16 +64,19 @@ export async function handleTheoremBenchmarkRun(input: TheoremBenchmarkRunInput)
 }
 
 export async function handleTheoremReplay(input: TheoremReplayInput): Promise<ReplayResult> {
-  if (input.receiptJson && input.receiptPath) {
-    throw new Error("Provide receiptJson or receiptPath, not both.");
-  }
+  return replayReceipt(await readReceiptInput(input));
+}
 
-  const raw = input.receiptJson ?? (input.receiptPath ? await readFile(resolveWorkspacePath(input.receiptPath), "utf8") : undefined);
-  if (!raw) {
-    throw new Error("Provide receiptJson or receiptPath.");
-  }
+export async function handleTheoremRenderReceipt(input: TheoremRenderReceiptInput): Promise<TheoremRenderReceiptOutput> {
+  const format = input.format ?? "markdown";
+  const receipt = await readReceiptInput(input);
 
-  return replayReceipt(JSON.parse(raw) as Receipt);
+  return {
+    runId: receipt.runId,
+    trust: receipt.trust,
+    format,
+    rendered: renderReceipt(receipt, format)
+  };
 }
 
 export function toolJson(value: unknown, options: { isError?: boolean } = {}) {
@@ -66,6 +89,19 @@ export function toolJson(value: unknown, options: { isError?: boolean } = {}) {
       }
     ]
   };
+}
+
+async function readReceiptInput(input: TheoremReplayInput): Promise<Receipt> {
+  if (input.receiptJson && input.receiptPath) {
+    throw new Error("Provide receiptJson or receiptPath, not both.");
+  }
+
+  const raw = input.receiptJson ?? (input.receiptPath ? await readFile(resolveWorkspacePath(input.receiptPath), "utf8") : undefined);
+  if (!raw) {
+    throw new Error("Provide receiptJson or receiptPath.");
+  }
+
+  return JSON.parse(raw) as Receipt;
 }
 
 function resolveWorkspacePath(path: string): string {
