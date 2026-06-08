@@ -3,7 +3,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { Command } from "commander";
 import { parseBenchmarkSuite, runBenchmarkSuite, type BenchmarkRun } from "@theorem-workbench/benchmarks";
-import { createReceipt, type Receipt } from "@theorem-workbench/core";
+import { createReceipt, replayReceipt, type Receipt, type ReplayResult } from "@theorem-workbench/core";
 
 const program = new Command();
 
@@ -15,12 +15,23 @@ program
 program
   .command("ask")
   .description("Create a proof receipt for a math prompt.")
-  .argument("<problem...>", "Problem statement")
-  .option("--json", "Print the full receipt JSON")
-  .option("--out <path>", "Write the full receipt JSON to a file")
-  .action(async (problemParts: string[], options: { json?: boolean; out?: string }) => {
-    const problem = problemParts.join(" ");
-    const receipt = createReceipt(problem);
+  .allowUnknownOption(true)
+  .argument("[tokens...]", "Problem tokens plus optional --json and --out <path> flags")
+  .addHelpText(
+    "after",
+    `
+
+Ask flags:
+  --json              Print the full receipt JSON
+  --out <path>        Write the full receipt JSON to a file
+
+With npm scripts, pass ask flags after an extra separator:
+  npm run cli -- ask "compute 2 + 2" -- --json
+`
+  )
+  .action(async (tokens: string[]) => {
+    const options = parseAskArgs(tokens);
+    const receipt = createReceipt(options.problem);
 
     if (options.out) {
       await writeJson(options.out, receipt);
@@ -60,6 +71,26 @@ bench
   });
 
 program
+  .command("replay")
+  .description("Replay a saved receipt JSON and compare trust-critical fields.")
+  .argument("<receipt>", "Path to a receipt JSON file")
+  .option("--json", "Print the full replay result JSON")
+  .action(async (receiptPath: string, options: { json?: boolean }) => {
+    const receipt = JSON.parse(await readFile(resolve(receiptPath), "utf8")) as Receipt;
+    const replay = replayReceipt(receipt);
+
+    if (options.json) {
+      printJson(replay);
+      return;
+    }
+
+    printReplayResult(replay);
+    if (!replay.passed) {
+      process.exitCode = 1;
+    }
+  });
+
+program
   .command("doctor")
   .description("Show local adapter and trust-surface status.")
   .action(() => {
@@ -77,6 +108,45 @@ program
   });
 
 await program.parseAsync(process.argv);
+
+function parseAskArgs(tokens: string[]): { problem: string; json: boolean; out?: string } {
+  const problemTokens: string[] = [];
+  let json = false;
+  let out: string | undefined;
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+
+    if (token === "--") {
+      continue;
+    }
+
+    if (token === "--json") {
+      json = true;
+      continue;
+    }
+
+    if (token === "--out") {
+      out = tokens[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith("--out=")) {
+      out = token.slice("--out=".length);
+      continue;
+    }
+
+    problemTokens.push(token);
+  }
+
+  const problem = problemTokens.join(" ").trim();
+  if (!problem) {
+    throw new Error("Missing problem. Example: theorem ask \"compute 2 + 2\"");
+  }
+
+  return { problem, json, out };
+}
 
 function printReceipt(receipt: Receipt, outPath?: string): void {
   console.log(`Theorem receipt ${receipt.runId}`);
@@ -122,6 +192,22 @@ function printBenchmarkRun(run: BenchmarkRun, outPath?: string): void {
   if (outPath) {
     console.log("");
     console.log(`Wrote benchmark JSON: ${outPath}`);
+  }
+}
+
+function printReplayResult(replay: ReplayResult): void {
+  const status = replay.passed ? "PASS" : "FAIL";
+  console.log(`${status} replay ${replay.expectedRunId}`);
+  console.log(`Expected trust: ${replay.expectedTrust}`);
+  console.log(`Actual trust: ${replay.actualTrust}`);
+  console.log(`Actual run: ${replay.actualRunId}`);
+
+  if (replay.differences.length > 0) {
+    console.log("");
+    console.log("Differences:");
+    for (const difference of replay.differences) {
+      console.log(`  ${difference}`);
+    }
   }
 }
 

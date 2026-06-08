@@ -255,7 +255,7 @@ function buildReceipt(args: {
   const runHash = stableHash({
     problem: args.problem,
     normalizedProblem: args.normalizedProblem,
-    nodes: args.nodes,
+    nodes: args.nodes.map(({ createdAt: _createdAt, ...node }) => node),
     edges: args.edges,
     artifacts: args.artifacts
   }).slice(0, 16);

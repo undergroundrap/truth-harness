@@ -1,7 +1,7 @@
 {
   "id": "foundations-seed",
   "title": "Foundations Seed",
-  "description": "Tiny launch suite for exact arithmetic, honest uncertainty, and false-claim refutation.",
+  "description": "Launch suite for exact arithmetic, honest uncertainty, false-claim refutation, and unsupported-task humility.",
   "tasks": [
     {
       "id": "exact-order-of-operations",
@@ -22,6 +22,48 @@
       "expectSummaryIncludes": "1024"
     },
     {
+      "id": "exact-parentheses",
+      "prompt": "calculate (2 + 3) * 4",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "20"
+    },
+    {
+      "id": "exact-nested-rational",
+      "prompt": "compute (1 / 2 + 1 / 3) * 6",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "5"
+    },
+    {
+      "id": "exact-subtract-products",
+      "prompt": "compute 6 * 7 - 5 * 8",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "2"
+    },
+    {
+      "id": "exact-negative-rational",
+      "prompt": "compute 1 - 5 / 2",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "-3/2"
+    },
+    {
+      "id": "exact-power-rational-result",
+      "prompt": "compute (2^5 + 1) / 3",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "11"
+    },
+    {
+      "id": "exact-parenthesized-division",
+      "prompt": "evaluate 7 * (8 - 3) / 5",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "7"
+    },
+    {
+      "id": "exact-reduce-fraction",
+      "prompt": "calculate 10 / 4 + 1 / 2",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "3"
+    },
+    {
       "id": "false-parity-plus-one",
       "prompt": "for all integers n, n^2+n+1 is even",
       "expectTrust": "refuted",
@@ -34,10 +76,82 @@
       "expectSummaryIncludes": "n=-20"
     },
     {
+      "id": "false-linear-even",
+      "prompt": "for all integers n, 2*n+1 is even",
+      "expectTrust": "refuted",
+      "expectSummaryIncludes": "n=-20"
+    },
+    {
+      "id": "false-shifted-parity",
+      "prompt": "for all integers n, n^2+n+2 is odd",
+      "expectTrust": "refuted",
+      "expectSummaryIncludes": "n=-20"
+    },
+    {
+      "id": "false-difference-parity",
+      "prompt": "for all integers n, n^2-n is odd",
+      "expectTrust": "refuted",
+      "expectSummaryIncludes": "n=-20"
+    },
+    {
+      "id": "false-square-even",
+      "prompt": "for all integers n, n^2 is even",
+      "expectTrust": "refuted",
+      "expectSummaryIncludes": "n=-19"
+    },
+    {
+      "id": "false-triple-odd",
+      "prompt": "for all integers n, 3*n is odd",
+      "expectTrust": "refuted",
+      "expectSummaryIncludes": "n=-20"
+    },
+    {
+      "id": "false-successor-even",
+      "prompt": "for all integers n, n+1 is even",
+      "expectTrust": "refuted",
+      "expectSummaryIncludes": "n=-20"
+    },
+    {
       "id": "honest-unverified-parity",
       "prompt": "for all integers n, n^2+n is even",
       "expectTrust": "unverified",
       "expectSummaryIncludes": "unverified"
+    },
+    {
+      "id": "honest-shifted-odd",
+      "prompt": "for all integers n, n^2+n+1 is odd",
+      "expectTrust": "unverified",
+      "expectSummaryIncludes": "unverified"
+    },
+    {
+      "id": "honest-linear-even",
+      "prompt": "for all integers n, 2*n is even",
+      "expectTrust": "unverified",
+      "expectSummaryIncludes": "unverified"
+    },
+    {
+      "id": "honest-linear-odd",
+      "prompt": "for all integers n, 2*n+1 is odd",
+      "expectTrust": "unverified",
+      "expectSummaryIncludes": "unverified"
+    },
+    {
+      "id": "honest-difference-even",
+      "prompt": "for all integers n, n^2-n is even",
+      "expectTrust": "unverified",
+      "expectSummaryIncludes": "unverified"
+    },
+    {
+      "id": "honest-shifted-even",
+      "prompt": "for all integers n, n^2+n+2 is even",
+      "expectTrust": "unverified",
+      "expectSummaryIncludes": "unverified"
+    },
+    {
+      "id": "unsupported-calculus",
+      "prompt": "integrate x^2 from 0 to 1",
+      "expectTrust": "unverified",
+      "expectSummaryIncludes": "Unsupported"
     }
   ]
 }

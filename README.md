@@ -26,6 +26,8 @@ npm install
 npm run build
 npm run cli -- ask "compute 3 / 4 + 5 / 8"
 npm run cli -- ask "for all integers n, n^2+n+1 is even"
+npm run cli -- ask "for all integers n, n^2+n+1 is even" -- --out receipts/false-parity.json
+npm run cli -- replay receipts/false-parity.json
 npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json
 ```
 
@@ -38,3 +40,5 @@ See [docs/RESEARCH_AND_ARCHITECTURE.md](docs/RESEARCH_AND_ARCHITECTURE.md) for t
 See [docs/CREDIBILITY_AND_GROWTH_STRATEGY.md](docs/CREDIBILITY_AND_GROWTH_STRATEGY.md) for the public positioning, expert credibility rules, viral wedges, launch demos, and community strategy.
 
 See [docs/LAUNCH_PLAN.md](docs/LAUNCH_PLAN.md) for the first Hacker News-ready demo path.
+
+See [docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md](docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md) for the open-source, company-building, and acquisition-path strategy.
