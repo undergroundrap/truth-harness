@@ -1,0 +1,34 @@
+name: Benchmark task
+description: Propose a reproducible task for the benchmark suite.
+title: "benchmark: "
+labels: ["benchmark"]
+body:
+  - type: textarea
+    id: prompt
+    attributes:
+      label: Prompt
+      description: The exact prompt or claim Theorem Workbench should evaluate.
+    validations:
+      required: true
+  - type: dropdown
+    id: expected_trust
+    attributes:
+      label: Expected trust label
+      options:
+        - proved
+        - exact-computed
+        - bounded-numeric
+        - smt-checked
+        - source-cited
+        - cross-checked
+        - unverified
+        - refuted
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Why this matters
+      description: Explain what capability or failure mode this task covers.
+    validations:
+      required: true

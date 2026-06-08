@@ -3,7 +3,14 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { Command } from "commander";
 import { parseBenchmarkSuite, runBenchmarkSuite, type BenchmarkRun } from "@theorem-workbench/benchmarks";
-import { createReceipt, replayReceipt, type Receipt, type ReplayResult } from "@theorem-workbench/core";
+import {
+  checkClaimFile,
+  createReceipt,
+  replayReceipt,
+  type ClaimFileCheck,
+  type Receipt,
+  type ReplayResult
+} from "@theorem-workbench/core";
 
 const program = new Command();
 
@@ -86,6 +93,32 @@ program
 
     printReplayResult(replay);
     if (!replay.passed) {
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command("check")
+  .description("Check theorem-workbench fenced claim blocks in Markdown files.")
+  .argument("<files...>", "Markdown files to check")
+  .option("--json", "Print the full claim check JSON")
+  .action(async (files: string[], options: { json?: boolean }) => {
+    const results = await Promise.all(
+      files.map(async (file) => checkClaimFile(await readFile(resolve(file), "utf8"), file))
+    );
+
+    if (options.json) {
+      printJson({
+        total: results.reduce((sum, result) => sum + result.total, 0),
+        passed: results.reduce((sum, result) => sum + result.passed, 0),
+        failed: results.reduce((sum, result) => sum + result.failed, 0),
+        results
+      });
+      return;
+    }
+
+    printClaimFileChecks(results);
+    if (results.some((result) => result.failed > 0)) {
       process.exitCode = 1;
     }
   });
@@ -207,6 +240,30 @@ function printReplayResult(replay: ReplayResult): void {
     console.log("Differences:");
     for (const difference of replay.differences) {
       console.log(`  ${difference}`);
+    }
+  }
+}
+
+function printClaimFileChecks(results: ClaimFileCheck[]): void {
+  const total = results.reduce((sum, result) => sum + result.total, 0);
+  const passed = results.reduce((sum, result) => sum + result.passed, 0);
+  const failed = results.reduce((sum, result) => sum + result.failed, 0);
+
+  console.log(`Theorem claim check: ${passed}/${total} passed`);
+  if (failed > 0) {
+    console.log(`Failed: ${failed}`);
+  }
+  console.log("");
+
+  for (const result of results) {
+    console.log(`${result.filePath}: ${result.passed}/${result.total} passed`);
+
+    for (const check of result.checks) {
+      const status = check.passed ? "PASS" : "FAIL";
+      console.log(
+        `  ${status} L${check.block.startLine}: ${check.receipt.trust} - ${check.receipt.summary}`
+      );
+      console.log(`       ${check.message}`);
     }
   }
 }

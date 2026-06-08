@@ -1,0 +1,26 @@
+name: Adapter request
+description: Request or design a solver/proof/RAG adapter.
+title: "adapter: "
+labels: ["adapter"]
+body:
+  - type: input
+    id: tool
+    attributes:
+      label: Tool or system
+      placeholder: "Lean, SymPy, SageMath, Z3, cvc5, Pint, Arb..."
+    validations:
+      required: true
+  - type: textarea
+    id: use_cases
+    attributes:
+      label: Use cases
+      description: What claims or computations should this adapter verify?
+    validations:
+      required: true
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Replay artifacts
+      description: What inputs, outputs, proof files, traces, or citations should be stored?
+    validations:
+      required: true

@@ -29,6 +29,7 @@ npm run cli -- ask "for all integers n, n^2+n+1 is even"
 npm run cli -- ask "for all integers n, n^2+n+1 is even" -- --out receipts/false-parity.json
 npm run cli -- replay receipts/false-parity.json
 npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json
+npm run cli -- check docs/examples/strict-claims.md
 ```
 
 The current MVP is intentionally small and honest. It supports exact rational arithmetic, finite counterexample search, receipt replay, benchmark runs, and a local MCP server. Lean, SymPy/Sage, SMT, and RAG adapters are planned as modular packages.
@@ -41,6 +42,12 @@ The MCP server exposes the same receipt engine to agents:
 npm run mcp
 ```
 
+The launch proof script runs the public demo gates:
+
+```bash
+npm run proof:launch
+```
+
 See [docs/RESEARCH_AND_ARCHITECTURE.md](docs/RESEARCH_AND_ARCHITECTURE.md) for the current naming check, open-source landscape, architecture, data structures, CLI/MCP surface, benchmarking surface, and test strategy.
 
 See [docs/CREDIBILITY_AND_GROWTH_STRATEGY.md](docs/CREDIBILITY_AND_GROWTH_STRATEGY.md) for the public positioning, expert credibility rules, viral wedges, launch demos, and community strategy.
@@ -50,3 +57,5 @@ See [docs/LAUNCH_PLAN.md](docs/LAUNCH_PLAN.md) for the first Hacker News-ready d
 See [docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md](docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md) for the open-source, company-building, and acquisition-path strategy.
 
 See [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) for Claude Code and Codex MCP setup.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before opening benchmark, adapter, or agent-workflow changes.
