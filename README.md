@@ -31,9 +31,15 @@ npm run cli -- replay receipts/false-parity.json
 npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json
 ```
 
-The current MVP is intentionally small and honest. It supports exact rational arithmetic and finite counterexample search. Lean, SymPy/Sage, SMT, RAG, and MCP adapters are planned as modular packages.
+The current MVP is intentionally small and honest. It supports exact rational arithmetic, finite counterexample search, receipt replay, benchmark runs, and a local MCP server. Lean, SymPy/Sage, SMT, and RAG adapters are planned as modular packages.
 
 Receipt JSON is shaped by [schemas/receipt.schema.json](schemas/receipt.schema.json), so future CLI, MCP, CI, and web surfaces can share the same artifact contract.
+
+The MCP server exposes the same receipt engine to agents:
+
+```bash
+npm run mcp
+```
 
 See [docs/RESEARCH_AND_ARCHITECTURE.md](docs/RESEARCH_AND_ARCHITECTURE.md) for the current naming check, open-source landscape, architecture, data structures, CLI/MCP surface, benchmarking surface, and test strategy.
 
@@ -42,3 +48,5 @@ See [docs/CREDIBILITY_AND_GROWTH_STRATEGY.md](docs/CREDIBILITY_AND_GROWTH_STRATE
 See [docs/LAUNCH_PLAN.md](docs/LAUNCH_PLAN.md) for the first Hacker News-ready demo path.
 
 See [docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md](docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md) for the open-source, company-building, and acquisition-path strategy.
+
+See [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) for Claude Code and Codex MCP setup.

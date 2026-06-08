@@ -1,0 +1,25 @@
+{
+  "name": "@theorem-workbench/mcp-server",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "MCP server exposing Theorem Workbench proof receipts and benchmarks to AI agents.",
+  "bin": {
+    "theorem-mcp": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@theorem-workbench/benchmarks": "0.0.0",
+    "@theorem-workbench/core": "0.0.0",
+    "zod": "^4.1.13"
+  }
+}
