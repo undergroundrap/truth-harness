@@ -34,14 +34,16 @@ npm run cli -- render receipts/false-parity.json markdown receipts/false-parity.
 npm run cli -- render receipts/false-parity.json html receipts/false-parity.html
 npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json
 npm run cli -- bench run packages/benchmarks/suites/physics-seed.json
+npm run cli -- bench run packages/benchmarks/suites/numeric-seed.json
 npm run cli -- bench run packages/benchmarks/suites/symbolic-seed.json
 npm run cli -- ask "dimension check force = mass * acceleration"
 npm run cli -- ask "dimension check force = mass * velocity"
+npm run cli -- ask "bound x^2 + 2*x + 1 for x in [0, 2]"
 npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
 npm run cli -- check docs/examples/strict-claims.md
 ```
 
-The current MVP is intentionally small and honest. It supports exact rational arithmetic, finite counterexample search, a narrow local modular parity proof kernel, dimensional analysis, a local SymPy symbolic adapter, receipt replay, Markdown/HTML receipt export, benchmark runs, and a local MCP server. Lean, Sage, SMT, and RAG adapters are planned as modular packages.
+The current MVP is intentionally small and honest. It supports exact rational arithmetic, finite counterexample search, a narrow local modular parity proof kernel, conservative rational interval bounds, dimensional analysis, a local SymPy symbolic adapter, receipt replay, Markdown/HTML receipt export, benchmark runs, and a local MCP server. Lean, Sage, SMT, and RAG adapters are planned as modular packages.
 
 Symbolic prompts use a local Python subprocess and require SymPy:
 

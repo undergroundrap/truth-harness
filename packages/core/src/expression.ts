@@ -2,7 +2,7 @@ import { Rational } from "./rational.js";
 
 export type Expr =
   | { type: "number"; value: Rational }
-  | { type: "variable"; name: "n" }
+  | { type: "variable"; name: string }
   | { type: "unary"; op: "-"; value: Expr }
   | { type: "binary"; op: "+" | "-" | "*" | "/" | "^"; left: Expr; right: Expr };
 
@@ -21,15 +21,15 @@ export function parseExpression(source: string): Expr {
   return expression;
 }
 
-export function evaluateExpression(expr: Expr, env: { n?: Rational } = {}): Rational {
+export function evaluateExpression(expr: Expr, env: Record<string, Rational> = {}): Rational {
   switch (expr.type) {
     case "number":
       return expr.value;
     case "variable":
-      if (!env.n) {
-        throw new Error("Expression requires variable n");
+      if (!env[expr.name]) {
+        throw new Error(`Expression requires variable ${expr.name}`);
       }
-      return env.n;
+      return env[expr.name];
     case "unary":
       return evaluateExpression(expr.value, env).negate();
     case "binary": {
@@ -52,6 +52,28 @@ export function evaluateExpression(expr: Expr, env: { n?: Rational } = {}): Rati
           return left.pow(right.numerator);
       }
     }
+  }
+}
+
+export function expressionVariables(expr: Expr): string[] {
+  const variables = new Set<string>();
+  collectVariables(expr, variables);
+  return [...variables].sort();
+}
+
+function collectVariables(expr: Expr, variables: Set<string>): void {
+  switch (expr.type) {
+    case "number":
+      return;
+    case "variable":
+      variables.add(expr.name);
+      return;
+    case "unary":
+      collectVariables(expr.value, variables);
+      return;
+    case "binary":
+      collectVariables(expr.left, variables);
+      collectVariables(expr.right, variables);
   }
 }
 
@@ -167,8 +189,8 @@ class Parser {
       return { type: "number", value: Rational.integer(token.value) };
     }
 
-    if (token.type === "ident" && token.value === "n") {
-      return { type: "variable", name: "n" };
+    if (token.type === "ident") {
+      return { type: "variable", name: token.value };
     }
 
     if (token.type === "lparen") {

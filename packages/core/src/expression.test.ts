@@ -17,4 +17,9 @@ describe("expression evaluator", () => {
     const value = evaluateExpression(parseExpression("n^2 + n + 1"), { n: Rational.integer(-20) });
     expect(value.toString()).toBe("381");
   });
+
+  it("supports named variables", () => {
+    const value = evaluateExpression(parseExpression("x^2 + 2*x + 1"), { x: Rational.integer(2) });
+    expect(value.toString()).toBe("9");
+  });
 });

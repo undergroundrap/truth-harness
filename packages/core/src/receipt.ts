@@ -1,5 +1,6 @@
 import { checkDimensionEquation, parseDimensionPrompt } from "./dimension.js";
-import { evaluateExpression, parseExpression } from "./expression.js";
+import { evaluateExpression, expressionVariables, parseExpression } from "./expression.js";
+import { evaluateIntervalPrompt, parseIntervalPrompt, type IntervalPrompt } from "./interval.js";
 import { proveUniversalParity } from "./parity-proof.js";
 import { Rational } from "./rational.js";
 import { stableHash } from "./stable-hash.js";
@@ -82,6 +83,21 @@ export function createReceipt(problem: string): Receipt {
     });
   }
 
+  const intervalPrompt = parseIntervalPrompt(normalizedProblem);
+  if (intervalPrompt) {
+    return completeIntervalReceipt({
+      problem,
+      normalizedProblem,
+      intervalPrompt,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const arithmeticSource = parseArithmeticPrompt(normalizedProblem);
   if (arithmeticSource) {
     return completeArithmeticReceipt({
@@ -106,7 +122,7 @@ export function createReceipt(problem: string): Receipt {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, finite counterexample search, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, finite counterexample search, modular parity proofs, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -125,6 +141,105 @@ export function createReceipt(problem: string): Receipt {
     artifacts,
     findings
   });
+}
+
+function completeIntervalReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  intervalPrompt: IntervalPrompt;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  try {
+    const result = evaluateIntervalPrompt(args.intervalPrompt);
+    const artifact = addArtifact(args.artifacts, {
+      kind: "interval-bound-result",
+      mimeType: "application/json",
+      content: JSON.stringify(result, null, 2)
+    });
+
+    const toolNode = addNode(args.nodes, args.createdAt, {
+      kind: "tool_run",
+      payload: {
+        adapter: result.adapter,
+        expression: result.expression,
+        variable: result.variable,
+        input: result.input,
+        conservative: result.conservative
+      },
+      trust: "bounded-numeric",
+      summary: "Evaluated a conservative rational interval bound.",
+      artifactRefs: [artifact.id]
+    });
+    args.edges.push({ from: args.normalizedNode.id, to: toolNode.id, label: "bounded-by" });
+
+    const computationNode = addNode(args.nodes, args.createdAt, {
+      kind: "computation",
+      payload: result,
+      trust: "bounded-numeric",
+      summary: `Interval output is [${result.output.lower}, ${result.output.upper}].`,
+      artifactRefs: [artifact.id]
+    });
+    args.edges.push({ from: toolNode.id, to: computationNode.id, label: "produced" });
+
+    args.findings.push({
+      level: "info",
+      message: "Interval arithmetic is conservative: repeated variables can widen bounds, but the true value remains inside the interval under the stated assumptions."
+    });
+
+    return buildReceipt({
+      problem: args.problem,
+      normalizedProblem: args.normalizedProblem,
+      createdAt: args.createdAt,
+      trust: "bounded-numeric",
+      summary: `Bounded interval result: ${result.expression} in [${result.output.lower}, ${result.output.upper}] for ${result.variable} in [${result.input.lower}, ${result.input.upper}].`,
+      nodes: args.nodes,
+      edges: args.edges,
+      artifacts: args.artifacts,
+      findings: args.findings
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Interval arithmetic failed for an unknown reason.";
+    args.findings.push({
+      level: "warning",
+      message
+    });
+
+    const planNode = addNode(args.nodes, args.createdAt, {
+      kind: "plan",
+      payload: {
+        adapter: "local-rational-interval-arithmetic",
+        expression: args.intervalPrompt.expressionSource,
+        variable: args.intervalPrompt.variable,
+        input: {
+          lower: args.intervalPrompt.input.lower.toString(),
+          upper: args.intervalPrompt.input.upper.toString()
+        },
+        reason: message,
+        nextAdapters: ["arb", "mpmath", "z3"]
+      },
+      trust: "unverified",
+      summary: "Interval bound could not be completed by the local adapter.",
+      artifactRefs: []
+    });
+    args.edges.push({ from: args.normalizedNode.id, to: planNode.id, label: "requires-adapter" });
+
+    return buildReceipt({
+      problem: args.problem,
+      normalizedProblem: args.normalizedProblem,
+      createdAt: args.createdAt,
+      trust: "unverified",
+      summary: `Interval bound could not be completed: ${message}`,
+      nodes: args.nodes,
+      edges: args.edges,
+      artifacts: args.artifacts,
+      findings: args.findings
+    });
+  }
 }
 
 function completeSymbolicReceipt(args: {
@@ -380,6 +495,41 @@ function completeUniversalParityReceipt(args: {
   claim: UniversalParityClaim;
 }): Receipt {
   const expression = parseExpression(args.claim.expressionSource);
+  const unsupportedVariables = expressionVariables(expression).filter((variable) => variable !== "n");
+  if (unsupportedVariables.length > 0) {
+    args.findings.push({
+      level: "warning",
+      message: `Universal parity prompts quantify n, but the expression also used: ${unsupportedVariables.join(", ")}.`
+    });
+
+    const planNode = addNode(args.nodes, args.createdAt, {
+      kind: "plan",
+      payload: {
+        quantifier: "for all integers n",
+        expression: args.claim.expressionSource,
+        unsupportedVariables,
+        nextAdapters: ["lean", "z3"],
+        reason: "The local universal parity checker only supports expressions over the quantified variable n."
+      },
+      trust: "unverified",
+      summary: "Universal parity claim contains variables outside the quantifier.",
+      artifactRefs: []
+    });
+    args.edges.push({ from: args.normalizedNode.id, to: planNode.id, label: "requires-adapter" });
+
+    return buildReceipt({
+      problem: args.problem,
+      normalizedProblem: args.normalizedProblem,
+      createdAt: args.createdAt,
+      trust: "unverified",
+      summary: "Universal parity claim contains variables outside the quantified variable n.",
+      nodes: args.nodes,
+      edges: args.edges,
+      artifacts: args.artifacts,
+      findings: args.findings
+    });
+  }
+
   const searchRange = { min: -20, max: 20 };
   let counterexample: { n: number; value: string } | undefined;
 

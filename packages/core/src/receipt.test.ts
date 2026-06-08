@@ -42,6 +42,21 @@ describe("createReceipt", () => {
     expect(receipt.graph.nodes.some((node) => node.kind === "tool_run" && node.trust === "dimension-checked")).toBe(true);
   });
 
+  it("creates bounded-numeric receipts for interval prompts", () => {
+    const receipt = createReceipt("bound x^2 + 2*x + 1 for x in [0, 2]");
+
+    expect(receipt.trust).toBe("bounded-numeric");
+    expect(receipt.summary).toContain("[1, 9]");
+    expect(receipt.artifacts.some((artifact) => artifact.kind === "interval-bound-result")).toBe(true);
+  });
+
+  it("keeps unsafe interval prompts unverified", () => {
+    const receipt = createReceipt("bound 1 / x for x in [-1, 1]");
+
+    expect(receipt.trust).toBe("unverified");
+    expect(receipt.summary).toContain("contains zero");
+  });
+
   it("refutes dimensionally inconsistent physics formulas", () => {
     const receipt = createReceipt("dimension check force = mass * velocity");
 

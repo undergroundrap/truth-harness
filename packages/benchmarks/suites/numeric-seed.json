@@ -1,0 +1,55 @@
+{
+  "id": "numeric-seed",
+  "title": "Bounded Numeric Seed Suite",
+  "description": "Launch suite for conservative rational interval arithmetic over stated input ranges.",
+  "tasks": [
+    {
+      "id": "linear-range",
+      "prompt": "bound 2*x + 3 for x in [-1, 4]",
+      "expectTrust": "bounded-numeric",
+      "expectSummaryIncludes": "[1, 11]"
+    },
+    {
+      "id": "quadratic-positive-range",
+      "prompt": "bound x^2 + 2*x + 1 for x in [0, 2]",
+      "expectTrust": "bounded-numeric",
+      "expectSummaryIncludes": "[1, 9]"
+    },
+    {
+      "id": "quadratic-cross-zero",
+      "prompt": "bound x^2 for x in [-2, 3]",
+      "expectTrust": "bounded-numeric",
+      "expectSummaryIncludes": "[0, 9]"
+    },
+    {
+      "id": "cubic-cross-zero",
+      "prompt": "bound x^3 for x in [-2, 3]",
+      "expectTrust": "bounded-numeric",
+      "expectSummaryIncludes": "[-8, 27]"
+    },
+    {
+      "id": "reciprocal-positive-range",
+      "prompt": "bound 1 / x for x in [2, 4]",
+      "expectTrust": "bounded-numeric",
+      "expectSummaryIncludes": "[1/4, 1/2]"
+    },
+    {
+      "id": "dependency-loss-is-conservative",
+      "prompt": "bound x - x for x in [0, 1]",
+      "expectTrust": "bounded-numeric",
+      "expectSummaryIncludes": "[-1, 1]"
+    },
+    {
+      "id": "rational-range",
+      "prompt": "bound x / 2 + 1 for x in [1/3, 5/3]",
+      "expectTrust": "bounded-numeric",
+      "expectSummaryIncludes": "[7/6, 11/6]"
+    },
+    {
+      "id": "unsafe-division-crosses-zero",
+      "prompt": "bound 1 / x for x in [-1, 1]",
+      "expectTrust": "unverified",
+      "expectSummaryIncludes": "contains zero"
+    }
+  ]
+}

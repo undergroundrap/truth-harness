@@ -79,6 +79,33 @@ export class Rational {
     return this.isInteger() && mod(this.numerator, 2n) === 1n;
   }
 
+  compare(other: Rational): -1 | 0 | 1 {
+    const left = this.numerator * other.denominator;
+    const right = other.numerator * this.denominator;
+
+    if (left < right) {
+      return -1;
+    }
+
+    if (left > right) {
+      return 1;
+    }
+
+    return 0;
+  }
+
+  lessThan(other: Rational): boolean {
+    return this.compare(other) < 0;
+  }
+
+  lessThanOrEqual(other: Rational): boolean {
+    return this.compare(other) <= 0;
+  }
+
+  abs(): Rational {
+    return this.numerator < 0n ? this.negate() : this;
+  }
+
   toJSON(): string {
     return this.toString();
   }

@@ -36,6 +36,13 @@ expect: dimension-checked
 dimension check force = mass * acceleration
 ```
 
+A conservative numeric bound:
+
+```theorem-workbench
+expect: bounded-numeric
+bound x^2 + 2*x + 1 for x in [0, 2]
+```
+
 A dimensionally inconsistent formula:
 
 ```theorem-workbench

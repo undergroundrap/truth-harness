@@ -120,6 +120,7 @@ Dependency posture:
 | RAG MVP | Hybrid BM25 plus vector abstraction; pluggable Qdrant/LanceDB later. |
 | CAS MVP | SymPy via subprocess adapter; optional WolframAlpha API adapter. |
 | Proof MVP | Local modular parity proof kernel first; Lean adapter through existing Lean MCP/LSP project or subprocess wrapper next. |
+| Numeric MVP | Conservative rational interval arithmetic first; Arb-backed rigorous ball arithmetic later. |
 | SMT MVP | Z3 adapter, then cvc5 adapter. |
 
 ## Benchmarking Capability

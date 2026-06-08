@@ -64,7 +64,7 @@ Body draft:
 
 > Theorem Workbench is an open-source CLI/workbench for turning AI-generated math into auditable receipts.
 >
-> The current MVP is tiny: exact rational arithmetic, finite counterexample search, a local modular parity proof kernel, dimensional analysis, SymPy-backed symbolic computation, evidence graphs, trust labels, replay commands, and seed benchmark suites. The important part is the trust policy: it will not label something `proved` unless a proof checker accepts it. If finite search finds no counterexample and the proof kernel cannot certify the statement, the output remains `unverified`.
+> The current MVP is tiny: exact rational arithmetic, finite counterexample search, a local modular parity proof kernel, conservative interval arithmetic, dimensional analysis, SymPy-backed symbolic computation, evidence graphs, trust labels, replay commands, and seed benchmark suites. The important part is the trust policy: it will not label something `proved` unless a proof checker accepts it. If finite search finds no counterexample and the proof kernel cannot certify the statement, the output remains `unverified`.
 >
 > The next adapters are Lean/Mathlib, Sage, Z3/cvc5, RAG citations, and richer MCP artifacts so Claude/Codex can verify subclaims recursively.
 >
@@ -88,7 +88,7 @@ The version that a serious AI lab notices is not a slick chat UI. It is a trust 
 1. `npm install && npm run check` passes on a clean clone. Status: done locally.
 2. `theorem ask` can write a JSON receipt with `--out`. Status: done.
 3. `theorem replay` can replay a saved receipt. Status: done.
-4. `theorem bench run` produces readable math, physics, and symbolic score reports. Status: done.
+4. `theorem bench run` produces readable math, physics, bounded-numeric, and symbolic score reports. Status: done.
 5. `theorem render` can export receipts as Markdown and HTML. Status: done.
 6. README explains the trust labels in plain language. Status: done.
 7. One GIF or terminal recording shows refutation and honest uncertainty. Status: pending.

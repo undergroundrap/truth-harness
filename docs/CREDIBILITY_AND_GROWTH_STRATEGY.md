@@ -117,7 +117,13 @@ Demo 4: Physics sanity receipt
 - Output: unit analysis, corrected formula or refutation, assumptions.
 - Why it matters: physicists care deeply about assumptions and units.
 
-Demo 5: Benchmark report
+Demo 5: Bounded numeric receipt
+
+- Input: `bound x^2 + 2*x + 1 for x in [0, 2]`.
+- Output: `bounded-numeric`, conservative interval output, and assumptions.
+- Why it matters: bridges from pure math into simulations and engineering calculations without pretending the bound is tighter than it is.
+
+Demo 6: Benchmark report
 
 - Input: same suite run through different model/tool profiles.
 - Output: trust accuracy, refutation rate, proof success, replay stability, cost, latency.
