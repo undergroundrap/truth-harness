@@ -100,7 +100,7 @@ Phase 2: Agent-native adoption
 
 Phase 3: Scientific and engineering usefulness
 
-- SymPy/Sage adapter.
+- SymPy local adapter is live; add Sage for broader CAS coverage.
 - Lean adapter.
 - Z3/cvc5 adapter.
 - Units and dimensional analysis.

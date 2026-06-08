@@ -35,3 +35,10 @@ A dimensionally inconsistent formula:
 expect: refuted
 dimension check force = mass * velocity
 ```
+
+A symbolic exact computation:
+
+```theorem-workbench
+expect: exact-computed
+symbolic simplify sin(x)^2 + cos(x)^2
+```

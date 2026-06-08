@@ -40,4 +40,19 @@ describe("createReceipt", () => {
     expect(receipt.summary).toContain("left is M L T^-2");
     expect(receipt.summary).toContain("right is M L T^-1");
   });
+
+  it("creates symbolic receipts when the SymPy adapter is available", () => {
+    const receipt = createReceipt("symbolic simplify sin(x)^2 + cos(x)^2");
+
+    if (receipt.trust === "exact-computed") {
+      expect(receipt.summary).toContain("1");
+      expect(
+        receipt.artifacts.some((artifact) => artifact.kind === "symbolic-computation-result")
+      ).toBe(true);
+      return;
+    }
+
+    expect(receipt.trust).toBe("unverified");
+    expect(receipt.findings[0]?.message).toContain("SymPy adapter");
+  });
 });

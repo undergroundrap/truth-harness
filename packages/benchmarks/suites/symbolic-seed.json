@@ -1,0 +1,43 @@
+{
+  "id": "symbolic-seed",
+  "title": "Symbolic CAS Seed Suite",
+  "description": "Launch suite for SymPy-backed symbolic exact computation receipts.",
+  "tasks": [
+    {
+      "id": "simplify-rational-polynomial",
+      "prompt": "symbolic simplify (x^2 - 1)/(x - 1)",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "x + 1"
+    },
+    {
+      "id": "factor-difference-of-squares",
+      "prompt": "symbolic factor x^2 - 1",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "(x - 1)*(x + 1)"
+    },
+    {
+      "id": "expand-square",
+      "prompt": "symbolic expand (x + 1)^2",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "x**2 + 2*x + 1"
+    },
+    {
+      "id": "differentiate-polynomial",
+      "prompt": "sympy diff x^3 + x wrt x",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "3*x**2 + 1"
+    },
+    {
+      "id": "integrate-polynomial",
+      "prompt": "symbolic integrate 2*x wrt x",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "x**2"
+    },
+    {
+      "id": "simplify-trig-identity",
+      "prompt": "symbolic simplify sin(x)^2 + cos(x)^2",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "1"
+    }
+  ]
+}

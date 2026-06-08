@@ -450,7 +450,7 @@ Phase 0: Research and skeleton
 Phase 1: Local MVP
 
 - CLI plus MCP stdio server.
-- SymPy adapter or JS exact arithmetic adapter.
+- SymPy subprocess adapter plus JS exact arithmetic evaluator.
 - Simple local RAG index.
 - Deterministic graph replay.
 - Golden tests for 25 basic-to-intermediate problems.

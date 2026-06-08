@@ -24,18 +24,29 @@ Theorem Workbench turns math answers into receipts:
 ```bash
 npm install
 npm run build
+python -m pip install sympy==1.14.0
 npm run cli -- ask "compute 3 / 4 + 5 / 8"
 npm run cli -- ask "for all integers n, n^2+n+1 is even"
 npm run cli -- ask "for all integers n, n^2+n+1 is even" -- --out receipts/false-parity.json
 npm run cli -- replay receipts/false-parity.json
 npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json
 npm run cli -- bench run packages/benchmarks/suites/physics-seed.json
+npm run cli -- bench run packages/benchmarks/suites/symbolic-seed.json
 npm run cli -- ask "dimension check force = mass * acceleration"
 npm run cli -- ask "dimension check force = mass * velocity"
+npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
 npm run cli -- check docs/examples/strict-claims.md
 ```
 
-The current MVP is intentionally small and honest. It supports exact rational arithmetic, finite counterexample search, dimensional analysis, receipt replay, benchmark runs, and a local MCP server. Lean, SymPy/Sage, SMT, and RAG adapters are planned as modular packages.
+The current MVP is intentionally small and honest. It supports exact rational arithmetic, finite counterexample search, dimensional analysis, a local SymPy symbolic adapter, receipt replay, benchmark runs, and a local MCP server. Lean, Sage, SMT, and RAG adapters are planned as modular packages.
+
+Symbolic prompts use a local Python subprocess and require SymPy:
+
+```bash
+python -m pip install sympy==1.14.0
+```
+
+On Windows, `py -m pip install sympy==1.14.0` works too.
 
 Receipt JSON is shaped by [schemas/receipt.schema.json](schemas/receipt.schema.json), so future CLI, MCP, CI, and web surfaces can share the same artifact contract.
 

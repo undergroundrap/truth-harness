@@ -9,6 +9,7 @@ Theorem Workbench is an agent-facing verification tool. Treat tool boundaries as
 - The MCP server does not write files.
 - CLI receipt output writes only to user-specified paths.
 - Network-backed adapters are not enabled in the MVP.
+- The SymPy adapter runs as a bounded local Python subprocess and accepts only a restricted symbolic expression grammar.
 
 ## Reporting Issues
 

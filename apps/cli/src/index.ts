@@ -132,8 +132,10 @@ program
     console.log("Available local adapters:");
     console.log("  exact arithmetic      ready   local Rational evaluator");
     console.log("  counterexample search ready   finite integer search over exact arithmetic");
+    console.log("  dimensional analysis  ready   local SI base-dimension evaluator");
+    console.log("  SymPy CAS             ready   local Python subprocess when sympy is installed");
     console.log("  Lean proof checker    planned adapter");
-    console.log("  SymPy/Sage CAS        planned adapter");
+    console.log("  Sage CAS              planned adapter");
     console.log("  Z3/cvc5 SMT           planned adapter");
     console.log("  RAG citations         planned adapter");
     console.log("");

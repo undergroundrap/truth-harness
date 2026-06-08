@@ -2,6 +2,7 @@ import { checkDimensionEquation, parseDimensionPrompt } from "./dimension.js";
 import { evaluateExpression, parseExpression } from "./expression.js";
 import { Rational } from "./rational.js";
 import { stableHash } from "./stable-hash.js";
+import { parseSymbolicPrompt, runSympySync, type SymbolicPrompt } from "./sympy.js";
 import type { Artifact, EvidenceEdge, Finding, GraphNode, NodeKind, Receipt, TrustLabel } from "./types.js";
 
 interface UniversalParityClaim {
@@ -65,6 +66,21 @@ export function createReceipt(problem: string): Receipt {
     });
   }
 
+  const symbolicPrompt = parseSymbolicPrompt(normalizedProblem);
+  if (symbolicPrompt) {
+    return completeSymbolicReceipt({
+      problem,
+      normalizedProblem,
+      symbolicPrompt,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const arithmeticSource = parseArithmeticPrompt(normalizedProblem);
   if (arithmeticSource) {
     return completeArithmeticReceipt({
@@ -88,8 +104,8 @@ export function createReceipt(problem: string): Receipt {
   const planNode = addNode(nodes, createdAt, {
     kind: "plan",
     payload: {
-      nextAdapters: ["sympy", "lean", "z3", "rag"],
-      reason: "The MVP only handles exact arithmetic and universal parity counterexample searches."
+      nextAdapters: ["lean", "z3", "rag"],
+      reason: "The MVP handles exact arithmetic, finite counterexample search, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -107,6 +123,114 @@ export function createReceipt(problem: string): Receipt {
     edges,
     artifacts,
     findings
+  });
+}
+
+function completeSymbolicReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  symbolicPrompt: SymbolicPrompt;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const result = runSympySync(args.symbolicPrompt);
+
+  if (!result.ok) {
+    args.findings.push({
+      level: "warning",
+      message: `SymPy adapter unavailable or failed: ${result.error}`
+    });
+
+    const planNode = addNode(args.nodes, args.createdAt, {
+      kind: "plan",
+      payload: {
+        adapter: "local-sympy-subprocess",
+        operation: args.symbolicPrompt.operation,
+        expression: args.symbolicPrompt.expression,
+        variable: args.symbolicPrompt.variable,
+        error: result.error,
+        errorType: result.errorType,
+        nextAdapters: ["sympy", "sage", "lean"],
+        reason: "Symbolic computation needs a local Python environment with SymPy installed."
+      },
+      trust: "unverified",
+      summary: "Symbolic computation could not be completed by the local SymPy adapter.",
+      artifactRefs: []
+    });
+    args.edges.push({ from: args.normalizedNode.id, to: planNode.id, label: "requires-adapter" });
+
+    return buildReceipt({
+      problem: args.problem,
+      normalizedProblem: args.normalizedProblem,
+      createdAt: args.createdAt,
+      trust: "unverified",
+      summary: `SymPy adapter could not verify this symbolic prompt: ${result.error}`,
+      nodes: args.nodes,
+      edges: args.edges,
+      artifacts: args.artifacts,
+      findings: args.findings
+    });
+  }
+
+  const artifactPayload = {
+    adapter: "local-sympy-subprocess",
+    operation: result.operation,
+    expression: result.expression,
+    variable: result.variable,
+    result: result.result,
+    srepr: result.srepr,
+    latex: result.latex,
+    sympyVersion: result.sympyVersion,
+    pythonCommand: result.pythonCommand
+  };
+  const artifact = addArtifact(args.artifacts, {
+    kind: "symbolic-computation-result",
+    mimeType: "application/json",
+    content: JSON.stringify(artifactPayload, null, 2)
+  });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-sympy-subprocess",
+      operation: result.operation,
+      pythonCommand: result.pythonCommand,
+      sympyVersion: result.sympyVersion
+    },
+    trust: "exact-computed",
+    summary: `Ran SymPy ${result.operation} in a bounded local subprocess.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: toolNode.id, label: "checked-by" });
+
+  const computationNode = addNode(args.nodes, args.createdAt, {
+    kind: "computation",
+    payload: artifactPayload,
+    trust: "exact-computed",
+    summary: `Symbolic ${result.operation} result is ${result.result}.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: computationNode.id, label: "produced" });
+
+  args.findings.push({
+    level: "info",
+    message: "Symbolic CAS output is exact computation, not a formal proof of arbitrary surrounding claims."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust: "exact-computed",
+    summary: `SymPy ${result.operation} result: ${result.result}.`,
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
   });
 }
 
