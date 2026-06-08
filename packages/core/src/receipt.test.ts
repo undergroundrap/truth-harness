@@ -18,11 +18,20 @@ describe("createReceipt", () => {
     expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
   });
 
-  it("does not pretend finite search is a proof", () => {
+  it("proves polynomial universal parity claims with the local proof kernel", () => {
     const receipt = createReceipt("for all integers n, n^2+n is even");
 
+    expect(receipt.trust).toBe("proved");
+    expect(receipt.summary).toContain("modular parity kernel");
+    expect(receipt.graph.nodes.some((node) => node.kind === "proof" && node.trust === "proved")).toBe(true);
+    expect(receipt.artifacts.some((artifact) => artifact.kind === "modular-parity-proof-certificate")).toBe(true);
+  });
+
+  it("does not pretend unsupported finite search is a proof", () => {
+    const receipt = createReceipt("for all integers n, 2*(n/1) is even");
+
     expect(receipt.trust).toBe("unverified");
-    expect(receipt.findings[0]?.message).toContain("did not produce a formal proof");
+    expect(receipt.findings[0]?.message).toContain("local proof kernel did not prove");
   });
 
   it("creates dimension-checked receipts for consistent physics formulas", () => {

@@ -12,6 +12,7 @@ export type {
 export { evaluateExpression, parseExpression } from "./expression.js";
 export { Rational } from "./rational.js";
 export { checkDimensionEquation, formatDimension, parseDimensionPrompt } from "./dimension.js";
+export { proveUniversalParity } from "./parity-proof.js";
 export { parseSymbolicPrompt, runSympy, runSympySync } from "./sympy.js";
 export { createReceipt } from "./receipt.js";
 export { renderReceipt, renderReceiptHtml, renderReceiptMarkdown } from "./receipt-renderer.js";
@@ -19,6 +20,14 @@ export { checkClaimBlock, checkClaimFile, parseClaimBlocks } from "./claim-file.
 export { replayReceipt } from "./replay.js";
 export { stableHash } from "./stable-hash.js";
 export type { BaseDimension, DimensionCheckResult, DimensionVector } from "./dimension.js";
+export type {
+  Mod2,
+  ParityPredicate,
+  ParityProofFailure,
+  ParityProofResult,
+  ParityProofSuccess,
+  ParityResidueCase
+} from "./parity-proof.js";
 export type { SymbolicPrompt, SympyFailure, SympyOperation, SympyResult, SympySuccess } from "./sympy.js";
 export type { ReceiptRenderFormat } from "./receipt-renderer.js";
 export type { ClaimBlock, ClaimCheck, ClaimFileCheck } from "./claim-file.js";

@@ -42,7 +42,7 @@ describe("claim file checks", () => {
 
   it("rejects unverified claims in strict mode without an explicit expectation", () => {
     const result = checkClaimFile(
-      ["```theorem-workbench", "for all integers n, n^2+n is even", "```"].join("\n"),
+      ["```theorem-workbench", "for all integers n, 2*(n/1) is even", "```"].join("\n"),
       "claims.md"
     );
 

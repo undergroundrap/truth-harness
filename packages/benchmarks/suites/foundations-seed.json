@@ -1,7 +1,7 @@
 {
   "id": "foundations-seed",
   "title": "Foundations Seed",
-  "description": "Launch suite for exact arithmetic, honest uncertainty, false-claim refutation, and unsupported-task humility.",
+  "description": "Launch suite for exact arithmetic, proof certificates, false-claim refutation, and unsupported-task humility.",
   "tasks": [
     {
       "id": "exact-order-of-operations",
@@ -112,40 +112,40 @@
       "expectSummaryIncludes": "n=-20"
     },
     {
-      "id": "honest-unverified-parity",
+      "id": "proved-even-quadratic-parity",
       "prompt": "for all integers n, n^2+n is even",
-      "expectTrust": "unverified",
-      "expectSummaryIncludes": "unverified"
+      "expectTrust": "proved",
+      "expectSummaryIncludes": "modular parity kernel"
     },
     {
-      "id": "honest-shifted-odd",
+      "id": "proved-shifted-odd-parity",
       "prompt": "for all integers n, n^2+n+1 is odd",
-      "expectTrust": "unverified",
-      "expectSummaryIncludes": "unverified"
+      "expectTrust": "proved",
+      "expectSummaryIncludes": "modular parity kernel"
     },
     {
-      "id": "honest-linear-even",
+      "id": "proved-linear-even",
       "prompt": "for all integers n, 2*n is even",
-      "expectTrust": "unverified",
-      "expectSummaryIncludes": "unverified"
+      "expectTrust": "proved",
+      "expectSummaryIncludes": "modular parity kernel"
     },
     {
-      "id": "honest-linear-odd",
+      "id": "proved-linear-odd",
       "prompt": "for all integers n, 2*n+1 is odd",
-      "expectTrust": "unverified",
-      "expectSummaryIncludes": "unverified"
+      "expectTrust": "proved",
+      "expectSummaryIncludes": "modular parity kernel"
     },
     {
-      "id": "honest-difference-even",
+      "id": "proved-difference-even",
       "prompt": "for all integers n, n^2-n is even",
-      "expectTrust": "unverified",
-      "expectSummaryIncludes": "unverified"
+      "expectTrust": "proved",
+      "expectSummaryIncludes": "modular parity kernel"
     },
     {
-      "id": "honest-shifted-even",
+      "id": "proved-shifted-even",
       "prompt": "for all integers n, n^2+n+2 is even",
-      "expectTrust": "unverified",
-      "expectSummaryIncludes": "unverified"
+      "expectTrust": "proved",
+      "expectSummaryIncludes": "modular parity kernel"
     },
     {
       "id": "unsupported-calculus",

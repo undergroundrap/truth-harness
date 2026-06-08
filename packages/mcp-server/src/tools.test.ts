@@ -25,7 +25,7 @@ describe("MCP tool handlers", () => {
   });
 
   it("marks strict unverified receipts as tool errors", () => {
-    const result = handleTheoremAsk({ problem: "for all integers n, n^2+n is even", strict: true });
+    const result = handleTheoremAsk({ problem: "for all integers n, 2*(n/1) is even", strict: true });
 
     expect(result.error).toBe(true);
     expect(result.receipt.trust).toBe("unverified");

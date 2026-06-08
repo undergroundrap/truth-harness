@@ -35,10 +35,22 @@ npm run cli -- ask "for all integers n, n^2+n is even"
 Expected story:
 
 - The system finds no counterexample in the local range.
-- It still returns `unverified`.
-- It explicitly says finite search is not a formal proof.
+- It invokes the local modular parity proof kernel.
+- It returns `proved` with a certificate over the two residue classes modulo 2.
 
-That contrast is the product. It shows Theorem Workbench is designed to be more truthful than a chatbot.
+Third screenshot:
+
+```bash
+npm run cli -- ask "for all integers n, 2*(n/1) is even"
+```
+
+Expected story:
+
+- The system finds no counterexample in the local range.
+- It still returns `unverified` because division is outside the narrow polynomial parity proof kernel.
+- It explicitly says the proof kernel boundary blocked a proof.
+
+That contrast is the product. It shows Theorem Workbench can prove narrow claims, refute false claims, and admit when a statement is outside the current checker.
 
 ## HN Post Draft
 
@@ -52,7 +64,7 @@ Body draft:
 
 > Theorem Workbench is an open-source CLI/workbench for turning AI-generated math into auditable receipts.
 >
-> The current MVP is tiny: exact rational arithmetic, finite counterexample search, dimensional analysis, SymPy-backed symbolic computation, evidence graphs, trust labels, replay commands, and seed benchmark suites. The important part is the trust policy: it will not label something `proved` unless a proof checker accepts it. If finite search finds no counterexample, the output remains `unverified`.
+> The current MVP is tiny: exact rational arithmetic, finite counterexample search, a local modular parity proof kernel, dimensional analysis, SymPy-backed symbolic computation, evidence graphs, trust labels, replay commands, and seed benchmark suites. The important part is the trust policy: it will not label something `proved` unless a proof checker accepts it. If finite search finds no counterexample and the proof kernel cannot certify the statement, the output remains `unverified`.
 >
 > The next adapters are Lean/Mathlib, Sage, Z3/cvc5, RAG citations, and richer MCP artifacts so Claude/Codex can verify subclaims recursively.
 >

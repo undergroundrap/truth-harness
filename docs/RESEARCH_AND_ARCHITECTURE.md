@@ -119,7 +119,7 @@ Dependency posture:
 | Storage MVP | SQLite plus filesystem artifact store. |
 | RAG MVP | Hybrid BM25 plus vector abstraction; pluggable Qdrant/LanceDB later. |
 | CAS MVP | SymPy via subprocess adapter; optional WolframAlpha API adapter. |
-| Proof MVP | Lean adapter through existing Lean MCP/LSP project or subprocess wrapper. |
+| Proof MVP | Local modular parity proof kernel first; Lean adapter through existing Lean MCP/LSP project or subprocess wrapper next. |
 | SMT MVP | Z3 adapter, then cvc5 adapter. |
 
 ## Benchmarking Capability

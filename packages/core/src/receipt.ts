@@ -1,5 +1,6 @@
 import { checkDimensionEquation, parseDimensionPrompt } from "./dimension.js";
 import { evaluateExpression, parseExpression } from "./expression.js";
+import { proveUniversalParity } from "./parity-proof.js";
 import { Rational } from "./rational.js";
 import { stableHash } from "./stable-hash.js";
 import { parseSymbolicPrompt, runSympySync, type SymbolicPrompt } from "./sympy.js";
@@ -392,6 +393,10 @@ function completeUniversalParityReceipt(args: {
     }
   }
 
+  const proofResult = counterexample
+    ? undefined
+    : proveUniversalParity(args.claim.expressionSource, expression, args.claim.parity);
+  const claimTrust: TrustLabel = counterexample ? "refuted" : proofResult?.ok ? "proved" : "unverified";
   const claimNode = addNode(args.nodes, args.createdAt, {
     kind: "claim",
     payload: {
@@ -399,10 +404,12 @@ function completeUniversalParityReceipt(args: {
       expression: args.claim.expressionSource,
       predicate: `is ${args.claim.parity}`
     },
-    trust: counterexample ? "refuted" : "unverified",
+    trust: claimTrust,
     summary: counterexample
       ? "Universal parity claim refuted by finite counterexample search."
-      : "No counterexample found in the finite search range; this is not a proof.",
+      : proofResult?.ok
+        ? "Universal parity claim proved by local modular arithmetic proof kernel."
+        : "No counterexample found in the finite search range; this is not a proof.",
     artifactRefs: []
   });
   args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: "claims" });
@@ -443,9 +450,59 @@ function completeUniversalParityReceipt(args: {
     });
   }
 
+  if (proofResult?.ok) {
+    const artifact = addArtifact(args.artifacts, {
+      kind: "modular-parity-proof-certificate",
+      mimeType: "application/json",
+      content: JSON.stringify(proofResult, null, 2)
+    });
+
+    const proofToolNode = addNode(args.nodes, args.createdAt, {
+      kind: "tool_run",
+      payload: {
+        adapter: proofResult.adapter,
+        theorem: proofResult.theorem,
+        modulus: proofResult.modulus,
+        residues: proofResult.residues
+      },
+      trust: "proved",
+      summary: "Checked both integer residue classes modulo 2 in the local proof kernel.",
+      artifactRefs: [artifact.id]
+    });
+    args.edges.push({ from: claimNode.id, to: proofToolNode.id, label: "proved-by" });
+
+    const proofNode = addNode(args.nodes, args.createdAt, {
+      kind: "proof",
+      payload: proofResult,
+      trust: "proved",
+      summary: proofResult.certificate,
+      artifactRefs: [artifact.id]
+    });
+    args.edges.push({ from: proofToolNode.id, to: proofNode.id, label: "produced" });
+
+    args.findings.push({
+      level: "info",
+      message: "The local parity proof kernel is intentionally narrow: it proves polynomial parity over integers by checking Z/2Z residue classes."
+    });
+
+    return buildReceipt({
+      problem: args.problem,
+      normalizedProblem: args.normalizedProblem,
+      createdAt: args.createdAt,
+      trust: "proved",
+      summary: `Proved by modular parity kernel: ${args.claim.expressionSource} is ${args.claim.parity} for every integer n.`,
+      nodes: args.nodes,
+      edges: args.edges,
+      artifacts: args.artifacts,
+      findings: args.findings
+    });
+  }
+
   args.findings.push({
     level: "warning",
-    message: "Finite search found no counterexample, but Theorem Workbench did not produce a formal proof."
+    message: proofResult
+      ? `Finite search found no counterexample, but the local proof kernel did not prove the claim: ${proofResult.reason}`
+      : "Finite search found no counterexample, but Theorem Workbench did not produce a formal proof."
   });
 
   return buildReceipt({
@@ -453,7 +510,9 @@ function completeUniversalParityReceipt(args: {
     normalizedProblem: args.normalizedProblem,
     createdAt: args.createdAt,
     trust: "unverified",
-    summary: "No counterexample found in local finite search; still unverified until a proof adapter checks it.",
+    summary: proofResult
+      ? `No counterexample found in local finite search, but the local proof kernel did not prove it: ${proofResult.reason}`
+      : "No counterexample found in local finite search; still unverified until a proof adapter checks it.",
     nodes: args.nodes,
     edges: args.edges,
     artifacts: args.artifacts,

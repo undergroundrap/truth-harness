@@ -35,7 +35,7 @@ Open-source core:
 - Benchmark format.
 - Local deterministic adapters.
 - MCP server.
-- Basic Lean/SymPy/Z3 adapters.
+- Basic proof/SymPy/Z3 adapters, starting with the local modular parity proof kernel and expanding to Lean.
 
 Commercial layer later:
 

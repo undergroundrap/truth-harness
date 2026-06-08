@@ -105,11 +105,11 @@ Demo 2: Exact computation receipt
 - Output: normalized problem, exact CAS output, independent check, explanation.
 - Why it matters: useful immediately for students and engineers.
 
-Demo 3: Lean proof receipt
+Demo 3: Proof receipt
 
-- Input: a small theorem such as divisibility, parity, set identity, or simple algebra.
-- Output: Lean statement/proof artifact plus human explanation derived from verified steps.
-- Why it matters: anchors the brand in real formal proof.
+- Input: `for all integers n, n^2+n is even`.
+- Output: a `proved` receipt with a local modular parity proof certificate over `n mod 2`.
+- Why it matters: anchors the brand in real proof-checking before the full Lean adapter lands.
 
 Demo 4: Physics sanity receipt
 

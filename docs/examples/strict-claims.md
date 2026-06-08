@@ -15,11 +15,18 @@ expect: refuted
 for all integers n, n^2+n+1 is even
 ```
 
-An intentionally unresolved claim. The expected trust label documents the current limitation instead of hiding it:
+A narrow formal proof checked by the local modular parity kernel:
+
+```theorem-workbench
+expect: proved
+for all integers n, n^2+n is even
+```
+
+An intentionally unresolved claim. The expected trust label documents the current proof-kernel boundary instead of hiding it:
 
 ```theorem-workbench
 expect: unverified
-for all integers n, n^2+n is even
+for all integers n, 2*(n/1) is even
 ```
 
 A physics sanity check:

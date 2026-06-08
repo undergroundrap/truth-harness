@@ -164,6 +164,7 @@ program
     console.log("Available local adapters:");
     console.log("  exact arithmetic      ready   local Rational evaluator");
     console.log("  counterexample search ready   finite integer search over exact arithmetic");
+    console.log("  parity proof kernel   ready   local Z/2Z checker for integer polynomial parity");
     console.log("  dimensional analysis  ready   local SI base-dimension evaluator");
     console.log("  SymPy CAS             ready   local Python subprocess when sympy is installed");
     console.log("  Lean proof checker    planned adapter");
