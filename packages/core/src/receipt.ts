@@ -1,3 +1,4 @@
+import { checkDimensionEquation, parseDimensionPrompt } from "./dimension.js";
 import { evaluateExpression, parseExpression } from "./expression.js";
 import { Rational } from "./rational.js";
 import { stableHash } from "./stable-hash.js";
@@ -49,6 +50,21 @@ export function createReceipt(problem: string): Receipt {
     });
   }
 
+  const dimensionSource = parseDimensionPrompt(normalizedProblem);
+  if (dimensionSource) {
+    return completeDimensionReceipt({
+      problem,
+      normalizedProblem,
+      dimensionSource,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const arithmeticSource = parseArithmeticPrompt(normalizedProblem);
   if (arithmeticSource) {
     return completeArithmeticReceipt({
@@ -92,6 +108,139 @@ export function createReceipt(problem: string): Receipt {
     artifacts,
     findings
   });
+}
+
+function completeDimensionReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  dimensionSource: string;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  try {
+    const result = checkDimensionEquation(args.dimensionSource);
+    const trust: TrustLabel = result.matched ? "dimension-checked" : "refuted";
+    const artifact = addArtifact(args.artifacts, {
+      kind: "dimension-check-result",
+      mimeType: "application/json",
+      content: JSON.stringify(
+        {
+          adapter: "local-dimensional-analysis",
+          equation: result.equation,
+          lhsDimension: result.lhsText,
+          rhsDimension: result.rhsText,
+          matched: result.matched,
+          identifiers: result.identifiers
+        },
+        null,
+        2
+      )
+    });
+
+    const claimNode = addNode(args.nodes, args.createdAt, {
+      kind: "claim",
+      payload: {
+        equation: result.equation,
+        lhsDimension: result.lhsText,
+        rhsDimension: result.rhsText
+      },
+      trust,
+      summary: result.matched
+        ? "Dimensional analysis found matching dimensions on both sides."
+        : "Dimensional analysis found incompatible dimensions.",
+      artifactRefs: [artifact.id]
+    });
+    args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: "claims" });
+
+    const toolNode = addNode(args.nodes, args.createdAt, {
+      kind: "tool_run",
+      payload: {
+        adapter: "local-dimensional-analysis",
+        identifiers: result.identifiers
+      },
+      trust,
+      summary: "Checked both sides using a local SI base-dimension table.",
+      artifactRefs: [artifact.id]
+    });
+    args.edges.push({ from: claimNode.id, to: toolNode.id, label: "checked-by" });
+
+    if (!result.matched) {
+      const mismatchNode = addNode(args.nodes, args.createdAt, {
+        kind: "counterexample",
+        payload: {
+          kind: "dimension-mismatch",
+          lhsDimension: result.lhsText,
+          rhsDimension: result.rhsText
+        },
+        trust: "refuted",
+        summary: `Dimension mismatch: left is ${result.lhsText}, right is ${result.rhsText}.`,
+        artifactRefs: [artifact.id]
+      });
+      args.edges.push({ from: toolNode.id, to: mismatchNode.id, label: "found" });
+
+      return buildReceipt({
+        problem: args.problem,
+        normalizedProblem: args.normalizedProblem,
+        createdAt: args.createdAt,
+        trust,
+        summary: `Refuted by dimensional analysis: left is ${result.lhsText}, right is ${result.rhsText}.`,
+        nodes: args.nodes,
+        edges: args.edges,
+        artifacts: args.artifacts,
+        findings: args.findings
+      });
+    }
+
+    args.findings.push({
+      level: "info",
+      message: "Dimensional consistency is a necessary physics sanity check, not a proof that the equation is physically true."
+    });
+
+    return buildReceipt({
+      problem: args.problem,
+      normalizedProblem: args.normalizedProblem,
+      createdAt: args.createdAt,
+      trust,
+      summary: `Dimensionally consistent: both sides are ${result.lhsText}. This checks units, not full physical truth.`,
+      nodes: args.nodes,
+      edges: args.edges,
+      artifacts: args.artifacts,
+      findings: args.findings
+    });
+  } catch (error) {
+    args.findings.push({
+      level: "warning",
+      message: error instanceof Error ? error.message : "Dimension check failed for an unknown reason."
+    });
+
+    const planNode = addNode(args.nodes, args.createdAt, {
+      kind: "plan",
+      payload: {
+        nextAdapters: ["units", "sympy", "rag"],
+        reason: "The local dimensional-analysis adapter could not parse or evaluate this equation."
+      },
+      trust: "unverified",
+      summary: "Dimension check could not be completed.",
+      artifactRefs: []
+    });
+    args.edges.push({ from: args.normalizedNode.id, to: planNode.id, label: "requires-adapter" });
+
+    return buildReceipt({
+      problem: args.problem,
+      normalizedProblem: args.normalizedProblem,
+      createdAt: args.createdAt,
+      trust: "unverified",
+      summary: "Dimension check could not be completed by the local adapter.",
+      nodes: args.nodes,
+      edges: args.edges,
+      artifacts: args.artifacts,
+      findings: args.findings
+    });
+  }
 }
 
 function completeUniversalParityReceipt(args: {

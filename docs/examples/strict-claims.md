@@ -21,3 +21,17 @@ An intentionally unresolved claim. The expected trust label documents the curren
 expect: unverified
 for all integers n, n^2+n is even
 ```
+
+A physics sanity check:
+
+```theorem-workbench
+expect: dimension-checked
+dimension check force = mass * acceleration
+```
+
+A dimensionally inconsistent formula:
+
+```theorem-workbench
+expect: refuted
+dimension check force = mass * velocity
+```

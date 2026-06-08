@@ -57,12 +57,13 @@ If we want real mathematicians and physicists to take it seriously, the system n
 2. `proved` only means a proof checker accepted it.
 3. `exact-computed` only means exact arithmetic or symbolic computation produced a replayable result.
 4. `bounded-numeric` only means the output includes precision, interval/error bounds, and assumptions.
-5. `source-cited` only means retrieved source spans directly support the claim.
-6. `unverified` is a first-class outcome, not an embarrassment.
-7. False claims must be benchmarked, not hidden.
-8. Failed proof attempts should be inspectable because they teach the next move.
-9. Long runs must checkpoint and replay.
-10. The benchmark suite must punish fluent wrong answers harder than humble uncertainty.
+5. `dimension-checked` only means physical dimensions/units are consistent, not that the model is true.
+6. `source-cited` only means retrieved source spans directly support the claim.
+7. `unverified` is a first-class outcome, not an embarrassment.
+8. False claims must be benchmarked, not hidden.
+9. Failed proof attempts should be inspectable because they teach the next move.
+10. Long runs must checkpoint and replay.
+11. The benchmark suite must punish fluent wrong answers harder than humble uncertainty.
 
 For physics, add these requirements before claiming physics competence:
 

@@ -76,6 +76,7 @@ Trust labels:
 | `exact-computed` | Derived by exact arithmetic or symbolic CAS with replayable inputs. |
 | `bounded-numeric` | Verified by intervals, error bounds, precision controls, or independent numeric checks. |
 | `smt-checked` | Checked by an SMT solver, often with satisfiable/unsatisfiable/counterexample output. |
+| `dimension-checked` | Physical dimensions/units are consistent; this is not a proof of the model or equation. |
 | `source-cited` | Grounded in retrieved source material, with citation metadata. |
 | `cross-checked` | Multiple independent tools agree on a normalized result. |
 | `unverified` | Generated or inferred, but not yet backed by a trusted tool. |

@@ -30,4 +30,4 @@ compute 3 / 4 + 5 / 8
 ```
 ````
 
-If `expect:` is omitted, strict checking only passes trusted non-refutation labels such as `proved`, `exact-computed`, `bounded-numeric`, `smt-checked`, `source-cited`, or `cross-checked`.
+If `expect:` is omitted, strict checking only passes trusted non-refutation labels such as `proved`, `exact-computed`, `bounded-numeric`, `smt-checked`, `dimension-checked`, `source-cited`, or `cross-checked`.

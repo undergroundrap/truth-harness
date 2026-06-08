@@ -6,6 +6,7 @@ const TRUST_LABELS = new Set<TrustLabel>([
   "exact-computed",
   "bounded-numeric",
   "smt-checked",
+  "dimension-checked",
   "source-cited",
   "cross-checked",
   "unverified",
@@ -17,6 +18,7 @@ const STRICT_PASS_TRUST = new Set<TrustLabel>([
   "exact-computed",
   "bounded-numeric",
   "smt-checked",
+  "dimension-checked",
   "source-cited",
   "cross-checked"
 ]);

@@ -3,6 +3,7 @@ export type TrustLabel =
   | "exact-computed"
   | "bounded-numeric"
   | "smt-checked"
+  | "dimension-checked"
   | "source-cited"
   | "cross-checked"
   | "unverified"

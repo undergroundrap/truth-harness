@@ -24,4 +24,20 @@ describe("createReceipt", () => {
     expect(receipt.trust).toBe("unverified");
     expect(receipt.findings[0]?.message).toContain("did not produce a formal proof");
   });
+
+  it("creates dimension-checked receipts for consistent physics formulas", () => {
+    const receipt = createReceipt("dimension check force = mass * acceleration");
+
+    expect(receipt.trust).toBe("dimension-checked");
+    expect(receipt.summary).toContain("Dimensionally consistent");
+    expect(receipt.graph.nodes.some((node) => node.kind === "tool_run" && node.trust === "dimension-checked")).toBe(true);
+  });
+
+  it("refutes dimensionally inconsistent physics formulas", () => {
+    const receipt = createReceipt("dimension check force = mass * velocity");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("left is M L T^-2");
+    expect(receipt.summary).toContain("right is M L T^-1");
+  });
 });

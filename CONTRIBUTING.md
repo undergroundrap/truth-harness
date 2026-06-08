@@ -44,6 +44,7 @@ Do not change trust-label semantics lightly. In particular:
 
 - `proved` means a proof checker accepted it.
 - `exact-computed` means exact arithmetic or symbolic computation produced a replayable result.
+- `dimension-checked` means both sides of a formula have matching physical dimensions; it is not a proof of the physics.
 - `refuted` means a counterexample or contradiction invalidated the claim.
 - `unverified` is a valid and important outcome.
 

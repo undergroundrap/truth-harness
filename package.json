@@ -16,9 +16,10 @@
     "demo": "npm run cli -- ask \"for all integers n, n^2+n+1 is even\"",
     "demo:bench": "npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json",
     "demo:check": "npm run cli -- check docs/examples/strict-claims.md",
+    "demo:physics": "npm run cli -- bench run packages/benchmarks/suites/physics-seed.json",
     "demo:replay": "npm run cli -- ask \"for all integers n, n^2+n+1 is even\" -- --out receipts/false-parity.json && npm run cli -- replay receipts/false-parity.json",
     "mcp": "node packages/mcp-server/dist/index.js",
-    "proof:launch": "npm run demo:replay && npm run demo:bench && npm run demo:check",
+    "proof:launch": "npm run demo:replay && npm run demo:bench && npm run demo:physics && npm run demo:check",
     "test": "vitest run"
   },
   "devDependencies": {

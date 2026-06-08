@@ -1,0 +1,67 @@
+{
+  "id": "physics-seed",
+  "title": "Physics Seed",
+  "description": "Launch suite for local dimensional analysis: consistent formulas, mismatches, and honest scope.",
+  "tasks": [
+    {
+      "id": "force-newton-second-law",
+      "prompt": "dimension check force = mass * acceleration",
+      "expectTrust": "dimension-checked",
+      "expectSummaryIncludes": "M L T^-2"
+    },
+    {
+      "id": "energy-work",
+      "prompt": "dimension check energy = force * length",
+      "expectTrust": "dimension-checked",
+      "expectSummaryIncludes": "M L^2 T^-2"
+    },
+    {
+      "id": "kinetic-energy",
+      "prompt": "dimension check energy = 0.5 * mass * velocity^2",
+      "expectTrust": "dimension-checked",
+      "expectSummaryIncludes": "M L^2 T^-2"
+    },
+    {
+      "id": "power-energy-time",
+      "prompt": "dimension check power = energy / time",
+      "expectTrust": "dimension-checked",
+      "expectSummaryIncludes": "M L^2 T^-3"
+    },
+    {
+      "id": "pressure-force-area",
+      "prompt": "dimension check pressure = force / area",
+      "expectTrust": "dimension-checked",
+      "expectSummaryIncludes": "M L^-1 T^-2"
+    },
+    {
+      "id": "density-mass-volume",
+      "prompt": "dimension check density = mass / volume",
+      "expectTrust": "dimension-checked",
+      "expectSummaryIncludes": "M L^-3"
+    },
+    {
+      "id": "voltage-power-current",
+      "prompt": "dimension check voltage = power / current",
+      "expectTrust": "dimension-checked",
+      "expectSummaryIncludes": "M L^2 T^-3 I^-1"
+    },
+    {
+      "id": "bad-force-velocity",
+      "prompt": "dimension check force = mass * velocity",
+      "expectTrust": "refuted",
+      "expectSummaryIncludes": "right is M L T^-1"
+    },
+    {
+      "id": "bad-energy-divide-length",
+      "prompt": "dimension check energy = force / length",
+      "expectTrust": "refuted",
+      "expectSummaryIncludes": "right is M T^-2"
+    },
+    {
+      "id": "bad-pressure-force-times-area",
+      "prompt": "dimension check pressure = force * area",
+      "expectTrust": "refuted",
+      "expectSummaryIncludes": "right is M L^3 T^-2"
+    }
+  ]
+}
