@@ -1,0 +1,43 @@
+{
+  "id": "foundations-seed",
+  "title": "Foundations Seed",
+  "description": "Tiny launch suite for exact arithmetic, honest uncertainty, and false-claim refutation.",
+  "tasks": [
+    {
+      "id": "exact-order-of-operations",
+      "prompt": "compute 2 + 2 * 3",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "8"
+    },
+    {
+      "id": "exact-rational",
+      "prompt": "compute 3 / 4 + 5 / 8",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "11/8"
+    },
+    {
+      "id": "exact-power",
+      "prompt": "evaluate 2^10",
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "1024"
+    },
+    {
+      "id": "false-parity-plus-one",
+      "prompt": "for all integers n, n^2+n+1 is even",
+      "expectTrust": "refuted",
+      "expectSummaryIncludes": "n=-20"
+    },
+    {
+      "id": "false-parity-odd",
+      "prompt": "for all integers n, n^2+n is odd",
+      "expectTrust": "refuted",
+      "expectSummaryIncludes": "n=-20"
+    },
+    {
+      "id": "honest-unverified-parity",
+      "prompt": "for all integers n, n^2+n is even",
+      "expectTrust": "unverified",
+      "expectSummaryIncludes": "unverified"
+    }
+  ]
+}

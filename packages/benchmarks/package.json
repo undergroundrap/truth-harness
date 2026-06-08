@@ -1,0 +1,19 @@
+{
+  "name": "@theorem-workbench/benchmarks",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Benchmark suites and scoring for Theorem Workbench proof receipts.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@theorem-workbench/core": "0.0.0"
+  }
+}

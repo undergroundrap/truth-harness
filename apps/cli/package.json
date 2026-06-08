@@ -1,0 +1,18 @@
+{
+  "name": "@theorem-workbench/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Human and agent CLI for Theorem Workbench.",
+  "bin": {
+    "theorem": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@theorem-workbench/benchmarks": "0.0.0",
+    "@theorem-workbench/core": "0.0.0",
+    "commander": "^14.0.0"
+  }
+}

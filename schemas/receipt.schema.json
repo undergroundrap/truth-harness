@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/receipt.schema.json",
+  "title": "Theorem Workbench Receipt",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "createdAt",
+    "problem",
+    "normalizedProblem",
+    "trust",
+    "summary",
+    "replay",
+    "graph",
+    "artifacts",
+    "findings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.receipt.v0"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^run_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "problem": {
+      "type": "string"
+    },
+    "normalizedProblem": {
+      "type": "string"
+    },
+    "trust": {
+      "$ref": "#/$defs/trustLabel"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "replay": {
+      "type": "string"
+    },
+    "graph": {
+      "type": "object",
+      "required": ["nodes", "edges"],
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/graphNode"
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceEdge"
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    }
+  },
+  "$defs": {
+    "trustLabel": {
+      "enum": [
+        "proved",
+        "exact-computed",
+        "bounded-numeric",
+        "smt-checked",
+        "source-cited",
+        "cross-checked",
+        "unverified",
+        "refuted"
+      ]
+    },
+    "nodeKind": {
+      "enum": [
+        "problem",
+        "normalized_problem",
+        "claim",
+        "plan",
+        "tool_run",
+        "proof",
+        "computation",
+        "counterexample",
+        "source",
+        "explanation",
+        "lesson",
+        "artifact"
+      ]
+    },
+    "graphNode": {
+      "type": "object",
+      "required": ["id", "kind", "createdAt", "payload", "trust", "summary", "artifactRefs"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^node_[a-f0-9]{16}$"
+        },
+        "kind": {
+          "$ref": "#/$defs/nodeKind"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "payload": true,
+        "trust": {
+          "$ref": "#/$defs/trustLabel"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "artifactRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "evidenceEdge": {
+      "type": "object",
+      "required": ["from", "to", "label"],
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["id", "kind", "mimeType", "content"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^artifact_[a-f0-9]{16}$"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "mimeType": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["level", "message"],
+      "properties": {
+        "level": {
+          "enum": ["info", "warning", "error"]
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
