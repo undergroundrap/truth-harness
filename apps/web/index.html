@@ -22,6 +22,11 @@
           <button class="nav-item" type="button"><span>*</span> Benchmarks</button>
         </nav>
 
+        <div class="sidebar-search">
+          <input id="sidebar-search" type="search" autocomplete="off" placeholder="Search workspace" aria-label="Search projects, lanes, claims, and progress">
+          <span class="mini-label" id="sidebar-search-count">all items</span>
+        </div>
+
         <section class="sidebar-section">
           <div class="section-label">Projects</div>
           <button class="project-row selected" type="button">
@@ -45,21 +50,25 @@
               <span>Math</span>
               <small>proof, CAS</small>
             </button>
+            <button class="lane-row" data-lane="sources" type="button">
+              <span>Sources</span>
+              <small>RAG, citations</small>
+            </button>
             <button class="lane-row" data-lane="code" type="button">
               <span>Code</span>
               <small>tests, formal</small>
             </button>
+            <button class="lane-row" data-lane="data" type="button">
+              <span>Data</span>
+              <small>stats, causal</small>
+            </button>
+            <button class="lane-row" data-lane="writing" type="button">
+              <span>Writing</span>
+              <small>book, paper</small>
+            </button>
             <button class="lane-row" data-lane="physics" type="button">
               <span>Physics</span>
               <small>units, sim</small>
-            </button>
-            <button class="lane-row" data-lane="quantum" type="button">
-              <span>Quantum</span>
-              <small>circuits, state</small>
-            </button>
-            <button class="lane-row" data-lane="hardware" type="button">
-              <span>Hardware</span>
-              <small>CAD, sensors</small>
             </button>
             <button class="lane-row" data-lane="biology" type="button">
               <span>Biology</span>
@@ -69,29 +78,25 @@
               <span>Chemistry</span>
               <small>molecules, mats</small>
             </button>
-            <button class="lane-row" data-lane="data" type="button">
-              <span>Data</span>
-              <small>stats, causal</small>
-            </button>
-            <button class="lane-row" data-lane="sources" type="button">
-              <span>Sources</span>
-              <small>RAG, citations</small>
-            </button>
-            <button class="lane-row" data-lane="writing" type="button">
-              <span>Writing</span>
-              <small>book, paper</small>
-            </button>
-            <button class="lane-row" data-lane="patent" type="button">
-              <span>Patent</span>
-              <small>prior art</small>
-            </button>
             <button class="lane-row" data-lane="finance" type="button">
               <span>Finance</span>
               <small>audit, risk</small>
             </button>
+            <button class="lane-row" data-lane="hardware" type="button">
+              <span>Hardware</span>
+              <small>CAD, sensors</small>
+            </button>
+            <button class="lane-row" data-lane="quantum" type="button">
+              <span>Quantum</span>
+              <small>circuits, state</small>
+            </button>
             <button class="lane-row" data-lane="security" type="button">
               <span>Security</span>
               <small>threat, repro</small>
+            </button>
+            <button class="lane-row" data-lane="patent" type="button">
+              <span>Patent</span>
+              <small>prior art</small>
             </button>
           </div>
         </section>
@@ -249,6 +254,17 @@
                 <div><dt>Snapshots</dt><dd>.theorem-workbench/snapshots</dd></div>
                 <div><dt>Indexes</dt><dd>.theorem-workbench/indexes</dd></div>
               </dl>
+            </section>
+
+            <section class="inspector-section">
+              <h3>Math Core</h3>
+              <div class="progress-list">
+                <div class="progress-row"><span class="task-state passed"></span><strong>Exact arithmetic</strong><small>fractions, traces, replay</small></div>
+                <div class="progress-row"><span class="task-state passed"></span><strong>Counterexamples</strong><small>finite exact search</small></div>
+                <div class="progress-row"><span class="task-state waiting"></span><strong>Symbolic engine</strong><small>deeper CAS coverage</small></div>
+                <div class="progress-row"><span class="task-state waiting"></span><strong>Proof bridge</strong><small>Lean-first proved path</small></div>
+                <div class="progress-row"><span class="task-state waiting"></span><strong>Benchmark ladder</strong><small>school to research</small></div>
+              </div>
             </section>
 
             <section class="inspector-section">

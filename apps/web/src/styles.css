@@ -126,6 +126,29 @@ button {
   margin-top: 12px;
 }
 
+.sidebar-search {
+  display: grid;
+  gap: 5px;
+  margin-top: 12px;
+  padding: 0 6px;
+}
+
+.sidebar-search input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  outline: none;
+  background: #111111;
+  color: var(--text);
+  padding: 0 10px;
+}
+
+.sidebar-search input::placeholder {
+  color: var(--faint);
+}
+
 .nav-item,
 .project-row,
 .claim-row {
@@ -251,6 +274,15 @@ button {
   color: var(--muted);
   font-size: 12px;
   margin-top: 2px;
+}
+
+.sidebar-empty {
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 4px 0;
+  padding: 9px;
 }
 
 .trust-dot {
@@ -790,6 +822,7 @@ dd {
 
 #research-notes:focus,
 .activity-tools input:focus,
+.sidebar-search input:focus,
 .composer input:focus {
   box-shadow: 0 0 0 2px rgba(183, 169, 138, 0.18);
 }
@@ -914,6 +947,40 @@ textarea:focus-visible {
   padding-left: 18px;
   color: #ddd8cf;
   font-size: 13px;
+}
+
+.progress-list {
+  display: grid;
+  gap: 7px;
+}
+
+.progress-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #121212;
+  padding: 8px;
+}
+
+.progress-row strong,
+.progress-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-row strong {
+  color: #eee7d8;
+  font-size: 12px;
+}
+
+.progress-row small {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .activity-list {
@@ -1171,6 +1238,7 @@ textarea:focus-visible {
 
   .project-row,
   .lane-list,
+  .sidebar-search,
   .claim-row span:last-child,
   .section-label,
   .sidebar-footer {

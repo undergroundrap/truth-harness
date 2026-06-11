@@ -138,11 +138,14 @@ const state = {
   level: "middle",
   surface: "trace",
   lane: "math",
+  sidebarQuery: "",
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE
 };
 
 const claimList = document.querySelector("#claim-list");
+const sidebarSearch = document.querySelector("#sidebar-search");
+const sidebarSearchCount = document.querySelector("#sidebar-search-count");
 const laneButtons = document.querySelectorAll(".lane-row");
 const laneStatus = document.querySelector("#lane-status");
 const traceList = document.querySelector("#trace-list");
@@ -181,18 +184,18 @@ const surfaceStatusText = {
 };
 const laneStatusText = {
   math: "Math lane",
+  sources: "Sources lane",
   code: "Code lane",
+  data: "Data lane",
+  writing: "Writing lane",
   physics: "Physics lane",
-  quantum: "Quantum lane",
-  hardware: "Hardware lane",
   biology: "Biology lane",
   chemistry: "Chemistry lane",
-  data: "Data lane",
-  sources: "Sources lane",
-  writing: "Writing lane",
-  patent: "Patent lane",
   finance: "Finance lane",
-  security: "Security lane"
+  hardware: "Hardware lane",
+  quantum: "Quantum lane",
+  security: "Security lane",
+  patent: "Patent lane"
 };
 
 researchNotes.value = loadNotes();
@@ -248,13 +251,22 @@ function render() {
   renderSurface();
   renderLane();
   renderReport(receipt);
+  applySidebarSearch();
   document.querySelectorAll(".segment").forEach((button) => {
     button.classList.toggle("active", button.dataset.level === state.level);
   });
 }
 
 function renderClaimList() {
-  claimList.innerHTML = recentReceiptKeys
+  const query = state.sidebarQuery.trim().toLowerCase();
+  const visibleKeys = recentReceiptKeys.filter((key) => {
+    const receipt = receiptStore.get(key);
+    return receipt && matchesReceiptSearch(receipt, query);
+  });
+
+  claimList.innerHTML = visibleKeys.length === 0
+    ? `<div class="sidebar-empty">No matching claims.</div>`
+    : visibleKeys
     .map((key) => {
       const receipt = receiptStore.get(key);
       return `<button class="claim-row ${key === state.receiptKey ? "active" : ""}" data-receipt="${escapeHtml(key)}" type="button">
@@ -266,6 +278,29 @@ function renderClaimList() {
       </button>`;
     })
     .join("");
+}
+
+function matchesReceiptSearch(receipt, query) {
+  if (!query) {
+    return true;
+  }
+
+  return [
+    receipt.title,
+    receipt.subtitle,
+    receipt.trust,
+    receipt.runId,
+    receipt.engine,
+    receipt.output,
+    receipt.replay,
+    ...Object.entries(receipt.details).flat(),
+    ...receipt.graph.flat(),
+    ...Object.values(receipt.traces).flat(),
+    ...receipt.limitations
+  ]
+    .join(" ")
+    .toLowerCase()
+    .includes(query);
 }
 
 function renderSurface() {
@@ -291,6 +326,24 @@ function renderLane() {
     button.setAttribute("aria-pressed", String(active));
   });
   laneStatus.textContent = laneStatusText[state.lane] ?? "General lane";
+}
+
+function applySidebarSearch() {
+  const query = state.sidebarQuery.trim().toLowerCase();
+  let matched = 0;
+  let total = recentReceiptKeys.length;
+
+  document.querySelectorAll(".project-row, .lane-row, .task-row, .progress-row").forEach((row) => {
+    total += 1;
+    const visible = !query || row.textContent.toLowerCase().includes(query);
+    row.hidden = !visible;
+    if (visible) {
+      matched += 1;
+    }
+  });
+
+  matched += claimList.querySelectorAll(".claim-row").length;
+  sidebarSearchCount.textContent = query ? `${matched} of ${total}` : "all items";
 }
 
 function renderMainGraph(receipt) {
@@ -715,6 +768,12 @@ laneButtons.forEach((button) => {
     state.lane = nextLane;
     renderLane();
   });
+});
+
+sidebarSearch.addEventListener("input", () => {
+  state.sidebarQuery = sidebarSearch.value;
+  renderClaimList();
+  applySidebarSearch();
 });
 
 activitySearch.addEventListener("input", () => {
