@@ -3,6 +3,7 @@ import { evaluateExpression, expressionVariables, parseExpression } from "./expr
 import { evaluateIntervalPrompt, parseIntervalPrompt, type IntervalPrompt } from "./interval.js";
 import { proveUniversalParity } from "./parity-proof.js";
 import { Rational } from "./rational.js";
+import { createArithmeticTrace } from "./arithmetic-trace.js";
 import { stableHash } from "./stable-hash.js";
 import { parseSymbolicPrompt, runSympySync, type SymbolicPrompt } from "./sympy.js";
 import type {
@@ -910,7 +911,13 @@ function completeArithmeticReceipt(args: {
   normalizedNode: GraphNode;
 }): Receipt {
   const expression = parseExpression(args.arithmeticSource);
-  const result = evaluateExpression(expression).toString();
+  const trace = createArithmeticTrace(args.arithmeticSource, expression);
+  const result = trace.result;
+  const traceArtifact = addArtifact(args.artifacts, {
+    kind: "exact-arithmetic-trace",
+    mimeType: "application/json",
+    content: JSON.stringify(trace, null, 2)
+  });
   const artifact = addArtifact(args.artifacts, {
     kind: "exact-arithmetic-result",
     mimeType: "application/json",
@@ -918,7 +925,8 @@ function completeArithmeticReceipt(args: {
       {
         adapter: "local-rational-arithmetic",
         expression: args.arithmeticSource,
-        result
+        result,
+        traceRef: traceArtifact.id
       },
       null,
       2
@@ -930,13 +938,33 @@ function completeArithmeticReceipt(args: {
     payload: {
       adapter: "local-rational-arithmetic",
       expression: args.arithmeticSource,
-      result
+      result,
+      traceArtifactRef: traceArtifact.id
     },
     trust: "exact-computed",
-    summary: `Exact arithmetic result is ${result}.`,
-    artifactRefs: [artifact.id]
+    summary: `Exact arithmetic result is ${result}; machine trace has ${trace.steps.length} steps.`,
+    artifactRefs: [artifact.id, traceArtifact.id]
   });
   args.edges.push({ from: args.normalizedNode.id, to: computationNode.id, label: "computed-by" });
+
+  const lessonNode = addNode(args.nodes, args.createdAt, {
+    kind: "lesson",
+    payload: {
+      source: "deterministic-arithmetic-trace",
+      audiences: trace.explanations.map((view) => view.audience),
+      traceArtifactRef: traceArtifact.id,
+      caveat: "If an explanation conflicts with the trace, the trace is authoritative."
+    },
+    trust: "exact-computed",
+    summary: "Generated audience-level explanations from the verified arithmetic trace.",
+    artifactRefs: [traceArtifact.id]
+  });
+  args.edges.push({ from: computationNode.id, to: lessonNode.id, label: "explained-by" });
+
+  args.findings.push({
+    level: "info",
+    message: "Exact arithmetic receipts include a deterministic step trace and audience-level explanations; no model-generated math is needed to explain this calculation."
+  });
 
   return buildReceipt({
     problem: args.problem,
@@ -955,10 +983,13 @@ function completeArithmeticReceipt(args: {
         }
       ],
       inputs: [args.arithmeticSource],
-      outputs: [result],
+      outputs: [result, `traceSteps=${trace.steps.length}`],
       replayable: true,
       proofCheckerBacked: false,
-      limitations: ["Exact arithmetic covers the parsed numeric expression, not arbitrary surrounding claims."]
+      limitations: [
+        "Exact arithmetic covers the parsed numeric expression, not arbitrary surrounding claims.",
+        "Educational explanations are generated from the trace and should defer to the machine-readable steps."
+      ]
     },
     nodes: args.nodes,
     edges: args.edges,

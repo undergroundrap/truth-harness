@@ -11,6 +11,17 @@ describe("createReceipt", () => {
     expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-rational-arithmetic");
     expect(receipt.evidenceProfile.proofCheckerBacked).toBe(false);
     expect(receipt.graph.nodes.some((node) => node.kind === "computation")).toBe(true);
+    expect(receipt.graph.nodes.some((node) => node.kind === "lesson")).toBe(true);
+    const traceArtifact = receipt.artifacts.find((artifact) => artifact.kind === "exact-arithmetic-trace");
+    expect(traceArtifact).toBeDefined();
+    const trace = JSON.parse(traceArtifact?.content ?? "{}") as {
+      result?: string;
+      steps?: unknown[];
+      explanations?: Array<{ audience: string }>;
+    };
+    expect(trace.result).toBe("11/8");
+    expect(trace.steps?.length).toBeGreaterThan(0);
+    expect(trace.explanations?.map((view) => view.audience)).toContain("middle-school");
   });
 
   it("marks MVP receipts as local-only with no external disclosure", () => {

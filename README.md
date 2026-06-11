@@ -17,6 +17,7 @@ AI is already good at writing plausible math. The hard part is knowing when the 
 Theorem Workbench turns math answers into receipts:
 
 - exact computations use exact rational arithmetic or CAS adapters,
+- exact arithmetic receipts include machine-readable step traces and deterministic audience-level explanations,
 - false universal claims get counterexample search before explanation,
 - formal proofs will only be labeled `proved` when a proof checker accepts them,
 - every result carries a trust label, replay command, and privacy metadata.

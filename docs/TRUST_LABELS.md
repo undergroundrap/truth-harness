@@ -42,4 +42,6 @@ Workspace validation scans receipts for schema failures, non-local-first privacy
 
 CAS output, notebook output, code-run stdout/stderr, simulations, RAG hits, and hosted model responses are evidence artifacts. They are not truth by themselves. A code-run record proves only that a local direct process was launched and captured under the recorded command, cwd, timeout, environment boundary, output limit, sandbox measurement, and execution-policy decision. Until OS sandboxing is implemented, code-run records must say `networkAccess: unknown`; an executable allowlist is not proof that no network access occurred. Workflows that require isolation should set `requireSandbox` and accept a fail-closed result when no sandbox provider is available.
 
+Exact arithmetic receipts include deterministic trace artifacts with every local rational-arithmetic step plus middle-school, high-school, college, and expert explanation views. Those explanations are teaching aids derived from the machine trace; if a natural-language explanation ever conflicts with the trace, the trace is authoritative.
+
 Biomedical, safety, regulatory, patent, and scientific discovery claims require explicit validation gates and human expert review before stronger language is allowed.

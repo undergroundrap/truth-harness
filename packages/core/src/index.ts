@@ -13,6 +13,7 @@ export type {
   TrustLabel
 } from "./types.js";
 
+export { createArithmeticTrace } from "./arithmetic-trace.js";
 export { evaluateExpression, parseExpression } from "./expression.js";
 export { Rational } from "./rational.js";
 export { checkDimensionEquation, formatDimension, parseDimensionPrompt } from "./dimension.js";
@@ -218,6 +219,13 @@ export {
 export { replayReceipt } from "./replay.js";
 export { stableHash } from "./stable-hash.js";
 export type { BaseDimension, DimensionCheckResult, DimensionVector } from "./dimension.js";
+export type {
+  ArithmeticTeachingAudience,
+  ArithmeticTeachingView,
+  ArithmeticTrace,
+  ArithmeticTraceOperation,
+  ArithmeticTraceStep
+} from "./arithmetic-trace.js";
 export type {
   BenchmarkCaseComparisonStatus,
   BenchmarkArtifactSummary,
