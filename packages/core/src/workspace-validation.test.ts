@@ -339,6 +339,9 @@ describe("workspace artifact validation", () => {
       codeRefs: ["inline:node-eval"],
       inputRefs: ["prompt:golden-code-run"],
       outputRefs: ["stdout"],
+      policy: {
+        allowedExecutables: [process.execPath]
+      },
       now: "2026-06-10T00:25:30.000Z"
     });
     const benchmarkReceipt = createReceipt("compute 2 + 2");

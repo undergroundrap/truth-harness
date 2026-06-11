@@ -35,6 +35,9 @@ describe("code run records", () => {
       codeRefs: ["inline:node-eval"],
       inputRefs: ["prompt:6*7"],
       outputRefs: ["stdout"],
+      policy: {
+        allowedExecutables: [process.execPath]
+      },
       now: "2026-06-11T00:00:00.000Z"
     });
     const schema = JSON.parse(await readFile(resolve(schemasDir, "code-run.schema.json"), "utf8")) as unknown;
@@ -57,6 +60,15 @@ describe("code run records", () => {
     expect(write.record.execution.exitCode).toBe(0);
     expect(write.record.stdout.text.trim()).toBe("42");
     expect(write.record.replay.command).toContain(quoteForExpectation(process.execPath));
+    expect(write.record.replay.localOnly).toBe(false);
+    expect(write.record.privacy).toMatchObject({
+      mode: "unsandboxed-local-execution",
+      networkAccess: "unknown",
+      measurement: {
+        processSandbox: "none",
+        networkIsolation: "not-enforced"
+      }
+    });
     expect(write.record.reproducibilityBoundary.commandExecutionIsNotProof).toBe(true);
     expect(write.markdown).toContain("Compute forty two");
     expect(write.markdown).toContain("42");
@@ -86,6 +98,9 @@ describe("code run records", () => {
       purpose: "Run a failing local test command.",
       command: "test-runner",
       args: ["--fail"],
+      policy: {
+        allowedExecutables: ["test-runner"]
+      },
       runner,
       now: "2026-06-11T00:00:00.000Z"
     });
@@ -118,6 +133,9 @@ describe("code run records", () => {
       command: "slow-command",
       timeoutMs: 100,
       maxOutputBytes: 3,
+      policy: {
+        allowedExecutables: ["slow-command"]
+      },
       runner
     });
 
@@ -155,6 +173,31 @@ describe("code run records", () => {
     expect(runnerCalled).toBe(false);
   });
 
+  it("requires an explicit executable allowlist before running any command", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    let runnerCalled = false;
+    const runner: CodeRunCommandRunner = () => {
+      runnerCalled = true;
+      return {
+        exitCode: 0,
+        stdout: "should-not-run\n",
+        stderr: "",
+        durationMs: 1
+      };
+    };
+
+    await expect(
+      executeCodeRun({
+        rootPath: root,
+        purpose: "Attempt to run without an allowlist.",
+        command: "node",
+        runner
+      })
+    ).rejects.toThrow("non-empty explicit executable allowlist");
+    expect(runnerCalled).toBe(false);
+  });
+
   it("records explicit policy overrides for package mutation commands", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);
@@ -171,6 +214,9 @@ describe("code run records", () => {
         purpose: "Attempt a package mutation without an override.",
         command: "npm",
         args: ["install"],
+        policy: {
+          allowedExecutables: ["npm"]
+        },
         runner
       })
     ).rejects.toThrow("Package mutation command");
@@ -182,6 +228,7 @@ describe("code run records", () => {
       args: ["install"],
       runner,
       policy: {
+        allowedExecutables: ["npm"],
         allowPackageMutation: true
       }
     });
@@ -210,9 +257,9 @@ describe("code run records", () => {
       executeCodeRun({
         rootPath: root,
         purpose: "Run a command outside the allowlist.",
-        command: "node",
-        runner,
-        policy: {
+      command: "node",
+      runner,
+      policy: {
           allowedExecutables: ["python"]
         }
       })

@@ -425,7 +425,7 @@ function gatesFor(input: {
       }),
       gate({
         kind: "code-run",
-        description: "Attach shell-free local code-run evidence for scripts, tests, parsers, or utilities that were actually executed.",
+        description: "Attach policy-gated local code-run evidence for scripts, tests, parsers, or utilities that were actually executed.",
         status: statusWhenAny(refsByKind(input.evidenceRefs, ["code-run"]), "in-progress"),
         blocking: input.domains.includes("engineering") || input.domains.includes("physics"),
         evidenceRefs: refsByKind(input.evidenceRefs, ["code-run"]),

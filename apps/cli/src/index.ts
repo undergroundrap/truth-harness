@@ -741,7 +741,7 @@ code
   .option("--evidence <ref>", "Related evidence ref; repeatable", collectRepeated, [])
   .option("--timeout-ms <ms>", "Command timeout in milliseconds", parsePositiveInteger, 10000)
   .option("--max-output-bytes <bytes>", "Maximum captured bytes per output stream", parsePositiveInteger, 65536)
-  .option("--allow-executable <name>", "Restrict execution to this executable name/path. Repeat for an allowlist.", collectRepeated, [])
+  .option("--allow-executable <name>", "Required executable name/path allowlist. Repeat for multiple allowed executables.", collectRepeated, [])
   .option("--allow-shell-launcher", "Allow shell launcher executables such as cmd, PowerShell, bash, or sh")
   .option("--allow-network-command", "Allow obvious network-capable commands such as curl, wget, ssh, or scp")
   .option("--allow-destructive-command", "Allow obvious destructive commands such as rm, rmdir, format, or shutdown")

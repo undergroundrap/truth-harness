@@ -1140,6 +1140,7 @@ export async function handleTheoremNotebookRunList(input: TheoremNotebookRunList
 }
 
 export async function handleTheoremCodeRun(input: TheoremCodeRunInput): Promise<TheoremCodeRunOutput> {
+  assertMcpCodeRunEnabled();
   const result = await writeCodeRun({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -1164,6 +1165,18 @@ export async function handleTheoremCodeRun(input: TheoremCodeRunInput): Promise<
       ? `Code run ${result.record.runId} did not pass: ${result.record.execution.status}.`
       : `Code run ${result.record.runId} completed with status ${result.record.execution.status}.`
   };
+}
+
+function assertMcpCodeRunEnabled(): void {
+  if (isTruthyEnv(process.env.THEOREM_ALLOW_CODE_RUN)) {
+    return;
+  }
+
+  throw new Error("MCP code execution is disabled. Set THEOREM_ALLOW_CODE_RUN=1 and provide an explicit policy.allowedExecutables list to enable theorem_code_run.");
+}
+
+function isTruthyEnv(value: string | undefined): boolean {
+  return value === "1" || value?.toLowerCase() === "true" || value?.toLowerCase() === "yes";
 }
 
 export async function handleTheoremCodeRunList(input: TheoremCodeRunListInput): Promise<{

@@ -9,12 +9,14 @@ import { createTheoremMcpServer } from "./index.js";
 const tempRoots: string[] = [];
 const originalWorkspaceRoot = process.env.THEOREM_WORKBENCH_ROOT;
 const originalLeanCommand = process.env.THEOREM_LEAN;
+const originalCodeRunOptIn = process.env.THEOREM_ALLOW_CODE_RUN;
 const vaultKeyEnv = "THEOREM_WORKBENCH_SERVER_TEST_VAULT_KEY";
 const originalVaultKey = process.env[vaultKeyEnv];
 
 afterEach(async () => {
   restoreWorkspaceRoot();
   restoreLeanCommand();
+  restoreCodeRunOptIn();
   restoreVaultKey();
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
   tempRoots.length = 0;
@@ -58,6 +60,7 @@ describe("Theorem MCP server", () => {
     );
     process.env[vaultKeyEnv] = "server vault test passphrase";
     process.env.THEOREM_LEAN = "theorem-workbench-missing-lean-command";
+    process.env.THEOREM_ALLOW_CODE_RUN = "1";
     const server = createTheoremMcpServer();
     const client = new Client({ name: "theorem-workbench-test-client", version: "0.0.0" });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -443,6 +446,9 @@ describe("Theorem MCP server", () => {
           codeRefs: ["inline:node-eval"],
           inputRefs: ["prompt:server-code-run"],
           outputRefs: ["stdout"],
+          policy: {
+            allowedExecutables: [process.execPath]
+          },
           failOnNonzero: true
         }
       });
@@ -766,6 +772,15 @@ function restoreLeanCommand(): void {
   }
 
   process.env.THEOREM_LEAN = originalLeanCommand;
+}
+
+function restoreCodeRunOptIn(): void {
+  if (originalCodeRunOptIn === undefined) {
+    delete process.env.THEOREM_ALLOW_CODE_RUN;
+    return;
+  }
+
+  process.env.THEOREM_ALLOW_CODE_RUN = originalCodeRunOptIn;
 }
 
 function restoreVaultKey(): void {

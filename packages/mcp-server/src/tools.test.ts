@@ -66,6 +66,7 @@ const receiptPath = join("receipts", "mcp-test.json");
 const tempRoots: string[] = [];
 const originalWorkspaceRoot = process.env.THEOREM_WORKBENCH_ROOT;
 const originalLeanCommand = process.env.THEOREM_LEAN;
+const originalCodeRunOptIn = process.env.THEOREM_ALLOW_CODE_RUN;
 const vaultKeyEnv = "THEOREM_WORKBENCH_MCP_TEST_VAULT_KEY";
 const originalVaultKey = process.env[vaultKeyEnv];
 
@@ -73,6 +74,7 @@ afterEach(async () => {
   // Keep generated receipts ignored by git; replay tests overwrite them when needed.
   restoreWorkspaceRoot();
   restoreLeanCommand();
+  restoreCodeRunOptIn();
   restoreVaultKey();
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
   tempRoots.length = 0;
@@ -997,6 +999,7 @@ describe("MCP tool handlers", () => {
   it("runs local code and records shell-free execution evidence", async () => {
     const root = await tempRoot();
     process.env.THEOREM_WORKBENCH_ROOT = root;
+    process.env.THEOREM_ALLOW_CODE_RUN = "1";
     await handleTheoremWorkspaceInit({ name: "MCP Code Run Lab" });
 
     const result = await handleTheoremCodeRun({
@@ -1020,6 +1023,8 @@ describe("MCP tool handlers", () => {
     expect(result.result.record.command.shell).toBe(false);
     expect(result.result.record.policy.matchedAllowlist).toBe(true);
     expect(result.result.record.policy.detected.categories).toEqual([]);
+    expect(result.result.record.privacy.networkAccess).toBe("unknown");
+    expect(result.result.record.replay.localOnly).toBe(false);
     expect(result.result.record.execution.status).toBe("passed");
     expect(result.result.record.stdout.text.trim()).toBe("mcp-code-run");
     expect(result.result.jsonPath).toContain(".theorem-workbench");
@@ -1033,15 +1038,37 @@ describe("MCP tool handlers", () => {
   it("blocks risky code-run commands through the MCP handler by default", async () => {
     const root = await tempRoot();
     process.env.THEOREM_WORKBENCH_ROOT = root;
+    process.env.THEOREM_ALLOW_CODE_RUN = "1";
     await handleTheoremWorkspaceInit({ name: "MCP Code Policy Lab" });
 
     await expect(
       handleTheoremCodeRun({
         purpose: "Attempt a blocked network command.",
         command: "curl",
-        args: ["--version"]
+        args: ["--version"],
+        policy: {
+          allowedExecutables: ["curl"]
+        }
       })
     ).rejects.toThrow("Network-capable command");
+  });
+
+  it("requires explicit MCP opt-in before code execution is reachable", async () => {
+    const root = await tempRoot();
+    process.env.THEOREM_WORKBENCH_ROOT = root;
+    delete process.env.THEOREM_ALLOW_CODE_RUN;
+    await handleTheoremWorkspaceInit({ name: "MCP Code Gate Lab" });
+
+    await expect(
+      handleTheoremCodeRun({
+        purpose: "Attempt a code run through MCP without process opt-in.",
+        command: process.execPath,
+        args: ["-e", "console.log('blocked')"],
+        policy: {
+          allowedExecutables: [process.execPath]
+        }
+      })
+    ).rejects.toThrow("MCP code execution is disabled");
   });
 
   it("returns MCP-compatible JSON content", () => {
@@ -1074,6 +1101,15 @@ function restoreLeanCommand(): void {
   }
 
   process.env.THEOREM_LEAN = originalLeanCommand;
+}
+
+function restoreCodeRunOptIn(): void {
+  if (originalCodeRunOptIn === undefined) {
+    delete process.env.THEOREM_ALLOW_CODE_RUN;
+    return;
+  }
+
+  process.env.THEOREM_ALLOW_CODE_RUN = originalCodeRunOptIn;
 }
 
 function restoreVaultKey(): void {

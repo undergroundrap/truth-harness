@@ -111,7 +111,7 @@ Priority 2: become useful to real math users.
 - Add SymPy adapter for symbolic exact computation. Status: done for local subprocess MVP.
 - Add Lean smoke adapter and reserve `proved` for accepted proof-checker output. Status: proof-backend readiness probe, local Lean proof artifact check records, proof record writer, and proof list done; richer theorem/proof workflow still pending.
 - Add Z3 adapter for constraints and counterexamples. Status: local SMT-LIB Z3 check records, backend probe, writer, list, CLI, MCP, explicit structured integer-constraint-to-SMT generation, and simple `sat` model binding extraction done; broader natural-language claim-to-SMT translation still pending.
-- Add local direct code execution records for scripts/tests/utilities agents claim to run. Status: core record, schema, default-local execution policy, workspace validation, CLI, MCP, and regression coverage done; richer sandbox isolation still pending.
+- Add local direct code execution records for scripts/tests/utilities agents claim to run. Status: core record, schema, default-deny executable allowlists, unsandboxed `networkAccess: unknown` privacy records, MCP opt-in gate, workspace validation, CLI, MCP, and regression coverage done; richer sandbox isolation still pending.
 - Add unit/dimensional analysis for physics claims.
 
 Priority 3: become native to agents.

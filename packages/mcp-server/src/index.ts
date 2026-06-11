@@ -803,7 +803,7 @@ export function createTheoremMcpServer(): McpServer {
     {
       title: "Run Local Code",
       description:
-        "Execute a local command directly without shell interpolation under the default local execution policy, capture stdout/stderr/exit status, and write a private theorem.code-run.v0 evidence record.",
+        "Execute a local command directly without shell interpolation under the default local execution policy, capture stdout/stderr/exit status, and write a private theorem.code-run.v0 evidence record. Disabled unless the MCP server process has THEOREM_ALLOW_CODE_RUN=1.",
       inputSchema: {
         workspacePath: z
           .string()
@@ -830,8 +830,9 @@ export function createTheoremMcpServer(): McpServer {
           .object({
             allowedExecutables: z
               .array(z.string().min(1))
+              .min(1)
               .optional()
-              .describe("Optional executable allowlist. Entries are normalized by basename without .exe/.cmd/.bat/.com."),
+              .describe("Required executable allowlist for execution. Entries are normalized by basename without .exe/.cmd/.bat/.com."),
             allowShellLauncher: z
               .boolean()
               .optional()

@@ -5,7 +5,6 @@ import { arch, platform } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
-import type { PrivacyMetadata } from "./types.js";
 
 export type CodeRunStatus = "passed" | "failed" | "timed-out" | "error";
 export type CodeRunPolicyCategory =
@@ -73,6 +72,20 @@ export interface CodeRunPolicyRecord {
   notes: string[];
 }
 
+export interface CodeRunPrivacyMetadata {
+  mode: "unsandboxed-local-execution";
+  localFirst: true;
+  networkAccess: "unknown";
+  dataResidency: "local-workspace";
+  externalDisclosures: [];
+  measurement: {
+    processSandbox: "none";
+    networkIsolation: "not-enforced";
+    filesystemIsolation: "working-directory-only";
+    notes: string[];
+  };
+}
+
 export interface CodeRunRecord {
   schemaVersion: "theorem.code-run.v0";
   runId: string;
@@ -116,7 +129,7 @@ export interface CodeRunRecord {
     command: string;
     workingDirectory: string;
     shell: false;
-    localOnly: true;
+    localOnly: boolean;
     notes: string[];
   };
   reproducibilityBoundary: {
@@ -129,7 +142,7 @@ export interface CodeRunRecord {
     requiresExpertReview: boolean;
     requiredNextChecks: string[];
   };
-  privacy: PrivacyMetadata;
+  privacy: CodeRunPrivacyMetadata;
   warnings: string[];
 }
 
@@ -243,7 +256,7 @@ export async function executeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRu
       command: formatCommand([command, ...args]),
       workingDirectory: cwdRef,
       shell: false as const,
-      localOnly: true as const,
+      localOnly: false,
       notes: replayNotesFor({ executionStatus, timedOut })
     },
     reproducibilityBoundary: {
@@ -256,7 +269,7 @@ export async function executeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRu
       requiresExpertReview: requiresExpertReview(purpose),
       requiredNextChecks: nextChecks
     },
-    privacy: status.manifest.privacy,
+    privacy: createUnsandboxedCodeRunPrivacy(),
     warnings: warningsFor({
       executionStatus,
       timedOut,
@@ -508,7 +521,10 @@ function warningsFor(input: {
 }
 
 function replayNotesFor(input: { executionStatus: CodeRunStatus; timedOut: boolean }): string[] {
-  const notes = ["The command executable was launched directly by Theorem Workbench without shell interpolation."];
+  const notes = [
+    "The command executable was launched directly by Theorem Workbench without shell interpolation.",
+    "No OS sandbox or network-deny boundary was enforced for this run, so local-only replay is not guaranteed."
+  ];
 
   if (input.executionStatus !== "passed") {
     notes.push("Replay should reproduce or explain the non-passing status before downstream use.");
@@ -524,10 +540,14 @@ function replayNotesFor(input: { executionStatus: CodeRunStatus; timedOut: boole
 function evaluateCodeRunPolicy(command: string, args: string[], input: CodeRunPolicyInput): CodeRunPolicyRecord {
   const executableName = executablePolicyName(command);
   const allowedExecutables = normalizeStringList(input.allowedExecutables ?? []).map(executablePolicyName);
-  const matchedAllowlist = allowedExecutables.length === 0 || allowedExecutables.includes(executableName);
+  const matchedAllowlist = allowedExecutables.length > 0 && allowedExecutables.includes(executableName);
   const categories = detectPolicyCategories(executableName, args);
   const packageMutation = detectPackageMutation(executableName, args);
   const blockedReasons: string[] = [];
+
+  if (allowedExecutables.length === 0) {
+    blockedReasons.push("Code execution requires a non-empty explicit executable allowlist.");
+  }
 
   if (!matchedAllowlist) {
     blockedReasons.push(`Executable ${JSON.stringify(executableName)} is not in the explicit allowlist.`);
@@ -674,7 +694,8 @@ function policyNotesFor(input: {
   allowedExecutables: string[];
 }): string[] {
   const notes = [
-    "The default local execution policy blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden."
+    "The default local execution policy is default-deny for executables and also blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden.",
+    "Executable allowlists and command-name checks are not a security sandbox; unsandboxed runs record network access as unknown."
   ];
 
   if (input.allowedExecutables.length > 0) {
@@ -690,6 +711,25 @@ function policyNotesFor(input: {
   }
 
   return notes;
+}
+
+function createUnsandboxedCodeRunPrivacy(): CodeRunPrivacyMetadata {
+  return {
+    mode: "unsandboxed-local-execution",
+    localFirst: true,
+    networkAccess: "unknown",
+    dataResidency: "local-workspace",
+    externalDisclosures: [],
+    measurement: {
+      processSandbox: "none",
+      networkIsolation: "not-enforced",
+      filesystemIsolation: "working-directory-only",
+      notes: [
+        "The process was launched from the local workspace, but the operating system did not enforce network isolation.",
+        "Do not treat this code-run record as proof that no network access occurred."
+      ]
+    }
+  };
 }
 
 function executablePolicyName(value: string): string {

@@ -244,6 +244,7 @@ export type {
   CodeRunPolicyCategory,
   CodeRunPolicyInput,
   CodeRunPolicyRecord,
+  CodeRunPrivacyMetadata,
   CodeRunRecord,
   CodeRunStatus,
   CodeRunSummary,
