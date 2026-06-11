@@ -28,6 +28,7 @@ interface JsonSchemaObject {
   minItems?: number;
   uniqueItems?: boolean;
   minimum?: number;
+  maximum?: number;
   pattern?: string;
   format?: string;
 }
@@ -49,6 +50,7 @@ const SUPPORTED_SCHEMA_KEYS = new Set([
   "minItems",
   "uniqueItems",
   "minimum",
+  "maximum",
   "pattern",
   "format"
 ]);
@@ -155,11 +157,16 @@ function validateString(value: string, schema: JsonSchemaObject, path: string): 
 }
 
 function validateNumber(value: number, schema: JsonSchemaObject, path: string): JsonSchemaValidationIssue[] {
+  const issues: JsonSchemaValidationIssue[] = [];
   if (typeof schema.minimum === "number" && value < schema.minimum) {
-    return [{ path, message: `must be >= ${schema.minimum}` }];
+    issues.push({ path, message: `must be >= ${schema.minimum}` });
   }
 
-  return [];
+  if (typeof schema.maximum === "number" && value > schema.maximum) {
+    issues.push({ path, message: `must be <= ${schema.maximum}` });
+  }
+
+  return issues;
 }
 
 function validateArray(

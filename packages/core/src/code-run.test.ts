@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { validateJsonSchema } from "./json-schema-validation.js";
@@ -22,7 +23,7 @@ afterEach(async () => {
 });
 
 describe("code run records", () => {
-  it("executes a shell-free local command and writes a validated record", async () => {
+  it("executes a policy-gated local command and writes a validated record", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Code Run Lab" });
 
@@ -147,6 +148,74 @@ describe("code run records", () => {
     expect(record.warnings.join(" ")).toContain("timed out");
   });
 
+  it("does not block the event loop while a child process is running", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const started = Date.now();
+
+    const run = executeCodeRun({
+      rootPath: root,
+      purpose: "Run a slow child process without blocking other agent work.",
+      command: process.execPath,
+      args: ["-e", "setTimeout(() => console.log('async-code-run'), 250)"],
+      policy: {
+        allowedExecutables: [process.execPath]
+      },
+      timeoutMs: 1000
+    });
+    await delay(25);
+
+    expect(Date.now() - started).toBeLessThan(200);
+    const record = await run;
+    expect(record.execution.status).toBe("passed");
+    expect(record.stdout.text.trim()).toBe("async-code-run");
+  });
+
+  it("limits concurrent code runs per workspace", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    let active = 0;
+    let maxActive = 0;
+    const releases: Array<() => void> = [];
+    const runner: CodeRunCommandRunner = async ({ command }) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise<void>((resolveRun) => releases.push(resolveRun));
+      active -= 1;
+      return {
+        exitCode: 0,
+        stdout: `${command}\n`,
+        stderr: "",
+        durationMs: 1
+      };
+    };
+
+    const runs = ["tool-one", "tool-two", "tool-three"].map((command) =>
+      executeCodeRun({
+        rootPath: root,
+        purpose: `Run queued fixture ${command}.`,
+        command,
+        policy: {
+          allowedExecutables: [command]
+        },
+        runner
+      })
+    );
+    await waitFor(() => releases.length === 2);
+
+    expect(active).toBe(2);
+    expect(maxActive).toBe(2);
+    releases.shift()?.();
+    await waitFor(() => releases.length === 2);
+    expect(maxActive).toBe(2);
+    releases.shift()?.();
+    releases.shift()?.();
+
+    const records = await Promise.all(runs);
+    expect(records.map((record) => record.stdout.text.trim()).sort()).toEqual(["tool-one", "tool-three", "tool-two"]);
+    expect(maxActive).toBe(2);
+  });
+
   it("blocks shell launchers before running the command by default", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);
@@ -257,9 +326,9 @@ describe("code run records", () => {
       executeCodeRun({
         rootPath: root,
         purpose: "Run a command outside the allowlist.",
-      command: "node",
-      runner,
-      policy: {
+        command: "node",
+        runner,
+        policy: {
           allowedExecutables: ["python"]
         }
       })
@@ -289,4 +358,15 @@ async function tempRoot(): Promise<string> {
 
 function quoteForExpectation(value: string): string {
   return /^[A-Za-z0-9_./\\:-]+$/.test(value) ? value : JSON.stringify(value);
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 500): Promise<void> {
+  const started = Date.now();
+  while (!predicate()) {
+    if (Date.now() - started > timeoutMs) {
+      throw new Error("Timed out waiting for test predicate.");
+    }
+
+    await delay(5);
+  }
 }

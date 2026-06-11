@@ -20,11 +20,12 @@ describe("JSON Schema validation", () => {
       $defs: {
         entry: {
           type: "object",
-          required: ["id", "status"],
+          required: ["id", "status", "priority"],
           properties: {
             id: { type: "string", pattern: "^id_[a-f0-9]{4}$" },
             status: { enum: ["planned", "sent"] },
             count: { type: "integer", minimum: 1 },
+            priority: { type: "integer", minimum: 1, maximum: 3 },
             createdAt: { type: "string", format: "date-time" }
           },
           additionalProperties: false
@@ -40,6 +41,7 @@ describe("JSON Schema validation", () => {
             id: "id_ab12",
             status: "planned",
             count: 2,
+            priority: 2,
             createdAt: "2026-06-10T00:00:00.000Z"
           },
           tags: ["local"]
@@ -56,6 +58,7 @@ describe("JSON Schema validation", () => {
             id: "bad",
             status: "uploaded",
             count: 0,
+            priority: 4,
             createdAt: "not-a-date",
             extra: true
           },
@@ -69,6 +72,7 @@ describe("JSON Schema validation", () => {
         expect.objectContaining({ path: "$.entry.id", message: expect.stringContaining("pattern") }),
         expect.objectContaining({ path: "$.entry.status", message: expect.stringContaining("one of") }),
         expect.objectContaining({ path: "$.entry.count", message: expect.stringContaining(">= 1") }),
+        expect.objectContaining({ path: "$.entry.priority", message: expect.stringContaining("<= 3") }),
         expect.objectContaining({ path: "$.entry.createdAt", message: expect.stringContaining("date-time") }),
         expect.objectContaining({ path: "$.entry.extra", message: expect.stringContaining("not allowed") }),
         expect.objectContaining({ path: "$.tags[1]", message: expect.stringContaining("unique") }),

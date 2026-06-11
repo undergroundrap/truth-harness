@@ -236,7 +236,7 @@ describe("benchmark CLI", () => {
     expect(list.total).toBe(1);
   });
 
-  it("runs a shell-free local code command and lists the code-run record", async () => {
+  it("runs a policy-gated local code command and lists the code-run record", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);
 

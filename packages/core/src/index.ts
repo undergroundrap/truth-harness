@@ -241,6 +241,7 @@ export type {
   CodeRunCommandResult,
   CodeRunCommandRunner,
   CodeRunOutput,
+  CodeRunOutputMetadata,
   CodeRunPolicyCategory,
   CodeRunPolicyInput,
   CodeRunPolicyRecord,

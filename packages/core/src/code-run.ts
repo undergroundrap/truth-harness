@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { arch, platform } from "node:os";
@@ -20,11 +20,21 @@ export interface CodeRunCommandResult {
   stdout: string;
   stderr: string;
   durationMs: number;
+  outputMetadata?: {
+    stdout?: CodeRunOutputMetadata;
+    stderr?: CodeRunOutputMetadata;
+  };
   error?: {
     name?: string;
     code?: string;
     message: string;
   };
+}
+
+export interface CodeRunOutputMetadata {
+  sha256: string;
+  byteLength: number;
+  truncated: boolean;
 }
 
 export type CodeRunCommandRunner = (input: {
@@ -33,7 +43,7 @@ export type CodeRunCommandRunner = (input: {
   cwd: string;
   timeoutMs: number;
   maxOutputBytes: number;
-}) => CodeRunCommandResult;
+}) => CodeRunCommandResult | Promise<CodeRunCommandResult>;
 
 export interface CodeRunOutput {
   text: string;
@@ -185,10 +195,19 @@ export interface CodeRunSummary {
 
 const DEFAULT_TIMEOUT_MS = 10000;
 const DEFAULT_MAX_OUTPUT_BYTES = 65536;
+const DEFAULT_MAX_CONCURRENT_CODE_RUNS = 2;
+const MAX_TIMEOUT_MS = 120000;
+const MAX_OUTPUT_BYTES = 1048576;
 const SHELL_LAUNCHERS = new Set(["cmd", "powershell", "pwsh", "bash", "sh", "zsh", "fish", "wscript", "cscript", "mshta"]);
 const NETWORK_COMMANDS = new Set(["curl", "wget", "ssh", "scp", "sftp", "ftp", "telnet", "nc", "ncat", "netcat", "rsync"]);
 const DESTRUCTIVE_COMMANDS = new Set(["rm", "rmdir", "del", "erase", "format", "shutdown", "reboot", "diskpart"]);
 const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "pip", "pip3", "cargo"]);
+const workspaceRunQueues = new Map<string, CodeRunQueueState>();
+
+interface CodeRunQueueState {
+  active: number;
+  waiting: Array<() => void>;
+}
 
 export async function executeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRunRecord> {
   const status = await requireLocalWorkspace(input.rootPath);
@@ -198,13 +217,15 @@ export async function executeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRu
   const maxOutputBytes = input.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
   assertPositiveInteger(timeoutMs, "Code run timeoutMs");
   assertPositiveInteger(maxOutputBytes, "Code run maxOutputBytes");
+  assertMaximumInteger(timeoutMs, MAX_TIMEOUT_MS, "Code run timeoutMs");
+  assertMaximumInteger(maxOutputBytes, MAX_OUTPUT_BYTES, "Code run maxOutputBytes");
   const cwd = resolveWorkspacePath(status.root, input.workingDirectory ?? ".");
   const cwdRef = toPortablePath(relative(status.root, cwd)) || ".";
   const policy = evaluateCodeRunPolicy(command, args, input.policy ?? {});
   const runner = input.runner ?? runCommand;
-  const result = runner({ command, args, cwd, timeoutMs, maxOutputBytes });
-  const stdout = normalizeOutput(result.stdout, maxOutputBytes);
-  const stderr = normalizeOutput(result.stderr, maxOutputBytes);
+  const result = await withWorkspaceCodeRunSlot(status.root, () => runner({ command, args, cwd, timeoutMs, maxOutputBytes }));
+  const stdout = normalizeOutput(result.stdout, maxOutputBytes, result.outputMetadata?.stdout);
+  const stderr = normalizeOutput(result.stderr, maxOutputBytes, result.outputMetadata?.stderr);
   const error = result.error ? `${result.error.name ? `${result.error.name}: ` : ""}${result.error.message}` : undefined;
   const timedOut = result.error?.code === "ETIMEDOUT" || /timed out|timeout/i.test(error ?? "");
   const executionStatus = codeRunStatusFor(result, timedOut);
@@ -391,32 +412,73 @@ export function renderCodeRunMarkdown(record: CodeRunRecord): string {
   return `${lines.join("\n")}\n`;
 }
 
-function runCommand(input: Parameters<CodeRunCommandRunner>[0]): CodeRunCommandResult {
+function runCommand(input: Parameters<CodeRunCommandRunner>[0]): Promise<CodeRunCommandResult> {
   const started = process.hrtime.bigint();
-  const result = spawnSync(input.command, input.args, {
-    cwd: input.cwd,
-    encoding: "utf8",
-    timeout: input.timeoutMs,
-    windowsHide: true,
-    maxBuffer: input.maxOutputBytes * 2
-  });
-  const durationMs = Number(process.hrtime.bigint() - started) / 1_000_000;
-  const error = result.error as (NodeJS.ErrnoException & { code?: string }) | undefined;
+  const stdout = createOutputCapture(input.maxOutputBytes);
+  const stderr = createOutputCapture(input.maxOutputBytes);
+  const aggregateOutputLimit = input.maxOutputBytes * 4;
 
-  return {
-    exitCode: result.status,
-    signal: result.signal,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-    durationMs,
-    error: error
-      ? {
-          name: error.name,
-          code: error.code,
-          message: error.message
-        }
-      : undefined
-  };
+  return new Promise((resolveResult) => {
+    let settled = false;
+    let timedOut = false;
+    let killedForOutput = false;
+    let spawnError: NodeJS.ErrnoException | undefined;
+    const child = spawn(input.command, input.args, {
+      cwd: input.cwd,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true
+    });
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, input.timeoutMs);
+
+    const maybeKillForOutputBudget = () => {
+      if (!killedForOutput && stdout.byteLength + stderr.byteLength > aggregateOutputLimit) {
+        killedForOutput = true;
+        child.kill("SIGTERM");
+      }
+    };
+
+    child.stdout?.on("data", (chunk: Buffer | string) => {
+      stdout.push(chunk);
+      maybeKillForOutputBudget();
+    });
+    child.stderr?.on("data", (chunk: Buffer | string) => {
+      stderr.push(chunk);
+      maybeKillForOutputBudget();
+    });
+    child.on("error", (error: NodeJS.ErrnoException) => {
+      spawnError = error;
+    });
+    child.on("close", (exitCode, signal) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+      const stdoutResult = stdout.finish();
+      const stderrResult = stderr.finish();
+      const durationMs = Number(process.hrtime.bigint() - started) / 1_000_000;
+      const error = errorForAsyncCommand({ timedOut, killedForOutput, spawnError, timeoutMs: input.timeoutMs, maxOutputBytes: input.maxOutputBytes });
+
+      resolveResult({
+        exitCode,
+        signal,
+        stdout: stdoutResult.text,
+        stderr: stderrResult.text,
+        durationMs,
+        outputMetadata: {
+          stdout: stdoutResult,
+          stderr: stderrResult
+        },
+        ...(error ? { error } : {})
+      });
+    });
+  });
 }
 
 function codeRunStatusFor(result: CodeRunCommandResult, timedOut: boolean): CodeRunStatus {
@@ -431,7 +493,136 @@ function codeRunStatusFor(result: CodeRunCommandResult, timedOut: boolean): Code
   return result.exitCode === 0 ? "passed" : "failed";
 }
 
-function normalizeOutput(value: string, maxBytes: number): CodeRunOutput {
+function createOutputCapture(maxBytes: number): {
+  readonly byteLength: number;
+  push(chunk: Buffer | string): void;
+  finish(): CodeRunOutputMetadata & { text: string };
+} {
+  const chunks: string[] = [];
+  const hash = createHash("sha256");
+  let byteLength = 0;
+  let storedBytes = 0;
+  let truncated = false;
+
+  return {
+    get byteLength() {
+      return byteLength;
+    },
+    push(chunk) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, "utf8");
+      byteLength += buffer.length;
+      hash.update(buffer);
+
+      if (storedBytes >= maxBytes) {
+        truncated = true;
+        return;
+      }
+
+      const remaining = maxBytes - storedBytes;
+      const slice = buffer.subarray(0, remaining);
+      chunks.push(slice.toString("utf8"));
+      storedBytes += slice.length;
+      if (buffer.length > remaining) {
+        truncated = true;
+      }
+    },
+    finish() {
+      return {
+        text: chunks.join(""),
+        sha256: hash.digest("hex"),
+        byteLength,
+        truncated
+      };
+    }
+  };
+}
+
+function errorForAsyncCommand(input: {
+  timedOut: boolean;
+  killedForOutput: boolean;
+  spawnError?: NodeJS.ErrnoException;
+  timeoutMs: number;
+  maxOutputBytes: number;
+}): CodeRunCommandResult["error"] | undefined {
+  if (input.timedOut) {
+    return {
+      name: "Error",
+      code: "ETIMEDOUT",
+      message: `Command timed out after ${input.timeoutMs}ms.`
+    };
+  }
+
+  if (input.killedForOutput) {
+    return {
+      name: "Error",
+      code: "EMAXOUTPUT",
+      message: `Command exceeded the aggregate captured output budget of ${input.maxOutputBytes * 4} bytes.`
+    };
+  }
+
+  if (input.spawnError) {
+    return {
+      name: input.spawnError.name,
+      code: input.spawnError.code,
+      message: input.spawnError.message
+    };
+  }
+
+  return undefined;
+}
+
+async function withWorkspaceCodeRunSlot<T>(root: string, task: () => T | Promise<T>): Promise<T> {
+  const release = await acquireWorkspaceCodeRunSlot(root);
+  try {
+    return await task();
+  } finally {
+    release();
+  }
+}
+
+function acquireWorkspaceCodeRunSlot(root: string): Promise<() => void> {
+  const state = workspaceRunQueues.get(root) ?? { active: 0, waiting: [] };
+  workspaceRunQueues.set(root, state);
+
+  return new Promise((resolveSlot) => {
+    const start = () => {
+      state.active += 1;
+      resolveSlot(() => releaseWorkspaceCodeRunSlot(root, state));
+    };
+
+    if (state.active < DEFAULT_MAX_CONCURRENT_CODE_RUNS && state.waiting.length === 0) {
+      start();
+      return;
+    }
+
+    state.waiting.push(start);
+  });
+}
+
+function releaseWorkspaceCodeRunSlot(root: string, state: CodeRunQueueState): void {
+  state.active = Math.max(0, state.active - 1);
+  const next = state.waiting.shift();
+  if (next) {
+    next();
+    return;
+  }
+
+  if (state.active === 0) {
+    workspaceRunQueues.delete(root);
+  }
+}
+
+function normalizeOutput(value: string, maxBytes: number, metadata?: CodeRunOutputMetadata): CodeRunOutput {
+  if (metadata) {
+    return {
+      text: value,
+      sha256: metadata.sha256,
+      byteLength: metadata.byteLength,
+      truncated: metadata.truncated,
+      maxBytes
+    };
+  }
+
   const byteLength = Buffer.byteLength(value, "utf8");
   const truncated = byteLength > maxBytes;
   const text = truncated ? truncateUtf8(value, maxBytes) : value;
@@ -830,6 +1021,12 @@ function quoteCommandArg(value: string): string {
 function assertPositiveInteger(value: number, label: string): void {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${label} must be a positive integer.`);
+  }
+}
+
+function assertMaximumInteger(value: number, max: number, label: string): void {
+  if (value > max) {
+    throw new Error(`${label} must be less than or equal to ${max}.`);
   }
 }
 

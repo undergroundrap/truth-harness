@@ -818,7 +818,7 @@ export function createTheoremMcpServer(): McpServer {
         inputRefs: z.array(z.string().min(1)).optional().describe("Input data/artifact refs."),
         outputRefs: z.array(z.string().min(1)).optional().describe("Output artifact refs."),
         evidenceRefs: z.array(z.string().min(1)).optional().describe("Related local evidence refs."),
-        timeoutMs: z.number().int().positive().max(300000).optional().describe("Command timeout in milliseconds. Defaults to 10000."),
+        timeoutMs: z.number().int().positive().max(120000).optional().describe("Command timeout in milliseconds. Defaults to 10000; maximum 120000."),
         maxOutputBytes: z
           .number()
           .int()
