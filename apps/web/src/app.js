@@ -118,11 +118,13 @@ const seedReceipts = {
 const receiptStore = new Map(Object.entries(seedReceipts));
 const recentReceiptKeys = ["rational", "parity", "dimension"];
 const ACTIVITY_PAGE_SIZE = 12;
+const NOTES_STORAGE_KEY = "theorem-workbench.session-notes.v0";
 const activityEvents = [];
 let activityEventCounter = 0;
 const state = {
   receiptKey: "rational",
   level: "middle",
+  surface: "trace",
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE
 };
@@ -131,12 +133,22 @@ const claimList = document.querySelector("#claim-list");
 const traceList = document.querySelector("#trace-list");
 const receiptDetails = document.querySelector("#receipt-details");
 const graphList = document.querySelector("#graph-list");
+const mainGraphList = document.querySelector("#main-graph-list");
 const activityLog = document.querySelector("#activity-log");
 const activitySearch = document.querySelector("#activity-search");
 const activityCount = document.querySelector("#activity-count");
 const activityShowMore = document.querySelector("#activity-show-more");
 const copyActivityButton = document.querySelector("#copy-activity");
 const downloadActivityButton = document.querySelector("#download-activity");
+const surfaceTabs = document.querySelectorAll(".surface-tab");
+const surfacePanels = document.querySelectorAll("[data-surface-panel]");
+const surfaceStatus = document.querySelector("#surface-status");
+const researchNotes = document.querySelector("#research-notes");
+const notesStatus = document.querySelector("#notes-status");
+const reportPreview = document.querySelector("#report-preview");
+const copyReportButton = document.querySelector("#copy-report");
+const downloadReportButton = document.querySelector("#download-report");
+const printReportButton = document.querySelector("#print-report");
 const inspectorTrust = document.querySelector("#inspector-trust");
 const replayCommand = document.querySelector(".replay-command");
 const answerValue = document.querySelector(".answer-value");
@@ -145,7 +157,15 @@ const receiptSummary = document.querySelector(".receipt-summary");
 const promptInput = document.querySelector("#prompt-input");
 const composer = document.querySelector("#composer");
 const verifyButton = document.querySelector("#verify-button");
+const surfaceStatusText = {
+  trace: "explainable steps",
+  graph: "evidence path",
+  notes: "local scratchpad",
+  report: "printable draft"
+};
 
+researchNotes.value = loadNotes();
+updateNotesStatus("local draft");
 addActivity("system", "Workbench opened", "Static shell loaded; no external service contacted.", "passed");
 addActivity("system", "Local API ready", "UI will submit prompts only to /api/receipt on this machine.", "waiting");
 render();
@@ -180,6 +200,7 @@ function render() {
   graphList.innerHTML = receipt.graph
     .map(([kind, summary]) => `<div class="graph-node"><span>${escapeHtml(kind)}</span><strong>${escapeHtml(summary)}</strong></div>`)
     .join("");
+  renderMainGraph(receipt);
 
   traceList.innerHTML = (receipt.traces[state.level] ?? receipt.traces.middle)
     .map((step) => `<li>${escapeHtml(step)}</li>`)
@@ -191,6 +212,8 @@ function render() {
 
   renderClaimList();
   renderActivityLog();
+  renderSurface();
+  renderReport(receipt);
   document.querySelectorAll(".segment").forEach((button) => {
     button.classList.toggle("active", button.dataset.level === state.level);
   });
@@ -208,6 +231,34 @@ function renderClaimList() {
         </span>
       </button>`;
     })
+    .join("");
+}
+
+function renderSurface() {
+  surfaceTabs.forEach((button) => {
+    const active = button.dataset.surface === state.surface;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+
+  surfacePanels.forEach((panel) => {
+    const active = panel.dataset.surfacePanel === state.surface;
+    panel.classList.toggle("active", active);
+    panel.hidden = !active;
+    panel.setAttribute("aria-hidden", String(!active));
+  });
+  surfaceStatus.textContent = surfaceStatusText[state.surface] ?? "local surface";
+}
+
+function renderMainGraph(receipt) {
+  mainGraphList.innerHTML = receipt.graph
+    .map(([kind, summary], index) => `<div class="canvas-node">
+      <span class="canvas-index">${index + 1}</span>
+      <div>
+        <strong>${escapeHtml(kind)}</strong>
+        <p>${escapeHtml(summary)}</p>
+      </div>
+    </div>`)
     .join("");
 }
 
@@ -251,6 +302,9 @@ function addActivity(actor, title, detail, status = "passed", at = new Date().to
   });
   if (activityLog) {
     renderActivityLog();
+  }
+  if (reportPreview) {
+    renderReport(receiptStore.get(state.receiptKey));
   }
 }
 
@@ -327,7 +381,7 @@ function downloadActivityLog() {
   document.body.append(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
   addActivity("human", "Downloaded activity log", `${payload.eventCount} events saved as JSON.`, "passed");
 }
 
@@ -339,6 +393,126 @@ function showOlderActivity() {
 
   state.activityLimit += ACTIVITY_PAGE_SIZE;
   renderActivityLog();
+}
+
+function loadNotes() {
+  try {
+    return localStorage.getItem(NOTES_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function saveNotes() {
+  try {
+    localStorage.setItem(NOTES_STORAGE_KEY, researchNotes.value);
+    updateNotesStatus(`saved ${formatActivityTime(new Date().toISOString())}`);
+  } catch {
+    updateNotesStatus("save failed");
+  }
+
+  renderReport(receiptStore.get(state.receiptKey));
+}
+
+function updateNotesStatus(text) {
+  notesStatus.textContent = text;
+}
+
+function renderReport(receipt) {
+  if (!receipt) {
+    return;
+  }
+
+  const notes = researchNotes.value.trim();
+  const graphItems = receipt.graph
+    .map(([kind, summary]) => `<li><strong>${escapeHtml(kind)}</strong>: ${escapeHtml(summary)}</li>`)
+    .join("");
+  const traceItems = (receipt.traces[state.level] ?? receipt.traces.middle)
+    .slice(0, 8)
+    .map((step) => `<li>${escapeHtml(step)}</li>`)
+    .join("");
+  const activityItems = activityEvents
+    .slice(0, 8)
+    .map((event) => `<li><time datetime="${escapeHtml(event.at)}">${escapeHtml(event.at)}</time> - ${escapeHtml(event.actor)}: ${escapeHtml(event.title)}</li>`)
+    .join("");
+
+  reportPreview.innerHTML = `
+    <header>
+      <h2>${escapeHtml(receipt.title)}</h2>
+      <p>${escapeHtml(receipt.subtitle)}</p>
+    </header>
+    <dl class="report-facts">
+      <div><dt>Trust</dt><dd>${escapeHtml(receipt.trust)}</dd></div>
+      <div><dt>Output</dt><dd>${escapeHtml(receipt.output)}</dd></div>
+      <div><dt>Engine</dt><dd>${escapeHtml(receipt.engine)}</dd></div>
+      <div><dt>Run</dt><dd>${escapeHtml(receipt.runId)}</dd></div>
+      <div><dt>Replay</dt><dd><code>${escapeHtml(receipt.replay)}</code></dd></div>
+    </dl>
+    <h3>Evidence Path</h3>
+    <ol>${graphItems}</ol>
+    <h3>Trace Excerpt</h3>
+    <ol>${traceItems}</ol>
+    <h3>Research Notes</h3>
+    <p>${notes ? escapeHtml(notes).replaceAll("\n", "<br>") : "No local notes added yet."}</p>
+    <h3>Boundaries</h3>
+    <ul>${receipt.limitations.map((limitation) => `<li>${escapeHtml(limitation)}</li>`).join("")}</ul>
+    <h3>Session Citations</h3>
+    <ul>${activityItems}</ul>
+  `;
+}
+
+function generateReportMarkdown(receipt) {
+  const trace = receipt.traces[state.level] ?? receipt.traces.middle;
+  const notes = researchNotes.value.trim() || "No local notes added yet.";
+  const lines = [
+    `# ${receipt.title}`,
+    "",
+    `Summary: ${receipt.subtitle}`,
+    "",
+    "## Receipt",
+    "",
+    `- Trust: ${receipt.trust}`,
+    `- Output: ${receipt.output}`,
+    `- Engine: ${receipt.engine}`,
+    `- Run ID: ${receipt.runId}`,
+    `- Replay: \`${receipt.replay}\``,
+    "",
+    "## Evidence Path",
+    "",
+    ...receipt.graph.map(([kind, summary], index) => `${index + 1}. ${kind}: ${summary}`),
+    "",
+    "## Trace Excerpt",
+    "",
+    ...trace.slice(0, 12).map((step, index) => `${index + 1}. ${step}`),
+    "",
+    "## Research Notes",
+    "",
+    notes,
+    "",
+    "## Boundaries",
+    "",
+    ...receipt.limitations.map((limitation) => `- ${limitation}`),
+    "",
+    "## Session Citations",
+    "",
+    ...activityEvents.slice(0, 20).map((event) => `- [${event.at}] ${event.actor}: ${event.title} - ${event.detail}`)
+  ];
+
+  return `${lines.join("\n")}\n`;
+}
+
+function downloadTextFile(filename, text, type) {
+  const blob = new Blob([text], {
+    type
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 function receiptToViewModel(receipt) {
@@ -460,6 +634,19 @@ activitySearch.addEventListener("input", () => {
   renderActivityLog();
 });
 
+surfaceTabs.forEach((button) => {
+  button.addEventListener("click", () => {
+    const nextSurface = button.dataset.surface;
+    if (!nextSurface || nextSurface === state.surface) {
+      return;
+    }
+
+    state.surface = nextSurface;
+    addActivity("human", "Changed work surface", `Opened ${state.surface} view.`, "passed");
+    render();
+  });
+});
+
 activityShowMore.addEventListener("click", showOlderActivity);
 
 activityLog.addEventListener("scroll", () => {
@@ -476,6 +663,48 @@ copyActivityButton.addEventListener("click", () => {
 });
 
 downloadActivityButton.addEventListener("click", downloadActivityLog);
+
+researchNotes.addEventListener("input", saveNotes);
+
+researchNotes.addEventListener("change", () => {
+  addActivity("human", "Updated scratchpad", "Local session notes were saved in browser storage.", "passed");
+});
+
+copyReportButton.addEventListener("click", () => {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt) {
+    return;
+  }
+
+  navigator.clipboard.writeText(generateReportMarkdown(receipt))
+    .then(() => {
+      addActivity("human", "Copied report draft", `${receipt.runId} report copied as Markdown.`, "passed");
+      copyReportButton.textContent = "Copied";
+      setTimeout(() => {
+        copyReportButton.textContent = "Copy";
+      }, 1200);
+    })
+    .catch((error) => {
+      addActivity("web-ui", "Copy report failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+    });
+});
+
+downloadReportButton.addEventListener("click", () => {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt) {
+    return;
+  }
+
+  downloadTextFile(`${receipt.runId}-report.md`, generateReportMarkdown(receipt), "text/markdown");
+  addActivity("human", "Downloaded report draft", `${receipt.runId} report saved as Markdown.`, "passed");
+});
+
+printReportButton.addEventListener("click", () => {
+  state.surface = "report";
+  render();
+  addActivity("human", "Printed report draft", `${receiptStore.get(state.receiptKey)?.runId ?? "current"} report sent to print dialog.`, "passed");
+  setTimeout(() => window.print(), 50);
+});
 
 document.querySelectorAll(".segment").forEach((button) => {
   button.addEventListener("click", () => {

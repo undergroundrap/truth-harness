@@ -89,17 +89,59 @@
               </div>
             </article>
 
-            <section class="trace-panel" aria-label="Trace">
-              <div class="panel-heading">
-                <h3>Trace</h3>
-                <div class="segmented" role="tablist" aria-label="Explanation level">
-                  <button class="segment active" data-level="middle" type="button">Middle</button>
-                  <button class="segment" data-level="high" type="button">High</button>
-                  <button class="segment" data-level="college" type="button">College</button>
-                  <button class="segment" data-level="expert" type="button">Expert</button>
+            <section class="work-surface" aria-label="Evidence work surface">
+              <div class="surface-header">
+                <div class="surface-tabs" role="tablist" aria-label="Workbench view">
+                  <button class="surface-tab active" id="tab-trace" role="tab" aria-controls="surface-trace" aria-selected="true" data-surface="trace" type="button">Trace</button>
+                  <button class="surface-tab" id="tab-graph" role="tab" aria-controls="surface-graph" aria-selected="false" data-surface="graph" type="button">Graph</button>
+                  <button class="surface-tab" id="tab-notes" role="tab" aria-controls="surface-notes" aria-selected="false" data-surface="notes" type="button">Notes</button>
+                  <button class="surface-tab" id="tab-report" role="tab" aria-controls="surface-report" aria-selected="false" data-surface="report" type="button">Report</button>
+                </div>
+                <div class="surface-actions" id="surface-actions">
+                  <span class="surface-status" id="surface-status">trace view</span>
                 </div>
               </div>
-              <ol class="trace-list" id="trace-list"></ol>
+
+              <section class="surface-panel active" id="surface-trace" role="tabpanel" aria-labelledby="tab-trace" data-surface-panel="trace" tabindex="0" aria-label="Trace">
+                <div class="panel-heading">
+                  <h3>Trace</h3>
+                  <div class="segmented" role="tablist" aria-label="Explanation level">
+                    <button class="segment active" data-level="middle" type="button">Middle</button>
+                    <button class="segment" data-level="high" type="button">High</button>
+                    <button class="segment" data-level="college" type="button">College</button>
+                    <button class="segment" data-level="expert" type="button">Expert</button>
+                  </div>
+                </div>
+                <ol class="trace-list" id="trace-list"></ol>
+              </section>
+
+              <section class="surface-panel" id="surface-graph" role="tabpanel" aria-labelledby="tab-graph" data-surface-panel="graph" tabindex="0" aria-label="Graph canvas" hidden>
+                <div class="panel-heading">
+                  <h3>Graph Canvas</h3>
+                  <span class="mini-label">receipt evidence path</span>
+                </div>
+                <div class="graph-canvas" id="main-graph-list"></div>
+              </section>
+
+              <section class="surface-panel" id="surface-notes" role="tabpanel" aria-labelledby="tab-notes" data-surface-panel="notes" tabindex="0" aria-label="Research notes" hidden>
+                <div class="panel-heading">
+                  <h3>Scratchpad</h3>
+                  <span class="mini-label" id="notes-status">local draft</span>
+                </div>
+                <textarea id="research-notes" spellcheck="true" aria-label="Session scratchpad" placeholder="Jot assumptions, questions, agent instructions, paper ideas, or things to verify next."></textarea>
+              </section>
+
+              <section class="surface-panel" id="surface-report" role="tabpanel" aria-labelledby="tab-report" data-surface-panel="report" tabindex="0" aria-label="Final report" hidden>
+                <div class="panel-heading">
+                  <h3>Report Draft</h3>
+                  <div class="activity-actions" aria-label="Report actions">
+                    <button class="text-button compact-button" id="copy-report" type="button">Copy</button>
+                    <button class="text-button compact-button" id="download-report" type="button">Download</button>
+                    <button class="text-button compact-button" id="print-report" type="button">Print</button>
+                  </div>
+                </div>
+                <article class="report-preview" id="report-preview"></article>
+              </section>
             </section>
           </section>
 
