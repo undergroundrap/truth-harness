@@ -1,0 +1,41 @@
+services:
+  theorem:
+    build:
+      context: .
+      target: dev
+    image: theorem-workbench:dev
+    init: true
+    working_dir: /workspace
+    network_mode: "none"
+    environment:
+      CI: "true"
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
+      THEOREM_WORKBENCH_CONTAINER: "1"
+    volumes:
+      - .:/workspace
+      - theorem_node_modules:/workspace/node_modules
+      - theorem_npm_cache:/home/theorem/.npm
+    command: ["npm", "run", "check"]
+
+  mcp:
+    build:
+      context: .
+      target: dev
+    image: theorem-workbench:dev
+    init: true
+    working_dir: /workspace
+    network_mode: "none"
+    environment:
+      CI: "true"
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
+      THEOREM_WORKBENCH_CONTAINER: "1"
+    volumes:
+      - .:/workspace
+      - theorem_node_modules:/workspace/node_modules
+      - theorem_npm_cache:/home/theorem/.npm
+    command: ["npm", "run", "mcp"]
+    stdin_open: true
+
+volumes:
+  theorem_node_modules:
+  theorem_npm_cache:

@@ -23,7 +23,32 @@ Theorem Workbench turns math answers into receipts:
 
 The current MVP is local-first by default. Receipt metadata records `local-only` mode, `networkAccess: none`, local workspace data residency, external disclosure metadata when relevant, and an `evidenceProfile` summarizing backend ids, versions, inputs, outputs, replayability, proof-checker status, and limitations. Live code-run records are stricter about honesty: until a real OS sandbox exists, they record unsandboxed execution with `networkAccess: unknown` instead of claiming no network access.
 
-## Quickstart
+## Docker-First Quickstart (Recommended)
+
+For agent-facing work, demos, and anything that may execute code, prefer Docker first. The image keeps Node, Python, SymPy, and npm dependencies out of your host environment, and the compose runtime disables network access by default.
+
+Highest-safety verification, with no repo bind mount during the checks:
+
+```bash
+docker --version
+docker build --target verify -t theorem-workbench:verify .
+```
+
+Day-to-day container workflow:
+
+```bash
+docker compose build
+docker compose run --rm theorem npm run check
+docker compose run --rm theorem npm run proof:launch
+docker compose run --rm theorem npm run cli -- workspace init --name "Local Math Lab"
+docker compose run --rm theorem npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
+docker compose run --rm theorem npm run cli -- code sandbox-status --json
+docker compose run --rm -i mcp
+```
+
+See [docs/DOCKER.md](docs/DOCKER.md) for the safety boundaries. Docker is the recommended baseline, but a compose dev container bind-mounts this repo and can still change files inside it. Code-run receipts still report `networkAccess: unknown` until a measured Docker-backed sandbox provider is implemented.
+
+## Native Quickstart
 
 ```bash
 npm install

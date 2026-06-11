@@ -8,6 +8,7 @@ When working in this repo:
 
 - Keep project data, source material, literature records, notebook-run records, intermediate calculations, simulations, experiments, invention notes, vault envelopes, snapshots, and reports inside the local `.theorem-workbench/` store unless the user explicitly approves selected context for an external model or service.
 - Use the best available local tools first. Use the latest capable hosted models only as opt-in reasoning collaborators after preparing a selected-context packet with `theorem_model_context_prepare`; send only what the user approved, and log any external context with `theorem_disclosure_log`.
+- Prefer Docker-first verification for agent-facing work: `docker build --target verify -t theorem-workbench:verify .` for the no-bind-mount proof gate, or `docker compose run --rm theorem npm run check` and `docker compose run --rm theorem npm run proof:launch` for day-to-day checks.
 - Run `npm run check` before claiming code is verified.
 - Run `npm run proof:launch` before claiming the public demo path works.
 - Use `theorem_ask`, `theorem_benchmark_run`, and `theorem_replay` through MCP when available.
