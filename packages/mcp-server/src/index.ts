@@ -13,6 +13,7 @@ import {
   handleTheoremClaimChartList,
   handleTheoremCodeRun,
   handleTheoremCodeRunList,
+  handleTheoremCodeSandboxStatus,
   handleTheoremDiscoveryPackage,
   handleTheoremEvidenceAudit,
   handleTheoremEvidenceAuditList,
@@ -799,6 +800,24 @@ export function createTheoremMcpServer(): McpServer {
   );
 
   server.registerTool(
+    "theorem_code_sandbox_status",
+    {
+      title: "Check Code Sandbox",
+      description:
+        "Report whether Theorem Workbench has an OS-enforced code-run sandbox available. A missing sandbox means code-run records must use networkAccess unknown.",
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async () => {
+      const result = handleTheoremCodeSandboxStatus();
+      return toolJson(result, { isError: result.error });
+    }
+  );
+
+  server.registerTool(
     "theorem_code_run",
     {
       title: "Run Local Code",
@@ -833,6 +852,10 @@ export function createTheoremMcpServer(): McpServer {
               .min(1)
               .optional()
               .describe("Required executable allowlist for execution. Entries are normalized by basename without .exe/.cmd/.bat/.com."),
+            requireSandbox: z
+              .boolean()
+              .optional()
+              .describe("Require an OS-enforced sandbox for this run; fail closed if no sandbox provider is available."),
             allowShellLauncher: z
               .boolean()
               .optional()

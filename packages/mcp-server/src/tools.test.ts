@@ -11,6 +11,7 @@ import {
   handleTheoremClaimChartList,
   handleTheoremCodeRun,
   handleTheoremCodeRunList,
+  handleTheoremCodeSandboxStatus,
   handleTheoremDiscoveryPackage,
   handleTheoremEvidenceAudit,
   handleTheoremEvidenceAuditList,
@@ -996,7 +997,7 @@ describe("MCP tool handlers", () => {
     expect(list.records[0]?.schemaVersion).toBe("theorem.notebook-run.v0");
   });
 
-  it("runs local code and records shell-free execution evidence", async () => {
+  it("runs local code and records policy-gated execution evidence", async () => {
     const root = await tempRoot();
     process.env.THEOREM_WORKBENCH_ROOT = root;
     process.env.THEOREM_ALLOW_CODE_RUN = "1";
@@ -1033,6 +1034,35 @@ describe("MCP tool handlers", () => {
     expect(list.records[0]?.runId).toBe(result.result.record.runId);
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind["code-runs"]).toBe(1);
+  });
+
+  it("reports code-run sandbox availability to agents", () => {
+    const result = handleTheoremCodeSandboxStatus();
+
+    expect(result.error).toBe(true);
+    expect(result.status.schemaVersion).toBe("theorem.code-run-sandbox-status.v0");
+    expect(result.status.available).toBe(false);
+    expect(result.status.provider).toBe("none");
+    expect(result.status.canAttestNetworkNone).toBe(false);
+    expect(result.message).toContain("unavailable");
+  });
+
+  it("blocks sandbox-required code-run requests through the MCP handler", async () => {
+    const root = await tempRoot();
+    process.env.THEOREM_WORKBENCH_ROOT = root;
+    process.env.THEOREM_ALLOW_CODE_RUN = "1";
+    await handleTheoremWorkspaceInit({ name: "MCP Code Sandbox Gate Lab" });
+
+    await expect(
+      handleTheoremCodeRun({
+        purpose: "Attempt to run only with an OS sandbox.",
+        command: process.execPath,
+        policy: {
+          allowedExecutables: [process.execPath],
+          requireSandbox: true
+        }
+      })
+    ).rejects.toThrow("requires an OS-enforced sandbox");
   });
 
   it("blocks risky code-run commands through the MCP handler by default", async () => {

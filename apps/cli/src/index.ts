@@ -22,6 +22,7 @@ import {
   createReceipt,
   createSimulationLogEntry,
   createSourceCitationReceipt,
+  getCodeRunSandboxStatus,
   getLocalWorkspaceStatus,
   getProofBackendStatus,
   getSmtBackendStatus,
@@ -727,6 +728,30 @@ const code = program
   .description("Execute local direct commands under policy and record process evidence.");
 
 code
+  .command("sandbox-status")
+  .description("Report whether an OS-enforced code-run sandbox is available.")
+  .option("--json", "Print the full sandbox status JSON")
+  .action((options: { json?: boolean }) => {
+    const status = getCodeRunSandboxStatus();
+    if (options.json) {
+      printJson(status);
+      if (!status.available) {
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    console.log(`Code-run sandbox: ${status.available ? "available" : "unavailable"}`);
+    console.log(`Provider: ${status.provider}`);
+    console.log(`Network isolation: ${status.networkIsolation}`);
+    console.log(`Filesystem isolation: ${status.filesystemIsolation}`);
+    console.log(status.reason);
+    if (!status.available) {
+      process.exitCode = 1;
+    }
+  });
+
+code
   .command("run")
   .description("Run a local command without shell interpolation and write a code-execution record.")
   .argument("<purpose...>", "Purpose or question for this code run")
@@ -742,6 +767,7 @@ code
   .option("--timeout-ms <ms>", "Command timeout in milliseconds; maximum 120000", parsePositiveInteger, 10000)
   .option("--max-output-bytes <bytes>", "Maximum captured bytes per output stream; maximum 1048576", parsePositiveInteger, 65536)
   .option("--allow-executable <name>", "Required executable name/path allowlist. Repeat for multiple allowed executables.", collectRepeated, [])
+  .option("--require-sandbox", "Require an OS-enforced code-run sandbox; fail closed if none is available")
   .option("--allow-shell-launcher", "Allow shell launcher executables such as cmd, PowerShell, bash, or sh")
   .option("--allow-network-command", "Allow obvious network-capable commands such as curl, wget, ssh, or scp")
   .option("--allow-destructive-command", "Allow obvious destructive commands such as rm, rmdir, format, or shutdown")
@@ -765,6 +791,7 @@ code
         timeoutMs: number;
         maxOutputBytes: number;
         allowExecutable: string[];
+        requireSandbox?: boolean;
         allowShellLauncher?: boolean;
         allowNetworkCommand?: boolean;
         allowDestructiveCommand?: boolean;
@@ -776,6 +803,7 @@ code
     ) => {
       const policy: CodeRunPolicyInput = {
         allowedExecutables: options.allowExecutable,
+        requireSandbox: options.requireSandbox,
         allowShellLauncher: options.allowShellLauncher,
         allowNetworkCommand: options.allowNetworkCommand,
         allowDestructiveCommand: options.allowDestructiveCommand,

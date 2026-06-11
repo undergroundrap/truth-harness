@@ -212,6 +212,7 @@ theorem smt backends --json
 theorem smt check docs/examples/constraints.smt2 --write --json
 theorem smt solve --int x --constraint "x > 0" --constraint "x < 3" --json
 theorem smt list
+theorem code sandbox-status --json
 theorem code run "Run a tiny local code check" --command node --allow-executable node --arg -e --arg "console.log(6 * 7)" --json
 theorem code list
 ```
@@ -558,7 +559,7 @@ Each `theorem.notebook-run.v0` entry stores:
 
 This gives agents a disciplined place to point when a simulation, analysis, benchmark, or discovery package depends on local code.
 
-Code-run records are the actual local execution layer. They are direct process records: Theorem Workbench launches an executable plus explicit args without shell interpolation, under a workspace-confined cwd and a default-local execution policy. The policy is default-deny for executables: a non-empty explicit allowlist is required before anything runs. It also blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden. Execution uses async child processes, streamed capture, timeout kill, output-budget kill, and a per-workspace concurrency queue so one long run does not freeze the MCP server event loop.
+Code-run records are the actual local execution layer. They are direct process records: Theorem Workbench launches an executable plus explicit args without shell interpolation, under a workspace-confined cwd and a default-local execution policy. `theorem code sandbox-status` and MCP `theorem_code_sandbox_status` report whether an OS-enforced sandbox provider is available. The policy is default-deny for executables: a non-empty explicit allowlist is required before anything runs, and `requireSandbox`/`--require-sandbox` fails closed unless the sandbox status can attest enforced isolation. It also blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden. Execution uses async child processes, streamed capture, timeout kill, output-budget kill, and a per-workspace concurrency queue so one long run does not freeze the MCP server event loop.
 
 The current implementation is intentionally honest about its limit: it does not yet enforce an OS sandbox, network namespace, or filesystem boundary beyond the workspace cwd. Therefore code-run records store `privacy.mode: "unsandboxed-local-execution"`, `networkAccess: "unknown"`, and `replay.localOnly: false`. The record captures stdout, stderr, exit code, duration, output hashes, timeout, policy decision, sandbox measurement notes, and replay notes, then writes `theorem.code-run.v0` JSON plus Markdown under `.theorem-workbench/code-runs/`. Timeouts are capped at 120000 ms and each output stream is capped at 1048576 bytes.
 
@@ -659,6 +660,7 @@ Current MCP tools:
 | `theorem_literature_list` | List local literature records. |
 | `theorem_notebook_run_log` | Create or write local notebook/script/pipeline provenance records without executing code. |
 | `theorem_notebook_run_list` | List local notebook-run records. |
+| `theorem_code_sandbox_status` | Report whether an OS-enforced code-run sandbox is available before requesting execution. |
 | `theorem_code_run` | Execute a local direct command under the default local execution policy and write a code-run evidence record. Disabled unless the MCP server process has `THEOREM_ALLOW_CODE_RUN=1`; each call still requires an explicit executable allowlist. |
 | `theorem_code_list` | List local code-run records. |
 | `theorem_vault_seal` | Encrypt a workspace-local file into the private vault using an environment key. |
@@ -742,6 +744,7 @@ theorem literature log "Local pathway paper" --kind paper --status annotated --i
 theorem literature list
 theorem notebook log "Run a local notebook that computes a toy pathway score" --kind notebook --runner jupyter --command "jupyter nbconvert --execute notebooks/pathway.ipynb" --notebook notebooks/pathway.ipynb --code src/pathway.py --input data/pathway.csv --output artifacts/pathway-output.json --runtime python --dependency sympy==1.14.0 --limitation "Toy model only"
 theorem notebook list
+theorem code sandbox-status --json
 theorem code run "Run a tiny local script check" --command node --allow-executable node --arg -e --arg "console.log(6 * 7)" --code inline:node-eval --input prompt:6x7 --output stdout
 theorem code list
 theorem vault seal private/notes.md --label "Private research notes"

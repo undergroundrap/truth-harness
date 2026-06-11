@@ -79,7 +79,7 @@
     },
     "policy": {
       "type": "object",
-      "required": ["mode", "decision", "allowedExecutables", "matchedAllowlist", "detected", "overrides", "notes"],
+      "required": ["mode", "decision", "allowedExecutables", "matchedAllowlist", "detected", "overrides", "sandbox", "notes"],
       "properties": {
         "mode": {
           "const": "default-local"
@@ -143,6 +143,19 @@
             },
             "gitMutation": {
               "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "sandbox": {
+          "type": "object",
+          "required": ["required", "measurement"],
+          "properties": {
+            "required": {
+              "type": "boolean"
+            },
+            "measurement": {
+              "$ref": "#/$defs/sandboxMeasurement"
             }
           },
           "additionalProperties": false
@@ -331,7 +344,7 @@
       "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures", "measurement"],
       "properties": {
         "mode": {
-          "enum": ["local-only", "external-calls", "unsandboxed-local-execution"]
+          "enum": ["local-only", "external-calls", "unsandboxed-local-execution", "sandboxed-local-execution"]
         },
         "localFirst": {
           "const": true
@@ -346,26 +359,46 @@
           "type": "array"
         },
         "measurement": {
-          "type": "object",
-          "required": ["processSandbox", "networkIsolation", "filesystemIsolation", "notes"],
-          "properties": {
-            "processSandbox": {
-              "enum": ["none"]
-            },
-            "networkIsolation": {
-              "enum": ["not-enforced"]
-            },
-            "filesystemIsolation": {
-              "enum": ["working-directory-only"]
-            },
-            "notes": {
-              "$ref": "#/$defs/stringArray"
-            }
-          },
-          "additionalProperties": false
+          "$ref": "#/$defs/sandboxMeasurement"
         }
       },
       "additionalProperties": true
+    },
+    "sandboxMeasurement": {
+      "type": "object",
+      "required": [
+        "available",
+        "provider",
+        "processSandbox",
+        "networkIsolation",
+        "filesystemIsolation",
+        "canAttestNetworkNone",
+        "notes"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "provider": {
+          "enum": ["none", "bubblewrap", "container", "windows-job", "custom"]
+        },
+        "processSandbox": {
+          "enum": ["none", "enforced"]
+        },
+        "networkIsolation": {
+          "enum": ["not-enforced", "enforced"]
+        },
+        "filesystemIsolation": {
+          "enum": ["working-directory-only", "workspace-scoped"]
+        },
+        "canAttestNetworkNone": {
+          "type": "boolean"
+        },
+        "notes": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
     },
     "stringArray": {
       "type": "array",

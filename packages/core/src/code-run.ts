@@ -4,6 +4,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { arch, platform } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { getCodeRunSandboxStatus, sandboxMeasurementForStatus, type CodeRunSandboxMeasurement } from "./sandbox.js";
 import { stableHash } from "./stable-hash.js";
 
 export type CodeRunStatus = "passed" | "failed" | "timed-out" | "error";
@@ -55,6 +56,7 @@ export interface CodeRunOutput {
 
 export interface CodeRunPolicyInput {
   allowedExecutables?: string[];
+  requireSandbox?: boolean;
   allowShellLauncher?: boolean;
   allowNetworkCommand?: boolean;
   allowDestructiveCommand?: boolean;
@@ -79,21 +81,20 @@ export interface CodeRunPolicyRecord {
     packageMutation: boolean;
     gitMutation: boolean;
   };
+  sandbox: {
+    required: boolean;
+    measurement: CodeRunSandboxMeasurement;
+  };
   notes: string[];
 }
 
 export interface CodeRunPrivacyMetadata {
-  mode: "unsandboxed-local-execution";
+  mode: "unsandboxed-local-execution" | "sandboxed-local-execution";
   localFirst: true;
-  networkAccess: "unknown";
+  networkAccess: "unknown" | "none";
   dataResidency: "local-workspace";
   externalDisclosures: [];
-  measurement: {
-    processSandbox: "none";
-    networkIsolation: "not-enforced";
-    filesystemIsolation: "working-directory-only";
-    notes: string[];
-  };
+  measurement: CodeRunSandboxMeasurement;
 }
 
 export interface CodeRunRecord {
@@ -221,7 +222,9 @@ export async function executeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRu
   assertMaximumInteger(maxOutputBytes, MAX_OUTPUT_BYTES, "Code run maxOutputBytes");
   const cwd = resolveWorkspacePath(status.root, input.workingDirectory ?? ".");
   const cwdRef = toPortablePath(relative(status.root, cwd)) || ".";
-  const policy = evaluateCodeRunPolicy(command, args, input.policy ?? {});
+  const sandboxStatus = getCodeRunSandboxStatus();
+  const sandboxMeasurement = sandboxMeasurementForStatus(sandboxStatus);
+  const policy = evaluateCodeRunPolicy(command, args, input.policy ?? {}, sandboxMeasurement);
   const runner = input.runner ?? runCommand;
   const result = await withWorkspaceCodeRunSlot(status.root, () => runner({ command, args, cwd, timeoutMs, maxOutputBytes }));
   const stdout = normalizeOutput(result.stdout, maxOutputBytes, result.outputMetadata?.stdout);
@@ -277,8 +280,8 @@ export async function executeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRu
       command: formatCommand([command, ...args]),
       workingDirectory: cwdRef,
       shell: false as const,
-      localOnly: false,
-      notes: replayNotesFor({ executionStatus, timedOut })
+      localOnly: sandboxMeasurement.canAttestNetworkNone,
+      notes: replayNotesFor({ executionStatus, timedOut, sandboxMeasurement })
     },
     reproducibilityBoundary: {
       workbenchExecuted: true as const,
@@ -290,7 +293,7 @@ export async function executeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRu
       requiresExpertReview: requiresExpertReview(purpose),
       requiredNextChecks: nextChecks
     },
-    privacy: createUnsandboxedCodeRunPrivacy(),
+    privacy: createCodeRunPrivacy(sandboxMeasurement),
     warnings: warningsFor({
       executionStatus,
       timedOut,
@@ -711,11 +714,16 @@ function warningsFor(input: {
   return warnings;
 }
 
-function replayNotesFor(input: { executionStatus: CodeRunStatus; timedOut: boolean }): string[] {
-  const notes = [
-    "The command executable was launched directly by Theorem Workbench without shell interpolation.",
-    "No OS sandbox or network-deny boundary was enforced for this run, so local-only replay is not guaranteed."
-  ];
+function replayNotesFor(input: {
+  executionStatus: CodeRunStatus;
+  timedOut: boolean;
+  sandboxMeasurement: CodeRunSandboxMeasurement;
+}): string[] {
+  const notes = ["The command executable was launched directly by Theorem Workbench without shell interpolation."];
+
+  if (!input.sandboxMeasurement.canAttestNetworkNone) {
+    notes.push("No OS sandbox or network-deny boundary was enforced for this run, so local-only replay is not guaranteed.");
+  }
 
   if (input.executionStatus !== "passed") {
     notes.push("Replay should reproduce or explain the non-passing status before downstream use.");
@@ -728,7 +736,12 @@ function replayNotesFor(input: { executionStatus: CodeRunStatus; timedOut: boole
   return notes;
 }
 
-function evaluateCodeRunPolicy(command: string, args: string[], input: CodeRunPolicyInput): CodeRunPolicyRecord {
+function evaluateCodeRunPolicy(
+  command: string,
+  args: string[],
+  input: CodeRunPolicyInput,
+  sandboxMeasurement: CodeRunSandboxMeasurement
+): CodeRunPolicyRecord {
   const executableName = executablePolicyName(command);
   const allowedExecutables = normalizeStringList(input.allowedExecutables ?? []).map(executablePolicyName);
   const matchedAllowlist = allowedExecutables.length > 0 && allowedExecutables.includes(executableName);
@@ -742,6 +755,10 @@ function evaluateCodeRunPolicy(command: string, args: string[], input: CodeRunPo
 
   if (!matchedAllowlist) {
     blockedReasons.push(`Executable ${JSON.stringify(executableName)} is not in the explicit allowlist.`);
+  }
+
+  if (input.requireSandbox === true && !sandboxMeasurement.available) {
+    blockedReasons.push("Code execution requires an OS-enforced sandbox, but no code-run sandbox provider is available.");
   }
 
   if (categories.includes("shell-launcher") && input.allowShellLauncher !== true) {
@@ -787,7 +804,11 @@ function evaluateCodeRunPolicy(command: string, args: string[], input: CodeRunPo
       ...(packageMutation ? { packageMutation } : {})
     },
     overrides,
-    notes: policyNotesFor({ categories, overrides, allowedExecutables })
+    sandbox: {
+      required: input.requireSandbox === true,
+      measurement: sandboxMeasurement
+    },
+    notes: policyNotesFor({ categories, overrides, allowedExecutables, sandboxRequired: input.requireSandbox === true, sandboxMeasurement })
   };
 }
 
@@ -883,6 +904,8 @@ function policyNotesFor(input: {
   categories: CodeRunPolicyCategory[];
   overrides: CodeRunPolicyRecord["overrides"];
   allowedExecutables: string[];
+  sandboxRequired: boolean;
+  sandboxMeasurement: CodeRunSandboxMeasurement;
 }): string[] {
   const notes = [
     "The default local execution policy is default-deny for executables and also blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden.",
@@ -897,6 +920,14 @@ function policyNotesFor(input: {
     notes.push("One or more code-run policy blocks were explicitly overridden; review the command and outputs before using this as evidence.");
   }
 
+  if (input.sandboxRequired) {
+    notes.push("This run required an OS-enforced sandbox.");
+  }
+
+  if (!input.sandboxMeasurement.available) {
+    notes.push("No OS-enforced code-run sandbox provider was available for this run.");
+  }
+
   if (input.categories.includes("shell-launcher")) {
     notes.push("A shell launcher can execute further commands that are not represented as structured args.");
   }
@@ -904,22 +935,25 @@ function policyNotesFor(input: {
   return notes;
 }
 
-function createUnsandboxedCodeRunPrivacy(): CodeRunPrivacyMetadata {
+function createCodeRunPrivacy(measurement: CodeRunSandboxMeasurement): CodeRunPrivacyMetadata {
+  if (measurement.canAttestNetworkNone) {
+    return {
+      mode: "sandboxed-local-execution",
+      localFirst: true,
+      networkAccess: "none",
+      dataResidency: "local-workspace",
+      externalDisclosures: [],
+      measurement
+    };
+  }
+
   return {
     mode: "unsandboxed-local-execution",
     localFirst: true,
     networkAccess: "unknown",
     dataResidency: "local-workspace",
     externalDisclosures: [],
-    measurement: {
-      processSandbox: "none",
-      networkIsolation: "not-enforced",
-      filesystemIsolation: "working-directory-only",
-      notes: [
-        "The process was launched from the local workspace, but the operating system did not enforce network isolation.",
-        "Do not treat this code-run record as proof that no network access occurred."
-      ]
-    }
+    measurement
   };
 }
 

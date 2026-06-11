@@ -78,6 +78,7 @@ describe("Theorem MCP server", () => {
         "theorem_claim_chart_list",
         "theorem_code_list",
         "theorem_code_run",
+        "theorem_code_sandbox_status",
         "theorem_disclosure_list",
         "theorem_disclosure_log",
         "theorem_discovery_package",
@@ -435,6 +436,15 @@ describe("Theorem MCP server", () => {
         arguments: {}
       });
       expect(firstText(notebookRunList.content)).toContain("\"total\": 1");
+
+      const codeSandboxStatus = await client.callTool({
+        name: "theorem_code_sandbox_status",
+        arguments: {}
+      });
+      const codeSandboxStatusText = firstText(codeSandboxStatus.content);
+      expect(codeSandboxStatus.isError).toBe(true);
+      expect(codeSandboxStatusText).toContain("\"schemaVersion\": \"theorem.code-run-sandbox-status.v0\"");
+      expect(codeSandboxStatusText).toContain("\"canAttestNetworkNone\": false");
 
       const codeRunResult = await client.callTool({
         name: "theorem_code_run",

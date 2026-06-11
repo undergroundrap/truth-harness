@@ -36,6 +36,7 @@ export {
   renderCodeRunMarkdown,
   writeCodeRun
 } from "./code-run.js";
+export { getCodeRunSandboxStatus, sandboxMeasurementForStatus } from "./sandbox.js";
 export {
   createClaimChart,
   listClaimCharts,
@@ -252,6 +253,14 @@ export type {
   CodeRunWriteResult,
   ExecuteCodeRunInput
 } from "./code-run.js";
+export type {
+  CodeRunSandboxFilesystemIsolation,
+  CodeRunSandboxMeasurement,
+  CodeRunSandboxNetworkIsolation,
+  CodeRunSandboxProcessIsolation,
+  CodeRunSandboxProvider,
+  CodeRunSandboxStatus
+} from "./sandbox.js";
 export type {
   ClaimChart,
   ClaimChartElement,

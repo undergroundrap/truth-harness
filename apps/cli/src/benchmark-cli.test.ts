@@ -298,6 +298,22 @@ describe("benchmark CLI", () => {
     });
   });
 
+  it("reports code-run sandbox status from the CLI", async () => {
+    const result = await runCli(["code", "sandbox-status", "--json"]);
+    const json = JSON.parse(result.stdout) as {
+      schemaVersion: string;
+      available: boolean;
+      provider: string;
+      canAttestNetworkNone: boolean;
+    };
+
+    expect(result.exitCode).toBe(1);
+    expect(json.schemaVersion).toBe("theorem.code-run-sandbox-status.v0");
+    expect(json.available).toBe(false);
+    expect(json.provider).toBe("none");
+    expect(json.canAttestNetworkNone).toBe(false);
+  });
+
   it("repairs older workspace manifests from the CLI", async () => {
     const root = await tempRoot();
     const init = JSON.parse((await runCli(["workspace", "init", root, "--json"])).stdout) as {

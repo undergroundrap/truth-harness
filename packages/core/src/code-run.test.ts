@@ -52,6 +52,14 @@ describe("code run records", () => {
       mode: "default-local",
       decision: "allowed",
       matchedAllowlist: true,
+      sandbox: {
+        required: false,
+        measurement: {
+          available: false,
+          provider: "none",
+          canAttestNetworkNone: false
+        }
+      },
       detected: {
         executableName: quoteForExpectation(process.execPath).replace(/^"|"$/g, "").split(/[\\/]/).pop()?.replace(/\.(exe|cmd|bat|com)$/i, "").toLowerCase(),
         categories: []
@@ -66,8 +74,11 @@ describe("code run records", () => {
       mode: "unsandboxed-local-execution",
       networkAccess: "unknown",
       measurement: {
+        available: false,
+        provider: "none",
         processSandbox: "none",
-        networkIsolation: "not-enforced"
+        networkIsolation: "not-enforced",
+        canAttestNetworkNone: false
       }
     });
     expect(write.record.reproducibilityBoundary.commandExecutionIsNotProof).toBe(true);
@@ -264,6 +275,35 @@ describe("code run records", () => {
         runner
       })
     ).rejects.toThrow("non-empty explicit executable allowlist");
+    expect(runnerCalled).toBe(false);
+  });
+
+  it("blocks sandbox-required runs when no OS sandbox provider is available", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    let runnerCalled = false;
+    const runner: CodeRunCommandRunner = () => {
+      runnerCalled = true;
+      return {
+        exitCode: 0,
+        stdout: "should-not-run\n",
+        stderr: "",
+        durationMs: 1
+      };
+    };
+
+    await expect(
+      executeCodeRun({
+        rootPath: root,
+        purpose: "Attempt to run only when an OS sandbox is available.",
+        command: process.execPath,
+        policy: {
+          allowedExecutables: [process.execPath],
+          requireSandbox: true
+        },
+        runner
+      })
+    ).rejects.toThrow("requires an OS-enforced sandbox");
     expect(runnerCalled).toBe(false);
   });
 

@@ -21,6 +21,7 @@ import {
   createSimulationLogEntry,
   createSourceCitationReceipt,
   createValidationPlan,
+  getCodeRunSandboxStatus,
   getLocalWorkspaceStatus,
   getProofBackendStatus,
   getSmtBackendStatus,
@@ -81,6 +82,7 @@ import {
   type ClaimChartElementInput,
   type ClaimChartWriteResult,
   type CodeRunPolicyInput,
+  type CodeRunSandboxStatus,
   type CodeRunSummary,
   type CodeRunWriteResult,
   type DiscoveryPackage,
@@ -424,6 +426,12 @@ export interface TheoremCodeRunInput {
 export interface TheoremCodeRunOutput {
   error: boolean;
   result: CodeRunWriteResult;
+  message: string;
+}
+
+export interface TheoremCodeSandboxStatusOutput {
+  error: boolean;
+  status: CodeRunSandboxStatus;
   message: string;
 }
 
@@ -1164,6 +1172,17 @@ export async function handleTheoremCodeRun(input: TheoremCodeRunInput): Promise<
     message: error
       ? `Code run ${result.record.runId} did not pass: ${result.record.execution.status}.`
       : `Code run ${result.record.runId} completed with status ${result.record.execution.status}.`
+  };
+}
+
+export function handleTheoremCodeSandboxStatus(): TheoremCodeSandboxStatusOutput {
+  const status = getCodeRunSandboxStatus();
+  return {
+    error: !status.available,
+    status,
+    message: status.available
+      ? `Code-run sandbox ${status.provider} is available.`
+      : `Code-run sandbox is unavailable: ${status.reason}`
   };
 }
 
