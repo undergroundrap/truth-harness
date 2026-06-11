@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Theorem Workbench</title>
+    <link rel="stylesheet" href="./src/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Workspace navigation">
+        <div class="top-strip">
+          <button class="icon-button" aria-label="Toggle sidebar">[]</button>
+          <button class="icon-button" aria-label="Back">&lt;</button>
+          <button class="icon-button muted-icon" aria-label="Forward">&gt;</button>
+        </div>
+
+        <nav class="nav-list">
+          <button class="nav-item active" type="button"><span>+</span> New session</button>
+          <button class="nav-item" type="button"><span>?</span> Search receipts</button>
+          <button class="nav-item" type="button"><span>@</span> Agent tools</button>
+          <button class="nav-item" type="button"><span>*</span> Benchmarks</button>
+        </nav>
+
+        <section class="sidebar-section">
+          <div class="section-label">Projects</div>
+          <button class="project-row selected" type="button">
+            <span>Theorem Workbench</span>
+            <span>now</span>
+          </button>
+          <button class="project-row" type="button">
+            <span>Finance audit lab</span>
+            <span>draft</span>
+          </button>
+          <button class="project-row" type="button">
+            <span>Physics notes</span>
+            <span>3h</span>
+          </button>
+        </section>
+
+        <section class="sidebar-section grow">
+          <div class="section-label">Recent Claims</div>
+          <button class="claim-row active" data-receipt="rational" type="button">
+            <span class="trust-dot exact"></span>
+            <span>
+              <strong>3 / 4 + 5 / 8</strong>
+              <small>exact arithmetic trace</small>
+            </span>
+          </button>
+          <button class="claim-row" data-receipt="parity" type="button">
+            <span class="trust-dot refuted"></span>
+            <span>
+              <strong>n^2+n+1 is even</strong>
+              <small>counterexample found</small>
+            </span>
+          </button>
+          <button class="claim-row" data-receipt="dimension" type="button">
+            <span class="trust-dot checked"></span>
+            <span>
+              <strong>force = mass * acceleration</strong>
+              <small>dimension checked</small>
+            </span>
+          </button>
+        </section>
+
+        <div class="sidebar-footer">
+          <button class="nav-item" type="button"><span>!</span> Local only</button>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="workspace-header">
+          <div>
+            <h1>Theorem Workbench</h1>
+            <p>Local evidence session</p>
+          </div>
+          <div class="header-actions">
+            <button class="text-button" type="button">Replay</button>
+            <button class="text-button" type="button">Snapshot</button>
+            <button class="icon-button" aria-label="Receipt options">...</button>
+          </div>
+        </header>
+
+        <section class="session-grid">
+          <section class="thread-panel" aria-label="Verification session">
+            <div class="session-title">
+              <div>
+                <h2>Verified Calculation</h2>
+                <p>Receipt-first arithmetic trace</p>
+              </div>
+              <span class="status-pill exact">exact-computed</span>
+            </div>
+
+            <article class="message user-message">
+              <div class="message-meta">Human</div>
+              <p>compute 3 / 4 + 5 / 8</p>
+            </article>
+
+            <article class="message engine-message">
+              <div class="message-meta">Local rational arithmetic</div>
+              <div class="answer-line">
+                <span class="answer-value">11/8</span>
+                <span class="answer-label">exact result</span>
+              </div>
+              <div class="receipt-summary">
+                <span>run_7e1b03d529609565</span>
+                <span>network none</span>
+                <span>proof checker false</span>
+              </div>
+            </article>
+
+            <section class="trace-panel" aria-label="Trace">
+              <div class="panel-heading">
+                <h3>Trace</h3>
+                <div class="segmented" role="tablist" aria-label="Explanation level">
+                  <button class="segment active" data-level="middle" type="button">Middle</button>
+                  <button class="segment" data-level="high" type="button">High</button>
+                  <button class="segment" data-level="college" type="button">College</button>
+                  <button class="segment" data-level="expert" type="button">Expert</button>
+                </div>
+              </div>
+              <ol class="trace-list" id="trace-list"></ol>
+            </section>
+          </section>
+
+          <aside class="inspector" aria-label="Receipt inspector">
+            <section class="inspector-section">
+              <div class="panel-heading">
+                <h3>Receipt</h3>
+                <span class="status-pill exact" id="inspector-trust">exact-computed</span>
+              </div>
+              <dl class="key-values" id="receipt-details"></dl>
+            </section>
+
+            <section class="inspector-section">
+              <h3>Evidence Graph</h3>
+              <div class="graph-list" id="graph-list"></div>
+            </section>
+
+            <section class="inspector-section">
+              <h3>Replay</h3>
+              <code class="replay-command">theorem ask "compute 3 / 4 + 5 / 8" --json</code>
+            </section>
+
+            <section class="inspector-section">
+              <h3>Boundary</h3>
+              <ul class="boundary-list">
+                <li>Exact arithmetic covers the parsed expression.</li>
+                <li>Explanation text defers to the machine trace.</li>
+                <li>This is not a broader financial or scientific claim.</li>
+              </ul>
+            </section>
+          </aside>
+        </section>
+
+        <section class="task-dock" aria-label="Verification tasks">
+          <div class="task-row">
+            <span class="task-state passed"></span>
+            <span>Docker check</span>
+            <strong>221 tests passed</strong>
+          </div>
+          <div class="task-row">
+            <span class="task-state passed"></span>
+            <span>Launch proof</span>
+            <strong>8/8 strict claims</strong>
+          </div>
+          <div class="task-row">
+            <span class="task-state waiting"></span>
+            <span>Code sandbox</span>
+            <strong>required gate fails closed</strong>
+          </div>
+        </section>
+
+        <form class="composer" id="composer">
+          <button class="icon-button" type="button" aria-label="Attach evidence">+</button>
+          <input id="prompt-input" name="prompt" autocomplete="off" value="compute 3 / 4 + 5 / 8" aria-label="Prompt">
+          <button class="text-button" type="submit">Verify</button>
+        </form>
+      </main>
+    </div>
+    <script src="./src/app.js" type="module"></script>
+  </body>
+</html>

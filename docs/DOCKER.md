@@ -44,6 +44,14 @@ docker compose run --rm theorem npm run cli -- ask "symbolic simplify sin(x)^2 +
 docker compose run --rm theorem npm run cli -- code sandbox-status --json
 ```
 
+Run the local web workbench:
+
+```bash
+docker compose up web
+```
+
+Then open `http://127.0.0.1:4173`. The web service publishes only to localhost. The first web surface is static and does not make network requests.
+
 Run the MCP server over stdio:
 
 ```bash

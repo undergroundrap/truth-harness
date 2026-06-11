@@ -36,6 +36,25 @@ services:
     command: ["npm", "run", "mcp"]
     stdin_open: true
 
+  web:
+    build:
+      context: .
+      target: dev
+    image: theorem-workbench:dev
+    init: true
+    working_dir: /workspace
+    environment:
+      CI: "true"
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
+      THEOREM_WORKBENCH_CONTAINER: "1"
+    volumes:
+      - .:/workspace
+      - theorem_node_modules:/workspace/node_modules
+      - theorem_npm_cache:/home/theorem/.npm
+    command: ["npm", "run", "web:serve", "--", "--host", "0.0.0.0", "--port", "4173"]
+    ports:
+      - "127.0.0.1:4173:4173"
+
 volumes:
   theorem_node_modules:
   theorem_npm_cache:

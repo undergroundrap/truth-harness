@@ -44,6 +44,7 @@ docker compose run --rm theorem npm run proof:launch
 docker compose run --rm theorem npm run cli -- workspace init --name "Local Math Lab"
 docker compose run --rm theorem npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
 docker compose run --rm theorem npm run cli -- code sandbox-status --json
+docker compose up web
 docker compose run --rm -i mcp
 ```
 
@@ -99,6 +100,8 @@ npm run cli -- workspace snapshot
 ```
 
 The current MVP is intentionally small and honest. It supports exact rational arithmetic, finite counterexample search, a narrow local modular parity checker, conservative rational interval bounds, dimensional analysis, a local SymPy symbolic adapter, policy-gated direct local code-run records, local proof-backend readiness probes, local Lean proof artifact checks when Lean is installed, local Z3 SMT-LIB checks when Z3 is installed, first-class proof-check and SMT-check records, receipt replay, Markdown/HTML receipt export, benchmark runs, first-class benchmark-run and benchmark-comparison records, and a local MCP server. The parity checker can emit an exact local certificate, but it is not labeled `proved` until an accepted proof-checking backend verifies the result. Sage, cvc5, and richer RAG adapters are planned as modular packages.
+
+The first web surface lives at [apps/web](apps/web). It is a local static workbench shell, designed like a dense desktop research tool: sessions and claims on the left, receipt-first verification in the center, and trust labels, replay commands, evidence graphs, and limitations in the inspector. Run it with `npm run web:serve` or `docker compose up web`, then open `http://127.0.0.1:4173`.
 
 Local workspace commands create a private `.theorem-workbench/` project store for receipts, artifacts, indexes, findings, research sessions, expert reviews, validation plans, literature records, notebook-run records, code-run records, invention logs, simulation logs, experiment logs, evidence audits, model-context packets, disclosure logs, encrypted vault envelopes, provenance snapshots, patent claim charts, proof-check records, SMT-check records, and benchmark run/comparison records. The directory is git-ignored by default. `workspace status` reports missing private directories and manifest defaults added by newer releases; `workspace repair` creates missing directories and persists newly added defaults without leaving the local project.
 
