@@ -38,6 +38,32 @@
           </button>
         </section>
 
+        <section class="sidebar-section">
+          <div class="section-label">Focus Lanes</div>
+          <div class="lane-list" id="lane-list">
+            <button class="lane-row active" data-lane="math" type="button">
+              <span>Math</span>
+              <small>proof, CAS</small>
+            </button>
+            <button class="lane-row" data-lane="physics" type="button">
+              <span>Physics</span>
+              <small>units, sim</small>
+            </button>
+            <button class="lane-row" data-lane="biology" type="button">
+              <span>Biology</span>
+              <small>literature, lab</small>
+            </button>
+            <button class="lane-row" data-lane="sources" type="button">
+              <span>Sources</span>
+              <small>RAG, citations</small>
+            </button>
+            <button class="lane-row" data-lane="writing" type="button">
+              <span>Writing</span>
+              <small>book, paper</small>
+            </button>
+          </div>
+        </section>
+
         <section class="sidebar-section grow">
           <div class="section-label">Recent Claims</div>
           <div id="claim-list"></div>
@@ -52,7 +78,10 @@
         <header class="workspace-header">
           <div>
             <h1>Theorem Workbench</h1>
-            <p>Local evidence session</p>
+            <div class="header-subline">
+              <p>Local evidence session</p>
+              <span class="lane-status" id="lane-status">Math lane</span>
+            </div>
           </div>
           <div class="header-actions">
             <button class="text-button" type="button">Replay</button>
@@ -74,6 +103,7 @@
             <article class="message user-message">
               <div class="message-meta">Human</div>
               <p>compute 3 / 4 + 5 / 8</p>
+              <div class="math-display" id="prompt-math" aria-label="Rendered prompt math"></div>
             </article>
 
             <article class="message engine-message">
@@ -176,6 +206,17 @@
                 <span class="mini-label">local session</span>
                 <button class="text-button compact-button" id="activity-show-more" type="button">Older</button>
               </div>
+            </section>
+
+            <section class="inspector-section">
+              <h3>Project Store</h3>
+              <dl class="key-values">
+                <div><dt>Root</dt><dd>.theorem-workbench</dd></div>
+                <div><dt>Receipts</dt><dd>.theorem-workbench/receipts</dd></div>
+                <div><dt>Sessions</dt><dd>.theorem-workbench/sessions</dd></div>
+                <div><dt>Snapshots</dt><dd>.theorem-workbench/snapshots</dd></div>
+                <div><dt>Indexes</dt><dd>.theorem-workbench/indexes</dd></div>
+              </dl>
             </section>
 
             <section class="inspector-section">

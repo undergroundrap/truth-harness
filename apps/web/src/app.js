@@ -7,6 +7,10 @@ const seedReceipts = {
     engine: "local-rational-arithmetic",
     replay: 'theorem ask "compute 3 / 4 + 5 / 8" --json',
     output: "11/8",
+    math: {
+      input: "\\frac{3}{4}+\\frac{5}{8}",
+      output: "\\frac{11}{8}"
+    },
     details: {
       "Evidence kind": "exact-arithmetic",
       Backend: "local-rational-arithmetic",
@@ -61,6 +65,10 @@ const seedReceipts = {
     engine: "finite-counterexample-search",
     replay: 'theorem ask "for all integers n, n^2+n+1 is even" --json',
     output: "n=-20, value=381",
+    math: {
+      input: "n^2+n+1 \\text{ even}",
+      output: "n=-20,\\ n^2+n+1=381"
+    },
     details: {
       "Evidence kind": "universal-parity",
       Backend: "finite-counterexample-search",
@@ -91,6 +99,10 @@ const seedReceipts = {
     engine: "local-dimensional-analysis",
     replay: 'theorem ask "dimension check force = mass * acceleration" --json',
     output: "M L T^-2",
+    math: {
+      input: "F=m a",
+      output: "M L T^{-2}"
+    },
     details: {
       "Evidence kind": "dimension-analysis",
       Backend: "local-dimensional-analysis",
@@ -125,11 +137,14 @@ const state = {
   receiptKey: "rational",
   level: "middle",
   surface: "trace",
+  lane: "math",
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE
 };
 
 const claimList = document.querySelector("#claim-list");
+const laneButtons = document.querySelectorAll(".lane-row");
+const laneStatus = document.querySelector("#lane-status");
 const traceList = document.querySelector("#trace-list");
 const receiptDetails = document.querySelector("#receipt-details");
 const graphList = document.querySelector("#graph-list");
@@ -153,6 +168,7 @@ const inspectorTrust = document.querySelector("#inspector-trust");
 const replayCommand = document.querySelector(".replay-command");
 const answerValue = document.querySelector(".answer-value");
 const answerLabel = document.querySelector(".answer-label");
+const promptMath = document.querySelector("#prompt-math");
 const receiptSummary = document.querySelector(".receipt-summary");
 const promptInput = document.querySelector("#prompt-input");
 const composer = document.querySelector("#composer");
@@ -162,6 +178,13 @@ const surfaceStatusText = {
   graph: "evidence path",
   notes: "local scratchpad",
   report: "printable draft"
+};
+const laneStatusText = {
+  math: "Math lane",
+  physics: "Physics lane",
+  biology: "Biology lane",
+  sources: "Sources lane",
+  writing: "Writing lane"
 };
 
 researchNotes.value = loadNotes();
@@ -184,8 +207,10 @@ function render() {
   document.querySelector(".user-message p").textContent = receipt.title;
   inspectorTrust.textContent = receipt.trust;
   inspectorTrust.className = `status-pill ${trustClass(receipt.trust)}`;
-  answerValue.textContent = receipt.output;
+  answerValue.innerHTML = renderMathInline(receipt.math?.output ?? receipt.output);
+  answerValue.setAttribute("aria-label", receipt.output);
   answerLabel.textContent = receipt.trust === "refuted" ? "counterexample" : "verified output";
+  promptMath.innerHTML = renderMathInline(receipt.math?.input ?? receipt.title);
   replayCommand.textContent = receipt.replay;
   receiptSummary.innerHTML = [
     receipt.runId,
@@ -213,6 +238,7 @@ function render() {
   renderClaimList();
   renderActivityLog();
   renderSurface();
+  renderLane();
   renderReport(receipt);
   document.querySelectorAll(".segment").forEach((button) => {
     button.classList.toggle("active", button.dataset.level === state.level);
@@ -248,6 +274,15 @@ function renderSurface() {
     panel.setAttribute("aria-hidden", String(!active));
   });
   surfaceStatus.textContent = surfaceStatusText[state.surface] ?? "local surface";
+}
+
+function renderLane() {
+  laneButtons.forEach((button) => {
+    const active = button.dataset.lane === state.lane;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  laneStatus.textContent = laneStatusText[state.lane] ?? "General lane";
 }
 
 function renderMainGraph(receipt) {
@@ -424,6 +459,8 @@ function renderReport(receipt) {
   }
 
   const notes = researchNotes.value.trim();
+  const mathInput = receipt.math?.input;
+  const mathOutput = receipt.math?.output;
   const graphItems = receipt.graph
     .map(([kind, summary]) => `<li><strong>${escapeHtml(kind)}</strong>: ${escapeHtml(summary)}</li>`)
     .join("");
@@ -441,6 +478,7 @@ function renderReport(receipt) {
       <h2>${escapeHtml(receipt.title)}</h2>
       <p>${escapeHtml(receipt.subtitle)}</p>
     </header>
+    <div class="report-math">${renderMathInline(mathInput ?? receipt.title)} <span>&rarr;</span> ${renderMathInline(mathOutput ?? receipt.output)}</div>
     <dl class="report-facts">
       <div><dt>Trust</dt><dd>${escapeHtml(receipt.trust)}</dd></div>
       <div><dt>Output</dt><dd>${escapeHtml(receipt.output)}</dd></div>
@@ -464,10 +502,17 @@ function renderReport(receipt) {
 function generateReportMarkdown(receipt) {
   const trace = receipt.traces[state.level] ?? receipt.traces.middle;
   const notes = researchNotes.value.trim() || "No local notes added yet.";
+  const mathInput = receipt.math?.input ?? receipt.title;
+  const mathOutput = receipt.math?.output ?? receipt.output;
   const lines = [
     `# ${receipt.title}`,
     "",
     `Summary: ${receipt.subtitle}`,
+    "",
+    "## Math View",
+    "",
+    `- Input TeX: \`${mathInput}\``,
+    `- Output TeX: \`${mathOutput}\``,
     "",
     "## Receipt",
     "",
@@ -615,6 +660,31 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function renderMathInline(value) {
+  let html = escapeHtml(value);
+  html = html.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/gu, (_match, numerator, denominator) => {
+    return `<span class="math-frac"><span>${renderMathInline(numerator)}</span><span>${renderMathInline(denominator)}</span></span>`;
+  });
+  html = html
+    .replace(/\\text\{([^{}]+)\}/gu, '<span class="math-text">$1</span>')
+    .replace(/\\mathbb\{Q\}/gu, '<span class="math-symbol">&Qopf;</span>')
+    .replace(/\\cdot/gu, '<span class="math-op">&middot;</span>')
+    .replace(/\\times/gu, '<span class="math-op">&times;</span>')
+    .replace(/\\leq?/gu, '<span class="math-op">&le;</span>')
+    .replace(/\\geq?/gu, '<span class="math-op">&ge;</span>')
+    .replace(/\\neq/gu, '<span class="math-op">&ne;</span>')
+    .replace(/\\rightarrow/gu, '<span class="math-op">&rarr;</span>')
+    .replace(/\\Rightarrow/gu, '<span class="math-op">&rArr;</span>')
+    .replace(/\\,/gu, '<span class="math-space"></span>')
+    .replace(/\\\s+/gu, " ");
+  html = html.replace(/\^\{([^{}]+)\}/gu, (_match, exponent) => `<sup>${renderMathInline(exponent)}</sup>`);
+  html = html.replace(/\^([A-Za-z0-9+\-]+)/gu, (_match, exponent) => `<sup>${renderMathInline(exponent)}</sup>`);
+  html = html.replace(/_\{([^{}]+)\}/gu, (_match, subscript) => `<sub>${renderMathInline(subscript)}</sub>`);
+  html = html.replace(/_([A-Za-z0-9+\-]+)/gu, (_match, subscript) => `<sub>${renderMathInline(subscript)}</sub>`);
+
+  return `<span class="math-inline">${html}</span>`;
+}
+
 claimList.addEventListener("click", (event) => {
   const button = event.target.closest(".claim-row");
   if (!button) {
@@ -624,8 +694,19 @@ claimList.addEventListener("click", (event) => {
   state.receiptKey = button.dataset.receipt;
   state.level = "middle";
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
-  addActivity("human", "Selected receipt", `Opened ${state.receiptKey} from recent claims.`, "passed");
   render();
+});
+
+laneButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const nextLane = button.dataset.lane;
+    if (!nextLane || nextLane === state.lane) {
+      return;
+    }
+
+    state.lane = nextLane;
+    renderLane();
+  });
 });
 
 activitySearch.addEventListener("input", () => {
@@ -642,7 +723,6 @@ surfaceTabs.forEach((button) => {
     }
 
     state.surface = nextSurface;
-    addActivity("human", "Changed work surface", `Opened ${state.surface} view.`, "passed");
     render();
   });
 });
@@ -709,7 +789,6 @@ printReportButton.addEventListener("click", () => {
 document.querySelectorAll(".segment").forEach((button) => {
   button.addEventListener("click", () => {
     state.level = button.dataset.level;
-    addActivity("human", "Changed explanation level", `Viewing ${state.level} trace details.`, "passed");
     render();
   });
 });
