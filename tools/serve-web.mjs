@@ -86,6 +86,7 @@ async function handleApiRequest(request, response, requestUrl) {
   }
 
   if (requestUrl.pathname === "/api/receipt" && request.method === "POST") {
+    const receivedAt = new Date().toISOString();
     const input = await readJsonBody(request);
     const problem = typeof input.problem === "string" ? input.problem.trim() : "";
     if (!problem) {
@@ -97,6 +98,7 @@ async function handleApiRequest(request, response, requestUrl) {
 
     const { createReceipt } = await loadCoreModule();
     const receipt = createReceipt(problem);
+    const completedAt = new Date().toISOString();
     writeJson(response, 200, {
       schemaVersion: "theorem.web-receipt-response.v0",
       localOnly: true,
@@ -106,12 +108,14 @@ async function handleApiRequest(request, response, requestUrl) {
         {
           actor: "web-ui",
           action: "submitted-local-problem",
-          detail: "Browser submitted selected prompt text to the local Theorem Workbench API."
+          detail: "Browser submitted selected prompt text to the local Theorem Workbench API.",
+          at: receivedAt
         },
         {
           actor: "local-api",
           action: "created-receipt",
-          detail: "The local API called @theorem-workbench/core createReceipt without a hosted model or external service."
+          detail: "The local API called @theorem-workbench/core createReceipt without a hosted model or external service.",
+          at: completedAt
         }
       ]
     });

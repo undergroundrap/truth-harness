@@ -117,12 +117,23 @@
               <div class="graph-list" id="graph-list"></div>
             </section>
 
-            <section class="inspector-section">
-              <div class="panel-heading">
+            <section class="inspector-section activity-section">
+              <div class="panel-heading activity-heading">
                 <h3>Activity Log</h3>
-                <span class="mini-label">local session</span>
+                <div class="activity-actions" aria-label="Activity log actions">
+                  <button class="text-button compact-button" id="copy-activity" type="button">Copy all</button>
+                  <button class="text-button compact-button" id="download-activity" type="button">Download</button>
+                </div>
+              </div>
+              <div class="activity-tools">
+                <input id="activity-search" type="search" autocomplete="off" placeholder="Search activity" aria-label="Search activity log">
+                <span class="mini-label" id="activity-count">0 events</span>
               </div>
               <div class="activity-list" id="activity-log" aria-live="polite"></div>
+              <div class="activity-footer">
+                <span class="mini-label">local session</span>
+                <button class="text-button compact-button" id="activity-show-more" type="button">Older</button>
+              </div>
             </section>
 
             <section class="inspector-section">

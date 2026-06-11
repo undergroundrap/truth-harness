@@ -117,10 +117,14 @@ const seedReceipts = {
 
 const receiptStore = new Map(Object.entries(seedReceipts));
 const recentReceiptKeys = ["rational", "parity", "dimension"];
+const ACTIVITY_PAGE_SIZE = 12;
 const activityEvents = [];
+let activityEventCounter = 0;
 const state = {
   receiptKey: "rational",
-  level: "middle"
+  level: "middle",
+  activityQuery: "",
+  activityLimit: ACTIVITY_PAGE_SIZE
 };
 
 const claimList = document.querySelector("#claim-list");
@@ -128,6 +132,11 @@ const traceList = document.querySelector("#trace-list");
 const receiptDetails = document.querySelector("#receipt-details");
 const graphList = document.querySelector("#graph-list");
 const activityLog = document.querySelector("#activity-log");
+const activitySearch = document.querySelector("#activity-search");
+const activityCount = document.querySelector("#activity-count");
+const activityShowMore = document.querySelector("#activity-show-more");
+const copyActivityButton = document.querySelector("#copy-activity");
+const downloadActivityButton = document.querySelector("#download-activity");
 const inspectorTrust = document.querySelector("#inspector-trust");
 const replayCommand = document.querySelector(".replay-command");
 const answerValue = document.querySelector(".answer-value");
@@ -203,25 +212,42 @@ function renderClaimList() {
 }
 
 function renderActivityLog() {
-  activityLog.innerHTML = activityEvents
-    .slice(0, 8)
-    .map((event) => `<div class="activity-row">
+  const filteredEvents = filteredActivityEvents();
+  const visibleEvents = filteredEvents.slice(0, state.activityLimit);
+  const previousScrollTop = activityLog.scrollTop;
+
+  activityCount.textContent =
+    filteredEvents.length === activityEvents.length
+      ? `${activityEvents.length} events`
+      : `${filteredEvents.length} of ${activityEvents.length} events`;
+  activityShowMore.hidden = visibleEvents.length >= filteredEvents.length;
+
+  activityLog.innerHTML = visibleEvents.length === 0
+    ? `<div class="activity-empty">No matching activity.</div>`
+    : visibleEvents
+      .map((event) => `<div class="activity-row">
       <span class="task-state ${event.status}"></span>
       <div>
-        <strong>${escapeHtml(event.title)}</strong>
-        <small>${escapeHtml(event.actor)} - ${escapeHtml(event.detail)}</small>
+        <div class="activity-row-head">
+          <strong>${escapeHtml(event.title)}</strong>
+          <time datetime="${escapeHtml(event.at)}">${escapeHtml(formatActivityTime(event.at))}</time>
+        </div>
+        <small><span>${escapeHtml(event.actor)}</span> - ${escapeHtml(event.detail)}</small>
       </div>
     </div>`)
-    .join("");
+      .join("");
+
+  activityLog.scrollTop = previousScrollTop;
 }
 
-function addActivity(actor, title, detail, status = "passed") {
+function addActivity(actor, title, detail, status = "passed", at = new Date().toISOString()) {
   activityEvents.unshift({
+    id: `activity_${++activityEventCounter}`,
     actor,
     title,
     detail,
     status,
-    at: new Date().toISOString()
+    at
   });
   if (activityLog) {
     renderActivityLog();
@@ -238,6 +264,80 @@ function updateLatestActivity(title, status, detail) {
   if (detail) {
     event.detail = detail;
   }
+  renderActivityLog();
+}
+
+function filteredActivityEvents() {
+  const query = state.activityQuery.trim().toLowerCase();
+  if (!query) {
+    return activityEvents;
+  }
+
+  return activityEvents.filter((event) => activityEventText(event).toLowerCase().includes(query));
+}
+
+function activityEventText(event) {
+  return [event.at, event.status, event.actor, event.title, event.detail].join(" ");
+}
+
+function formatActivityTime(isoTime) {
+  const date = new Date(isoTime);
+  if (Number.isNaN(date.getTime())) {
+    return isoTime;
+  }
+
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+
+function formatActivityExport(events) {
+  return events
+    .map((event) => `[${event.at}] ${event.status.toUpperCase()} ${event.actor}: ${event.title} - ${event.detail}`)
+    .join("\n");
+}
+
+async function copyActivityLog() {
+  const text = formatActivityExport(activityEvents);
+  await navigator.clipboard.writeText(text);
+  const originalText = copyActivityButton.textContent;
+  copyActivityButton.textContent = "Copied";
+  addActivity("human", "Copied activity log", `${activityEvents.length} events copied to clipboard.`, "passed");
+  setTimeout(() => {
+    copyActivityButton.textContent = originalText;
+  }, 1200);
+}
+
+function downloadActivityLog() {
+  const payload = {
+    schemaVersion: "theorem.web-activity-export.v0",
+    exportedAt: new Date().toISOString(),
+    eventCount: activityEvents.length,
+    events: activityEvents
+  };
+  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
+    type: "application/json"
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `theorem-workbench-activity-${payload.exportedAt.replaceAll(":", "-")}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  addActivity("human", "Downloaded activity log", `${payload.eventCount} events saved as JSON.`, "passed");
+}
+
+function showOlderActivity() {
+  const filteredEvents = filteredActivityEvents();
+  if (state.activityLimit >= filteredEvents.length) {
+    return;
+  }
+
+  state.activityLimit += ACTIVITY_PAGE_SIZE;
   renderActivityLog();
 }
 
@@ -354,6 +454,29 @@ claimList.addEventListener("click", (event) => {
   render();
 });
 
+activitySearch.addEventListener("input", () => {
+  state.activityQuery = activitySearch.value;
+  state.activityLimit = ACTIVITY_PAGE_SIZE;
+  renderActivityLog();
+});
+
+activityShowMore.addEventListener("click", showOlderActivity);
+
+activityLog.addEventListener("scroll", () => {
+  const nearBottom = activityLog.scrollTop + activityLog.clientHeight >= activityLog.scrollHeight - 24;
+  if (nearBottom) {
+    showOlderActivity();
+  }
+});
+
+copyActivityButton.addEventListener("click", () => {
+  copyActivityLog().catch((error) => {
+    addActivity("web-ui", "Copy failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+  });
+});
+
+downloadActivityButton.addEventListener("click", downloadActivityLog);
+
 document.querySelectorAll(".segment").forEach((button) => {
   button.addEventListener("click", () => {
     state.level = button.dataset.level;
@@ -396,7 +519,7 @@ composer.addEventListener("submit", async (event) => {
     state.receiptKey = key;
     state.level = "middle";
     for (const item of payload.activity ?? []) {
-      addActivity(item.actor, item.action, item.detail, "passed");
+      addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }
     addActivity("web-ui", "Rendered receipt", `${payload.receipt.runId} displayed with trace and evidence graph.`, "passed");
   } catch (error) {
