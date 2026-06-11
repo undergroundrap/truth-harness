@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/literature-record.schema.json",
+  "title": "Theorem Workbench Literature Record",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "recordId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "kind",
+    "status",
+    "authors",
+    "identifiers",
+    "localRefs",
+    "corpusRefs",
+    "evidenceRefs",
+    "keyClaims",
+    "methodNotes",
+    "limitations",
+    "relevance",
+    "qualityFlags",
+    "nextChecks",
+    "reviewBoundary",
+    "privacy",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.literature.v0"
+    },
+    "recordId": {
+      "type": "string",
+      "pattern": "^lit_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": ["paper", "preprint", "patent", "dataset", "database-export", "book", "web-page", "protocol", "standard", "note", "other"]
+    },
+    "status": {
+      "enum": ["unreviewed", "triaged", "read", "annotated", "reproduced", "replicated", "disputed", "retracted", "superseded"]
+    },
+    "authors": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "venue": {
+      "type": "string"
+    },
+    "year": {
+      "type": "integer"
+    },
+    "identifiers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/identifier"
+      }
+    },
+    "localRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "corpusRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "evidenceRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "keyClaims": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "methodNotes": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "relevance": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "qualityFlags": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "nextChecks": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "reviewBoundary": {
+      "type": "object",
+      "required": [
+        "sourceRecordOnly",
+        "sourceRetrievalIsNotEntailment",
+        "requiresEntailmentReview",
+        "requiresDomainExpertReview",
+        "requiresReplicationForScientificClaims",
+        "requiresPatentLegalReview",
+        "requiredNextChecks"
+      ],
+      "properties": {
+        "sourceRecordOnly": {
+          "const": true
+        },
+        "sourceRetrievalIsNotEntailment": {
+          "const": true
+        },
+        "requiresEntailmentReview": {
+          "type": "boolean"
+        },
+        "requiresDomainExpertReview": {
+          "type": "boolean"
+        },
+        "requiresReplicationForScientificClaims": {
+          "type": "boolean"
+        },
+        "requiresPatentLegalReview": {
+          "type": "boolean"
+        },
+        "requiredNextChecks": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "object",
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": {
+          "enum": ["doi", "pmid", "pmcid", "arxiv", "isbn", "patent", "url", "local-path", "other"]
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

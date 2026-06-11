@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/invention-log.schema.json",
+  "title": "Theorem Workbench Invention Log Entry",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "entryId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "problem",
+    "hypothesis",
+    "validationStage",
+    "evidenceRefs",
+    "noveltyNotes",
+    "priorArtNotes",
+    "risks",
+    "nextChecks",
+    "patent",
+    "safety",
+    "privacy"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.invention.v0"
+    },
+    "entryId": {
+      "type": "string",
+      "pattern": "^inv_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "problem": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hypothesis": {
+      "type": "string",
+      "minLength": 1
+    },
+    "validationStage": {
+      "$ref": "#/$defs/validationStage"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidenceRef"
+      }
+    },
+    "noveltyNotes": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "priorArtNotes": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "risks": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "nextChecks": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "patent": {
+      "type": "object",
+      "required": ["humanReviewRequired", "legalConclusion", "provisionalDraftReady", "notes"],
+      "properties": {
+        "humanReviewRequired": {
+          "const": true
+        },
+        "legalConclusion": {
+          "const": "not-a-legal-opinion"
+        },
+        "provisionalDraftReady": {
+          "const": false
+        },
+        "notes": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "required": ["validationRequired", "overclaimWarnings"],
+      "properties": {
+        "validationRequired": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "overclaimWarnings": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "type": "boolean"
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "validationStage": {
+      "enum": [
+        "idea",
+        "computational-hypothesis",
+        "simulated",
+        "bench-tested",
+        "experimentally-observed",
+        "preclinical",
+        "clinical",
+        "regulatory-reviewed"
+      ]
+    },
+    "evidenceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "enum": ["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "other"]
+        },
+        "ref": {
+          "type": "string"
+        },
+        "trust": {
+          "enum": [
+            "proved",
+            "exact-computed",
+            "bounded-numeric",
+            "smt-checked",
+            "dimension-checked",
+            "source-cited",
+            "cross-checked",
+            "unverified",
+            "refuted"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        }
+      }
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

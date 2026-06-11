@@ -5,7 +5,17 @@ import { proveUniversalParity } from "./parity-proof.js";
 import { Rational } from "./rational.js";
 import { stableHash } from "./stable-hash.js";
 import { parseSymbolicPrompt, runSympySync, type SymbolicPrompt } from "./sympy.js";
-import type { Artifact, EvidenceEdge, Finding, GraphNode, NodeKind, Receipt, TrustLabel } from "./types.js";
+import type {
+  Artifact,
+  EvidenceEdge,
+  Finding,
+  GraphNode,
+  NodeKind,
+  PrivacyMetadata,
+  Receipt,
+  ReceiptEvidenceProfile,
+  TrustLabel
+} from "./types.js";
 
 interface UniversalParityClaim {
   expressionSource: string;
@@ -122,7 +132,7 @@ export function createReceipt(problem: string): Receipt {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, finite counterexample search, modular parity proofs, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -136,6 +146,15 @@ export function createReceipt(problem: string): Receipt {
     createdAt,
     trust: "unverified",
     summary: "Unsupported by the local MVP adapters; no verified claim returned.",
+    evidenceProfile: {
+      kind: "unsupported",
+      backends: [],
+      inputs: [normalizedProblem],
+      outputs: [],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: ["No local adapter accepted this problem yet."]
+    },
     nodes,
     edges,
     artifacts,
@@ -197,6 +216,25 @@ function completeIntervalReceipt(args: {
       createdAt: args.createdAt,
       trust: "bounded-numeric",
       summary: `Bounded interval result: ${result.expression} in [${result.output.lower}, ${result.output.upper}] for ${result.variable} in [${result.input.lower}, ${result.input.upper}].`,
+      evidenceProfile: {
+        kind: "interval-bound",
+        backends: [
+          {
+            id: "local-rational-interval-arithmetic",
+            role: "interval",
+            version: "0",
+            acceptedProofChecker: false
+          }
+        ],
+        inputs: [`${result.variable} in [${result.input.lower}, ${result.input.upper}]`, result.expression],
+        outputs: [`${result.expression} in [${result.output.lower}, ${result.output.upper}]`],
+        replayable: true,
+        proofCheckerBacked: false,
+        limitations: [
+          "Interval arithmetic is conservative and may widen repeated variables.",
+          "A numeric bound is not a proof of a broader physical, scientific, or safety claim."
+        ]
+      },
       nodes: args.nodes,
       edges: args.edges,
       artifacts: args.artifacts,
@@ -234,6 +272,25 @@ function completeIntervalReceipt(args: {
       createdAt: args.createdAt,
       trust: "unverified",
       summary: `Interval bound could not be completed: ${message}`,
+      evidenceProfile: {
+        kind: "interval-bound",
+        backends: [
+          {
+            id: "local-rational-interval-arithmetic",
+            role: "interval",
+            version: "0",
+            acceptedProofChecker: false
+          }
+        ],
+        inputs: [
+          `${args.intervalPrompt.variable} in [${args.intervalPrompt.input.lower}, ${args.intervalPrompt.input.upper}]`,
+          args.intervalPrompt.expressionSource
+        ],
+        outputs: [],
+        replayable: true,
+        proofCheckerBacked: false,
+        limitations: [message]
+      },
       nodes: args.nodes,
       edges: args.edges,
       artifacts: args.artifacts,
@@ -285,6 +342,22 @@ function completeSymbolicReceipt(args: {
       createdAt: args.createdAt,
       trust: "unverified",
       summary: `SymPy adapter could not verify this symbolic prompt: ${result.error}`,
+      evidenceProfile: {
+        kind: "symbolic-cas",
+        backends: [
+          {
+            id: "local-sympy-subprocess",
+            role: "cas",
+            version: "unavailable",
+            acceptedProofChecker: false
+          }
+        ],
+        inputs: [args.symbolicPrompt.operation, args.symbolicPrompt.expression],
+        outputs: [],
+        replayable: true,
+        proofCheckerBacked: false,
+        limitations: [`SymPy adapter unavailable or failed: ${result.error}`]
+      },
       nodes: args.nodes,
       edges: args.edges,
       artifacts: args.artifacts,
@@ -343,6 +416,23 @@ function completeSymbolicReceipt(args: {
     createdAt: args.createdAt,
     trust: "exact-computed",
     summary: `SymPy ${result.operation} result: ${result.result}.`,
+    evidenceProfile: {
+      kind: "symbolic-cas",
+      backends: [
+        {
+          id: "local-sympy-subprocess",
+          role: "cas",
+          version: result.sympyVersion,
+          environment: { pythonCommand: result.pythonCommand },
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [result.operation, result.expression, ...(result.variable ? [`variable=${result.variable}`] : [])],
+      outputs: [result.result],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: ["CAS output is exact computation, not a formal proof of arbitrary surrounding claims."]
+    },
     nodes: args.nodes,
     edges: args.edges,
     artifacts: args.artifacts,
@@ -428,6 +518,22 @@ function completeDimensionReceipt(args: {
         createdAt: args.createdAt,
         trust,
         summary: `Refuted by dimensional analysis: left is ${result.lhsText}, right is ${result.rhsText}.`,
+        evidenceProfile: {
+          kind: "dimension-analysis",
+          backends: [
+            {
+              id: "local-dimensional-analysis",
+              role: "checker",
+              version: "0",
+              acceptedProofChecker: false
+            }
+          ],
+          inputs: [`${result.equation.lhs} = ${result.equation.rhs}`],
+          outputs: [`left=${result.lhsText}`, `right=${result.rhsText}`],
+          replayable: true,
+          proofCheckerBacked: false,
+          limitations: ["Dimensional mismatch refutes dimensional consistency under the local SI base-dimension table."]
+        },
         nodes: args.nodes,
         edges: args.edges,
         artifacts: args.artifacts,
@@ -446,6 +552,22 @@ function completeDimensionReceipt(args: {
       createdAt: args.createdAt,
       trust,
       summary: `Dimensionally consistent: both sides are ${result.lhsText}. This checks units, not full physical truth.`,
+      evidenceProfile: {
+        kind: "dimension-analysis",
+        backends: [
+          {
+            id: "local-dimensional-analysis",
+            role: "checker",
+            version: "0",
+            acceptedProofChecker: false
+          }
+        ],
+        inputs: [`${result.equation.lhs} = ${result.equation.rhs}`],
+        outputs: [`left=${result.lhsText}`, `right=${result.rhsText}`],
+        replayable: true,
+        proofCheckerBacked: false,
+        limitations: ["Dimensional consistency is a necessary sanity check, not proof that the equation or model is physically true."]
+      },
       nodes: args.nodes,
       edges: args.edges,
       artifacts: args.artifacts,
@@ -475,6 +597,22 @@ function completeDimensionReceipt(args: {
       createdAt: args.createdAt,
       trust: "unverified",
       summary: "Dimension check could not be completed by the local adapter.",
+      evidenceProfile: {
+        kind: "dimension-analysis",
+        backends: [
+          {
+            id: "local-dimensional-analysis",
+            role: "checker",
+            version: "0",
+            acceptedProofChecker: false
+          }
+        ],
+        inputs: [args.dimensionSource],
+        outputs: [],
+        replayable: true,
+        proofCheckerBacked: false,
+        limitations: ["The local dimensional-analysis adapter could not parse or evaluate this equation."]
+      },
       nodes: args.nodes,
       edges: args.edges,
       artifacts: args.artifacts,
@@ -523,6 +661,22 @@ function completeUniversalParityReceipt(args: {
       createdAt: args.createdAt,
       trust: "unverified",
       summary: "Universal parity claim contains variables outside the quantified variable n.",
+      evidenceProfile: {
+        kind: "universal-parity",
+        backends: [
+          {
+            id: "local-modular-parity-checker",
+            role: "checker",
+            version: "0",
+            acceptedProofChecker: false
+          }
+        ],
+        inputs: [args.claim.expressionSource],
+        outputs: [],
+        replayable: true,
+        proofCheckerBacked: false,
+        limitations: ["The local parity checker only supports expressions over the quantified variable n."]
+      },
       nodes: args.nodes,
       edges: args.edges,
       artifacts: args.artifacts,
@@ -546,7 +700,7 @@ function completeUniversalParityReceipt(args: {
   const proofResult = counterexample
     ? undefined
     : proveUniversalParity(args.claim.expressionSource, expression, args.claim.parity);
-  const claimTrust: TrustLabel = counterexample ? "refuted" : proofResult?.ok ? "proved" : "unverified";
+  const claimTrust: TrustLabel = counterexample ? "refuted" : proofResult?.ok ? "exact-computed" : "unverified";
   const claimNode = addNode(args.nodes, args.createdAt, {
     kind: "claim",
     payload: {
@@ -558,7 +712,7 @@ function completeUniversalParityReceipt(args: {
     summary: counterexample
       ? "Universal parity claim refuted by finite counterexample search."
       : proofResult?.ok
-        ? "Universal parity claim proved by local modular arithmetic proof kernel."
+        ? "Universal parity claim checked by a narrow local modular arithmetic kernel; not proof-checker-backed."
         : "No counterexample found in the finite search range; this is not a proof.",
     artifactRefs: []
   });
@@ -593,6 +747,28 @@ function completeUniversalParityReceipt(args: {
       createdAt: args.createdAt,
       trust: "refuted",
       summary: `Refuted: n=${counterexample.n} gives ${counterexample.value}, which is not ${args.claim.parity}.`,
+      evidenceProfile: {
+        kind: "universal-parity",
+        backends: [
+          {
+            id: "finite-counterexample-search",
+            role: "counterexample-search",
+            version: "0",
+            acceptedProofChecker: false
+          },
+          {
+            id: "local-rational-arithmetic",
+            role: "arithmetic",
+            version: "0",
+            acceptedProofChecker: false
+          }
+        ],
+        inputs: [args.claim.expressionSource, `predicate=is ${args.claim.parity}`, `searchRange=${searchRange.min}..${searchRange.max}`],
+        outputs: [`n=${counterexample.n}`, `value=${counterexample.value}`],
+        replayable: true,
+        proofCheckerBacked: false,
+        limitations: ["A single exact counterexample refutes the universal parity claim."]
+      },
       nodes: args.nodes,
       edges: args.edges,
       artifacts: args.artifacts,
@@ -602,7 +778,7 @@ function completeUniversalParityReceipt(args: {
 
   if (proofResult?.ok) {
     const artifact = addArtifact(args.artifacts, {
-      kind: "modular-parity-proof-certificate",
+      kind: "modular-parity-check-certificate",
       mimeType: "application/json",
       content: JSON.stringify(proofResult, null, 2)
     });
@@ -615,32 +791,59 @@ function completeUniversalParityReceipt(args: {
         modulus: proofResult.modulus,
         residues: proofResult.residues
       },
-      trust: "proved",
-      summary: "Checked both integer residue classes modulo 2 in the local proof kernel.",
+      trust: "exact-computed",
+      summary: "Checked both integer residue classes modulo 2 in the local parity kernel.",
       artifactRefs: [artifact.id]
     });
-    args.edges.push({ from: claimNode.id, to: proofToolNode.id, label: "proved-by" });
+    args.edges.push({ from: claimNode.id, to: proofToolNode.id, label: "checked-by" });
 
-    const proofNode = addNode(args.nodes, args.createdAt, {
-      kind: "proof",
+    const certificateNode = addNode(args.nodes, args.createdAt, {
+      kind: "computation",
       payload: proofResult,
-      trust: "proved",
+      trust: "exact-computed",
       summary: proofResult.certificate,
       artifactRefs: [artifact.id]
     });
-    args.edges.push({ from: proofToolNode.id, to: proofNode.id, label: "produced" });
+    args.edges.push({ from: proofToolNode.id, to: certificateNode.id, label: "produced" });
 
     args.findings.push({
-      level: "info",
-      message: "The local parity proof kernel is intentionally narrow: it proves polynomial parity over integers by checking Z/2Z residue classes."
+      level: "warning",
+      message: "The local parity kernel is intentionally narrow and is not an accepted proof-checking backend. This receipt records an exact modular check; reserve `proved` for Lean, SMT/proof-certificate, or another accepted proof checker."
     });
 
     return buildReceipt({
       problem: args.problem,
       normalizedProblem: args.normalizedProblem,
       createdAt: args.createdAt,
-      trust: "proved",
-      summary: `Proved by modular parity kernel: ${args.claim.expressionSource} is ${args.claim.parity} for every integer n.`,
+      trust: "exact-computed",
+      summary: `Exact modular parity check: ${args.claim.expressionSource} is ${args.claim.parity} for both residue classes modulo 2; not proof-checker-backed.`,
+      evidenceProfile: {
+        kind: "universal-parity",
+        backends: [
+          {
+            id: "finite-counterexample-search",
+            role: "counterexample-search",
+            version: "0",
+            acceptedProofChecker: false
+          },
+          {
+            id: proofResult.adapter,
+            role: "checker",
+            version: "0",
+            acceptedProofChecker: false
+          }
+        ],
+        inputs: [args.claim.expressionSource, `predicate=is ${args.claim.parity}`],
+        outputs: proofResult.residues.map(
+          (residue) => `n mod 2 = ${residue.nMod2}; value mod 2 = ${residue.valueMod2}`
+        ),
+        replayable: true,
+        proofCheckerBacked: false,
+        limitations: [
+          "The local parity checker is intentionally narrow and not an accepted proof-checking backend.",
+          "Reserve `proved` for Lean, SMT/proof-certificate, or another accepted proof checker."
+        ]
+      },
       nodes: args.nodes,
       edges: args.edges,
       artifacts: args.artifacts,
@@ -651,8 +854,8 @@ function completeUniversalParityReceipt(args: {
   args.findings.push({
     level: "warning",
     message: proofResult
-      ? `Finite search found no counterexample, but the local proof kernel did not prove the claim: ${proofResult.reason}`
-      : "Finite search found no counterexample, but Theorem Workbench did not produce a formal proof."
+      ? `Finite search found no counterexample, but the local parity checker could not certify the claim: ${proofResult.reason}`
+      : "Finite search found no counterexample, but Theorem Workbench did not produce proof-checker-backed evidence."
   });
 
   return buildReceipt({
@@ -661,8 +864,33 @@ function completeUniversalParityReceipt(args: {
     createdAt: args.createdAt,
     trust: "unverified",
     summary: proofResult
-      ? `No counterexample found in local finite search, but the local proof kernel did not prove it: ${proofResult.reason}`
+      ? `No counterexample found in local finite search, but the local parity checker could not certify it: ${proofResult.reason}`
       : "No counterexample found in local finite search; still unverified until a proof adapter checks it.",
+    evidenceProfile: {
+      kind: "universal-parity",
+      backends: [
+        {
+          id: "finite-counterexample-search",
+          role: "counterexample-search",
+          version: "0",
+          acceptedProofChecker: false
+        },
+        {
+          id: "local-modular-parity-checker",
+          role: "checker",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.expressionSource, `predicate=is ${args.claim.parity}`, `searchRange=${searchRange.min}..${searchRange.max}`],
+      outputs: [],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        proofResult?.reason ?? "The current adapter did not produce proof-checker-backed evidence.",
+        "Finite search without a counterexample is not proof of a universal claim."
+      ]
+    },
     nodes: args.nodes,
     edges: args.edges,
     artifacts: args.artifacts,
@@ -716,6 +944,22 @@ function completeArithmeticReceipt(args: {
     createdAt: args.createdAt,
     trust: "exact-computed",
     summary: `Exact result: ${result}.`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-rational-arithmetic",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.arithmeticSource],
+      outputs: [result],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: ["Exact arithmetic covers the parsed numeric expression, not arbitrary surrounding claims."]
+    },
     nodes: args.nodes,
     edges: args.edges,
     artifacts: args.artifacts,
@@ -729,14 +973,18 @@ function buildReceipt(args: {
   createdAt: string;
   trust: TrustLabel;
   summary: string;
+  evidenceProfile: ReceiptEvidenceProfile;
   nodes: GraphNode[];
   edges: EvidenceEdge[];
   artifacts: Artifact[];
   findings: Finding[];
 }): Receipt {
+  const privacy = createLocalOnlyPrivacyMetadata();
   const runHash = stableHash({
     problem: args.problem,
     normalizedProblem: args.normalizedProblem,
+    privacy,
+    evidenceProfile: args.evidenceProfile,
     nodes: args.nodes.map(({ createdAt: _createdAt, ...node }) => node),
     edges: args.edges,
     artifacts: args.artifacts
@@ -751,12 +999,24 @@ function buildReceipt(args: {
     trust: args.trust,
     summary: args.summary,
     replay: `theorem ask ${JSON.stringify(args.problem)} --json`,
+    privacy,
+    evidenceProfile: args.evidenceProfile,
     graph: {
       nodes: args.nodes,
       edges: args.edges
     },
     artifacts: args.artifacts,
     findings: args.findings
+  };
+}
+
+function createLocalOnlyPrivacyMetadata(): PrivacyMetadata {
+  return {
+    mode: "local-only",
+    localFirst: true,
+    networkAccess: "none",
+    dataResidency: "local-workspace",
+    externalDisclosures: []
   };
 }
 

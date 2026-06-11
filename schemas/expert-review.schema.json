@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/expert-review.schema.json",
+  "title": "Theorem Workbench Expert Review",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "reviewId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "subject",
+    "question",
+    "kind",
+    "status",
+    "reviewer",
+    "evidenceRefs",
+    "findings",
+    "limitations",
+    "recommendations",
+    "requiredNextChecks",
+    "outcome",
+    "boundary",
+    "privacy",
+    "warnings",
+    "markdown"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.expert-review.v0"
+    },
+    "reviewId": {
+      "type": "string",
+      "pattern": "^review_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": [
+        "math",
+        "physics",
+        "engineering",
+        "software",
+        "biomedical",
+        "clinical",
+        "safety",
+        "ethics",
+        "regulatory",
+        "patent-legal",
+        "domain-expert",
+        "other"
+      ]
+    },
+    "status": {
+      "enum": ["needed", "requested", "in-review", "completed", "rejected", "superseded"]
+    },
+    "reviewer": {
+      "type": "object",
+      "required": ["role", "conflictDisclosure"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nameOrOrg": {
+          "type": "string"
+        },
+        "credentials": {
+          "type": "string"
+        },
+        "conflictDisclosure": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidenceRef"
+      }
+    },
+    "findings": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "recommendations": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "requiredNextChecks": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "outcome": {
+      "type": "object",
+      "required": ["status", "summary"],
+      "properties": {
+        "status": {
+          "enum": [
+            "not-reviewed",
+            "needs-more-evidence",
+            "supported-with-limitations",
+            "not-supported",
+            "inconclusive",
+            "requires-validation",
+            "legal-review-only"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "boundary": {
+      "type": "object",
+      "required": [
+        "humanReviewRecord",
+        "notProof",
+        "notMedicalAdvice",
+        "notRegulatoryApproval",
+        "notLegalAdvice",
+        "requiresIndependentVerification"
+      ],
+      "properties": {
+        "humanReviewRecord": {
+          "const": true
+        },
+        "notProof": {
+          "const": true
+        },
+        "notMedicalAdvice": {
+          "const": true
+        },
+        "notRegulatoryApproval": {
+          "const": true
+        },
+        "notLegalAdvice": {
+          "const": true
+        },
+        "requiresIndependentVerification": {
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "markdown": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "evidenceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "receipt",
+            "artifact",
+            "source",
+            "literature",
+            "notebook",
+            "notebook-run",
+            "code-run",
+            "benchmark",
+            "disclosure",
+            "simulation",
+            "experiment",
+            "vault",
+            "audit",
+            "snapshot",
+            "session",
+            "review",
+            "validation",
+            "model-context",
+            "invention",
+            "claim-chart",
+            "discovery-package",
+            "other"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trust": {
+          "enum": [
+            "proved",
+            "exact-computed",
+            "bounded-numeric",
+            "smt-checked",
+            "dimension-checked",
+            "source-cited",
+            "cross-checked",
+            "unverified",
+            "refuted"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

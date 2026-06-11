@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/simulation-log.schema.json",
+  "title": "Theorem Workbench Simulation Log Entry",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "simulationId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "question",
+    "kind",
+    "stage",
+    "engine",
+    "modelName",
+    "inputRefs",
+    "outputRefs",
+    "codeRefs",
+    "parameters",
+    "metrics",
+    "assumptions",
+    "uncertainty",
+    "limitations",
+    "nextChecks",
+    "validationBoundary",
+    "privacy",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.simulation.v0"
+    },
+    "simulationId": {
+      "type": "string",
+      "pattern": "^sim_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": ["numeric", "symbolic", "physics", "molecular", "statistical", "agentic", "other"]
+    },
+    "stage": {
+      "enum": ["planned", "computed", "reproduced", "benchmarked", "experimentally-compared"]
+    },
+    "engine": {
+      "type": "string",
+      "minLength": 1
+    },
+    "engineVersion": {
+      "type": "string"
+    },
+    "modelName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "modelVersion": {
+      "type": "string"
+    },
+    "inputRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "outputRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "codeRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/scalar"
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/scalar"
+      }
+    },
+    "assumptions": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "uncertainty": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "nextChecks": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "validationBoundary": {
+      "type": "object",
+      "required": [
+        "computationalOnly",
+        "simulationIsNotReality",
+        "requiresExpertReview",
+        "requiresRealWorldValidation",
+        "requiredNextValidation"
+      ],
+      "properties": {
+        "computationalOnly": {
+          "type": "boolean"
+        },
+        "simulationIsNotReality": {
+          "const": true
+        },
+        "requiresExpertReview": {
+          "const": true
+        },
+        "requiresRealWorldValidation": {
+          "type": "boolean"
+        },
+        "requiredNextValidation": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "type": "boolean"
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      }
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "scalar": {
+      "type": "object",
+      "required": ["name", "value"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

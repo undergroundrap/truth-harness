@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/workspace-snapshot-verification.schema.json",
+  "title": "Theorem Workbench Workspace Snapshot Verification",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "snapshotId",
+    "projectId",
+    "verifiedAt",
+    "passed",
+    "checked",
+    "missing",
+    "changed",
+    "addedSinceSnapshot",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.workspace-snapshot-verification.v0"
+    },
+    "snapshotId": {
+      "type": "string",
+      "pattern": "^snap_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "verifiedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "passed": {
+      "type": "boolean"
+    },
+    "checked": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "missing": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/verificationEntry"
+      }
+    },
+    "changed": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/verificationEntry"
+      }
+    },
+    "addedSinceSnapshot": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/verificationEntry"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "verificationEntry": {
+      "type": "object",
+      "required": ["path", "kind"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^\\.theorem-workbench/"
+        },
+        "kind": {
+          "enum": [
+            "receipts",
+            "artifacts",
+            "indexes",
+            "findings",
+            "inventions",
+            "proofs",
+            "smt",
+            "benchmarks",
+            "disclosures",
+            "simulations",
+            "patents",
+            "experiments",
+            "vault",
+            "audits",
+            "snapshots",
+            "sessions",
+            "reviews",
+            "validation",
+            "literature",
+            "notebook-runs",
+            "code-runs",
+            "model-contexts",
+            "manifest",
+            "unknown"
+          ]
+        },
+        "expectedBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "actualBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expectedSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "actualSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "schemaVersion": {
+          "type": "string"
+        },
+        "artifactId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/workspace-snapshot.schema.json",
+  "title": "Theorem Workbench Workspace Snapshot",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "snapshotId",
+    "projectId",
+    "createdAt",
+    "workspaceDir",
+    "entries",
+    "summary",
+    "privacy",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.workspace-snapshot.v0"
+    },
+    "snapshotId": {
+      "type": "string",
+      "pattern": "^snap_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "workspaceDir": {
+      "const": ".theorem-workbench"
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["totalFiles", "totalBytes", "byKind", "bySchema"],
+      "properties": {
+        "totalFiles": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "byKind": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "bySchema": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["path", "kind", "bytes", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^\\.theorem-workbench/"
+        },
+        "kind": {
+          "enum": [
+            "receipts",
+            "artifacts",
+            "indexes",
+            "findings",
+            "inventions",
+            "proofs",
+            "smt",
+            "benchmarks",
+            "disclosures",
+            "simulations",
+            "patents",
+            "experiments",
+            "vault",
+            "audits",
+            "snapshots",
+            "sessions",
+            "reviews",
+            "validation",
+            "literature",
+            "notebook-runs",
+            "code-runs",
+            "model-contexts",
+            "manifest",
+            "unknown"
+          ]
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "schemaVersion": {
+          "type": "string"
+        },
+        "artifactId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

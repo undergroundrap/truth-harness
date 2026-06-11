@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { parseExpression } from "./expression.js";
 import { proveUniversalParity } from "./parity-proof.js";
 
-describe("local modular parity proof kernel", () => {
-  it("proves universal even polynomial parity claims", () => {
+describe("local modular parity checker", () => {
+  it("certifies universal even polynomial parity claims in the narrow checker", () => {
     const result = proveUniversalParity("n^2+n", parseExpression("n^2+n"), "even");
 
     expect(result.ok).toBe(true);
@@ -15,7 +15,7 @@ describe("local modular parity proof kernel", () => {
     }
   });
 
-  it("proves universal odd polynomial parity claims", () => {
+  it("certifies universal odd polynomial parity claims in the narrow checker", () => {
     const result = proveUniversalParity("2*n+1", parseExpression("2*n+1"), "odd");
 
     expect(result.ok).toBe(true);
@@ -30,7 +30,7 @@ describe("local modular parity proof kernel", () => {
     }
   });
 
-  it("does not prove expressions outside the polynomial kernel", () => {
+  it("does not certify expressions outside the polynomial checker", () => {
     const result = proveUniversalParity("2*(n/1)", parseExpression("2*(n/1)"), "even");
 
     expect(result.ok).toBe(false);

@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/workspace-manifest.schema.json",
+  "title": "Theorem Workbench Local Workspace Manifest",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "displayName",
+    "createdAt",
+    "updatedAt",
+    "privacy",
+    "directories",
+    "policies"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.workspace.v0"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "const": "local-only"
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "const": "none"
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "const": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "directories": {
+      "type": "object",
+      "required": [
+        "receipts",
+        "artifacts",
+        "indexes",
+        "findings",
+        "inventions",
+        "proofs",
+        "smt",
+        "benchmarks",
+        "disclosures",
+        "simulations",
+        "patents",
+        "experiments",
+        "vault",
+        "audits",
+        "snapshots",
+        "sessions",
+        "reviews",
+        "validation",
+        "literature",
+        "notebook-runs",
+        "code-runs",
+        "model-contexts"
+      ],
+      "properties": {
+        "receipts": {
+          "const": ".theorem-workbench/receipts"
+        },
+        "artifacts": {
+          "const": ".theorem-workbench/artifacts"
+        },
+        "indexes": {
+          "const": ".theorem-workbench/indexes"
+        },
+        "findings": {
+          "const": ".theorem-workbench/findings"
+        },
+        "inventions": {
+          "const": ".theorem-workbench/inventions"
+        },
+        "proofs": {
+          "const": ".theorem-workbench/proofs"
+        },
+        "smt": {
+          "const": ".theorem-workbench/smt"
+        },
+        "benchmarks": {
+          "const": ".theorem-workbench/benchmarks"
+        },
+        "disclosures": {
+          "const": ".theorem-workbench/disclosures"
+        },
+        "simulations": {
+          "const": ".theorem-workbench/simulations"
+        },
+        "patents": {
+          "const": ".theorem-workbench/patents"
+        },
+        "experiments": {
+          "const": ".theorem-workbench/experiments"
+        },
+        "vault": {
+          "const": ".theorem-workbench/vault"
+        },
+        "audits": {
+          "const": ".theorem-workbench/audits"
+        },
+        "snapshots": {
+          "const": ".theorem-workbench/snapshots"
+        },
+        "sessions": {
+          "const": ".theorem-workbench/sessions"
+        },
+        "reviews": {
+          "const": ".theorem-workbench/reviews"
+        },
+        "validation": {
+          "const": ".theorem-workbench/validation"
+        },
+        "literature": {
+          "const": ".theorem-workbench/literature"
+        },
+        "notebook-runs": {
+          "const": ".theorem-workbench/notebook-runs"
+        },
+        "code-runs": {
+          "const": ".theorem-workbench/code-runs"
+        },
+        "model-contexts": {
+          "const": ".theorem-workbench/model-contexts"
+        }
+      },
+      "additionalProperties": false
+    },
+    "policies": {
+      "type": "object",
+      "required": ["externalCalls", "disclosure", "secrets", "portability"],
+      "properties": {
+        "externalCalls": {
+          "const": "disabled-by-default"
+        },
+        "disclosure": {
+          "const": "required-for-external-calls"
+        },
+        "secrets": {
+          "const": "environment-only"
+        },
+        "portability": {
+          "const": "relative-paths"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

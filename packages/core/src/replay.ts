@@ -1,4 +1,5 @@
 import { createReceipt } from "./receipt.js";
+import { assertReceipt } from "./receipt-validation.js";
 import type { Receipt } from "./types.js";
 
 export interface ReplayResult {
@@ -11,7 +12,10 @@ export interface ReplayResult {
   receipt: Receipt;
 }
 
-export function replayReceipt(expected: Pick<Receipt, "problem" | "runId" | "trust" | "summary">): ReplayResult {
+export function replayReceipt(
+  expected: Receipt
+): ReplayResult {
+  assertReceipt(expected);
   const actual = createReceipt(expected.problem);
   const differences: string[] = [];
 
@@ -25,6 +29,12 @@ export function replayReceipt(expected: Pick<Receipt, "problem" | "runId" | "tru
 
   if (actual.summary !== expected.summary) {
     differences.push(`summary changed from ${JSON.stringify(expected.summary)} to ${JSON.stringify(actual.summary)}`);
+  }
+
+  if (expected.privacy && JSON.stringify(actual.privacy) !== JSON.stringify(expected.privacy)) {
+    differences.push(
+      `privacy changed from ${JSON.stringify(expected.privacy)} to ${JSON.stringify(actual.privacy)}`
+    );
   }
 
   return {

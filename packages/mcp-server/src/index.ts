@@ -4,9 +4,61 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import * as z from "zod/v4";
 import {
   handleTheoremAsk,
+  handleTheoremBenchmarkCompare,
+  handleTheoremBenchmarkList,
   handleTheoremBenchmarkRun,
+  theoremBenchmarkCompareOutputFailsGate,
+  theoremBenchmarkRunOutputFailsGate,
+  handleTheoremClaimChart,
+  handleTheoremClaimChartList,
+  handleTheoremCodeRun,
+  handleTheoremCodeRunList,
+  handleTheoremDiscoveryPackage,
+  handleTheoremEvidenceAudit,
+  handleTheoremEvidenceAuditList,
+  handleTheoremExpertReviewList,
+  handleTheoremExpertReviewLog,
+  handleTheoremExperimentList,
+  handleTheoremExperimentLog,
+  handleTheoremExternalDisclosureList,
+  handleTheoremExternalDisclosureLog,
+  handleTheoremInventionList,
+  handleTheoremInventionLog,
+  handleTheoremLiteratureList,
+  handleTheoremLiteratureLog,
+  handleTheoremModelContextList,
+  handleTheoremModelContextPrepare,
+  handleTheoremNotebookRunList,
+  handleTheoremNotebookRunLog,
+  handleTheoremProofBackends,
+  handleTheoremProofCheck,
+  handleTheoremProofList,
   handleTheoremRenderReceipt,
   handleTheoremReplay,
+  handleTheoremResearchSessionCheckpoint,
+  handleTheoremResearchSessionList,
+  handleTheoremResearchSessionStart,
+  handleTheoremSimulationList,
+  handleTheoremSimulationLog,
+  handleTheoremSmtBackends,
+  handleTheoremSmtCheck,
+  handleTheoremSmtList,
+  handleTheoremSmtSolve,
+  handleTheoremSourceCite,
+  handleTheoremSourceIngest,
+  handleTheoremSourceSearch,
+  handleTheoremValidationPlan,
+  handleTheoremValidationPlanList,
+  handleTheoremVaultList,
+  handleTheoremVaultSeal,
+  handleTheoremVaultVerify,
+  handleTheoremWorkspaceInit,
+  handleTheoremWorkspaceRepair,
+  handleTheoremWorkspaceSnapshot,
+  handleTheoremWorkspaceSnapshotList,
+  handleTheoremWorkspaceSnapshotVerify,
+  handleTheoremWorkspaceStatus,
+  handleTheoremWorkspaceValidate,
   toolJson
 } from "./tools.js";
 
@@ -18,7 +70,7 @@ export function createTheoremMcpServer(): McpServer {
     },
     {
       instructions:
-        "Use Theorem Workbench to create replayable proof receipts. Do not treat unverified outputs as proved."
+        "Use Theorem Workbench to create replayable proof receipts, search local sources, and maintain local discovery logs. Do not treat unverified outputs, retrieved chunks, or computational hypotheses as proved."
     }
   );
 
@@ -56,14 +108,1797 @@ export function createTheoremMcpServer(): McpServer {
         suitePath: z
           .string()
           .optional()
-          .describe("Path under the current workspace. Defaults to packages/benchmarks/suites/foundations-seed.json.")
+          .describe("Path under the current workspace. Defaults to packages/benchmarks/suites/foundations-seed.json."),
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root for writing benchmark records. Defaults to the MCP workspace root."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write JSON and Markdown into .theorem-workbench/benchmarks. Defaults to false."),
+        failOnFailures: z
+          .boolean()
+          .optional()
+          .describe("When true, mark the tool call as an error if any benchmark task fails.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ suitePath, workspacePath, write, failOnFailures }) => {
+      const result = await handleTheoremBenchmarkRun({ suitePath, workspacePath, write, failOnFailures });
+      return toolJson(result, {
+        isError: failOnFailures === true && theoremBenchmarkRunOutputFailsGate(result)
+      });
+    }
+  );
+
+  server.registerTool(
+    "theorem_benchmark_compare",
+    {
+      title: "Compare Theorem Benchmarks",
+      description:
+        "Compare two theorem.benchmark-run.v0 records and return regressions, improvements, trust-label changes, and suite drift.",
+      inputSchema: {
+        baselinePath: z.string().describe("Baseline benchmark-run JSON path under the current workspace."),
+        currentPath: z.string().describe("Current benchmark-run JSON path under the current workspace."),
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root for writing comparison records. Defaults to the MCP workspace root."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write JSON and Markdown into .theorem-workbench/benchmarks. Defaults to false."),
+        failOnRegression: z
+          .boolean()
+          .optional()
+          .describe("When true, mark the tool call as an error if the comparison is regressed or incomparable.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ baselinePath, currentPath, workspacePath, write, failOnRegression }) => {
+      const result = await handleTheoremBenchmarkCompare({
+        baselinePath,
+        currentPath,
+        workspacePath,
+        write,
+        failOnRegression
+      });
+      return toolJson(result, {
+        isError: failOnRegression === true && theoremBenchmarkCompareOutputFailsGate(result)
+      });
+    }
+  );
+
+  server.registerTool(
+    "theorem_benchmark_list",
+    {
+      title: "List Theorem Benchmarks",
+      description:
+        "List local benchmark run and comparison artifacts with paths agents can reuse for comparisons and evidence refs.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root.")
       },
       annotations: {
         readOnlyHint: true,
         openWorldHint: false
       }
     },
-    async ({ suitePath }) => toolJson(await handleTheoremBenchmarkRun({ suitePath }))
+    async ({ workspacePath }) => toolJson(await handleTheoremBenchmarkList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_proof_backends",
+    {
+      title: "Probe Proof Backends",
+      description:
+        "Probe local accepted proof-checker backends without network access. A status probe is not proof; `proved` requires a successful proof-checking run.",
+      inputSchema: {
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .max(10000)
+          .optional()
+          .describe("Local backend version-probe timeout in milliseconds. Defaults to 3000.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ timeoutMs }) => toolJson(handleTheoremProofBackends({ timeoutMs }))
+  );
+
+  server.registerTool(
+    "theorem_proof_check",
+    {
+      title: "Check Lean Proof Artifact",
+      description:
+        "Run a local Lean proof-check over a workspace-local source file. Only an accepted Lean run can return `proved`; rejected or unavailable checks remain unverified.",
+      inputSchema: {
+        sourcePath: z.string().min(1).describe("Workspace-local Lean source file to check."),
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root for writing proof-check records. Defaults to the MCP workspace root."),
+        theoremName: z.string().optional().describe("Optional theorem or declaration name represented by the source file."),
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .max(30000)
+          .optional()
+          .describe("Local backend probe and proof-check timeout in milliseconds. Defaults to 3000."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write JSON and Markdown into .theorem-workbench/proofs. Defaults to false."),
+        failOnUnproved: z
+          .boolean()
+          .optional()
+          .describe("When true, mark the tool call as an error unless Lean accepts the proof artifact.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ sourcePath, workspacePath, theoremName, timeoutMs, write, failOnUnproved }) => {
+      const result = await handleTheoremProofCheck({
+        sourcePath,
+        workspacePath,
+        theoremName,
+        timeoutMs,
+        write,
+        failOnUnproved
+      });
+      return toolJson(result, { isError: result.error });
+    }
+  );
+
+  server.registerTool(
+    "theorem_proof_list",
+    {
+      title: "List Lean Proof Checks",
+      description:
+        "List local theorem.proof-check.v0 artifacts with paths agents can reuse for evidence refs, audits, and validation plans.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremProofList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_smt_backends",
+    {
+      title: "Probe SMT Solver Backends",
+      description:
+        "Probe local SMT solver availability without checking a claim; a status probe never proves or refutes anything.",
+      inputSchema: {
+        z3Command: z
+          .string()
+          .optional()
+          .describe("Z3 executable path or command. Defaults to THEOREM_Z3 or z3."),
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .max(30000)
+          .optional()
+          .describe("Local backend probe timeout in milliseconds. Defaults to 3000.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ z3Command, timeoutMs }) => toolJson(handleTheoremSmtBackends({ z3Command, timeoutMs }))
+  );
+
+  server.registerTool(
+    "theorem_smt_check",
+    {
+      title: "Check SMT-LIB Artifact",
+      description:
+        "Run Z3 on a workspace-local SMT-LIB artifact and optionally write a local theorem.smt-check.v0 record.",
+      inputSchema: {
+        sourcePath: z.string().min(1).describe("Workspace-local SMT-LIB source file to check."),
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root for reading and writing SMT check records. Defaults to the MCP workspace root."),
+        queryName: z.string().optional().describe("Optional query or constraint-set name represented by the source file."),
+        z3Command: z
+          .string()
+          .optional()
+          .describe("Z3 executable path or command. Defaults to THEOREM_Z3 or z3."),
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .max(30000)
+          .optional()
+          .describe("Local backend probe and SMT check timeout in milliseconds. Defaults to 3000."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write JSON and Markdown into .theorem-workbench/smt. Defaults to false."),
+        failOnUnverified: z
+          .boolean()
+          .optional()
+          .describe("When true, mark the tool call as an error unless the solver returns sat or unsat.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ sourcePath, workspacePath, queryName, z3Command, timeoutMs, write, failOnUnverified }) => {
+      const result = await handleTheoremSmtCheck({
+        sourcePath,
+        workspacePath,
+        queryName,
+        z3Command,
+        timeoutMs,
+        write,
+        failOnUnverified
+      });
+      return toolJson(result, { isError: result.error });
+    }
+  );
+
+  server.registerTool(
+    "theorem_smt_list",
+    {
+      title: "List SMT Checks",
+      description:
+        "List local theorem.smt-check.v0 artifacts with paths agents can reuse for evidence refs, audits, and validation plans.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremSmtList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_smt_solve",
+    {
+      title: "Generate And Check SMT Problem",
+      description:
+        "Build workspace-local SMT-LIB from explicit integer variables and constraints, then run the local Z3 SMT check workflow.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root for writing generated SMT-LIB and check records. Defaults to the MCP workspace root."),
+        queryName: z.string().optional().describe("Optional query or constraint-set name."),
+        integerVariables: z
+          .array(z.string().min(1))
+          .min(1)
+          .describe("Integer variable names to declare, such as ['x', 'y']."),
+        constraints: z
+          .array(z.string().min(1))
+          .min(1)
+          .describe("Explicit constraints such as 'x > 0' or 'x + y <= 3'."),
+        includeModel: z.boolean().optional().describe("When true, append get-model after check-sat."),
+        z3Command: z
+          .string()
+          .optional()
+          .describe("Z3 executable path or command. Defaults to THEOREM_Z3 or z3."),
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .max(30000)
+          .optional()
+          .describe("Local backend probe and SMT check timeout in milliseconds. Defaults to 3000."),
+        failOnUnverified: z
+          .boolean()
+          .optional()
+          .describe("When true, mark the tool call as an error unless the solver returns sat or unsat.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, queryName, integerVariables, constraints, includeModel, z3Command, timeoutMs, failOnUnverified }) => {
+      const result = await handleTheoremSmtSolve({
+        workspacePath,
+        queryName,
+        integerVariables,
+        constraints,
+        includeModel,
+        z3Command,
+        timeoutMs,
+        failOnUnverified
+      });
+      return toolJson(result, { isError: result.error });
+    }
+  );
+
+  server.registerTool(
+    "theorem_workspace_init",
+    {
+      title: "Initialize Local Workspace",
+      description:
+        "Initialize a private .theorem-workbench project store under the current workspace or a workspace-local subdirectory.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        name: z.string().optional().describe("Human display name for the local workspace.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, name }) => toolJson(await handleTheoremWorkspaceInit({ workspacePath, name }))
+  );
+
+  server.registerTool(
+    "theorem_workspace_status",
+    {
+      title: "Check Local Workspace",
+      description:
+        "Check whether a private Theorem Workbench local project store exists and whether required directories are present.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremWorkspaceStatus({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_workspace_repair",
+    {
+      title: "Repair Local Workspace",
+      description:
+        "Repair missing private workspace directories and persist newly added manifest defaults without leaving the local project.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremWorkspaceRepair({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_workspace_validate",
+    {
+      title: "Validate Workspace Evidence",
+      description:
+        "Validate local workspace evidence artifacts before agents rely on them. Checks receipts deeply plus JSON Schema, reference, and trust-boundary policies for known workspace records.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremWorkspaceValidate({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_workspace_snapshot",
+    {
+      title: "Write Workspace Snapshot",
+      description:
+        "Write a portable local provenance snapshot of .theorem-workbench artifacts with SHA-256 hashes for drift detection.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremWorkspaceSnapshot({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_workspace_snapshot_list",
+    {
+      title: "List Workspace Snapshots",
+      description:
+        "List local workspace provenance snapshots without reading or decrypting private vault payloads.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremWorkspaceSnapshotList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_workspace_snapshot_verify",
+    {
+      title: "Verify Workspace Snapshot",
+      description:
+        "Verify a local workspace provenance snapshot and report changed, missing, or added artifacts.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        snapshotRef: z.string().min(1).describe("Snapshot id or workspace-local snapshot JSON path.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, snapshotRef }) =>
+      toolJson(await handleTheoremWorkspaceSnapshotVerify({ workspacePath, snapshotRef }))
+  );
+
+  server.registerTool(
+    "theorem_source_ingest",
+    {
+      title: "Ingest Local Sources",
+      description:
+        "Ingest workspace-local Markdown/text files or directories into the private local corpus index for source-cited retrieval.",
+      inputSchema: {
+        paths: z.array(z.string().min(1)).min(1).describe("Files or directories under the local workspace root."),
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ paths, workspacePath }) => toolJson(await handleTheoremSourceIngest({ paths, workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_source_search",
+    {
+      title: "Search Local Sources",
+      description:
+        "Search the private local corpus index and return source-cited chunk hits. Retrieval is evidence, not proof.",
+      inputSchema: {
+        query: z.string().min(1).describe("Search query."),
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        limit: z.number().int().positive().optional().describe("Maximum number of hits. Defaults to 5.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ query, workspacePath, limit }) =>
+      toolJson(await handleTheoremSourceSearch({ query, workspacePath, limit }))
+  );
+
+  server.registerTool(
+    "theorem_source_cite",
+    {
+      title: "Create Source-Cited Receipt",
+      description:
+        "Create a receipt for a claim using private local corpus search hits. Source-cited retrieval is evidence, not proof.",
+      inputSchema: {
+        claim: z.string().min(1).describe("Claim to cite against local source material."),
+        query: z.string().optional().describe("Search query. Defaults to the claim."),
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        limit: z.number().int().positive().optional().describe("Maximum number of source hits. Defaults to 5."),
+        strict: z
+          .boolean()
+          .optional()
+          .describe("When true, return an MCP tool error if no source-cited local evidence is found.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ claim, query, workspacePath, limit, strict }) => {
+      const result = await handleTheoremSourceCite({ claim, query, workspacePath, limit, strict });
+      return toolJson(result, { isError: result.error });
+    }
+  );
+
+  const literatureIdentifierSchema = z.object({
+    kind: z.enum(["doi", "pmid", "pmcid", "arxiv", "isbn", "patent", "url", "local-path", "other"]),
+    value: z.string().min(1)
+  });
+
+  server.registerTool(
+    "theorem_literature_log",
+    {
+      title: "Log Literature Record",
+      description:
+        "Create or write a private local literature, prior-art, dataset, or database-export evidence record. This does not call PubMed, arXiv, patent databases, or any network service.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().min(1).describe("Paper, patent, dataset, database export, standard, note, or source title."),
+        kind: z
+          .enum(["paper", "preprint", "patent", "dataset", "database-export", "book", "web-page", "protocol", "standard", "note", "other"])
+          .optional()
+          .describe("Literature/source kind. Defaults to paper."),
+        status: z
+          .enum(["unreviewed", "triaged", "read", "annotated", "reproduced", "replicated", "disputed", "retracted", "superseded"])
+          .optional()
+          .describe("Review status. Defaults to unreviewed."),
+        authors: z.array(z.string().min(1)).optional().describe("Authors or organizations."),
+        venue: z.string().optional().describe("Venue, publisher, database, or source collection."),
+        year: z.number().int().optional().describe("Publication or record year."),
+        identifiers: z.array(literatureIdentifierSchema).optional().describe("DOI, PMID, arXiv, patent, URL, local-path, or other identifiers."),
+        localRefs: z.array(z.string().min(1)).optional().describe("Workspace-local source files or artifacts."),
+        corpusRefs: z.array(z.string().min(1)).optional().describe("Local corpus chunk/search refs."),
+        evidenceRefs: z.array(z.string().min(1)).optional().describe("Related local evidence refs."),
+        summary: z.string().optional().describe("Short source summary."),
+        keyClaims: z.array(z.string().min(1)).optional().describe("Key claims extracted from the source."),
+        methodNotes: z.array(z.string().min(1)).optional().describe("Method, data, or provenance notes."),
+        limitations: z.array(z.string().min(1)).optional().describe("Source limitations."),
+        relevance: z.array(z.string().min(1)).optional().describe("Why this source matters to the project."),
+        qualityFlags: z.array(z.string().min(1)).optional().describe("Retraction, conflict, caveat, bias, or quality flags."),
+        nextChecks: z.array(z.string().min(1)).optional().describe("Next review, replication, prior-art, or entailment checks."),
+        write: z.boolean().optional().describe("When true, write JSON plus Markdown into the local workspace.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremLiteratureLog(input))
+  );
+
+  server.registerTool(
+    "theorem_literature_list",
+    {
+      title: "List Literature Records",
+      description: "List private local literature, prior-art, dataset, and database-export evidence records from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremLiteratureList({ workspacePath }))
+  );
+
+  const notebookRunValueSchema = z.object({
+    name: z.string().min(1),
+    value: z.string().min(1),
+    unit: z.string().optional(),
+    note: z.string().optional()
+  });
+
+  server.registerTool(
+    "theorem_notebook_run_log",
+    {
+      title: "Log Notebook Run",
+      description:
+        "Create or write a private local notebook, script, or pipeline run provenance record. This records replay metadata and does not execute code.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().optional().describe("Short run title."),
+        purpose: z.string().min(1).describe("Purpose, question, or claim context for the local run."),
+        kind: z.enum(["notebook", "script", "pipeline", "test", "analysis", "simulation", "other"]).optional(),
+        status: z.enum(["planned", "completed", "failed", "reproduced", "superseded"]).optional(),
+        runner: z.string().optional().describe("Runner such as jupyter, python, node, pytest, snakemake, or nextflow."),
+        runnerVersion: z.string().optional().describe("Runner version."),
+        command: z.string().optional().describe("Replay command or manual execution command."),
+        workingDirectory: z.string().optional().describe("Working directory for replay."),
+        notebookRefs: z.array(z.string().min(1)).optional().describe("Notebook refs."),
+        codeRefs: z.array(z.string().min(1)).optional().describe("Code or script refs."),
+        inputRefs: z.array(z.string().min(1)).optional().describe("Input data/artifact refs."),
+        outputRefs: z.array(z.string().min(1)).optional().describe("Output artifact refs."),
+        runtime: z.string().optional().describe("Runtime such as python, node, R, julia, or shell."),
+        runtimeVersion: z.string().optional().describe("Runtime version."),
+        operatingSystem: z.string().optional().describe("Operating system or environment label."),
+        dependencies: z.array(z.string().min(1)).optional().describe("Dependencies or lockfile refs."),
+        environmentVariables: z.array(notebookRunValueSchema).optional().describe("Environment variable metadata, not secrets."),
+        parameters: z.array(notebookRunValueSchema).optional().describe("Run parameters."),
+        metrics: z.array(notebookRunValueSchema).optional().describe("Run metrics."),
+        observations: z.array(z.string().min(1)).optional().describe("Observations from the run."),
+        limitations: z.array(z.string().min(1)).optional().describe("Run limitations."),
+        nextChecks: z.array(z.string().min(1)).optional().describe("Next reproducibility checks."),
+        deterministic: z.boolean().optional().describe("Whether the run is expected to be deterministic."),
+        replayNotes: z.array(z.string().min(1)).optional().describe("Replay notes."),
+        write: z.boolean().optional().describe("When true, write JSON plus Markdown into the local workspace.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremNotebookRunLog(input))
+  );
+
+  server.registerTool(
+    "theorem_notebook_run_list",
+    {
+      title: "List Notebook Runs",
+      description: "List private local notebook, script, and pipeline run records from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremNotebookRunList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_code_run",
+    {
+      title: "Run Local Code",
+      description:
+        "Execute a local command directly without shell interpolation under the default local execution policy, capture stdout/stderr/exit status, and write a private theorem.code-run.v0 evidence record.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().optional().describe("Short code run title."),
+        purpose: z.string().min(1).describe("Purpose, question, or claim context for this code execution."),
+        command: z.string().min(1).describe("Executable path or command to launch directly without shell interpolation."),
+        args: z.array(z.string()).optional().describe("Arguments passed to the executable without shell interpolation."),
+        workingDirectory: z.string().optional().describe("Working directory under the workspace root. Defaults to the root."),
+        codeRefs: z.array(z.string().min(1)).optional().describe("Code/script refs related to the run."),
+        inputRefs: z.array(z.string().min(1)).optional().describe("Input data/artifact refs."),
+        outputRefs: z.array(z.string().min(1)).optional().describe("Output artifact refs."),
+        evidenceRefs: z.array(z.string().min(1)).optional().describe("Related local evidence refs."),
+        timeoutMs: z.number().int().positive().max(300000).optional().describe("Command timeout in milliseconds. Defaults to 10000."),
+        maxOutputBytes: z
+          .number()
+          .int()
+          .positive()
+          .max(1048576)
+          .optional()
+          .describe("Maximum captured bytes per output stream. Defaults to 65536."),
+        policy: z
+          .object({
+            allowedExecutables: z
+              .array(z.string().min(1))
+              .optional()
+              .describe("Optional executable allowlist. Entries are normalized by basename without .exe/.cmd/.bat/.com."),
+            allowShellLauncher: z
+              .boolean()
+              .optional()
+              .describe("Allow shell launcher executables such as cmd, PowerShell, bash, or sh."),
+            allowNetworkCommand: z
+              .boolean()
+              .optional()
+              .describe("Allow obvious network-capable commands such as curl, wget, ssh, or scp."),
+            allowDestructiveCommand: z
+              .boolean()
+              .optional()
+              .describe("Allow obvious destructive commands such as rm, rmdir, format, or shutdown."),
+            allowPackageMutation: z
+              .boolean()
+              .optional()
+              .describe("Allow package-manager mutation commands such as npm install or pip install."),
+            allowGitMutation: z
+              .boolean()
+              .optional()
+              .describe("Allow git mutation/network commands such as push, pull, reset, clean, or checkout.")
+          })
+          .optional()
+          .describe("Default-local execution policy controls. Risky categories are blocked unless explicitly allowed."),
+        failOnNonzero: z.boolean().optional().describe("When true, mark the tool call as an error unless the command exits 0.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => {
+      const result = await handleTheoremCodeRun(input);
+      return toolJson(result, { isError: result.error });
+    }
+  );
+
+  server.registerTool(
+    "theorem_code_list",
+    {
+      title: "List Code Runs",
+      description: "List private local direct code execution records from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremCodeRunList({ workspacePath }))
+  );
+
+  const simulationScalarSchema = z.object({
+    name: z.string().min(1),
+    value: z.string().min(1),
+    unit: z.string().optional(),
+    note: z.string().optional()
+  });
+
+  server.registerTool(
+    "theorem_simulation_log",
+    {
+      title: "Write Simulation Log",
+      description:
+        "Write a private local simulation evidence record with assumptions, parameters, metrics, uncertainty, limitations, validation boundaries, and overclaim warnings.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().optional().describe("Short simulation title."),
+        question: z.string().min(1).describe("Simulation question or computational claim under investigation."),
+        kind: z
+          .enum(["numeric", "symbolic", "physics", "molecular", "statistical", "agentic", "other"])
+          .optional()
+          .describe("Simulation kind. Defaults to numeric."),
+        stage: z
+          .enum(["planned", "computed", "reproduced", "benchmarked", "experimentally-compared"])
+          .optional()
+          .describe("Simulation evidence stage. Defaults to computed."),
+        engine: z.string().min(1).describe("Local simulation engine, script, notebook, solver, or tool."),
+        engineVersion: z.string().optional().describe("Simulation engine version."),
+        modelName: z.string().min(1).describe("Model name or simulation model identifier."),
+        modelVersion: z.string().optional().describe("Model version."),
+        inputRefs: z.array(z.string().min(1)).optional().describe("Local input refs."),
+        outputRefs: z.array(z.string().min(1)).optional().describe("Local output refs."),
+        codeRefs: z.array(z.string().min(1)).optional().describe("Local code or notebook refs."),
+        parameters: z.array(simulationScalarSchema).optional().describe("Simulation parameters."),
+        metrics: z.array(simulationScalarSchema).optional().describe("Simulation output metrics."),
+        assumptions: z.array(z.string().min(1)).optional().describe("Model assumptions."),
+        uncertainty: z.array(z.string().min(1)).optional().describe("Uncertainty notes."),
+        limitations: z.array(z.string().min(1)).optional().describe("Model or implementation limitations."),
+        nextChecks: z.array(z.string().min(1)).optional().describe("Next validation checks.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremSimulationLog(input))
+  );
+
+  server.registerTool(
+    "theorem_simulation_list",
+    {
+      title: "List Simulation Logs",
+      description: "List private local simulation evidence records from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremSimulationList({ workspacePath }))
+  );
+
+  const experimentMeasurementSchema = z.object({
+    name: z.string().min(1),
+    value: z.string().min(1),
+    unit: z.string().optional(),
+    note: z.string().optional()
+  });
+
+  server.registerTool(
+    "theorem_experiment_log",
+    {
+      title: "Write Experiment Log",
+      description:
+        "Write a private local experiment evidence record with protocol/data/analysis refs, observations, measurements, ethics/safety/regulatory review fields, and overclaim warnings.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().optional().describe("Short experiment title."),
+        question: z.string().min(1).describe("Experiment question or observation under review."),
+        kind: z
+          .enum(["bench", "wet-lab", "field", "preclinical", "clinical", "observational", "other"])
+          .optional()
+          .describe("Experiment kind. Defaults to bench."),
+        stage: z
+          .enum(["planned", "protocol-drafted", "running", "completed", "replicated", "failed", "inconclusive"])
+          .optional()
+          .describe("Experiment stage. Defaults to planned."),
+        protocolRefs: z.array(z.string().min(1)).optional().describe("Local protocol refs."),
+        dataRefs: z.array(z.string().min(1)).optional().describe("Local data refs."),
+        analysisRefs: z.array(z.string().min(1)).optional().describe("Local analysis refs."),
+        evidenceRefs: z.array(z.string().min(1)).optional().describe("Related local evidence refs."),
+        observations: z.array(z.string().min(1)).optional().describe("Observed facts under the recorded protocol."),
+        measurements: z.array(experimentMeasurementSchema).optional().describe("Experiment measurements."),
+        outcomeStatus: z
+          .enum(["not-run", "observed", "not-observed", "mixed", "inconclusive"])
+          .optional()
+          .describe("Outcome status."),
+        outcomeSummary: z.string().optional().describe("Outcome summary."),
+        limitations: z.array(z.string().min(1)).optional().describe("Experiment limitations."),
+        nextChecks: z.array(z.string().min(1)).optional().describe("Next validation checks."),
+        humanSubjects: z.boolean().optional().describe("Whether human subjects are involved."),
+        biologicalOrMedical: z.boolean().optional().describe("Whether the experiment is biological, medical, or safety-sensitive."),
+        ethicsApprovalRefs: z.array(z.string().min(1)).optional().describe("Ethics approval or review refs."),
+        regulatoryReviewRefs: z.array(z.string().min(1)).optional().describe("Regulatory or safety review refs.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremExperimentLog(input))
+  );
+
+  server.registerTool(
+    "theorem_experiment_list",
+    {
+      title: "List Experiment Logs",
+      description: "List private local experiment evidence records from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremExperimentList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_vault_seal",
+    {
+      title: "Seal Vault File",
+      description:
+        "Encrypt a workspace-local file into the private local vault using an environment-provided key. The tool returns encrypted envelope metadata, not plaintext.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        sourcePath: z.string().min(1).describe("Workspace-local file path to encrypt."),
+        label: z.string().optional().describe("Safe public label for the vault entry."),
+        keyEnv: z
+          .string()
+          .regex(/^[A-Z_][A-Z0-9_]*$/)
+          .optional()
+          .describe("Environment variable containing the vault key. Defaults to THEOREM_WORKBENCH_VAULT_KEY.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremVaultSeal(input))
+  );
+
+  server.registerTool(
+    "theorem_vault_list",
+    {
+      title: "List Vault Entries",
+      description: "List encrypted local vault envelopes from the workspace without decrypting plaintext.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremVaultList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_vault_verify",
+    {
+      title: "Verify Vault Entry",
+      description:
+        "Decrypt a vault entry locally and return integrity metadata only. This tool intentionally does not return plaintext bytes.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        vaultRef: z.string().min(1).describe("Vault id or workspace-local vault envelope path."),
+        keyEnv: z
+          .string()
+          .regex(/^[A-Z_][A-Z0-9_]*$/)
+          .optional()
+          .describe("Environment variable containing the vault key. Defaults to the entry keyRef or THEOREM_WORKBENCH_VAULT_KEY.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremVaultVerify(input))
+  );
+
+  const evidenceRefSchema = z.object({
+    kind: z.enum([
+      "receipt",
+      "artifact",
+      "source",
+      "literature",
+      "notebook",
+      "notebook-run",
+      "code-run",
+      "benchmark",
+      "disclosure",
+      "simulation",
+      "experiment",
+      "vault",
+      "review",
+      "validation",
+      "other"
+    ]),
+    ref: z.string().min(1),
+    trust: z
+      .enum([
+        "proved",
+        "exact-computed",
+        "bounded-numeric",
+        "smt-checked",
+        "dimension-checked",
+        "source-cited",
+        "cross-checked",
+        "unverified",
+        "refuted"
+      ])
+      .optional(),
+    summary: z.string().optional()
+  });
+
+  server.registerTool(
+    "theorem_evidence_audit",
+    {
+      title: "Audit Claim Evidence",
+      description:
+        "Audit a claim against local evidence refs, classify overclaim risk, and return required next checks before an agent presents the claim as true.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        claim: z.string().min(1).describe("Claim to audit."),
+        title: z.string().optional().describe("Short audit title."),
+        evidenceRefs: z.array(evidenceRefSchema).optional().describe("Local evidence refs supporting or contextualizing the claim."),
+        write: z.boolean().optional().describe("When true, write the audit JSON into the local workspace."),
+        writeReport: z.boolean().optional().describe("When true, write both audit JSON and a Markdown report into the local workspace."),
+        includeMarkdown: z.boolean().optional().describe("When true and not writing, include a rendered Markdown report in the tool response.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremEvidenceAudit(input))
+  );
+
+  server.registerTool(
+    "theorem_evidence_audit_list",
+    {
+      title: "List Evidence Audits",
+      description: "List local evidence audit records from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremEvidenceAuditList({ workspacePath }))
+  );
+
+  const validationEvidenceRefSchema = z.object({
+    kind: z.enum([
+      "receipt",
+      "artifact",
+      "source",
+      "literature",
+      "notebook",
+      "notebook-run",
+      "code-run",
+      "benchmark",
+      "disclosure",
+      "simulation",
+      "experiment",
+      "vault",
+      "audit",
+      "snapshot",
+      "session",
+      "review",
+      "validation",
+      "model-context",
+      "invention",
+      "claim-chart",
+      "discovery-package",
+      "other"
+    ]),
+    ref: z.string().min(1),
+    trust: z
+      .enum([
+        "proved",
+        "exact-computed",
+        "bounded-numeric",
+        "smt-checked",
+        "dimension-checked",
+        "source-cited",
+        "cross-checked",
+        "unverified",
+        "refuted"
+      ])
+      .optional(),
+    summary: z.string().optional()
+  });
+
+  const validationGateSchema = z.object({
+    kind: z
+      .enum([
+        "evidence-audit",
+        "proof",
+        "source-citation",
+        "literature-record",
+        "notebook-run",
+        "code-run",
+        "simulation-log",
+        "simulation-review",
+        "experiment-record",
+        "experiment-replication",
+        "wet-lab",
+        "preclinical",
+        "clinical",
+        "safety",
+        "ethics",
+        "regulatory",
+        "expert-review",
+        "patent-legal",
+        "prior-art",
+        "claim-chart",
+        "reduction-to-practice",
+        "workspace-snapshot",
+        "replay",
+        "benchmark",
+        "other"
+      ])
+      .optional(),
+    description: z.string().min(1),
+    status: z.enum(["missing", "planned", "in-progress", "satisfied", "blocked", "not-applicable"]).optional(),
+    evidenceRefs: z.array(validationEvidenceRefSchema).optional(),
+    rationale: z.string().optional(),
+    blocking: z.boolean().optional()
+  });
+
+  server.registerTool(
+    "theorem_validation_plan",
+    {
+      title: "Create Validation Plan",
+      description:
+        "Create or write a private local validation-gate plan before stronger discovery, biomedical, patent, simulation, or engineering claims. This derives required gates from a conservative evidence audit.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().optional().describe("Short validation plan title."),
+        objective: z.string().optional().describe("Validation objective."),
+        claim: z.string().min(1).describe("Claim or hypothesis to validate."),
+        domains: z
+          .array(
+            z.enum([
+              "math",
+              "source",
+              "literature",
+              "simulation",
+              "experiment",
+              "biomedical",
+              "clinical",
+              "safety",
+              "regulatory",
+              "patent",
+              "engineering",
+              "software",
+              "physics",
+              "general"
+            ])
+          )
+          .optional()
+          .describe("Validation domains. If omitted, domains are inferred from the claim and evidence audit."),
+        evidenceRefs: z.array(validationEvidenceRefSchema).optional().describe("Local evidence refs to evaluate against validation gates."),
+        gates: z.array(validationGateSchema).optional().describe("Additional user-supplied validation gates."),
+        write: z.boolean().optional().describe("When true, write JSON plus Markdown into the local workspace.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremValidationPlan(input))
+  );
+
+  server.registerTool(
+    "theorem_validation_plan_list",
+    {
+      title: "List Validation Plans",
+      description: "List private local validation plans from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremValidationPlanList({ workspacePath }))
+  );
+
+  const researchEvidenceRefSchema = z.object({
+    kind: z.enum([
+      "receipt",
+      "artifact",
+      "source",
+      "literature",
+      "notebook",
+      "notebook-run",
+      "code-run",
+      "benchmark",
+      "disclosure",
+      "simulation",
+      "experiment",
+      "vault",
+      "audit",
+      "snapshot",
+      "review",
+      "validation",
+      "model-context",
+      "invention",
+      "claim-chart",
+      "discovery-package",
+      "other"
+    ]),
+    ref: z.string().min(1),
+    trust: z
+      .enum([
+        "proved",
+        "exact-computed",
+        "bounded-numeric",
+        "smt-checked",
+        "dimension-checked",
+        "source-cited",
+        "cross-checked",
+        "unverified",
+        "refuted"
+      ])
+      .optional(),
+    summary: z.string().optional()
+  });
+
+  server.registerTool(
+    "theorem_research_session_start",
+    {
+      title: "Start Research Session",
+      description:
+        "Start a private local research runbook for long agentic investigations with budgets, evidence refs, snapshot refs, model disclosure policy, and review boundaries.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().optional().describe("Short research session title."),
+        objective: z.string().min(1).describe("Research objective or moonshot question."),
+        domains: z
+          .array(z.enum(["math", "physics", "code", "biomedical", "materials", "energy", "climate", "patent", "learning", "general"]))
+          .optional()
+          .describe("Research domains. If omitted, domains are inferred from the objective."),
+        hypotheses: z.array(z.string().min(1)).optional().describe("Hypotheses to track."),
+        claims: z.array(z.string().min(1)).optional().describe("Claims that must be verified, refuted, sourced, or labeled."),
+        evidenceRefs: z.array(researchEvidenceRefSchema).optional().describe("Initial local evidence refs."),
+        snapshotRefs: z.array(z.string().min(1)).optional().describe("Workspace snapshot ids or paths."),
+        tasks: z.array(z.string().min(1)).optional().describe("Initial concrete research tasks."),
+        maxDepth: z.number().int().positive().optional(),
+        maxBranches: z.number().int().positive().optional(),
+        maxToolCalls: z.number().int().positive().optional(),
+        maxWallMinutes: z.number().int().positive().optional()
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremResearchSessionStart(input))
+  );
+
+  server.registerTool(
+    "theorem_research_session_checkpoint",
+    {
+      title: "Checkpoint Research Session",
+      description:
+        "Append a local checkpoint to a research session with evidence refs, snapshot refs, decisions, and next validation checks.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        sessionRef: z.string().min(1).describe("Research session id or workspace-local session JSON path."),
+        summary: z.string().min(1).describe("Checkpoint summary."),
+        evidenceRefs: z.array(researchEvidenceRefSchema).optional().describe("Evidence refs added at this checkpoint."),
+        snapshotRefs: z.array(z.string().min(1)).optional().describe("Workspace snapshot ids or paths added at this checkpoint."),
+        decisions: z.array(z.string().min(1)).optional().describe("Decisions recorded at this checkpoint."),
+        nextChecks: z.array(z.string().min(1)).optional().describe("Next validation checks.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremResearchSessionCheckpoint(input))
+  );
+
+  server.registerTool(
+    "theorem_research_session_list",
+    {
+      title: "List Research Sessions",
+      description: "List private local research sessions and checkpoints from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremResearchSessionList({ workspacePath }))
+  );
+
+  const expertReviewEvidenceRefSchema = z.object({
+    kind: z.enum([
+      "receipt",
+      "artifact",
+      "source",
+      "literature",
+      "notebook",
+      "notebook-run",
+      "code-run",
+      "benchmark",
+      "disclosure",
+      "simulation",
+      "experiment",
+      "vault",
+      "audit",
+      "snapshot",
+      "session",
+      "review",
+      "validation",
+      "model-context",
+      "invention",
+      "claim-chart",
+      "discovery-package",
+      "other"
+    ]),
+    ref: z.string().min(1),
+    trust: z
+      .enum([
+        "proved",
+        "exact-computed",
+        "bounded-numeric",
+        "smt-checked",
+        "dimension-checked",
+        "source-cited",
+        "cross-checked",
+        "unverified",
+        "refuted"
+      ])
+      .optional(),
+    summary: z.string().optional()
+  });
+
+  server.registerTool(
+    "theorem_expert_review_log",
+    {
+      title: "Log Expert Review",
+      description:
+        "Write a private local expert-review record with scope, reviewer role, evidence refs, findings, limitations, recommendations, and required next checks. This records human review context; it is not proof, medical advice, regulatory approval, or legal advice.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().optional().describe("Short review title."),
+        subject: z.string().min(1).describe("Subject under expert review."),
+        question: z.string().optional().describe("Review question or scope."),
+        kind: z
+          .enum([
+            "math",
+            "physics",
+            "engineering",
+            "software",
+            "biomedical",
+            "clinical",
+            "safety",
+            "ethics",
+            "regulatory",
+            "patent-legal",
+            "domain-expert",
+            "other"
+          ])
+          .optional()
+          .describe("Review kind. If omitted, inferred from subject and question."),
+        status: z
+          .enum(["needed", "requested", "in-review", "completed", "rejected", "superseded"])
+          .optional()
+          .describe("Review workflow status. Defaults to needed."),
+        reviewerRole: z.string().min(1).describe("Reviewer role, such as oncologist, physicist, patent attorney, or software auditor."),
+        reviewerNameOrOrg: z.string().optional(),
+        reviewerCredentials: z.string().optional(),
+        conflictDisclosure: z.string().optional(),
+        evidenceRefs: z.array(expertReviewEvidenceRefSchema).optional().describe("Local evidence refs reviewed or queued for review."),
+        findings: z.array(z.string().min(1)).optional(),
+        limitations: z.array(z.string().min(1)).optional(),
+        recommendations: z.array(z.string().min(1)).optional(),
+        requiredNextChecks: z.array(z.string().min(1)).optional(),
+        outcomeStatus: z
+          .enum([
+            "not-reviewed",
+            "needs-more-evidence",
+            "supported-with-limitations",
+            "not-supported",
+            "inconclusive",
+            "requires-validation",
+            "legal-review-only"
+          ])
+          .optional(),
+        outcomeSummary: z.string().optional()
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremExpertReviewLog(input))
+  );
+
+  server.registerTool(
+    "theorem_expert_review_list",
+    {
+      title: "List Expert Reviews",
+      description: "List private local expert-review records from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremExpertReviewList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_invention_log",
+    {
+      title: "Write Invention Log",
+      description:
+        "Write a private local discovery/invention hypothesis log with evidence refs, validation stage, and overclaim warnings.",
+      inputSchema: {
+        hypothesis: z.string().min(1).describe("Discovery or invention hypothesis."),
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().optional().describe("Short title."),
+        problem: z.string().optional().describe("Problem or research question."),
+        validationStage: z
+          .enum([
+            "idea",
+            "computational-hypothesis",
+            "simulated",
+            "bench-tested",
+            "experimentally-observed",
+            "preclinical",
+            "clinical",
+            "regulatory-reviewed"
+          ])
+          .optional()
+          .describe("Current validation stage. Defaults to computational-hypothesis."),
+        evidenceRefs: z
+          .array(
+            z.object({
+              kind: z.enum([
+                "receipt",
+                "artifact",
+                "source",
+                "literature",
+                "notebook",
+                "notebook-run",
+                "code-run",
+                "benchmark",
+                "disclosure",
+                "simulation",
+                "experiment",
+                "vault",
+                "review",
+                "validation",
+                "other"
+              ]),
+              ref: z.string().min(1),
+              trust: z
+                .enum([
+                  "proved",
+                  "exact-computed",
+                  "bounded-numeric",
+                  "smt-checked",
+                  "dimension-checked",
+                  "source-cited",
+                  "cross-checked",
+                  "unverified",
+                  "refuted"
+                ])
+                .optional(),
+              summary: z.string().optional()
+            })
+          )
+          .optional()
+          .describe("Local evidence references supporting or contextualizing the hypothesis."),
+        noveltyNotes: z.array(z.string()).optional(),
+        priorArtNotes: z.array(z.string()).optional(),
+        risks: z.array(z.string()).optional(),
+        nextChecks: z.array(z.string()).optional()
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremInventionLog(input))
+  );
+
+  server.registerTool(
+    "theorem_invention_list",
+    {
+      title: "List Invention Logs",
+      description: "List private local invention/discovery hypothesis logs from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremInventionList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_discovery_package",
+    {
+      title: "Create Discovery Package",
+      description:
+        "Render or write a local Markdown discovery package for an invention log, including evidence review, validation requirements, and patent/safety caveats.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        entryId: z.string().optional().describe("Invention log entry id. Defaults to the newest entry."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write Markdown into .theorem-workbench/findings. Defaults to false.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, entryId, write }) =>
+      toolJson(await handleTheoremDiscoveryPackage({ workspacePath, entryId, write }))
+  );
+
+  const claimChartEvidenceRefSchema = z.object({
+    kind: z.enum(["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "other"]),
+    ref: z.string().min(1),
+    trust: z
+      .enum([
+        "proved",
+        "exact-computed",
+        "bounded-numeric",
+        "smt-checked",
+        "dimension-checked",
+        "source-cited",
+        "cross-checked",
+        "unverified",
+        "refuted"
+      ])
+      .optional(),
+    summary: z.string().optional()
+  });
+
+  server.registerTool(
+    "theorem_claim_chart",
+    {
+      title: "Create Claim Chart",
+      description:
+        "Render or write a local patent claim chart for an invention log with evidence refs, prior-art notes, reduction-to-practice refs, and legal-review caveats. This is not legal advice.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        entryId: z.string().optional().describe("Invention log entry id. Defaults to the newest entry."),
+        title: z.string().optional().describe("Claim chart title."),
+        elements: z
+          .array(
+            z.object({
+              text: z.string().min(1),
+              supportRefs: z.array(claimChartEvidenceRefSchema).optional(),
+              priorArtRefs: z.array(z.string().min(1)).optional(),
+              notes: z.array(z.string().min(1)).optional()
+            })
+          )
+          .min(1)
+          .describe("Explicit candidate claim elements. The tool will not invent elements."),
+        evidenceRefs: z
+          .array(claimChartEvidenceRefSchema)
+          .optional()
+          .describe("Shared support evidence refs applied to elements without explicit supportRefs."),
+        noveltyQuestions: z.array(z.string().min(1)).optional().describe("Open novelty questions for legal review."),
+        priorArtNotes: z.array(z.string().min(1)).optional().describe("Prior-art notes for human review."),
+        reductionToPracticeRefs: z
+          .array(z.string().min(1))
+          .optional()
+          .describe("Reduction-to-practice or constructive example refs."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write JSON and Markdown into .theorem-workbench/patents. Defaults to false.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremClaimChart(input))
+  );
+
+  server.registerTool(
+    "theorem_claim_chart_list",
+    {
+      title: "List Claim Charts",
+      description: "List private local patent claim charts from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremClaimChartList({ workspacePath }))
+  );
+
+  const modelContextSectionSchema = z.object({
+    title: z.string().min(1),
+    content: z.string().min(1),
+    sourceRefs: z.array(z.string().min(1)).default([])
+  });
+
+  server.registerTool(
+    "theorem_model_context_prepare",
+    {
+      title: "Prepare Model Context",
+      description:
+        "Create or write a private local selected-context packet for hosted frontier models, local models, or external services. This does not call any model or network endpoint.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().optional().describe("Short packet title."),
+        purpose: z.string().min(1).describe("Why the selected context is being prepared for model review."),
+        service: z.string().min(1).describe("Target service/provider or local model label."),
+        target: z.enum(["hosted-model", "local-model", "external-service"]).optional().describe("Target type. Defaults to hosted-model."),
+        model: z.string().optional().describe("Specific hosted or local model name."),
+        endpoint: z.string().optional().describe("Optional endpoint or service surface."),
+        dataClasses: z.array(z.string().min(1)).optional().describe("Classes of selected data included in the packet."),
+        selectedContextRefs: z.array(z.string().min(1)).optional().describe("Local refs selected for review."),
+        sections: z.array(modelContextSectionSchema).optional().describe("Prompt sections with exact selected content."),
+        redactions: z.array(z.string().min(1)).optional().describe("Redaction/minimization notes."),
+        exclusions: z.array(z.string().min(1)).optional().describe("Local data intentionally excluded from this packet."),
+        approvalRef: z.string().optional().describe("Human approval prompt, issue, ticket, or other audit reference."),
+        approvedBy: z.string().optional().describe("Approver name or role."),
+        approvedAt: z.string().optional().describe("Approval timestamp."),
+        disclosureRef: z.string().optional().describe("Existing disclosure log id or path, if one was already created."),
+        disclosureStatus: z.enum(["not-required", "required-not-created", "planned", "sent", "cancelled"]).optional(),
+        write: z.boolean().optional().describe("When true, write JSON plus Markdown into the local workspace.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremModelContextPrepare(input))
+  );
+
+  server.registerTool(
+    "theorem_model_context_list",
+    {
+      title: "List Model Context Packets",
+      description: "List private local model-context packets from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremModelContextList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_disclosure_log",
+    {
+      title: "Log External Disclosure",
+      description:
+        "Write a private local audit record for selected context sent to a hosted model, external CAS, scientific API, lab service, or other non-local system.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        service: z.string().min(1).describe("External service or provider, such as OpenAI, Anthropic, WolframAlpha, or a lab API."),
+        model: z.string().optional().describe("Specific model name, if applicable."),
+        endpoint: z.string().optional().describe("Optional endpoint or external service surface."),
+        purpose: z.string().min(1).describe("Why selected context is being sent externally."),
+        dataClasses: z
+          .array(z.string().min(1))
+          .min(1)
+          .describe("Classes of data disclosed, such as selected proof sketch or selected source excerpt."),
+        contextSummary: z.string().min(1).describe("Human-readable summary of the exact selected context disclosed."),
+        selectedContextRefs: z
+          .array(z.string().min(1))
+          .optional()
+          .describe("Local receipt, source, notebook, benchmark, or artifact refs for the selected context."),
+        userInitiated: z.boolean().optional().describe("Whether the disclosure was explicitly initiated by the user."),
+        approvalRef: z.string().optional().describe("Human approval prompt, issue, ticket, or other audit reference."),
+        status: z.enum(["planned", "sent", "received", "cancelled"]).optional().describe("External call status."),
+        responseSummary: z.string().optional().describe("Optional summary of the external response."),
+        outputRefs: z.array(z.string().min(1)).optional().describe("Local output refs produced from the external call.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremExternalDisclosureLog(input))
+  );
+
+  server.registerTool(
+    "theorem_disclosure_list",
+    {
+      title: "List External Disclosures",
+      description: "List private local external model/service disclosure audit records from the workspace.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremExternalDisclosureList({ workspacePath }))
   );
 
   server.registerTool(

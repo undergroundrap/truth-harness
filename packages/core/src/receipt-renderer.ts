@@ -1,8 +1,10 @@
 import type { Artifact, EvidenceEdge, GraphNode, Receipt } from "./types.js";
+import { assertReceipt } from "./receipt-validation.js";
 
 export type ReceiptRenderFormat = "markdown" | "html";
 
 export function renderReceipt(receipt: Receipt, format: ReceiptRenderFormat): string {
+  assertReceipt(receipt);
   if (format === "markdown") {
     return renderReceiptMarkdown(receipt);
   }
@@ -11,6 +13,7 @@ export function renderReceipt(receipt: Receipt, format: ReceiptRenderFormat): st
 }
 
 export function renderReceiptMarkdown(receipt: Receipt): string {
+  assertReceipt(receipt);
   const lines: string[] = [
     `# Theorem Receipt ${receipt.runId}`,
     "",
@@ -19,6 +22,10 @@ export function renderReceiptMarkdown(receipt: Receipt): string {
     `| Schema | \`${escapeMarkdownTable(receipt.schemaVersion)}\` |`,
     `| Created | ${escapeMarkdownTable(receipt.createdAt)} |`,
     `| Trust | \`${escapeMarkdownTable(receipt.trust)}\` |`,
+    `| Evidence Kind | \`${escapeMarkdownTable(receipt.evidenceProfile.kind)}\` |`,
+    `| Proof Checker Backed | \`${String(receipt.evidenceProfile.proofCheckerBacked)}\` |`,
+    `| Privacy | \`${escapeMarkdownTable(receipt.privacy.mode)}\` |`,
+    `| Network Access | \`${escapeMarkdownTable(receipt.privacy.networkAccess)}\` |`,
     `| Replay | \`${escapeMarkdownTable(receipt.replay)}\` |`,
     "",
     "## Problem",
@@ -30,6 +37,38 @@ export function renderReceiptMarkdown(receipt: Receipt): string {
     escapeMarkdownText(receipt.summary),
     ""
   ];
+
+  lines.push(
+    "## Privacy",
+    "",
+    `- Local-first: \`${String(receipt.privacy.localFirst)}\``,
+    `- Data residency: \`${escapeMarkdownText(receipt.privacy.dataResidency)}\``,
+    `- External disclosures: \`${String(receipt.privacy.externalDisclosures.length)}\``,
+    ""
+  );
+
+  lines.push(
+    "## Evidence Profile",
+    "",
+    `- Replayable: \`${String(receipt.evidenceProfile.replayable)}\``,
+    `- Proof-checker-backed: \`${String(receipt.evidenceProfile.proofCheckerBacked)}\``,
+    "",
+    "| Backend | Role | Version | Accepted Proof Checker |",
+    "| --- | --- | --- | --- |",
+    ...receipt.evidenceProfile.backends.map((backend) =>
+      [
+        `\`${escapeMarkdownTable(backend.id)}\``,
+        escapeMarkdownTable(backend.role),
+        backend.version ? `\`${escapeMarkdownTable(backend.version)}\`` : "",
+        `\`${String(backend.acceptedProofChecker)}\``
+      ].join(" | ").replace(/^/, "| ").replace(/$/, " |")
+    ),
+    "",
+    "### Limitations",
+    "",
+    ...receipt.evidenceProfile.limitations.map((limitation) => `- ${escapeMarkdownText(limitation)}`),
+    ""
+  );
 
   if (receipt.findings.length > 0) {
     lines.push("## Findings", "");
@@ -65,6 +104,7 @@ export function renderReceiptMarkdown(receipt: Receipt): string {
 }
 
 export function renderReceiptHtml(receipt: Receipt): string {
+  assertReceipt(receipt);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -192,13 +232,25 @@ export function renderReceiptHtml(receipt: Receipt): string {
     <div class="summary">
       <p><span class="trust ${escapeHtml(receipt.trust)}">${escapeHtml(receipt.trust)}</span></p>
       <p>${escapeHtml(receipt.summary)}</p>
+      <p class="muted">Evidence: <code>${escapeHtml(receipt.evidenceProfile.kind)}</code> Proof checker backed: <code>${String(receipt.evidenceProfile.proofCheckerBacked)}</code></p>
+      <p class="muted">Privacy: <code>${escapeHtml(receipt.privacy.mode)}</code> Network: <code>${escapeHtml(receipt.privacy.networkAccess)}</code></p>
       <p class="muted">Replay: <code>${escapeHtml(receipt.replay)}</code></p>
     </div>
 
     <h2>Problem</h2>
     <p>${escapeHtml(receipt.problem)}</p>
 
+    <h2>Privacy</h2>
+    <table>
+      <tbody>
+        <tr><th>Local-first</th><td><code>${String(receipt.privacy.localFirst)}</code></td></tr>
+        <tr><th>Data residency</th><td><code>${escapeHtml(receipt.privacy.dataResidency)}</code></td></tr>
+        <tr><th>External disclosures</th><td><code>${String(receipt.privacy.externalDisclosures.length)}</code></td></tr>
+      </tbody>
+    </table>
+
     ${renderFindingsHtml(receipt)}
+    ${renderEvidenceProfileHtml(receipt)}
     ${renderGraphHtml(receipt.graph.nodes, receipt.graph.edges)}
     ${renderArtifactsHtml(receipt.artifacts)}
   </main>
@@ -251,6 +303,37 @@ function renderFindingsHtml(receipt: Receipt): string {
       ${receipt.findings
         .map((finding) => `<li><code>${escapeHtml(finding.level)}</code>: ${escapeHtml(finding.message)}</li>`)
         .join("\n      ")}
+    </ul>`;
+}
+
+function renderEvidenceProfileHtml(receipt: Receipt): string {
+  const backendRows = receipt.evidenceProfile.backends
+    .map(
+      (backend) =>
+        `<tr><td><code>${escapeHtml(backend.id)}</code></td><td>${escapeHtml(backend.role)}</td><td><code>${escapeHtml(backend.version ?? "")}</code></td><td><code>${String(backend.acceptedProofChecker)}</code></td></tr>`
+    )
+    .join("\n        ");
+  const limitations = receipt.evidenceProfile.limitations
+    .map((limitation) => `<li>${escapeHtml(limitation)}</li>`)
+    .join("\n      ");
+
+  return `<h2>Evidence Profile</h2>
+    <table>
+      <tbody>
+        <tr><th>Kind</th><td><code>${escapeHtml(receipt.evidenceProfile.kind)}</code></td></tr>
+        <tr><th>Replayable</th><td><code>${String(receipt.evidenceProfile.replayable)}</code></td></tr>
+        <tr><th>Proof-checker-backed</th><td><code>${String(receipt.evidenceProfile.proofCheckerBacked)}</code></td></tr>
+      </tbody>
+    </table>
+    <table>
+      <thead><tr><th>Backend</th><th>Role</th><th>Version</th><th>Accepted Proof Checker</th></tr></thead>
+      <tbody>
+        ${backendRows}
+      </tbody>
+    </table>
+    <h3>Limitations</h3>
+    <ul>
+      ${limitations}
     </ul>`;
 }
 

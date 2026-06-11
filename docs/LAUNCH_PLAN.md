@@ -6,7 +6,7 @@ Date: 2026-06-08
 
 The first public artifact should be narrow, real, and easy to argue about:
 
-> I built a proof-receipt machine for AI math answers.
+> I built a local evidence-receipt machine for AI math answers.
 
 The Hacker News audience will punish hype and reward a working demo with crisp limits. The launch should not claim "AI discovers math." It should show a small tool that catches bad AI math, produces exact receipts, and refuses to claim proof when it only ran finite checks.
 
@@ -35,8 +35,8 @@ npm run cli -- ask "for all integers n, n^2+n is even"
 Expected story:
 
 - The system finds no counterexample in the local range.
-- It invokes the local modular parity proof kernel.
-- It returns `proved` with a certificate over the two residue classes modulo 2.
+- It invokes the local modular parity checker.
+- It returns `exact-computed` with a certificate over the two residue classes modulo 2, and explicitly says this is not proof-checker-backed.
 
 Third screenshot:
 
@@ -47,26 +47,26 @@ npm run cli -- ask "for all integers n, 2*(n/1) is even"
 Expected story:
 
 - The system finds no counterexample in the local range.
-- It still returns `unverified` because division is outside the narrow polynomial parity proof kernel.
-- It explicitly says the proof kernel boundary blocked a proof.
+- It still returns `unverified` because division is outside the narrow polynomial parity checker.
+- It explicitly says the local checker boundary blocked stronger trust.
 
-That contrast is the product. It shows Theorem Workbench can prove narrow claims, refute false claims, and admit when a statement is outside the current checker.
+That contrast is the product. It shows Theorem Workbench can compute/check narrow claims, refute false claims, and admit when a statement is outside the current checker. The `proved` label stays reserved for accepted proof-checking backends such as Lean.
 
 ## HN Post Draft
 
 Title options:
 
-- Show HN: Theorem Workbench, proof receipts for AI-generated math
-- Show HN: I built a proof-receipt CLI for AI math answers
+- Show HN: Theorem Workbench, local evidence receipts for AI-generated math
+- Show HN: I built a replayable receipt CLI for AI math answers
 - Show HN: A tiny workbench that makes AI math answers replayable
 
 Body draft:
 
-> Theorem Workbench is an open-source CLI/workbench for turning AI-generated math into auditable receipts.
+> Theorem Workbench is an open-source CLI/workbench for turning AI-generated math into auditable local receipts.
 >
-> The current MVP is tiny: exact rational arithmetic, finite counterexample search, a local modular parity proof kernel, conservative interval arithmetic, dimensional analysis, SymPy-backed symbolic computation, evidence graphs, trust labels, replay commands, and seed benchmark suites. The important part is the trust policy: it will not label something `proved` unless a proof checker accepts it. If finite search finds no counterexample and the proof kernel cannot certify the statement, the output remains `unverified`.
+> The current MVP is tiny: exact rational arithmetic, finite counterexample search, a local modular parity checker, conservative interval arithmetic, dimensional analysis, SymPy-backed symbolic computation, evidence graphs, trust labels, replay commands, and seed benchmark suites. The important part is the trust policy: it will not label something `proved` unless a proof checker accepts it. The local parity checker produces `exact-computed` certificates, not formal proof labels.
 >
-> The next adapters are Lean/Mathlib, Sage, Z3/cvc5, RAG citations, and richer MCP artifacts so Claude/Codex can verify subclaims recursively.
+> The next adapters are Lean/Mathlib, Sage, richer Z3/cvc5 workflows, RAG citations, and richer MCP artifacts so Claude/Codex can verify subclaims recursively.
 >
 > I am looking for people to break the trust model, suggest benchmark tasks, and point out which proof/CAS integrations should come first.
 
@@ -79,7 +79,7 @@ Do not optimize for looking like a small WolframAlpha clone. Optimize for becomi
 - CLI-first workflow.
 - Agent-native integration.
 - Proof/CAS/SMT/RAG adapters.
-- Replayable artifacts for CI, docs, notebooks, papers, and chats.
+- Replayable artifacts for CI, docs, notebooks, code runs, papers, and chats.
 
 The version that a serious AI lab notices is not a slick chat UI. It is a trust layer that agents can call recursively and benchmark against.
 
@@ -88,12 +88,14 @@ The version that a serious AI lab notices is not a slick chat UI. It is a trust 
 1. `npm install && npm run check` passes on a clean clone. Status: done locally.
 2. `theorem ask` can write a JSON receipt with `--out`. Status: done.
 3. `theorem replay` can replay a saved receipt. Status: done.
-4. `theorem bench run` produces readable math, physics, bounded-numeric, and symbolic score reports. Status: done.
-5. `theorem render` can export receipts as Markdown and HTML. Status: done.
-6. README explains the trust labels in plain language. Status: done.
-7. One GIF or terminal recording shows refutation and honest uncertainty. Status: pending.
-8. At least 25 seed benchmark tasks exist. Status: done.
-9. GitHub repo has issues labeled `good first proof`, `adapter`, `benchmark`, and `trust-model`. Status: pending.
+4. `theorem bench run` produces readable math, physics, bounded-numeric, and symbolic score reports, can write local benchmark-run records with `--write`, can fail CI with `--fail-on-failures`, `theorem bench list` can find local benchmark artifacts, and `theorem bench compare` can flag or gate regressions between recorded runs. Status: done.
+5. `theorem proof check --write` can record local Lean proof-check attempts, `theorem proof list` can find them, and `proved` remains reserved for accepted Lean runs. Status: done.
+6. `theorem smt check --write` can record local Z3 SMT-LIB checks, `theorem smt list` can find them, and SMT output remains `smt-checked` rather than `proved`. Status: done.
+7. `theorem render` can export receipts as Markdown and HTML. Status: done.
+8. README explains the trust labels in plain language. Status: done.
+9. One GIF or terminal recording shows refutation and honest uncertainty. Status: pending.
+10. At least 25 seed benchmark tasks exist. Status: done.
+11. GitHub repo has issues labeled `good first proof`, `adapter`, `benchmark`, and `trust-model`. Status: pending.
 
 ## What To Build Next
 
@@ -107,8 +109,9 @@ Priority 1: make the demo undeniable.
 Priority 2: become useful to real math users.
 
 - Add SymPy adapter for symbolic exact computation. Status: done for local subprocess MVP.
-- Add Lean smoke adapter.
-- Add Z3 adapter for constraints and counterexamples.
+- Add Lean smoke adapter and reserve `proved` for accepted proof-checker output. Status: proof-backend readiness probe, local Lean proof artifact check records, proof record writer, and proof list done; richer theorem/proof workflow still pending.
+- Add Z3 adapter for constraints and counterexamples. Status: local SMT-LIB Z3 check records, backend probe, writer, list, CLI, MCP, explicit structured integer-constraint-to-SMT generation, and simple `sat` model binding extraction done; broader natural-language claim-to-SMT translation still pending.
+- Add local direct code execution records for scripts/tests/utilities agents claim to run. Status: core record, schema, default-local execution policy, workspace validation, CLI, MCP, and regression coverage done; richer sandbox isolation still pending.
 - Add unit/dimensional analysis for physics claims.
 
 Priority 3: become native to agents.

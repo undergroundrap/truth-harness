@@ -12,6 +12,8 @@
     "trust",
     "summary",
     "replay",
+    "privacy",
+    "evidenceProfile",
     "graph",
     "artifacts",
     "findings"
@@ -42,6 +44,12 @@
     },
     "replay": {
       "type": "string"
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacyMetadata"
+    },
+    "evidenceProfile": {
+      "$ref": "#/$defs/receiptEvidenceProfile"
     },
     "graph": {
       "type": "object",
@@ -103,6 +111,139 @@
         "lesson",
         "artifact"
       ]
+    },
+    "privacyMetadata": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "type": "boolean"
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/externalDisclosure"
+          }
+        }
+      }
+    },
+    "externalDisclosure": {
+      "type": "object",
+      "required": ["service", "purpose", "dataClasses", "userInitiated"],
+      "properties": {
+        "service": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "dataClasses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "userInitiated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "receiptEvidenceProfile": {
+      "type": "object",
+      "required": [
+        "kind",
+        "backends",
+        "inputs",
+        "outputs",
+        "replayable",
+        "proofCheckerBacked",
+        "limitations"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "exact-arithmetic",
+            "universal-parity",
+            "dimension-analysis",
+            "symbolic-cas",
+            "interval-bound",
+            "source-citation",
+            "unsupported"
+          ]
+        },
+        "backends": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/receiptBackend"
+          }
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "replayable": {
+          "type": "boolean"
+        },
+        "proofCheckerBacked": {
+          "type": "boolean"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "receiptBackend": {
+      "type": "object",
+      "required": ["id", "role", "acceptedProofChecker"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "arithmetic",
+            "counterexample-search",
+            "checker",
+            "cas",
+            "retrieval",
+            "interval",
+            "proof-checker",
+            "planned"
+          ]
+        },
+        "version": {
+          "type": "string"
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "acceptedProofChecker": {
+          "type": "boolean"
+        }
+      }
     },
     "graphNode": {
       "type": "object",

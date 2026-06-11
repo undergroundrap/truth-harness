@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/experiment-log.schema.json",
+  "title": "Theorem Workbench Experiment Log Entry",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "experimentId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "question",
+    "kind",
+    "stage",
+    "protocolRefs",
+    "dataRefs",
+    "analysisRefs",
+    "evidenceRefs",
+    "observations",
+    "measurements",
+    "outcome",
+    "limitations",
+    "nextChecks",
+    "review",
+    "validationBoundary",
+    "privacy",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.experiment.v0"
+    },
+    "experimentId": {
+      "type": "string",
+      "pattern": "^exp_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": ["bench", "wet-lab", "field", "preclinical", "clinical", "observational", "other"]
+    },
+    "stage": {
+      "enum": ["planned", "protocol-drafted", "running", "completed", "replicated", "failed", "inconclusive"]
+    },
+    "protocolRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "dataRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "analysisRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "evidenceRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "observations": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "measurements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/measurement"
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "required": ["status", "summary"],
+      "properties": {
+        "status": {
+          "enum": ["not-run", "observed", "not-observed", "mixed", "inconclusive"]
+        },
+        "summary": {
+          "type": "string"
+        }
+      }
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "nextChecks": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "review": {
+      "type": "object",
+      "required": [
+        "humanExpertReviewRequired",
+        "ethicsReviewRequired",
+        "ethicsApprovalRefs",
+        "regulatoryReviewRequired",
+        "regulatoryReviewRefs",
+        "safetyReviewRequired"
+      ],
+      "properties": {
+        "humanExpertReviewRequired": {
+          "const": true
+        },
+        "ethicsReviewRequired": {
+          "type": "boolean"
+        },
+        "ethicsApprovalRefs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "regulatoryReviewRequired": {
+          "type": "boolean"
+        },
+        "regulatoryReviewRefs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "safetyReviewRequired": {
+          "type": "boolean"
+        }
+      }
+    },
+    "validationBoundary": {
+      "type": "object",
+      "required": [
+        "experimentalEvidence",
+        "requiresReplication",
+        "requiresExpertReview",
+        "notClinicalProof",
+        "notRegulatoryApproval"
+      ],
+      "properties": {
+        "experimentalEvidence": {
+          "type": "boolean"
+        },
+        "requiresReplication": {
+          "type": "boolean"
+        },
+        "requiresExpertReview": {
+          "const": true
+        },
+        "notClinicalProof": {
+          "type": "boolean"
+        },
+        "notRegulatoryApproval": {
+          "const": true
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "type": "boolean"
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      }
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "measurement": {
+      "type": "object",
+      "required": ["name", "value"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

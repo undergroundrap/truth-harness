@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Verified math for AI agents: proof receipts, exact computation, refutation, and benchmark artifacts.",
+  "description": "Local-first evidence receipts for AI agents: exact computation, refutation, replay, and benchmark artifacts.",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -17,13 +17,14 @@
     "demo:bench": "npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json",
     "demo:check": "npm run cli -- check docs/examples/strict-claims.md",
     "demo:physics": "npm run cli -- bench run packages/benchmarks/suites/physics-seed.json",
-    "demo:prove": "npm run cli -- ask \"for all integers n, n^2+n is even\"",
+    "demo:parity": "npm run cli -- ask \"for all integers n, n^2+n is even\"",
+    "demo:prove": "npm run demo:parity",
     "demo:numeric": "npm run cli -- bench run packages/benchmarks/suites/numeric-seed.json",
     "demo:replay": "npm run cli -- ask \"for all integers n, n^2+n+1 is even\" -- --out receipts/false-parity.json && npm run cli -- replay receipts/false-parity.json",
     "demo:render": "npm run cli -- render receipts/false-parity.json markdown receipts/false-parity.md && npm run cli -- render receipts/false-parity.json html receipts/false-parity.html",
     "demo:symbolic": "npm run cli -- bench run packages/benchmarks/suites/symbolic-seed.json",
     "mcp": "node packages/mcp-server/dist/index.js",
-    "proof:launch": "npm run demo:replay && npm run demo:render && npm run demo:prove && npm run demo:bench && npm run demo:physics && npm run demo:numeric && npm run demo:symbolic && npm run demo:check",
+    "proof:launch": "npm run demo:replay && npm run demo:render && npm run demo:parity && npm run demo:bench && npm run demo:physics && npm run demo:numeric && npm run demo:symbolic && npm run demo:check",
     "test": "vitest run"
   },
   "devDependencies": {

@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/claim-chart.schema.json",
+  "title": "Theorem Workbench Claim Chart",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "chartId",
+    "projectId",
+    "entryId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "invention",
+    "elements",
+    "noveltyQuestions",
+    "priorArtNotes",
+    "reductionToPracticeRefs",
+    "legal",
+    "validation",
+    "privacy",
+    "markdown"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.claim-chart.v0"
+    },
+    "chartId": {
+      "type": "string",
+      "pattern": "^chart_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "entryId": {
+      "type": "string",
+      "pattern": "^inv_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "invention": {
+      "type": "object",
+      "required": ["title", "hypothesis", "validationStage"],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "hypothesis": {
+          "type": "string"
+        },
+        "validationStage": {
+          "$ref": "#/$defs/validationStage"
+        }
+      }
+    },
+    "elements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/claimElement"
+      }
+    },
+    "noveltyQuestions": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "priorArtNotes": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "reductionToPracticeRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "legal": {
+      "type": "object",
+      "required": [
+        "humanReviewRequired",
+        "legalConclusion",
+        "patentabilityConclusion",
+        "provisionalDraftReady",
+        "warnings"
+      ],
+      "properties": {
+        "humanReviewRequired": {
+          "const": true
+        },
+        "legalConclusion": {
+          "const": "not-a-legal-opinion"
+        },
+        "patentabilityConclusion": {
+          "const": "not-determined"
+        },
+        "provisionalDraftReady": {
+          "const": false
+        },
+        "warnings": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": ["stage", "reductionToPracticeClaimed", "requiredBeforeDrafting"],
+      "properties": {
+        "stage": {
+          "$ref": "#/$defs/validationStage"
+        },
+        "reductionToPracticeClaimed": {
+          "type": "boolean"
+        },
+        "requiredBeforeDrafting": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "type": "boolean"
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      }
+    },
+    "markdown": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "validationStage": {
+      "enum": [
+        "idea",
+        "computational-hypothesis",
+        "simulated",
+        "bench-tested",
+        "experimentally-observed",
+        "preclinical",
+        "clinical",
+        "regulatory-reviewed"
+      ]
+    },
+    "claimElement": {
+      "type": "object",
+      "required": ["elementId", "text", "supportRefs", "priorArtRefs", "notes", "status", "warnings"],
+      "properties": {
+        "elementId": {
+          "type": "string",
+          "pattern": "^elt_[a-f0-9]{16}$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "supportRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        },
+        "priorArtRefs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "notes": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "status": {
+          "enum": ["unsupported", "evidence-referenced", "needs-human-review"]
+        },
+        "warnings": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "evidenceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "enum": ["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "other"]
+        },
+        "ref": {
+          "type": "string"
+        },
+        "trust": {
+          "enum": [
+            "proved",
+            "exact-computed",
+            "bounded-numeric",
+            "smt-checked",
+            "dimension-checked",
+            "source-cited",
+            "cross-checked",
+            "unverified",
+            "refuted"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        }
+      }
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

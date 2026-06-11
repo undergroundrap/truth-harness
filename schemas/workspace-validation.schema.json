@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/workspace-validation.schema.json",
+  "title": "Theorem Workbench Workspace Validation",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "checkedAt",
+    "passed",
+    "artifacts",
+    "issues",
+    "summary",
+    "privacy",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.workspace-validation.v0"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "checkedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "passed": {
+      "type": "boolean"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["checkedFiles", "validFiles", "invalidFiles", "byKind", "byTrust", "errors", "warnings"],
+      "properties": {
+        "checkedFiles": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "validFiles": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "invalidFiles": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "byKind": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "byTrust": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warnings": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "required": ["path", "kind", "valid", "issueCodes"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "receipts",
+            "artifacts",
+            "indexes",
+            "findings",
+            "inventions",
+            "proofs",
+            "smt",
+            "benchmarks",
+            "disclosures",
+            "simulations",
+            "patents",
+            "experiments",
+            "vault",
+            "audits",
+            "snapshots",
+            "sessions",
+            "reviews",
+            "validation",
+            "literature",
+            "notebook-runs",
+            "code-runs",
+            "model-contexts",
+            "manifest"
+          ]
+        },
+        "valid": {
+          "type": "boolean"
+        },
+        "schemaVersion": {
+          "type": "string"
+        },
+        "expectedSchemaVersion": {
+          "type": "string"
+        },
+        "artifactId": {
+          "type": "string"
+        },
+        "trust": {
+          "$ref": "#/$defs/trust"
+        },
+        "issueCodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/issueCode"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "issue": {
+      "type": "object",
+      "required": ["severity", "code", "path", "message"],
+      "properties": {
+        "severity": {
+          "enum": ["warning", "error"]
+        },
+        "code": {
+          "$ref": "#/$defs/issueCode"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "issueCode": {
+      "enum": [
+        "missing-workspace-directory",
+        "invalid-json",
+        "invalid-receipt-schema",
+        "invalid-artifact-schema",
+        "missing-schema-version",
+        "unexpected-schema-version",
+        "missing-artifact-id",
+        "unresolved-evidence-ref",
+        "external-model-context-sent-without-approval",
+        "external-model-context-sent-without-disclosure",
+        "unresolved-disclosure-ref",
+        "sent-disclosure-without-approval",
+        "sent-disclosure-not-user-initiated",
+        "sent-disclosure-without-selected-context",
+        "proved-without-proof-checker",
+        "trusted-receipt-without-backend",
+        "non-local-first-receipt",
+        "external-call-without-disclosure",
+        "non-replayable-receipt"
+      ]
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "type": "boolean"
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "trust": {
+      "enum": [
+        "proved",
+        "exact-computed",
+        "bounded-numeric",
+        "smt-checked",
+        "dimension-checked",
+        "source-cited",
+        "cross-checked",
+        "unverified",
+        "refuted"
+      ]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

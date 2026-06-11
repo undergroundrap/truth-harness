@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/notebook-run.schema.json",
+  "title": "Theorem Workbench Notebook Run Record",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runRecordId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "purpose",
+    "kind",
+    "status",
+    "notebookRefs",
+    "codeRefs",
+    "inputRefs",
+    "outputRefs",
+    "environment",
+    "parameters",
+    "metrics",
+    "observations",
+    "limitations",
+    "nextChecks",
+    "replay",
+    "reproducibilityBoundary",
+    "privacy",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.notebook-run.v0"
+    },
+    "runRecordId": {
+      "type": "string",
+      "pattern": "^nb_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": ["notebook", "script", "pipeline", "test", "analysis", "simulation", "other"]
+    },
+    "status": {
+      "enum": ["planned", "completed", "failed", "reproduced", "superseded"]
+    },
+    "runner": {
+      "type": "string"
+    },
+    "runnerVersion": {
+      "type": "string"
+    },
+    "command": {
+      "type": "string"
+    },
+    "workingDirectory": {
+      "type": "string"
+    },
+    "notebookRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "codeRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "inputRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "outputRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "environment": {
+      "type": "object",
+      "required": ["dependencies", "variables"],
+      "properties": {
+        "runtime": {
+          "type": "string"
+        },
+        "runtimeVersion": {
+          "type": "string"
+        },
+        "operatingSystem": {
+          "type": "string"
+        },
+        "dependencies": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/value"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/value"
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/value"
+      }
+    },
+    "observations": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "nextChecks": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "replay": {
+      "type": "object",
+      "required": ["deterministic", "requiresManualReplay", "notes"],
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "deterministic": {
+          "type": "boolean"
+        },
+        "requiresManualReplay": {
+          "type": "boolean"
+        },
+        "notes": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "reproducibilityBoundary": {
+      "type": "object",
+      "required": [
+        "recordOnly",
+        "executionNotPerformedByWorkbench",
+        "outputsNotVerifiedByWorkbench",
+        "notebookRunIsNotTruth",
+        "requiresWorkspaceSnapshot",
+        "requiresIndependentReplay",
+        "requiresExpertReview",
+        "requiredNextChecks"
+      ],
+      "properties": {
+        "recordOnly": {
+          "const": true
+        },
+        "executionNotPerformedByWorkbench": {
+          "const": true
+        },
+        "outputsNotVerifiedByWorkbench": {
+          "const": true
+        },
+        "notebookRunIsNotTruth": {
+          "const": true
+        },
+        "requiresWorkspaceSnapshot": {
+          "type": "boolean"
+        },
+        "requiresIndependentReplay": {
+          "type": "boolean"
+        },
+        "requiresExpertReview": {
+          "type": "boolean"
+        },
+        "requiredNextChecks": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "value": {
+      "type": "object",
+      "required": ["name", "value"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

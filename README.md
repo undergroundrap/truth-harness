@@ -1,10 +1,12 @@
 # Theorem Workbench
 
-**Verified Math for AI Agents.**
+**Local-First Verified Math for AI Agents.**
 
 Theorem Workbench is a verification-first mathematical workbench for humans, Claude, Codex, and other agentic tools.
 
-The project goal is not to replace WolframAlpha by rebuilding every math engine. The goal is to make AI-assisted math auditable: every answer should be backed by a replayable tool run, proof check, cited source, counterexample search, or an explicit uncertainty label.
+The project goal is not to replace WolframAlpha by rebuilding every math engine. The goal is to make AI-assisted math auditable and private by default: every answer should be backed by a replayable local tool run, proof check, cited source, counterexample search, workspace snapshot, or an explicit uncertainty label. Claude, Codex, and other frontier models can still help reason, plan, and critique, but the app is local-first: project data and artifacts stay in the local workspace unless the user explicitly sends selected context to a hosted model or network service, and that selected context plus disclosure is recorded locally.
+
+The long-term mission is open-source discovery infrastructure: help humans and agents investigate hard math, physics, materials, climate, biomedical, and engineering problems without turning model output into fake certainty. The workbench should make it easy to use the best available local solvers and, when the user chooses, the latest capable frontier models as outside critics while keeping the private workspace private.
 
 The name is intentional: it is both a workbench for doing verified math and a benchmark harness for measuring agents, tools, prompts, and solver portfolios against reproducible math tasks.
 
@@ -17,7 +19,9 @@ Theorem Workbench turns math answers into receipts:
 - exact computations use exact rational arithmetic or CAS adapters,
 - false universal claims get counterexample search before explanation,
 - formal proofs will only be labeled `proved` when a proof checker accepts them,
-- every result carries a trust label and replay command.
+- every result carries a trust label, replay command, and privacy metadata.
+
+The current MVP is local-only by default. Receipt metadata records `local-only` mode, `networkAccess: none`, local workspace data residency, external disclosure metadata when relevant, and an `evidenceProfile` summarizing backend ids, versions, inputs, outputs, replayability, proof-checker status, and limitations.
 
 ## Quickstart
 
@@ -25,6 +29,10 @@ Theorem Workbench turns math answers into receipts:
 npm install
 npm run build
 python -m pip install sympy==1.14.0
+npm run cli -- workspace init --name "Local Math Lab"
+npm run cli -- workspace status
+npm run cli -- workspace repair
+npm run cli -- workspace validate
 npm run cli -- ask "compute 3 / 4 + 5 / 8"
 npm run cli -- ask "for all integers n, n^2+n+1 is even"
 npm run cli -- ask "for all integers n, n^2+n is even"
@@ -33,6 +41,7 @@ npm run cli -- replay receipts/false-parity.json
 npm run cli -- render receipts/false-parity.json markdown receipts/false-parity.md
 npm run cli -- render receipts/false-parity.json html receipts/false-parity.html
 npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json
+npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json --write
 npm run cli -- bench run packages/benchmarks/suites/physics-seed.json
 npm run cli -- bench run packages/benchmarks/suites/numeric-seed.json
 npm run cli -- bench run packages/benchmarks/suites/symbolic-seed.json
@@ -40,10 +49,79 @@ npm run cli -- ask "dimension check force = mass * acceleration"
 npm run cli -- ask "dimension check force = mass * velocity"
 npm run cli -- ask "bound x^2 + 2*x + 1 for x in [0, 2]"
 npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
+npm run cli -- proof backends
+npm run cli -- proof check docs/examples/trivial.lean
+npm run cli -- proof check docs/examples/trivial.lean --write
+npm run cli -- proof list
+npm run cli -- smt backends
+npm run cli -- smt check docs/examples/constraints.smt2
+npm run cli -- smt check docs/examples/constraints.smt2 --write
+npm run cli -- smt solve --int x --constraint "x > 0" --constraint "x < 3"
+npm run cli -- smt list
 npm run cli -- check docs/examples/strict-claims.md
+npm run cli -- source ingest docs
+npm run cli -- source search "verified math agents"
+npm run cli -- source cite "Theorem Workbench is built for verified math agents" --query "verified math agents"
+npm run cli -- notebook log "Run a local notebook that checks a parity conjecture" --kind notebook --runner jupyter --command "jupyter nbconvert --execute notebooks/parity.ipynb" --notebook notebooks/parity.ipynb --code src/parity.py --output artifacts/parity-output.json --runtime python --runtime-version 3.12 --dependency sympy==1.14.0 --metric checked_cases=2 --limitation "Notebook output is provenance, not a proof-checker-backed result"
+npm run cli -- notebook list
+npm run cli -- code run "Run a tiny local code check" --command node --arg -e --arg "console.log(6 * 7)" --code inline:node-eval --input prompt:6x7 --output stdout
+npm run cli -- code list
+npm run cli -- model-context prepare "Ask a frontier model to critique a selected proof plan" --service OpenAI --model frontier-reasoning-model --data "selected theorem statement" --data "selected proof sketch" --section "Selected proof plan=Only critique this selected proof plan; local notes stay local." --approval "prompt:explicit-user-request"
+npm run cli -- disclosure log "Ask a frontier model to critique a selected proof plan" --service OpenAI --model frontier-reasoning-model --data "selected theorem statement" --data "selected proof sketch" --context "Only the theorem statement and proof sketch are sent; local notes stay local." --approval "prompt:explicit-user-request"
+npm run cli -- workspace validate
+npm run cli -- workspace snapshot
 ```
 
-The current MVP is intentionally small and honest. It supports exact rational arithmetic, finite counterexample search, a narrow local modular parity proof kernel, conservative rational interval bounds, dimensional analysis, a local SymPy symbolic adapter, receipt replay, Markdown/HTML receipt export, benchmark runs, and a local MCP server. Lean, Sage, SMT, and RAG adapters are planned as modular packages.
+The current MVP is intentionally small and honest. It supports exact rational arithmetic, finite counterexample search, a narrow local modular parity checker, conservative rational interval bounds, dimensional analysis, a local SymPy symbolic adapter, policy-gated direct local code-run records, local proof-backend readiness probes, local Lean proof artifact checks when Lean is installed, local Z3 SMT-LIB checks when Z3 is installed, first-class proof-check and SMT-check records, receipt replay, Markdown/HTML receipt export, benchmark runs, first-class benchmark-run and benchmark-comparison records, and a local MCP server. The parity checker can emit an exact local certificate, but it is not labeled `proved` until an accepted proof-checking backend verifies the result. Sage, cvc5, and richer RAG adapters are planned as modular packages.
+
+Local workspace commands create a private `.theorem-workbench/` project store for receipts, artifacts, indexes, findings, research sessions, expert reviews, validation plans, literature records, notebook-run records, code-run records, invention logs, simulation logs, experiment logs, evidence audits, model-context packets, disclosure logs, encrypted vault envelopes, provenance snapshots, patent claim charts, proof-check records, SMT-check records, and benchmark run/comparison records. The directory is git-ignored by default. `workspace status` reports missing private directories and manifest defaults added by newer releases; `workspace repair` creates missing directories and persists newly added defaults without leaving the local project.
+
+Workspace validation commands write no files; they scan local evidence artifacts and return `theorem.workspace-validation.v0` reports. Validation checks the root `project.json` manifest against a private-by-default schema, then checks receipt JSON deeply, including local-first privacy metadata, backend-aware trust boundaries, and forged `proved` labels. Other known workspace JSON records are checked against their checked-in JSON Schema contracts, artifact ids, local evidence refs, and trust-boundary policies before humans or agents rely on the workspace.
+
+The test suite includes a golden workspace regression that generates representative artifacts through the writer APIs, then requires `workspace validate` to pass over the whole local project store. This keeps schemas, writers, and agent-facing validation policies moving together.
+
+The local JSON Schema validator intentionally supports a documented subset used by the checked-in schemas. Unsupported schema keywords fail validation instead of being silently ignored, and tests scan every schema file to keep the validator vocabulary honest.
+
+Source commands ingest local Markdown/text files into `.theorem-workbench/indexes/local-corpus.json`, search those chunks without network access, and create `source-cited` receipts for claims grounded in local source hits. This is the first local RAG substrate: lexical and simple on purpose, with citation refs agents can attach to later claims.
+
+Literature commands write `theorem.literature.v0` records into `.theorem-workbench/literature/` for papers, preprints, patents, datasets, database exports, standards, protocols, web pages, books, or notes. They store identifiers, local refs, corpus refs, key claims, methods, limitations, quality flags, relevance, and next checks without calling PubMed, arXiv, patent databases, or any network service. A literature record is source organization, not proof of entailment, clinical validity, regulatory approval, or patentability.
+
+Notebook commands write `theorem.notebook-run.v0` records into `.theorem-workbench/notebook-runs/` for local notebooks, scripts, tests, analyses, simulations, and pipelines. They capture runner, replay command, notebook/code/input/output refs, runtime, dependencies, parameters, metrics, observations, limitations, and next checks. They do not execute code; they record provenance so humans and agents can replay, snapshot, audit, and review outputs without pretending notebook output is truth.
+
+Code commands write `theorem.code-run.v0` records into `.theorem-workbench/code-runs/`. `theorem code run` launches a local command directly without shell interpolation, under a default-local execution policy that blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden. It captures stdout, stderr, exit code, duration, cwd, timeout, output hashes, refs, policy decision, and replay notes, then writes JSON plus Markdown. This proves a bounded local process execution happened; it does not prove the code is correct, deterministic, scientifically valid, safe, regulatory-approved, or patentable.
+
+Benchmark commands can write `theorem.benchmark-run.v0` records into `.theorem-workbench/benchmarks/` with `theorem bench run <suite> --write`. Records capture suite metadata, runner metadata, replay command, per-case receipt hashes, receipt trust labels, backend ids, failures, aggregate trust accuracy, and explicit warnings that benchmarks measure system behavior rather than proving mathematical or scientific truth. Add `--fail-on-failures` when a CLI or CI workflow should exit non-zero if any benchmark case fails. Once two benchmark-run files exist, `theorem bench compare <baseline.json> <current.json> --write` writes a `theorem.benchmark-comparison.v0` record that flags regressions, improvements, trust-label changes, changed receipt hashes, added/removed cases, and suite drift. Add `--fail-on-regression` when comparison regressions or incomparable suites should fail the workflow.
+Use `theorem bench list` to find local benchmark run and comparison paths for follow-up comparisons, audits, research-session evidence refs, or agent reports.
+
+Proof commands can probe accepted proof-checker availability with `theorem proof backends` and can check local Lean proof artifacts with `theorem proof check <file>`. Add `--write` to store a `theorem.proof-check.v0` JSON record plus Markdown report under `.theorem-workbench/proofs/`, then use `theorem proof list` to find proof-check artifacts for audits, snapshots, research sessions, or agent follow-up. A proof-check record is labeled `proved` only when Lean accepts the concrete source file; missing Lean, execution errors, syntax errors, incomplete proofs, or rejected proof attempts remain `unverified`. Add `--fail-on-unproved` when CI or an agent workflow must stop unless the proof artifact is accepted.
+
+SMT commands can probe local Z3 availability with `theorem smt backends` and can check local SMT-LIB artifacts with `theorem smt check <file>`. `theorem smt solve --int x --constraint "x > 0"` builds a workspace-local SMT-LIB source from explicit integer constraints, stores it under `.theorem-workbench/smt/sources/`, then writes a paired `theorem.smt-check.v0` JSON record plus Markdown report under `.theorem-workbench/smt/`. When `--model` is used and Z3 returns `sat`, the record keeps raw stdout and also extracts simple `define-fun` bindings into structured JSON for agent follow-up. Use `theorem smt list` to find solver artifacts for audits, snapshots, research sessions, or agent follow-up. A check is labeled `smt-checked` only when Z3 returns `sat` or `unsat` for the concrete SMT-LIB file; missing Z3, execution errors, `unknown`, or unrecognized output remain `unverified`. SMT evidence is not a `proved` label and is not proof of surrounding informal, scientific, medical, safety, regulatory, or patent claims.
+
+Vault commands encrypt workspace-local files into `.theorem-workbench/vault/` with AES-256-GCM and a scrypt-derived key from an environment variable. Vault envelopes are local artifacts with safe public labels and ciphertext metadata; original filenames, plaintext hashes, and bytes stay inside the encrypted payload until a local verify/open operation. Do not put vault keys in prompts, manifests, receipts, or source control.
+
+Audit commands classify a claim against local evidence refs and write `theorem.evidence-audit.v0` records plus optional Markdown reports. They flag missing evidence, biomedical/patent/simulation overclaims, narrow proof scope, and required next checks before an agent or human presents a claim as true.
+
+Validation plan commands write `theorem.validation-plan.v0` records into `.theorem-workbench/validation/`. They turn an audited claim into explicit gates such as proof, source citation, simulation review, wet-lab work, replication, preclinical/clinical validation, safety, ethics, regulatory review, prior art, claim charts, reduction to practice, and patent legal review. They are local checklists, not proof that those gates are satisfied.
+
+Workspace snapshot commands write `theorem.workspace-snapshot.v0` records into `.theorem-workbench/snapshots/`. They hash local artifacts, extract schema/id metadata, and let humans or agents verify whether evidence changed, disappeared, or was added since a prior research checkpoint. Snapshots verify provenance and drift; they do not prove scientific, mathematical, medical, regulatory, or legal truth.
+
+Research session commands write `theorem.research-session.v0` runbooks into `.theorem-workbench/sessions/`. They give Claude, Codex, and humans a local anchor for long investigations: objective, domains, hypotheses, claims to verify, evidence refs, snapshot refs, bounded budgets, decisions, checkpoints, and next validation checks. Sessions preserve the rule that hosted models are optional collaborators with disclosure, not authorities.
+
+Expert review commands write `theorem.expert-review.v0` records into `.theorem-workbench/reviews/`. They capture reviewer role, scope, evidence refs, findings, limitations, recommendations, outcome, and required next checks. They make human review visible without pretending the software itself provides proof, medical advice, regulatory approval, or legal advice.
+
+Model-context commands write `theorem.model-context.v0` packets into `.theorem-workbench/model-contexts/`. They prepare a minimal selected-context packet for a hosted model, local model, or external service, but they do not call that service. Their job is to keep frontier-model collaboration explicit: purpose, service/model, selected data classes, included sections, exclusions, redactions, approval, and disclosure status are visible before anything leaves the machine.
+
+Disclosure commands write local audit records for any selected context sent to hosted models, external CAS services, scientific APIs, lab services, or other non-local systems. They do not make the call; they record service, model, purpose, data classes, context summary, approval ref, status, and warnings so frontier-model workflows remain explicit and reviewable.
+
+Workspace validation allows preflight model-context packets before anything is sent, but fails records marked `sent` or `received` unless they preserve the local audit trail: approved model context, disclosure linkage, human approval ref, and selected-context refs.
+
+Simulation commands write local computational evidence records with model assumptions, parameters, metrics, uncertainty, limitations, and next validation checks. They intentionally mark simulation output as computational evidence, not real-world, clinical, safety, regulatory, or patent validation.
+
+Experiment commands write local protocol/data/analysis/observation records with ethics, safety, replication, and regulatory review metadata. They intentionally mark observations as protocol-scoped evidence, not broad proof of safety, efficacy, clinical validity, regulatory approval, or patentability.
+
+Invention log commands write local provenance records for hypotheses, evidence references, novelty notes, prior-art notes, risks, and next checks. Claim-chart commands turn invention logs into local patent-review aids with explicit claim elements, evidence refs, prior-art notes, reduction-to-practice refs, and legal disclaimers. They intentionally mark patent conclusions as requiring human legal review and warn when computational hypotheses are not experimentally, clinically, or regulatorily validated.
+
+Discovery package reports render invention logs into local Markdown summaries with evidence review, validation requirements, overclaim warnings, patent posture, and next checks. They are designed for review packages, not for claiming a validated breakthrough.
 
 Symbolic prompts use a local Python subprocess and require SymPy:
 
@@ -53,7 +131,7 @@ python -m pip install sympy==1.14.0
 
 On Windows, `py -m pip install sympy==1.14.0` works too.
 
-Receipt JSON is shaped by [schemas/receipt.schema.json](schemas/receipt.schema.json), so future CLI, MCP, CI, and web surfaces can share the same artifact contract.
+Receipt JSON is shaped by [schemas/receipt.schema.json](schemas/receipt.schema.json), proof-check records are shaped by [schemas/proof-check.schema.json](schemas/proof-check.schema.json), SMT-check records are shaped by [schemas/smt-check.schema.json](schemas/smt-check.schema.json), code-run records are shaped by [schemas/code-run.schema.json](schemas/code-run.schema.json), benchmark records are shaped by [schemas/benchmark-run.schema.json](schemas/benchmark-run.schema.json), benchmark comparisons are shaped by [schemas/benchmark-comparison.schema.json](schemas/benchmark-comparison.schema.json), and workspace validation reports are shaped by [schemas/workspace-validation.schema.json](schemas/workspace-validation.schema.json), so future CLI, MCP, CI, and web surfaces can share the same artifact contracts.
 
 The MCP server exposes the same receipt engine to agents:
 
@@ -61,11 +139,15 @@ The MCP server exposes the same receipt engine to agents:
 npm run mcp
 ```
 
+MCP also exposes local workspace init/status/repair, workspace validation, workspace snapshot/list/verify, proof-backend readiness probes, Lean proof artifact checks/write/list, SMT-backend readiness probes, SMT-LIB checks/write/list, benchmark-run record writing and benchmark comparison, research-session start/checkpoint/list, expert-review log/list, validation-plan create/list, source ingest/search, literature log/list, notebook-run log/list, code-run/list tools, vault seal/list/verify, evidence-audit, model-context prepare/list, disclosure-log, simulation-log, experiment-log, invention-log, and claim-chart tools so agents can work against private local evidence instead of relying on memory or unsupported claims.
+
 The launch proof script runs the public demo gates:
 
 ```bash
 npm run proof:launch
 ```
+
+See [docs/TRUST_LABELS.md](docs/TRUST_LABELS.md) for the conservative meaning of each trust label and the current rule that local parity certificates are `exact-computed`, not `proved`.
 
 See [docs/RESEARCH_AND_ARCHITECTURE.md](docs/RESEARCH_AND_ARCHITECTURE.md) for the current naming check, open-source landscape, architecture, data structures, CLI/MCP surface, benchmarking surface, and test strategy.
 

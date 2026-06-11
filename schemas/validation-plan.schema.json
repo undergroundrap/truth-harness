@@ -1,0 +1,365 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/validation-plan.schema.json",
+  "title": "Theorem Workbench Validation Plan",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "planId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "claim",
+    "objective",
+    "domains",
+    "evidenceRefs",
+    "audit",
+    "gates",
+    "readiness",
+    "recommendedClaimLanguage",
+    "boundary",
+    "warnings",
+    "privacy",
+    "markdown"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.validation-plan.v0"
+    },
+    "planId": {
+      "type": "string",
+      "pattern": "^plan_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "claim": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "domains": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/domain"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidenceRef"
+      }
+    },
+    "audit": {
+      "type": "object",
+      "required": ["auditId", "verdict", "claimTypes", "requiredNextChecks", "overclaimWarnings"],
+      "properties": {
+        "auditId": {
+          "type": "string",
+          "pattern": "^audit_[a-f0-9]{16}$"
+        },
+        "verdict": {
+          "type": "object",
+          "required": ["status", "summary"],
+          "properties": {
+            "status": {
+              "enum": [
+                "refuted",
+                "verified-narrow",
+                "source-grounded",
+                "protocol-evidence",
+                "computational-evidence",
+                "hypothesis",
+                "unsupported",
+                "overclaimed"
+              ]
+            },
+            "summary": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "claimTypes": {
+          "type": "array",
+          "items": {
+            "enum": ["math", "source-grounded", "simulation", "experiment", "biomedical", "patent", "engineering", "general"]
+          }
+        },
+        "requiredNextChecks": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "overclaimWarnings": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/gate"
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "required": ["status", "summary", "blockingGateCount", "missingGateCount", "inProgressGateCount", "satisfiedGateCount"],
+      "properties": {
+        "status": {
+          "enum": ["blocked-refuted", "not-ready", "ready-for-review", "ready-for-narrow-claim"]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "blockingGateCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missingGateCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inProgressGateCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "satisfiedGateCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "recommendedClaimLanguage": {
+      "type": "string"
+    },
+    "boundary": {
+      "type": "object",
+      "required": [
+        "notProof",
+        "notMedicalAdvice",
+        "notRegulatoryApproval",
+        "notLegalAdvice",
+        "simulationIsNotReality",
+        "aiOutputIsNotTruth",
+        "requiresIndependentVerification"
+      ],
+      "properties": {
+        "notProof": {
+          "const": true
+        },
+        "notMedicalAdvice": {
+          "const": true
+        },
+        "notRegulatoryApproval": {
+          "const": true
+        },
+        "notLegalAdvice": {
+          "const": true
+        },
+        "simulationIsNotReality": {
+          "const": true
+        },
+        "aiOutputIsNotTruth": {
+          "const": true
+        },
+        "requiresIndependentVerification": {
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "markdown": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "domain": {
+      "enum": [
+        "math",
+        "source",
+        "literature",
+        "simulation",
+        "experiment",
+        "biomedical",
+        "clinical",
+        "safety",
+        "regulatory",
+        "patent",
+        "engineering",
+        "software",
+        "physics",
+        "general"
+      ]
+    },
+    "gate": {
+      "type": "object",
+      "required": ["gateId", "kind", "description", "status", "blocking", "evidenceRefs", "rationale", "nextChecks"],
+      "properties": {
+        "gateId": {
+          "type": "string",
+          "pattern": "^gate_[a-f0-9]{16}$"
+        },
+        "kind": {
+          "enum": [
+            "evidence-audit",
+            "proof",
+            "source-citation",
+            "literature-record",
+            "notebook-run",
+            "code-run",
+            "simulation-log",
+            "simulation-review",
+            "experiment-record",
+            "experiment-replication",
+            "wet-lab",
+            "preclinical",
+            "clinical",
+            "safety",
+            "ethics",
+            "regulatory",
+            "expert-review",
+            "patent-legal",
+            "prior-art",
+            "claim-chart",
+            "reduction-to-practice",
+            "workspace-snapshot",
+            "replay",
+            "benchmark",
+            "other"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": ["missing", "planned", "in-progress", "satisfied", "blocked", "not-applicable"]
+        },
+        "blocking": {
+          "type": "boolean"
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        },
+        "rationale": {
+          "type": "string"
+        },
+        "nextChecks": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidenceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "receipt",
+            "artifact",
+            "source",
+            "literature",
+            "notebook",
+            "notebook-run",
+            "code-run",
+            "benchmark",
+            "disclosure",
+            "simulation",
+            "experiment",
+            "vault",
+            "audit",
+            "snapshot",
+            "session",
+            "review",
+            "validation",
+            "model-context",
+            "invention",
+            "claim-chart",
+            "discovery-package",
+            "other"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trust": {
+          "enum": [
+            "proved",
+            "exact-computed",
+            "bounded-numeric",
+            "smt-checked",
+            "dimension-checked",
+            "source-cited",
+            "cross-checked",
+            "unverified",
+            "refuted"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

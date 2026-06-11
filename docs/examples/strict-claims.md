@@ -15,10 +15,10 @@ expect: refuted
 for all integers n, n^2+n+1 is even
 ```
 
-A narrow formal proof checked by the local modular parity kernel:
+A narrow exact parity check. This does not use an accepted proof checker, so it is not labeled `proved`:
 
 ```theorem-workbench
-expect: proved
+expect: exact-computed
 for all integers n, n^2+n is even
 ```
 

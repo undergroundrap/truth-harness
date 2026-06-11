@@ -11,7 +11,7 @@ export interface ParityResidueCase {
 
 export interface ParityProofSuccess {
   ok: true;
-  adapter: "local-modular-parity-kernel";
+  adapter: "local-modular-parity-checker";
   theorem: "universal-integer-parity";
   expression: string;
   predicate: ParityPredicate;
@@ -22,7 +22,7 @@ export interface ParityProofSuccess {
 
 export interface ParityProofFailure {
   ok: false;
-  adapter: "local-modular-parity-kernel";
+  adapter: "local-modular-parity-checker";
   expression: string;
   predicate: ParityPredicate;
   reason: string;
@@ -50,7 +50,7 @@ export function proveUniversalParity(
     if (!residues.every((residue) => residue.satisfiesPredicate)) {
       return {
         ok: false,
-        adapter: "local-modular-parity-kernel",
+        adapter: "local-modular-parity-checker",
         expression: expressionSource,
         predicate,
         reason: "At least one residue class modulo 2 does not satisfy the requested parity predicate.",
@@ -60,19 +60,19 @@ export function proveUniversalParity(
 
     return {
       ok: true,
-      adapter: "local-modular-parity-kernel",
+      adapter: "local-modular-parity-checker",
       theorem: "universal-integer-parity",
       expression: expressionSource,
       predicate,
       modulus: 2,
       residues,
       certificate:
-        "For every integer n, polynomial parity depends only on n mod 2. The checker evaluated the expression in Z/2Z for n=0 and n=1, and every residue matched the requested predicate."
+        "For every integer n, polynomial parity depends only on n mod 2. The local checker evaluated the expression in Z/2Z for n=0 and n=1, and every residue matched the requested predicate."
     };
   } catch (error) {
     return {
       ok: false,
-      adapter: "local-modular-parity-kernel",
+      adapter: "local-modular-parity-checker",
       expression: expressionSource,
       predicate,
       reason: error instanceof Error ? error.message : "Unknown parity proof failure."
@@ -84,7 +84,7 @@ function evaluateMod2(expression: Expr, nMod2: Mod2): Mod2 {
   switch (expression.type) {
     case "number":
       if (!expression.value.isInteger()) {
-        throw new Error("The parity proof kernel only accepts integer literals.");
+        throw new Error("The local parity checker only accepts integer literals.");
       }
       return mod2(expression.value.numerator);
     case "variable":
@@ -97,16 +97,16 @@ function evaluateMod2(expression: Expr, nMod2: Mod2): Mod2 {
       if (expression.op === "^") {
         const exponent = constantInteger(expression.right);
         if (exponent < 0n) {
-          throw new Error("The parity proof kernel only accepts non-negative integer exponents.");
+          throw new Error("The local parity checker only accepts non-negative integer exponents.");
         }
         if (exponent > 1024n) {
-          throw new Error("Exponent too large for the local parity proof kernel.");
+          throw new Error("Exponent too large for the local parity checker.");
         }
         return powMod2(left, exponent);
       }
 
       if (expression.op === "/") {
-        throw new Error("Division is outside the local polynomial parity proof kernel.");
+        throw new Error("Division is outside the local polynomial parity checker.");
       }
 
       const right = evaluateMod2(expression.right, nMod2);
@@ -124,12 +124,12 @@ function evaluateMod2(expression: Expr, nMod2: Mod2): Mod2 {
 
 function constantInteger(expression: Expr): bigint {
   if (containsVariable(expression)) {
-    throw new Error("The parity proof kernel only accepts constant exponents.");
+    throw new Error("The local parity checker only accepts constant exponents.");
   }
 
   const value = evaluateExpression(expression);
   if (!value.isInteger()) {
-    throw new Error("The parity proof kernel only accepts integer exponents.");
+    throw new Error("The local parity checker only accepts integer exponents.");
   }
 
   return value.numerator;

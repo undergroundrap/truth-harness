@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/smt-check.schema.json",
+  "title": "Theorem Workbench SMT Check Record",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "checkId",
+    "createdAt",
+    "backend",
+    "source",
+    "status",
+    "trust",
+    "proofCheckerBacked",
+    "localOnly",
+    "networkAccess",
+    "replay",
+    "limitations",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.smt-check.v0"
+    },
+    "checkId": {
+      "type": "string",
+      "pattern": "^smt_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "backend": {
+      "type": "object",
+      "required": ["id", "displayName", "adapter", "role", "acceptedProofChecker", "command", "args"],
+      "properties": {
+        "id": {
+          "const": "z3"
+        },
+        "displayName": {
+          "const": "Z3 SMT solver"
+        },
+        "adapter": {
+          "const": "local-z3-smtlib-subprocess"
+        },
+        "role": {
+          "const": "checker"
+        },
+        "acceptedProofChecker": {
+          "const": false
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "version": {
+          "type": "string"
+        },
+        "exitCode": {
+          "type": ["integer", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["path", "sha256", "byteLength"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "queryName": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "status": {
+      "enum": ["sat", "unsat", "unknown", "solver-unavailable", "error"]
+    },
+    "trust": {
+      "enum": ["smt-checked", "unverified"]
+    },
+    "proofCheckerBacked": {
+      "const": false
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "replay": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "object",
+      "required": ["format", "bindings", "warnings"],
+      "properties": {
+        "format": {
+          "const": "z3-define-fun"
+        },
+        "bindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "sort", "value", "raw"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sort": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1
+              },
+              "raw": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "warnings": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "stdout": {
+      "type": "string"
+    },
+    "stderr": {
+      "type": "string"
+    },
+    "error": {
+      "type": "string"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

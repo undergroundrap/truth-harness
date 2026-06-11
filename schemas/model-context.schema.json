@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/model-context.schema.json",
+  "title": "Theorem Workbench Model Context Packet",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "packetId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "purpose",
+    "target",
+    "dataClasses",
+    "selectedContextRefs",
+    "sections",
+    "redactions",
+    "exclusions",
+    "approval",
+    "disclosure",
+    "boundary",
+    "privacy",
+    "warnings",
+    "markdown"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.model-context.v0"
+    },
+    "packetId": {
+      "type": "string",
+      "pattern": "^ctx_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target": {
+      "type": "object",
+      "required": ["kind", "service"],
+      "properties": {
+        "kind": {
+          "enum": ["hosted-model", "local-model", "external-service"]
+        },
+        "service": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dataClasses": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "selectedContextRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/section"
+      }
+    },
+    "redactions": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "exclusions": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "approval": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "enum": ["not-approved", "approved"]
+        },
+        "approvalRef": {
+          "type": "string"
+        },
+        "approvedBy": {
+          "type": "string"
+        },
+        "approvedAt": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "disclosure": {
+      "type": "object",
+      "required": ["required", "status"],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": ["not-required", "required-not-created", "planned", "sent", "cancelled"]
+        },
+        "disclosureRef": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "boundary": {
+      "type": "object",
+      "required": [
+        "localPacketOnly",
+        "externalCallNotPerformed",
+        "selectedContextOnly",
+        "secretsMustNotBeIncluded",
+        "requiresDisclosureBeforeSending"
+      ],
+      "properties": {
+        "localPacketOnly": {
+          "const": true
+        },
+        "externalCallNotPerformed": {
+          "const": true
+        },
+        "selectedContextOnly": {
+          "const": true
+        },
+        "secretsMustNotBeIncluded": {
+          "const": true
+        },
+        "requiresDisclosureBeforeSending": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "markdown": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "required": ["title", "content", "sourceRefs"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceRefs": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

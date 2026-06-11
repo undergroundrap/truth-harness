@@ -1,0 +1,818 @@
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { join, relative, resolve, sep } from "node:path";
+import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import type { TrustLabel } from "./types.js";
+
+export type SmtBackendId = "z3";
+export type SmtBackendStatus = "available" | "missing" | "error";
+
+export interface SmtBackendCommandResult {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+  error?: {
+    name?: string;
+    message: string;
+  };
+}
+
+export type SmtBackendCommandRunner = (
+  command: string,
+  args: string[],
+  timeoutMs: number
+) => SmtBackendCommandResult;
+
+export interface SmtBackendProbe {
+  backendId: SmtBackendId;
+  displayName: string;
+  adapter: string;
+  role: "checker";
+  acceptedProofChecker: false;
+  status: SmtBackendStatus;
+  localOnly: true;
+  networkAccess: "none";
+  command: string;
+  args: string[];
+  version?: string;
+  exitCode?: number | null;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+  canCheckSmt: boolean;
+  statusProbeMintedCheck: false;
+  limitations: string[];
+}
+
+export interface SmtBackendStatusReport {
+  schemaVersion: "theorem.smt-backends.v0";
+  createdAt: string;
+  localOnly: true;
+  networkAccess: "none";
+  smtSolversAvailable: number;
+  backends: SmtBackendProbe[];
+  trustBoundary: {
+    statusProbeIsNotCheck: true;
+    smtCheckedRequiresSolverRun: true;
+    smtCheckedIsNotProofCheckerProof: true;
+    provedRequiresAcceptedProofChecker: true;
+  };
+  warnings: string[];
+}
+
+export interface SmtBackendStatusOptions {
+  z3Command?: string;
+  timeoutMs?: number;
+  now?: Date;
+  runner?: SmtBackendCommandRunner;
+}
+
+export type SmtCheckStatus = "sat" | "unsat" | "unknown" | "solver-unavailable" | "error";
+
+export interface SmtModelBinding {
+  name: string;
+  sort: string;
+  value: string;
+  raw: string;
+}
+
+export interface SmtModelSummary {
+  format: "z3-define-fun";
+  bindings: SmtModelBinding[];
+  warnings: string[];
+}
+
+export interface SmtCheckInput {
+  sourcePath: string;
+  sourceText: string;
+  sourceRef?: string;
+  queryName?: string;
+  z3Command?: string;
+  timeoutMs?: number;
+  now?: Date;
+  runner?: SmtBackendCommandRunner;
+  replayCommand?: string;
+}
+
+export interface SmtCheckRecord {
+  schemaVersion: "theorem.smt-check.v0";
+  checkId: string;
+  createdAt: string;
+  backend: {
+    id: "z3";
+    displayName: "Z3 SMT solver";
+    adapter: "local-z3-smtlib-subprocess";
+    role: "checker";
+    acceptedProofChecker: false;
+    command: string;
+    args: string[];
+    version?: string;
+    exitCode?: number | null;
+  };
+  source: {
+    path: string;
+    sha256: string;
+    byteLength: number;
+    queryName?: string;
+  };
+  status: SmtCheckStatus;
+  trust: TrustLabel;
+  proofCheckerBacked: false;
+  localOnly: true;
+  networkAccess: "none";
+  replay: string;
+  model?: SmtModelSummary;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+  limitations: string[];
+  warnings: string[];
+}
+
+export interface WriteSmtCheckInput {
+  rootPath: string;
+  sourcePath: string;
+  queryName?: string;
+  z3Command?: string;
+  timeoutMs?: number;
+  now?: Date;
+  runner?: SmtBackendCommandRunner;
+}
+
+export interface SmtCheckWriteResult {
+  record: SmtCheckRecord;
+  jsonPath: string;
+  markdownPath: string;
+  markdown: string;
+}
+
+export interface SmtCheckSummary {
+  path: string;
+  checkId: string;
+  createdAt: string;
+  sourcePath: string;
+  queryName?: string;
+  status: SmtCheckStatus;
+  trust: TrustLabel;
+  proofCheckerBacked: false;
+  backendId: "z3";
+  backendVersion?: string;
+  warnings: string[];
+}
+
+const DEFAULT_TIMEOUT_MS = 3000;
+
+export function getSmtBackendStatus(options: SmtBackendStatusOptions = {}): SmtBackendStatusReport {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const runner = options.runner ?? runCommand;
+  const z3Command = options.z3Command?.trim() || process.env.THEOREM_Z3?.trim() || "z3";
+  const z3 = probeZ3Backend({
+    command: z3Command,
+    timeoutMs,
+    runner
+  });
+  const smtSolversAvailable = z3.status === "available" ? 1 : 0;
+
+  return {
+    schemaVersion: "theorem.smt-backends.v0",
+    createdAt: (options.now ?? new Date()).toISOString(),
+    localOnly: true,
+    networkAccess: "none",
+    smtSolversAvailable,
+    backends: [z3],
+    trustBoundary: {
+      statusProbeIsNotCheck: true,
+      smtCheckedRequiresSolverRun: true,
+      smtCheckedIsNotProofCheckerProof: true,
+      provedRequiresAcceptedProofChecker: true
+    },
+    warnings:
+      smtSolversAvailable > 0
+        ? [
+            "A detected SMT solver can check SMT-LIB constraints, but this status report does not prove or refute any claim."
+          ]
+        : [
+            "No accepted local SMT solver was detected. Theorem Workbench must not label results `smt-checked` until a solver run returns sat or unsat for a concrete SMT-LIB artifact."
+          ]
+  };
+}
+
+export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
+  const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const runner = input.runner ?? runCommand;
+  const z3Command = input.z3Command?.trim() || process.env.THEOREM_Z3?.trim() || "z3";
+  const createdAt = (input.now ?? new Date()).toISOString();
+  const sourcePath = input.sourcePath;
+  const sourceRef = input.sourceRef ?? sourcePath;
+  const sourceSha256 = sha256(input.sourceText);
+  const sourceByteLength = Buffer.byteLength(input.sourceText, "utf8");
+  const queryName = normalizeOptional(input.queryName);
+  const backendProbe = probeZ3Backend({
+    command: z3Command,
+    timeoutMs,
+    runner
+  });
+  const checkArgs = ["-smt2", sourcePath];
+  const base = {
+    schemaVersion: "theorem.smt-check.v0" as const,
+    createdAt,
+    backend: {
+      id: "z3" as const,
+      displayName: "Z3 SMT solver" as const,
+      adapter: "local-z3-smtlib-subprocess" as const,
+      role: "checker" as const,
+      acceptedProofChecker: false as const,
+      command: z3Command,
+      args: checkArgs,
+      ...(backendProbe.version ? { version: backendProbe.version } : {})
+    },
+    source: {
+      path: sourceRef,
+      sha256: sourceSha256,
+      byteLength: sourceByteLength,
+      ...(queryName ? { queryName } : {})
+    },
+    proofCheckerBacked: false as const,
+    localOnly: true as const,
+    networkAccess: "none" as const,
+    replay: input.replayCommand ?? `theorem smt check ${quoteCommandArg(sourceRef)} --json`
+  };
+
+  if (backendProbe.status !== "available") {
+    return withCheckId({
+      ...base,
+      backend: {
+        ...base.backend,
+        exitCode: backendProbe.exitCode
+      },
+      status: "solver-unavailable",
+      trust: "unverified",
+      stdout: backendProbe.stdout,
+      stderr: backendProbe.stderr,
+      error: backendProbe.error,
+      limitations: [
+        "Z3 did not pass the local backend availability probe, so no SMT-LIB artifact was checked.",
+        "This record cannot support an `smt-checked` trust label."
+      ],
+      warnings: [
+        "No local SMT solver run completed. Treat the claim as unverified until a solver checks the concrete SMT-LIB artifact."
+      ]
+    });
+  }
+
+  const result = runner(z3Command, checkArgs, timeoutMs);
+  const stdout = trimOutput(result.stdout);
+  const stderr = trimOutput(result.stderr);
+  const errorText = result.error ? `${result.error.name ? `${result.error.name}: ` : ""}${result.error.message}` : undefined;
+
+  if (result.error && isMissingExecutable(result.error)) {
+    return withCheckId({
+      ...base,
+      backend: {
+        ...base.backend,
+        exitCode: result.status
+      },
+      status: "solver-unavailable",
+      trust: "unverified",
+      stdout,
+      stderr,
+      error: errorText,
+      limitations: [
+        "Z3 was available during probing but could not be launched for the SMT check.",
+        "This record cannot support an `smt-checked` trust label."
+      ],
+      warnings: [
+        "No local SMT solver run completed. Treat the claim as unverified until a solver checks the concrete SMT-LIB artifact."
+      ]
+    });
+  }
+
+  if (result.error || result.status !== 0) {
+    return withCheckId({
+      ...base,
+      backend: {
+        ...base.backend,
+        exitCode: result.status
+      },
+      status: "error",
+      trust: "unverified",
+      stdout,
+      stderr,
+      error: errorText ?? `Z3 exited with status ${String(result.status)}.`,
+      limitations: [
+        "Z3 failed before returning a reliable SMT result.",
+        "Execution errors cannot support `smt-checked` or `proved` trust labels."
+      ],
+      warnings: [
+        "The SMT artifact was not checked successfully. Treat the claim as unverified."
+      ]
+    });
+  }
+
+  const solverStatus = parseSolverStatus(stdout);
+  if (solverStatus === "sat" || solverStatus === "unsat") {
+    const model = solverStatus === "sat" ? parseSmtModel(stdout) : undefined;
+
+    return withCheckId({
+      ...base,
+      backend: {
+        ...base.backend,
+        exitCode: result.status
+      },
+      status: solverStatus,
+      trust: "smt-checked",
+      ...(model ? { model } : {}),
+      stdout,
+      stderr,
+      limitations: [
+        `Z3 returned ${solverStatus} for the provided SMT-LIB artifact.`,
+        "This is SMT-solver evidence for the encoded constraints, not a proof-checker-backed proof of an informal, scientific, medical, safety, regulatory, or patent claim."
+      ],
+      warnings: [
+        "Review the SMT-LIB encoding, solver logic, assumptions, and model/unsat meaning before relying on this result."
+      ]
+    });
+  }
+
+  return withCheckId({
+    ...base,
+    backend: {
+      ...base.backend,
+      exitCode: result.status
+    },
+    status: "unknown",
+    trust: "unverified",
+    stdout,
+    stderr,
+    limitations: [
+      "Z3 did not return a conclusive sat or unsat result for this artifact.",
+      "Unknown or unrecognized SMT output cannot support `smt-checked` or `proved` trust labels."
+    ],
+    warnings: [
+      "The SMT solver output was unknown or unrecognized. Treat the claim as unverified."
+    ]
+  });
+}
+
+export async function writeSmtCheckRecord(input: WriteSmtCheckInput): Promise<SmtCheckWriteResult> {
+  const status = await requireLocalWorkspace(input.rootPath);
+  const resolvedSourcePath = resolveWorkspacePath(status.root, input.sourcePath);
+  const sourceRef = toPortablePath(relative(status.root, resolvedSourcePath));
+  const sourceText = await readFile(resolvedSourcePath, "utf8");
+  const record = checkSmtLibArtifact({
+    sourcePath: resolvedSourcePath,
+    sourceRef,
+    sourceText,
+    queryName: input.queryName,
+    z3Command: input.z3Command,
+    timeoutMs: input.timeoutMs,
+    now: input.now,
+    runner: input.runner,
+    replayCommand: `theorem smt check ${quoteCommandArg(sourceRef)} --write --json`
+  });
+  const smtDir = resolve(status.root, status.manifest.directories.smt);
+  await mkdir(smtDir, { recursive: true });
+  const baseName = `${record.createdAt.slice(0, 10)}-${record.checkId}`;
+  const jsonPath = join(smtDir, `${baseName}.json`);
+  const markdownPath = join(smtDir, `${baseName}.md`);
+  const markdown = renderSmtCheckMarkdown(record);
+
+  await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+  await writeFile(markdownPath, markdown, "utf8");
+
+  return {
+    record,
+    jsonPath,
+    markdownPath,
+    markdown
+  };
+}
+
+export async function listSmtChecks(rootPath: string): Promise<SmtCheckSummary[]> {
+  const status = await requireLocalWorkspace(rootPath);
+  const smtDir = resolve(status.root, status.manifest.directories.smt);
+
+  let files: string[];
+  try {
+    files = await readdir(smtDir);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const summaries = await Promise.all(
+    files
+      .filter((file) => file.endsWith(".json"))
+      .map(async (file) => {
+        const path = join(smtDir, file);
+        return summarizeSmtCheck(status.root, path, await readFile(path, "utf8"));
+      })
+  );
+
+  return summaries
+    .filter((summary): summary is SmtCheckSummary => summary !== undefined)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export function renderSmtCheckMarkdown(record: SmtCheckRecord): string {
+  const lines = [
+    `# SMT Check ${record.checkId}`,
+    "",
+    `Status: \`${record.status}\``,
+    `Trust: \`${record.trust}\``,
+    `Proof-checker backed: ${String(record.proofCheckerBacked)}`,
+    `Created: ${record.createdAt}`,
+    `Privacy: local-only (network: none)`,
+    "",
+    "## Source",
+    "",
+    `- Path: \`${record.source.path}\``,
+    `- SHA-256: \`${record.source.sha256}\``,
+    `- Bytes: ${record.source.byteLength}`
+  ];
+
+  if (record.source.queryName) {
+    lines.push(`- Query: \`${record.source.queryName}\``);
+  }
+
+  lines.push(
+    "",
+    "## Backend",
+    "",
+    `- Backend: ${record.backend.displayName}`,
+    `- Adapter: \`${record.backend.adapter}\``,
+    `- Accepted proof checker: ${String(record.backend.acceptedProofChecker)}`,
+    `- Command: \`${[record.backend.command, ...record.backend.args].join(" ")}\``
+  );
+
+  if (record.backend.version) {
+    lines.push(`- Version: ${record.backend.version}`);
+  }
+
+  if (record.backend.exitCode !== undefined) {
+    lines.push(`- Exit code: ${String(record.backend.exitCode)}`);
+  }
+
+  lines.push("", "## Replay", "", `\`${record.replay}\``);
+
+  if (record.model) {
+    lines.push("", "## Model", "", `Format: \`${record.model.format}\``);
+
+    if (record.model.bindings.length > 0) {
+      lines.push("", "Bindings:");
+      for (const binding of record.model.bindings) {
+        lines.push(`- \`${binding.name}: ${binding.sort} = ${binding.value}\``);
+      }
+    }
+
+    if (record.model.warnings.length > 0) {
+      lines.push("", "Model warnings:");
+      for (const warning of record.model.warnings) {
+        lines.push(`- ${warning}`);
+      }
+    }
+  }
+
+  if (record.stdout) {
+    lines.push("", "## Stdout", "", "```text", record.stdout, "```");
+  }
+
+  if (record.stderr) {
+    lines.push("", "## Stderr", "", "```text", record.stderr, "```");
+  }
+
+  if (record.error) {
+    lines.push("", "## Error", "", "```text", record.error, "```");
+  }
+
+  if (record.limitations.length > 0) {
+    lines.push("", "## Limitations", "");
+    for (const limitation of record.limitations) {
+      lines.push(`- ${limitation}`);
+    }
+  }
+
+  if (record.warnings.length > 0) {
+    lines.push("", "## Warnings", "");
+    for (const warning of record.warnings) {
+      lines.push(`- ${warning}`);
+    }
+  }
+
+  lines.push(
+    "",
+    "## Boundary",
+    "",
+    "An SMT result is evidence about the encoded constraints under the solver, selected logic, and assumptions. It is not a proof-checker-backed proof of surrounding informal, scientific, medical, safety, regulatory, or patent claims."
+  );
+
+  return `${lines.join("\n")}\n`;
+}
+
+export function parseSmtModel(stdout: string): SmtModelSummary | undefined {
+  const forms = extractDefineFunForms(stdout);
+  if (forms.length === 0) {
+    return undefined;
+  }
+
+  const bindings: SmtModelBinding[] = [];
+  const warnings: string[] = [];
+
+  for (const form of forms) {
+    const parsed = parseDefineFunForm(form);
+    if (parsed) {
+      bindings.push(parsed);
+      continue;
+    }
+
+    warnings.push(`Could not parse model binding: ${singleLine(form)}`);
+  }
+
+  return {
+    format: "z3-define-fun",
+    bindings,
+    warnings
+  };
+}
+
+function probeZ3Backend(args: {
+  command: string;
+  timeoutMs: number;
+  runner: SmtBackendCommandRunner;
+}): SmtBackendProbe {
+  const probeArgs = ["-version"];
+  const result = args.runner(args.command, probeArgs, args.timeoutMs);
+  const stdout = singleLine(result.stdout);
+  const stderr = singleLine(result.stderr);
+  const errorText = result.error ? `${result.error.name ? `${result.error.name}: ` : ""}${result.error.message}` : undefined;
+
+  if (result.error && isMissingExecutable(result.error)) {
+    return {
+      backendId: "z3",
+      displayName: "Z3 SMT solver",
+      adapter: "local-z3-smtlib-subprocess",
+      role: "checker",
+      acceptedProofChecker: false,
+      status: "missing",
+      localOnly: true,
+      networkAccess: "none",
+      command: args.command,
+      args: probeArgs,
+      exitCode: result.status,
+      stderr,
+      error: errorText,
+      canCheckSmt: false,
+      statusProbeMintedCheck: false,
+      limitations: [
+        "Z3 executable was not found or could not be launched.",
+        "Install/configure Z3 before any record can use Z3 for `smt-checked` evidence."
+      ]
+    };
+  }
+
+  if (result.error || result.status !== 0) {
+    return {
+      backendId: "z3",
+      displayName: "Z3 SMT solver",
+      adapter: "local-z3-smtlib-subprocess",
+      role: "checker",
+      acceptedProofChecker: false,
+      status: "error",
+      localOnly: true,
+      networkAccess: "none",
+      command: args.command,
+      args: probeArgs,
+      exitCode: result.status,
+      stdout,
+      stderr,
+      error: errorText ?? `Z3 exited with status ${String(result.status)}.`,
+      canCheckSmt: false,
+      statusProbeMintedCheck: false,
+      limitations: [
+        "Z3 was detected but the local version probe failed.",
+        "A failed backend probe cannot support `smt-checked` trust labels."
+      ]
+    };
+  }
+
+  const version = stdout || stderr || "version unavailable";
+
+  return {
+    backendId: "z3",
+    displayName: "Z3 SMT solver",
+    adapter: "local-z3-smtlib-subprocess",
+    role: "checker",
+    acceptedProofChecker: false,
+    status: "available",
+    localOnly: true,
+    networkAccess: "none",
+    command: args.command,
+    args: probeArgs,
+    version,
+    exitCode: result.status,
+    stdout,
+    stderr,
+    canCheckSmt: true,
+    statusProbeMintedCheck: false,
+    limitations: [
+      "This is only a local SMT solver availability probe.",
+      "A record may be labeled `smt-checked` only after Z3 returns sat or unsat for a concrete SMT-LIB artifact."
+    ]
+  };
+}
+
+function runCommand(command: string, args: string[], timeoutMs: number): SmtBackendCommandResult {
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    timeout: timeoutMs,
+    windowsHide: true,
+    maxBuffer: 1024 * 1024
+  });
+
+  return {
+    status: result.status,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+    error: result.error
+      ? {
+          name: result.error.name,
+          message: result.error.message
+        }
+      : undefined
+  };
+}
+
+function withCheckId(record: Omit<SmtCheckRecord, "checkId">): SmtCheckRecord {
+  return {
+    ...record,
+    checkId: `smt_${sha256({
+      schemaVersion: record.schemaVersion,
+      backend: record.backend,
+      source: record.source,
+      status: record.status,
+      trust: record.trust,
+      model: record.model,
+      stdout: record.stdout,
+      stderr: record.stderr,
+      error: record.error
+    }).slice(0, 16)}`
+  };
+}
+
+function parseSolverStatus(stdout: string): "sat" | "unsat" | "unknown" {
+  const resultLine = stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line === "sat" || line === "unsat" || line === "unknown");
+
+  if (resultLine === "sat" || resultLine === "unsat" || resultLine === "unknown") {
+    return resultLine;
+  }
+
+  return "unknown";
+}
+
+function extractDefineFunForms(stdout: string): string[] {
+  const forms: string[] = [];
+  let searchFrom = 0;
+  while (searchFrom < stdout.length) {
+    const start = stdout.indexOf("(define-fun", searchFrom);
+    if (start === -1) {
+      break;
+    }
+
+    const end = findBalancedSExpressionEnd(stdout, start);
+    if (end === undefined) {
+      forms.push(stdout.slice(start).trim());
+      break;
+    }
+
+    forms.push(stdout.slice(start, end + 1).trim());
+    searchFrom = end + 1;
+  }
+
+  return forms;
+}
+
+function findBalancedSExpressionEnd(source: string, start: number): number | undefined {
+  let depth = 0;
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "(") {
+      depth += 1;
+      continue;
+    }
+
+    if (char === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function parseDefineFunForm(form: string): SmtModelBinding | undefined {
+  const match = /^\(define-fun\s+([A-Za-z_][A-Za-z0-9_]*)\s+\(\)\s+([A-Za-z_][A-Za-z0-9_]*)\s+([\s\S]+)\)$/.exec(form);
+  if (!match) {
+    return undefined;
+  }
+
+  return {
+    name: match[1] ?? "",
+    sort: match[2] ?? "",
+    value: singleLine(match[3] ?? ""),
+    raw: form
+  };
+}
+
+function isMissingExecutable(error: { name?: string; message: string }): boolean {
+  return /\b(?:ENOENT|ENOTDIR|EPERM|EACCES)\b/i.test(`${error.name ?? ""} ${error.message}`);
+}
+
+function singleLine(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function trimOutput(value: string): string {
+  return value.trim();
+}
+
+function sha256(value: unknown): string {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return createHash("sha256").update(text).digest("hex");
+}
+
+function normalizeOptional(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
+function quoteCommandArg(value: string): string {
+  return /^[A-Za-z0-9_./\\:-]+$/.test(value) ? value : JSON.stringify(value);
+}
+
+async function requireLocalWorkspace(
+  rootPath: string
+): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
+  const status = await getLocalWorkspaceStatus(rootPath);
+  if (!status.exists || !status.manifest) {
+    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing SMT check records.");
+  }
+
+  return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
+}
+
+function resolveWorkspacePath(root: string, path: string): string {
+  const target = resolve(root, path);
+  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
+
+  if (target !== root && !target.startsWith(rootWithSep)) {
+    throw new Error(`Path escapes workspace root: ${path}`);
+  }
+
+  return target;
+}
+
+function summarizeSmtCheck(root: string, path: string, raw: string): SmtCheckSummary | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return undefined;
+  }
+
+  if (!isRecord(parsed) || parsed.schemaVersion !== "theorem.smt-check.v0") {
+    return undefined;
+  }
+
+  const record = parsed as unknown as SmtCheckRecord;
+  return {
+    path: toPortablePath(relative(root, path)),
+    checkId: record.checkId,
+    createdAt: record.createdAt,
+    sourcePath: record.source.path,
+    queryName: record.source.queryName,
+    status: record.status,
+    trust: record.trust,
+    proofCheckerBacked: record.proofCheckerBacked,
+    backendId: record.backend.id,
+    backendVersion: record.backend.version,
+    warnings: record.warnings
+  };
+}
+
+function toPortablePath(path: string): string {
+  return path.split(sep).join("/");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

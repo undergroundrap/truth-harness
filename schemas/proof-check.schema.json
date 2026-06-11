@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/proof-check.schema.json",
+  "title": "Theorem Workbench Proof Check Record",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "checkId",
+    "createdAt",
+    "backend",
+    "source",
+    "status",
+    "trust",
+    "proofCheckerBacked",
+    "localOnly",
+    "networkAccess",
+    "replay",
+    "limitations",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.proof-check.v0"
+    },
+    "checkId": {
+      "type": "string",
+      "pattern": "^proof_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "backend": {
+      "type": "object",
+      "required": ["id", "displayName", "adapter", "role", "acceptedProofChecker", "command", "args"],
+      "properties": {
+        "id": {
+          "const": "lean"
+        },
+        "displayName": {
+          "const": "Lean proof checker"
+        },
+        "adapter": {
+          "const": "local-lean-subprocess"
+        },
+        "role": {
+          "const": "proof-checker"
+        },
+        "acceptedProofChecker": {
+          "const": true
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "version": {
+          "type": "string"
+        },
+        "exitCode": {
+          "type": ["integer", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": ["path", "sha256", "byteLength"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "theoremName": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "status": {
+      "enum": ["accepted", "rejected", "backend-unavailable", "error"]
+    },
+    "trust": {
+      "enum": ["proved", "unverified"]
+    },
+    "proofCheckerBacked": {
+      "type": "boolean"
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "replay": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stdout": {
+      "type": "string"
+    },
+    "stderr": {
+      "type": "string"
+    },
+    "error": {
+      "type": "string"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

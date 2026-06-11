@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/disclosure-log.schema.json",
+  "title": "Theorem Workbench External Disclosure Log Entry",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "disclosureId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "service",
+    "purpose",
+    "dataClasses",
+    "contextSummary",
+    "selectedContextRefs",
+    "userInitiated",
+    "status",
+    "outputRefs",
+    "privacy",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.disclosure.v0"
+    },
+    "disclosureId": {
+      "type": "string",
+      "pattern": "^dis_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "service": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "string"
+    },
+    "endpoint": {
+      "type": "string"
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dataClasses": {
+      "$ref": "#/$defs/nonEmptyStringArray"
+    },
+    "contextSummary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "selectedContextRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "userInitiated": {
+      "type": "boolean"
+    },
+    "approvalRef": {
+      "type": "string"
+    },
+    "status": {
+      "enum": ["planned", "sent", "received", "cancelled"]
+    },
+    "responseSummary": {
+      "type": "string"
+    },
+    "outputRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "const": "external-calls"
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "const": "optional"
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/externalDisclosure"
+          }
+        }
+      }
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "externalDisclosure": {
+      "type": "object",
+      "required": ["service", "purpose", "dataClasses", "userInitiated"],
+      "properties": {
+        "service": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "dataClasses": {
+          "$ref": "#/$defs/nonEmptyStringArray"
+        },
+        "userInitiated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "nonEmptyStringArray": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

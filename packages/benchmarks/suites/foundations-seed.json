@@ -112,40 +112,40 @@
       "expectSummaryIncludes": "n=-20"
     },
     {
-      "id": "proved-even-quadratic-parity",
+      "id": "checked-even-quadratic-parity",
       "prompt": "for all integers n, n^2+n is even",
-      "expectTrust": "proved",
-      "expectSummaryIncludes": "modular parity kernel"
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "Exact modular parity check"
     },
     {
-      "id": "proved-shifted-odd-parity",
+      "id": "checked-shifted-odd-parity",
       "prompt": "for all integers n, n^2+n+1 is odd",
-      "expectTrust": "proved",
-      "expectSummaryIncludes": "modular parity kernel"
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "Exact modular parity check"
     },
     {
-      "id": "proved-linear-even",
+      "id": "checked-linear-even",
       "prompt": "for all integers n, 2*n is even",
-      "expectTrust": "proved",
-      "expectSummaryIncludes": "modular parity kernel"
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "Exact modular parity check"
     },
     {
-      "id": "proved-linear-odd",
+      "id": "checked-linear-odd",
       "prompt": "for all integers n, 2*n+1 is odd",
-      "expectTrust": "proved",
-      "expectSummaryIncludes": "modular parity kernel"
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "Exact modular parity check"
     },
     {
-      "id": "proved-difference-even",
+      "id": "checked-difference-even",
       "prompt": "for all integers n, n^2-n is even",
-      "expectTrust": "proved",
-      "expectSummaryIncludes": "modular parity kernel"
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "Exact modular parity check"
     },
     {
-      "id": "proved-shifted-even",
+      "id": "checked-shifted-even",
       "prompt": "for all integers n, n^2+n+2 is even",
-      "expectTrust": "proved",
-      "expectSummaryIncludes": "modular parity kernel"
+      "expectTrust": "exact-computed",
+      "expectSummaryIncludes": "Exact modular parity check"
     },
     {
       "id": "unsupported-calculus",

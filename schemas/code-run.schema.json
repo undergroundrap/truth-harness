@@ -1,0 +1,352 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/code-run.schema.json",
+  "title": "Theorem Workbench Code Run Record",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "projectId",
+    "createdAt",
+    "title",
+    "purpose",
+    "command",
+    "policy",
+    "execution",
+    "stdout",
+    "stderr",
+    "refs",
+    "environment",
+    "replay",
+    "reproducibilityBoundary",
+    "privacy",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.code-run.v0"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^code_run_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1
+    },
+    "command": {
+      "type": "object",
+      "required": ["executable", "args", "workingDirectory", "shell", "timeoutMs", "maxOutputBytes"],
+      "properties": {
+        "executable": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "workingDirectory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "shell": {
+          "const": false
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxOutputBytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "policy": {
+      "type": "object",
+      "required": ["mode", "decision", "allowedExecutables", "matchedAllowlist", "detected", "overrides", "notes"],
+      "properties": {
+        "mode": {
+          "const": "default-local"
+        },
+        "decision": {
+          "const": "allowed"
+        },
+        "allowedExecutables": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "matchedAllowlist": {
+          "type": "boolean"
+        },
+        "detected": {
+          "type": "object",
+          "required": ["executableName", "categories"],
+          "properties": {
+            "executableName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "categories": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "shell-launcher",
+                  "network-command",
+                  "destructive-command",
+                  "package-mutation",
+                  "git-mutation"
+                ]
+              }
+            },
+            "packageMutation": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "overrides": {
+          "type": "object",
+          "required": ["shellLauncher", "networkCommand", "destructiveCommand", "packageMutation", "gitMutation"],
+          "properties": {
+            "shellLauncher": {
+              "type": "boolean"
+            },
+            "networkCommand": {
+              "type": "boolean"
+            },
+            "destructiveCommand": {
+              "type": "boolean"
+            },
+            "packageMutation": {
+              "type": "boolean"
+            },
+            "gitMutation": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "notes": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": "object",
+      "required": ["status", "exitCode", "durationMs", "timedOut"],
+      "properties": {
+        "status": {
+          "enum": ["passed", "failed", "timed-out", "error"]
+        },
+        "exitCode": {
+          "type": ["integer", "null"]
+        },
+        "signal": {
+          "type": ["string", "null"]
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timedOut": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "stdout": {
+      "$ref": "#/$defs/output"
+    },
+    "stderr": {
+      "$ref": "#/$defs/output"
+    },
+    "refs": {
+      "type": "object",
+      "required": ["codeRefs", "inputRefs", "outputRefs", "evidenceRefs"],
+      "properties": {
+        "codeRefs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "inputRefs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "outputRefs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "evidenceRefs": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "required": ["platform", "arch", "nodeVersion", "inheritedEnvironment", "environmentVariablesCaptured"],
+      "properties": {
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "arch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nodeVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inheritedEnvironment": {
+          "const": true
+        },
+        "environmentVariablesCaptured": {
+          "const": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "replay": {
+      "type": "object",
+      "required": ["command", "workingDirectory", "shell", "localOnly", "notes"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workingDirectory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "shell": {
+          "const": false
+        },
+        "localOnly": {
+          "const": true
+        },
+        "notes": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "reproducibilityBoundary": {
+      "type": "object",
+      "required": [
+        "workbenchExecuted",
+        "commandOutputCaptured",
+        "commandExecutionIsNotProof",
+        "outputsNeedIndependentReview",
+        "requiresCleanReplay",
+        "requiresWorkspaceSnapshot",
+        "requiresExpertReview",
+        "requiredNextChecks"
+      ],
+      "properties": {
+        "workbenchExecuted": {
+          "const": true
+        },
+        "commandOutputCaptured": {
+          "const": true
+        },
+        "commandExecutionIsNotProof": {
+          "const": true
+        },
+        "outputsNeedIndependentReview": {
+          "const": true
+        },
+        "requiresCleanReplay": {
+          "type": "boolean"
+        },
+        "requiresWorkspaceSnapshot": {
+          "type": "boolean"
+        },
+        "requiresExpertReview": {
+          "type": "boolean"
+        },
+        "requiredNextChecks": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "output": {
+      "type": "object",
+      "required": ["text", "sha256", "byteLength", "truncated", "maxBytes"],
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "maxBytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,322 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/research-session.schema.json",
+  "title": "Theorem Workbench Research Session",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sessionId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "objective",
+    "domains",
+    "hypotheses",
+    "claims",
+    "evidenceRefs",
+    "snapshotRefs",
+    "tasks",
+    "checkpoints",
+    "budgets",
+    "modelPolicy",
+    "reviewBoundary",
+    "privacy",
+    "warnings",
+    "markdown"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.research-session.v0"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^session_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "domains": {
+      "type": "array",
+      "items": {
+        "enum": ["math", "physics", "code", "biomedical", "materials", "energy", "climate", "patent", "learning", "general"]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "hypotheses": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "claims": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidenceRef"
+      }
+    },
+    "snapshotRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/task"
+      }
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/checkpoint"
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "required": ["maxDepth", "maxBranches", "maxToolCalls", "maxWallMinutes", "maxUnverifiedFinalClaims"],
+      "properties": {
+        "maxDepth": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxBranches": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxToolCalls": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxWallMinutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxUnverifiedFinalClaims": {
+          "const": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "modelPolicy": {
+      "type": "object",
+      "required": ["localFirst", "hostedModels", "disclosureRequired", "selectedContextOnly"],
+      "properties": {
+        "localFirst": {
+          "const": true
+        },
+        "hostedModels": {
+          "const": "optional-with-disclosure"
+        },
+        "disclosureRequired": {
+          "const": true
+        },
+        "selectedContextOnly": {
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "reviewBoundary": {
+      "type": "object",
+      "required": [
+        "expertReviewRequired",
+        "wetLabValidationRequired",
+        "preclinicalOrClinicalValidationRequired",
+        "regulatoryReviewRequired",
+        "patentAttorneyReviewRequired",
+        "reasons"
+      ],
+      "properties": {
+        "expertReviewRequired": {
+          "type": "boolean"
+        },
+        "wetLabValidationRequired": {
+          "type": "boolean"
+        },
+        "preclinicalOrClinicalValidationRequired": {
+          "type": "boolean"
+        },
+        "regulatoryReviewRequired": {
+          "type": "boolean"
+        },
+        "patentAttorneyReviewRequired": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "markdown": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "task": {
+      "type": "object",
+      "required": ["taskId", "title", "status", "evidenceRefs", "nextChecks"],
+      "properties": {
+        "taskId": {
+          "type": "string",
+          "pattern": "^task_[a-f0-9]{16}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": ["todo", "doing", "blocked", "done"]
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        },
+        "nextChecks": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "checkpoint": {
+      "type": "object",
+      "required": ["checkpointId", "createdAt", "summary", "evidenceRefs", "snapshotRefs", "decisions", "nextChecks"],
+      "properties": {
+        "checkpointId": {
+          "type": "string",
+          "pattern": "^chk_[a-f0-9]{16}$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        },
+        "snapshotRefs": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "decisions": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "nextChecks": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidenceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "receipt",
+            "artifact",
+            "source",
+            "literature",
+            "notebook",
+            "notebook-run",
+            "code-run",
+            "benchmark",
+            "disclosure",
+            "simulation",
+            "experiment",
+            "vault",
+            "audit",
+            "snapshot",
+            "review",
+            "validation",
+            "model-context",
+            "invention",
+            "claim-chart",
+            "discovery-package",
+            "other"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trust": {
+          "enum": [
+            "proved",
+            "exact-computed",
+            "bounded-numeric",
+            "smt-checked",
+            "dimension-checked",
+            "source-cited",
+            "cross-checked",
+            "unverified",
+            "refuted"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

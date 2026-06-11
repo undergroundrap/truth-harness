@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/local-corpus.schema.json",
+  "title": "Theorem Workbench Local Corpus Index",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "privacy",
+    "documents",
+    "chunks"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.corpus.v0"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "type": "boolean"
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      }
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/document"
+      }
+    },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/chunk"
+      }
+    }
+  },
+  "$defs": {
+    "document": {
+      "type": "object",
+      "required": ["documentId", "path", "title", "mimeType", "contentHash", "ingestedAt", "chunkIds"],
+      "properties": {
+        "documentId": {
+          "type": "string",
+          "pattern": "^doc_[a-f0-9]{16}$"
+        },
+        "path": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "mimeType": {
+          "enum": ["text/markdown", "text/plain"]
+        },
+        "contentHash": {
+          "type": "string"
+        },
+        "ingestedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "chunkIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^chunk_[a-f0-9]{16}$"
+          }
+        }
+      }
+    },
+    "chunk": {
+      "type": "object",
+      "required": ["chunkId", "documentId", "ordinal", "text", "tokenCounts"],
+      "properties": {
+        "chunkId": {
+          "type": "string",
+          "pattern": "^chunk_[a-f0-9]{16}$"
+        },
+        "documentId": {
+          "type": "string",
+          "pattern": "^doc_[a-f0-9]{16}$"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string"
+        },
+        "tokenCounts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  }
+}

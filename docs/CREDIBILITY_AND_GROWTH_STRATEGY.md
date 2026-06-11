@@ -6,7 +6,7 @@ Date: 2026-06-08
 
 Theorem Workbench should not present itself as an AI oracle. The credible promise is:
 
-> Turn AI math into auditable proof, computation, citation, and benchmark artifacts.
+> Turn AI math into auditable proof, computation, citation, replay, and benchmark artifacts.
 
 That is still huge. It means Claude, Codex, and other agents can explore, calculate, formalize, refute, cite, explain, and replay math without the user having to trust model vibes.
 
@@ -105,11 +105,11 @@ Demo 2: Exact computation receipt
 - Output: normalized problem, exact CAS output, independent check, explanation.
 - Why it matters: useful immediately for students and engineers.
 
-Demo 3: Proof receipt
+Demo 3: Conservative local-check receipt
 
 - Input: `for all integers n, n^2+n is even`.
-- Output: a `proved` receipt with a local modular parity proof certificate over `n mod 2`.
-- Why it matters: anchors the brand in real proof-checking before the full Lean adapter lands.
+- Output: an `exact-computed` receipt with a local modular parity certificate over `n mod 2`, plus a finding that this is not proof-checker-backed.
+- Why it matters: shows the trust policy is real before the full Lean adapter lands. The system refuses to call a homemade checker `proved`.
 
 Demo 4: Physics sanity receipt
 

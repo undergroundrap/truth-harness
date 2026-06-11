@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/evidence-audit.schema.json",
+  "title": "Theorem Workbench Evidence Audit",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "auditId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "claim",
+    "claimTypes",
+    "evidenceRefs",
+    "reviews",
+    "evidenceSummary",
+    "verdict",
+    "requiredNextChecks",
+    "overclaimWarnings",
+    "privacy"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.evidence-audit.v0"
+    },
+    "auditId": {
+      "type": "string",
+      "pattern": "^audit_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "claim": {
+      "type": "string",
+      "minLength": 1
+    },
+    "claimTypes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/claimType"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidenceRef"
+      }
+    },
+    "reviews": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/review"
+      }
+    },
+    "evidenceSummary": {
+      "type": "object",
+      "required": ["total", "resolved", "referenced", "missing", "byKind", "byStrength", "byTrust"],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "resolved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "referenced": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "byKind": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "byStrength": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "byTrust": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "verdict": {
+      "type": "object",
+      "required": ["status", "summary"],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/verdict"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "requiredNextChecks": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "overclaimWarnings": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "claimType": {
+      "enum": ["math", "source-grounded", "simulation", "experiment", "biomedical", "patent", "engineering", "general"]
+    },
+    "verdict": {
+      "enum": [
+        "refuted",
+        "verified-narrow",
+        "source-grounded",
+        "protocol-evidence",
+        "computational-evidence",
+        "hypothesis",
+        "unsupported",
+        "overclaimed"
+      ]
+    },
+    "review": {
+      "type": "object",
+      "required": ["kind", "ref", "status", "strength", "summary", "warnings"],
+      "properties": {
+        "kind": {
+          "enum": ["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "other"]
+        },
+        "ref": {
+          "type": "string"
+        },
+        "status": {
+          "enum": ["resolved", "referenced", "missing"]
+        },
+        "strength": {
+          "enum": ["none", "weak", "context", "computational", "protocol", "strong", "refuting"]
+        },
+        "trust": {
+          "enum": [
+            "proved",
+            "exact-computed",
+            "bounded-numeric",
+            "smt-checked",
+            "dimension-checked",
+            "source-cited",
+            "cross-checked",
+            "unverified",
+            "refuted"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "warnings": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidenceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "enum": ["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "other"]
+        },
+        "ref": {
+          "type": "string"
+        },
+        "trust": {
+          "enum": [
+            "proved",
+            "exact-computed",
+            "bounded-numeric",
+            "smt-checked",
+            "dimension-checked",
+            "source-cited",
+            "cross-checked",
+            "unverified",
+            "refuted"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

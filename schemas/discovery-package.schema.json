@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/discovery-package.schema.json",
+  "title": "Theorem Workbench Discovery Package",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "packageId",
+    "createdAt",
+    "projectId",
+    "entry",
+    "evidenceReviews",
+    "validation",
+    "patent",
+    "privacy",
+    "markdown"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.discovery-package.v0"
+    },
+    "packageId": {
+      "type": "string",
+      "pattern": "^pkg_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "entry": {
+      "type": "object"
+    },
+    "evidenceReviews": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidenceReview"
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": [
+        "stage",
+        "evidenceCount",
+        "resolvedReceiptCount",
+        "unresolvedEvidenceCount",
+        "required",
+        "overclaimWarnings"
+      ],
+      "properties": {
+        "stage": {
+          "type": "string"
+        },
+        "evidenceCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "resolvedReceiptCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unresolvedEvidenceCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "required": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "overclaimWarnings": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "patent": {
+      "type": "object"
+    },
+    "privacy": {
+      "type": "object"
+    },
+    "markdown": {
+      "type": "string"
+    }
+  },
+  "$defs": {
+    "evidenceReview": {
+      "type": "object",
+      "required": ["kind", "ref", "status", "summary", "warnings"],
+      "properties": {
+        "kind": {
+          "enum": ["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "other"]
+        },
+        "ref": {
+          "type": "string"
+        },
+        "status": {
+          "enum": ["resolved", "referenced", "missing"]
+        },
+        "trust": {
+          "enum": [
+            "proved",
+            "exact-computed",
+            "bounded-numeric",
+            "smt-checked",
+            "dimension-checked",
+            "source-cited",
+            "cross-checked",
+            "unverified",
+            "refuted"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "warnings": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

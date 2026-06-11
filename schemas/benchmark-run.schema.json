@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/benchmark-run.schema.json",
+  "title": "Theorem Workbench Benchmark Run Record",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "benchmarkRunId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "suite",
+    "runner",
+    "startedAt",
+    "completedAt",
+    "totals",
+    "cases",
+    "replay",
+    "verificationBoundary",
+    "privacy",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.benchmark-run.v0"
+    },
+    "benchmarkRunId": {
+      "type": "string",
+      "pattern": "^bench_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "suite": {
+      "type": "object",
+      "required": ["suiteId", "title"],
+      "properties": {
+        "suiteId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "runner": {
+      "type": "object",
+      "required": ["name", "adapter"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "adapter": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "command": {
+      "type": "string"
+    },
+    "workingDirectory": {
+      "type": "string"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "totals": {
+      "type": "object",
+      "required": ["total", "passed", "failed", "trustAccuracy"],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trustAccuracy": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/caseRecord"
+      }
+    },
+    "replay": {
+      "type": "object",
+      "required": ["deterministic", "requiresManualReplay", "notes"],
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "suitePath": {
+          "type": "string"
+        },
+        "deterministic": {
+          "type": "boolean"
+        },
+        "requiresManualReplay": {
+          "type": "boolean"
+        },
+        "notes": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "verificationBoundary": {
+      "type": "object",
+      "required": [
+        "executionPerformedByWorkbench",
+        "benchmarkMeasuresSystemBehavior",
+        "benchmarkRunIsNotTruth",
+        "receiptsRetainOwnTrustLabels",
+        "requiresIndependentSuiteReview",
+        "requiresRegressionComparison",
+        "requiredNextChecks"
+      ],
+      "properties": {
+        "executionPerformedByWorkbench": {
+          "const": true
+        },
+        "benchmarkMeasuresSystemBehavior": {
+          "const": true
+        },
+        "benchmarkRunIsNotTruth": {
+          "const": true
+        },
+        "receiptsRetainOwnTrustLabels": {
+          "const": true
+        },
+        "requiresIndependentSuiteReview": {
+          "type": "boolean"
+        },
+        "requiresRegressionComparison": {
+          "type": "boolean"
+        },
+        "requiredNextChecks": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "caseRecord": {
+      "type": "object",
+      "required": [
+        "taskId",
+        "prompt",
+        "expectedTrust",
+        "actualTrust",
+        "receiptRunId",
+        "receiptCreatedAt",
+        "receiptSummary",
+        "receiptReplay",
+        "receiptHash",
+        "evidenceKind",
+        "backendIds",
+        "proofCheckerBacked",
+        "receiptReplayable",
+        "passed",
+        "failures"
+      ],
+      "properties": {
+        "taskId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expectedTrust": {
+          "$ref": "#/$defs/trust"
+        },
+        "expectedSummaryIncludes": {
+          "type": "string"
+        },
+        "actualTrust": {
+          "$ref": "#/$defs/trust"
+        },
+        "receiptRunId": {
+          "type": "string",
+          "pattern": "^run_[a-f0-9]{16}$"
+        },
+        "receiptCreatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "receiptSummary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "receiptReplay": {
+          "type": "string",
+          "minLength": 1
+        },
+        "receiptHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "evidenceKind": {
+          "enum": [
+            "exact-arithmetic",
+            "universal-parity",
+            "dimension-analysis",
+            "symbolic-cas",
+            "interval-bound",
+            "source-citation",
+            "unsupported"
+          ]
+        },
+        "backendIds": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "proofCheckerBacked": {
+          "type": "boolean"
+        },
+        "receiptReplayable": {
+          "type": "boolean"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "failures": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "trust": {
+      "enum": [
+        "proved",
+        "exact-computed",
+        "bounded-numeric",
+        "smt-checked",
+        "dimension-checked",
+        "source-cited",
+        "cross-checked",
+        "unverified",
+        "refuted"
+      ]
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

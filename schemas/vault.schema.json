@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/vault.schema.json",
+  "title": "Theorem Workbench Vault Envelope",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "vaultId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "label",
+    "payloadContentType",
+    "payloadBytes",
+    "ciphertextBytes",
+    "ciphertextSha256",
+    "ciphertextBase64",
+    "encryption",
+    "privacy",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.vault.v0"
+    },
+    "vaultId": {
+      "type": "string",
+      "pattern": "^vault_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1
+    },
+    "payloadContentType": {
+      "const": "application/json"
+    },
+    "payloadBytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "ciphertextBytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "ciphertextSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "ciphertextBase64": {
+      "type": "string",
+      "minLength": 1
+    },
+    "encryption": {
+      "type": "object",
+      "required": ["algorithm", "kdf", "kdfParams", "ivBase64", "authTagBase64", "keyPolicy", "keyRef"],
+      "properties": {
+        "algorithm": {
+          "const": "aes-256-gcm"
+        },
+        "kdf": {
+          "const": "scrypt"
+        },
+        "kdfParams": {
+          "type": "object",
+          "required": ["saltBase64", "keyLength", "cost", "blockSize", "parallelization"],
+          "properties": {
+            "saltBase64": {
+              "type": "string",
+              "minLength": 1
+            },
+            "keyLength": {
+              "const": 32
+            },
+            "cost": {
+              "type": "integer",
+              "minimum": 16384
+            },
+            "blockSize": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "parallelization": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "ivBase64": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authTagBase64": {
+          "type": "string",
+          "minLength": 1
+        },
+        "keyPolicy": {
+          "const": "environment-only"
+        },
+        "keyRef": {
+          "type": "string",
+          "pattern": "^env:[A-Z_][A-Z0-9_]*$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "type": "string"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

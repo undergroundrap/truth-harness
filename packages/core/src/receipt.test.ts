@@ -7,7 +7,22 @@ describe("createReceipt", () => {
 
     expect(receipt.trust).toBe("exact-computed");
     expect(receipt.summary).toContain("11/8");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-rational-arithmetic");
+    expect(receipt.evidenceProfile.proofCheckerBacked).toBe(false);
     expect(receipt.graph.nodes.some((node) => node.kind === "computation")).toBe(true);
+  });
+
+  it("marks MVP receipts as local-only with no external disclosure", () => {
+    const receipt = createReceipt("compute 2 + 2");
+
+    expect(receipt.privacy).toEqual({
+      mode: "local-only",
+      localFirst: true,
+      networkAccess: "none",
+      dataResidency: "local-workspace",
+      externalDisclosures: []
+    });
   });
 
   it("refutes false universal parity claims with a counterexample", () => {
@@ -18,20 +33,28 @@ describe("createReceipt", () => {
     expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
   });
 
-  it("proves polynomial universal parity claims with the local proof kernel", () => {
+  it("checks polynomial universal parity claims without minting proved", () => {
     const receipt = createReceipt("for all integers n, n^2+n is even");
 
-    expect(receipt.trust).toBe("proved");
-    expect(receipt.summary).toContain("modular parity kernel");
-    expect(receipt.graph.nodes.some((node) => node.kind === "proof" && node.trust === "proved")).toBe(true);
-    expect(receipt.artifacts.some((artifact) => artifact.kind === "modular-parity-proof-certificate")).toBe(true);
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("Exact modular parity check");
+    expect(receipt.summary).toContain("not proof-checker-backed");
+    expect(receipt.evidenceProfile.kind).toBe("universal-parity");
+    expect(receipt.evidenceProfile.backends.map((backend) => backend.id)).toContain("local-modular-parity-checker");
+    expect(receipt.evidenceProfile.proofCheckerBacked).toBe(false);
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("Reserve `proved`");
+    expect(
+      receipt.graph.nodes.some((node) => node.kind === "computation" && node.trust === "exact-computed")
+    ).toBe(true);
+    expect(receipt.artifacts.some((artifact) => artifact.kind === "modular-parity-check-certificate")).toBe(true);
+    expect(receipt.findings[0]?.message).toContain("reserve `proved`");
   });
 
   it("does not pretend unsupported finite search is a proof", () => {
     const receipt = createReceipt("for all integers n, 2*(n/1) is even");
 
     expect(receipt.trust).toBe("unverified");
-    expect(receipt.findings[0]?.message).toContain("local proof kernel did not prove");
+    expect(receipt.findings[0]?.message).toContain("local parity checker could not certify");
   });
 
   it("creates dimension-checked receipts for consistent physics formulas", () => {

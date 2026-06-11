@@ -1,0 +1,326 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/benchmark-comparison.schema.json",
+  "title": "Theorem Workbench Benchmark Comparison Record",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "comparisonId",
+    "projectId",
+    "createdAt",
+    "baseline",
+    "current",
+    "verdict",
+    "summary",
+    "cases",
+    "boundary",
+    "privacy",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.benchmark-comparison.v0"
+    },
+    "comparisonId": {
+      "type": "string",
+      "pattern": "^bcmp_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "baseline": {
+      "$ref": "#/$defs/runSummary"
+    },
+    "current": {
+      "$ref": "#/$defs/runSummary"
+    },
+    "verdict": {
+      "enum": ["improved", "regressed", "changed", "unchanged", "incomparable"]
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "comparable",
+        "totalDelta",
+        "passedDelta",
+        "failedDelta",
+        "trustAccuracyDelta",
+        "regressions",
+        "improvements",
+        "changedTrust",
+        "changedReceipts",
+        "addedCases",
+        "removedCases",
+        "unchanged"
+      ],
+      "properties": {
+        "comparable": {
+          "type": "boolean"
+        },
+        "totalDelta": {
+          "type": "integer"
+        },
+        "passedDelta": {
+          "type": "integer"
+        },
+        "failedDelta": {
+          "type": "integer"
+        },
+        "trustAccuracyDelta": {
+          "type": "number"
+        },
+        "regressions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "improvements": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "changedTrust": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "changedReceipts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "addedCases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "removedCases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unchanged": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/caseComparison"
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "required": [
+        "comparesRecordedRunsOnly",
+        "benchmarkComparisonIsNotTruth",
+        "requiresHumanReviewForClaims",
+        "requiredNextChecks"
+      ],
+      "properties": {
+        "comparesRecordedRunsOnly": {
+          "const": true
+        },
+        "benchmarkComparisonIsNotTruth": {
+          "const": true
+        },
+        "requiresHumanReviewForClaims": {
+          "const": true
+        },
+        "requiredNextChecks": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "runSummary": {
+      "type": "object",
+      "required": [
+        "benchmarkRunId",
+        "suiteId",
+        "title",
+        "createdAt",
+        "runnerName",
+        "runnerAdapter",
+        "total",
+        "passed",
+        "failed",
+        "trustAccuracy"
+      ],
+      "properties": {
+        "benchmarkRunId": {
+          "type": "string",
+          "pattern": "^bench_[a-f0-9]{16}$"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "suiteId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "runnerName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runnerAdapter": {
+          "type": "string",
+          "minLength": 1
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trustAccuracy": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "caseComparison": {
+      "type": "object",
+      "required": ["taskId", "status", "warnings"],
+      "properties": {
+        "taskId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "unchanged-pass",
+            "unchanged-fail",
+            "regression",
+            "improvement",
+            "changed-trust",
+            "changed-receipt",
+            "added",
+            "removed"
+          ]
+        },
+        "baseline": {
+          "$ref": "#/$defs/caseSnapshot"
+        },
+        "current": {
+          "$ref": "#/$defs/caseSnapshot"
+        },
+        "warnings": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "caseSnapshot": {
+      "type": "object",
+      "required": [
+        "prompt",
+        "expectedTrust",
+        "actualTrust",
+        "passed",
+        "receiptRunId",
+        "receiptHash",
+        "receiptSummary",
+        "failures"
+      ],
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expectedTrust": {
+          "$ref": "#/$defs/trust"
+        },
+        "actualTrust": {
+          "$ref": "#/$defs/trust"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "receiptRunId": {
+          "type": "string",
+          "pattern": "^run_[a-f0-9]{16}$"
+        },
+        "receiptHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "receiptSummary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failures": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "trust": {
+      "enum": [
+        "proved",
+        "exact-computed",
+        "bounded-numeric",
+        "smt-checked",
+        "dimension-checked",
+        "source-cited",
+        "cross-checked",
+        "unverified",
+        "refuted"
+      ]
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}
