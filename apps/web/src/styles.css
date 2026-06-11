@@ -208,6 +208,11 @@ button {
   color: var(--checked);
 }
 
+.status-pill.waiting {
+  background: rgba(230, 195, 106, 0.15);
+  color: var(--warn);
+}
+
 .trust-dot.exact {
   background: var(--exact);
 }
@@ -218,6 +223,10 @@ button {
 
 .trust-dot.checked {
   background: var(--checked);
+}
+
+.trust-dot.waiting {
+  background: var(--warn);
 }
 
 .sidebar-footer {
@@ -475,6 +484,11 @@ dd {
   gap: 7px;
 }
 
+.mini-label {
+  color: var(--faint);
+  font-size: 12px;
+}
+
 .graph-node {
   display: grid;
   grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1.2fr);
@@ -512,6 +526,40 @@ dd {
   padding-left: 18px;
   color: #ddd8cf;
   font-size: 13px;
+}
+
+.activity-list {
+  display: grid;
+  gap: 8px;
+}
+
+.activity-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #121212;
+  padding: 8px;
+}
+
+.activity-row strong,
+.activity-row small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.activity-row strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.activity-row small {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
 }
 
 .task-dock {
@@ -553,6 +601,15 @@ dd {
 
 .task-state.waiting {
   background: var(--warn);
+}
+
+.task-state.refuted {
+  background: var(--refuted);
+}
+
+.text-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .composer {

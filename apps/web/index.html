@@ -40,27 +40,7 @@
 
         <section class="sidebar-section grow">
           <div class="section-label">Recent Claims</div>
-          <button class="claim-row active" data-receipt="rational" type="button">
-            <span class="trust-dot exact"></span>
-            <span>
-              <strong>3 / 4 + 5 / 8</strong>
-              <small>exact arithmetic trace</small>
-            </span>
-          </button>
-          <button class="claim-row" data-receipt="parity" type="button">
-            <span class="trust-dot refuted"></span>
-            <span>
-              <strong>n^2+n+1 is even</strong>
-              <small>counterexample found</small>
-            </span>
-          </button>
-          <button class="claim-row" data-receipt="dimension" type="button">
-            <span class="trust-dot checked"></span>
-            <span>
-              <strong>force = mass * acceleration</strong>
-              <small>dimension checked</small>
-            </span>
-          </button>
+          <div id="claim-list"></div>
         </section>
 
         <div class="sidebar-footer">
@@ -138,6 +118,14 @@
             </section>
 
             <section class="inspector-section">
+              <div class="panel-heading">
+                <h3>Activity Log</h3>
+                <span class="mini-label">local session</span>
+              </div>
+              <div class="activity-list" id="activity-log" aria-live="polite"></div>
+            </section>
+
+            <section class="inspector-section">
               <h3>Replay</h3>
               <code class="replay-command">theorem ask "compute 3 / 4 + 5 / 8" --json</code>
             </section>
@@ -174,7 +162,7 @@
         <form class="composer" id="composer">
           <button class="icon-button" type="button" aria-label="Attach evidence">+</button>
           <input id="prompt-input" name="prompt" autocomplete="off" value="compute 3 / 4 + 5 / 8" aria-label="Prompt">
-          <button class="text-button" type="submit">Verify</button>
+          <button class="text-button" id="verify-button" type="submit">Verify</button>
         </form>
       </main>
     </div>
