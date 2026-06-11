@@ -204,7 +204,7 @@ button {
 .lane-list {
   display: grid;
   gap: 4px;
-  max-height: min(36vh, 390px);
+  max-height: min(28vh, 280px);
   overflow: auto;
   padding-right: 2px;
   scrollbar-gutter: stable;
@@ -244,8 +244,18 @@ button {
 }
 
 .grow {
+  display: flex;
+  flex: 1 1 180px;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#claim-list {
   min-height: 0;
   overflow: auto;
+  padding-bottom: 12px;
+  scrollbar-gutter: stable;
 }
 
 .claim-row {
@@ -878,6 +888,88 @@ textarea:focus-visible {
   color: #f4e7c7;
 }
 
+.replay-frame {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  padding: 14px;
+}
+
+.replay-frame strong,
+.replay-step strong {
+  display: block;
+  color: #f1eadc;
+  font-size: 13px;
+}
+
+.replay-frame p {
+  color: #ddd8cf;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.replay-frame small,
+.replay-step small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay-progress {
+  flex: 0 0 auto;
+  height: 6px;
+  border-radius: 999px;
+  background: #23211e;
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.replay-progress span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+
+.replay-list {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 7px;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.replay-step {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 9px;
+  width: 100%;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #121212;
+  color: var(--text);
+  cursor: pointer;
+  padding: 9px;
+  text-align: left;
+}
+
+.replay-step.active {
+  border-color: rgba(183, 169, 138, 0.5);
+  background: #1c1a17;
+}
+
 .report-math {
   display: flex;
   flex-wrap: wrap;
@@ -1148,6 +1240,14 @@ textarea:focus-visible {
 
 .task-state.passed {
   background: var(--exact);
+}
+
+.task-state.exact {
+  background: var(--exact);
+}
+
+.task-state.checked {
+  background: var(--checked);
 }
 
 .task-state.waiting {

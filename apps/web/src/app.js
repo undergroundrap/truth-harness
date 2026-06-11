@@ -138,6 +138,8 @@ const state = {
   level: "middle",
   surface: "trace",
   lane: "math",
+  replayIndex: 0,
+  replayPlaying: false,
   sidebarQuery: "",
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE
@@ -167,6 +169,13 @@ const reportPreview = document.querySelector("#report-preview");
 const copyReportButton = document.querySelector("#copy-report");
 const downloadReportButton = document.querySelector("#download-report");
 const printReportButton = document.querySelector("#print-report");
+const openReplayButton = document.querySelector("#open-replay");
+const playReplayButton = document.querySelector("#play-replay");
+const resetReplayButton = document.querySelector("#reset-replay");
+const exportReplayButton = document.querySelector("#export-replay");
+const replayFrame = document.querySelector("#replay-frame");
+const replayList = document.querySelector("#replay-list");
+const replayProgressBar = document.querySelector("#replay-progress-bar");
 const inspectorTrust = document.querySelector("#inspector-trust");
 const replayCommand = document.querySelector(".replay-command");
 const answerValue = document.querySelector(".answer-value");
@@ -180,6 +189,7 @@ const surfaceStatusText = {
   trace: "explainable steps",
   graph: "evidence path",
   notes: "local scratchpad",
+  replay: "session reel",
   report: "printable draft"
 };
 const laneStatusText = {
@@ -197,6 +207,7 @@ const laneStatusText = {
   security: "Security lane",
   patent: "Patent lane"
 };
+let replayTimer;
 
 researchNotes.value = loadNotes();
 updateNotesStatus("local draft");
@@ -250,6 +261,7 @@ function render() {
   renderActivityLog();
   renderSurface();
   renderLane();
+  renderReplay(receipt);
   renderReport(receipt);
   applySidebarSearch();
   document.querySelectorAll(".segment").forEach((button) => {
@@ -346,6 +358,140 @@ function applySidebarSearch() {
   sidebarSearchCount.textContent = query ? `${matched} of ${total}` : "all items";
 }
 
+function renderReplay(receipt) {
+  if (!receipt) {
+    return;
+  }
+
+  const frames = replayFrames(receipt);
+  const activeIndex = Math.min(state.replayIndex, frames.length - 1);
+  state.replayIndex = activeIndex;
+  const activeFrame = frames[activeIndex];
+  const percent = frames.length <= 1 ? 100 : (activeIndex / (frames.length - 1)) * 100;
+
+  playReplayButton.textContent = state.replayPlaying ? "Pause" : "Play";
+  replayProgressBar.style.width = `${percent}%`;
+  replayFrame.innerHTML = `<span class="task-state ${activeFrame.status}"></span>
+    <div>
+      <strong>${escapeHtml(activeFrame.title)}</strong>
+      <p>${escapeHtml(activeFrame.detail)}</p>
+      <small>${escapeHtml(activeFrame.actor)} - ${escapeHtml(activeFrame.kind)}</small>
+    </div>`;
+  replayList.innerHTML = frames
+    .map((frame, index) => `<button class="replay-step ${index === activeIndex ? "active" : ""}" data-replay-index="${index}" type="button">
+      <span class="task-state ${frame.status}"></span>
+      <span>
+        <strong>${escapeHtml(frame.title)}</strong>
+        <small>${escapeHtml(frame.detail)}</small>
+      </span>
+    </button>`)
+    .join("");
+}
+
+function replayFrames(receipt) {
+  return [
+    {
+      actor: "human",
+      kind: "problem",
+      status: trustClass(receipt.trust),
+      title: "Problem received",
+      detail: receipt.title
+    },
+    ...receipt.graph.map(([kind, summary], index) => ({
+      actor: receipt.engine,
+      kind,
+      status: trustClass(receipt.trust),
+      title: `Evidence ${index + 1}: ${kind}`,
+      detail: summary
+    })),
+    ...activityEvents.slice().reverse().map((event) => ({
+      actor: event.actor,
+      kind: "activity",
+      status: event.status,
+      title: event.title,
+      detail: `${formatActivityTime(event.at)} - ${event.detail}`
+    }))
+  ];
+}
+
+function setReplayPlaying(playing) {
+  state.replayPlaying = playing;
+  if (replayTimer) {
+    clearInterval(replayTimer);
+    replayTimer = undefined;
+  }
+
+  if (playing) {
+    replayTimer = setInterval(() => {
+      const receipt = receiptStore.get(state.receiptKey);
+      if (!receipt) {
+        setReplayPlaying(false);
+        return;
+      }
+
+      const lastIndex = replayFrames(receipt).length - 1;
+      if (state.replayIndex >= lastIndex) {
+        setReplayPlaying(false);
+        renderReplay(receipt);
+        return;
+      }
+
+      state.replayIndex += 1;
+      renderReplay(receipt);
+    }, 850);
+  }
+
+  const receipt = receiptStore.get(state.receiptKey);
+  if (receipt) {
+    renderReplay(receipt);
+  }
+}
+
+function resetReplay() {
+  setReplayPlaying(false);
+  state.replayIndex = 0;
+  renderReplay(receiptStore.get(state.receiptKey));
+}
+
+function exportReplayImage() {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt) {
+    return;
+  }
+
+  downloadTextFile(`${receipt.runId}-session-replay.svg`, replaySvg(receipt), "image/svg+xml");
+  addActivity("human", "Exported session replay image", `${receipt.runId} replay image saved as SVG.`, "passed");
+}
+
+function replaySvg(receipt) {
+  const frames = replayFrames(receipt).slice(0, 9);
+  const width = 1100;
+  const rowHeight = 76;
+  const height = 190 + frames.length * rowHeight;
+  const rows = frames.map((frame, index) => {
+    const y = 150 + index * rowHeight;
+    const color = frame.status === "refuted" ? "#f28b82" : frame.status === "waiting" ? "#e6c36a" : "#7dd3a8";
+    return `<g transform="translate(42 ${y})">
+      <circle cx="10" cy="15" r="5" fill="${color}" />
+      <text x="30" y="18" fill="#f2f2ee" font-size="20" font-weight="700">${escapeXml(frame.title)}</text>
+      <text x="30" y="48" fill="#aaa59d" font-size="16">${escapeXml(truncateForImage(frame.detail, 118))}</text>
+    </g>`;
+  }).join("");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <rect width="100%" height="100%" fill="#101010" />
+    <rect x="24" y="24" width="${width - 48}" height="${height - 48}" rx="20" fill="#171717" stroke="#30302f" />
+    <text x="42" y="70" fill="#f2f2ee" font-family="Inter, Segoe UI, sans-serif" font-size="30" font-weight="750">Theorem Workbench Session Replay</text>
+    <text x="42" y="108" fill="#b7a98a" font-family="Inter, Segoe UI, sans-serif" font-size="18">${escapeXml(receipt.runId)} - ${escapeXml(receipt.trust)}</text>
+    ${rows}
+  </svg>`;
+}
+
+function truncateForImage(value, maxLength) {
+  const text = String(value).replace(/\s+/g, " ").trim();
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 3)}...`;
+}
+
 function renderMainGraph(receipt) {
   mainGraphList.innerHTML = receipt.graph
     .map(([kind, summary], index) => `<div class="canvas-node">
@@ -401,6 +547,9 @@ function addActivity(actor, title, detail, status = "passed", at = new Date().to
   }
   if (reportPreview) {
     renderReport(receiptStore.get(state.receiptKey));
+  }
+  if (replayList) {
+    renderReplay(receiptStore.get(state.receiptKey));
   }
 }
 
@@ -721,6 +870,15 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function escapeXml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
 function renderMathInline(value) {
   let html = escapeHtml(value);
   html = html.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/gu, (_match, numerator, denominator) => {
@@ -752,8 +910,10 @@ claimList.addEventListener("click", (event) => {
     return;
   }
 
+  setReplayPlaying(false);
   state.receiptKey = button.dataset.receipt;
   state.level = "middle";
+  state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
 });
@@ -774,6 +934,30 @@ sidebarSearch.addEventListener("input", () => {
   state.sidebarQuery = sidebarSearch.value;
   renderClaimList();
   applySidebarSearch();
+});
+
+openReplayButton.addEventListener("click", () => {
+  state.surface = "replay";
+  render();
+});
+
+playReplayButton.addEventListener("click", () => {
+  setReplayPlaying(!state.replayPlaying);
+});
+
+resetReplayButton.addEventListener("click", resetReplay);
+
+exportReplayButton.addEventListener("click", exportReplayImage);
+
+replayList.addEventListener("click", (event) => {
+  const button = event.target.closest(".replay-step");
+  if (!button) {
+    return;
+  }
+
+  setReplayPlaying(false);
+  state.replayIndex = Number(button.dataset.replayIndex);
+  renderReplay(receiptStore.get(state.receiptKey));
 });
 
 activitySearch.addEventListener("input", () => {
@@ -891,8 +1075,10 @@ composer.addEventListener("submit", async (event) => {
     receiptStore.set(key, viewModel);
     recentReceiptKeys.unshift(key);
     recentReceiptKeys.splice(6);
+    setReplayPlaying(false);
     state.receiptKey = key;
     state.level = "middle";
+    state.replayIndex = 0;
     for (const item of payload.activity ?? []) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }

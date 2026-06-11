@@ -121,7 +121,7 @@
             </div>
           </div>
           <div class="header-actions">
-            <button class="text-button" type="button">Replay</button>
+            <button class="text-button" id="open-replay" type="button">Replay</button>
             <button class="text-button" type="button">Snapshot</button>
             <button class="icon-button" aria-label="Receipt options">...</button>
           </div>
@@ -162,6 +162,7 @@
                   <button class="surface-tab active" id="tab-trace" role="tab" aria-controls="surface-trace" aria-selected="true" data-surface="trace" type="button">Trace</button>
                   <button class="surface-tab" id="tab-graph" role="tab" aria-controls="surface-graph" aria-selected="false" data-surface="graph" type="button">Graph</button>
                   <button class="surface-tab" id="tab-notes" role="tab" aria-controls="surface-notes" aria-selected="false" data-surface="notes" type="button">Notes</button>
+                  <button class="surface-tab" id="tab-replay" role="tab" aria-controls="surface-replay" aria-selected="false" data-surface="replay" type="button">Replay</button>
                   <button class="surface-tab" id="tab-report" role="tab" aria-controls="surface-report" aria-selected="false" data-surface="report" type="button">Report</button>
                 </div>
                 <div class="surface-actions" id="surface-actions">
@@ -196,6 +197,20 @@
                   <span class="mini-label" id="notes-status">local draft</span>
                 </div>
                 <textarea id="research-notes" spellcheck="true" aria-label="Session scratchpad" placeholder="Jot assumptions, questions, agent instructions, paper ideas, or things to verify next."></textarea>
+              </section>
+
+              <section class="surface-panel" id="surface-replay" role="tabpanel" aria-labelledby="tab-replay" data-surface-panel="replay" tabindex="0" aria-label="Session replay" hidden>
+                <div class="panel-heading">
+                  <h3>Session Replay</h3>
+                  <div class="activity-actions" aria-label="Replay actions">
+                    <button class="text-button compact-button" id="play-replay" type="button">Play</button>
+                    <button class="text-button compact-button" id="reset-replay" type="button">Reset</button>
+                    <button class="text-button compact-button" id="export-replay" type="button">Export image</button>
+                  </div>
+                </div>
+                <div class="replay-frame" id="replay-frame"></div>
+                <div class="replay-progress" aria-hidden="true"><span id="replay-progress-bar"></span></div>
+                <div class="replay-list" id="replay-list"></div>
               </section>
 
               <section class="surface-panel" id="surface-report" role="tabpanel" aria-labelledby="tab-report" data-surface-panel="report" tabindex="0" aria-label="Final report" hidden>
