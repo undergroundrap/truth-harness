@@ -181,10 +181,18 @@ const surfaceStatusText = {
 };
 const laneStatusText = {
   math: "Math lane",
+  code: "Code lane",
   physics: "Physics lane",
+  quantum: "Quantum lane",
+  hardware: "Hardware lane",
   biology: "Biology lane",
+  chemistry: "Chemistry lane",
+  data: "Data lane",
   sources: "Sources lane",
-  writing: "Writing lane"
+  writing: "Writing lane",
+  patent: "Patent lane",
+  finance: "Finance lane",
+  security: "Security lane"
 };
 
 researchNotes.value = loadNotes();

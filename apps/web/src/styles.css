@@ -181,6 +181,10 @@ button {
 .lane-list {
   display: grid;
   gap: 4px;
+  max-height: min(36vh, 390px);
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
 }
 
 .lane-row {
@@ -529,8 +533,7 @@ h1 {
 
 .trace-panel,
 .work-surface,
-.inspector-section,
-.task-dock {
+.inspector-section {
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: var(--panel);
@@ -1042,10 +1045,11 @@ textarea:focus-visible {
 .task-dock {
   display: flex;
   align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   gap: 8px;
-  margin: 0 18px 8px;
-  padding: 8px;
+  margin: 0 clamp(18px, 10vw, 140px) 8px;
+  padding: 0;
   overflow-x: auto;
   scrollbar-gutter: stable;
 }
@@ -1055,12 +1059,13 @@ textarea:focus-visible {
   align-items: center;
   gap: 8px;
   min-width: max-content;
-  border: 1px solid var(--line-soft);
-  border-radius: 7px;
-  background: #151515;
-  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(25, 25, 25, 0.82);
+  padding: 7px 10px;
   color: var(--muted);
   font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
 }
 
 .task-row strong {
@@ -1100,22 +1105,33 @@ textarea:focus-visible {
   position: sticky;
   bottom: 0;
   z-index: 20;
-  margin: 0 clamp(18px, 10vw, 140px) 12px;
+  width: min(760px, calc(100% - 36px));
+  margin: 0 auto 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-raised);
-  padding: 8px;
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+  border-radius: 18px;
+  background: #2c2b29;
+  padding: 8px 10px;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.56);
 }
 
 .composer input {
   width: 100%;
   min-width: 0;
-  height: 36px;
+  height: 38px;
   border: 0;
   outline: none;
   background: transparent;
   color: var(--text);
+}
+
+.composer .icon-button {
+  border-radius: 999px;
+}
+
+.composer .text-button {
+  height: 32px;
+  border-radius: 12px;
+  background: #242321;
 }
 
 .composer input::selection {
@@ -1259,6 +1275,8 @@ textarea:focus-visible {
   .composer {
     grid-template-columns: 32px minmax(0, 1fr);
     bottom: 10px;
+    width: auto;
+    margin: 0 10px 12px;
   }
 
   .composer .text-button {
