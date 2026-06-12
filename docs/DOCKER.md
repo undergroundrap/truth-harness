@@ -58,6 +58,8 @@ Run the MCP server over stdio:
 docker compose run --rm -i mcp
 ```
 
+By default, MCP `theorem_code_run` is still disabled. To expose it to an agent, the MCP process must have `THEOREM_ALLOW_CODE_RUN=1`. Unsandboxed direct execution needs the additional `THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1` escape hatch; otherwise agents should set `policy.requireSandbox: true` and accept a fail-closed result until a measured sandbox provider exists.
+
 ## What Is Isolated
 
 - The dev image runs as an unprivileged `theorem` user.

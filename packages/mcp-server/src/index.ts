@@ -822,7 +822,7 @@ export function createTheoremMcpServer(): McpServer {
     {
       title: "Run Local Code",
       description:
-        "Execute a local command directly without shell interpolation under the default local execution policy, capture stdout/stderr/exit status, and write a private theorem.code-run.v0 evidence record. Disabled unless the MCP server process has THEOREM_ALLOW_CODE_RUN=1.",
+        "Execute a local command directly without shell interpolation under the default local execution policy, capture stdout/stderr/exit status, and write a private theorem.code-run.v0 evidence record. Disabled unless the MCP server process has THEOREM_ALLOW_CODE_RUN=1. Unsandboxed direct execution is also disabled unless policy.requireSandbox=true or the process has THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1.",
       inputSchema: {
         workspacePath: z
           .string()
@@ -855,7 +855,7 @@ export function createTheoremMcpServer(): McpServer {
             requireSandbox: z
               .boolean()
               .optional()
-              .describe("Require an OS-enforced sandbox for this run; fail closed if no sandbox provider is available."),
+              .describe("Require an OS-enforced sandbox for this run; fail closed if no sandbox provider is available. Agent-facing MCP calls should prefer this setting."),
             allowShellLauncher: z
               .boolean()
               .optional()
@@ -878,7 +878,7 @@ export function createTheoremMcpServer(): McpServer {
               .describe("Allow git mutation/network commands such as push, pull, reset, clean, or checkout.")
           })
           .optional()
-          .describe("Default-local execution policy controls. Risky categories are blocked unless explicitly allowed."),
+          .describe("Default-local execution policy controls. Risky categories are blocked unless explicitly allowed. Unsandboxed MCP execution also requires THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1."),
         failOnNonzero: z.boolean().optional().describe("When true, mark the tool call as an error unless the command exits 0.")
       },
       annotations: {

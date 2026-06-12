@@ -1148,7 +1148,7 @@ export async function handleTheoremNotebookRunList(input: TheoremNotebookRunList
 }
 
 export async function handleTheoremCodeRun(input: TheoremCodeRunInput): Promise<TheoremCodeRunOutput> {
-  assertMcpCodeRunEnabled();
+  assertMcpCodeRunAllowed(input.policy);
   const result = await writeCodeRun({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -1186,12 +1186,18 @@ export function handleTheoremCodeSandboxStatus(): TheoremCodeSandboxStatusOutput
   };
 }
 
-function assertMcpCodeRunEnabled(): void {
-  if (isTruthyEnv(process.env.THEOREM_ALLOW_CODE_RUN)) {
+function assertMcpCodeRunAllowed(policy: CodeRunPolicyInput | undefined): void {
+  if (!isTruthyEnv(process.env.THEOREM_ALLOW_CODE_RUN)) {
+    throw new Error("MCP code execution is disabled. Set THEOREM_ALLOW_CODE_RUN=1 and provide an explicit policy.allowedExecutables list to enable theorem_code_run.");
+  }
+
+  if (policy?.requireSandbox === true || isTruthyEnv(process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN)) {
     return;
   }
 
-  throw new Error("MCP code execution is disabled. Set THEOREM_ALLOW_CODE_RUN=1 and provide an explicit policy.allowedExecutables list to enable theorem_code_run.");
+  throw new Error(
+    "MCP unsandboxed code execution is disabled. Set policy.requireSandbox=true to require a measured sandbox, or set THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1 to permit direct local execution with networkAccess unknown."
+  );
 }
 
 function isTruthyEnv(value: string | undefined): boolean {

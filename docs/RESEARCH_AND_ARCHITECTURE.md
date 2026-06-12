@@ -563,6 +563,8 @@ Code-run records are the actual local execution layer. They are direct process r
 
 The current implementation is intentionally honest about its limit: it does not yet enforce an OS sandbox, network namespace, or filesystem boundary beyond the workspace cwd. Therefore code-run records store `privacy.mode: "unsandboxed-local-execution"`, `networkAccess: "unknown"`, and `replay.localOnly: false`. The record captures stdout, stderr, exit code, duration, output hashes, timeout, policy decision, sandbox measurement notes, and replay notes, then writes `theorem.code-run.v0` JSON plus Markdown under `.theorem-workbench/code-runs/`. Timeouts are capped at 120000 ms and each output stream is capped at 1048576 bytes.
 
+Agent-facing MCP code execution has an additional gate. `theorem_code_run` is not reachable unless the server process has `THEOREM_ALLOW_CODE_RUN=1`. Even then, unsandboxed direct execution is blocked unless either the caller sets `policy.requireSandbox: true` or the server process also has `THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1`. Because the built-in sandbox status currently reports unavailable, `policy.requireSandbox: true` fails closed until a measured sandbox provider exists.
+
 Each `theorem.code-run.v0` entry stores:
 
 | Field | Purpose |
@@ -661,7 +663,7 @@ Current MCP tools:
 | `theorem_notebook_run_log` | Create or write local notebook/script/pipeline provenance records without executing code. |
 | `theorem_notebook_run_list` | List local notebook-run records. |
 | `theorem_code_sandbox_status` | Report whether an OS-enforced code-run sandbox is available before requesting execution. |
-| `theorem_code_run` | Execute a local direct command under the default local execution policy and write a code-run evidence record. Disabled unless the MCP server process has `THEOREM_ALLOW_CODE_RUN=1`; each call still requires an explicit executable allowlist. |
+| `theorem_code_run` | Execute a local direct command under the default local execution policy and write a code-run evidence record. Disabled unless the MCP server process has `THEOREM_ALLOW_CODE_RUN=1`; unsandboxed MCP execution also requires `THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1`, and each call still requires an explicit executable allowlist. |
 | `theorem_code_list` | List local code-run records. |
 | `theorem_vault_seal` | Encrypt a workspace-local file into the private vault using an environment key. |
 | `theorem_vault_list` | List encrypted local vault envelopes without decrypting plaintext. |

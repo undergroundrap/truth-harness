@@ -68,6 +68,7 @@ const tempRoots: string[] = [];
 const originalWorkspaceRoot = process.env.THEOREM_WORKBENCH_ROOT;
 const originalLeanCommand = process.env.THEOREM_LEAN;
 const originalCodeRunOptIn = process.env.THEOREM_ALLOW_CODE_RUN;
+const originalUnsandboxedCodeRunOptIn = process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN;
 const vaultKeyEnv = "THEOREM_WORKBENCH_MCP_TEST_VAULT_KEY";
 const originalVaultKey = process.env[vaultKeyEnv];
 
@@ -76,6 +77,7 @@ afterEach(async () => {
   restoreWorkspaceRoot();
   restoreLeanCommand();
   restoreCodeRunOptIn();
+  restoreUnsandboxedCodeRunOptIn();
   restoreVaultKey();
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
   tempRoots.length = 0;
@@ -1001,6 +1003,7 @@ describe("MCP tool handlers", () => {
     const root = await tempRoot();
     process.env.THEOREM_WORKBENCH_ROOT = root;
     process.env.THEOREM_ALLOW_CODE_RUN = "1";
+    process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN = "1";
     await handleTheoremWorkspaceInit({ name: "MCP Code Run Lab" });
 
     const result = await handleTheoremCodeRun({
@@ -1051,6 +1054,7 @@ describe("MCP tool handlers", () => {
     const root = await tempRoot();
     process.env.THEOREM_WORKBENCH_ROOT = root;
     process.env.THEOREM_ALLOW_CODE_RUN = "1";
+    delete process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN;
     await handleTheoremWorkspaceInit({ name: "MCP Code Sandbox Gate Lab" });
 
     await expect(
@@ -1069,6 +1073,7 @@ describe("MCP tool handlers", () => {
     const root = await tempRoot();
     process.env.THEOREM_WORKBENCH_ROOT = root;
     process.env.THEOREM_ALLOW_CODE_RUN = "1";
+    process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN = "1";
     await handleTheoremWorkspaceInit({ name: "MCP Code Policy Lab" });
 
     await expect(
@@ -1081,6 +1086,28 @@ describe("MCP tool handlers", () => {
         }
       })
     ).rejects.toThrow("Network-capable command");
+  });
+
+  it("requires a second opt-in before MCP can request unsandboxed code execution", async () => {
+    const root = await tempRoot();
+    process.env.THEOREM_WORKBENCH_ROOT = root;
+    process.env.THEOREM_ALLOW_CODE_RUN = "1";
+    delete process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN;
+    await handleTheoremWorkspaceInit({ name: "MCP Unsandboxed Code Gate Lab" });
+
+    await expect(
+      handleTheoremCodeRun({
+        purpose: "Attempt unsandboxed MCP code execution without the server-level escape hatch.",
+        command: process.execPath,
+        args: ["-e", "console.log('blocked-unsandboxed')"],
+        policy: {
+          allowedExecutables: [process.execPath]
+        }
+      })
+    ).rejects.toThrow("MCP unsandboxed code execution is disabled");
+
+    const list = await handleTheoremCodeRunList({});
+    expect(list.total).toBe(0);
   });
 
   it("requires explicit MCP opt-in before code execution is reachable", async () => {
@@ -1140,6 +1167,15 @@ function restoreCodeRunOptIn(): void {
   }
 
   process.env.THEOREM_ALLOW_CODE_RUN = originalCodeRunOptIn;
+}
+
+function restoreUnsandboxedCodeRunOptIn(): void {
+  if (originalUnsandboxedCodeRunOptIn === undefined) {
+    delete process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN;
+    return;
+  }
+
+  process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN = originalUnsandboxedCodeRunOptIn;
 }
 
 function restoreVaultKey(): void {

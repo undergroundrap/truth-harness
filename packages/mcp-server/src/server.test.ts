@@ -10,6 +10,7 @@ const tempRoots: string[] = [];
 const originalWorkspaceRoot = process.env.THEOREM_WORKBENCH_ROOT;
 const originalLeanCommand = process.env.THEOREM_LEAN;
 const originalCodeRunOptIn = process.env.THEOREM_ALLOW_CODE_RUN;
+const originalUnsandboxedCodeRunOptIn = process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN;
 const vaultKeyEnv = "THEOREM_WORKBENCH_SERVER_TEST_VAULT_KEY";
 const originalVaultKey = process.env[vaultKeyEnv];
 
@@ -17,6 +18,7 @@ afterEach(async () => {
   restoreWorkspaceRoot();
   restoreLeanCommand();
   restoreCodeRunOptIn();
+  restoreUnsandboxedCodeRunOptIn();
   restoreVaultKey();
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
   tempRoots.length = 0;
@@ -61,6 +63,7 @@ describe("Theorem MCP server", () => {
     process.env[vaultKeyEnv] = "server vault test passphrase";
     process.env.THEOREM_LEAN = "theorem-workbench-missing-lean-command";
     process.env.THEOREM_ALLOW_CODE_RUN = "1";
+    process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN = "1";
     const server = createTheoremMcpServer();
     const client = new Client({ name: "theorem-workbench-test-client", version: "0.0.0" });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -791,6 +794,15 @@ function restoreCodeRunOptIn(): void {
   }
 
   process.env.THEOREM_ALLOW_CODE_RUN = originalCodeRunOptIn;
+}
+
+function restoreUnsandboxedCodeRunOptIn(): void {
+  if (originalUnsandboxedCodeRunOptIn === undefined) {
+    delete process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN;
+    return;
+  }
+
+  process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN = originalUnsandboxedCodeRunOptIn;
 }
 
 function restoreVaultKey(): void {
