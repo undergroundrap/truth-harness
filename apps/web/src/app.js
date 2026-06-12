@@ -214,7 +214,8 @@ const state = {
   sidebarQuery: "",
   sidebarCollapsed: false,
   activityQuery: "",
-  activityLimit: ACTIVITY_PAGE_SIZE
+  activityLimit: ACTIVITY_PAGE_SIZE,
+  safetyStatus: undefined
 };
 
 const appShell = document.querySelector("#app-shell");
@@ -245,6 +246,9 @@ const protocolReview = document.querySelector("#protocol-review");
 const protocolDeliverables = document.querySelector("#protocol-deliverables");
 const reviewStandardLane = document.querySelector("#review-standard-lane");
 const reviewStandard = document.querySelector("#review-standard");
+const safetyStatusPill = document.querySelector("#safety-status-pill");
+const safetyDetails = document.querySelector("#safety-details");
+const safetyNotes = document.querySelector("#safety-notes");
 const activityLog = document.querySelector("#activity-log");
 const activitySearch = document.querySelector("#activity-search");
 const activityCount = document.querySelector("#activity-count");
@@ -809,6 +813,7 @@ updateNotesStatus("local draft");
 addActivity("system", "Workbench opened", "Static shell loaded; no external service contacted.", "passed");
 addActivity("system", "Local API ready", "UI will submit prompts only to /api/receipt on this machine.", "waiting");
 render();
+void refreshSafetyStatus();
 
 function render() {
   const receipt = receiptStore.get(state.receiptKey);
@@ -858,6 +863,7 @@ function render() {
   renderSurface();
   renderLane();
   renderProtocol();
+  renderSafetyStatus();
   renderAgentRoutes(receipt);
   renderRunbook(receipt);
   renderVerificationMatrix(receipt);
@@ -1241,7 +1247,7 @@ function renderTaskDock(receipt) {
   const open = openRows.length;
 
   taskDockState.className = `task-state ${open > 0 ? "waiting" : "passed"}`;
-  taskDockSummary.textContent = open > 0 ? `${passed} passed · ${open} open` : `${passed} passed · ready`;
+  taskDockSummary.textContent = open > 0 ? `${passed} passed / ${open} open` : `${passed} passed / ready`;
   taskList.innerHTML = visibleRows
     .map((row) => `<div class="task-row">
       <span class="task-state ${row.status}"></span>
@@ -1249,6 +1255,110 @@ function renderTaskDock(receipt) {
       <strong>${escapeHtml(statusLabel(row.status))}</strong>
     </div>`)
     .join("");
+}
+
+async function refreshSafetyStatus() {
+  if (!safetyStatusPill) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/status", {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Local status API failed.");
+    }
+
+    state.safetyStatus = payload;
+    renderSafetyStatus();
+    addActivity(
+      "local-api",
+      "Loaded safety center",
+      safetyStatusSummary(payload),
+      payload.safety?.codeRunSandbox?.canAttestNetworkNone ? "passed" : "waiting"
+    );
+  } catch (error) {
+    state.safetyStatus = {
+      error: error instanceof Error ? error.message : "Unknown local status failure."
+    };
+    renderSafetyStatus();
+    addActivity("local-api", "Safety center unavailable", state.safetyStatus.error, "refuted");
+  }
+}
+
+function renderSafetyStatus() {
+  if (!safetyStatusPill || !safetyDetails || !safetyNotes) {
+    return;
+  }
+
+  const payload = state.safetyStatus;
+  if (!payload) {
+    safetyStatusPill.textContent = "checking";
+    safetyStatusPill.className = "status-pill waiting";
+    safetyDetails.innerHTML = `<div><dt>Sandbox</dt><dd>checking local status</dd></div>`;
+    safetyNotes.innerHTML = `<li>Loading local execution boundary.</li>`;
+    return;
+  }
+
+  if (payload.error) {
+    safetyStatusPill.textContent = "unavailable";
+    safetyStatusPill.className = "status-pill refuted";
+    safetyDetails.innerHTML = `<div><dt>Status</dt><dd>local API unavailable</dd></div>`;
+    safetyNotes.innerHTML = `<li>${escapeHtml(payload.error)}</li>`;
+    return;
+  }
+
+  const safety = payload.safety ?? {};
+  const sandbox = safety.codeRunSandbox ?? {};
+  const mcp = safety.mcpCodeRun ?? {};
+  const attested = sandbox.canAttestNetworkNone === true;
+  const exposed = mcp.exposed === true;
+  const unsandboxedAllowed = mcp.unsandboxedAllowed === true;
+  const mcpState = !exposed ? "disabled by default" : unsandboxedAllowed ? "unsandboxed opt-in" : "sandbox gated";
+  const modelCallState = payload.externalCalls ? "external calls possible" : "none from local API";
+  const rows = [
+    ["Local API", payload.localOnly ? "local only" : "check config"],
+    ["Code run", `${formatSafetyPhrase(sandbox.provider)} / ${formatSafetyPhrase(sandbox.processSandbox)}`],
+    ["Network", attested ? "none attested" : formatSafetyPhrase(sandbox.networkIsolation)],
+    ["MCP tool", mcpState],
+    ["Model calls", modelCallState]
+  ];
+
+  safetyStatusPill.textContent = attested ? "sandbox-attested" : "needs sandbox";
+  safetyStatusPill.className = `status-pill ${attested ? "exact" : "waiting"}`;
+  safetyDetails.innerHTML = rows
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
+    .join("");
+
+  const noteCandidates = [
+    sandbox.reason,
+    mcp.recommendation,
+    ...(Array.isArray(sandbox.notes) ? sandbox.notes : [])
+  ].filter(Boolean);
+  const notes = noteCandidates.length > 0 ? noteCandidates.slice(0, 3) : ["No local safety metadata was returned."];
+  safetyNotes.innerHTML = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
+}
+
+function safetyStatusSummary(payload) {
+  const sandbox = payload?.safety?.codeRunSandbox;
+  if (!sandbox) {
+    return "Local status endpoint responded without sandbox metadata.";
+  }
+
+  if (sandbox.canAttestNetworkNone) {
+    return `Code-run sandbox attested by ${formatSafetyPhrase(sandbox.provider)} with ${formatSafetyPhrase(sandbox.networkIsolation)} network isolation.`;
+  }
+
+  return `Code-run sandbox not attested: ${sandbox.reason ?? "no measured sandbox provider"}`;
+}
+
+function formatSafetyPhrase(value) {
+  return String(value ?? "unknown").replaceAll("-", " ");
 }
 
 function verificationRows(receipt) {

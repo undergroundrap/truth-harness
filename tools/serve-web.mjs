@@ -2,6 +2,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const root = resolve("apps/web");
 const MAX_JSON_BODY_BYTES = 16 * 1024;
@@ -40,6 +41,9 @@ const server = createServer(async (request, response) => {
     createReadStream(filePath).pipe(response);
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
+    if (status >= 500) {
+      console.error(error);
+    }
     response.writeHead(status, { "Content-Type": "text/plain; charset=utf-8" });
     response.end(status === 404 ? "Not found" : "Server error");
   }
@@ -74,13 +78,34 @@ async function resolveRequestPath(pathname) {
 
 async function handleApiRequest(request, response, requestUrl) {
   if (requestUrl.pathname === "/api/status" && request.method === "GET") {
+    const codeRunSandbox = await readCodeRunSandboxStatus();
+    const mcpCodeRunExposed = isTruthyEnv(process.env.THEOREM_ALLOW_CODE_RUN);
+    const unsandboxedCodeRunAllowed = isTruthyEnv(process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN);
+
     writeJson(response, 200, {
       schemaVersion: "theorem.web-status.v0",
       localOnly: true,
       externalCalls: false,
       api: "local-node",
       engine: "@theorem-workbench/core",
-      capabilities: ["receipt-create", "trace-render", "activity-log", "agent-runbook", "research-session", "validation-plan"]
+      safety: {
+        status: codeRunSandbox.canAttestNetworkNone ? "sandbox-attested" : "sandbox-unavailable",
+        codeRunSandbox,
+        mcpCodeRun: {
+          exposed: mcpCodeRunExposed,
+          unsandboxedAllowed: unsandboxedCodeRunAllowed,
+          requiredForExecution: mcpCodeRunExposed ? "policy.allowedExecutables" : "THEOREM_ALLOW_CODE_RUN=1",
+          recommendation: codeRunSandbox.canAttestNetworkNone
+            ? "Prefer policy.requireSandbox=true for agent-triggered code runs."
+            : "Keep MCP code execution disabled or require a measured sandbox before running untrusted commands."
+        },
+        privacy: {
+          localApiOnly: true,
+          hostedModelCalls: false,
+          selectedContextRequiredForExternalModels: true
+        }
+      },
+      capabilities: ["receipt-create", "trace-render", "activity-log", "agent-runbook", "research-session", "validation-plan", "sandbox-status", "safety-center"]
     });
     return;
   }
@@ -127,9 +152,37 @@ async function handleApiRequest(request, response, requestUrl) {
   });
 }
 
+async function readCodeRunSandboxStatus() {
+  try {
+    const { getCodeRunSandboxStatus } = await loadCoreModule();
+    return getCodeRunSandboxStatus();
+  } catch (error) {
+    return {
+      schemaVersion: "theorem.code-run-sandbox-status.v0",
+      platform: process.platform,
+      available: false,
+      provider: "none",
+      processSandbox: "none",
+      networkIsolation: "not-enforced",
+      filesystemIsolation: "working-directory-only",
+      canAttestNetworkNone: false,
+      reason: `Sandbox status unavailable: ${error instanceof Error ? error.message : "unknown error"}`,
+      notes: [
+        "The local web status endpoint could not load the core sandbox detector.",
+        "Treat agent-triggered code execution as unavailable until the local API reports a measured sandbox.",
+        "Receipt creation can still run, but code-run networkAccess none must not be claimed from this process."
+      ]
+    };
+  }
+}
+
 function loadCoreModule() {
-  coreModulePromise ??= import(resolve("packages/core/dist/index.js"));
+  coreModulePromise ??= import(pathToFileURL(resolve("packages/core/dist/index.js")).href);
   return coreModulePromise;
+}
+
+function isTruthyEnv(value) {
+  return /^(1|true|yes|on)$/iu.test(value ?? "");
 }
 
 function readJsonBody(request) {

@@ -1078,6 +1078,35 @@ h4 {
   align-items: baseline;
 }
 
+.safety-section {
+  background: linear-gradient(180deg, rgba(32, 32, 32, 0.82), rgba(20, 20, 20, 0.96));
+}
+
+.safety-values {
+  margin-top: 8px;
+}
+
+.safety-values div {
+  grid-template-columns: minmax(84px, 0.72fr) minmax(0, 1.28fr);
+}
+
+.safety-notes {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding: 10px 10px 10px 26px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #111;
+  color: #d8d2c6;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.safety-notes li::marker {
+  color: var(--accent);
+}
+
 dt {
   color: var(--muted);
   font-size: 12px;
