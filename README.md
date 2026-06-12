@@ -69,7 +69,7 @@ npm run cli -- workspace init --name "Local Math Lab"
 npm run cli -- workspace status
 npm run cli -- workspace repair
 npm run cli -- workspace validate
-npm run cli -- ask "compute 3 / 4 + 5 / 8"
+npm run cli -- ask "compute 3 / 4 + 5 / 8" -- --out .theorem-workbench/receipts/fraction-sum.json
 npm run cli -- ask "for all integers n, n^2+n+1 is even"
 npm run cli -- ask "for all integers n, n^2+n is even"
 npm run cli -- ask "for all integers n, n^2+n+1 is even" -- --out receipts/false-parity.json
@@ -85,7 +85,7 @@ npm run cli -- ask "dimension check force = mass * acceleration"
 npm run cli -- ask "dimension check force = mass * velocity"
 npm run cli -- ask "bound x^2 + 2*x + 1 for x in [0, 2]"
 npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
-npm run cli -- claim add "3 / 4 + 5 / 8 equals 11 / 8" --trust exact-computed --tag fractions --evidence other:run_fraction_sum
+npm run cli -- claim add "3 / 4 + 5 / 8 equals 11 / 8" --trust exact-computed --tag fractions --evidence receipt:.theorem-workbench/receipts/fraction-sum.json
 npm run cli -- claim list --tag fractions
 npm run cli -- claim show <claim_id>
 npm run cli -- proof backends
@@ -130,7 +130,7 @@ The test suite includes a golden workspace regression that generates representat
 
 The local JSON Schema validator intentionally supports a documented subset used by the checked-in schemas. Unsupported schema keywords fail validation instead of being silently ignored, and tests scan every schema file to keep the validator vocabulary honest.
 
-Claim commands write `theorem.claim.v0` records into `.theorem-workbench/claims/`. A claim record stores the exact statement, domain, tags, strongest trust label, upstream claim ids, superseded claim ids, evidence refs, a verifier ladder, open checks, and a Markdown review packet. This is the "math as a codebase" layer: long work can be broken into linked claims, corrected without erasing history, filtered by tag/domain/trust, and handed to agents through CLI/MCP without hiding state inside chat.
+Claim commands write `theorem.claim.v0` records into `.theorem-workbench/claims/`. A claim record stores the exact statement, domain, tags, strongest evidence-backed trust label, upstream claim ids, superseded claim ids, evidence refs, a verifier ladder, open checks, and a Markdown review packet. Requested trust labels and manually typed evidence labels are not enough to finalize a claim; the claim trust is derived from resolvable local receipts, proof checks, SMT checks, or existing claim records. This is the "math as a codebase" layer: long work can be broken into linked claims, corrected without erasing history, filtered by tag/domain/trust, and handed to agents through CLI/MCP without hiding state inside chat.
 
 Source commands ingest local Markdown/text files into `.theorem-workbench/indexes/local-corpus.json`, search those chunks without network access, and create `source-cited` receipts for claims grounded in local source hits. This is the first local RAG substrate: lexical and simple on purpose, with citation refs agents can attach to later claims.
 

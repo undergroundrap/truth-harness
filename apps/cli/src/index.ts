@@ -245,19 +245,24 @@ const claim = program.command("claim").description("Manage git-like local claim 
 
 claim
   .command("add")
-  .description("Write a local claim record with lineage, evidence refs, trust label, and next checks.")
+  .description("Write a local claim record with lineage, evidence-backed trust, and next checks.")
   .argument("<statement...>", "Claim statement")
   .option("--workspace <path>", "Project root path", ".")
   .option("--title <title>", "Short claim title")
   .option("--domain <domain>", "Claim lane/domain")
   .option("--status <status>", "active, superseded, or retracted", "active")
-  .option("--trust <label>", "Current strongest trust label", "unverified")
+  .option("--trust <label>", "Requested trust label; final claim trust is downgraded unless attached evidence supports it", "unverified")
   .option("--tag <tag>", "Search/filter tag. Repeatable", collectRepeated, [])
   .option("--depends-on <claim>", "Upstream claim id. Repeatable", collectRepeated, [])
   .option("--supersedes <claim>", "Claim id this record supersedes. Repeatable", collectRepeated, [])
   .option("--derived-by <note>", "Derivation note explaining how this claim was produced")
   .option("--author <name>", "Human or agent author; repeatable", collectRepeated, [])
-  .option("--evidence <ref>", "Evidence ref such as claim:id, receipt:path, proof:id, smt:id, review:id, validation:id, source:path, or other:ref. Repeatable", collectRepeated, [])
+  .option(
+    "--evidence <ref>",
+    "Evidence ref such as claim:id, receipt:path, proof:path, smt:path, source:path, or manual other:ref@trust-label. Repeatable",
+    collectRepeated,
+    []
+  )
   .option("--next-check <text>", "Open validation/proof/review check. Repeatable", collectRepeated, [])
   .option("--json", "Print the full claim write JSON")
   .action(
@@ -4210,6 +4215,15 @@ function parseClaimLedgerStatus(value: string): ClaimLedgerStatus {
 }
 
 function parseTrustLabel(value: string): TrustLabel {
+  const label = maybeTrustLabel(value);
+  if (label) {
+    return label;
+  }
+
+  throw new Error(`Unsupported trust label ${JSON.stringify(value)}.`);
+}
+
+function maybeTrustLabel(value: string): TrustLabel | undefined {
   if (
     value === "proved" ||
     value === "exact-computed" ||
@@ -4224,17 +4238,20 @@ function parseTrustLabel(value: string): TrustLabel {
     return value;
   }
 
-  throw new Error(`Unsupported trust label ${JSON.stringify(value)}.`);
+  return undefined;
 }
 
 function parseClaimLedgerEvidenceRef(value: string): ClaimLedgerEvidenceRef {
-  const separator = value.indexOf(":");
+  const trustSeparator = value.lastIndexOf("@");
+  const maybeTrust = trustSeparator > 0 ? maybeTrustLabel(value.slice(trustSeparator + 1)) : undefined;
+  const rawRef = maybeTrust ? value.slice(0, trustSeparator) : value;
+  const separator = rawRef.indexOf(":");
   if (separator <= 0) {
-    return { kind: "other", ref: value };
+    return { kind: "other", ref: rawRef, trust: maybeTrust };
   }
 
-  const maybeKind = value.slice(0, separator);
-  const ref = value.slice(separator + 1);
+  const maybeKind = rawRef.slice(0, separator);
+  const ref = rawRef.slice(separator + 1);
   if (
     maybeKind === "claim" ||
     maybeKind === "receipt" ||
@@ -4261,10 +4278,10 @@ function parseClaimLedgerEvidenceRef(value: string): ClaimLedgerEvidenceRef {
     maybeKind === "discovery-package" ||
     maybeKind === "other"
   ) {
-    return { kind: maybeKind, ref };
+    return { kind: maybeKind, ref, trust: maybeTrust };
   }
 
-  return { kind: "other", ref: value };
+  return { kind: "other", ref: rawRef, trust: maybeTrust };
 }
 
 function parseEvidenceRef(value: string): InventionEvidenceRef {

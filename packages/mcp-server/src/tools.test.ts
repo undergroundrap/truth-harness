@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createReceipt } from "@theorem-workbench/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   handleTheoremAsk,
@@ -123,13 +124,25 @@ describe("MCP tool handlers", () => {
     const root = await tempRoot();
     process.env.THEOREM_WORKBENCH_ROOT = root;
     await handleTheoremWorkspaceInit({ name: "MCP Claim Lab" });
+    const receiptsDir = join(root, ".theorem-workbench", "receipts");
+    await mkdir(receiptsDir, { recursive: true });
+    await writeFile(
+      join(receiptsDir, "base-fraction.json"),
+      `${JSON.stringify(createReceipt("compute 3 / 4"), null, 2)}\n`,
+      "utf8"
+    );
+    await writeFile(
+      join(receiptsDir, "fraction-sum.json"),
+      `${JSON.stringify(createReceipt("compute 3 / 4 + 5 / 8"), null, 2)}\n`,
+      "utf8"
+    );
 
     const base = await handleTheoremClaimAdd({
-      statement: "3 / 4 converts to 6 / 8.",
+      statement: "3 / 4 is exactly 3 / 4.",
       domain: "math",
       trust: "exact-computed",
       tags: ["fractions"],
-      evidenceRefs: [{ kind: "other", ref: "run_common_denominator", trust: "exact-computed" }]
+      evidenceRefs: [{ kind: "receipt", ref: ".theorem-workbench/receipts/base-fraction.json" }]
     });
     const derived = await handleTheoremClaimAdd({
       statement: "3 / 4 + 5 / 8 equals 11 / 8.",
@@ -137,8 +150,8 @@ describe("MCP tool handlers", () => {
       trust: "exact-computed",
       dependsOn: [base.claim.claimId],
       evidenceRefs: [
-        { kind: "claim", ref: base.claim.claimId, trust: "exact-computed" },
-        { kind: "other", ref: "run_fraction_sum", trust: "exact-computed" }
+        { kind: "claim", ref: base.claim.claimId },
+        { kind: "receipt", ref: ".theorem-workbench/receipts/fraction-sum.json" }
       ]
     });
     const list = await handleTheoremClaimList({ domain: "math" });

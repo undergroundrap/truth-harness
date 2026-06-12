@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { parseReceiptJson } from "./receipt-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 
@@ -198,14 +199,23 @@ export async function createClaimLedgerRecord(input: CreateClaimLedgerRecordInpu
   const status = await requireLocalWorkspace(input.rootPath);
   const existingClaims = await listClaimRecords(input.rootPath);
   const knownClaimIds = new Set(existingClaims.map((claim) => claim.claimId));
+  const knownClaimsById = new Map(existingClaims.map((claim) => [claim.claimId, claim]));
   const createdAt = input.now ?? new Date().toISOString();
   const statement = requireText(input.statement, "Claim statement is required.");
   const domain = input.domain ?? inferClaimDomain(statement);
-  const evidenceRefs = normalizeEvidenceRefs(input.evidenceRefs ?? []);
+  const requestedTrust = input.trust;
+  const resolvedEvidence = await resolveEvidenceRefs({
+    root: status.root,
+    evidenceRefs: normalizeEvidenceRefs(input.evidenceRefs ?? []),
+    knownClaimsById
+  });
+  const evidenceRefs = resolvedEvidence.evidenceRefs;
   const dependsOn = normalizeClaimRefs(input.dependsOn ?? [], "Claim dependency not found", knownClaimIds);
   const supersedes = normalizeClaimRefs(input.supersedes ?? [], "Superseded claim not found", knownClaimIds);
   const nextChecks = normalizeStringList(input.nextChecks ?? []);
-  const trust = input.trust ?? strongestTrustFromEvidence(evidenceRefs);
+  const evidenceTrust = strongestTrustFromTrusts(resolvedEvidence.supportingTrusts);
+  const trust = effectiveClaimTrust(requestedTrust, evidenceTrust);
+  const trustBoundaryChecks = trustBoundaryOpenChecks(requestedTrust, trust);
   const statusValue = input.status ?? "active";
   const recordWithoutId = {
     projectId: status.manifest.projectId,
@@ -231,8 +241,17 @@ export async function createClaimLedgerRecord(input: CreateClaimLedgerRecordInpu
     ...recordWithoutId,
     updatedAt: createdAt,
     verification: verificationFor(trust, evidenceRefs, nextChecks),
-    finalization: finalizationFor(trust, statusValue, nextChecks),
-    warnings: warningsFor({ statement, trust, status: statusValue, nextChecks, domain })
+    finalization: finalizationFor(trust, statusValue, [...nextChecks, ...trustBoundaryChecks]),
+    warnings: warningsFor({
+      statement,
+      trust,
+      status: statusValue,
+      nextChecks,
+      domain,
+      requestedTrust,
+      evidenceTrust,
+      evidenceWarnings: resolvedEvidence.warnings
+    })
   };
 
   return {
@@ -435,7 +454,9 @@ function verificationFor(
       status: hasTrust(trust, ["exact-computed", "bounded-numeric", "dimension-checked", "smt-checked", "cross-checked", "proved"])
         ? "satisfied"
         : "waiting",
-      evidenceRefs: evidenceRefs.filter((ref) => hasTrust(ref.trust, ["exact-computed", "bounded-numeric", "dimension-checked"])),
+      evidenceRefs: evidenceRefs.filter((ref) =>
+        hasTrust(ref.trust, ["exact-computed", "bounded-numeric", "dimension-checked", "smt-checked", "cross-checked", "proved"])
+      ),
       summary: "Exact arithmetic, dimensions, bounded numeric checks, or deterministic computation backs the narrow claim."
     },
     {
@@ -496,7 +517,12 @@ function finalizationFor(
   };
 }
 
-function strongestTrustFromEvidence(evidenceRefs: ClaimLedgerEvidenceRef[]): TrustLabel {
+function strongestTrustFromTrusts(values: TrustLabel[]): TrustLabel {
+  const trusts = new Set(values);
+  if (trusts.has("refuted")) {
+    return "refuted";
+  }
+
   const ranking: TrustLabel[] = [
     "proved",
     "cross-checked",
@@ -505,10 +531,8 @@ function strongestTrustFromEvidence(evidenceRefs: ClaimLedgerEvidenceRef[]): Tru
     "exact-computed",
     "bounded-numeric",
     "source-cited",
-    "refuted",
     "unverified"
   ];
-  const trusts = new Set(evidenceRefs.map((ref) => ref.trust).filter((trust): trust is TrustLabel => Boolean(trust)));
   for (const candidate of ranking) {
     if (trusts.has(candidate)) {
       return candidate;
@@ -518,17 +542,152 @@ function strongestTrustFromEvidence(evidenceRefs: ClaimLedgerEvidenceRef[]): Tru
   return "unverified";
 }
 
+async function resolveEvidenceRefs(input: {
+  root: string;
+  evidenceRefs: ClaimLedgerEvidenceRef[];
+  knownClaimsById: Map<string, ClaimLedgerRecord>;
+}): Promise<{ evidenceRefs: ClaimLedgerEvidenceRef[]; warnings: string[]; supportingTrusts: TrustLabel[] }> {
+  const warnings: string[] = [];
+  const supportingTrusts: TrustLabel[] = [];
+  const evidenceRefs = await Promise.all(
+    input.evidenceRefs.map(async (ref) => {
+      const inferred = await inferEvidenceRefTrust({
+        root: input.root,
+        ref,
+        knownClaimsById: input.knownClaimsById
+      });
+
+      if (!inferred) {
+        if (ref.trust) {
+          warnings.push(
+            `Evidence ref ${ref.kind}:${ref.ref} carries manually declared trust ${ref.trust}; attach a resolvable receipt, proof, SMT check, or claim record before it can support finalization.`
+          );
+        }
+        if (!ref.trust && shouldResolveEvidenceKind(ref.kind)) {
+          warnings.push(`Could not resolve trust for evidence ref ${ref.kind}:${ref.ref}; it cannot support finalization yet.`);
+        }
+        return ref;
+      }
+
+      if (ref.trust && ref.trust !== inferred.trust) {
+        warnings.push(
+          `Evidence ref ${ref.kind}:${ref.ref} declared trust ${ref.trust}, but the local artifact reports ${inferred.trust}; using the artifact trust.`
+        );
+      }
+      supportingTrusts.push(inferred.trust);
+
+      return {
+        ...ref,
+        trust: inferred.trust,
+        summary: ref.summary ?? inferred.summary
+      };
+    })
+  );
+
+  return { evidenceRefs, warnings, supportingTrusts };
+}
+
+async function inferEvidenceRefTrust(input: {
+  root: string;
+  ref: ClaimLedgerEvidenceRef;
+  knownClaimsById: Map<string, ClaimLedgerRecord>;
+}): Promise<{ trust: TrustLabel; summary?: string } | undefined> {
+  if (input.ref.kind === "claim") {
+    const claim = input.knownClaimsById.get(input.ref.ref);
+    return claim ? { trust: claim.trust, summary: claim.title } : undefined;
+  }
+
+  if (input.ref.kind !== "receipt" && input.ref.kind !== "proof" && input.ref.kind !== "smt") {
+    return undefined;
+  }
+
+  const artifact = await readEvidenceArtifactJson(input.root, input.ref.ref);
+  if (!artifact) {
+    return undefined;
+  }
+
+  if (input.ref.kind === "receipt") {
+    try {
+      const receipt = parseReceiptJson(artifact.raw, input.ref.ref);
+      return { trust: receipt.trust, summary: receipt.summary };
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (!isRecord(artifact.parsed) || typeof artifact.parsed.trust !== "string" || !isTrustLabel(artifact.parsed.trust)) {
+    return undefined;
+  }
+
+  if (input.ref.kind === "proof" && artifact.parsed.schemaVersion === "theorem.proof-check.v0") {
+    const status = typeof artifact.parsed.status === "string" ? artifact.parsed.status : "unknown";
+    return { trust: artifact.parsed.trust, summary: `Lean proof check status: ${status}.` };
+  }
+
+  if (input.ref.kind === "smt" && artifact.parsed.schemaVersion === "theorem.smt-check.v0") {
+    const status = typeof artifact.parsed.status === "string" ? artifact.parsed.status : "unknown";
+    return { trust: artifact.parsed.trust, summary: `SMT check status: ${status}.` };
+  }
+
+  return undefined;
+}
+
+async function readEvidenceArtifactJson(root: string, ref: string): Promise<{ raw: string; parsed: unknown } | undefined> {
+  let path: string;
+  try {
+    path = resolveUnderRoot(root, ref);
+  } catch {
+    return undefined;
+  }
+
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch {
+    return undefined;
+  }
+
+  try {
+    return { raw, parsed: JSON.parse(raw) as unknown };
+  } catch {
+    return { raw, parsed: undefined };
+  }
+}
+
+function effectiveClaimTrust(_requestedTrust: TrustLabel | undefined, evidenceTrust: TrustLabel): TrustLabel {
+  return evidenceTrust;
+}
+
+function trustBoundaryOpenChecks(requestedTrust: TrustLabel | undefined, effectiveTrust: TrustLabel): string[] {
+  if (!requestedTrust || requestedTrust === "unverified" || requestedTrust === effectiveTrust) {
+    return [];
+  }
+
+  if (requestedTrust === "refuted" || effectiveTrust === "refuted" || trustRank(requestedTrust) > trustRank(effectiveTrust)) {
+    return [`Requested trust ${requestedTrust} is not backed by attached evidence; effective claim trust is ${effectiveTrust}.`];
+  }
+
+  return [];
+}
+
 function warningsFor(input: {
   statement: string;
   trust: TrustLabel;
   status: ClaimLedgerStatus;
   nextChecks: string[];
   domain: ClaimLedgerDomain;
+  requestedTrust?: TrustLabel;
+  evidenceTrust: TrustLabel;
+  evidenceWarnings: string[];
 }): string[] {
   const warnings = [
     "A claim ledger record preserves provenance and lineage; it is not proof by itself.",
     "No final claim may outrun the strongest attached trust label."
   ];
+  warnings.push(...input.evidenceWarnings);
+  if (input.requestedTrust && input.requestedTrust !== "unverified" && input.requestedTrust !== input.trust) {
+    warnings.push(`Requested trust ${input.requestedTrust} was not recorded as claim trust because attached evidence supports ${input.evidenceTrust}.`);
+  }
   if (input.trust === "unverified") {
     warnings.push("This claim has no verified local evidence yet.");
   }
@@ -618,6 +777,45 @@ function hasTrust(value: TrustLabel | undefined, allowed: TrustLabel[]): boolean
   return value ? allowed.includes(value) : false;
 }
 
+function isTrustLabel(value: string): value is TrustLabel {
+  return (
+    value === "proved" ||
+    value === "exact-computed" ||
+    value === "bounded-numeric" ||
+    value === "smt-checked" ||
+    value === "dimension-checked" ||
+    value === "source-cited" ||
+    value === "cross-checked" ||
+    value === "unverified" ||
+    value === "refuted"
+  );
+}
+
+function trustRank(value: TrustLabel): number {
+  switch (value) {
+    case "proved":
+      return 7;
+    case "cross-checked":
+      return 6;
+    case "smt-checked":
+      return 5;
+    case "dimension-checked":
+    case "exact-computed":
+    case "bounded-numeric":
+      return 4;
+    case "source-cited":
+      return 3;
+    case "unverified":
+      return 0;
+    case "refuted":
+      return -1;
+  }
+}
+
+function shouldResolveEvidenceKind(kind: ClaimLedgerEvidenceRef["kind"]): boolean {
+  return kind === "claim" || kind === "receipt" || kind === "proof" || kind === "smt";
+}
+
 function formatEvidenceRefs(refs: ClaimLedgerEvidenceRef[]): string {
   return refs.map((ref) => `${ref.kind}:${ref.ref}`).join("; ");
 }
@@ -643,4 +841,8 @@ function escapeMarkdownText(value: string): string {
 
 function escapeMarkdownTable(value: string): string {
   return escapeMarkdownText(value).replace(/\|/gu, "\\|").replace(/\n/gu, " ");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

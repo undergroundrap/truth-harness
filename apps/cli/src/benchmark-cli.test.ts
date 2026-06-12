@@ -1,6 +1,7 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createReceipt } from "@theorem-workbench/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { program } from "./index.js";
 
@@ -455,11 +456,23 @@ describe("benchmark CLI", () => {
   it("writes, lists, and shows claim ledger records", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);
+    const receiptsDir = join(root, ".theorem-workbench", "receipts");
+    await mkdir(receiptsDir, { recursive: true });
+    await writeFile(
+      join(receiptsDir, "base-fraction.json"),
+      `${JSON.stringify(createReceipt("compute 3 / 4"), null, 2)}\n`,
+      "utf8"
+    );
+    await writeFile(
+      join(receiptsDir, "fraction-sum.json"),
+      `${JSON.stringify(createReceipt("compute 3 / 4 + 5 / 8"), null, 2)}\n`,
+      "utf8"
+    );
 
     const base = await runCli([
       "claim",
       "add",
-      "3 / 4 converts to 6 / 8",
+      "3 / 4 is exactly 3 / 4",
       "--workspace",
       root,
       "--domain",
@@ -469,7 +482,7 @@ describe("benchmark CLI", () => {
       "--tag",
       "fractions",
       "--evidence",
-      "other:run_common_denominator",
+      "receipt:.theorem-workbench/receipts/base-fraction.json",
       "--json"
     ]);
     const baseJson = JSON.parse(base.stdout) as { claim: { claimId: string; trust: string } };
@@ -488,7 +501,7 @@ describe("benchmark CLI", () => {
       "--evidence",
       `claim:${baseJson.claim.claimId}`,
       "--evidence",
-      "other:run_fraction_sum",
+      "receipt:.theorem-workbench/receipts/fraction-sum.json",
       "--json"
     ]);
     const derivedJson = JSON.parse(derived.stdout) as {

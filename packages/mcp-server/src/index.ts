@@ -168,7 +168,7 @@ export function createTheoremMcpServer(): McpServer {
     {
       title: "Add Claim Ledger Record",
       description:
-        "Write a git-like local claim record with claim id, dependencies, supersession links, tags, evidence refs, trust label, and finalization gates.",
+        "Write a git-like local claim record with claim id, dependencies, supersession links, tags, evidence refs, evidence-backed trust, and finalization gates.",
       inputSchema: {
         workspacePath: z
           .string()
@@ -178,7 +178,9 @@ export function createTheoremMcpServer(): McpServer {
         statement: z.string().min(1).describe("Exact claim statement to record."),
         domain: claimDomainSchema.optional().describe("Research lane/domain for filtering and review policy."),
         status: claimStatusSchema.optional().describe("Claim lifecycle status. Defaults to active."),
-        trust: claimTrustSchema.optional().describe("Current strongest local trust label. Defaults to unverified."),
+        trust: claimTrustSchema
+          .optional()
+          .describe("Requested trust label. The recorded claim trust is downgraded unless attached evidence supports it."),
         tags: z.array(z.string().min(1)).optional().describe("Filter tags without # prefix."),
         dependsOn: z.array(z.string().min(1)).optional().describe("Upstream claim ids this claim depends on."),
         supersedes: z.array(z.string().min(1)).optional().describe("Older claim ids this claim replaces or corrects."),
