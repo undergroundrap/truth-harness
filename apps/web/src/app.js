@@ -320,6 +320,10 @@ const plotKind = document.querySelector("#plot-kind");
 const plotTitle = document.querySelector("#plot-title");
 const plotCaption = document.querySelector("#plot-caption");
 const plotFacts = document.querySelector("#plot-facts");
+const plotData = document.querySelector("#plot-data");
+const copyPlotDataButton = document.querySelector("#copy-plot-data");
+const downloadPlotDataButton = document.querySelector("#download-plot-data");
+const downloadPlotSvgButton = document.querySelector("#download-plot-svg");
 const taskDockState = document.querySelector("#task-dock-state");
 const taskDockSummary = document.querySelector("#task-dock-summary");
 const taskList = document.querySelector("#task-list");
@@ -1000,7 +1004,7 @@ function renderClaimList() {
 }
 
 function renderMathPlot(receipt) {
-  if (!plotCanvas || !plotKind || !plotTitle || !plotCaption || !plotFacts) {
+  if (!plotCanvas || !plotKind || !plotTitle || !plotCaption || !plotFacts || !plotData) {
     return;
   }
 
@@ -1012,6 +1016,7 @@ function renderMathPlot(receipt) {
   plotFacts.innerHTML = plot.facts
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join("");
+  plotData.innerHTML = renderPlotDataTable(plot);
 }
 
 function createPlotModel(receipt) {
@@ -1072,6 +1077,11 @@ function createNumberLinePlotModel(receipt, fractions, outputFraction) {
       <text x="${x}" y="${markerY + 7}" text-anchor="middle" fill="#f2f2ee" font-size="13" font-weight="700">${escapeXml(fractionLabel(fraction))}</text>
     </g>`;
   });
+  const dataRows = uniqueFractions.map((fraction) => {
+    const label = fractionLabel(fraction);
+    const isOutput = outputFraction && label === fractionLabel(outputFraction);
+    return [isOutput ? "verified-output" : "plotted-fraction", label, String(fraction.numerator), String(fraction.denominator), fractionValue(fraction).toFixed(6)];
+  });
 
   return {
     kind: "number line",
@@ -1090,7 +1100,9 @@ function createNumberLinePlotModel(receipt, fractions, outputFraction) {
       ["Trust", receipt.trust],
       ["Output", receipt.output],
       ["Ticks", `1/${denominator} subdivisions`]
-    ]
+    ],
+    dataColumns: ["role", "exact", "numerator", "denominator", "decimal"],
+    dataRows
   };
 }
 
@@ -1138,7 +1150,9 @@ function createDiscretePolynomialPlotModel(receipt) {
       ["Red", "odd value"],
       ["Green", "even value"],
       ["Receipt output", receipt.output]
-    ]
+    ],
+    dataColumns: ["n", "value", "parity"],
+    dataRows: points.map((point) => [String(point.n), String(point.y), point.even ? "even" : "odd"])
   };
 }
 
@@ -1168,6 +1182,11 @@ function createDimensionPlotModel(receipt) {
       ["Trust", receipt.trust],
       ["Output", receipt.output],
       ["Boundary", "dimensions only"]
+    ],
+    dataColumns: ["side", "base-dimension-vector", "source"],
+    dataRows: [
+      ["left", "M L T^-2", "receipt output"],
+      ["right", "M L T^-2", "dimension check"]
     ]
   };
 }
@@ -1189,8 +1208,91 @@ function createFallbackPlotModel(receipt) {
       ["Trust", receipt.trust],
       ["Output", receipt.output],
       ["Next", "add plot adapter"]
+    ],
+    dataColumns: ["field", "value"],
+    dataRows: [
+      ["title", receipt.title],
+      ["engine", receipt.engine],
+      ["trust", receipt.trust],
+      ["output", receipt.output]
     ]
   };
+}
+
+function renderPlotDataTable(plot) {
+  if (!plot.dataColumns?.length || !plot.dataRows?.length) {
+    return `<div class="activity-empty">No plot data rows available.</div>`;
+  }
+
+  return `<section>
+    <h5>Plot Data</h5>
+    <div class="plot-data-table-wrap">
+      <table class="plot-data-table">
+        <thead>
+          <tr>${plot.dataColumns.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr>
+        </thead>
+        <tbody>
+          ${plot.dataRows.map((row) => `<tr>${plot.dataColumns.map((_column, index) => `<td>${escapeHtml(row[index] ?? "")}</td>`).join("")}</tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  </section>`;
+}
+
+function formatPlotDataCsv(plot) {
+  const rows = [
+    plot.dataColumns,
+    ...(plot.dataRows ?? [])
+  ];
+  return `${rows.map((row) => row.map(csvCell).join(",")).join("\n")}\n`;
+}
+
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[",\n\r]/u.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function currentPlotModel() {
+  const receipt = receiptStore.get(state.receiptKey);
+  return receipt ? createPlotModel(receipt) : undefined;
+}
+
+async function copyCurrentPlotData() {
+  const receipt = receiptStore.get(state.receiptKey);
+  const plot = currentPlotModel();
+  if (!receipt || !plot) {
+    return;
+  }
+
+  await copyTextToClipboard(formatPlotDataCsv(plot));
+  const originalText = copyPlotDataButton.textContent;
+  copyPlotDataButton.textContent = "Copied";
+  setTimeout(() => {
+    copyPlotDataButton.textContent = originalText;
+  }, 1100);
+  addActivity("human", "Copied plot data", `${receipt.runId} ${plot.kind} rows copied as CSV.`, "passed");
+}
+
+function downloadCurrentPlotData() {
+  const receipt = receiptStore.get(state.receiptKey);
+  const plot = currentPlotModel();
+  if (!receipt || !plot) {
+    return;
+  }
+
+  downloadTextFile(`${receipt.runId}-plot-data.csv`, formatPlotDataCsv(plot), "text/csv");
+  addActivity("human", "Downloaded plot data", `${receipt.runId} ${plot.kind} rows saved as CSV.`, "passed");
+}
+
+function downloadCurrentPlotSvg() {
+  const receipt = receiptStore.get(state.receiptKey);
+  const plot = currentPlotModel();
+  if (!receipt || !plot) {
+    return;
+  }
+
+  downloadTextFile(`${receipt.runId}-plot.svg`, plot.svg, "image/svg+xml");
+  addActivity("human", "Downloaded plot SVG", `${receipt.runId} ${plot.kind} visualization saved as SVG.`, "passed");
 }
 
 function parseFractionsFromText(text) {
@@ -2565,7 +2667,7 @@ function formatActivityExport(events) {
 
 async function copyActivityLog() {
   const text = formatActivityExport(activityEvents);
-  await navigator.clipboard.writeText(text);
+  await copyTextToClipboard(text);
   const originalText = copyActivityButton.textContent;
   copyActivityButton.textContent = "Copied";
   addActivity("human", "Copied activity log", `${activityEvents.length} events copied to clipboard.`, "passed");
@@ -2602,7 +2704,7 @@ async function copyRunbookPacket() {
   }
 
   const packet = formatRunbookPacket(createRunbookPacket(receipt));
-  await navigator.clipboard.writeText(packet);
+  await copyTextToClipboard(packet);
   const originalText = copyRunbookButton.textContent;
   copyRunbookButton.textContent = "Copied";
   addActivity("human", "Copied agent runbook", `${receipt.runId} runbook copied for agent handoff.`, "passed");
@@ -2810,6 +2912,7 @@ function renderReport(receipt) {
     .map((row) => `<li><strong>${escapeHtml(row.label)}</strong>: ${escapeHtml(statusLabel(row.status))} - <code>${escapeHtml(row.command)}</code></li>`)
     .join("");
   const notes = researchNotes.value.trim();
+  const plot = createPlotModel(receipt);
   const mathInput = receipt.math?.input;
   const mathOutput = receipt.math?.output;
   const tags = receiptTags(receipt);
@@ -2835,6 +2938,10 @@ function renderReport(receipt) {
     .slice(0, 8)
     .map((event) => `<li><time datetime="${escapeHtml(event.at)}">${escapeHtml(event.at)}</time> - ${escapeHtml(event.actor)}: ${escapeHtml(event.title)}</li>`)
     .join("");
+  const plotRows = plot.dataRows
+    .slice(0, 8)
+    .map((row) => `<tr>${plot.dataColumns.map((_column, index) => `<td>${escapeHtml(row[index] ?? "")}</td>`).join("")}</tr>`)
+    .join("");
 
   reportPreview.innerHTML = `
     <header>
@@ -2844,6 +2951,16 @@ function renderReport(receipt) {
       <p>Workbench: Theorem Workbench by Ocean Bennett. License: AGPL-3.0 with visible attribution requirement.</p>
     </header>
     <div class="report-math">${renderMathInline(mathInput ?? receipt.title)} <span>&rarr;</span> ${renderMathInline(mathOutput ?? receipt.output)}</div>
+    <h3>Plot</h3>
+    <dl class="report-facts">
+      <div><dt>Kind</dt><dd>${escapeHtml(plot.kind)}</dd></div>
+      <div><dt>Title</dt><dd>${escapeHtml(plot.title)}</dd></div>
+      <div><dt>Boundary</dt><dd>${escapeHtml(plot.caption)}</dd></div>
+    </dl>
+    <table class="report-table">
+      <thead><tr>${plot.dataColumns.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr></thead>
+      <tbody>${plotRows}</tbody>
+    </table>
     <dl class="report-facts">
       <div><dt>Trust</dt><dd>${escapeHtml(receipt.trust)}</dd></div>
       <div><dt>Output</dt><dd>${escapeHtml(receipt.output)}</dd></div>
@@ -2906,6 +3023,7 @@ function generateReportMarkdown(receipt) {
   const researcher = currentResearcherName();
   const matrix = verificationRows(receipt);
   const notes = researchNotes.value.trim() || "No local notes added yet.";
+  const plot = createPlotModel(receipt);
   const mathInput = receipt.math?.input ?? receipt.title;
   const mathOutput = receipt.math?.output ?? receipt.output;
   const tags = receiptTags(receipt);
@@ -2928,6 +3046,18 @@ function generateReportMarkdown(receipt) {
     "",
     `- Input TeX: \`${mathInput}\``,
     `- Output TeX: \`${mathOutput}\``,
+    "",
+    "## Plot",
+    "",
+    `- Kind: ${plot.kind}`,
+    `- Title: ${plot.title}`,
+    `- Boundary: ${plot.caption}`,
+    "",
+    "Plot data CSV:",
+    "",
+    "```csv",
+    formatPlotDataCsv(plot).trimEnd(),
+    "```",
     "",
     "## Receipt",
     "",
@@ -3028,6 +3158,33 @@ function downloadTextFile(filename, text, type) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function copyTextToClipboard(text) {
+  if (globalThis.navigator?.clipboard?.writeText) {
+    try {
+      await globalThis.navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall through to the local textarea copy path when browser permission blocks direct clipboard writes.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.append(textarea);
+  textarea.focus();
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+
+  if (!copied) {
+    throw new Error("Clipboard permission denied. Use Download instead.");
+  }
 }
 
 function receiptToViewModel(receipt) {
@@ -3369,6 +3526,16 @@ copyRunbookButton.addEventListener("click", () => {
 
 downloadRunbookButton.addEventListener("click", downloadRunbookPacket);
 
+copyPlotDataButton.addEventListener("click", () => {
+  copyCurrentPlotData().catch((error) => {
+    addActivity("web-ui", "Copy plot data failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+  });
+});
+
+downloadPlotDataButton.addEventListener("click", downloadCurrentPlotData);
+
+downloadPlotSvgButton.addEventListener("click", downloadCurrentPlotSvg);
+
 researchNotes.addEventListener("input", saveNotes);
 
 researchNotes.addEventListener("change", () => {
@@ -3381,7 +3548,7 @@ copyReportButton.addEventListener("click", () => {
     return;
   }
 
-  navigator.clipboard.writeText(generateReportMarkdown(receipt))
+  copyTextToClipboard(generateReportMarkdown(receipt))
     .then(() => {
       addActivity("human", "Copied report draft", `${receipt.runId} report copied as Markdown.`, "passed");
       copyReportButton.textContent = "Copied";

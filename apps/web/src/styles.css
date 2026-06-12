@@ -1266,6 +1266,58 @@ dd {
   gap: 8px;
 }
 
+.plot-data {
+  border-top: 1px solid var(--line-soft);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.plot-data h5 {
+  color: #f1eadc;
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+.plot-data-table-wrap {
+  max-height: 190px;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  scrollbar-gutter: stable;
+}
+
+.plot-data-table {
+  width: 100%;
+  min-width: 260px;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.plot-data-table th,
+.plot-data-table td {
+  border-bottom: 1px solid var(--line-soft);
+  padding: 6px 7px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.plot-data-table th {
+  position: sticky;
+  top: 0;
+  background: #171717;
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.plot-data-table td {
+  color: #d8d2c8;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+}
+
+.plot-data-table tr:last-child td {
+  border-bottom: 0;
+}
+
 .graph-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
@@ -2068,6 +2120,31 @@ textarea:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.report-table th,
+.report-table td {
+  border: 1px solid var(--line-soft);
+  padding: 6px 7px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.report-table th {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.report-table td {
+  color: #d8d2c8;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
 }
 
 .mini-label {

@@ -208,7 +208,12 @@
               <section class="surface-panel" id="surface-plot" role="tabpanel" aria-labelledby="tab-plot" data-surface-panel="plot" tabindex="0" aria-label="Math plot" hidden>
                 <div class="panel-heading">
                   <h3>Math Plot</h3>
-                  <span class="mini-label" id="plot-kind">exact visualization</span>
+                  <div class="activity-actions" aria-label="Plot actions">
+                    <span class="mini-label" id="plot-kind">exact visualization</span>
+                    <button class="text-button compact-button" id="copy-plot-data" type="button">Copy data</button>
+                    <button class="text-button compact-button" id="download-plot-data" type="button">Download CSV</button>
+                    <button class="text-button compact-button" id="download-plot-svg" type="button">Download SVG</button>
+                  </div>
                 </div>
                 <div class="plot-layout">
                   <div class="plot-canvas" id="plot-canvas" aria-label="Rendered math visualization"></div>
@@ -216,6 +221,7 @@
                     <h4 id="plot-title">Visualization</h4>
                     <p id="plot-caption">The plot is generated from the verified receipt output.</p>
                     <dl class="plot-facts" id="plot-facts"></dl>
+                    <div class="plot-data" id="plot-data" aria-label="Exact plot data"></div>
                   </aside>
                 </div>
               </section>
