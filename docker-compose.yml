@@ -20,6 +20,7 @@ services:
       CI: "true"
       NPM_CONFIG_UPDATE_NOTIFIER: "false"
       THEOREM_WORKBENCH_CONTAINER: "1"
+      THEOREM_Z3: "z3"
     volumes:
       - .:/workspace
       - theorem_node_modules:/workspace/node_modules
@@ -38,6 +39,7 @@ services:
       CI: "true"
       NPM_CONFIG_UPDATE_NOTIFIER: "false"
       THEOREM_WORKBENCH_CONTAINER: "1"
+      THEOREM_Z3: "z3"
     volumes:
       - .:/workspace
       - theorem_node_modules:/workspace/node_modules
@@ -56,6 +58,7 @@ services:
       CI: "true"
       NPM_CONFIG_UPDATE_NOTIFIER: "false"
       THEOREM_WORKBENCH_CONTAINER: "1"
+      THEOREM_Z3: "z3"
     volumes:
       - .:/workspace
       - theorem_node_modules:/workspace/node_modules

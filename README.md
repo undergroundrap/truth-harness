@@ -28,7 +28,7 @@ The current MVP is local-first by default. Receipt metadata records `local-only`
 
 ## Docker-First Quickstart (Recommended)
 
-For agent-facing work, demos, and anything that may execute code, prefer Docker first. The image keeps Node, Python, SymPy, and npm dependencies out of your host environment. The CLI and MCP compose runtimes disable network access; the web runtime publishes only to `127.0.0.1` so your browser can reach the local workbench.
+For agent-facing work, demos, and anything that may execute code, prefer Docker first. The image keeps Node, Python, SymPy, Z3, and npm dependencies out of your host environment. The CLI and MCP compose runtimes disable network access; the web runtime publishes only to `127.0.0.1` so your browser can reach the local workbench.
 
 Highest-safety verification, with no repo bind mount during the checks:
 
@@ -45,6 +45,9 @@ docker compose run --rm theorem npm run check
 docker compose run --rm theorem npm run proof:launch
 docker compose run --rm theorem npm run cli -- workspace init --name "Local Math Lab"
 docker compose run --rm theorem npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
+docker compose run --rm theorem npm run cli -- cas backends
+docker compose run --rm theorem npm run cli -- smt backends
+docker compose run --rm theorem npm run cli -- proof backends
 docker compose run --rm theorem npm run cli -- code sandbox-status --json
 docker compose up web
 docker compose run --rm -i mcp
@@ -111,6 +114,8 @@ The current MVP is intentionally small and honest. It supports exact rational ar
 The first web surface lives at [apps/web](apps/web). It is a local workbench shell, designed like a dense desktop research tool: sessions and claims on the left, receipt-first verification in the center, and trust labels, replay commands, math plots, evidence lineage, activity logs, and limitations in the inspector. The browser calls localhost `/api/receipt` and `/api/claims` endpoints backed by `@theorem-workbench/core`; it does not call a hosted model or external service. Verified receipts can be recorded into the local claim ledger so exported reports cite stable claim IDs. In the UI, `Plot` means numeric/math visualization; `Lineage` means the receipt/claim dependency graph. Run it with `npm run web:serve` or `docker compose up web`, then open `http://127.0.0.1:4180`.
 
 The web inspector also calls localhost `/api/status` to show safety and verification-engine readiness. It reports the measured code-run sandbox boundary plus local Maxima, Lean, and Z3 availability probes. These probes are readiness checks only: they never mint `cross-checked`, `smt-checked`, or `proved` by themselves. Those labels still require a concrete replayable Maxima agreement run, Z3 solver run, or accepted Lean proof-check artifact.
+
+The Docker image installs Z3 so the containerized web UI and CLI can show real SMT readiness without changing the host machine. Maxima and Lean are intentionally not bundled yet; configure `THEOREM_MAXIMA` or `THEOREM_LEAN`, or extend the image with validated/pinned engine builds, when the CAS or proof lanes need a reproducible environment.
 
 On Windows during UI iteration, prefer `npm run web:restart`. It stops the Node listener on port `4180`, starts the web server again in the background, and keeps the browser URL stable. Static web edits usually need only a browser reload; server/API edits need `npm run web:restart`.
 

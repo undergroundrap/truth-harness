@@ -1,6 +1,6 @@
 # Docker-First Workflow
 
-Theorem Workbench should be run from Docker by default when you are testing agent-facing code, proof gates, symbolic adapters, or MCP workflows. Docker keeps Node, Python, SymPy, and npm dependencies out of the host environment and makes the public credibility path easier to replay.
+Theorem Workbench should be run from Docker by default when you are testing agent-facing code, proof gates, symbolic adapters, or MCP workflows. Docker keeps Node, Python, SymPy, Z3, and npm dependencies out of the host environment and makes the public credibility path easier to replay.
 
 Docker is still not magic security. The Docker daemon is powerful, and a dev container with the repository bind-mounted can change files in that repository. Treat Docker as the baseline isolation layer, then use Theorem Workbench receipts, measured sandbox status, and replayable evidence for stronger claims.
 
@@ -41,6 +41,9 @@ Run CLI commands:
 ```bash
 docker compose run --rm theorem npm run cli -- workspace init --name "Local Math Lab"
 docker compose run --rm theorem npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
+docker compose run --rm theorem npm run cli -- cas backends
+docker compose run --rm theorem npm run cli -- smt backends
+docker compose run --rm theorem npm run cli -- proof backends
 docker compose run --rm theorem npm run cli -- code sandbox-status --json
 ```
 
@@ -51,6 +54,8 @@ docker compose up web
 ```
 
 Then open `http://127.0.0.1:4180`. The web service publishes only to localhost. The browser calls localhost `/api/receipt` and `/api/claims` endpoints backed by `@theorem-workbench/core`; it does not call a hosted model or external service. The web server also rejects non-local Host headers by default and accepts browser API writes only from the same origin.
+
+The web inspector's Engine Readiness panel reads `/api/status` and should report Z3 as available in the standard container image after `docker compose build`. Maxima and Lean are not bundled by default because those lanes need validated engine builds and, for proof work, a pinned Lean/Mathlib environment; set `THEOREM_MAXIMA` or `THEOREM_LEAN` or build a derived image once that project layout is chosen.
 
 Run the MCP server over stdio:
 
@@ -69,7 +74,8 @@ By default, MCP `theorem_code_run` is still disabled. To expose it to an agent, 
 - The web compose service publishes `127.0.0.1:4180` for the browser and is not a code sandbox. Its local API currently creates receipts and claim-ledger records through `@theorem-workbench/core` without hosted model calls.
 - Node dependencies live in the `theorem_node_modules` Docker volume.
 - npm cache lives in the `theorem_npm_cache` Docker volume.
-- Python and `sympy==1.14.0` are installed inside the image.
+- Python, `sympy==1.14.0`, and Z3 are installed inside the image.
+- `THEOREM_Z3=z3` is set for compose services so local SMT probes use the containerized solver.
 
 ## What Is Not Isolated
 
@@ -77,6 +83,7 @@ By default, MCP `theorem_code_run` is still disabled. To expose it to an agent, 
 - The measured Docker provider attests the current container network namespace, not mathematical truth, code correctness, medical/scientific validity, or safety.
 - Loopback remains available inside the container. The measurement means no non-loopback interface/default route was observed.
 - Docker does not make AI-generated code safe. Keep executable allowlists narrow, prefer `--require-sandbox` for risky workflows, and review any command before running it.
+- Z3 availability probes are not evidence by themselves. `smt-checked` still requires a concrete Z3 `sat` or `unsat` solver run over the recorded artifact. Maxima remains a supported optional CAS backend, but `cross-checked` still requires a concrete Maxima agreement run from a validated local `THEOREM_MAXIMA` command.
 
 ## Reset Container State
 

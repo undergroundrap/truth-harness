@@ -10,7 +10,7 @@ ENV CI=true \
     PATH="/opt/theorem-python/bin:${PATH}"
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates python3 python3-pip python3-venv tini \
+  && apt-get install -y --no-install-recommends ca-certificates python3 python3-pip python3-venv tini z3 \
   && python3 -m venv /opt/theorem-python \
   && /opt/theorem-python/bin/python -m pip install sympy==1.14.0 \
   && useradd --create-home --uid 10001 theorem \

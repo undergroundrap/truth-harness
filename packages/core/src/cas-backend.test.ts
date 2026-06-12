@@ -64,6 +64,24 @@ describe("CAS backend status", () => {
     });
     expect(report.warnings.join(" ")).toContain("must not label symbolic results `cross-checked`");
   });
+
+  it("explains signal-based Maxima probe failures", () => {
+    const runner: CasBackendCommandRunner = () => ({
+      status: null,
+      signal: "SIGKILL",
+      stdout: "",
+      stderr: ""
+    });
+
+    const report = getCasBackendStatus({ runner });
+
+    expect(report.backends[0]).toMatchObject({
+      backendId: "maxima",
+      status: "error",
+      error: "Maxima exited by signal SIGKILL.",
+      canCheckSymbolic: false
+    });
+  });
 });
 
 describe("Maxima symbolic cross-check", () => {

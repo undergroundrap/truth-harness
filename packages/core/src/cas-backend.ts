@@ -8,6 +8,7 @@ export type SymbolicCasCheckStatus = "passed" | "failed" | "solver-unavailable" 
 
 export interface CasBackendCommandResult {
   status: number | null;
+  signal?: string | null;
   stdout: string;
   stderr: string;
   error?: {
@@ -290,6 +291,9 @@ function probeMaximaBackend(args: {
   const result = args.runner(args.command, versionArgs, args.timeoutMs);
   const version = firstNonEmptyLine(result.stdout);
   const launchFailure = result.error ? isLaunchFailure(result.error) : false;
+  const errorText = result.error?.message
+    ?? (result.signal ? `Maxima exited by signal ${result.signal}.` : undefined)
+    ?? (result.status !== 0 ? `Maxima exited with status ${String(result.status)}.` : undefined);
   const status: CasBackendStatus = result.status === 0 && version
     ? "available"
     : launchFailure
@@ -311,7 +315,7 @@ function probeMaximaBackend(args: {
     exitCode: result.status,
     stdout: trimOptional(result.stdout),
     stderr: trimOptional(result.stderr),
-    error: result.error?.message,
+    error: errorText,
     canCheckSymbolic: status === "available",
     statusProbeMintedCheck: false,
     limitations: [
@@ -407,6 +411,7 @@ function runCommand(command: string, args: string[], timeoutMs: number): CasBack
 
   return {
     status: result.status,
+    signal: result.signal,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
     ...(result.error ? { error: { name: result.error.name, message: result.error.message } } : {})
