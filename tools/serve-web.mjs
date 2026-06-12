@@ -85,6 +85,7 @@ async function resolveRequestPath(pathname) {
 async function handleApiRequest(request, response, requestUrl) {
   if (requestUrl.pathname === "/api/status" && request.method === "GET") {
     const codeRunSandbox = await readCodeRunSandboxStatus();
+    const verification = await readVerificationEngineStatus();
     const mcpCodeRunExposed = isTruthyEnv(process.env.THEOREM_ALLOW_CODE_RUN);
     const unsandboxedCodeRunAllowed = isTruthyEnv(process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN);
     const webServer = webServerSafetyStatus();
@@ -113,6 +114,7 @@ async function handleApiRequest(request, response, requestUrl) {
           selectedContextRequiredForExternalModels: true
         }
       },
+      verification,
       capabilities: [
         "receipt-create",
         "claim-ledger",
@@ -121,6 +123,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "agent-runbook",
         "research-session",
         "validation-plan",
+        "verification-readiness",
         "sandbox-status",
         "safety-center"
       ]
@@ -396,6 +399,113 @@ async function readCodeRunSandboxStatus() {
       ]
     };
   }
+}
+
+async function readVerificationEngineStatus() {
+  try {
+    const {
+      getCasBackendStatus,
+      getProofBackendStatus,
+      getSmtBackendStatus
+    } = await loadCoreModule();
+    const timeoutMs = 1500;
+    const cas = getCasBackendStatus({ timeoutMs });
+    const proof = getProofBackendStatus({ timeoutMs });
+    const smt = getSmtBackendStatus({ timeoutMs });
+    const engines = [
+      engineProbeRow({
+        lane: "Symbolic CAS",
+        command: "theorem cas backends",
+        trustBoundary: "Can support `cross-checked` only after a concrete independent Maxima agreement run.",
+        probe: cas.backends[0]
+      }),
+      engineProbeRow({
+        lane: "Formal proof",
+        command: "theorem proof backends",
+        trustBoundary: "Can support `proved` only after Lean accepts a concrete proof artifact.",
+        probe: proof.backends[0]
+      }),
+      engineProbeRow({
+        lane: "SMT solver",
+        command: "theorem smt backends",
+        trustBoundary: "Can support `smt-checked` only after Z3 returns sat or unsat for a concrete SMT-LIB artifact.",
+        probe: smt.backends[0]
+      })
+    ];
+    const readyCount = engines.filter((engine) => engine.status === "available").length;
+
+    return {
+      schemaVersion: "theorem.verification-readiness.v0",
+      createdAt: new Date().toISOString(),
+      localOnly: true,
+      networkAccess: "none",
+      status: readyCount === engines.length ? "ready" : readyCount > 0 ? "partial" : "missing",
+      readyCount,
+      totalCount: engines.length,
+      engines,
+      trustBoundary: {
+        statusProbeIsNotEvidence: true,
+        crossCheckedRequiresIndependentAgreementRun: true,
+        smtCheckedRequiresConcreteSolverRun: true,
+        provedRequiresAcceptedProofCheckerRun: true
+      },
+      warnings: [
+        ...cas.warnings,
+        ...proof.warnings,
+        ...smt.warnings
+      ],
+      reports: {
+        cas,
+        proof,
+        smt
+      }
+    };
+  } catch (error) {
+    return {
+      schemaVersion: "theorem.verification-readiness.v0",
+      createdAt: new Date().toISOString(),
+      localOnly: true,
+      networkAccess: "none",
+      status: "error",
+      readyCount: 0,
+      totalCount: 3,
+      engines: [],
+      trustBoundary: {
+        statusProbeIsNotEvidence: true,
+        crossCheckedRequiresIndependentAgreementRun: true,
+        smtCheckedRequiresConcreteSolverRun: true,
+        provedRequiresAcceptedProofCheckerRun: true
+      },
+      warnings: [
+        `Verification readiness unavailable: ${error instanceof Error ? error.message : "unknown error"}`
+      ]
+    };
+  }
+}
+
+function engineProbeRow(input) {
+  const probe = input.probe ?? {};
+
+  return {
+    id: probe.backendId ?? "unknown",
+    displayName: probe.displayName ?? "Unknown backend",
+    lane: input.lane,
+    adapter: probe.adapter ?? "unknown",
+    role: probe.role ?? "checker",
+    status: probe.status ?? "missing",
+    command: input.command,
+    executable: probe.command ?? "not configured",
+    version: probe.version,
+    localOnly: probe.localOnly === true,
+    networkAccess: probe.networkAccess ?? "unknown",
+    acceptedProofChecker: probe.acceptedProofChecker === true,
+    statusProbeMintedEvidence: false,
+    canRun: Boolean(probe.canCheckSymbolic ?? probe.canCheckProofs ?? probe.canCheckSmt),
+    trustBoundary: input.trustBoundary,
+    note: Array.isArray(probe.limitations) && probe.limitations.length > 0
+      ? probe.limitations[0]
+      : "Backend status probe did not return a limitation note."
+  };
 }
 
 function loadCoreModule() {

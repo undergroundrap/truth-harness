@@ -263,6 +263,9 @@ const reviewStandard = document.querySelector("#review-standard");
 const safetyStatusPill = document.querySelector("#safety-status-pill");
 const safetyDetails = document.querySelector("#safety-details");
 const safetyNotes = document.querySelector("#safety-notes");
+const engineReadinessPill = document.querySelector("#engine-readiness-pill");
+const engineReadinessDetails = document.querySelector("#engine-readiness-details");
+const engineReadinessNotes = document.querySelector("#engine-readiness-notes");
 const activityLog = document.querySelector("#activity-log");
 const activitySearch = document.querySelector("#activity-search");
 const activityCount = document.querySelector("#activity-count");
@@ -2167,6 +2170,12 @@ async function refreshSafetyStatus() {
       safetyStatusSummary(payload),
       payload.safety?.codeRunSandbox?.canAttestNetworkNone ? "passed" : "waiting"
     );
+    addActivity(
+      "local-api",
+      "Loaded engine readiness",
+      engineReadinessSummary(payload),
+      payload.verification?.readyCount > 0 ? "passed" : "waiting"
+    );
   } catch (error) {
     state.safetyStatus = {
       error: error instanceof Error ? error.message : "Unknown local status failure."
@@ -2187,6 +2196,7 @@ function renderSafetyStatus() {
     safetyStatusPill.className = "status-pill waiting";
     safetyDetails.innerHTML = `<div><dt>Sandbox</dt><dd>checking local status</dd></div>`;
     safetyNotes.innerHTML = `<li>Loading local execution boundary.</li>`;
+    renderEngineReadinessStatus(payload);
     return;
   }
 
@@ -2195,6 +2205,7 @@ function renderSafetyStatus() {
     safetyStatusPill.className = "status-pill refuted";
     safetyDetails.innerHTML = `<div><dt>Status</dt><dd>local API unavailable</dd></div>`;
     safetyNotes.innerHTML = `<li>${escapeHtml(payload.error)}</li>`;
+    renderEngineReadinessStatus(payload);
     return;
   }
 
@@ -2231,6 +2242,66 @@ function renderSafetyStatus() {
   ].filter(Boolean);
   const notes = noteCandidates.length > 0 ? noteCandidates.slice(0, 3) : ["No local safety metadata was returned."];
   safetyNotes.innerHTML = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
+  renderEngineReadinessStatus(payload);
+}
+
+function renderEngineReadinessStatus(payload) {
+  if (!engineReadinessPill || !engineReadinessDetails || !engineReadinessNotes) {
+    return;
+  }
+
+  if (!payload) {
+    engineReadinessPill.textContent = "checking";
+    engineReadinessPill.className = "status-pill waiting";
+    engineReadinessDetails.innerHTML = `<div><dt>Backends</dt><dd>checking local tools</dd></div>`;
+    engineReadinessNotes.innerHTML = `<li>Backend probes report availability only; evidence still requires concrete replayable runs.</li>`;
+    return;
+  }
+
+  if (payload.error) {
+    engineReadinessPill.textContent = "unavailable";
+    engineReadinessPill.className = "status-pill refuted";
+    engineReadinessDetails.innerHTML = `<div><dt>Status</dt><dd>local API unavailable</dd></div>`;
+    engineReadinessNotes.innerHTML = `<li>${escapeHtml(payload.error)}</li>`;
+    return;
+  }
+
+  const readiness = payload.verification ?? {};
+  const engines = Array.isArray(readiness.engines) ? readiness.engines : [];
+  const totalCount = Number.isFinite(readiness.totalCount) ? readiness.totalCount : engines.length;
+  const readyCount = Number.isFinite(readiness.readyCount)
+    ? readiness.readyCount
+    : engines.filter((engine) => engine.status === "available").length;
+  const allReady = totalCount > 0 && readyCount === totalCount;
+  const anyReady = readyCount > 0;
+  const rows = [
+    ["Ready", `${readyCount}/${totalCount} local engines`],
+    ...engines.map((engine) => [
+      engine.lane ?? engine.displayName ?? "Backend",
+      engineReadinessValue(engine)
+    ])
+  ];
+
+  engineReadinessPill.textContent = allReady ? "all ready" : anyReady ? `${readyCount}/${totalCount} ready` : "install engines";
+  engineReadinessPill.className = `status-pill ${allReady ? "exact" : anyReady ? "checked" : "waiting"}`;
+  engineReadinessDetails.innerHTML = rows
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`)
+    .join("");
+
+  const boundaryNotes = [
+    "Status probes do not mint evidence, truth labels, or proof.",
+    ...engines
+      .filter((engine) => engine.status !== "available")
+      .map((engine) => `${engine.displayName ?? engine.id ?? "Backend"}: ${engine.note ?? "not available"}`),
+    ...engines
+      .filter((engine) => engine.status === "available")
+      .map((engine) => engine.trustBoundary)
+  ].filter(Boolean);
+
+  engineReadinessNotes.innerHTML = boundaryNotes
+    .slice(0, 5)
+    .map((note) => `<li>${escapeHtml(note)}</li>`)
+    .join("");
 }
 
 function safetyStatusSummary(payload) {
@@ -2244,6 +2315,38 @@ function safetyStatusSummary(payload) {
   }
 
   return `Code-run sandbox not attested: ${sandbox.reason ?? "no measured sandbox provider"}`;
+}
+
+function engineReadinessSummary(payload) {
+  const readiness = payload?.verification;
+  if (!readiness) {
+    return "No verification engine readiness metadata returned.";
+  }
+
+  const engines = Array.isArray(readiness.engines) ? readiness.engines : [];
+  const readyCount = Number.isFinite(readiness.readyCount)
+    ? readiness.readyCount
+    : engines.filter((engine) => engine.status === "available").length;
+  const totalCount = Number.isFinite(readiness.totalCount) ? readiness.totalCount : engines.length;
+  const missing = engines
+    .filter((engine) => engine.status !== "available")
+    .map((engine) => engine.displayName ?? engine.id)
+    .filter(Boolean);
+
+  if (missing.length === 0 && totalCount > 0) {
+    return `${readyCount}/${totalCount} local verification engines available. Probes are readiness only, not evidence.`;
+  }
+
+  return `${readyCount}/${totalCount} local verification engines available. Missing: ${missing.join(", ") || "unknown"}.`;
+}
+
+function engineReadinessValue(engine) {
+  const status = formatSafetyPhrase(engine.status ?? "unknown");
+  const command = engine.command ? `<code>${escapeHtml(engine.command)}</code>` : "";
+  const version = engine.version ? `<small>${escapeHtml(engine.version)}</small>` : "";
+  const boundary = engine.trustBoundary ? `<small>${escapeHtml(engine.trustBoundary)}</small>` : "";
+
+  return `<span>${escapeHtml(engine.displayName ?? engine.id ?? "Backend")} - ${escapeHtml(status)}</span>${command}${version}${boundary}`;
 }
 
 function formatSafetyPhrase(value) {

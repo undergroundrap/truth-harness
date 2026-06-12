@@ -1191,12 +1191,31 @@ h4 {
   background: linear-gradient(180deg, rgba(32, 32, 32, 0.82), rgba(20, 20, 20, 0.96));
 }
 
+.engine-readiness-section {
+  background: #121212;
+}
+
 .safety-values {
   margin-top: 8px;
 }
 
-.safety-values div {
+.safety-values div,
+.engine-values div {
   grid-template-columns: minmax(84px, 0.72fr) minmax(0, 1.28fr);
+}
+
+.engine-values {
+  margin-top: 8px;
+}
+
+.engine-values dd {
+  display: grid;
+  gap: 2px;
+}
+
+.engine-values code {
+  color: var(--text);
+  font-size: 11px;
 }
 
 .safety-notes {
@@ -1214,6 +1233,10 @@ h4 {
 
 .safety-notes li::marker {
   color: var(--accent);
+}
+
+.engine-notes li::marker {
+  color: var(--warning);
 }
 
 dt {
