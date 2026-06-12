@@ -133,5 +133,9 @@ The web app now participates in the same local evidence loop as the CLI and MCP 
 - `/api/claims` writes selected receipts into `.theorem-workbench/claims` through the core claim-ledger module.
 - The browser shows persisted claim IDs in the sidebar, inspector, and report export.
 - Claim records keep tags, trust labels, dependencies, evidence refs, open checks, authors, and Markdown output as project-local artifacts.
+- `Record chain` recursively records upstream subclaims first, then records or revises the selected claim with ledger dependency links and `supersedes` history.
+- The claim ledger can be filtered by claim id, tags, domain, trust state, evidence refs, authors, open checks, and dependency ids.
 
 This is the wedge: researchers and agents should not have to choose between a usable front end and verifiable local provenance.
+
+The long-term export direction should stay compatible with established provenance and research packaging ideas: claims and receipts as entities, verifier/model/tool runs as activities, humans/agents as attributed actors, and reports/snapshots as portable research objects.

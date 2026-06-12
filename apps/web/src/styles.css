@@ -625,7 +625,10 @@ h1 {
 .header-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
 }
 
 .text-button {
@@ -1078,6 +1081,26 @@ h4 {
   overflow: auto;
   padding-right: 2px;
   scrollbar-gutter: stable;
+}
+
+.ledger-tools {
+  margin-bottom: 8px;
+}
+
+.ledger-tools input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  outline: none;
+  background: #101010;
+  color: var(--text);
+  padding: 0 9px;
+}
+
+.ledger-tools input::placeholder {
+  color: var(--faint);
 }
 
 .ledger-record {
@@ -2227,7 +2250,7 @@ textarea:focus-visible {
 }
 
 .text-button:disabled {
-  cursor: wait;
+  cursor: default;
   opacity: 0.65;
 }
 

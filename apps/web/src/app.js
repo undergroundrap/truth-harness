@@ -219,6 +219,7 @@ const state = {
   replayIndex: 0,
   replayPlaying: false,
   sidebarQuery: "",
+  claimLedgerQuery: "",
   sidebarCollapsed: false,
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE,
@@ -242,6 +243,7 @@ const receiptDetails = document.querySelector("#receipt-details");
 const graphList = document.querySelector("#graph-list");
 const claimLedgerList = document.querySelector("#claim-ledger-list");
 const claimLedgerCount = document.querySelector("#claim-ledger-count");
+const claimLedgerSearch = document.querySelector("#claim-ledger-search");
 const mainGraphList = document.querySelector("#main-graph-list");
 const matrixSummary = document.querySelector("#matrix-summary");
 const matrixCurrentClaim = document.querySelector("#matrix-current-claim");
@@ -294,6 +296,7 @@ const routeReplay = document.querySelector("#route-replay");
 const routeReport = document.querySelector("#route-report");
 const openReplayButton = document.querySelector("#open-replay");
 const recordClaimButton = document.querySelector("#record-claim");
+const recordChainButton = document.querySelector("#record-chain");
 const playReplayButton = document.querySelector("#play-replay");
 const resetReplayButton = document.querySelector("#reset-replay");
 const exportReplayButton = document.querySelector("#export-replay");
@@ -955,7 +958,7 @@ function render() {
   renderTaskDock(receipt);
   renderReplay(receipt);
   renderReport(receipt);
-  updateRecordClaimButton(receipt);
+  updateClaimRecordButtons(receipt);
   applySidebarSearch();
   document.querySelectorAll(".segment").forEach((button) => {
     button.classList.toggle("active", button.dataset.level === state.level);
@@ -992,13 +995,17 @@ function renderClaimLedger() {
     return;
   }
 
+  const query = state.claimLedgerQuery.trim().toLowerCase();
   const claims = [...claimLedgerStore.values()];
-  const visibleClaims = claims.slice(0, 6);
+  const filteredClaims = claims.filter((claim) => matchesClaimLedgerSearch(claim, query));
+  const visibleClaims = filteredClaims.slice(0, 8);
   const edgeCount = Array.isArray(claimLedgerGraph.edges) ? claimLedgerGraph.edges.length : 0;
-  claimLedgerCount.textContent = `${claims.length} records / ${edgeCount} links`;
+  claimLedgerCount.textContent = query
+    ? `${filteredClaims.length} of ${claims.length} records / ${edgeCount} links`
+    : `${claims.length} records / ${edgeCount} links`;
 
   claimLedgerList.innerHTML = visibleClaims.length === 0
-    ? `<div class="activity-empty">No local claim records yet. Record the current receipt to create the first project claim.</div>`
+    ? `<div class="activity-empty">${claims.length === 0 ? "No local claim records yet. Record the current receipt to create the first project claim." : "No claim records match this filter."}</div>`
     : visibleClaims
       .map((claim) => {
         const linkedKey = receiptKeyForClaimId(claim.claimId);
@@ -1007,17 +1014,48 @@ function renderClaimLedger() {
         const dependencyText = claim.dependsOn?.length
           ? `${claim.dependsOn.length} upstream`
           : "root claim";
+        const revisionText = claim.supersedes?.length ? `revises ${claim.supersedes.length}` : "";
+        const lineageText = [dependencyText, revisionText].filter(Boolean).join(" / ");
         return `<button class="ledger-record ${linkedKey ? "clickable" : ""}" data-claim-id="${escapeHtml(claim.claimId)}" type="button">
           <span class="trust-dot ${trustClass(claim.trust)}"></span>
           <span>
             <strong>${escapeHtml(claim.title)}</strong>
             <small>${escapeHtml(claim.domain)} - ${escapeHtml(claim.trust)} - ${escapeHtml(ready)}</small>
-            <small>${escapeHtml(claim.claimId)} - ${escapeHtml(dependencyText)}</small>
+            <small>${escapeHtml(claim.claimId)} - ${escapeHtml(lineageText)}</small>
             <small>${escapeHtml(tagText)}</small>
           </span>
         </button>`;
       })
       .join("");
+}
+
+function matchesClaimLedgerSearch(claim, query) {
+  if (!query) {
+    return true;
+  }
+
+  return [
+    claim.claimId,
+    claim.title,
+    claim.statement,
+    claim.normalizedStatement,
+    claim.domain,
+    claim.status,
+    claim.trust,
+    ...(claim.tags ?? []),
+    ...(claim.tags ?? []).map((tag) => `#${tag}`),
+    ...(claim.dependsOn ?? []),
+    ...(claim.supersedes ?? []),
+    ...(claim.authors ?? []),
+    ...(claim.evidenceRefs ?? []).flatMap((ref) => [ref.kind, ref.ref, ref.trust, ref.summary]),
+    ...(claim.finalization?.openChecks ?? []),
+    claim.finalization?.summary,
+    ...(claim.warnings ?? [])
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(query);
 }
 
 async function refreshClaimLedger({ announce = true } = {}) {
@@ -1109,23 +1147,28 @@ function receiptKeyForClaimId(claimId) {
   return undefined;
 }
 
-function updateRecordClaimButton(receipt) {
-  if (!recordClaimButton || !receipt) {
+function updateClaimRecordButtons(receipt) {
+  if (!recordClaimButton || !recordChainButton || !receipt) {
     return;
   }
 
   const recorded = Boolean(receipt.claimId);
+  const chainState = claimChainState(receipt);
   recordClaimButton.disabled = recorded;
   recordClaimButton.textContent = recorded ? "Claim recorded" : "Record claim";
   recordClaimButton.title = recorded
     ? `${receipt.claimId} is already stored in the local claim ledger.`
     : "Write this receipt into the local claim ledger.";
+
+  recordChainButton.disabled = !chainState.needsWork;
+  recordChainButton.textContent = chainState.label;
+  recordChainButton.title = chainState.detail;
 }
 
 async function recordCurrentClaim() {
   const receipt = receiptStore.get(state.receiptKey);
   if (!receipt || receipt.claimId) {
-    updateRecordClaimButton(receipt);
+    updateClaimRecordButtons(receipt);
     return;
   }
 
@@ -1159,8 +1202,127 @@ async function recordCurrentClaim() {
   }
 }
 
-function createClaimLedgerPayload(receipt) {
-  const dependencies = receiptDependencies(receipt)
+async function recordCurrentChain() {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt) {
+    return;
+  }
+
+  recordChainButton.disabled = true;
+  recordChainButton.textContent = "Recording chain";
+  addActivity("human", "Recording claim chain", `${receipt.title} and its upstream subclaims are being written to the local claim ledger.`, "waiting");
+
+  try {
+    const claimId = await recordReceiptChain(state.receiptKey, {
+      reviseExisting: true,
+      visited: new Set()
+    });
+    updateLatestActivity("Recording claim chain", "passed", `${claimId} is now linked to recorded upstream claims.`);
+  } catch (error) {
+    updateLatestActivity("Recording claim chain", "refuted", error instanceof Error ? error.message : "Unknown claim chain failure.");
+  } finally {
+    render();
+  }
+}
+
+async function recordReceiptChain(key, options) {
+  if (options.visited.has(key)) {
+    throw new Error(`Circular receipt dependency detected at ${key}.`);
+  }
+
+  options.visited.add(key);
+  const receipt = receiptStore.get(key);
+  if (!receipt) {
+    throw new Error(`Receipt dependency not found: ${key}.`);
+  }
+
+  const dependencyClaimIds = [];
+  for (const dependencyKey of receiptDependencies(receipt)) {
+    dependencyClaimIds.push(await recordReceiptChain(dependencyKey, {
+      reviseExisting: true,
+      visited: options.visited
+    }));
+  }
+  options.visited.delete(key);
+
+  const existingClaim = receipt.claimId ? claimLedgerStore.get(receipt.claimId) : undefined;
+  const missingLinks = dependencyClaimIds.filter((claimId) => !existingClaim?.dependsOn?.includes(claimId));
+  if (receipt.claimId && (!options.reviseExisting || missingLinks.length === 0)) {
+    return receipt.claimId;
+  }
+
+  const supersedes = receipt.claimId && missingLinks.length > 0 ? [receipt.claimId] : [];
+  const result = await writeReceiptClaim(receipt, {
+    dependsOn: dependencyClaimIds,
+    supersedes,
+    activityTitle: supersedes.length > 0 ? "Revised linked claim" : "Recorded linked claim"
+  });
+
+  return result.claim.claimId;
+}
+
+async function writeReceiptClaim(receipt, { dependsOn = undefined, supersedes = [], activityTitle = "Recorded claim" } = {}) {
+  const response = await fetch("/api/claims", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(createClaimLedgerPayload(receipt, {
+      dependsOn,
+      supersedes
+    }))
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Local claim ledger write failed.");
+  }
+
+  applyClaimLedgerPayload(payload);
+  receipt.claimId = payload.claim.claimId;
+  addActivity("local-api", activityTitle, `${payload.claim.claimId} stored with ${payload.claim.dependsOn.length} upstream links.`, "passed", payload.claim.createdAt);
+  for (const item of payload.activity ?? []) {
+    addActivity(item.actor, item.action, item.detail, "passed", item.at);
+  }
+
+  return payload;
+}
+
+function claimChainState(receipt) {
+  const dependencyKeys = receiptDependencies(receipt);
+  const dependencyClaimIds = dependencyKeys
+    .map((key) => receiptStore.get(key)?.claimId)
+    .filter(Boolean);
+  const missingReceiptClaims = dependencyKeys.length - dependencyClaimIds.length;
+  const currentClaim = receipt.claimId ? claimLedgerStore.get(receipt.claimId) : undefined;
+  const missingLedgerLinks = dependencyClaimIds.filter((claimId) => !currentClaim?.dependsOn?.includes(claimId)).length;
+
+  if (!receipt.claimId) {
+    return {
+      needsWork: true,
+      label: dependencyKeys.length > 0 ? "Record chain" : "Record chain",
+      detail: dependencyKeys.length > 0
+        ? `Record ${dependencyKeys.length} upstream subclaim(s), then record this claim with dependency links.`
+        : "Record this claim as a root ledger claim."
+    };
+  }
+
+  if (missingReceiptClaims > 0 || missingLedgerLinks > 0) {
+    return {
+      needsWork: true,
+      label: "Complete chain",
+      detail: "Record missing upstream subclaims and revise this claim with ledger dependency links."
+    };
+  }
+
+  return {
+    needsWork: false,
+    label: "Chain recorded",
+    detail: "This receipt and its upstream subclaims are already linked in the local claim ledger."
+  };
+}
+
+function createClaimLedgerPayload(receipt, options = {}) {
+  const dependencies = options.dependsOn ?? receiptDependencies(receipt)
     .map((key) => receiptStore.get(key)?.claimId)
     .filter(Boolean);
   const nextChecks = verificationRows(receipt)
@@ -1176,6 +1338,7 @@ function createClaimLedgerPayload(receipt) {
     trust: receipt.trust,
     tags: receiptTags(receipt),
     dependsOn: dependencies,
+    supersedes: options.supersedes ?? [],
     derivedBy: receipt.derivedBy,
     authors: researcher === "Unsigned researcher" ? [] : [researcher],
     evidenceRefs: [
@@ -1277,7 +1440,7 @@ function renderTagPills(tags) {
 
 function linkedClaimLabel(key) {
   const receipt = receiptStore.get(key);
-  return receipt ? `${receipt.title} (${receipt.trust})` : key;
+  return receipt ? `${receipt.title} (${receipt.claimId ?? receipt.trust})` : key;
 }
 
 function renderSurface() {
@@ -1931,11 +2094,40 @@ function evidenceGraphEntries(receipt) {
     .map((key) => ["depends_on", linkedClaimLabel(key)]);
   const downstream = dependentReceiptKeys(receipt)
     .map((key) => ["unlocks", linkedClaimLabel(key)]);
+  const ledgerEntries = claimLedgerGraphEntries(receipt);
   const tags = receiptTags(receipt).length > 0
     ? [["tags", receiptTags(receipt).map((tag) => `#${tag}`).join(" ")]]
     : [];
 
-  return [...upstream, ...receipt.graph, ...downstream, ...tags];
+  return [...upstream, ...ledgerEntries, ...receipt.graph, ...downstream, ...tags];
+}
+
+function claimLedgerGraphEntries(receipt) {
+  if (!receipt.claimId) {
+    return [["ledger_status", "Not recorded in the local claim ledger yet."]];
+  }
+
+  const claim = claimLedgerStore.get(receipt.claimId);
+  if (!claim) {
+    return [["ledger_status", `${receipt.claimId} not loaded from local claim ledger.`]];
+  }
+
+  const dependencies = (claim.dependsOn ?? []).map((claimId) => ["claim_depends_on", claimLedgerLabel(claimId)]);
+  const supersedes = (claim.supersedes ?? []).map((claimId) => ["claim_supersedes", claimLedgerLabel(claimId)]);
+  const unlocks = (claimLedgerGraph.edges ?? [])
+    .filter((edge) => edge.kind === "depends-on" && edge.from === receipt.claimId)
+    .map((edge) => ["claim_unlocks", claimLedgerLabel(edge.to)]);
+  return [
+    ["claim_record", `${claim.claimId} (${claim.trust}, ${claim.status})`],
+    ...dependencies,
+    ...supersedes,
+    ...unlocks
+  ];
+}
+
+function claimLedgerLabel(claimId) {
+  const claim = claimLedgerStore.get(claimId);
+  return claim ? `${claim.title} (${claim.claimId})` : claimId;
 }
 
 function renderMainGraph(receipt) {
@@ -2737,6 +2929,11 @@ sidebarSearch.addEventListener("input", () => {
   applySidebarSearch();
 });
 
+claimLedgerSearch.addEventListener("input", () => {
+  state.claimLedgerQuery = claimLedgerSearch.value;
+  renderClaimLedger();
+});
+
 openReplayButton.addEventListener("click", () => {
   state.surface = "replay";
   render();
@@ -2744,6 +2941,10 @@ openReplayButton.addEventListener("click", () => {
 
 recordClaimButton.addEventListener("click", () => {
   void recordCurrentClaim();
+});
+
+recordChainButton.addEventListener("click", () => {
+  void recordCurrentChain();
 });
 
 playReplayButton.addEventListener("click", () => {

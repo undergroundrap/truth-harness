@@ -138,6 +138,7 @@
           </div>
           <div class="header-actions">
             <button class="text-button" id="record-claim" type="button">Record claim</button>
+            <button class="text-button" id="record-chain" type="button">Record chain</button>
             <button class="text-button" id="open-replay" type="button">Replay</button>
             <button class="text-button" type="button">Snapshot</button>
             <button class="icon-button" aria-label="Receipt options">...</button>
@@ -393,6 +394,9 @@
               <div class="panel-heading">
                 <h3>Claim Ledger</h3>
                 <span class="mini-label" id="claim-ledger-count">loading</span>
+              </div>
+              <div class="ledger-tools">
+                <input id="claim-ledger-search" type="search" autocomplete="off" placeholder="Filter claim ids, #tags, trust, links" aria-label="Search local claim ledger">
               </div>
               <div class="claim-ledger-list" id="claim-ledger-list"></div>
             </section>
