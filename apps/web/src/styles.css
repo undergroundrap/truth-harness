@@ -69,21 +69,68 @@ button {
 }
 
 .app-shell {
+  --sidebar-width: 300px;
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   height: 100vh;
   background:
     linear-gradient(180deg, rgba(26, 29, 33, 0.9), rgba(16, 16, 16, 0.95) 18%),
     var(--bg);
+  transition: grid-template-columns 140ms ease;
+}
+
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 72px minmax(0, 1fr);
 }
 
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
   background: #1d1c1a;
   border-right: 1px solid var(--line);
+  overflow: hidden;
   padding: 0 8px 10px;
+}
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  z-index: 5;
+  width: 10px;
+  height: 100%;
+  border: 0;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebar-resizer::after {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  width: 1px;
+  height: 100%;
+  background: transparent;
+  content: "";
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus-visible::after,
+.app-shell.sidebar-resizing .sidebar-resizer::after {
+  background: #6f6758;
+}
+
+.sidebar-resizer:focus-visible {
+  outline: 1px solid #7f7665;
+  outline-offset: -2px;
+}
+
+.sidebar-resizing,
+.sidebar-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .top-strip {
@@ -149,6 +196,46 @@ button {
   color: var(--faint);
 }
 
+.app-shell.sidebar-collapsed .sidebar {
+  padding-inline: 6px;
+}
+
+.app-shell.sidebar-collapsed .nav-item,
+.app-shell.sidebar-collapsed .project-row,
+.app-shell.sidebar-collapsed .claim-row {
+  justify-content: center;
+  padding-inline: 8px;
+}
+
+.app-shell.sidebar-collapsed .nav-item {
+  gap: 0;
+  font-size: 0;
+}
+
+.app-shell.sidebar-collapsed .nav-item span,
+.app-shell.sidebar-collapsed .claim-row .trust-dot {
+  margin: 0 auto;
+}
+
+.app-shell.sidebar-collapsed .nav-item span {
+  display: inline-grid;
+  font-size: 13px;
+}
+
+.app-shell.sidebar-collapsed .project-row,
+.app-shell.sidebar-collapsed .lane-list,
+.app-shell.sidebar-collapsed .sidebar-search,
+.app-shell.sidebar-collapsed .claim-row span:last-child,
+.app-shell.sidebar-collapsed .section-label,
+.app-shell.sidebar-collapsed .sidebar-footer,
+.app-shell.sidebar-collapsed .sidebar-resizer {
+  display: none;
+}
+
+.app-shell.sidebar-collapsed .claim-row {
+  grid-template-columns: 1fr;
+}
+
 .nav-item,
 .project-row,
 .claim-row {
@@ -204,7 +291,7 @@ button {
 .lane-list {
   display: grid;
   gap: 4px;
-  max-height: min(28vh, 280px);
+  max-height: min(24vh, 230px);
   overflow: auto;
   padding-right: 2px;
   scrollbar-gutter: stable;
@@ -254,7 +341,7 @@ button {
 #claim-list {
   min-height: 0;
   overflow: auto;
-  padding-bottom: 12px;
+  padding-bottom: 28px;
   scrollbar-gutter: stable;
 }
 
@@ -590,10 +677,11 @@ h1 {
 }
 
 .work-surface {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
-  height: clamp(460px, 58vh, 690px);
-  min-height: 430px;
+  height: clamp(500px, 64vh, 760px);
+  min-height: 450px;
   overflow: hidden;
   padding: 14px;
 }
@@ -736,7 +824,7 @@ h1 {
 }
 
 #surface-runbook.active {
-  overflow: auto;
+  overflow: auto hidden;
   padding-right: 2px;
 }
 
@@ -900,7 +988,7 @@ dd {
 
 .runbook-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(150px, 0.85fr) minmax(150px, 0.9fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
   gap: 10px;
   flex: 0 0 auto;
   margin-bottom: 10px;
@@ -931,7 +1019,8 @@ dd {
 
 .runbook-grid {
   display: grid;
-  grid-template-columns: minmax(210px, 0.9fr) minmax(210px, 0.9fr) minmax(260px, 1.25fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  align-items: start;
   gap: 10px;
   min-height: 0;
 }
@@ -939,8 +1028,14 @@ dd {
 .runbook-card {
   display: flex;
   flex-direction: column;
-  min-height: 260px;
+  min-height: 220px;
+  overflow: hidden;
   padding: 13px 14px;
+}
+
+.runbook-packet-card {
+  grid-column: 1 / -1;
+  min-height: 240px;
 }
 
 .runbook-card ol,
@@ -961,6 +1056,7 @@ dd {
 #runbook-packet {
   flex: 1 1 auto;
   min-height: 0;
+  max-height: 340px;
   overflow: auto;
   white-space: pre-wrap;
   border: 1px solid var(--line-soft);
@@ -970,6 +1066,17 @@ dd {
   padding: 10px;
   scrollbar-gutter: stable;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+@container (max-width: 620px) {
+  .runbook-card,
+  .runbook-packet-card {
+    min-height: 0;
+  }
+
+  #runbook-packet {
+    max-height: 280px;
+  }
 }
 
 .matrix-hero {
@@ -1642,49 +1749,6 @@ textarea:focus-visible {
 }
 
 @media (max-width: 1120px) {
-  .app-shell {
-    grid-template-columns: 72px minmax(0, 1fr);
-  }
-
-  .sidebar {
-    padding-inline: 6px;
-  }
-
-  .nav-item,
-  .project-row,
-  .claim-row {
-    justify-content: center;
-    padding-inline: 8px;
-  }
-
-  .nav-item {
-    gap: 0;
-    font-size: 0;
-  }
-
-  .nav-item span,
-  .claim-row .trust-dot {
-    margin: 0 auto;
-  }
-
-  .nav-item span {
-    display: inline-grid;
-    font-size: 13px;
-  }
-
-  .project-row,
-  .lane-list,
-  .sidebar-search,
-  .claim-row span:last-child,
-  .section-label,
-  .sidebar-footer {
-    display: none;
-  }
-
-  .claim-row {
-    grid-template-columns: 1fr;
-  }
-
   .session-grid {
     grid-template-columns: 1fr;
   }

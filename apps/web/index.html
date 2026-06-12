@@ -7,10 +7,10 @@
     <link rel="stylesheet" href="./src/styles.css">
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="sidebar" aria-label="Workspace navigation">
+    <div class="app-shell" id="app-shell">
+      <aside class="sidebar" id="sidebar" aria-label="Workspace navigation">
         <div class="top-strip">
-          <button class="icon-button" aria-label="Toggle sidebar">[]</button>
+          <button class="icon-button" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-pressed="false">[]</button>
           <button class="icon-button" aria-label="Back">&lt;</button>
           <button class="icon-button muted-icon" aria-label="Forward">&gt;</button>
         </div>
@@ -109,6 +109,7 @@
         <div class="sidebar-footer">
           <button class="nav-item" type="button"><span>!</span> Local only</button>
         </div>
+        <div class="sidebar-resizer" id="sidebar-resizer" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin="220" aria-valuemax="420" aria-valuenow="300" tabindex="0"></div>
       </aside>
 
       <main class="workspace">
@@ -236,7 +237,7 @@
                     <h4>Evidence Ledger</h4>
                     <ul id="runbook-ledger"></ul>
                   </section>
-                  <section class="runbook-card">
+                  <section class="runbook-card runbook-packet-card">
                     <h4>Agent Packet</h4>
                     <pre id="runbook-packet" aria-label="Agent packet"></pre>
                   </section>

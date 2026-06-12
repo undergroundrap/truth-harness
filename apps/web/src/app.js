@@ -131,6 +131,11 @@ const receiptStore = new Map(Object.entries(seedReceipts));
 const recentReceiptKeys = ["rational", "parity", "dimension"];
 const ACTIVITY_PAGE_SIZE = 12;
 const NOTES_STORAGE_KEY = "theorem-workbench.session-notes.v0";
+const SIDEBAR_WIDTH_STORAGE_KEY = "theorem-workbench.sidebar-width.v0";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "theorem-workbench.sidebar-collapsed.v0";
+const SIDEBAR_DEFAULT_WIDTH = 300;
+const SIDEBAR_MIN_WIDTH = 220;
+const SIDEBAR_MAX_WIDTH = 420;
 const activityEvents = [];
 let activityEventCounter = 0;
 const state = {
@@ -141,10 +146,15 @@ const state = {
   replayIndex: 0,
   replayPlaying: false,
   sidebarQuery: "",
+  sidebarCollapsed: false,
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE
 };
 
+const appShell = document.querySelector("#app-shell");
+const sidebar = document.querySelector("#sidebar");
+const sidebarToggle = document.querySelector("#sidebar-toggle");
+const sidebarResizer = document.querySelector("#sidebar-resizer");
 const claimList = document.querySelector("#claim-list");
 const sidebarSearch = document.querySelector("#sidebar-search");
 const sidebarSearchCount = document.querySelector("#sidebar-search-count");
@@ -709,8 +719,13 @@ const laneProtocols = {
   }
 };
 let replayTimer;
+let sidebarResizeActive = false;
+let sidebarResizePointerId = null;
+let sidebarResizeStartX = 0;
+let sidebarResizeStartWidth = SIDEBAR_DEFAULT_WIDTH;
 
 researchNotes.value = loadNotes();
+initSidebarLayout();
 updateNotesStatus("local draft");
 addActivity("system", "Workbench opened", "Static shell loaded; no external service contacted.", "passed");
 addActivity("system", "Local API ready", "UI will submit prompts only to /api/receipt on this machine.", "waiting");
@@ -1421,6 +1436,128 @@ function loadNotes() {
   }
 }
 
+function initSidebarLayout() {
+  const savedCollapsed = readStorageValue(SIDEBAR_COLLAPSED_STORAGE_KEY);
+  const shouldAutoCollapse = savedCollapsed === null && window.innerWidth <= 1120;
+  const shouldCollapse = savedCollapsed === null ? shouldAutoCollapse : savedCollapsed === "true";
+
+  setSidebarWidth(readStoredSidebarWidth(), { persist: false });
+  setSidebarCollapsed(shouldCollapse, { persist: false });
+}
+
+function readStorageValue(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorageValue(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Layout preferences are helpful, not mission-critical evidence.
+  }
+}
+
+function readStoredSidebarWidth() {
+  const storedWidth = Number(readStorageValue(SIDEBAR_WIDTH_STORAGE_KEY));
+  if (!Number.isFinite(storedWidth)) {
+    return SIDEBAR_DEFAULT_WIDTH;
+  }
+
+  return clampSidebarWidth(storedWidth);
+}
+
+function clampSidebarWidth(width) {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)));
+}
+
+function setSidebarWidth(width, options = {}) {
+  const { persist = true } = options;
+  const nextWidth = clampSidebarWidth(width);
+  appShell.style.setProperty("--sidebar-width", `${nextWidth}px`);
+  sidebarResizer.setAttribute("aria-valuenow", String(nextWidth));
+
+  if (persist) {
+    writeStorageValue(SIDEBAR_WIDTH_STORAGE_KEY, String(nextWidth));
+  }
+
+  return nextWidth;
+}
+
+function setSidebarCollapsed(collapsed, options = {}) {
+  const { persist = true } = options;
+  state.sidebarCollapsed = collapsed;
+  appShell.classList.toggle("sidebar-collapsed", collapsed);
+  sidebarToggle.setAttribute("aria-pressed", String(collapsed));
+  sidebarToggle.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+  sidebarToggle.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+
+  if (persist) {
+    writeStorageValue(SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
+  }
+}
+
+function beginSidebarResize(event) {
+  if (event.button !== undefined && event.button !== 0) {
+    return;
+  }
+
+  sidebarResizeActive = true;
+  sidebarResizePointerId = event.pointerId;
+  sidebarResizeStartX = event.clientX;
+  sidebarResizeStartWidth = sidebar.getBoundingClientRect().width || readStoredSidebarWidth();
+  setSidebarCollapsed(false);
+  appShell.classList.add("sidebar-resizing");
+  sidebarResizer.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+}
+
+function updateSidebarResize(event) {
+  if (!sidebarResizeActive || event.pointerId !== sidebarResizePointerId) {
+    return;
+  }
+
+  const delta = event.clientX - sidebarResizeStartX;
+  setSidebarWidth(sidebarResizeStartWidth + delta);
+}
+
+function endSidebarResize(event) {
+  if (!sidebarResizeActive || event.pointerId !== sidebarResizePointerId) {
+    return;
+  }
+
+  sidebarResizeActive = false;
+  sidebarResizePointerId = null;
+  appShell.classList.remove("sidebar-resizing");
+  sidebarResizer.releasePointerCapture?.(event.pointerId);
+}
+
+function handleSidebarResizerKey(event) {
+  const currentWidth = sidebar.getBoundingClientRect().width || readStoredSidebarWidth();
+  let nextWidth = null;
+
+  if (event.key === "ArrowLeft") {
+    nextWidth = currentWidth - 16;
+  } else if (event.key === "ArrowRight") {
+    nextWidth = currentWidth + 16;
+  } else if (event.key === "Home") {
+    nextWidth = SIDEBAR_MIN_WIDTH;
+  } else if (event.key === "End") {
+    nextWidth = SIDEBAR_MAX_WIDTH;
+  }
+
+  if (nextWidth === null) {
+    return;
+  }
+
+  event.preventDefault();
+  setSidebarCollapsed(false);
+  setSidebarWidth(nextWidth);
+}
+
 function saveNotes() {
   try {
     localStorage.setItem(NOTES_STORAGE_KEY, researchNotes.value);
@@ -1754,6 +1891,18 @@ function renderMathInline(value) {
 
   return `<span class="math-inline">${html}</span>`;
 }
+
+sidebarToggle.addEventListener("click", () => {
+  const collapsed = !state.sidebarCollapsed;
+  setSidebarCollapsed(collapsed);
+  addActivity("human", collapsed ? "Collapsed navigation" : "Expanded navigation", "Researcher workspace layout changed locally.", "passed");
+});
+
+sidebarResizer.addEventListener("pointerdown", beginSidebarResize);
+sidebarResizer.addEventListener("pointermove", updateSidebarResize);
+sidebarResizer.addEventListener("pointerup", endSidebarResize);
+sidebarResizer.addEventListener("pointercancel", endSidebarResize);
+sidebarResizer.addEventListener("keydown", handleSidebarResizerKey);
 
 claimList.addEventListener("click", (event) => {
   const button = event.target.closest(".claim-row");
