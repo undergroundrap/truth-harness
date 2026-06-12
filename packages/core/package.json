@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "type": "module",
   "description": "Core evidence graph, trust labels, exact arithmetic, and proof-receipt generation.",
+  "license": "SEE LICENSE IN LICENSE",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

@@ -1,21 +1,54 @@
-MIT License
+AGPL-3.0 License with Visible Attribution Requirement
 
-Copyright (c) 2026 Theorem Workbench contributors
+Copyright (c) 2026 Ocean Bennett
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Theorem Workbench - including its receipt schema, evidence graph, local
+verification engines, benchmark suites, MCP/CLI/API interfaces, web workbench,
+agent runbooks, trust-label system, safety center, and all source code in this
+repository - is licensed under the GNU Affero General Public License v3.0, with
+the additional visible attribution requirement below.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+-------------------------------------------------------------------------------
+ADDITIONAL TERM (permitted under AGPL-3.0 Section 7):
+-------------------------------------------------------------------------------
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Any tool, plugin, application, or service that uses, derives from, or is
+substantially built upon this codebase or its architecture must include a
+visible credit in one or more of the following locations:
+
+  - The tool's public-facing README or documentation
+  - The tool's in-app about panel, settings panel, or credits screen
+  - The tool's store page, landing page, or repository description
+
+The credit must read, at minimum:
+
+  "Built on Theorem Workbench by Ocean Bennett
+   (https://github.com/undergroundrap/theorem-workbench)"
+
+  or an equivalent that names Ocean Bennett and links to this repository.
+
+This requirement applies regardless of how substantially the code was modified.
+-------------------------------------------------------------------------------
+
+Core license terms:
+
+1. Attribution: Retain this copyright notice and the visible credit above in
+   any derivative work, fork, or project that uses Theorem Workbench or its
+   architecture.
+
+2. Copyleft: Derivative works must be released under AGPL-3.0. You may not
+   incorporate this code into a closed-source tool, plugin, application,
+   service, or product unless you have a separate commercial license from the
+   copyright holder.
+
+3. Network use: If you run a modified version as a hosted or networked service
+   (for example, a web-based research, agent, math, simulation, or verification
+   dashboard), you must make the complete modified source code publicly
+   available to users of that service. Running a hosted service counts.
+
+4. Commercial use by the original author: Ocean Bennett, as copyright holder,
+   reserves the right to release commercial versions of this software under
+   separate licensing terms. This does not affect the open-source rights granted
+   to the community under this license.
+
+Full AGPL-3.0 license text: https://www.gnu.org/licenses/agpl-3.0.en.html

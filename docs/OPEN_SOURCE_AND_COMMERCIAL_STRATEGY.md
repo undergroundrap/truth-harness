@@ -49,21 +49,23 @@ Commercial layer later:
 
 This keeps the trust-critical layer inspectable while leaving room for a business.
 
-## License Preference
+## License Posture
 
-The preferred public license is **GNU Affero General Public License v3.0** (`AGPL-3.0-only` unless the owner explicitly chooses `AGPL-3.0-or-later`). AGPL fits Theorem Workbench better than MIT if the goal is open research infrastructure with commercial upside, because hosted forks and network services must preserve source availability for their users.
+The selected repo license is **GNU Affero General Public License v3.0 with a visible attribution requirement**. AGPL fits Theorem Workbench better than MIT if the goal is open research infrastructure with commercial upside, because hosted forks and network services must preserve source availability for their users.
 
-Do not change the checked-in `LICENSE` file until the exact owner attribution format is confirmed. The public release should use a standard AGPL license text plus normal attribution files, not a custom license clause.
+The visible attribution term is intentionally plain:
 
-Recommended attribution structure:
+> Built on Theorem Workbench by Ocean Bennett (https://github.com/undergroundrap/theorem-workbench)
 
-- `LICENSE`: unmodified AGPL-3.0 text.
-- `NOTICE`: product name, copyright owner line, attribution request, project website, and trademark/brand note.
-- `AUTHORS.md`: owner/founder and contributor attribution.
-- UI/About and generated reports: "Theorem Workbench by <owner name>" plus the license identifier.
-- `package.json`: `"license": "AGPL-3.0-only"` after the license migration.
+Attribution structure:
 
-Avoid adding extra attribution restrictions directly to the license unless a lawyer reviews them. Extra restrictions can make an otherwise standard open-source license harder to adopt and easier to misunderstand. Standard AGPL already requires preservation of copyright notices and license notices; `NOTICE` and UI/report attribution give the brand credit without creating a custom license trap.
+- `LICENSE`: AGPL-3.0 posture with the visible attribution term selected by Ocean Bennett.
+- `NOTICE`: product name, copyright owner line, minimum visible credit, and project mission summary.
+- `AUTHORS.md`: founder/copyright-holder and future contributor attribution.
+- UI/About and generated reports: "Theorem Workbench by Ocean Bennett" plus the license posture.
+- `package.json`: `"license": "SEE LICENSE IN LICENSE"` because the local license includes a custom attribution term beyond a stock SPDX identifier.
+
+Before a public launch, have counsel review the exact wording. The engineering goal is clear - keep the trust-critical core open and make downstream users preserve visible credit - but custom open-source terms should be easy for serious adopters to understand.
 
 ## Release Posture
 
@@ -89,7 +91,7 @@ Do not publicly promote the repo until these are true:
 - README explains exactly what the tool does and does not prove.
 - `SECURITY.md`, `TRUST_LABELS.md`, `PARITY_LEDGER.md`, and Docker docs are current.
 - The project has issue templates for bug reports, trust-label bugs, adapter requests, and security reports.
-- The license migration is complete: `LICENSE`, `NOTICE`, `AUTHORS.md`, package metadata, docs, and app/report attribution all agree.
+- The license migration is complete and reviewed: `LICENSE`, `NOTICE`, `AUTHORS.md`, package metadata, docs, and app/report attribution all agree.
 
 ## Website Strategy
 

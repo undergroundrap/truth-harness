@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "type": "module",
   "description": "MCP server exposing Theorem Workbench proof receipts and benchmarks to AI agents.",
+  "license": "SEE LICENSE IN LICENSE",
   "bin": {
     "theorem-mcp": "./dist/index.js"
   },

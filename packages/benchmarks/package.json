@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "type": "module",
   "description": "Benchmark suites and scoring for Theorem Workbench proof receipts.",
+  "license": "SEE LICENSE IN LICENSE",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

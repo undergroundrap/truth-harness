@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "type": "module",
   "description": "Human and agent CLI for Theorem Workbench.",
+  "license": "SEE LICENSE IN LICENSE",
   "bin": {
     "theorem": "./dist/index.js"
   },

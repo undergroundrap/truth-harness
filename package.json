@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Local-first evidence receipts for AI agents: exact computation, refutation, replay, and benchmark artifacts.",
+  "license": "SEE LICENSE IN LICENSE",
   "workspaces": [
     "apps/*",
     "packages/*"

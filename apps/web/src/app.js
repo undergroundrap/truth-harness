@@ -2089,6 +2089,7 @@ function renderReport(receipt) {
       <h2>${escapeHtml(receipt.title)}</h2>
       <p>${escapeHtml(receipt.subtitle)}</p>
       <p>Researcher: ${escapeHtml(researcher)}. Agent/tooling: Theorem Workbench local evidence session.</p>
+      <p>Workbench: Theorem Workbench by Ocean Bennett. License: AGPL-3.0 with visible attribution requirement.</p>
     </header>
     <div class="report-math">${renderMathInline(mathInput ?? receipt.title)} <span>&rarr;</span> ${renderMathInline(mathOutput ?? receipt.output)}</div>
     <dl class="report-facts">
@@ -2097,6 +2098,8 @@ function renderReport(receipt) {
       <div><dt>Engine</dt><dd>${escapeHtml(receipt.engine)}</dd></div>
       <div><dt>Run</dt><dd>${escapeHtml(receipt.runId)}</dd></div>
       <div><dt>Researcher</dt><dd>${escapeHtml(researcher)}</dd></div>
+      <div><dt>Workbench</dt><dd>Theorem Workbench by Ocean Bennett</dd></div>
+      <div><dt>License</dt><dd>AGPL-3.0 with visible attribution</dd></div>
       <div><dt>Replay</dt><dd><code>${escapeHtml(receipt.replay)}</code></dd></div>
     </dl>
     <h3>Ledger Metadata</h3>
@@ -2164,6 +2167,8 @@ function generateReportMarkdown(receipt) {
     "",
     `- Human researcher: ${researcher}`,
     "- Agent/tooling: Theorem Workbench local evidence session",
+    "- Workbench: Theorem Workbench by Ocean Bennett",
+    "- License: AGPL-3.0 with visible attribution requirement",
     "- Identity storage: local browser storage; include stronger signatures before public or legal use",
     "",
     "## Math View",
