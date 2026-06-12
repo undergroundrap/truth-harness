@@ -18,7 +18,7 @@ const args = new Map(
   })
 );
 const host = args.get("host") ?? "127.0.0.1";
-const port = Number(args.get("port") ?? "4173");
+const port = Number(args.get("port") ?? "4180");
 const allowNonLocalWeb = isTruthyEnv(process.env.THEOREM_WEB_ALLOW_NONLOCAL);
 
 const mimeTypes = new Map([

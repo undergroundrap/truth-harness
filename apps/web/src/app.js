@@ -217,6 +217,7 @@ const state = {
   surface: "trace",
   lane: "math",
   replayIndex: 0,
+  selectedGraphIndex: 0,
   replayPlaying: false,
   sidebarQuery: "",
   claimLedgerQuery: "",
@@ -245,6 +246,7 @@ const claimLedgerList = document.querySelector("#claim-ledger-list");
 const claimLedgerCount = document.querySelector("#claim-ledger-count");
 const claimLedgerSearch = document.querySelector("#claim-ledger-search");
 const mainGraphList = document.querySelector("#main-graph-list");
+const graphDetail = document.querySelector("#graph-detail");
 const matrixSummary = document.querySelector("#matrix-summary");
 const matrixCurrentClaim = document.querySelector("#matrix-current-claim");
 const matrixNextCommand = document.querySelector("#matrix-next-command");
@@ -2131,15 +2133,84 @@ function claimLedgerLabel(claimId) {
 }
 
 function renderMainGraph(receipt) {
-  mainGraphList.innerHTML = evidenceGraphEntries(receipt)
-    .map(([kind, summary], index) => `<div class="canvas-node">
+  const entries = evidenceGraphEntries(receipt);
+  if (state.selectedGraphIndex >= entries.length) {
+    state.selectedGraphIndex = 0;
+  }
+
+  mainGraphList.innerHTML = entries
+    .map(([kind, summary], index) => `<button class="canvas-node ${index === state.selectedGraphIndex ? "active" : ""}" data-graph-index="${index}" type="button">
       <span class="canvas-index">${index + 1}</span>
       <div>
         <strong>${escapeHtml(kind)}</strong>
         <p>${escapeHtml(summary)}</p>
       </div>
-    </div>`)
+    </button>`)
     .join("");
+  renderGraphDetail(receipt, entries[state.selectedGraphIndex], state.selectedGraphIndex);
+}
+
+function renderGraphDetail(receipt, entry, index) {
+  if (!graphDetail || !entry) {
+    return;
+  }
+
+  const [kind, summary] = entry;
+  const claimId = claimIdFromGraphSummary(summary);
+  const claim = claimId ? claimLedgerStore.get(claimId) : undefined;
+  const linkedReceiptKey = claimId ? receiptKeyForClaimId(claimId) : undefined;
+  const currentClaim = receipt.claimId ? claimLedgerStore.get(receipt.claimId) : undefined;
+  const previousClaim = kind === "claim_supersedes" && claim ? claim : undefined;
+  const compareHtml = currentClaim && previousClaim
+    ? renderRevisionCompare(currentClaim, previousClaim)
+    : "";
+  const claimHtml = claim
+    ? `<dl class="graph-detail-facts">
+        <div><dt>Claim ID</dt><dd><code>${escapeHtml(claim.claimId)}</code></dd></div>
+        <div><dt>Trust</dt><dd>${escapeHtml(claim.trust)}</dd></div>
+        <div><dt>Status</dt><dd>${escapeHtml(claim.status)}</dd></div>
+        <div><dt>Domain</dt><dd>${escapeHtml(claim.domain)}</dd></div>
+        <div><dt>Updated</dt><dd>${escapeHtml(formatActivityTime(claim.updatedAt))}</dd></div>
+        <div><dt>Links</dt><dd>${escapeHtml((claim.dependsOn?.length ?? 0) + " upstream / " + (claim.supersedes?.length ?? 0) + " revisions")}</dd></div>
+      </dl>
+      <div class="graph-detail-tags">${renderTagPills(claim.tags ?? []) || `<span class="mini-label">No tags</span>`}</div>
+      ${linkedReceiptKey ? `<button class="text-button compact-button graph-open-receipt" data-claim-id="${escapeHtml(claim.claimId)}" type="button">Open receipt</button>` : ""}`
+    : `<p>${escapeHtml(summary)}</p>`;
+
+  graphDetail.innerHTML = `
+    <span class="mini-label">node ${index + 1}</span>
+    <h4>${escapeHtml(kind)}</h4>
+    ${claim ? `<p>${escapeHtml(claim.title)}</p>` : ""}
+    ${claimHtml}
+    ${compareHtml}
+  `;
+}
+
+function renderRevisionCompare(currentClaim, previousClaim) {
+  const addedDependencies = (currentClaim.dependsOn ?? []).filter((claimId) => !(previousClaim.dependsOn ?? []).includes(claimId));
+  const removedDependencies = (previousClaim.dependsOn ?? []).filter((claimId) => !(currentClaim.dependsOn ?? []).includes(claimId));
+  const addedTags = (currentClaim.tags ?? []).filter((tag) => !(previousClaim.tags ?? []).includes(tag));
+  const removedTags = (previousClaim.tags ?? []).filter((tag) => !(currentClaim.tags ?? []).includes(tag));
+  const rows = [
+    ["Statement", currentClaim.statement === previousClaim.statement ? "unchanged" : "changed"],
+    ["Trust", `${previousClaim.trust} -> ${currentClaim.trust}`],
+    ["Dependencies added", addedDependencies.map(claimLedgerLabel).join("; ") || "none"],
+    ["Dependencies removed", removedDependencies.map(claimLedgerLabel).join("; ") || "none"],
+    ["Tags added", addedTags.map((tag) => `#${tag}`).join(", ") || "none"],
+    ["Tags removed", removedTags.map((tag) => `#${tag}`).join(", ") || "none"]
+  ];
+
+  return `<section class="revision-panel">
+    <h5>Revision Compare</h5>
+    <dl class="graph-detail-facts">
+      ${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+    </dl>
+  </section>`;
+}
+
+function claimIdFromGraphSummary(summary) {
+  const match = String(summary).match(/claim_[a-f0-9]{16}/u);
+  return match?.[0];
 }
 
 function renderActivityLog() {
@@ -2880,6 +2951,7 @@ claimList.addEventListener("click", (event) => {
   setReplayPlaying(false);
   state.receiptKey = button.dataset.receipt;
   state.level = "middle";
+  state.selectedGraphIndex = 0;
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
@@ -2901,6 +2973,37 @@ claimLedgerList.addEventListener("click", (event) => {
   setReplayPlaying(false);
   state.receiptKey = key;
   state.level = "middle";
+  state.selectedGraphIndex = 0;
+  state.replayIndex = 0;
+  promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
+  render();
+});
+
+mainGraphList.addEventListener("click", (event) => {
+  const button = event.target.closest(".canvas-node");
+  if (!button) {
+    return;
+  }
+
+  state.selectedGraphIndex = Number(button.dataset.graphIndex);
+  renderMainGraph(receiptStore.get(state.receiptKey));
+});
+
+graphDetail.addEventListener("click", (event) => {
+  const button = event.target.closest(".graph-open-receipt");
+  if (!button) {
+    return;
+  }
+
+  const key = receiptKeyForClaimId(button.dataset.claimId);
+  if (!key) {
+    return;
+  }
+
+  setReplayPlaying(false);
+  state.receiptKey = key;
+  state.level = "middle";
+  state.selectedGraphIndex = 0;
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();

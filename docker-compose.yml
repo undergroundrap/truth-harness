@@ -60,9 +60,9 @@ services:
       - .:/workspace
       - theorem_node_modules:/workspace/node_modules
       - theorem_npm_cache:/home/theorem/.npm
-    command: ["npm", "run", "web:serve", "--", "--host", "0.0.0.0", "--port", "4173"]
+    command: ["npm", "run", "web:serve", "--", "--host", "0.0.0.0", "--port", "4180"]
     ports:
-      - "127.0.0.1:4173:4173"
+      - "127.0.0.1:4180:4180"
 
 volumes:
   theorem_node_modules:

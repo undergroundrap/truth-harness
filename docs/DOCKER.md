@@ -50,7 +50,7 @@ Run the local web workbench:
 docker compose up web
 ```
 
-Then open `http://127.0.0.1:4173`. The web service publishes only to localhost. The browser calls a localhost `/api/receipt` endpoint backed by `@theorem-workbench/core`; it does not call a hosted model or external service. The web server also rejects non-local Host headers by default and accepts browser API writes only from the same origin.
+Then open `http://127.0.0.1:4180`. The web service publishes only to localhost. The browser calls localhost `/api/receipt` and `/api/claims` endpoints backed by `@theorem-workbench/core`; it does not call a hosted model or external service. The web server also rejects non-local Host headers by default and accepts browser API writes only from the same origin.
 
 Run the MCP server over stdio:
 
@@ -66,7 +66,7 @@ By default, MCP `theorem_code_run` is still disabled. To expose it to an agent, 
 - CLI and MCP compose services use `network_mode: "none"` so normal CLI, MCP, test, and proof runs cannot reach the network from inside the container.
 - Compose drops Linux capabilities, sets `no-new-privileges:true`, and caps process count for each service.
 - `theorem code sandbox-status --json` can record the CLI/MCP no-network services as a measured `container` provider when the runtime has only loopback networking and no default route.
-- The web compose service publishes `127.0.0.1:4173` for the browser and is not a code sandbox. Its local API currently creates receipts through `@theorem-workbench/core` without hosted model calls.
+- The web compose service publishes `127.0.0.1:4180` for the browser and is not a code sandbox. Its local API currently creates receipts and claim-ledger records through `@theorem-workbench/core` without hosted model calls.
 - Node dependencies live in the `theorem_node_modules` Docker volume.
 - npm cache lives in the `theorem_npm_cache` Docker volume.
 - Python and `sympy==1.14.0` are installed inside the image.
