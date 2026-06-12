@@ -118,6 +118,85 @@ describe("local web route ledger API", () => {
       })
     );
 
+    const smtResponse = await fetch(`${baseUrl}/api/smt/solve`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        queryName: "web-integer-window",
+        variables: ["x"],
+        constraints: ["x > 0", "x < 3"],
+        includeModel: true
+      })
+    });
+    expect(smtResponse.status).toBe(200);
+    const smtPayload = await smtResponse.json();
+    expect(smtPayload.localOnly).toBe(true);
+    expect(smtPayload.externalCalls).toEqual([]);
+    expect(smtPayload.problem.problemId).toMatch(/^smt_problem_[a-f0-9]{16}$/u);
+    expect(smtPayload.sourceRef).toContain(".theorem-workbench/smt/sources/");
+    expect(smtPayload.record.schemaVersion).toBe("theorem.smt-check.v0");
+    expect(smtPayload.record.checkId).toMatch(/^smt_[a-f0-9]{16}$/u);
+    expect(smtPayload.record.networkAccess).toBe("none");
+    expect(["smt-checked", "unverified"]).toContain(smtPayload.record.trust);
+    expect(existsSync(smtPayload.sourcePath)).toBe(true);
+    expect(existsSync(smtPayload.paths.json)).toBe(true);
+    expect(existsSync(smtPayload.paths.markdown)).toBe(true);
+
+    const smtListResponse = await fetch(`${baseUrl}/api/smt`);
+    expect(smtListResponse.status).toBe(200);
+    const smtListPayload = await smtListResponse.json();
+    expect(smtListPayload.localOnly).toBe(true);
+    expect(smtListPayload.externalCalls).toEqual([]);
+    expect(smtListPayload.checks).toContainEqual(
+      expect.objectContaining({
+        checkId: smtPayload.record.checkId,
+        path: expect.stringContaining(".theorem-workbench")
+      })
+    );
+
+    const smtRouteResponse = await fetch(`${baseUrl}/api/receipt`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ problem: "solve integer constraints x > 0 and x < 3" })
+    });
+    expect(smtRouteResponse.status).toBe(200);
+    const smtRoutePayload = await smtRouteResponse.json();
+    const solverObligation = smtRoutePayload.route.proofObligations.find((obligation: { kind: string }) => obligation.kind === "solver-encoding");
+    if (!solverObligation) {
+      throw new Error("Expected a solver-encoding obligation for the SMT route.");
+    }
+    expect(solverObligation?.obligationId).toMatch(/^obl_[a-f0-9]{16}$/u);
+
+    const smtSatisfaction = await fetch(`${baseUrl}/api/routes/${smtRoutePayload.route.routeId}/obligations/${solverObligation.obligationId}/satisfy`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        evidenceRef: {
+          kind: "smt",
+          ref: smtListPayload.checks[0].path,
+          trust: smtPayload.record.trust
+        }
+      })
+    });
+    const smtSatisfactionPayload = await smtSatisfaction.json();
+    if (smtPayload.record.trust === "smt-checked") {
+      expect(smtSatisfaction.status).toBe(200);
+      expect(smtSatisfactionPayload.obligation.status).toBe("satisfied");
+      expect(smtSatisfactionPayload.obligation.satisfiedBy[0]).toMatchObject({
+        kind: "smt",
+        trust: "smt-checked"
+      });
+    } else {
+      expect(smtSatisfaction.status).toBe(400);
+      expect(smtSatisfactionPayload.error).toContain("solver-encoding obligations require");
+    }
+
     const formalObligation = routePayload.route.proofObligations.find((obligation: { kind: string }) => obligation.kind === "formal-proof");
     if (!formalObligation) {
       throw new Error("Expected a formal-proof obligation for the arithmetic route.");

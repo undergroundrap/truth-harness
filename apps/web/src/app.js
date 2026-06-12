@@ -196,6 +196,7 @@ const receiptStore = new Map(Object.entries(seedReceipts));
 const claimLedgerStore = new Map();
 const routeLedgerStore = new Map();
 const casCheckStore = new Map();
+const smtCheckStore = new Map();
 let claimLedgerGraph = {
   schemaVersion: "theorem.claim-graph.v0",
   nodes: [],
@@ -933,6 +934,7 @@ void refreshSafetyStatus();
 void refreshClaimLedger();
 void refreshRouteLedger();
 void refreshCasChecks();
+void refreshSmtChecks();
 
 function render() {
   const receipt = receiptStore.get(state.receiptKey);
@@ -1743,6 +1745,42 @@ function applyCasCheckPayload(payload) {
   }
 }
 
+async function refreshSmtChecks({ announce = true } = {}) {
+  try {
+    const response = await fetch("/api/smt", {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Local SMT ledger API failed.");
+    }
+
+    applySmtCheckPayload(payload);
+    if (announce) {
+      addActivity("local-api", "Loaded SMT ledger", `${smtCheckStore.size} local SMT check records available.`, "passed");
+    }
+    render();
+  } catch (error) {
+    if (casArtifactCount) {
+      casArtifactCount.textContent = "evidence unavailable";
+    }
+    if (casArtifactList) {
+      casArtifactList.innerHTML = `<div class="activity-empty">Evidence attachment ledger unavailable from the local API.</div>`;
+    }
+    addActivity("local-api", "SMT ledger unavailable", error instanceof Error ? error.message : "Unknown SMT ledger failure.", "waiting");
+  }
+}
+
+function applySmtCheckPayload(payload) {
+  smtCheckStore.clear();
+  for (const check of payload.checks ?? []) {
+    if (check?.checkId) {
+      smtCheckStore.set(check.checkId, check);
+    }
+  }
+}
+
 async function openSavedRoute(routeId) {
   if (!routeId) {
     return;
@@ -1827,7 +1865,7 @@ async function runCasForObligation(button) {
       return;
     }
 
-    await attachCasEvidenceToRoute({
+    await attachEvidenceToRoute({
       routeId,
       obligationId,
       evidenceRef: {
@@ -1845,12 +1883,13 @@ async function runCasForObligation(button) {
   }
 }
 
-async function attachCasEvidenceToRoute(input) {
+async function attachEvidenceToRoute(input) {
   if (!input.routeId || !input.obligationId || !input.evidenceRef?.ref) {
     return;
   }
 
-  addActivity("web-ui", "Attaching CAS evidence", `${input.evidenceRef.ref} -> ${input.obligationId}`, "waiting");
+  const label = input.evidenceRef.kind === "smt" ? "SMT" : input.evidenceRef.kind === "cas" ? "CAS" : "local";
+  addActivity("web-ui", `Attaching ${label} evidence`, `${input.evidenceRef.ref} -> ${input.obligationId}`, "waiting");
 
   try {
     const response = await fetch(`/api/routes/${encodeURIComponent(input.routeId)}/obligations/${encodeURIComponent(input.obligationId)}/satisfy`, {
@@ -1874,7 +1913,7 @@ async function attachCasEvidenceToRoute(input) {
     }
     render();
   } catch (error) {
-    addActivity("local-api", "CAS attach rejected", error instanceof Error ? error.message : "Unknown route satisfaction failure.", "refuted");
+    addActivity("local-api", `${label} attach rejected`, error instanceof Error ? error.message : "Unknown route satisfaction failure.", "refuted");
   }
 }
 
@@ -2574,7 +2613,7 @@ function renderVerificationMatrix(receipt) {
       </div>
     </article>`)
     .join("");
-  renderCasArtifactList(receipt);
+  renderEvidenceArtifactList(receipt);
 
   mathCoreList.innerHTML = rows
     .filter((row) => ["exact", "counterexample", "dimension", "symbolic", "smt", "proof", "bench"].includes(row.id))
@@ -2586,56 +2625,114 @@ function renderVerificationMatrix(receipt) {
     .join("");
 }
 
-function renderCasArtifactList(receipt) {
+function renderEvidenceArtifactList(receipt) {
   if (!casArtifactList || !casArtifactCount) {
     return;
   }
 
-  const checks = [...casCheckStore.values()];
-  const openCasObligation = currentOpenCasObligation(receipt);
-  casArtifactCount.textContent = checks.length === 0
-    ? "no CAS records"
-    : `${checks.length} CAS record${checks.length === 1 ? "" : "s"}`;
+  const artifacts = [
+    ...[...casCheckStore.values()].map((check) => normalizeCasAttachment(check)),
+    ...[...smtCheckStore.values()].map((check) => normalizeSmtAttachment(check))
+  ].sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")));
+  const openObligations = currentOpenEvidenceObligations(receipt);
+  casArtifactCount.textContent = artifacts.length === 0
+    ? "no records"
+    : `${artifacts.length} evidence record${artifacts.length === 1 ? "" : "s"}`;
 
-  if (checks.length === 0) {
-    casArtifactList.innerHTML = `<div class="activity-empty">No CAS artifacts yet. Run an independent-check obligation to write the first local Maxima record.</div>`;
+  if (artifacts.length === 0) {
+    casArtifactList.innerHTML = `<div class="activity-empty">No evidence artifacts yet. Run a CAS or SMT obligation to write the first local verifier record.</div>`;
     return;
   }
 
-  casArtifactList.innerHTML = checks.slice(0, 6)
-    .map((check) => {
-      const statusClass = trustClass(check.trust);
-      const attachable = openCasObligation && check.trust === "cross-checked";
-      const summary = `${check.operation} ${check.expression} -> ${check.result}`;
-      const path = check.path ?? check.paths?.json ?? check.checkId;
+  casArtifactList.innerHTML = artifacts.slice(0, 8)
+    .map((artifact) => {
+      const statusClass = trustClass(artifact.trust);
+      const target = attachmentTargetForArtifact(artifact, openObligations);
       return `<article class="cas-artifact-card">
         <span class="task-state ${statusClass}"></span>
         <div class="cas-artifact-body">
           <div class="cas-artifact-head">
-            <strong>${escapeHtml(summary)}</strong>
-            <span>${escapeHtml(check.status)} / ${escapeHtml(check.trust)}</span>
+            <strong>${escapeHtml(artifact.summary)}</strong>
+            <span>${escapeHtml(artifact.status)} / ${escapeHtml(artifact.trust)}</span>
           </div>
-          <small><code>${escapeHtml(check.checkId)}</code> - ${escapeHtml(path)}</small>
-          ${check.warnings?.length ? `<small>${escapeHtml(check.warnings[0])}</small>` : ""}
-          ${attachable ? `<button class="text-button compact-button attach-cas-artifact" data-route-id="${escapeHtml(openCasObligation.routeId)}" data-obligation-id="${escapeHtml(openCasObligation.obligationId)}" data-cas-ref="${escapeHtml(path)}" data-cas-trust="${escapeHtml(check.trust)}" data-cas-summary="${escapeHtml(summary)}" type="button">Attach to open CAS obligation</button>` : ""}
+          <small><code>${escapeHtml(artifact.checkId)}</code> - ${escapeHtml(artifact.path)}</small>
+          ${artifact.warning ? `<small>${escapeHtml(artifact.warning)}</small>` : ""}
+          ${target ? `<button class="text-button compact-button attach-evidence-artifact" data-route-id="${escapeHtml(target.routeId)}" data-obligation-id="${escapeHtml(target.obligationId)}" data-evidence-kind="${escapeHtml(artifact.kind)}" data-evidence-ref="${escapeHtml(artifact.path)}" data-evidence-trust="${escapeHtml(artifact.trust)}" data-evidence-summary="${escapeHtml(artifact.summary)}" type="button">${escapeHtml(target.label)}</button>` : ""}
         </div>
       </article>`;
     })
     .join("");
 }
 
-function currentOpenCasObligation(receipt) {
-  const route = receipt?.verifierRoute;
-  const obligation = route?.proofObligations?.find((item) =>
-    item.kind === "independent-check" && item.status === "open"
-  );
-  if (!route || !obligation) {
-    return undefined;
+function normalizeCasAttachment(check) {
+  const summary = `${check.operation} ${check.expression} -> ${check.result}`;
+  return {
+    kind: "cas",
+    checkId: check.checkId,
+    createdAt: check.createdAt,
+    status: check.status,
+    trust: check.trust,
+    summary,
+    path: check.path ?? check.paths?.json ?? check.checkId,
+    warning: check.warnings?.[0]
+  };
+}
+
+function normalizeSmtAttachment(check) {
+  const sourcePath = check.sourcePath ?? check.source?.path ?? "SMT-LIB source";
+  return {
+    kind: "smt",
+    checkId: check.checkId,
+    createdAt: check.createdAt,
+    status: check.status,
+    trust: check.trust,
+    summary: `${sourcePath} -> ${check.status}`,
+    path: check.path ?? check.paths?.json ?? check.checkId,
+    warning: check.warnings?.[0]
+  };
+}
+
+function attachmentTargetForArtifact(artifact, openObligations) {
+  if (artifact.kind === "cas" && artifact.trust === "cross-checked" && openObligations.independent) {
+    return {
+      ...openObligations.independent,
+      label: "Attach to independent check"
+    };
   }
 
+  if (artifact.kind === "smt" && artifact.trust === "smt-checked") {
+    const target = openObligations.solver ?? openObligations.independent;
+    if (target) {
+      return {
+        ...target,
+        label: target === openObligations.solver ? "Attach to SMT obligation" : "Attach to independent check"
+      };
+    }
+  }
+
+  return undefined;
+}
+
+function currentOpenEvidenceObligations(receipt) {
+  const route = receipt?.verifierRoute;
+  const empty = {
+    independent: undefined,
+    solver: undefined
+  };
+  if (!route) {
+    return empty;
+  }
+
+  const toTarget = (obligation) => obligation
+    ? {
+        routeId: route.routeId,
+        obligationId: obligation.obligationId
+      }
+    : undefined;
+
   return {
-    routeId: route.routeId,
-    obligationId: obligation.obligationId
+    independent: toTarget(route.proofObligations?.find((item) => item.kind === "independent-check" && item.status === "open")),
+    solver: toTarget(route.proofObligations?.find((item) => item.kind === "solver-encoding" && item.status === "open"))
   };
 }
 
@@ -4420,19 +4517,19 @@ verificationMatrix.addEventListener("click", (event) => {
 });
 
 casArtifactList.addEventListener("click", (event) => {
-  const attachButton = event.target.closest(".attach-cas-artifact");
+  const attachButton = event.target.closest(".attach-evidence-artifact");
   if (!attachButton) {
     return;
   }
 
-  void attachCasEvidenceToRoute({
+  void attachEvidenceToRoute({
     routeId: attachButton.dataset.routeId,
     obligationId: attachButton.dataset.obligationId,
     evidenceRef: {
-      kind: "cas",
-      ref: attachButton.dataset.casRef,
-      trust: attachButton.dataset.casTrust,
-      summary: attachButton.dataset.casSummary
+      kind: attachButton.dataset.evidenceKind,
+      ref: attachButton.dataset.evidenceRef,
+      trust: attachButton.dataset.evidenceTrust,
+      summary: attachButton.dataset.evidenceSummary
     }
   });
 });

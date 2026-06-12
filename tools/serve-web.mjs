@@ -168,6 +168,66 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/smt" && request.method === "GET") {
+    const checks = await readSmtCheckSnapshot();
+    writeJson(response, 200, {
+      schemaVersion: "theorem.web-smt-list-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      checks
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/smt/solve" && request.method === "POST") {
+    const input = await readJsonBody(request);
+    try {
+      const { solveSmtProblem } = await loadCoreModule();
+      const variables = stringList(input.variables);
+      const constraints = stringList(input.constraints);
+      const timeoutMs = Number.isFinite(input.timeoutMs) ? Number(input.timeoutMs) : undefined;
+
+      await ensureLocalWorkspace();
+      const result = await solveSmtProblem({
+        rootPath: projectRoot,
+        queryName: optionalText(input.queryName),
+        variables,
+        constraints,
+        includeModel: input.includeModel === true,
+        z3Command: optionalText(input.z3Command),
+        timeoutMs
+      });
+      const checks = await readSmtCheckSnapshot();
+      writeJson(response, 200, {
+        schemaVersion: "theorem.web-smt-solve-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        problem: result.problem,
+        sourcePath: result.sourcePath,
+        sourceRef: result.sourceRef,
+        record: result.check.record,
+        paths: {
+          json: result.check.jsonPath,
+          markdown: result.check.markdownPath
+        },
+        checks,
+        activity: [
+          {
+            actor: "local-api",
+            action: "created-smt-check",
+            detail: `${result.check.record.checkId} wrote ${result.check.record.status} Z3 SMT record with trust ${result.check.record.trust}.`,
+            at: result.check.record.createdAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeJson(response, 400, {
+        error: error instanceof Error ? error.message : "SMT solve failed."
+      });
+    }
+    return;
+  }
+
   if (requestUrl.pathname === "/api/cas/check" && request.method === "POST") {
     const input = await readJsonBody(request);
     try {
@@ -437,6 +497,16 @@ async function readCasCheckSnapshot() {
   const { listSymbolicCasChecks } = await loadCoreModule();
   await ensureLocalWorkspace();
   const checks = await listSymbolicCasChecks(projectRoot);
+  return checks.map((check) => ({
+    ...check,
+    paths: artifactPathsFor(check.path)
+  }));
+}
+
+async function readSmtCheckSnapshot() {
+  const { listSmtChecks } = await loadCoreModule();
+  await ensureLocalWorkspace();
+  const checks = await listSmtChecks(projectRoot);
   return checks.map((check) => ({
     ...check,
     paths: artifactPathsFor(check.path)
