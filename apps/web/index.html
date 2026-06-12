@@ -439,23 +439,30 @@
           </aside>
         </section>
 
-        <section class="task-dock" aria-label="Verification tasks">
-          <div class="task-row">
-            <span class="task-state passed"></span>
-            <span>Docker check</span>
-            <strong>221 tests passed</strong>
+        <details class="task-dock" id="task-dock" aria-label="Verification tasks">
+          <summary>
+            <span class="task-state waiting" id="task-dock-state"></span>
+            <span>Verification checks</span>
+            <strong id="task-dock-summary">local gates loading</strong>
+          </summary>
+          <div class="task-list" id="task-list">
+            <div class="task-row">
+              <span class="task-state passed"></span>
+              <span>Receipt envelope</span>
+              <strong>passed</strong>
+            </div>
+            <div class="task-row">
+              <span class="task-state waiting"></span>
+              <span>Symbolic / CAS cross-check</span>
+              <strong>waiting</strong>
+            </div>
+            <div class="task-row">
+              <span class="task-state waiting"></span>
+              <span>Paper-ready packet</span>
+              <strong>waiting</strong>
+            </div>
           </div>
-          <div class="task-row">
-            <span class="task-state passed"></span>
-            <span>Launch proof</span>
-            <strong>8/8 strict claims</strong>
-          </div>
-          <div class="task-row">
-            <span class="task-state waiting"></span>
-            <span>Code sandbox</span>
-            <strong>required gate fails closed</strong>
-          </div>
-        </section>
+        </details>
 
         <form class="composer" id="composer">
           <button class="icon-button" type="button" aria-label="Attach evidence">+</button>

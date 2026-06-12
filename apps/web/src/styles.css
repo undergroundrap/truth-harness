@@ -1903,14 +1903,68 @@ textarea:focus-visible {
 }
 
 .task-dock {
+  flex: 0 0 auto;
+  width: min(760px, calc(100% - 36px));
+  margin: 0 auto 8px;
+  padding: 0;
+}
+
+.task-dock summary {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  max-width: 100%;
+  min-height: 30px;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(25, 25, 25, 0.86);
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+  margin: 0 auto;
+  padding: 6px 11px;
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+.task-dock summary::-webkit-details-marker {
+  display: none;
+}
+
+.task-dock summary:focus-visible {
+  outline: 1px solid rgba(183, 169, 138, 0.5);
+  outline-offset: 2px;
+}
+
+.task-dock summary::after {
+  color: var(--faint);
+  content: "Show";
+  font-size: 11px;
+  margin-left: 2px;
+}
+
+.task-dock[open] summary {
+  margin-bottom: 8px;
+}
+
+.task-dock[open] summary::after {
+  content: "Hide";
+}
+
+.task-dock summary strong,
+.task-row strong {
+  color: var(--text);
+  font-weight: 550;
+}
+
+.task-list {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
   gap: 8px;
-  margin: 0 clamp(18px, 10vw, 140px) 8px;
-  padding: 0;
   overflow-x: auto;
+  padding-bottom: 2px;
   scrollbar-gutter: stable;
 }
 
@@ -1926,11 +1980,6 @@ textarea:focus-visible {
   color: var(--muted);
   font-size: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
-}
-
-.task-row strong {
-  color: var(--text);
-  font-weight: 550;
 }
 
 .task-state {

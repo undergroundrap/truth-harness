@@ -230,6 +230,9 @@ const receiptSummary = document.querySelector(".receipt-summary");
 const promptInput = document.querySelector("#prompt-input");
 const composer = document.querySelector("#composer");
 const verifyButton = document.querySelector("#verify-button");
+const taskDockState = document.querySelector("#task-dock-state");
+const taskDockSummary = document.querySelector("#task-dock-summary");
+const taskList = document.querySelector("#task-list");
 const surfaceStatusText = {
   trace: "explainable steps",
   runbook: "agent harness",
@@ -792,6 +795,7 @@ function render() {
   renderAgentRoutes(receipt);
   renderRunbook(receipt);
   renderVerificationMatrix(receipt);
+  renderTaskDock(receipt);
   renderReplay(receipt);
   renderReport(receipt);
   applySidebarSearch();
@@ -1081,6 +1085,32 @@ function renderVerificationMatrix(receipt) {
       <span class="task-state ${row.status}"></span>
       <strong>${escapeHtml(row.label)}</strong>
       <small>${escapeHtml(statusLabel(row.status))}</small>
+    </div>`)
+    .join("");
+}
+
+function renderTaskDock(receipt) {
+  if (!receipt) {
+    return;
+  }
+
+  const rows = verificationRows(receipt);
+  const counts = rows.reduce((accumulator, row) => {
+    accumulator[row.status] = (accumulator[row.status] ?? 0) + 1;
+    return accumulator;
+  }, {});
+  const openRows = rows.filter((row) => ["missing", "waiting"].includes(row.status));
+  const visibleRows = (openRows.length > 0 ? openRows : rows.filter((row) => row.status === "passed")).slice(0, 3);
+  const passed = counts.passed ?? 0;
+  const open = openRows.length;
+
+  taskDockState.className = `task-state ${open > 0 ? "waiting" : "passed"}`;
+  taskDockSummary.textContent = open > 0 ? `${passed} passed · ${open} open` : `${passed} passed · ready`;
+  taskList.innerHTML = visibleRows
+    .map((row) => `<div class="task-row">
+      <span class="task-state ${row.status}"></span>
+      <span>${escapeHtml(row.label)}</span>
+      <strong>${escapeHtml(statusLabel(row.status))}</strong>
     </div>`)
     .join("");
 }
