@@ -584,40 +584,43 @@ h1 {
 .work-surface {
   display: flex;
   flex-direction: column;
-  height: clamp(340px, 46vh, 500px);
-  min-height: 340px;
+  height: clamp(460px, 58vh, 690px);
+  min-height: 430px;
   overflow: hidden;
   padding: 14px;
 }
 
 .surface-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .surface-tabs {
-  display: flex;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 3px;
   min-width: 0;
   padding: 2px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #202020;
-  overflow-x: auto;
-  scrollbar-gutter: stable;
+  overflow: hidden;
 }
 
 .surface-tab {
-  min-width: 68px;
+  min-width: 0;
   height: 28px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  padding: 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .surface-tab:hover {
@@ -631,6 +634,7 @@ h1 {
 
 .surface-actions {
   min-width: 0;
+  justify-self: start;
 }
 
 .surface-status {
@@ -646,6 +650,59 @@ h1 {
   white-space: nowrap;
 }
 
+.agent-route-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+}
+
+.route-pill {
+  min-width: 0;
+  min-height: 50px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #121212;
+  padding: 9px 10px;
+}
+
+.route-pill span,
+.route-pill code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-pill span {
+  color: var(--faint);
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+
+.route-pill strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #eee7d8;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-pill code {
+  color: #e6dfce;
+  font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.route-primary {
+  border-color: rgba(183, 169, 138, 0.3);
+  background: #171512;
+}
+
 .surface-panel {
   display: none;
   min-height: 0;
@@ -658,6 +715,11 @@ h1 {
   min-height: 0;
   overflow: hidden;
   scrollbar-gutter: stable;
+}
+
+#surface-protocol.active {
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .panel-heading {
@@ -822,8 +884,8 @@ dd {
   flex: 0 0 auto;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: #101010;
-  padding: 12px;
+  background: linear-gradient(180deg, #151515, #111111);
+  padding: 14px;
 }
 
 .protocol-summary strong {
@@ -842,32 +904,36 @@ dd {
 
 .protocol-grid {
   display: grid;
-  flex: 1 1 auto;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  flex: 0 0 auto;
+  grid-template-columns: 1fr;
   align-content: start;
   gap: 10px;
   min-height: 0;
   margin-top: 10px;
-  overflow: auto;
-  scrollbar-gutter: stable;
+  overflow: visible;
 }
 
 .protocol-card {
-  min-height: 172px;
+  min-height: 0;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: #121212;
-  padding: 12px;
+  padding: 13px 14px;
 }
 
 .protocol-card ul {
-  display: grid;
-  gap: 8px;
+  columns: 2 230px;
+  column-gap: 28px;
   margin: 10px 0 0;
   padding-left: 18px;
   color: #d8d2c8;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.protocol-card li {
+  break-inside: avoid;
+  margin: 0 0 8px;
 }
 
 .review-standard {
@@ -1477,6 +1543,10 @@ textarea:focus-visible {
 
   .surface-tabs {
     width: 100%;
+  }
+
+  .agent-route-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .surface-status {

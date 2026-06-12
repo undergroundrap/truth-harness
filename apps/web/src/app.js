@@ -177,6 +177,11 @@ const reportPreview = document.querySelector("#report-preview");
 const copyReportButton = document.querySelector("#copy-report");
 const downloadReportButton = document.querySelector("#download-report");
 const printReportButton = document.querySelector("#print-report");
+const routeLane = document.querySelector("#route-lane");
+const routeProtocol = document.querySelector("#route-protocol");
+const routeReceipt = document.querySelector("#route-receipt");
+const routeReplay = document.querySelector("#route-replay");
+const routeReport = document.querySelector("#route-report");
 const openReplayButton = document.querySelector("#open-replay");
 const playReplayButton = document.querySelector("#play-replay");
 const resetReplayButton = document.querySelector("#reset-replay");
@@ -637,6 +642,7 @@ function render() {
   renderSurface();
   renderLane();
   renderProtocol();
+  renderAgentRoutes(receipt);
   renderReplay(receipt);
   renderReport(receipt);
   applySidebarSearch();
@@ -734,6 +740,33 @@ function currentLaneProtocol() {
 
 function renderProtocolItems(items) {
   return items.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+}
+
+function renderAgentRoutes(receipt) {
+  if (!receipt) {
+    return;
+  }
+
+  const protocol = currentLaneProtocol();
+  const routes = agentRouteCommands(receipt);
+  routeLane.textContent = `${protocol.name} lane`;
+  routeProtocol.textContent = protocol.title;
+  routeReceipt.textContent = routes.receipt;
+  routeReplay.textContent = routes.replay;
+  routeReport.textContent = routes.report;
+}
+
+function agentRouteCommands(receipt) {
+  return {
+    receipt: `theorem ask "${truncateForCommand(receipt.title, 34)}" --json`,
+    replay: `theorem replay ${receipt.runId}.json`,
+    report: `theorem render ${receipt.runId}.json markdown`
+  };
+}
+
+function truncateForCommand(value, maxLength) {
+  const text = String(value).replace(/\s+/g, " ").trim();
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 3)}...`;
 }
 
 function applySidebarSearch() {
@@ -1080,6 +1113,7 @@ function renderReport(receipt) {
   }
 
   const protocol = currentLaneProtocol();
+  const routes = agentRouteCommands(receipt);
   const notes = researchNotes.value.trim();
   const mathInput = receipt.math?.input;
   const mathOutput = receipt.math?.output;
@@ -1108,6 +1142,12 @@ function renderReport(receipt) {
       <div><dt>Run</dt><dd>${escapeHtml(receipt.runId)}</dd></div>
       <div><dt>Replay</dt><dd><code>${escapeHtml(receipt.replay)}</code></dd></div>
     </dl>
+    <h3>Agent Routes</h3>
+    <dl class="report-facts">
+      <div><dt>Receipt</dt><dd><code>${escapeHtml(routes.receipt)}</code></dd></div>
+      <div><dt>Replay</dt><dd><code>${escapeHtml(routes.replay)}</code></dd></div>
+      <div><dt>Report</dt><dd><code>${escapeHtml(routes.report)}</code></dd></div>
+    </dl>
     <h3>${escapeHtml(protocol.name)} Review Standard</h3>
     <p>${escapeHtml(protocol.claimStandard)}</p>
     <dl class="report-facts">
@@ -1132,6 +1172,7 @@ function renderReport(receipt) {
 function generateReportMarkdown(receipt) {
   const trace = receipt.traces[state.level] ?? receipt.traces.middle;
   const protocol = currentLaneProtocol();
+  const routes = agentRouteCommands(receipt);
   const notes = researchNotes.value.trim() || "No local notes added yet.";
   const mathInput = receipt.math?.input ?? receipt.title;
   const mathOutput = receipt.math?.output ?? receipt.output;
@@ -1152,6 +1193,12 @@ function generateReportMarkdown(receipt) {
     `- Engine: ${receipt.engine}`,
     `- Run ID: ${receipt.runId}`,
     `- Replay: \`${receipt.replay}\``,
+    "",
+    "## Agent Routes",
+    "",
+    `- Receipt: \`${routes.receipt}\``,
+    `- Replay: \`${routes.replay}\``,
+    `- Report: \`${routes.report}\``,
     "",
     `## ${protocol.name} Review Standard`,
     "",
@@ -1371,6 +1418,7 @@ laneButtons.forEach((button) => {
     state.lane = nextLane;
     renderLane();
     renderProtocol();
+    renderAgentRoutes(receiptStore.get(state.receiptKey));
     renderReport(receiptStore.get(state.receiptKey));
   });
 });
