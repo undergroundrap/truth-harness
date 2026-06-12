@@ -863,6 +863,11 @@ function renderSurface() {
 }
 
 function resetActiveSurfaceScroll() {
+  if (state.surface === "runbook") {
+    document.querySelectorAll("#surface-runbook details").forEach((details) => {
+      details.open = false;
+    });
+  }
   document.querySelector(`[data-surface-panel="${state.surface}"]`)?.scrollTo({ top: 0, left: 0 });
 }
 
