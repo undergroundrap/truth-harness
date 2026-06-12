@@ -1040,6 +1040,36 @@ function routeLedgerValueHtml(label, value) {
   return `<code title="${escapeHtml(value)}">${escapeHtml(value)}</code>`;
 }
 
+function verifierRouteReportFacts(receipt) {
+  const route = receipt.verifierRoute;
+  if (!route) {
+    return [
+      ["Status", "not persisted"],
+      ["Boundary", "This seed/demo receipt has no local verifier route artifact yet."]
+    ];
+  }
+
+  const routePaths = receipt.routePaths ?? {};
+  return [
+    ["Route ID", route.routeId],
+    ["Status", `${route.status} / ${route.finalTrust ?? receipt.trust}`],
+    ["Evidence kind", route.evidenceKind ?? receipt.details["Evidence kind"] ?? "unknown"],
+    ["Replay", route.replay?.command ?? receipt.replay],
+    ["JSON", routePaths.json ?? "local route JSON path not returned"],
+    ["Markdown", routePaths.markdown ?? "local route Markdown path not returned"],
+    ["Gaps", String(route.gaps?.length ?? 0)]
+  ];
+}
+
+function routeReportValueHtml(label, value) {
+  const codeLabels = new Set(["Route ID", "Replay", "JSON", "Markdown"]);
+  if (!codeLabels.has(label)) {
+    return escapeHtml(value);
+  }
+
+  return `<code>${escapeHtml(value)}</code>`;
+}
+
 function renderClaimList() {
   const query = state.sidebarQuery.trim().toLowerCase();
   const visibleKeys = recentReceiptKeys.filter((key) => {
@@ -1928,16 +1958,31 @@ function createClaimLedgerPayload(receipt, options = {}) {
     supersedes: options.supersedes ?? [],
     derivedBy: receipt.derivedBy,
     authors: researcher === "Unsigned researcher" ? [] : [researcher],
-    evidenceRefs: [
+    evidenceRefs: claimEvidenceRefs(receipt),
+    nextChecks
+  };
+}
+
+function claimEvidenceRefs(receipt) {
+  const refs = [
       {
         kind: "other",
         ref: `local-web-receipt:${receipt.runId}`,
         trust: receipt.trust,
         summary: `${receipt.engine}: ${receipt.subtitle}`
       }
-    ],
-    nextChecks
-  };
+  ];
+
+  if (receipt.verifierRoute?.routeId) {
+    refs.push({
+      kind: "route",
+      ref: receipt.verifierRoute.routeId,
+      trust: receipt.verifierRoute.finalTrust ?? receipt.trust,
+      summary: `Verifier route ${receipt.verifierRoute.routeId} recorded ${receipt.verifierRoute.status} with ${receipt.verifierRoute.gaps?.length ?? 0} gap(s).`
+    });
+  }
+
+  return refs;
 }
 
 function claimStatementForReceipt(receipt) {
@@ -3388,6 +3433,9 @@ function renderReport(receipt) {
     .slice(0, 8)
     .map((row) => `<tr>${plot.dataColumns.map((_column, index) => `<td>${escapeHtml(row[index] ?? "")}</td>`).join("")}</tr>`)
     .join("");
+  const routeFactRows = verifierRouteReportFacts(receipt)
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${routeReportValueHtml(label, value)}</dd></div>`)
+    .join("");
 
   reportPreview.innerHTML = `
     <header>
@@ -3418,6 +3466,8 @@ function renderReport(receipt) {
       <div><dt>License</dt><dd>AGPL-3.0 with visible attribution</dd></div>
       <div><dt>Replay</dt><dd><code>${escapeHtml(receipt.replay)}</code></dd></div>
     </dl>
+    <h3>Saved Verifier Route</h3>
+    <dl class="report-facts">${routeFactRows}</dl>
     <h3>Ledger Metadata</h3>
     <div class="report-tags">${tagItems}</div>
     <dl class="report-facts">
@@ -3513,6 +3563,10 @@ function generateReportMarkdown(receipt) {
     `- Run ID: ${receipt.runId}`,
     `- Claim ledger ID: ${receipt.claimId ?? "not recorded"}`,
     `- Replay: \`${receipt.replay}\``,
+    "",
+    "## Saved Verifier Route",
+    "",
+    ...verifierRouteReportFacts(receipt).map(([label, value]) => `- ${label}: ${value}`),
     "",
     "## Ledger Metadata",
     "",

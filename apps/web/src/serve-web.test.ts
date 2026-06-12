@@ -75,6 +75,34 @@ describe("local web route ledger API", () => {
     expect(routePayload.route.routeId).toBe(receiptPayload.route.routeId);
     expect(routePayload.route.receipt.runId).toBe(receiptPayload.receipt.runId);
     expect(routePayload.routePaths.markdown).toBe(receiptPayload.routePaths.markdown);
+
+    const claimResponse = await fetch(`${baseUrl}/api/claims`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: "Exact fraction sum",
+        statement: "3 / 4 + 5 / 8 = 11/8",
+        domain: "math",
+        trust: "exact-computed",
+        evidenceRefs: [
+          {
+            kind: "route",
+            ref: receiptPayload.route.routeId
+          }
+        ]
+      })
+    });
+    expect(claimResponse.status).toBe(200);
+    const claimPayload = await claimResponse.json();
+    const routeRef = claimPayload.claim.evidenceRefs.find((ref: { kind: string }) => ref.kind === "route");
+    expect(routeRef).toMatchObject({
+      kind: "route",
+      ref: receiptPayload.route.routeId,
+      trust: "exact-computed"
+    });
+    expect(routeRef.summary).toContain(receiptPayload.route.routeId);
   }, 30_000);
 });
 
