@@ -67,6 +67,7 @@ def main() -> int:
                     "result": str(result),
                     "srepr": sp.srepr(result),
                     "latex": sp.latex(result),
+                    "checks": build_checks(operation, expression, result, variable),
                     "sympyVersion": sp.__version__,
                 },
                 sort_keys=True,
@@ -116,6 +117,123 @@ def parse_safe_expr(source: str):
         transformations=TRANSFORMATIONS,
         evaluate=True,
     )
+
+
+def build_checks(operation: str, expression, result, variable):
+    if operation in {"simplify", "factor", "expand"}:
+        return [
+            symbolic_zero_check("symbolic-equivalence", expression - result),
+            numeric_sample_check("numeric-sample-equivalence", expression, result, variable),
+        ]
+
+    if operation == "differentiate":
+        derived = sp.diff(expression, variable)
+        return [
+            symbolic_zero_check("derivative-equivalence", derived - result),
+            numeric_sample_check("numeric-derivative-equivalence", derived, result, variable),
+        ]
+
+    if operation == "integrate":
+        derived = sp.diff(result, variable)
+        return [
+            symbolic_zero_check("integral-derivative-equivalence", derived - expression),
+            numeric_sample_check("numeric-integral-derivative-equivalence", derived, expression, variable),
+        ]
+
+    return [
+        {
+            "id": "unsupported-operation-check",
+            "status": "warning",
+            "detail": f"No sanity check implemented for operation {operation}.",
+        }
+    ]
+
+
+def symbolic_zero_check(check_id: str, residual):
+    try:
+        simplified = sp.simplify(residual)
+        if simplified == 0 or simplified.is_zero is True:
+            return {
+                "id": check_id,
+                "status": "passed",
+                "detail": "Symbolic residual simplified to 0.",
+                "residual": str(simplified),
+            }
+
+        status = "warning" if simplified.is_zero is None else "failed"
+        return {
+            "id": check_id,
+            "status": status,
+            "detail": "Symbolic residual did not simplify to 0.",
+            "residual": str(simplified),
+        }
+    except Exception as error:
+        return {
+            "id": check_id,
+            "status": "warning",
+            "detail": f"Symbolic residual check could not run: {error}",
+        }
+
+
+def numeric_sample_check(check_id: str, left, right, variable):
+    samples = []
+    skipped = 0
+    failures = []
+
+    for value in [-3, -2, -1, 0, 1, 2, 3]:
+        try:
+            left_value = sp.N(left.subs(variable, value), 30)
+            right_value = sp.N(right.subs(variable, value), 30)
+            residual = sp.N(sp.simplify(left_value - right_value), 30)
+            if not residual.is_number or has_invalid_number(left_value, right_value, residual):
+                skipped += 1
+                continue
+
+            passed = residual == 0 or abs(complex(residual)) <= 1e-9
+            sample = {
+                "variable": str(variable),
+                "value": str(value),
+                "left": str(left_value),
+                "right": str(right_value),
+                "residual": str(residual),
+                "passed": passed,
+            }
+            samples.append(sample)
+            if not passed:
+                failures.append(sample)
+        except Exception:
+            skipped += 1
+
+    if failures:
+        return {
+            "id": check_id,
+            "status": "failed",
+            "detail": f"{len(failures)} numeric sample(s) disagreed.",
+            "samples": samples,
+            "skipped": skipped,
+        }
+
+    if len(samples) >= 3:
+        return {
+            "id": check_id,
+            "status": "passed",
+            "detail": f"{len(samples)} deterministic numeric sample(s) agreed.",
+            "samples": samples,
+            "skipped": skipped,
+        }
+
+    return {
+        "id": check_id,
+        "status": "warning",
+        "detail": "Fewer than three safe numeric samples were available.",
+        "samples": samples,
+        "skipped": skipped,
+    }
+
+
+def has_invalid_number(*values) -> bool:
+    invalids = (sp.zoo, sp.oo, -sp.oo, sp.nan)
+    return any(value.has(*invalids) for value in values)
 
 
 if __name__ == "__main__":

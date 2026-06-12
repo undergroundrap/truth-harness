@@ -104,9 +104,19 @@ describe("createReceipt", () => {
 
     if (receipt.trust === "exact-computed") {
       expect(receipt.summary).toContain("1");
-      expect(
-        receipt.artifacts.some((artifact) => artifact.kind === "symbolic-computation-result")
-      ).toBe(true);
+      const artifact = receipt.artifacts.find((item) => item.kind === "symbolic-computation-result");
+      expect(artifact).toBeDefined();
+      const payload = JSON.parse(artifact?.content ?? "{}") as {
+        checks?: Array<{ id: string; status: string }>;
+        checkStatus?: string;
+      };
+      expect(payload.checkStatus).toBe("passed");
+      expect(payload.checks?.map((check) => `${check.id}:${check.status}`)).toEqual([
+        "symbolic-equivalence:passed",
+        "numeric-sample-equivalence:passed"
+      ]);
+      expect(receipt.evidenceProfile.outputs.join(" ")).toContain("sanityChecks=passed");
+      expect(receipt.findings.map((finding) => finding.message).join(" ")).toContain("same-engine");
       return;
     }
 

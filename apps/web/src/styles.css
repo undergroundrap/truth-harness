@@ -145,6 +145,33 @@ button {
   color: var(--muted);
 }
 
+.workspace-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: #151515;
+  color: #f1eadc;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.workspace-kicker {
+  min-width: 0;
+  flex: 1;
+  color: var(--faint);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-toggle {
+  margin-left: auto;
+}
+
 .icon-button {
   display: inline-grid;
   place-items: center;

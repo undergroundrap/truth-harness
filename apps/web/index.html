@@ -10,9 +10,9 @@
     <div class="app-shell" id="app-shell">
       <aside class="sidebar" id="sidebar" aria-label="Workspace navigation">
         <div class="top-strip">
-          <button class="icon-button" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-pressed="false">&lt;</button>
-          <button class="icon-button" aria-label="Back">&lt;</button>
-          <button class="icon-button muted-icon" aria-label="Forward">&gt;</button>
+          <span class="workspace-mark" aria-hidden="true">TW</span>
+          <span class="workspace-kicker">Local workbench</span>
+          <button class="icon-button sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-pressed="false">&lt;</button>
         </div>
 
         <nav class="nav-list">
@@ -23,7 +23,7 @@
         </nav>
 
         <div class="sidebar-search">
-          <input id="sidebar-search" type="search" autocomplete="off" placeholder="Search workspace, #tags, links" aria-label="Search projects, lanes, claims, tags, links, and progress">
+          <input id="sidebar-search" type="search" autocomplete="off" placeholder="Search claims, #tags" aria-label="Search projects, lanes, claims, tags, links, and progress">
           <span class="mini-label" id="sidebar-search-count">claims, tags, links</span>
         </div>
 

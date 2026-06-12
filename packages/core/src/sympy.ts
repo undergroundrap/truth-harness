@@ -19,8 +19,18 @@ export interface SympySuccess {
   result: string;
   srepr: string;
   latex: string;
+  checks?: SympyCheck[];
   sympyVersion: string;
   pythonCommand: string;
+}
+
+export interface SympyCheck {
+  id: string;
+  status: "passed" | "warning" | "failed";
+  detail: string;
+  residual?: string;
+  skipped?: number;
+  samples?: Array<Record<string, string | boolean>>;
 }
 
 export interface SympyFailure {

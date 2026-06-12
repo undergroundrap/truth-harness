@@ -215,6 +215,7 @@ export {
   writeSmtProblemSource
 } from "./smt-problem.js";
 export { parseSymbolicPrompt, runSympy, runSympySync } from "./sympy.js";
+export { summarizeSympyCheckStatus } from "./sympy-check.js";
 export { createReceipt } from "./receipt.js";
 export { createSourceCitationReceipt } from "./source-receipt.js";
 export { renderReceipt, renderReceiptHtml, renderReceiptMarkdown } from "./receipt-renderer.js";
@@ -503,7 +504,8 @@ export type {
   SmtProblemVariable,
   SmtVariableSort
 } from "./smt-problem.js";
-export type { SymbolicPrompt, SympyFailure, SympyOperation, SympyResult, SympySuccess } from "./sympy.js";
+export type { SympyCheckAggregateStatus } from "./sympy-check.js";
+export type { SymbolicPrompt, SympyCheck, SympyFailure, SympyOperation, SympyResult, SympySuccess } from "./sympy.js";
 export type { ReceiptRenderFormat } from "./receipt-renderer.js";
 export type { ClaimBlock, ClaimCheck, ClaimFileCheck } from "./claim-file.js";
 export type {

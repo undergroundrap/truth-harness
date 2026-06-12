@@ -5,6 +5,7 @@ import { proveUniversalParity } from "./parity-proof.js";
 import { Rational } from "./rational.js";
 import { createArithmeticTrace } from "./arithmetic-trace.js";
 import { stableHash } from "./stable-hash.js";
+import { summarizeSympyCheckStatus } from "./sympy-check.js";
 import { parseSymbolicPrompt, runSympySync, type SymbolicPrompt } from "./sympy.js";
 import type {
   Artifact,
@@ -366,6 +367,9 @@ function completeSymbolicReceipt(args: {
     });
   }
 
+  const checks = result.checks ?? [];
+  const checkStatus = summarizeSympyCheckStatus(checks);
+  const symbolicTrust: TrustLabel = checkStatus === "failed" ? "unverified" : "exact-computed";
   const artifactPayload = {
     adapter: "local-sympy-subprocess",
     operation: result.operation,
@@ -374,6 +378,8 @@ function completeSymbolicReceipt(args: {
     result: result.result,
     srepr: result.srepr,
     latex: result.latex,
+    checks,
+    checkStatus,
     sympyVersion: result.sympyVersion,
     pythonCommand: result.pythonCommand
   };
@@ -389,10 +395,11 @@ function completeSymbolicReceipt(args: {
       adapter: "local-sympy-subprocess",
       operation: result.operation,
       pythonCommand: result.pythonCommand,
-      sympyVersion: result.sympyVersion
+      sympyVersion: result.sympyVersion,
+      checkStatus
     },
-    trust: "exact-computed",
-    summary: `Ran SymPy ${result.operation} in a bounded local subprocess.`,
+    trust: symbolicTrust,
+    summary: `Ran SymPy ${result.operation} in a bounded local subprocess with ${checks.length} local sanity check(s).`,
     artifactRefs: [artifact.id]
   });
   args.edges.push({ from: args.normalizedNode.id, to: toolNode.id, label: "checked-by" });
@@ -400,23 +407,29 @@ function completeSymbolicReceipt(args: {
   const computationNode = addNode(args.nodes, args.createdAt, {
     kind: "computation",
     payload: artifactPayload,
-    trust: "exact-computed",
+    trust: symbolicTrust,
     summary: `Symbolic ${result.operation} result is ${result.result}.`,
     artifactRefs: [artifact.id]
   });
   args.edges.push({ from: toolNode.id, to: computationNode.id, label: "produced" });
 
   args.findings.push({
+    level: checkStatus === "failed" ? "warning" : "info",
+    message: `Symbolic CAS output is exact computation, not a formal proof of arbitrary surrounding claims. Local sanity checks: ${checkStatus}.`
+  });
+  args.findings.push({
     level: "info",
-    message: "Symbolic CAS output is exact computation, not a formal proof of arbitrary surrounding claims."
+    message: "SymPy sanity checks are same-engine checks using symbolic residuals and deterministic numeric samples; use a second CAS, SMT, or proof checker before stronger claims."
   });
 
   return buildReceipt({
     problem: args.problem,
     normalizedProblem: args.normalizedProblem,
     createdAt: args.createdAt,
-    trust: "exact-computed",
-    summary: `SymPy ${result.operation} result: ${result.result}.`,
+    trust: symbolicTrust,
+    summary: checkStatus === "failed"
+      ? `SymPy ${result.operation} produced ${result.result}, but local sanity checks failed.`
+      : `SymPy ${result.operation} result: ${result.result}; local sanity checks ${checkStatus}.`,
     evidenceProfile: {
       kind: "symbolic-cas",
       backends: [
@@ -429,10 +442,13 @@ function completeSymbolicReceipt(args: {
         }
       ],
       inputs: [result.operation, result.expression, ...(result.variable ? [`variable=${result.variable}`] : [])],
-      outputs: [result.result],
+      outputs: [result.result, `sanityChecks=${checkStatus}`, ...checks.map((check) => `${check.id}:${check.status}`)],
       replayable: true,
       proofCheckerBacked: false,
-      limitations: ["CAS output is exact computation, not a formal proof of arbitrary surrounding claims."]
+      limitations: [
+        "CAS output is exact computation, not a formal proof of arbitrary surrounding claims.",
+        "SymPy sanity checks are same-engine symbolic and numeric checks, not an independent CAS or proof-checker result."
+      ]
     },
     nodes: args.nodes,
     edges: args.edges,

@@ -388,11 +388,19 @@ const verificationGateCatalog = [
   },
   {
     id: "symbolic",
-    label: "Symbolic / CAS cross-check",
+    label: "Symbolic CAS receipt",
     command: "npm run demo:symbolic",
-    description: "Algebraic transformations need a second symbolic engine or recorded unsupported status.",
+    description: "Symbolic transformations run through a local CAS with recorded operation, output, limitations, and sanity-check status.",
     applies: (receipt) => state.lane === "math" || /symbolic|polynomial|equation|algebra/u.test(receipt.title),
     status: (receipt) => /symbolic|cas/u.test(receipt.engine) ? "passed" : "waiting"
+  },
+  {
+    id: "independent-cas",
+    label: "Independent CAS / proof escalation",
+    command: "theorem proof check / theorem smt check",
+    description: "Same-engine symbolic sanity checks are useful, but stronger claims need a second CAS, SMT result, or proof-checker artifact.",
+    applies: (receipt) => state.lane === "math" || /symbolic|cas|polynomial|equation|algebra/u.test(`${receipt.title} ${receipt.engine}`),
+    status: (receipt) => ["cross-checked", "smt-checked", "proved"].includes(receipt.trust) ? "passed" : "waiting"
   },
   {
     id: "smt",
@@ -3195,6 +3203,23 @@ function receiptToViewModel(receipt) {
   const graph = receipt.graph.nodes.map((node) => [node.kind, node.summary]);
   const traces = trace ? tracesFromArithmeticArtifact(trace) : tracesFromReceipt(receipt);
   const backendTags = receipt.evidenceProfile.backends.map((item) => item.id).filter(Boolean);
+  const symbolicArtifact = parseJsonArtifact(receipt, "symbolic-computation-result");
+  const details = {
+    "Evidence kind": receipt.evidenceProfile.kind,
+    Backend: receipt.evidenceProfile.backends.map((item) => item.id).join(", ") || "none",
+    Output: primaryOutput,
+    "Trace steps": trace ? String(trace.steps.length) : String(receipt.graph.nodes.length),
+    Network: receipt.privacy.networkAccess,
+    "Proof checker": String(receipt.evidenceProfile.proofCheckerBacked)
+  };
+  if (symbolicArtifact?.checkStatus) {
+    details["CAS sanity"] = String(symbolicArtifact.checkStatus);
+  }
+  if (Array.isArray(symbolicArtifact?.checks)) {
+    details["CAS checks"] = symbolicArtifact.checks
+      .map((check) => `${check.id}:${check.status}`)
+      .join(", ");
+  }
 
   return {
     trust: receipt.trust,
@@ -3207,14 +3232,7 @@ function receiptToViewModel(receipt) {
     tags: uniqueTags(["imported", receipt.evidenceProfile.kind, ...backendTags]),
     dependsOn: [],
     derivedBy: "Imported from local receipt API response.",
-    details: {
-      "Evidence kind": receipt.evidenceProfile.kind,
-      Backend: receipt.evidenceProfile.backends.map((item) => item.id).join(", ") || "none",
-      Output: primaryOutput,
-      "Trace steps": trace ? String(trace.steps.length) : String(receipt.graph.nodes.length),
-      Network: receipt.privacy.networkAccess,
-      "Proof checker": String(receipt.evidenceProfile.proofCheckerBacked)
-    },
+    details,
     graph,
     traces,
     limitations: receipt.evidenceProfile.limitations
@@ -3233,7 +3251,11 @@ function uniqueTags(tags) {
 }
 
 function parseTraceArtifact(receipt) {
-  const artifact = receipt.artifacts.find((item) => item.kind === "exact-arithmetic-trace");
+  return parseJsonArtifact(receipt, "exact-arithmetic-trace");
+}
+
+function parseJsonArtifact(receipt, kind) {
+  const artifact = receipt.artifacts.find((item) => item.kind === kind);
   if (!artifact) {
     return undefined;
   }
