@@ -1316,13 +1316,16 @@ function renderSafetyStatus() {
   const safety = payload.safety ?? {};
   const sandbox = safety.codeRunSandbox ?? {};
   const mcp = safety.mcpCodeRun ?? {};
+  const webServer = safety.webServer ?? {};
   const attested = sandbox.canAttestNetworkNone === true;
   const exposed = mcp.exposed === true;
   const unsandboxedAllowed = mcp.unsandboxedAllowed === true;
   const mcpState = !exposed ? "disabled by default" : unsandboxedAllowed ? "unsandboxed opt-in" : "sandbox gated";
+  const webGuardState = webServer.localHostGuard === false ? "non-local opt-in" : "local host + same-origin";
   const modelCallState = payload.externalCalls ? "external calls possible" : "none from local API";
   const rows = [
     ["Local API", payload.localOnly ? "local only" : "check config"],
+    ["Browser guard", webGuardState],
     ["Code run", `${formatSafetyPhrase(sandbox.provider)} / ${formatSafetyPhrase(sandbox.processSandbox)}`],
     ["Network", attested ? "none attested" : formatSafetyPhrase(sandbox.networkIsolation)],
     ["MCP tool", mcpState],
@@ -1337,6 +1340,7 @@ function renderSafetyStatus() {
 
   const noteCandidates = [
     sandbox.reason,
+    webServer.recommendation,
     mcp.recommendation,
     ...(Array.isArray(sandbox.notes) ? sandbox.notes : [])
   ].filter(Boolean);

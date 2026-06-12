@@ -48,7 +48,7 @@ docker compose up web
 docker compose run --rm -i mcp
 ```
 
-See [docs/DOCKER.md](docs/DOCKER.md) for the safety boundaries. Docker is the recommended baseline, but a compose dev container bind-mounts this repo and can still change files inside it. Code-run receipts report `networkAccess: none` only when the measured Docker no-network provider is active; otherwise they correctly stay at `unknown`.
+See [SECURITY.md](SECURITY.md) and [docs/DOCKER.md](docs/DOCKER.md) for the safety boundaries. Docker is the recommended baseline, but a compose dev container bind-mounts this repo and can still change files inside it. Code-run receipts report `networkAccess: none` only when the measured Docker no-network provider is active; otherwise they correctly stay at `unknown`.
 
 ## Native Quickstart
 

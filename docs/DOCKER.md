@@ -50,7 +50,7 @@ Run the local web workbench:
 docker compose up web
 ```
 
-Then open `http://127.0.0.1:4173`. The web service publishes only to localhost. The browser calls a localhost `/api/receipt` endpoint backed by `@theorem-workbench/core`; it does not call a hosted model or external service.
+Then open `http://127.0.0.1:4173`. The web service publishes only to localhost. The browser calls a localhost `/api/receipt` endpoint backed by `@theorem-workbench/core`; it does not call a hosted model or external service. The web server also rejects non-local Host headers by default and accepts browser API writes only from the same origin.
 
 Run the MCP server over stdio:
 

@@ -18,6 +18,7 @@ const args = new Map(
 );
 const host = args.get("host") ?? "127.0.0.1";
 const port = Number(args.get("port") ?? "4173");
+const allowNonLocalWeb = isTruthyEnv(process.env.THEOREM_WEB_ALLOW_NONLOCAL);
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -31,19 +32,23 @@ const server = createServer(async (request, response) => {
   try {
     const requestUrl = new URL(request.url ?? "/", `http://${host}:${port}`);
     if (requestUrl.pathname.startsWith("/api/")) {
+      if (!guardApiRequest(request, response)) {
+        return;
+      }
       await handleApiRequest(request, response, requestUrl);
       return;
     }
 
     const filePath = await resolveRequestPath(requestUrl.pathname);
+    setWebSecurityHeaders(response);
     response.setHeader("Content-Type", mimeTypes.get(extname(filePath)) ?? "application/octet-stream");
-    response.setHeader("X-Content-Type-Options", "nosniff");
     createReadStream(filePath).pipe(response);
   } catch (error) {
     const status = error instanceof HttpError ? error.status : 500;
     if (status >= 500) {
       console.error(error);
     }
+    setWebSecurityHeaders(response);
     response.writeHead(status, { "Content-Type": "text/plain; charset=utf-8" });
     response.end(status === 404 ? "Not found" : "Server error");
   }
@@ -81,6 +86,7 @@ async function handleApiRequest(request, response, requestUrl) {
     const codeRunSandbox = await readCodeRunSandboxStatus();
     const mcpCodeRunExposed = isTruthyEnv(process.env.THEOREM_ALLOW_CODE_RUN);
     const unsandboxedCodeRunAllowed = isTruthyEnv(process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN);
+    const webServer = webServerSafetyStatus();
 
     writeJson(response, 200, {
       schemaVersion: "theorem.web-status.v0",
@@ -99,6 +105,7 @@ async function handleApiRequest(request, response, requestUrl) {
             ? "Prefer policy.requireSandbox=true for agent-triggered code runs."
             : "Keep MCP code execution disabled or require a measured sandbox before running untrusted commands."
         },
+        webServer,
         privacy: {
           localApiOnly: true,
           hostedModelCalls: false,
@@ -150,6 +157,84 @@ async function handleApiRequest(request, response, requestUrl) {
   writeJson(response, 404, {
     error: "unknown API route"
   });
+}
+
+function guardApiRequest(request, response) {
+  if (!isAllowedLocalHostHeader(request.headers.host)) {
+    writeJson(response, 403, {
+      error: "non-local API host rejected"
+    });
+    return false;
+  }
+
+  if (!isReadMethod(request.method) && !isAllowedSameOriginWrite(request)) {
+    writeJson(response, 403, {
+      error: "cross-origin API write rejected"
+    });
+    return false;
+  }
+
+  return true;
+}
+
+function isReadMethod(method) {
+  return method === "GET" || method === "HEAD" || method === "OPTIONS";
+}
+
+function isAllowedLocalHostHeader(hostHeader) {
+  if (allowNonLocalWeb) {
+    return true;
+  }
+
+  const hostname = parseHostHeader(hostHeader);
+  return isLocalHostname(hostname);
+}
+
+function isAllowedSameOriginWrite(request) {
+  const origin = request.headers.origin;
+  if (!origin) {
+    return true;
+  }
+
+  try {
+    const originUrl = new URL(origin);
+    return ["http:", "https:"].includes(originUrl.protocol)
+      && originUrl.host === request.headers.host
+      && isAllowedLocalHostHeader(originUrl.host);
+  } catch {
+    return false;
+  }
+}
+
+function parseHostHeader(hostHeader) {
+  if (!hostHeader) {
+    return "";
+  }
+
+  if (hostHeader.startsWith("[")) {
+    const end = hostHeader.indexOf("]");
+    return end === -1 ? hostHeader : hostHeader.slice(1, end);
+  }
+
+  return hostHeader.split(":")[0] ?? "";
+}
+
+function isLocalHostname(hostname) {
+  return ["localhost", "127.0.0.1", "::1"].includes(hostname.toLowerCase());
+}
+
+function webServerSafetyStatus() {
+  return {
+    schemaVersion: "theorem.web-server-safety.v0",
+    bindHost: host,
+    port,
+    localHostGuard: !allowNonLocalWeb,
+    sameOriginWritesOnly: true,
+    securityHeaders: true,
+    recommendation: allowNonLocalWeb
+      ? "Non-local web access was explicitly enabled; do not expose this server to untrusted networks."
+      : "The local API rejects non-local Host headers and cross-origin browser writes."
+  };
 }
 
 async function readCodeRunSandboxStatus() {
@@ -216,11 +301,28 @@ function readJsonBody(request) {
 
 function writeJson(response, status, payload) {
   response.writeHead(status, {
+    ...webSecurityHeaders(),
     "Content-Type": "application/json; charset=utf-8",
-    "X-Content-Type-Options": "nosniff",
     "Cache-Control": "no-store"
   });
   response.end(`${JSON.stringify(payload, null, 2)}\n`);
+}
+
+function setWebSecurityHeaders(response) {
+  for (const [key, value] of Object.entries(webSecurityHeaders())) {
+    response.setHeader(key, value);
+  }
+}
+
+function webSecurityHeaders() {
+  return {
+    "Content-Security-Policy": "default-src 'self'; base-uri 'none'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; object-src 'none'; script-src 'self'; style-src 'self'",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY"
+  };
 }
 
 class HttpError extends Error {
