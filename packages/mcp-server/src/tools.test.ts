@@ -9,6 +9,8 @@ import {
   handleTheoremBenchmarkList,
   handleTheoremBenchmarkRun,
   handleTheoremCasBackends,
+  handleTheoremCasCheck,
+  handleTheoremCasList,
   handleTheoremClaimAdd,
   handleTheoremClaimChart,
   handleTheoremClaimChartList,
@@ -227,6 +229,53 @@ describe("MCP tool handlers", () => {
     expect(result.backends[0]?.statusProbeMintedCheck).toBe(false);
     expect(result.trustBoundary.statusProbeIsNotCheck).toBe(true);
     expect(result.trustBoundary.crossCheckedRequiresIndependentRun).toBe(true);
+  });
+
+  it("checks symbolic CAS results for agents without minting trust when Maxima is unavailable", async () => {
+    const result = await handleTheoremCasCheck({
+      operation: "simplify",
+      expression: "sin(x)^2 + cos(x)^2",
+      result: "1",
+      variable: "x",
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      timeoutMs: 50,
+      failOnUnverified: true
+    });
+
+    expect(result.error).toBe(true);
+    expect(result.record.schemaVersion).toBe("theorem.cas-check.v0");
+    expect(result.record.status).toBe("solver-unavailable");
+    expect(result.record.trust).toBe("unverified");
+    expect(result.record.proofCheckerBacked).toBe(false);
+    expect(result.record.backend.acceptedProofChecker).toBe(false);
+    expect(result.message).toContain("CAS gate failed");
+  });
+
+  it("writes and lists CAS check records for agents", async () => {
+    const root = await tempRoot();
+    process.env.THEOREM_WORKBENCH_ROOT = root;
+    await handleTheoremWorkspaceInit({ name: "MCP CAS Lab" });
+
+    const result = await handleTheoremCasCheck({
+      operation: "simplify",
+      expression: "sin(x)^2 + cos(x)^2",
+      result: "1",
+      variable: "x",
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      timeoutMs: 50,
+      write: true
+    });
+    const list = await handleTheoremCasList({});
+    const validation = await handleTheoremWorkspaceValidate({});
+
+    expect(result.error).toBe(false);
+    expect(result.written).toBe(true);
+    expect(result.result?.jsonPath).toContain(".theorem-workbench");
+    expect(result.record.trust).toBe("unverified");
+    expect(list.total).toBe(1);
+    expect(list.checks[0]?.checkId).toBe(result.record.checkId);
+    expect(validation.passed).toBe(true);
+    expect(validation.summary.byKind.cas).toBe(1);
   });
 
   it("reports the local engine capability manifest for agents", () => {

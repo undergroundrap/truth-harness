@@ -24,6 +24,7 @@ import {
   createSimulationLogEntry,
   createSourceCitationReceipt,
   createVerifierRoute,
+  createSymbolicCasCheckRecord,
   getCasBackendStatus,
   getCodeRunSandboxStatus,
   getEngineManifest,
@@ -55,6 +56,7 @@ import {
   isValidationGateKind,
   isValidationPlanDomain,
   listBenchmarkArtifacts,
+  listSymbolicCasChecks,
   listClaimCharts,
   listClaimRecords,
   listCodeRuns,
@@ -92,6 +94,7 @@ import {
   verifyWorkspaceSnapshot,
   writeBenchmarkComparisonRecord,
   writeBenchmarkRunRecord,
+  writeSymbolicCasCheckRecord,
   writeClaimLedgerRecord,
   writeCodeRun,
   writeEvidenceAudit,
@@ -123,6 +126,9 @@ import {
   type ClaimLedgerStatus,
   type ClaimLedgerWriteResult,
   type CasBackendStatusReport,
+  type SymbolicCasCheckRecord,
+  type SymbolicCasCheckSummary,
+  type SymbolicCasCheckWriteResult,
   type CodeRunSummary,
   type EngineManifest,
   type CodeRunPolicyInput,
@@ -210,7 +216,8 @@ import {
   type WorkspaceSnapshotVerification,
   type WorkspaceSnapshotWriteResult,
   type TrustLabel,
-  type WorkspaceValidation
+  type WorkspaceValidation,
+  type SympyOperation
 } from "@theorem-workbench/core";
 
 const program = new Command();
@@ -2348,6 +2355,92 @@ cas
     printCasBackendStatus(status);
   });
 
+cas
+  .command("check")
+  .description("Run an independent Maxima symbolic equality check and produce a CAS check record.")
+  .requiredOption("--operation <operation>", "simplify, factor, expand, differentiate, or integrate", parseSympyOperation)
+  .requiredOption("--expression <expression>", "Original symbolic expression to check")
+  .requiredOption("--result <expression>", "Expected symbolic result to compare against")
+  .option("--variable <name>", "Symbolic variable for differentiation/integration", "x")
+  .option("--json", "Print the full CAS check JSON")
+  .option("--out <path>", "Write the full CAS check JSON to a file")
+  .option("--write", "Write JSON and Markdown into .theorem-workbench/cas")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--maxima-command <path>", "Maxima executable path or command. Defaults to THEOREM_MAXIMA or maxima.")
+  .option("--timeout-ms <ms>", "Backend probe and check timeout in milliseconds", parsePositiveInteger, 3000)
+  .option("--fail-on-unverified", "Exit non-zero unless the independent CAS check passes")
+  .action(
+    async (options: {
+      operation: SympyOperation;
+      expression: string;
+      result: string;
+      variable: string;
+      json?: boolean;
+      out?: string;
+      write?: boolean;
+      workspace: string;
+      maximaCommand?: string;
+      timeoutMs: number;
+      failOnUnverified?: boolean;
+    }) => {
+      const prompt = {
+        operation: options.operation,
+        expression: options.expression,
+        variable: options.variable
+      };
+      const workspaceWrite = options.write
+        ? await writeSymbolicCasCheckRecord({
+            rootPath: options.workspace,
+            prompt,
+            result: options.result,
+            maximaCommand: options.maximaCommand,
+            timeoutMs: options.timeoutMs
+          })
+        : undefined;
+      const record =
+        workspaceWrite?.record ??
+        createSymbolicCasCheckRecord({
+          prompt,
+          result: options.result,
+          maximaCommand: options.maximaCommand,
+          timeoutMs: options.timeoutMs
+        });
+
+      if (options.out) {
+        await writeJson(options.out, record);
+      }
+
+      if (options.json) {
+        printJson(workspaceWrite ? { record, written: true, result: workspaceWrite } : record);
+        if (options.failOnUnverified && record.trust !== "cross-checked") {
+          process.exitCode = 1;
+        }
+        return;
+      }
+
+      printSymbolicCasCheck(record, options.out, workspaceWrite);
+      if (options.failOnUnverified && record.trust !== "cross-checked") {
+        process.exitCode = 1;
+      }
+    }
+  );
+
+cas
+  .command("list")
+  .description("List local CAS check records.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full CAS check list JSON")
+  .action(async (path: string, options: { json?: boolean }) => {
+    const checks = await listSymbolicCasChecks(path);
+
+    if (options.json) {
+      printJson({ total: checks.length, checks });
+      return;
+    }
+
+    printSymbolicCasCheckList(checks);
+  });
+
 const proof = program.command("proof").description("Inspect formal proof-checker backends and trust boundaries.");
 
 proof
@@ -2707,6 +2800,22 @@ function parseRenderFormat(format: string): ReceiptRenderFormat {
   throw new Error(`Unsupported receipt render format ${JSON.stringify(format)}. Use markdown or html.`);
 }
 
+function parseSympyOperation(value: string): SympyOperation {
+  if (
+    value === "simplify" ||
+    value === "factor" ||
+    value === "expand" ||
+    value === "differentiate" ||
+    value === "integrate"
+  ) {
+    return value;
+  }
+
+  throw new Error(
+    `Unsupported symbolic operation ${JSON.stringify(value)}. Use simplify, factor, expand, differentiate, or integrate.`
+  );
+}
+
 function printEngineManifest(manifest: EngineManifest): void {
   console.log("Theorem engine manifest");
   console.log(`Status: ${manifest.status}`);
@@ -2806,6 +2915,58 @@ function printCasBackendStatus(status: CasBackendStatusReport): void {
   console.log("Trust boundary:");
   for (const warning of status.warnings) {
     console.log(`  ${warning}`);
+  }
+}
+
+function printSymbolicCasCheck(
+  record: SymbolicCasCheckRecord,
+  outPath?: string,
+  workspaceWrite?: SymbolicCasCheckWriteResult
+): void {
+  console.log(`CAS check ${record.checkId}`);
+  console.log(`Status: ${record.status}`);
+  console.log(`Trust: ${record.trust}`);
+  console.log(`Backend: ${record.backend.displayName}${record.backend.version ? ` (${record.backend.version})` : ""}`);
+  console.log(`Operation: ${record.operation}`);
+  console.log(`Expression: ${record.expression}`);
+  console.log(`Result: ${record.result}`);
+  console.log(`Variable: ${record.variable}`);
+  console.log(`Proof-checker backed: ${String(record.proofCheckerBacked)}`);
+  console.log(`Replay: ${record.replay}`);
+
+  if (record.residual) {
+    console.log(`Residual: ${record.residual}`);
+  }
+  if (record.error) {
+    console.log(`Error: ${record.error}`);
+  }
+  for (const limitation of record.limitations) {
+    console.log(`Limitation: ${limitation}`);
+  }
+  for (const warning of record.warnings) {
+    console.log(`Warning: ${warning}`);
+  }
+  if (outPath) {
+    console.log(`Wrote JSON: ${outPath}`);
+  }
+  if (workspaceWrite) {
+    console.log(`Workspace JSON: ${workspaceWrite.jsonPath}`);
+    console.log(`Workspace Markdown: ${workspaceWrite.markdownPath}`);
+  }
+}
+
+function printSymbolicCasCheckList(checks: SymbolicCasCheckSummary[]): void {
+  console.log(`Theorem CAS checks: ${checks.length}`);
+
+  for (const check of checks) {
+    console.log("");
+    console.log(`${check.checkId} ${check.createdAt}`);
+    console.log(`  ${check.operation} ${check.expression} -> ${check.result}`);
+    console.log(`  Status: ${check.status}; trust: ${check.trust}; backend: ${check.backendId}`);
+    console.log(`  Path: ${check.path}`);
+    if (check.warnings.length > 0) {
+      console.log(`  Warnings: ${check.warnings.join("; ")}`);
+    }
   }
 }
 
@@ -4583,6 +4744,7 @@ function parseClaimLedgerEvidenceRef(value: string): ClaimLedgerEvidenceRef {
     maybeKind === "review" ||
     maybeKind === "validation" ||
     maybeKind === "model-context" ||
+    maybeKind === "cas" ||
     maybeKind === "proof" ||
     maybeKind === "smt" ||
     maybeKind === "route" ||
@@ -4600,12 +4762,12 @@ function parseClaimLedgerEvidenceRef(value: string): ClaimLedgerEvidenceRef {
 function parseVerifierRouteEvidenceRef(value: string, summary?: string): VerifierRouteEvidenceRef {
   const separator = value.indexOf(":");
   if (separator <= 0) {
-    throw new Error("Route obligation evidence must be prefixed as proof:, smt:, receipt:, or route:.");
+    throw new Error("Route obligation evidence must be prefixed as cas:, proof:, smt:, receipt:, or route:.");
   }
 
   const maybeKind = value.slice(0, separator);
   const ref = value.slice(separator + 1);
-  if (maybeKind === "proof" || maybeKind === "smt" || maybeKind === "receipt" || maybeKind === "route") {
+  if (maybeKind === "cas" || maybeKind === "proof" || maybeKind === "smt" || maybeKind === "receipt" || maybeKind === "route") {
     return {
       kind: maybeKind,
       ref,
@@ -4633,6 +4795,7 @@ function parseEvidenceRef(value: string): InventionEvidenceRef {
     maybeKind === "notebook-run" ||
     maybeKind === "code-run" ||
     maybeKind === "benchmark" ||
+    maybeKind === "cas" ||
     maybeKind === "disclosure" ||
     maybeKind === "simulation" ||
     maybeKind === "experiment" ||
@@ -4665,6 +4828,7 @@ function parseResearchEvidenceRef(value: string): ResearchEvidenceRef {
     maybeKind === "notebook-run" ||
     maybeKind === "code-run" ||
     maybeKind === "benchmark" ||
+    maybeKind === "cas" ||
     maybeKind === "disclosure" ||
     maybeKind === "simulation" ||
     maybeKind === "experiment" ||
@@ -4703,6 +4867,7 @@ function parseExpertReviewEvidenceRef(value: string): ExpertReviewEvidenceRef {
     maybeKind === "notebook-run" ||
     maybeKind === "code-run" ||
     maybeKind === "benchmark" ||
+    maybeKind === "cas" ||
     maybeKind === "disclosure" ||
     maybeKind === "simulation" ||
     maybeKind === "experiment" ||
@@ -4742,6 +4907,7 @@ function parseValidationEvidenceRef(value: string): ValidationEvidenceRef {
     maybeKind === "notebook-run" ||
     maybeKind === "code-run" ||
     maybeKind === "benchmark" ||
+    maybeKind === "cas" ||
     maybeKind === "disclosure" ||
     maybeKind === "simulation" ||
     maybeKind === "experiment" ||

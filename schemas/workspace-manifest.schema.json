@@ -64,6 +64,7 @@
         "indexes",
         "findings",
         "inventions",
+        "cas",
         "proofs",
         "smt",
         "benchmarks",
@@ -101,6 +102,9 @@
         },
         "inventions": {
           "const": ".theorem-workbench/inventions"
+        },
+        "cas": {
+          "const": ".theorem-workbench/cas"
         },
         "proofs": {
           "const": ".theorem-workbench/proofs"

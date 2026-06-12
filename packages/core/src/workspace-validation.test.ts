@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeBenchmarkComparisonRecord, writeBenchmarkRunRecord } from "./benchmark-run.js";
+import { writeSymbolicCasCheckRecord, type CasBackendCommandRunner } from "./cas-backend.js";
 import { writeClaimChart } from "./claim-chart.js";
 import { writeCodeRun } from "./code-run.js";
 import { createExternalDisclosureLogEntry } from "./disclosure-log.js";
@@ -418,6 +419,33 @@ describe("workspace artifact validation", () => {
       runner: smtRunner,
       now: new Date("2026-06-10T00:29:00.000Z")
     });
+    const casRunner: CasBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Maxima 5.47.0\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "THEOREM_MAXIMA_STATUS:passed:0\n",
+        stderr: ""
+      };
+    };
+    const cas = await writeSymbolicCasCheckRecord({
+      rootPath: root,
+      prompt: {
+        operation: "simplify",
+        expression: "sin(x)^2 + cos(x)^2",
+        variable: "x"
+      },
+      result: "1",
+      maximaCommand: "maxima-test",
+      runner: casRunner,
+      now: new Date("2026-06-10T00:29:30.000Z")
+    });
     const review = await writeExpertReview({
       rootPath: root,
       subject: "Golden simulation evidence",
@@ -555,6 +583,7 @@ describe("workspace artifact validation", () => {
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
     expect(audit.audit.auditId).toBe(validationPlan.plan.audit.auditId);
+    expect(cas.record.trust).toBe("cross-checked");
     expect(validation.passed).toBe(true);
     expect(validation.summary.errors).toBe(0);
     expect(validation.summary.byKind.manifest).toBe(1);
@@ -566,6 +595,7 @@ describe("workspace artifact validation", () => {
     expect(validation.summary.byKind["notebook-runs"]).toBe(1);
     expect(validation.summary.byKind["code-runs"]).toBe(1);
     expect(validation.summary.byKind.benchmarks).toBe(2);
+    expect(validation.summary.byKind.cas).toBe(1);
     expect(validation.summary.byKind.smt).toBe(1);
     expect(validation.summary.byKind.reviews).toBe(1);
     expect(validation.summary.byKind.disclosures).toBe(1);

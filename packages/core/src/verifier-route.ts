@@ -36,7 +36,7 @@ export interface VerifierRouteGap {
 
 export type ProofObligationKind = "formal-proof" | "independent-check" | "solver-encoding" | "reproducibility";
 export type ProofObligationStatus = "open" | "satisfied" | "not-required";
-export type VerifierRouteEvidenceKind = "proof" | "smt" | "receipt" | "route";
+export type VerifierRouteEvidenceKind = "cas" | "proof" | "smt" | "receipt" | "route";
 
 export interface VerifierRouteEvidenceRef {
   kind: VerifierRouteEvidenceKind;

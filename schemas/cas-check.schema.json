@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/cas-check.schema.json",
+  "title": "Theorem Workbench CAS Check Record",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "checkId",
+    "createdAt",
+    "backend",
+    "operation",
+    "expression",
+    "result",
+    "variable",
+    "status",
+    "trust",
+    "proofCheckerBacked",
+    "localOnly",
+    "networkAccess",
+    "replay",
+    "limitations",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.cas-check.v0"
+    },
+    "checkId": {
+      "type": "string",
+      "pattern": "^cas_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "backend": {
+      "type": "object",
+      "required": ["id", "displayName", "adapter", "role", "acceptedProofChecker", "command", "args"],
+      "properties": {
+        "id": {
+          "const": "maxima"
+        },
+        "displayName": {
+          "const": "Maxima CAS"
+        },
+        "adapter": {
+          "const": "local-maxima-symbolic-subprocess"
+        },
+        "role": {
+          "const": "cas"
+        },
+        "acceptedProofChecker": {
+          "const": false
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "args": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "version": {
+          "type": "string"
+        },
+        "exitCode": {
+          "type": ["integer", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "operation": {
+      "enum": ["simplify", "factor", "expand", "differentiate", "integrate"]
+    },
+    "expression": {
+      "type": "string",
+      "minLength": 1
+    },
+    "result": {
+      "type": "string",
+      "minLength": 1
+    },
+    "variable": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "status": {
+      "enum": ["passed", "failed", "solver-unavailable", "error"]
+    },
+    "trust": {
+      "enum": ["cross-checked", "unverified"]
+    },
+    "proofCheckerBacked": {
+      "const": false
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "residual": {
+      "type": "string"
+    },
+    "stdout": {
+      "type": "string"
+    },
+    "stderr": {
+      "type": "string"
+    },
+    "error": {
+      "type": "string"
+    },
+    "replay": {
+      "type": "string",
+      "minLength": 1
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

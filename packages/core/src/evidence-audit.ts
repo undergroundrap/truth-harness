@@ -358,6 +358,18 @@ async function reviewEvidenceRef(
     };
   }
 
+  if (ref.kind === "cas") {
+    return {
+      kind: "cas",
+      ref: ref.ref,
+      status: "referenced",
+      strength: "computational",
+      trust: ref.trust,
+      summary: ref.summary ?? "CAS check reference recorded.",
+      warnings: ["CAS checks can cross-check scoped symbolic equalities; they are not accepted proof-checker proofs."]
+    };
+  }
+
   return {
     kind: ref.kind,
     ref: ref.ref,

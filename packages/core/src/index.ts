@@ -204,7 +204,11 @@ export {
 export { proveUniversalParity } from "./parity-proof.js";
 export {
   checkSymbolicWithMaximaSync,
-  getCasBackendStatus
+  createSymbolicCasCheckRecord,
+  getCasBackendStatus,
+  listSymbolicCasChecks,
+  renderSymbolicCasCheckMarkdown,
+  writeSymbolicCasCheckRecord
 } from "./cas-backend.js";
 export {
   checkLeanProofArtifact,
@@ -510,8 +514,13 @@ export type {
   CasBackendStatusOptions,
   CasBackendStatusReport,
   SymbolicCasCheckInput,
+  SymbolicCasCheckRecord,
+  SymbolicCasCheckRecordInput,
   SymbolicCasCheckResult,
-  SymbolicCasCheckStatus
+  SymbolicCasCheckStatus,
+  SymbolicCasCheckSummary,
+  SymbolicCasCheckWriteResult,
+  WriteSymbolicCasCheckInput
 } from "./cas-backend.js";
 export type {
   ProofBackendCommandResult,

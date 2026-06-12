@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { join, relative, resolve, sep } from "node:path";
+import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import type { SymbolicPrompt } from "./sympy.js";
 import type { TrustLabel } from "./types.js";
 
@@ -76,6 +79,10 @@ export interface SymbolicCasCheckInput {
   runner?: CasBackendCommandRunner;
 }
 
+export interface SymbolicCasCheckRecordInput extends SymbolicCasCheckInput {
+  replayCommand?: string;
+}
+
 export interface SymbolicCasCheckResult {
   schemaVersion: "theorem.symbolic-cas-check.v0";
   checkId: string;
@@ -105,6 +112,37 @@ export interface SymbolicCasCheckResult {
   stderr?: string;
   error?: string;
   limitations: string[];
+  warnings: string[];
+}
+
+export type SymbolicCasCheckRecord = Omit<SymbolicCasCheckResult, "schemaVersion"> & {
+  schemaVersion: "theorem.cas-check.v0";
+  replay: string;
+};
+
+export interface WriteSymbolicCasCheckInput extends SymbolicCasCheckInput {
+  rootPath: string;
+}
+
+export interface SymbolicCasCheckWriteResult {
+  record: SymbolicCasCheckRecord;
+  jsonPath: string;
+  markdownPath: string;
+  markdown: string;
+}
+
+export interface SymbolicCasCheckSummary {
+  path: string;
+  checkId: string;
+  createdAt: string;
+  operation: SymbolicPrompt["operation"];
+  expression: string;
+  result: string;
+  variable: string;
+  status: SymbolicCasCheckStatus;
+  trust: TrustLabel;
+  backendId: "maxima";
+  backendVersion?: string;
   warnings: string[];
 }
 
@@ -282,6 +320,153 @@ export function checkSymbolicWithMaximaSync(input: SymbolicCasCheckInput): Symbo
   };
 }
 
+export function createSymbolicCasCheckRecord(input: SymbolicCasCheckRecordInput): SymbolicCasCheckRecord {
+  const check = checkSymbolicWithMaximaSync(input);
+  const replay = input.replayCommand ?? casCheckReplayCommand(input, false);
+
+  return {
+    ...check,
+    schemaVersion: "theorem.cas-check.v0",
+    replay
+  };
+}
+
+export async function writeSymbolicCasCheckRecord(
+  input: WriteSymbolicCasCheckInput
+): Promise<SymbolicCasCheckWriteResult> {
+  const status = await requireLocalWorkspace(input.rootPath);
+  const record = createSymbolicCasCheckRecord({
+    prompt: input.prompt,
+    result: input.result,
+    maximaCommand: input.maximaCommand,
+    timeoutMs: input.timeoutMs,
+    now: input.now,
+    runner: input.runner,
+    replayCommand: casCheckReplayCommand(input, true)
+  });
+  const casDir = resolve(status.root, status.manifest.directories.cas);
+  await mkdir(casDir, { recursive: true });
+  const baseName = `${record.createdAt.slice(0, 10)}-${record.checkId}`;
+  const jsonPath = join(casDir, `${baseName}.json`);
+  const markdownPath = join(casDir, `${baseName}.md`);
+  const markdown = renderSymbolicCasCheckMarkdown(record);
+
+  await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+  await writeFile(markdownPath, markdown, "utf8");
+
+  return {
+    record,
+    jsonPath,
+    markdownPath,
+    markdown
+  };
+}
+
+export async function listSymbolicCasChecks(rootPath: string): Promise<SymbolicCasCheckSummary[]> {
+  const status = await requireLocalWorkspace(rootPath);
+  const casDir = resolve(status.root, status.manifest.directories.cas);
+
+  let files: string[];
+  try {
+    files = await readdir(casDir);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const summaries = await Promise.all(
+    files
+      .filter((file) => file.endsWith(".json"))
+      .map(async (file) => {
+        const path = join(casDir, file);
+        return summarizeSymbolicCasCheck(status.root, path, await readFile(path, "utf8"));
+      })
+  );
+
+  return summaries
+    .filter((summary): summary is SymbolicCasCheckSummary => summary !== undefined)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export function renderSymbolicCasCheckMarkdown(record: SymbolicCasCheckRecord): string {
+  const lines = [
+    `# CAS Check ${record.checkId}`,
+    "",
+    `Status: \`${record.status}\``,
+    `Trust: \`${record.trust}\``,
+    `Proof-checker backed: ${String(record.proofCheckerBacked)}`,
+    `Created: ${record.createdAt}`,
+    `Privacy: local-only (network: none)`,
+    "",
+    "## Prompt",
+    "",
+    `- Operation: \`${record.operation}\``,
+    `- Expression: \`${record.expression}\``,
+    `- Result: \`${record.result}\``,
+    `- Variable: \`${record.variable}\``,
+    "",
+    "## Backend",
+    "",
+    `- Backend: ${record.backend.displayName}`,
+    `- Adapter: \`${record.backend.adapter}\``,
+    `- Accepted proof checker: ${String(record.backend.acceptedProofChecker)}`,
+    `- Command: \`${[record.backend.command, ...record.backend.args].join(" ")}\``
+  ];
+
+  if (record.backend.version) {
+    lines.push(`- Version: ${record.backend.version}`);
+  }
+
+  if (record.backend.exitCode !== undefined) {
+    lines.push(`- Exit code: ${String(record.backend.exitCode)}`);
+  }
+
+  lines.push("", "## Replay", "", `\`${record.replay}\``);
+
+  if (record.residual) {
+    lines.push("", "## Residual", "", `\`${record.residual}\``);
+  }
+
+  if (record.stdout) {
+    lines.push("", "## Stdout", "", "```text", record.stdout, "```");
+  }
+
+  if (record.stderr) {
+    lines.push("", "## Stderr", "", "```text", record.stderr, "```");
+  }
+
+  if (record.error) {
+    lines.push("", "## Error", "", "```text", record.error, "```");
+  }
+
+  if (record.limitations.length > 0) {
+    lines.push("", "## Limitations", "");
+    for (const limitation of record.limitations) {
+      lines.push(`- ${limitation}`);
+    }
+  }
+
+  if (record.warnings.length > 0) {
+    lines.push("", "## Warnings", "");
+    for (const warning of record.warnings) {
+      lines.push(`- ${warning}`);
+    }
+  }
+
+  lines.push(
+    "",
+    "## Boundary",
+    "",
+    "A Maxima CAS agreement supports a narrow `cross-checked` symbolic equality. It is not a proof-checker-backed proof of an arbitrary informal theorem, scientific claim, medical claim, safety claim, regulatory claim, or patent claim."
+  );
+
+  return `${lines.join("\n")}\n`;
+}
+
 function probeMaximaBackend(args: {
   command: string;
   timeoutMs: number;
@@ -416,6 +601,76 @@ function runCommand(command: string, args: string[], timeoutMs: number): CasBack
     stderr: result.stderr ?? "",
     ...(result.error ? { error: { name: result.error.name, message: result.error.message } } : {})
   };
+}
+
+function summarizeSymbolicCasCheck(
+  root: string,
+  path: string,
+  raw: string
+): SymbolicCasCheckSummary | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return undefined;
+  }
+
+  if (!isRecord(parsed) || parsed.schemaVersion !== "theorem.cas-check.v0") {
+    return undefined;
+  }
+
+  const record = parsed as unknown as SymbolicCasCheckRecord;
+  return {
+    path: toPortablePath(relative(root, path)),
+    checkId: record.checkId,
+    createdAt: record.createdAt,
+    operation: record.operation,
+    expression: record.expression,
+    result: record.result,
+    variable: record.variable,
+    status: record.status,
+    trust: record.trust,
+    backendId: "maxima",
+    backendVersion: record.backend.version,
+    warnings: record.warnings
+  };
+}
+
+function quoteCommandArg(value: string): string {
+  return /^[A-Za-z0-9_./\\:-]+$/u.test(value) ? value : JSON.stringify(value);
+}
+
+function casCheckReplayCommand(input: SymbolicCasCheckInput, write: boolean): string {
+  return [
+    "theorem cas check",
+    `--operation ${quoteCommandArg(input.prompt.operation)}`,
+    `--expression ${quoteCommandArg(input.prompt.expression)}`,
+    `--result ${quoteCommandArg(input.result)}`,
+    `--variable ${quoteCommandArg(input.prompt.variable)}`,
+    ...(input.maximaCommand ? [`--maxima-command ${quoteCommandArg(input.maximaCommand)}`] : []),
+    ...(input.timeoutMs ? [`--timeout-ms ${String(input.timeoutMs)}`] : []),
+    ...(write ? ["--write"] : []),
+    "--json"
+  ].join(" ");
+}
+
+async function requireLocalWorkspace(
+  rootPath: string
+): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
+  const status = await getLocalWorkspaceStatus(rootPath);
+  if (!status.exists || !status.manifest) {
+    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing CAS check records.");
+  }
+
+  return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
+}
+
+function toPortablePath(path: string): string {
+  return path.split(sep).join("/");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function firstNonEmptyLine(text: string): string | undefined {

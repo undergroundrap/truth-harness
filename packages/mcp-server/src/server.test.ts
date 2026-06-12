@@ -78,6 +78,8 @@ describe("Theorem MCP server", () => {
         "theorem_benchmark_list",
         "theorem_benchmark_run",
         "theorem_cas_backends",
+        "theorem_cas_check",
+        "theorem_cas_list",
         "theorem_claim_add",
         "theorem_claim_chart",
         "theorem_claim_chart_list",
@@ -178,6 +180,24 @@ describe("Theorem MCP server", () => {
       expect(casBackendText).toContain("\"backendId\": \"maxima\"");
       expect(casBackendText).toContain("\"statusProbeIsNotCheck\": true");
 
+      const casCheck = await client.callTool({
+        name: "theorem_cas_check",
+        arguments: {
+          operation: "simplify",
+          expression: "sin(x)^2 + cos(x)^2",
+          result: "1",
+          variable: "x",
+          maximaCommand: "theorem-workbench-missing-maxima-command",
+          timeoutMs: 50,
+          failOnUnverified: true
+        }
+      });
+      expect(casCheck.isError).toBe(true);
+      const casCheckText = firstText(casCheck.content);
+      expect(casCheckText).toContain("\"schemaVersion\": \"theorem.cas-check.v0\"");
+      expect(casCheckText).toContain("\"trust\": \"unverified\"");
+      expect(casCheckText).toContain("\"proofCheckerBacked\": false");
+
       const engineManifest = await client.callTool({
         name: "theorem_engine_manifest",
         arguments: {
@@ -245,6 +265,29 @@ describe("Theorem MCP server", () => {
         }
       });
       expect(firstText(workspaceResult.content)).toContain("\"networkAccess\": \"none\"");
+
+      const casCheckWrite = await client.callTool({
+        name: "theorem_cas_check",
+        arguments: {
+          operation: "simplify",
+          expression: "sin(x)^2 + cos(x)^2",
+          result: "1",
+          variable: "x",
+          maximaCommand: "theorem-workbench-missing-maxima-command",
+          timeoutMs: 50,
+          write: true
+        }
+      });
+      const casCheckWriteText = firstText(casCheckWrite.content);
+      expect(casCheckWrite.isError).toBe(false);
+      expect(casCheckWriteText).toContain("\"written\": true");
+      expect(casCheckWriteText).toContain("\"schemaVersion\": \"theorem.cas-check.v0\"");
+
+      const casList = await client.callTool({
+        name: "theorem_cas_list",
+        arguments: {}
+      });
+      expect(firstText(casList.content)).toContain("\"total\": 1");
 
       const routeWrite = await client.callTool({
         name: "theorem_verify",

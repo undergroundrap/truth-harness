@@ -411,7 +411,7 @@
       "required": ["kind", "ref"],
       "properties": {
         "kind": {
-          "enum": ["proof", "smt", "receipt", "route"]
+          "enum": ["cas", "proof", "smt", "receipt", "route"]
         },
         "ref": {
           "type": "string",

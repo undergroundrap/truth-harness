@@ -44,6 +44,7 @@ Run CLI commands:
 docker compose run --rm theorem npm run cli -- workspace init --name "Local Math Lab"
 docker compose run --rm theorem npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
 docker compose run --rm theorem npm run cli -- cas backends
+docker compose run --rm theorem npm run cli -- cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write
 docker compose run --rm theorem npm run cli -- smt backends
 docker compose run --rm theorem npm run cli -- proof backends
 docker compose run --rm theorem npm run cli -- code sandbox-status --json

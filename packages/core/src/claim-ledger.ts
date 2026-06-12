@@ -58,6 +58,7 @@ export interface ClaimLedgerEvidenceRef {
     | "review"
     | "validation"
     | "model-context"
+    | "cas"
     | "proof"
     | "smt"
     | "route"
@@ -471,10 +472,10 @@ function verificationFor(
     },
     {
       stage: "independent-check",
-      status: hasTrust(trust, ["smt-checked", "cross-checked", "proved"]) || evidenceRefs.some((ref) => ref.kind === "smt" || ref.kind === "benchmark")
+      status: hasTrust(trust, ["smt-checked", "cross-checked", "proved"]) || evidenceRefs.some((ref) => ref.kind === "cas" || ref.kind === "smt" || ref.kind === "benchmark")
         ? "satisfied"
         : "waiting",
-      evidenceRefs: evidenceRefs.filter((ref) => ref.kind === "smt" || ref.kind === "benchmark" || ref.trust === "smt-checked" || ref.trust === "cross-checked"),
+      evidenceRefs: evidenceRefs.filter((ref) => ref.kind === "cas" || ref.kind === "smt" || ref.kind === "benchmark" || ref.trust === "smt-checked" || ref.trust === "cross-checked"),
       summary: "An independent solver, benchmark, cross-check, or equivalent verifier is linked."
     },
     {
@@ -608,7 +609,7 @@ async function inferEvidenceRefTrust(input: {
     }
   }
 
-  if (input.ref.kind !== "receipt" && input.ref.kind !== "proof" && input.ref.kind !== "smt") {
+  if (input.ref.kind !== "receipt" && input.ref.kind !== "cas" && input.ref.kind !== "proof" && input.ref.kind !== "smt") {
     return undefined;
   }
 
@@ -628,6 +629,11 @@ async function inferEvidenceRefTrust(input: {
 
   if (!isRecord(artifact.parsed) || typeof artifact.parsed.trust !== "string" || !isTrustLabel(artifact.parsed.trust)) {
     return undefined;
+  }
+
+  if (input.ref.kind === "cas" && artifact.parsed.schemaVersion === "theorem.cas-check.v0") {
+    const status = typeof artifact.parsed.status === "string" ? artifact.parsed.status : "unknown";
+    return { trust: artifact.parsed.trust, summary: `CAS check status: ${status}.` };
   }
 
   if (input.ref.kind === "proof" && artifact.parsed.schemaVersion === "theorem.proof-check.v0") {
@@ -824,7 +830,7 @@ function trustRank(value: TrustLabel): number {
 }
 
 function shouldResolveEvidenceKind(kind: ClaimLedgerEvidenceRef["kind"]): boolean {
-  return kind === "claim" || kind === "receipt" || kind === "proof" || kind === "smt" || kind === "route";
+  return kind === "claim" || kind === "receipt" || kind === "cas" || kind === "proof" || kind === "smt" || kind === "route";
 }
 
 function formatEvidenceRefs(refs: ClaimLedgerEvidenceRef[]): string {

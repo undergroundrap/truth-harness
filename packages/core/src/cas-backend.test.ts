@@ -1,9 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   checkSymbolicWithMaximaSync,
   getCasBackendStatus,
+  listSymbolicCasChecks,
+  writeSymbolicCasCheckRecord,
   type CasBackendCommandRunner
 } from "./cas-backend.js";
+import { initLocalWorkspace } from "./local-workspace.js";
+import { validateWorkspaceArtifacts } from "./workspace-validation.js";
+
+const roots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
+  roots.length = 0;
+});
 
 describe("CAS backend status", () => {
   it("reports an available local Maxima CAS without minting a check", () => {
@@ -129,6 +143,57 @@ describe("Maxima symbolic cross-check", () => {
     expect(record.limitations.join(" ")).toContain("not a proof-checker-backed proof");
   });
 
+  it("writes, lists, and validates first-class CAS check records", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
+    const runner: CasBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Maxima 5.47.0\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "THEOREM_MAXIMA_STATUS:passed:0\n",
+        stderr: ""
+      };
+    };
+
+    const result = await writeSymbolicCasCheckRecord({
+      rootPath: root,
+      prompt: {
+        operation: "simplify",
+        expression: "sin(x)^2 + cos(x)^2",
+        variable: "x"
+      },
+      result: "1",
+      maximaCommand: "maxima-test",
+      now: new Date("2026-06-12T00:05:00.000Z"),
+      runner
+    });
+    const list = await listSymbolicCasChecks(root);
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(result.record.schemaVersion).toBe("theorem.cas-check.v0");
+    expect(result.record.trust).toBe("cross-checked");
+    expect(result.record.replay).toContain("theorem cas check");
+    expect(result.record.replay).toContain("--write");
+    expect(result.jsonPath).toContain(join(".theorem-workbench", "cas"));
+    expect(result.markdown).toContain(`# CAS Check ${result.record.checkId}`);
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      checkId: result.record.checkId,
+      status: "passed",
+      trust: "cross-checked"
+    });
+    expect(list[0]?.path).toContain(".theorem-workbench/cas/2026-06-12-cas_");
+    expect(validation.passed).toBe(true);
+    expect(validation.summary.byKind.cas).toBe(1);
+  });
+
   it("fails closed when independent CAS disagrees", () => {
     const runner: CasBackendCommandRunner = (_command, args) => {
       if (args[0] === "--version") {
@@ -188,3 +253,9 @@ describe("Maxima symbolic cross-check", () => {
     expect(record.error).toContain("outside the supported Maxima-safe subset");
   });
 });
+
+async function tempRoot(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-cas-"));
+  roots.push(root);
+  return root;
+}

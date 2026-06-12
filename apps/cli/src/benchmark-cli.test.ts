@@ -39,6 +39,83 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.crossCheckedRequiresIndependentRun).toBe(true);
   });
 
+  it("checks symbolic CAS results without minting trust when Maxima is unavailable", async () => {
+    const result = await runCli([
+      "cas",
+      "check",
+      "--operation",
+      "simplify",
+      "--expression",
+      "sin(x)^2 + cos(x)^2",
+      "--result",
+      "1",
+      "--variable",
+      "x",
+      "--maxima-command",
+      "theorem-workbench-missing-maxima-command",
+      "--timeout-ms",
+      "50",
+      "--json",
+      "--fail-on-unverified"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      schemaVersion: string;
+      status: string;
+      trust: string;
+      proofCheckerBacked: boolean;
+      backend: { acceptedProofChecker: boolean };
+    };
+
+    expect(result.exitCode).toBe(1);
+    expect(json.schemaVersion).toBe("theorem.cas-check.v0");
+    expect(json.status).toBe("solver-unavailable");
+    expect(json.trust).toBe("unverified");
+    expect(json.proofCheckerBacked).toBe(false);
+    expect(json.backend.acceptedProofChecker).toBe(false);
+  });
+
+  it("writes and lists CAS check workspace records", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    const write = await runCli([
+      "cas",
+      "check",
+      "--operation",
+      "simplify",
+      "--expression",
+      "sin(x)^2 + cos(x)^2",
+      "--result",
+      "1",
+      "--workspace",
+      root,
+      "--write",
+      "--maxima-command",
+      "theorem-workbench-missing-maxima-command",
+      "--timeout-ms",
+      "50",
+      "--json"
+    ]);
+    const writeJson = JSON.parse(write.stdout) as {
+      record: { checkId: string; trust: string };
+      result: { jsonPath: string; markdownPath: string };
+    };
+    const list = JSON.parse((await runCli(["cas", "list", root, "--json"])).stdout) as {
+      total: number;
+      checks: Array<{ checkId: string; trust: string; path: string }>;
+    };
+
+    expect(write.exitCode).toBe(0);
+    expect(writeJson.record.trust).toBe("unverified");
+    expect(writeJson.result.jsonPath).toContain(".theorem-workbench");
+    expect(writeJson.result.markdownPath).toContain(".theorem-workbench");
+    expect(list.total).toBe(1);
+    expect(list.checks[0]).toMatchObject({
+      checkId: writeJson.record.checkId,
+      trust: "unverified"
+    });
+    expect(list.checks[0]?.path).toContain(".theorem-workbench/cas/");
+  });
+
   it("prints an engine manifest for humans and agents", async () => {
     const result = await runCli([
       "engines",

@@ -279,6 +279,10 @@ function warningForReferencedEvidence(ref: InventionEvidenceRef): string {
     return "Expert review records capture scoped human review, limitations, and next checks; they are not standalone proof, medical advice, regulatory approval, or legal advice.";
   }
 
+  if (ref.kind === "cas") {
+    return "CAS checks can support scoped symbolic cross-checks, but they are not accepted proof-checker proofs or experimental validation.";
+  }
+
   if (ref.kind === "validation") {
     return "Validation plans list required gates before stronger claims; they are checklists for review, not proof that the gates were satisfied.";
   }

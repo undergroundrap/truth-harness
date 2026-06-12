@@ -45,6 +45,7 @@ export interface ExpertReviewEvidenceRef {
     | "notebook-run"
     | "code-run"
     | "benchmark"
+    | "cas"
     | "disclosure"
     | "simulation"
     | "experiment"

@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { writeSymbolicCasCheckRecord, type CasBackendCommandRunner } from "./cas-backend.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { createReceipt } from "./receipt.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
@@ -112,6 +113,59 @@ describe("claim ledger", () => {
       ref: ".theorem-workbench/receipts/fraction-sum.json",
       trust: "exact-computed",
       summary: "Exact result: 11/8."
+    });
+    expect(written.claim.finalization.readyForNarrowClaim).toBe(true);
+  });
+
+  it("derives cross-checked claim trust from linked CAS evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
+    const runner: CasBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Maxima 5.47.0\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "THEOREM_MAXIMA_STATUS:passed:0\n",
+        stderr: ""
+      };
+    };
+    const cas = await writeSymbolicCasCheckRecord({
+      rootPath: root,
+      prompt: {
+        operation: "simplify",
+        expression: "sin(x)^2 + cos(x)^2",
+        variable: "x"
+      },
+      result: "1",
+      maximaCommand: "maxima-test",
+      now: new Date("2026-06-12T00:05:00.000Z"),
+      runner
+    });
+    const casRef = cas.jsonPath.slice(root.length + 1).replace(/\\/gu, "/");
+
+    const written = await writeClaimLedgerRecord({
+      rootPath: root,
+      statement: "sin(x)^2 + cos(x)^2 simplifies to 1.",
+      trust: "cross-checked",
+      evidenceRefs: [{ kind: "cas", ref: casRef }],
+      now: "2026-06-12T00:10:00.000Z"
+    });
+
+    expect(written.claim.trust).toBe("cross-checked");
+    expect(written.claim.evidenceRefs[0]).toMatchObject({
+      kind: "cas",
+      ref: casRef,
+      trust: "cross-checked",
+      summary: "CAS check status: passed."
+    });
+    expect(written.claim.verification.find((step) => step.stage === "independent-check")).toMatchObject({
+      status: "satisfied"
     });
     expect(written.claim.finalization.readyForNarrowClaim).toBe(true);
   });

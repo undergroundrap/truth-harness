@@ -23,6 +23,7 @@ import {
   createSourceCitationReceipt,
   createValidationPlan,
   createVerifierRoute,
+  createSymbolicCasCheckRecord,
   getCasBackendStatus,
   isClaimLedgerDomain,
   isClaimLedgerStatus,
@@ -36,6 +37,7 @@ import {
   addResearchSessionCheckpoint,
   listClaimRecords,
   listBenchmarkArtifacts,
+  listSymbolicCasChecks,
   listExpertReviews,
   listClaimCharts,
   listCodeRuns,
@@ -72,6 +74,7 @@ import {
   writeExpertReview,
   writeClaimChart,
   writeClaimLedgerRecord,
+  writeSymbolicCasCheckRecord,
   writeLeanProofCheckRecord,
   writeSmtCheckRecord,
   writeBenchmarkComparisonRecord,
@@ -100,6 +103,9 @@ import {
   type ClaimLedgerStatus,
   type ClaimLedgerWriteResult,
   type CasBackendStatusReport,
+  type SymbolicCasCheckRecord,
+  type SymbolicCasCheckSummary,
+  type SymbolicCasCheckWriteResult,
   type CodeRunPolicyInput,
   type CodeRunSandboxStatus,
   type CodeRunSummary,
@@ -188,7 +194,8 @@ import {
   type WorkspaceSnapshotVerification,
   type WorkspaceSnapshotWriteResult,
   type TrustLabel,
-  type WorkspaceValidation
+  type WorkspaceValidation,
+  type SympyOperation
 } from "@theorem-workbench/core";
 
 export interface TheoremAskInput {
@@ -301,6 +308,30 @@ export interface TheoremBenchmarkListInput {
 export interface TheoremCasBackendsInput {
   timeoutMs?: number;
   maximaCommand?: string;
+}
+
+export interface TheoremCasCheckInput {
+  operation: SympyOperation;
+  expression: string;
+  result: string;
+  variable?: string;
+  workspacePath?: string;
+  maximaCommand?: string;
+  timeoutMs?: number;
+  write?: boolean;
+  failOnUnverified?: boolean;
+}
+
+export interface TheoremCasCheckOutput {
+  error: boolean;
+  written: boolean;
+  record: SymbolicCasCheckRecord;
+  result?: SymbolicCasCheckWriteResult;
+  message: string;
+}
+
+export interface TheoremCasListInput {
+  workspacePath?: string;
 }
 
 export interface TheoremProofBackendsInput {
@@ -1062,6 +1093,53 @@ export function handleTheoremCasBackends(input: TheoremCasBackendsInput): CasBac
     maximaCommand: input.maximaCommand,
     timeoutMs: input.timeoutMs
   });
+}
+
+export async function handleTheoremCasCheck(input: TheoremCasCheckInput): Promise<TheoremCasCheckOutput> {
+  const prompt = {
+    operation: input.operation,
+    expression: input.expression,
+    variable: input.variable ?? "x"
+  };
+  const write = input.write === true
+    ? await writeSymbolicCasCheckRecord({
+        rootPath: resolveWorkspaceRoot(input.workspacePath),
+        prompt,
+        result: input.result,
+        maximaCommand: input.maximaCommand,
+        timeoutMs: input.timeoutMs
+      })
+    : undefined;
+  const record =
+    write?.record ??
+    createSymbolicCasCheckRecord({
+      prompt,
+      result: input.result,
+      maximaCommand: input.maximaCommand,
+      timeoutMs: input.timeoutMs
+    });
+  const error = input.failOnUnverified === true && record.trust !== "cross-checked";
+
+  return {
+    error,
+    written: write !== undefined,
+    record,
+    result: write,
+    message: error
+      ? "CAS gate failed because the independent symbolic check did not pass."
+      : `CAS check ${record.checkId} completed with trust ${record.trust}.`
+  };
+}
+
+export async function handleTheoremCasList(input: TheoremCasListInput): Promise<{
+  total: number;
+  checks: SymbolicCasCheckSummary[];
+}> {
+  const checks = await listSymbolicCasChecks(resolveWorkspaceRoot(input.workspacePath));
+  return {
+    total: checks.length,
+    checks
+  };
 }
 
 export function handleTheoremProofBackends(input: TheoremProofBackendsInput): ProofBackendStatusReport {

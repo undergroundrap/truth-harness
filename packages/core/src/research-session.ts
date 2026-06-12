@@ -32,6 +32,7 @@ export interface ResearchEvidenceRef {
     | "notebook-run"
     | "code-run"
     | "benchmark"
+    | "cas"
     | "disclosure"
     | "simulation"
     | "experiment"

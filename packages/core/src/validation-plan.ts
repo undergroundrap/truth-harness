@@ -69,6 +69,7 @@ export interface ValidationEvidenceRef {
     | "notebook-run"
     | "code-run"
     | "benchmark"
+    | "cas"
     | "disclosure"
     | "simulation"
     | "experiment"
@@ -785,6 +786,7 @@ function toAuditEvidenceRefs(refs: ValidationEvidenceRef[]): InventionEvidenceRe
         "notebook",
         "notebook-run",
         "benchmark",
+        "cas",
         "disclosure",
         "simulation",
         "experiment",

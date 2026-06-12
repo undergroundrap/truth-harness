@@ -91,6 +91,7 @@
             "indexes",
             "findings",
             "inventions",
+            "cas",
             "proofs",
             "smt",
             "benchmarks",

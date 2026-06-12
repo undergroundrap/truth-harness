@@ -358,6 +358,7 @@ function isWorkspaceDirectory(value: string | undefined): value is LocalWorkspac
     value === "indexes" ||
     value === "findings" ||
     value === "inventions" ||
+    value === "cas" ||
     value === "proofs" ||
     value === "smt" ||
     value === "benchmarks" ||

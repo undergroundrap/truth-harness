@@ -27,6 +27,7 @@ export interface InventionEvidenceRef {
     | "notebook-run"
     | "code-run"
     | "benchmark"
+    | "cas"
     | "disclosure"
     | "simulation"
     | "experiment"

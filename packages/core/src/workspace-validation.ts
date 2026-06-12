@@ -125,6 +125,13 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
     idKey: "entryId",
     required: true
   },
+  cas: {
+    kind: "cas",
+    schemaVersion: "theorem.cas-check.v0",
+    schemaFile: "cas-check.schema.json",
+    idKey: "checkId",
+    required: true
+  },
   proofs: {
     kind: "proofs",
     schemaVersion: "theorem.proof-check.v0",
@@ -960,6 +967,9 @@ function kindToArtifactKind(kind: string | undefined): WorkspaceValidationArtifa
       return "receipts";
     case "claim":
       return "claims";
+    case "cas":
+    case "cas-check":
+      return "cas";
     case "proof":
     case "proof-check":
       return "proofs";

@@ -174,7 +174,7 @@
       "required": ["kind", "ref", "status", "strength", "summary", "warnings"],
       "properties": {
         "kind": {
-          "enum": ["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "other"]
+          "enum": ["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "cas", "disclosure", "simulation", "experiment", "vault", "review", "validation", "other"]
         },
         "ref": {
           "type": "string"
@@ -212,7 +212,7 @@
       "required": ["kind", "ref"],
       "properties": {
         "kind": {
-          "enum": ["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "other"]
+          "enum": ["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "cas", "disclosure", "simulation", "experiment", "vault", "review", "validation", "other"]
         },
         "ref": {
           "type": "string"

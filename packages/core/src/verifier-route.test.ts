@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { writeSymbolicCasCheckRecord, type CasBackendCommandRunner } from "./cas-backend.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
@@ -247,6 +248,85 @@ describe("verifier route", () => {
     expect(readBack.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
       status: "satisfied",
       satisfactionSummary: "Accepted proof-check record supplies `proved` evidence for this obligation."
+    });
+    expect(validation.passed).toBe(true);
+  });
+
+  it("satisfies independent-check obligations with cross-checked CAS evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-12T00:00:00.000Z"
+    });
+    const runner: CasBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Maxima 5.47.0\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "THEOREM_MAXIMA_STATUS:passed:0\n",
+        stderr: ""
+      };
+    };
+
+    const routeWrite = await writeVerifierRoute({
+      rootPath: root,
+      problem: "prove the Riemann hypothesis",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+    const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "independent-check");
+    expect(obligation).toMatchObject({
+      status: "open",
+      sourceCapabilityId: "maxima-cas"
+    });
+    const casWrite = await writeSymbolicCasCheckRecord({
+      rootPath: root,
+      prompt: {
+        operation: "simplify",
+        expression: "sin(x)^2 + cos(x)^2",
+        variable: "x"
+      },
+      result: "1",
+      maximaCommand: "maxima-test",
+      now: new Date("2026-06-12T00:01:00.000Z"),
+      runner
+    });
+    const casRef = relative(root, casWrite.jsonPath);
+
+    const satisfied = await satisfyVerifierRouteObligation({
+      rootPath: root,
+      routeRef: routeWrite.route.routeId,
+      obligationId: obligation?.obligationId ?? "",
+      evidenceRef: { kind: "cas", ref: casRef },
+      now: new Date("2026-06-12T00:02:00.000Z")
+    });
+    const readBack = await readVerifierRoute(root, routeWrite.route.routeId);
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(satisfied.obligation.status).toBe("satisfied");
+    expect(satisfied.obligation.satisfiedBy).toEqual([
+      expect.objectContaining({
+        kind: "cas",
+        ref: casRef,
+        trust: "cross-checked"
+      })
+    ]);
+    expect(satisfied.evidence).toMatchObject({
+      kind: "cas",
+      trust: "cross-checked",
+      schemaVersion: "theorem.cas-check.v0"
+    });
+    expect(readBack.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
+      status: "satisfied",
+      satisfactionSummary: "Independent cross-check evidence satisfies this obligation."
     });
     expect(validation.passed).toBe(true);
   });

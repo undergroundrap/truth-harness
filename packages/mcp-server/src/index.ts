@@ -8,6 +8,8 @@ import {
   handleTheoremBenchmarkList,
   handleTheoremBenchmarkRun,
   handleTheoremCasBackends,
+  handleTheoremCasCheck,
+  handleTheoremCasList,
   theoremBenchmarkCompareOutputFailsGate,
   theoremBenchmarkRunOutputFailsGate,
   handleTheoremClaimAdd,
@@ -215,7 +217,7 @@ export function createTheoremMcpServer(): McpServer {
         obligationId: z.string().regex(/^obl_[a-f0-9]{16}$/u).describe("Proof obligation id to satisfy."),
         evidenceRef: z
           .object({
-            kind: z.enum(["proof", "smt", "receipt", "route"]),
+            kind: z.enum(["cas", "proof", "smt", "receipt", "route"]),
             ref: z.string().min(1),
             summary: z.string().optional()
           })
@@ -278,6 +280,7 @@ export function createTheoremMcpServer(): McpServer {
       "review",
       "validation",
       "model-context",
+      "cas",
       "proof",
       "smt",
       "route",
@@ -493,6 +496,74 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ maximaCommand, timeoutMs }) => toolJson(handleTheoremCasBackends({ maximaCommand, timeoutMs }))
+  );
+
+  server.registerTool(
+    "theorem_cas_check",
+    {
+      title: "Check Symbolic CAS Result",
+      description:
+        "Run a local Maxima symbolic equality check for a concrete expression/result pair and optionally write a theorem.cas-check.v0 record. A passing CAS check can support `cross-checked`, never `proved`.",
+      inputSchema: {
+        operation: z
+          .enum(["simplify", "factor", "expand", "differentiate", "integrate"])
+          .describe("Symbolic operation being checked."),
+        expression: z.string().min(1).describe("Original symbolic expression to check."),
+        result: z.string().min(1).describe("Expected symbolic result to compare against."),
+        variable: z.string().min(1).optional().describe("Symbolic variable. Defaults to x."),
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root for writing CAS check records. Defaults to the MCP workspace root."),
+        maximaCommand: z
+          .string()
+          .optional()
+          .describe("Maxima executable path or command. Defaults to THEOREM_MAXIMA or maxima."),
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .max(30000)
+          .optional()
+          .describe("Local backend probe and CAS check timeout in milliseconds. Defaults to 3000."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write JSON and Markdown into .theorem-workbench/cas. Defaults to false."),
+        failOnUnverified: z
+          .boolean()
+          .optional()
+          .describe("When true, mark the tool call as an error unless Maxima independently agrees.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => {
+      const result = await handleTheoremCasCheck(input);
+      return toolJson(result, { isError: result.error });
+    }
+  );
+
+  server.registerTool(
+    "theorem_cas_list",
+    {
+      title: "List CAS Checks",
+      description:
+        "List local theorem.cas-check.v0 artifacts with paths agents can reuse for route obligations, claim ledger evidence refs, audits, and validation plans.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremCasList({ workspacePath }))
   );
 
   server.registerTool(
@@ -1468,6 +1539,7 @@ export function createTheoremMcpServer(): McpServer {
       "notebook-run",
       "code-run",
       "benchmark",
+      "cas",
       "disclosure",
       "simulation",
       "experiment",
@@ -1549,6 +1621,7 @@ export function createTheoremMcpServer(): McpServer {
       "notebook-run",
       "code-run",
       "benchmark",
+      "cas",
       "disclosure",
       "simulation",
       "experiment",
@@ -1695,6 +1768,7 @@ export function createTheoremMcpServer(): McpServer {
       "notebook-run",
       "code-run",
       "benchmark",
+      "cas",
       "disclosure",
       "simulation",
       "experiment",
@@ -1817,6 +1891,7 @@ export function createTheoremMcpServer(): McpServer {
       "notebook-run",
       "code-run",
       "benchmark",
+      "cas",
       "disclosure",
       "simulation",
       "experiment",
@@ -1973,6 +2048,7 @@ export function createTheoremMcpServer(): McpServer {
                 "notebook-run",
                 "code-run",
                 "benchmark",
+                "cas",
                 "disclosure",
                 "simulation",
                 "experiment",
@@ -2060,7 +2136,7 @@ export function createTheoremMcpServer(): McpServer {
   );
 
   const claimChartEvidenceRefSchema = z.object({
-    kind: z.enum(["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "route", "other"]),
+    kind: z.enum(["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "cas", "disclosure", "simulation", "experiment", "vault", "review", "validation", "route", "other"]),
     ref: z.string().min(1),
     trust: z
       .enum([

@@ -31,6 +31,7 @@ describe("local workspace", () => {
       externalDisclosures: []
     });
     expect(Object.values(manifest.directories).every((directory) => directory.startsWith(LOCAL_WORKSPACE_DIR))).toBe(true);
+    expect(manifest.directories.cas).toBe(".theorem-workbench/cas");
     expect(manifest.directories.proofs).toBe(".theorem-workbench/proofs");
     expect(manifest.directories.smt).toBe(".theorem-workbench/smt");
     expect(manifest.directories.disclosures).toBe(".theorem-workbench/disclosures");

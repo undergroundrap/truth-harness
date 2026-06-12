@@ -82,7 +82,7 @@ Every claim ledger record has:
 - `dependsOn`: upstream claims this claim relies on.
 - `supersedes`: old claims corrected or replaced by this one.
 - `tags`: searchable topic labels.
-- `evidenceRefs`: receipts, proof checks, SMT checks, sources, reviews, validation plans, snapshots, or other artifacts.
+- `evidenceRefs`: receipts, CAS checks, proof checks, SMT checks, sources, reviews, validation plans, snapshots, or other artifacts.
 - `verification`: ladder showing which gates are satisfied, waiting, blocked, or not applicable.
 - `finalization`: whether the claim is ready only as a narrow claim, and what checks remain open.
 - `markdown`: portable review output.
@@ -129,7 +129,7 @@ The credible line:
 
 The next moat-building sequence should be:
 
-1. Make the math lane brutally good at exact arithmetic, false theorem refutation, symbolic checks, SMT checks, proof-check records, and benchmark reports.
+1. Make the math lane brutally good at exact arithmetic, false theorem refutation, symbolic CAS checks, SMT checks, proof-check records, and benchmark reports.
 2. Make every result promotable into a claim ledger record.
 3. Make the web UI show a claim graph that can be searched, filtered, copied, downloaded, and exported into a report.
 4. Make agent sessions recursively update the ledger rather than leaving important state in chat.

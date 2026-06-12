@@ -13,6 +13,7 @@ export type LocalWorkspaceDirectory =
   | "indexes"
   | "findings"
   | "inventions"
+  | "cas"
   | "proofs"
   | "smt"
   | "benchmarks"
@@ -55,6 +56,7 @@ const DEFAULT_WORKSPACE_DIRECTORIES: Record<LocalWorkspaceDirectory, string> = {
   indexes: ".theorem-workbench/indexes",
   findings: ".theorem-workbench/findings",
   inventions: ".theorem-workbench/inventions",
+  cas: ".theorem-workbench/cas",
   proofs: ".theorem-workbench/proofs",
   smt: ".theorem-workbench/smt",
   benchmarks: ".theorem-workbench/benchmarks",
