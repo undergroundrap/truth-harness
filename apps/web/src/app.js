@@ -1883,6 +1883,77 @@ async function runCasForObligation(button) {
   }
 }
 
+async function runSmtForObligation(button) {
+  const receipt = receiptStore.get(state.receiptKey);
+  const routeId = button.dataset.routeId;
+  const obligationId = button.dataset.obligationId;
+  if (!receipt || !routeId || !obligationId) {
+    return;
+  }
+
+  const draft = smtProblemDraftForReceipt(receipt);
+  if (!draft) {
+    addActivity(
+      "web-ui",
+      "SMT draft unavailable",
+      "The current claim does not contain explicit integer constraints the local SMT builder can encode.",
+      "waiting"
+    );
+    return;
+  }
+
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Running";
+  addActivity("human", "Requested SMT check", draft.constraints.join("; "), "waiting");
+
+  try {
+    const response = await fetch("/api/smt/solve", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(draft)
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Local SMT check failed.");
+    }
+
+    applySmtCheckPayload(payload);
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, payload.record?.trust === "smt-checked" ? "passed" : "waiting", item.at);
+    }
+
+    if (payload.record?.trust !== "smt-checked") {
+      addActivity(
+        "local-api",
+        "SMT obligation still open",
+        `${payload.record?.checkId ?? "SMT check"} returned ${payload.record?.status ?? "unknown"} and cannot satisfy the route.`,
+        "waiting"
+      );
+      render();
+      return;
+    }
+
+    await attachEvidenceToRoute({
+      routeId,
+      obligationId,
+      evidenceRef: {
+        kind: "smt",
+        ref: relativeArtifactRef(payload.paths?.json),
+        trust: payload.record.trust,
+        summary: `SMT ${payload.record.status}: ${draft.constraints.join("; ")}`
+      }
+    });
+  } catch (error) {
+    addActivity("local-api", "SMT check failed", error instanceof Error ? error.message : "Unknown SMT check failure.", "refuted");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
 async function attachEvidenceToRoute(input) {
   if (!input.routeId || !input.obligationId || !input.evidenceRef?.ref) {
     return;
@@ -3074,7 +3145,10 @@ function routeObligationVerificationRows(receipt) {
         canRunCas: obligation.status === "open"
           && obligation.kind === "independent-check"
           && command.startsWith("theorem cas check")
-          && casResultLooksCheckable(receipt)
+          && casResultLooksCheckable(receipt),
+        canRunSmt: obligation.status === "open"
+          && obligation.kind === "solver-encoding"
+          && Boolean(smtProblemDraftForReceipt(receipt))
       };
     });
 }
@@ -3134,6 +3208,84 @@ function casResultLooksCheckable(receipt) {
   return !/\b(unavailable|unsupported|failed|failure|error|could not|missing|not installed)\b/iu.test(result);
 }
 
+function smtProblemDraftForReceipt(receipt) {
+  const text = String(receipt?.title ?? "").trim();
+  if (!/[<>!=]=?|[<>]/u.test(text)) {
+    return undefined;
+  }
+
+  const constraintText = extractSmtConstraintText(text);
+  if (!constraintText) {
+    return undefined;
+  }
+
+  const constraints = constraintText
+    .split(/\s+(?:and|&&)\s+|[;,]/iu)
+    .map((item) => cleanSmtConstraintFragment(item))
+    .filter(Boolean);
+  if (constraints.length === 0) {
+    return undefined;
+  }
+
+  const reserved = new Set([
+    "and",
+    "check",
+    "constraint",
+    "constraints",
+    "find",
+    "for",
+    "integer",
+    "integers",
+    "model",
+    "sat",
+    "satisfiable",
+    "solve",
+    "smt",
+    "such",
+    "that",
+    "where"
+  ]);
+  const variables = [...new Set(constraints.flatMap((constraint) =>
+    [...constraint.matchAll(/\b[A-Za-z][A-Za-z0-9_]*\b/gu)]
+      .map((match) => match[0])
+      .filter((word) => !reserved.has(word.toLowerCase()))
+  ))].sort();
+
+  if (variables.length === 0) {
+    return undefined;
+  }
+
+  return {
+    queryName: `web-${receipt.runId ?? "smt"}`,
+    variables,
+    constraints,
+    includeModel: true
+  };
+}
+
+function extractSmtConstraintText(text) {
+  const explicit = /\b(?:constraints?|where|such that)\b[:\s-]*(.+)$/iu.exec(text);
+  if (explicit?.[1]) {
+    return explicit[1].trim();
+  }
+
+  if (/\b(?:smt|solver|sat|satisfiable)\b/iu.test(text)) {
+    return text;
+  }
+
+  return undefined;
+}
+
+function cleanSmtConstraintFragment(value) {
+  return value
+    .replace(/[\u2264]/gu, "<=")
+    .replace(/[\u2265]/gu, ">=")
+    .replace(/[\u2260]/gu, "!=")
+    .replace(/^(?:(?:solve|check|find|integer|integers|constraints?|where|such|that|smt|sat|satisfiable)\s+)+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
 function verificationRowActionHtml(row) {
   if (row.status === "passed" || !row.obligationId) {
     return "";
@@ -3143,6 +3295,13 @@ function verificationRowActionHtml(row) {
     return `<div class="matrix-row-actions">
       <button class="text-button compact-button run-cas-obligation" data-route-id="${escapeHtml(row.routeId)}" data-obligation-id="${escapeHtml(row.obligationId)}" type="button">Run CAS + attach</button>
       <span class="mini-label">writes .theorem-workbench/cas first</span>
+    </div>`;
+  }
+
+  if (row.canRunSmt) {
+    return `<div class="matrix-row-actions">
+      <button class="text-button compact-button run-smt-obligation" data-route-id="${escapeHtml(row.routeId)}" data-obligation-id="${escapeHtml(row.obligationId)}" type="button">Run Z3 + attach</button>
+      <span class="mini-label">writes .theorem-workbench/smt first</span>
     </div>`;
   }
 
@@ -4507,6 +4666,12 @@ verificationMatrix.addEventListener("click", (event) => {
   const casButton = event.target.closest(".run-cas-obligation");
   if (casButton) {
     void runCasForObligation(casButton);
+    return;
+  }
+
+  const smtButton = event.target.closest(".run-smt-obligation");
+  if (smtButton) {
+    void runSmtForObligation(smtButton);
     return;
   }
 
