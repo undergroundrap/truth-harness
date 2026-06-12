@@ -388,6 +388,40 @@
         },
         "nextStep": {
           "type": "string"
+        },
+        "satisfiedBy": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        },
+        "satisfiedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "satisfactionSummary": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidenceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "enum": ["proof", "smt", "receipt", "route"]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trust": {
+          "$ref": "#/$defs/trustLabel"
+        },
+        "summary": {
+          "type": "string"
         }
       },
       "additionalProperties": false

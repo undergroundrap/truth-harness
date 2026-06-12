@@ -1,10 +1,17 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
-import { createVerifierRoute, listVerifierRoutes, readVerifierRoute, writeVerifierRoute } from "./verifier-route.js";
+import {
+  createVerifierRoute,
+  listVerifierRoutes,
+  readVerifierRoute,
+  satisfyVerifierRouteObligation,
+  writeVerifierRoute
+} from "./verifier-route.js";
 
 const roots: string[] = [];
 
@@ -170,6 +177,115 @@ describe("verifier route", () => {
     expect(readBack.routeId).toBe(result.route.routeId);
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.routes).toBe(1);
+  });
+
+  it("satisfies a formal proof obligation only with accepted proof-check evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-12T00:00:00.000Z"
+    });
+    await writeFile(join(root, "trivial.lean"), "example : True := by trivial\n", "utf8");
+    const runner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Lean (version 4.12.0)\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "",
+        stderr: ""
+      };
+    };
+
+    const routeWrite = await writeVerifierRoute({
+      rootPath: root,
+      problem: "prove the Riemann hypothesis",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+    const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
+    expect(obligation).toMatchObject({
+      status: "open",
+      sourceCapabilityId: "lean-proof-checker"
+    });
+    const proofWrite = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "trivial.lean",
+      theoremName: "trivial_true",
+      now: new Date("2026-06-12T00:01:00.000Z"),
+      runner
+    });
+    const proofRef = relative(root, proofWrite.jsonPath);
+
+    const satisfied = await satisfyVerifierRouteObligation({
+      rootPath: root,
+      routeRef: routeWrite.route.routeId,
+      obligationId: obligation?.obligationId ?? "",
+      evidenceRef: { kind: "proof", ref: proofRef },
+      now: new Date("2026-06-12T00:02:00.000Z")
+    });
+    const readBack = await readVerifierRoute(root, routeWrite.route.routeId);
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(satisfied.obligation.status).toBe("satisfied");
+    expect(satisfied.obligation.satisfiedBy).toEqual([
+      expect.objectContaining({
+        kind: "proof",
+        ref: proofRef,
+        trust: "proved"
+      })
+    ]);
+    expect(satisfied.markdown).toContain("Satisfied by:");
+    expect(satisfied.markdown).toContain(`proof:${proofRef}`);
+    expect(readBack.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
+      status: "satisfied",
+      satisfactionSummary: "Accepted proof-check record supplies `proved` evidence for this obligation."
+    });
+    expect(validation.passed).toBe(true);
+  });
+
+  it("refuses to satisfy a formal proof obligation with non-proof evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-12T00:00:00.000Z"
+    });
+    const receiptRoute = await writeVerifierRoute({
+      rootPath: root,
+      problem: "compute 3 / 4 + 5 / 8",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+    const routeWrite = await writeVerifierRoute({
+      rootPath: root,
+      problem: "prove the Riemann hypothesis",
+      now: new Date("2026-06-12T00:01:00.000Z"),
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+    const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
+    const receiptRef = relative(root, receiptRoute.jsonPath);
+
+    await expect(
+      satisfyVerifierRouteObligation({
+        rootPath: root,
+        routeRef: routeWrite.route.routeId,
+        obligationId: obligation?.obligationId ?? "",
+        evidenceRef: { kind: "route", ref: receiptRef },
+        now: new Date("2026-06-12T00:02:00.000Z")
+      })
+    ).rejects.toThrow("formal-proof obligations require `proved` evidence");
   });
 });
 

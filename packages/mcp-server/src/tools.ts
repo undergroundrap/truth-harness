@@ -68,6 +68,7 @@ import {
   renderReceipt,
   replayReceipt,
   searchLocalCorpus,
+  satisfyVerifierRouteObligation,
   writeExpertReview,
   writeClaimChart,
   writeClaimLedgerRecord,
@@ -179,7 +180,9 @@ import {
   type VaultSealResult,
   type VaultVerifyResult,
   type VerifierRoute,
+  type VerifierRouteEvidenceRef,
   type VerifierRouteSummary,
+  type SatisfyVerifierRouteObligationResult,
   type VerifierRouteWriteResult,
   type WorkspaceSnapshotSummary,
   type WorkspaceSnapshotVerification,
@@ -225,6 +228,13 @@ export interface TheoremRouteListInput {
 export interface TheoremRouteShowInput {
   workspacePath?: string;
   routeRef: string;
+}
+
+export interface TheoremRouteSatisfyInput {
+  workspacePath?: string;
+  routeRef: string;
+  obligationId: string;
+  evidenceRef: VerifierRouteEvidenceRef;
 }
 
 export interface TheoremEngineManifestInput {
@@ -905,6 +915,17 @@ export async function handleTheoremRouteList(input: TheoremRouteListInput): Prom
 
 export async function handleTheoremRouteShow(input: TheoremRouteShowInput): Promise<VerifierRoute> {
   return readVerifierRoute(resolveWorkspaceRoot(input.workspacePath), input.routeRef);
+}
+
+export async function handleTheoremRouteSatisfy(
+  input: TheoremRouteSatisfyInput
+): Promise<SatisfyVerifierRouteObligationResult> {
+  return satisfyVerifierRouteObligation({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    routeRef: input.routeRef,
+    obligationId: input.obligationId,
+    evidenceRef: input.evidenceRef
+  });
 }
 
 export function handleTheoremEngineManifest(input: TheoremEngineManifestInput = {}): EngineManifest {

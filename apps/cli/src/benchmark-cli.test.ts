@@ -197,6 +197,100 @@ describe("benchmark CLI", () => {
     expect(humanList.stdout).toContain("Proof obligations: 1");
   });
 
+  it("satisfies verifier route obligations from accepted local evidence", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    const write = await runCli([
+      "verify",
+      "prove",
+      "the",
+      "Riemann",
+      "hypothesis",
+      "--write",
+      "--workspace",
+      root,
+      "--json",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "theorem-workbench-missing-maxima-command",
+      "--lean-command",
+      "theorem-workbench-missing-lean-command",
+      "--z3-command",
+      "theorem-workbench-missing-z3-command"
+    ]);
+    const written = JSON.parse(write.stdout) as {
+      route: {
+        routeId: string;
+        proofObligations: Array<{ obligationId: string; kind: string; status: string }>;
+      };
+    };
+    const proofRef = join(".theorem-workbench", "proofs", "manual-proof.json");
+    await mkdir(join(root, ".theorem-workbench", "proofs"), { recursive: true });
+    await writeFile(
+      join(root, proofRef),
+      `${JSON.stringify(
+        {
+          schemaVersion: "theorem.proof-check.v0",
+          checkId: "proof_0123456789abcdef",
+          createdAt: "2026-06-12T00:00:00.000Z",
+          backend: { acceptedProofChecker: true },
+          status: "accepted",
+          trust: "proved",
+          proofCheckerBacked: true
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    const obligation = written.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
+    const satisfy = await runCli([
+      "route",
+      "satisfy",
+      written.route.routeId,
+      obligation?.obligationId ?? "",
+      "--workspace",
+      root,
+      "--evidence",
+      `proof:${proofRef}`,
+      "--json"
+    ]);
+    const result = JSON.parse(satisfy.stdout) as {
+      obligation: { status: string; satisfiedBy: Array<{ kind: string; ref: string; trust: string }> };
+      evidence: { trust: string; schemaVersion: string };
+    };
+    const shown = JSON.parse(
+      (await runCli(["route", "show", written.route.routeId, "--workspace", root, "--json"])).stdout
+    ) as { proofObligations: Array<{ obligationId: string; status: string }> };
+    const human = await runCli([
+      "route",
+      "satisfy",
+      written.route.routeId,
+      obligation?.obligationId ?? "",
+      "--workspace",
+      root,
+      "--evidence",
+      `proof:${proofRef}`
+    ]);
+
+    expect(satisfy.exitCode).toBe(0);
+    expect(result.obligation.status).toBe("satisfied");
+    expect(result.obligation.satisfiedBy[0]).toMatchObject({
+      kind: "proof",
+      ref: proofRef,
+      trust: "proved"
+    });
+    expect(result.evidence).toMatchObject({
+      trust: "proved",
+      schemaVersion: "theorem.proof-check.v0"
+    });
+    expect(shown.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
+      status: "satisfied"
+    });
+    expect(human.stdout).toContain("Claim ledger follow-up:");
+  });
+
   it("reports proof backend status without requiring Lean to be installed", async () => {
     const result = await runCli([
       "proof",

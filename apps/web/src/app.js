@@ -1080,7 +1080,8 @@ function verifierRouteObligationItems(receipt) {
 
   return obligations.map((obligation) => {
     const command = obligation.command ? ` <code>${escapeHtml(obligation.command)}</code>` : "";
-    return `<strong>${escapeHtml(obligation.title)}</strong> <code>${escapeHtml(obligation.obligationId)}</code>: ${escapeHtml(obligation.requiredBefore)}${command}`;
+    const satisfiedBy = routeObligationEvidenceHtml(obligation);
+    return `<strong>${escapeHtml(obligation.title)}</strong> <code>${escapeHtml(obligation.obligationId)}</code>: ${escapeHtml(obligation.requiredBefore)}${command}${satisfiedBy}`;
   });
 }
 
@@ -1097,8 +1098,43 @@ function verifierRouteObligationMarkdown(receipt) {
     `  - Statement: ${obligation.statement}`,
     `  - Required before: ${obligation.requiredBefore}`,
     ...(obligation.command ? [`  - Command: \`${obligation.command}\``] : []),
+    ...(obligation.satisfiedAt ? [`  - Satisfied at: ${obligation.satisfiedAt}`] : []),
+    ...(obligation.satisfactionSummary ? [`  - Satisfaction: ${obligation.satisfactionSummary}`] : []),
+    ...routeObligationEvidenceMarkdown(obligation),
     ...((obligation.acceptanceCriteria ?? []).map((criterion) => `  - Accept: ${criterion}`))
   ]);
+}
+
+function routeObligationEvidenceHtml(obligation) {
+  const refs = Array.isArray(obligation.satisfiedBy) ? obligation.satisfiedBy : [];
+  if (refs.length === 0) {
+    return "";
+  }
+
+  const items = refs
+    .map((ref) => {
+      const trust = ref.trust ? ` <code>${escapeHtml(ref.trust)}</code>` : "";
+      const summary = ref.summary ? ` - ${escapeHtml(ref.summary)}` : "";
+      return `<li><code>${escapeHtml(ref.kind)}:${escapeHtml(ref.ref)}</code>${trust}${summary}</li>`;
+    })
+    .join("");
+  return `<ul class="report-sublist">${items}</ul>`;
+}
+
+function routeObligationEvidenceMarkdown(obligation) {
+  const refs = Array.isArray(obligation.satisfiedBy) ? obligation.satisfiedBy : [];
+  if (refs.length === 0) {
+    return [];
+  }
+
+  return [
+    "  - Satisfied by:",
+    ...refs.map((ref) => {
+      const trust = ref.trust ? ` (${ref.trust})` : "";
+      const summary = ref.summary ? ` - ${ref.summary}` : "";
+      return `    - ${ref.kind}:${ref.ref}${trust}${summary}`;
+    })
+  ];
 }
 
 function renderClaimList() {
@@ -3195,7 +3231,11 @@ function formatRouteLedgerPacket(receipt) {
     ? route.gaps.map((gap) => `- ${routeItemSummary(gap)}`)
     : ["- No route gaps recorded."];
   const obligations = Array.isArray(route.proofObligations) && route.proofObligations.length > 0
-    ? route.proofObligations.map((obligation) => `- ${obligation.obligationId}: ${obligation.title} (${obligation.status}) - ${obligation.requiredBefore}`)
+    ? route.proofObligations.flatMap((obligation) => [
+      `- ${obligation.obligationId}: ${obligation.title} (${obligation.status}) - ${obligation.requiredBefore}`,
+      ...(obligation.satisfactionSummary ? [`  - Satisfaction: ${obligation.satisfactionSummary}`] : []),
+      ...routeObligationEvidenceMarkdown(obligation)
+    ])
     : ["- No proof obligations recorded."];
   const warnings = Array.isArray(route.warnings) && route.warnings.length > 0
     ? route.warnings.map((warning) => `- ${routeItemSummary(warning)}`)

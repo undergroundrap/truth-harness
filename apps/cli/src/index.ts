@@ -84,6 +84,7 @@ import {
   replayReceipt,
   searchLocalCorpus,
   sealVaultFile,
+  satisfyVerifierRouteObligation,
   solveSmtProblem,
   addResearchSessionCheckpoint,
   validateWorkspaceArtifacts,
@@ -192,7 +193,9 @@ import {
   type SmtCheckWriteResult,
   type SmtProblemSolveResult,
   type VerifierRoute,
+  type VerifierRouteEvidenceRef,
   type VerifierRouteSummary,
+  type SatisfyVerifierRouteObligationResult,
   type VerifierRouteWriteResult,
   type ValidationEvidenceRef,
   type ValidationGateInput,
@@ -348,6 +351,38 @@ route
 
     printVerifierRoute(storedRoute);
   });
+
+route
+  .command("satisfy")
+  .description("Attach accepted local evidence to a verifier-route proof obligation.")
+  .argument("<route>", "Route id or workspace-local JSON path")
+  .argument("<obligation>", "Proof obligation id such as obl_<hash>")
+  .requiredOption("--evidence <ref>", "Local evidence ref, such as proof:.theorem-workbench/proofs/check.json")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--summary <text>", "Human scope note to store beside the evidence ref")
+  .option("--json", "Print the full satisfaction result JSON")
+  .action(
+    async (
+      routeRef: string,
+      obligationId: string,
+      options: { evidence: string; workspace: string; summary?: string; json?: boolean }
+    ) => {
+      const evidenceRef = parseVerifierRouteEvidenceRef(options.evidence, options.summary);
+      const result = await satisfyVerifierRouteObligation({
+        rootPath: options.workspace,
+        routeRef,
+        obligationId,
+        evidenceRef
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printVerifierRouteSatisfaction(result);
+    }
+  );
 
 const claim = program.command("claim").description("Manage git-like local claim ledger records.");
 
@@ -3142,6 +3177,24 @@ function printVerifierRouteList(routes: VerifierRouteSummary[]): void {
   }
 }
 
+function printVerifierRouteSatisfaction(result: SatisfyVerifierRouteObligationResult): void {
+  console.log(result.message);
+  console.log(`Route: ${result.route.routeId}`);
+  console.log(`Obligation: ${result.obligation.obligationId}`);
+  console.log(`Status: ${result.obligation.status}`);
+  console.log(`Evidence: ${result.evidence.kind}:${result.evidence.ref}`);
+  console.log(`Evidence trust: ${result.evidence.trust ?? "unknown"}`);
+  console.log(`Evidence schema: ${result.evidence.schemaVersion ?? "unknown"}`);
+  console.log("");
+  console.log(`Wrote verifier route JSON: ${result.jsonPath}`);
+  console.log(`Wrote verifier route Markdown: ${result.markdownPath}`);
+  console.log("");
+  console.log("Claim ledger follow-up:");
+  console.log(
+    `  theorem claim add ${quoteCommandArg(result.route.problem)} --evidence route:${result.route.routeId} --evidence ${result.evidence.kind}:${result.evidence.ref}`
+  );
+}
+
 function printBenchmarkRun(run: BenchmarkRun, outPath?: string, workspaceWrite?: BenchmarkRunWriteResult): void {
   console.log(`${run.title} (${run.suiteId})`);
   console.log(`Passed: ${run.passed}/${run.total}`);
@@ -4542,6 +4595,25 @@ function parseClaimLedgerEvidenceRef(value: string): ClaimLedgerEvidenceRef {
   }
 
   return { kind: "other", ref: rawRef, trust: maybeTrust };
+}
+
+function parseVerifierRouteEvidenceRef(value: string, summary?: string): VerifierRouteEvidenceRef {
+  const separator = value.indexOf(":");
+  if (separator <= 0) {
+    throw new Error("Route obligation evidence must be prefixed as proof:, smt:, receipt:, or route:.");
+  }
+
+  const maybeKind = value.slice(0, separator);
+  const ref = value.slice(separator + 1);
+  if (maybeKind === "proof" || maybeKind === "smt" || maybeKind === "receipt" || maybeKind === "route") {
+    return {
+      kind: maybeKind,
+      ref,
+      ...(summary ? { summary } : {})
+    };
+  }
+
+  throw new Error(`Unsupported route obligation evidence kind ${JSON.stringify(maybeKind)}.`);
 }
 
 function parseEvidenceRef(value: string): InventionEvidenceRef {

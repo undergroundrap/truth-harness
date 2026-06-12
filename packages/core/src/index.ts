@@ -198,6 +198,7 @@ export {
   listVerifierRoutes,
   readVerifierRoute,
   renderVerifierRouteMarkdown,
+  satisfyVerifierRouteObligation,
   writeVerifierRoute
 } from "./verifier-route.js";
 export { proveUniversalParity } from "./parity-proof.js";
@@ -463,7 +464,15 @@ export type {
 } from "./engine-manifest.js";
 export type {
   CreateVerifierRouteOptions,
+  ProofObligation,
+  ProofObligationKind,
+  ProofObligationStatus,
+  ResolvedVerifierRouteEvidence,
+  SatisfyVerifierRouteObligationInput,
+  SatisfyVerifierRouteObligationResult,
   VerifierRoute,
+  VerifierRouteEvidenceKind,
+  VerifierRouteEvidenceRef,
   VerifierRouteGap,
   VerifierRouteGapSeverity,
   VerifierRouteStatus,

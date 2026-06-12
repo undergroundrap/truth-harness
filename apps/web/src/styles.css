@@ -2117,6 +2117,12 @@ textarea:focus-visible {
   margin-top: 5px;
 }
 
+.report-preview .report-sublist {
+  margin-top: 6px;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
 .report-preview code {
   color: #f4e7c7;
 }

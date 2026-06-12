@@ -45,6 +45,7 @@ import {
   handleTheoremResearchSessionStart,
   handleTheoremRouteList,
   handleTheoremRouteShow,
+  handleTheoremRouteSatisfy,
   handleTheoremSimulationList,
   handleTheoremSimulationLog,
   handleTheoremSmtBackends,
@@ -156,6 +157,60 @@ describe("MCP tool handlers", () => {
       finalTrust: "exact-computed"
     });
     expect(shown.routeId).toBe(result.route.routeId);
+  });
+
+  it("satisfies verifier route obligations for agents", async () => {
+    const root = await tempRoot();
+    process.env.THEOREM_WORKBENCH_ROOT = root;
+    await handleTheoremWorkspaceInit({ name: "MCP Obligation Lab" });
+    const result = await handleTheoremVerify({
+      write: true,
+      problem: "prove the Riemann hypothesis",
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+    const obligation = result.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
+    const proofRef = join(".theorem-workbench", "proofs", "manual-proof.json");
+    await mkdir(join(root, ".theorem-workbench", "proofs"), { recursive: true });
+    await writeFile(
+      join(root, proofRef),
+      `${JSON.stringify(
+        {
+          schemaVersion: "theorem.proof-check.v0",
+          checkId: "proof_0123456789abcdef",
+          createdAt: "2026-06-12T00:00:00.000Z",
+          backend: { acceptedProofChecker: true },
+          status: "accepted",
+          trust: "proved",
+          proofCheckerBacked: true
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const satisfied = await handleTheoremRouteSatisfy({
+      routeRef: result.route.routeId,
+      obligationId: obligation?.obligationId ?? "",
+      evidenceRef: { kind: "proof", ref: proofRef }
+    });
+    const shown = await handleTheoremRouteShow({
+      routeRef: result.route.routeId
+    });
+
+    expect(satisfied.obligation.status).toBe("satisfied");
+    expect(satisfied.evidence).toMatchObject({
+      kind: "proof",
+      ref: proofRef,
+      trust: "proved",
+      schemaVersion: "theorem.proof-check.v0"
+    });
+    expect(shown.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
+      status: "satisfied"
+    });
   });
 
   it("reports local CAS backend readiness for agents", () => {

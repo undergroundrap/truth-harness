@@ -113,6 +113,7 @@ describe("Theorem MCP server", () => {
         "theorem_research_session_list",
         "theorem_research_session_start",
         "theorem_route_list",
+        "theorem_route_satisfy",
         "theorem_route_show",
         "theorem_simulation_list",
         "theorem_simulation_log",

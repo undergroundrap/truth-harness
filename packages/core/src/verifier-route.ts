@@ -3,6 +3,7 @@ import { join, relative, resolve, sep } from "node:path";
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { createReceipt, type CreateReceiptOptions } from "./receipt.js";
+import { parseReceiptJson } from "./receipt-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { Receipt, ReceiptEvidenceProfile, TrustLabel } from "./types.js";
 
@@ -35,6 +36,22 @@ export interface VerifierRouteGap {
 
 export type ProofObligationKind = "formal-proof" | "independent-check" | "solver-encoding" | "reproducibility";
 export type ProofObligationStatus = "open" | "satisfied" | "not-required";
+export type VerifierRouteEvidenceKind = "proof" | "smt" | "receipt" | "route";
+
+export interface VerifierRouteEvidenceRef {
+  kind: VerifierRouteEvidenceKind;
+  ref: string;
+  trust?: TrustLabel;
+  summary?: string;
+}
+
+export interface ResolvedVerifierRouteEvidence extends VerifierRouteEvidenceRef {
+  schemaVersion?: string;
+  artifactId?: string;
+  status?: string;
+  proofCheckerBacked?: boolean;
+  acceptedProofChecker?: boolean;
+}
 
 export interface ProofObligation {
   obligationId: string;
@@ -48,6 +65,9 @@ export interface ProofObligation {
   acceptanceCriteria: string[];
   command?: string;
   nextStep?: string;
+  satisfiedBy?: VerifierRouteEvidenceRef[];
+  satisfiedAt?: string;
+  satisfactionSummary?: string;
 }
 
 export interface VerifierRoute {
@@ -95,6 +115,24 @@ export interface VerifierRouteWriteResult {
   jsonPath: string;
   markdownPath: string;
   markdown: string;
+}
+
+export interface SatisfyVerifierRouteObligationInput {
+  rootPath: string;
+  routeRef: string;
+  obligationId: string;
+  evidenceRef: VerifierRouteEvidenceRef;
+  now?: Date;
+}
+
+export interface SatisfyVerifierRouteObligationResult {
+  route: VerifierRoute;
+  obligation: ProofObligation;
+  evidence: ResolvedVerifierRouteEvidence;
+  jsonPath: string;
+  markdownPath: string;
+  markdown: string;
+  message: string;
 }
 
 export interface VerifierRouteSummary {
@@ -242,19 +280,71 @@ export async function listVerifierRoutes(rootPath: string): Promise<VerifierRout
 
 export async function readVerifierRoute(rootPath: string, routeRef: string): Promise<VerifierRoute> {
   const status = await requireLocalWorkspace(rootPath);
-  let path: string;
+  const { jsonPath } = await resolveVerifierRouteFile(status, routeRef);
 
-  if (/^route_[a-f0-9]{16}$/u.test(routeRef)) {
-    const route = (await listVerifierRoutes(status.root)).find((summary) => summary.routeId === routeRef);
-    if (!route) {
-      throw new Error(`No verifier route found for id ${routeRef}.`);
-    }
-    path = resolve(status.root, route.path);
-  } else {
-    path = resolveWorkspacePath(status.root, routeRef);
+  return parseVerifierRouteJson(await readFile(jsonPath, "utf8"), jsonPath);
+}
+
+export async function satisfyVerifierRouteObligation(
+  input: SatisfyVerifierRouteObligationInput
+): Promise<SatisfyVerifierRouteObligationResult> {
+  const status = await requireLocalWorkspace(input.rootPath);
+  const { jsonPath, markdownPath } = await resolveVerifierRouteFile(status, input.routeRef);
+  const route = parseVerifierRouteJson(await readFile(jsonPath, "utf8"), jsonPath);
+  const obligationIndex = (route.proofObligations ?? []).findIndex(
+    (obligation) => obligation.obligationId === input.obligationId
+  );
+
+  if (obligationIndex === -1) {
+    throw new Error(`No proof obligation found for id ${input.obligationId} in route ${route.routeId}.`);
   }
 
-  return parseVerifierRouteJson(await readFile(path, "utf8"), path);
+  const obligation = route.proofObligations[obligationIndex];
+  const evidence = await resolveVerifierRouteEvidence(status.root, input.evidenceRef);
+  const satisfaction = evidenceSatisfiesObligation(obligation, evidence);
+
+  if (!satisfaction.satisfied) {
+    throw new Error(
+      `Evidence ${input.evidenceRef.kind}:${input.evidenceRef.ref} does not satisfy obligation ${input.obligationId}: ${satisfaction.reason}`
+    );
+  }
+
+  const satisfiedAt = (input.now ?? new Date()).toISOString();
+  const satisfiedEvidence: VerifierRouteEvidenceRef = {
+    kind: input.evidenceRef.kind,
+    ref: input.evidenceRef.ref,
+    trust: evidence.trust,
+    summary: input.evidenceRef.summary ?? evidence.summary
+  };
+  const satisfiedBy = mergeEvidenceRefs(obligation.satisfiedBy ?? [], [satisfiedEvidence]);
+  const updatedObligation: ProofObligation = {
+    ...obligation,
+    status: "satisfied",
+    satisfiedBy,
+    satisfiedAt,
+    satisfactionSummary: satisfaction.reason
+  };
+  const updatedRoute: VerifierRoute = {
+    ...route,
+    proofObligations: route.proofObligations.map((candidate, index) =>
+      index === obligationIndex ? updatedObligation : candidate
+    ),
+    nextActions: updateRouteNextActions(route.nextActions, updatedObligation)
+  };
+  const markdown = renderVerifierRouteMarkdown(updatedRoute);
+
+  await writeFile(jsonPath, `${JSON.stringify(updatedRoute, null, 2)}\n`, "utf8");
+  await writeFile(markdownPath, markdown, "utf8");
+
+  return {
+    route: updatedRoute,
+    obligation: updatedObligation,
+    evidence,
+    jsonPath,
+    markdownPath,
+    markdown,
+    message: `Proof obligation ${updatedObligation.obligationId} satisfied by ${satisfiedEvidence.kind}:${satisfiedEvidence.ref}.`
+  };
 }
 
 export function renderVerifierRouteMarkdown(route: VerifierRoute): string {
@@ -301,6 +391,20 @@ export function renderVerifierRouteMarkdown(route: VerifierRoute): string {
       }
       if (obligation.command) {
         lines.push(`  - Command: \`${obligation.command}\``);
+      }
+      if (obligation.satisfiedAt) {
+        lines.push(`  - Satisfied at: ${obligation.satisfiedAt}`);
+      }
+      if (obligation.satisfactionSummary) {
+        lines.push(`  - Satisfaction: ${obligation.satisfactionSummary}`);
+      }
+      if (obligation.satisfiedBy && obligation.satisfiedBy.length > 0) {
+        lines.push("  - Satisfied by:");
+        for (const evidenceRef of obligation.satisfiedBy) {
+          const trust = evidenceRef.trust ? ` (${evidenceRef.trust})` : "";
+          const summary = evidenceRef.summary ? ` - ${evidenceRef.summary}` : "";
+          lines.push(`    - ${evidenceRef.kind}:${evidenceRef.ref}${trust}${summary}`);
+        }
       }
       for (const criterion of obligation.acceptanceCriteria) {
         lines.push(`  - Accept: ${criterion}`);
@@ -724,6 +828,231 @@ function summarizeVerifierRoute(root: string, path: string, raw: string): Verifi
     proofObligations: route.proofObligations?.length ?? 0,
     nextActions: route.nextActions
   };
+}
+
+async function resolveVerifierRouteFile(
+  status: LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> },
+  routeRef: string
+): Promise<{ jsonPath: string; markdownPath: string }> {
+  let jsonPath: string;
+
+  if (/^route_[a-f0-9]{16}$/u.test(routeRef)) {
+    const route = (await listVerifierRoutes(status.root)).find((summary) => summary.routeId === routeRef);
+    if (!route) {
+      throw new Error(`No verifier route found for id ${routeRef}.`);
+    }
+    jsonPath = resolve(status.root, route.path);
+  } else {
+    jsonPath = resolveWorkspacePath(status.root, routeRef);
+  }
+
+  if (!jsonPath.endsWith(".json")) {
+    throw new Error(`Verifier route ref must resolve to a JSON artifact: ${routeRef}.`);
+  }
+
+  return {
+    jsonPath,
+    markdownPath: jsonPath.replace(/\.json$/u, ".md")
+  };
+}
+
+async function resolveVerifierRouteEvidence(
+  root: string,
+  evidenceRef: VerifierRouteEvidenceRef
+): Promise<ResolvedVerifierRouteEvidence> {
+  if (evidenceRef.kind === "route") {
+    const route = await readVerifierRoute(root, evidenceRef.ref);
+    return {
+      ...evidenceRef,
+      trust: route.finalTrust,
+      summary: evidenceRef.summary ?? `Verifier route ${route.routeId} ended with ${route.finalTrust}.`,
+      schemaVersion: route.schemaVersion,
+      artifactId: route.routeId,
+      proofCheckerBacked: route.receipt.evidenceProfile.proofCheckerBacked,
+      acceptedProofChecker: route.receipt.evidenceProfile.backends.some((backend) => backend.acceptedProofChecker)
+    };
+  }
+
+  const artifact = await readEvidenceArtifactJson(root, evidenceRef.ref);
+  if (!artifact) {
+    throw new Error(`Could not read evidence artifact ${evidenceRef.kind}:${evidenceRef.ref}.`);
+  }
+
+  if (evidenceRef.kind === "receipt") {
+    const receipt = parseReceiptJson(artifact.raw, evidenceRef.ref);
+    return {
+      ...evidenceRef,
+      trust: receipt.trust,
+      summary: evidenceRef.summary ?? receipt.summary,
+      schemaVersion: receipt.schemaVersion,
+      artifactId: receipt.runId,
+      proofCheckerBacked: receipt.evidenceProfile.proofCheckerBacked,
+      acceptedProofChecker: receipt.evidenceProfile.backends.some((backend) => backend.acceptedProofChecker)
+    };
+  }
+
+  if (!isRecord(artifact.parsed)) {
+    throw new Error(`Evidence artifact is not JSON object: ${evidenceRef.ref}.`);
+  }
+
+  const schemaVersion = typeof artifact.parsed.schemaVersion === "string" ? artifact.parsed.schemaVersion : undefined;
+  const trust = typeof artifact.parsed.trust === "string" && isTrustLabel(artifact.parsed.trust)
+    ? artifact.parsed.trust
+    : undefined;
+  const artifactId =
+    typeof artifact.parsed.checkId === "string"
+      ? artifact.parsed.checkId
+      : typeof artifact.parsed.runId === "string"
+        ? artifact.parsed.runId
+        : undefined;
+  const status = typeof artifact.parsed.status === "string" ? artifact.parsed.status : "unknown";
+  const proofCheckerBacked =
+    typeof artifact.parsed.proofCheckerBacked === "boolean" ? artifact.parsed.proofCheckerBacked : undefined;
+  const backend = isRecord(artifact.parsed.backend) ? artifact.parsed.backend : undefined;
+  const acceptedProofChecker =
+    typeof backend?.acceptedProofChecker === "boolean" ? backend.acceptedProofChecker : undefined;
+  const summary = evidenceRef.summary ?? `${schemaVersion ?? "artifact"} status: ${status}.`;
+
+  if (!trust) {
+    throw new Error(`Evidence artifact does not expose a supported trust label: ${evidenceRef.ref}.`);
+  }
+
+  return {
+    ...evidenceRef,
+    trust,
+    summary,
+    schemaVersion,
+    artifactId,
+    status,
+    proofCheckerBacked,
+    acceptedProofChecker
+  };
+}
+
+function evidenceSatisfiesObligation(
+  obligation: ProofObligation,
+  evidence: ResolvedVerifierRouteEvidence
+): { satisfied: boolean; reason: string } {
+  if (obligation.kind === "formal-proof") {
+    if (evidence.trust !== "proved") {
+      return { satisfied: false, reason: "formal-proof obligations require `proved` evidence." };
+    }
+
+    if (
+      evidence.kind === "proof" &&
+      evidence.schemaVersion === "theorem.proof-check.v0" &&
+      evidence.status === "accepted" &&
+      evidence.proofCheckerBacked === true &&
+      evidence.acceptedProofChecker === true
+    ) {
+      return { satisfied: true, reason: "Accepted proof-check record supplies `proved` evidence for this obligation." };
+    }
+
+    if (
+      evidence.kind === "receipt" &&
+      evidence.schemaVersion === "theorem.receipt.v0" &&
+      evidence.proofCheckerBacked === true &&
+      evidence.acceptedProofChecker === true
+    ) {
+      return { satisfied: true, reason: "Proof-checker-backed receipt supplies `proved` evidence for this obligation." };
+    }
+
+    if (
+      evidence.kind === "route" &&
+      evidence.schemaVersion === "theorem.verifier-route.v0" &&
+      evidence.proofCheckerBacked === true &&
+      evidence.acceptedProofChecker === true
+    ) {
+      return { satisfied: true, reason: "Verifier route with `proved` final trust supplies accepted-proof evidence." };
+    }
+
+    return { satisfied: false, reason: "formal-proof obligations require a proof-check record, proof-backed receipt, or proved route." };
+  }
+
+  if (obligation.kind === "solver-encoding") {
+    if (evidence.trust === "smt-checked" || evidence.trust === "proved") {
+      return { satisfied: true, reason: "SMT/proof evidence satisfies the solver-encoding obligation." };
+    }
+
+    return { satisfied: false, reason: "solver-encoding obligations require `smt-checked` or `proved` evidence." };
+  }
+
+  if (obligation.kind === "independent-check") {
+    if (evidence.trust === "cross-checked" || evidence.trust === "smt-checked" || evidence.trust === "proved") {
+      return { satisfied: true, reason: "Independent cross-check evidence satisfies this obligation." };
+    }
+
+    return {
+      satisfied: false,
+      reason: "independent-check obligations require `cross-checked`, `smt-checked`, or `proved` evidence."
+    };
+  }
+
+  if (evidence.trust && evidence.trust !== "unverified") {
+    return { satisfied: true, reason: "Replayable trusted evidence satisfies the reproducibility obligation." };
+  }
+
+  return { satisfied: false, reason: "reproducibility obligations require evidence stronger than `unverified`." };
+}
+
+async function readEvidenceArtifactJson(root: string, ref: string): Promise<{ raw: string; parsed: unknown } | undefined> {
+  let path: string;
+  try {
+    path = resolveWorkspacePath(root, ref);
+  } catch {
+    return undefined;
+  }
+
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch {
+    return undefined;
+  }
+
+  try {
+    return { raw, parsed: JSON.parse(raw) as unknown };
+  } catch {
+    return { raw, parsed: undefined };
+  }
+}
+
+function mergeEvidenceRefs(
+  existing: VerifierRouteEvidenceRef[],
+  additions: VerifierRouteEvidenceRef[]
+): VerifierRouteEvidenceRef[] {
+  const seen = new Set<string>();
+  const merged: VerifierRouteEvidenceRef[] = [];
+
+  for (const ref of [...existing, ...additions]) {
+    const key = `${ref.kind}:${ref.ref}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(ref);
+  }
+
+  return merged;
+}
+
+function updateRouteNextActions(actions: string[], obligation: ProofObligation): string[] {
+  const summary = `Proof obligation ${obligation.obligationId} is satisfied; cite its attached evidence before strengthening downstream claims.`;
+  return unique([summary, ...actions]).slice(0, 6);
+}
+
+function isTrustLabel(value: string): value is TrustLabel {
+  return (
+    value === "proved" ||
+    value === "exact-computed" ||
+    value === "bounded-numeric" ||
+    value === "dimension-checked" ||
+    value === "smt-checked" ||
+    value === "source-cited" ||
+    value === "cross-checked" ||
+    value === "unverified" ||
+    value === "refuted"
+  );
 }
 
 function parseVerifierRouteJson(raw: string, sourcePath: string): VerifierRoute {

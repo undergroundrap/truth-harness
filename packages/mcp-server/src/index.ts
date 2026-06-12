@@ -46,6 +46,7 @@ import {
   handleTheoremResearchSessionStart,
   handleTheoremRouteList,
   handleTheoremRouteShow,
+  handleTheoremRouteSatisfy,
   handleTheoremSimulationList,
   handleTheoremSimulationLog,
   handleTheoremSmtBackends,
@@ -197,6 +198,36 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ workspacePath, routeRef }) => toolJson(await handleTheoremRouteShow({ workspacePath, routeRef }))
+  );
+
+  server.registerTool(
+    "theorem_route_satisfy",
+    {
+      title: "Satisfy Verifier Route Obligation",
+      description:
+        "Attach accepted local evidence to a persisted verifier-route proof obligation. The route is updated only when the evidence trust is strong enough for the obligation.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root."),
+        routeRef: z.string().min(1).describe("Route id such as route_<hash> or workspace-local JSON path."),
+        obligationId: z.string().regex(/^obl_[a-f0-9]{16}$/u).describe("Proof obligation id to satisfy."),
+        evidenceRef: z
+          .object({
+            kind: z.enum(["proof", "smt", "receipt", "route"]),
+            ref: z.string().min(1),
+            summary: z.string().optional()
+          })
+          .describe("Local evidence artifact ref, such as { kind: 'proof', ref: '.theorem-workbench/proofs/check.json' }.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, routeRef, obligationId, evidenceRef }) =>
+      toolJson(await handleTheoremRouteSatisfy({ workspacePath, routeRef, obligationId, evidenceRef }))
   );
 
   const claimTrustSchema = z.enum([
