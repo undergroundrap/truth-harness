@@ -729,7 +729,7 @@ const code = program
 
 code
   .command("sandbox-status")
-  .description("Report whether an OS-enforced code-run sandbox is available.")
+  .description("Report whether a measured code-run sandbox is available.")
   .option("--json", "Print the full sandbox status JSON")
   .action((options: { json?: boolean }) => {
     const status = getCodeRunSandboxStatus();
@@ -767,7 +767,7 @@ code
   .option("--timeout-ms <ms>", "Command timeout in milliseconds; maximum 120000", parsePositiveInteger, 10000)
   .option("--max-output-bytes <bytes>", "Maximum captured bytes per output stream; maximum 1048576", parsePositiveInteger, 65536)
   .option("--allow-executable <name>", "Required executable name/path allowlist. Repeat for multiple allowed executables.", collectRepeated, [])
-  .option("--require-sandbox", "Require an OS-enforced code-run sandbox; fail closed if none is available")
+  .option("--require-sandbox", "Require a measured code-run sandbox; fail closed if none is available")
   .option("--allow-shell-launcher", "Allow shell launcher executables such as cmd, PowerShell, bash, or sh")
   .option("--allow-network-command", "Allow obvious network-capable commands such as curl, wget, ssh, or scp")
   .option("--allow-destructive-command", "Allow obvious destructive commands such as rm, rmdir, format, or shutdown")

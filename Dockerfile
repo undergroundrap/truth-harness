@@ -6,6 +6,7 @@ ENV CI=true \
     NPM_CONFIG_UPDATE_NOTIFIER=false \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
+    THEOREM_WORKBENCH_CONTAINER=1 \
     PATH="/opt/theorem-python/bin:${PATH}"
 
 RUN apt-get update \

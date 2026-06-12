@@ -307,11 +307,15 @@ describe("benchmark CLI", () => {
       canAttestNetworkNone: boolean;
     };
 
-    expect(result.exitCode).toBe(1);
     expect(json.schemaVersion).toBe("theorem.code-run-sandbox-status.v0");
-    expect(json.available).toBe(false);
-    expect(json.provider).toBe("none");
-    expect(json.canAttestNetworkNone).toBe(false);
+    expect(result.exitCode).toBe(json.available ? 0 : 1);
+    if (json.available) {
+      expect(json.provider).toBe("container");
+      expect(json.canAttestNetworkNone).toBe(true);
+    } else {
+      expect(json.provider).toBe("none");
+      expect(json.canAttestNetworkNone).toBe(false);
+    }
   });
 
   it("repairs older workspace manifests from the CLI", async () => {

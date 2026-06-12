@@ -804,7 +804,7 @@ export function createTheoremMcpServer(): McpServer {
     {
       title: "Check Code Sandbox",
       description:
-        "Report whether Theorem Workbench has an OS-enforced code-run sandbox available. A missing sandbox means code-run records must use networkAccess unknown.",
+        "Report whether Theorem Workbench has a measured code-run sandbox available. A missing sandbox means code-run records must use networkAccess unknown.",
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
@@ -855,7 +855,7 @@ export function createTheoremMcpServer(): McpServer {
             requireSandbox: z
               .boolean()
               .optional()
-              .describe("Require an OS-enforced sandbox for this run; fail closed if no sandbox provider is available. Agent-facing MCP calls should prefer this setting."),
+              .describe("Require a measured sandbox provider for this run; fail closed if no provider is available. Agent-facing MCP calls should prefer this setting."),
             allowShellLauncher: z
               .boolean()
               .optional()

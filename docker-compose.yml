@@ -1,10 +1,19 @@
+name: theorem-workbench
+
+x-theorem-security: &theorem-security
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  pids_limit: 1024
+
 services:
   theorem:
+    <<: *theorem-security
     build:
       context: .
       target: dev
     image: theorem-workbench:dev
-    init: true
     working_dir: /workspace
     network_mode: "none"
     environment:
@@ -18,11 +27,11 @@ services:
     command: ["npm", "run", "check"]
 
   mcp:
+    <<: *theorem-security
     build:
       context: .
       target: dev
     image: theorem-workbench:dev
-    init: true
     working_dir: /workspace
     network_mode: "none"
     environment:
@@ -37,11 +46,11 @@ services:
     stdin_open: true
 
   web:
+    <<: *theorem-security
     build:
       context: .
       target: dev
     image: theorem-workbench:dev
-    init: true
     working_dir: /workspace
     environment:
       CI: "true"

@@ -12,6 +12,7 @@ import {
   writeCodeRun,
   type CodeRunCommandRunner
 } from "./code-run.js";
+import { getCodeRunSandboxStatus } from "./sandbox.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 
 const schemasDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
@@ -44,6 +45,7 @@ describe("code run records", () => {
     const schema = JSON.parse(await readFile(resolve(schemasDir, "code-run.schema.json"), "utf8")) as unknown;
     const list = await listCodeRuns(root);
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
+    const sandboxStatus = getCodeRunSandboxStatus();
 
     expect(write.record.schemaVersion).toBe("theorem.code-run.v0");
     expect(write.record.runId).toMatch(/^code_run_[a-f0-9]{16}$/);
@@ -55,9 +57,9 @@ describe("code run records", () => {
       sandbox: {
         required: false,
         measurement: {
-          available: false,
-          provider: "none",
-          canAttestNetworkNone: false
+          available: sandboxStatus.available,
+          provider: sandboxStatus.provider,
+          canAttestNetworkNone: sandboxStatus.canAttestNetworkNone
         }
       },
       detected: {
@@ -69,16 +71,16 @@ describe("code run records", () => {
     expect(write.record.execution.exitCode).toBe(0);
     expect(write.record.stdout.text.trim()).toBe("42");
     expect(write.record.replay.command).toContain(quoteForExpectation(process.execPath));
-    expect(write.record.replay.localOnly).toBe(false);
+    expect(write.record.replay.localOnly).toBe(sandboxStatus.canAttestNetworkNone);
     expect(write.record.privacy).toMatchObject({
-      mode: "unsandboxed-local-execution",
-      networkAccess: "unknown",
+      mode: sandboxStatus.canAttestNetworkNone ? "sandboxed-local-execution" : "unsandboxed-local-execution",
+      networkAccess: sandboxStatus.canAttestNetworkNone ? "none" : "unknown",
       measurement: {
-        available: false,
-        provider: "none",
-        processSandbox: "none",
-        networkIsolation: "not-enforced",
-        canAttestNetworkNone: false
+        available: sandboxStatus.available,
+        provider: sandboxStatus.provider,
+        processSandbox: sandboxStatus.processSandbox,
+        networkIsolation: sandboxStatus.networkIsolation,
+        canAttestNetworkNone: sandboxStatus.canAttestNetworkNone
       }
     });
     expect(write.record.reproducibilityBoundary.commandExecutionIsNotProof).toBe(true);
@@ -278,9 +280,10 @@ describe("code run records", () => {
     expect(runnerCalled).toBe(false);
   });
 
-  it("blocks sandbox-required runs when no OS sandbox provider is available", async () => {
+  it("respects sandbox-required runs according to measured provider availability", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);
+    const sandboxStatus = getCodeRunSandboxStatus();
     let runnerCalled = false;
     const runner: CodeRunCommandRunner = () => {
       runnerCalled = true;
@@ -291,6 +294,24 @@ describe("code run records", () => {
         durationMs: 1
       };
     };
+
+    if (sandboxStatus.available) {
+      const record = await executeCodeRun({
+        rootPath: root,
+        purpose: "Run only when an OS sandbox is available.",
+        command: process.execPath,
+        policy: {
+          allowedExecutables: [process.execPath],
+          requireSandbox: true
+        },
+        runner
+      });
+
+      expect(runnerCalled).toBe(true);
+      expect(record.policy.sandbox.required).toBe(true);
+      expect(record.privacy.networkAccess).toBe("none");
+      return;
+    }
 
     await expect(
       executeCodeRun({
@@ -303,7 +324,7 @@ describe("code run records", () => {
         },
         runner
       })
-    ).rejects.toThrow("requires an OS-enforced sandbox");
+    ).rejects.toThrow("requires a measured sandbox provider");
     expect(runnerCalled).toBe(false);
   });
 

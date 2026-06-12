@@ -1021,14 +1021,15 @@ describe("MCP tool handlers", () => {
     });
     const list = await handleTheoremCodeRunList({});
     const validation = await handleTheoremWorkspaceValidate({});
+    const sandboxStatus = handleTheoremCodeSandboxStatus().status;
 
     expect(result.error).toBe(false);
     expect(result.result.record.schemaVersion).toBe("theorem.code-run.v0");
     expect(result.result.record.command.shell).toBe(false);
     expect(result.result.record.policy.matchedAllowlist).toBe(true);
     expect(result.result.record.policy.detected.categories).toEqual([]);
-    expect(result.result.record.privacy.networkAccess).toBe("unknown");
-    expect(result.result.record.replay.localOnly).toBe(false);
+    expect(result.result.record.privacy.networkAccess).toBe(sandboxStatus.canAttestNetworkNone ? "none" : "unknown");
+    expect(result.result.record.replay.localOnly).toBe(sandboxStatus.canAttestNetworkNone);
     expect(result.result.record.execution.status).toBe("passed");
     expect(result.result.record.stdout.text.trim()).toBe("mcp-code-run");
     expect(result.result.jsonPath).toContain(".theorem-workbench");
@@ -1042,20 +1043,45 @@ describe("MCP tool handlers", () => {
   it("reports code-run sandbox availability to agents", () => {
     const result = handleTheoremCodeSandboxStatus();
 
-    expect(result.error).toBe(true);
     expect(result.status.schemaVersion).toBe("theorem.code-run-sandbox-status.v0");
-    expect(result.status.available).toBe(false);
-    expect(result.status.provider).toBe("none");
-    expect(result.status.canAttestNetworkNone).toBe(false);
-    expect(result.message).toContain("unavailable");
+    expect(result.error).toBe(!result.status.available);
+    if (result.status.available) {
+      expect(result.status.provider).toBe("container");
+      expect(result.status.canAttestNetworkNone).toBe(true);
+      expect(result.message).toContain("available");
+    } else {
+      expect(result.status.provider).toBe("none");
+      expect(result.status.canAttestNetworkNone).toBe(false);
+      expect(result.message).toContain("unavailable");
+    }
   });
 
-  it("blocks sandbox-required code-run requests through the MCP handler", async () => {
+  it("respects sandbox-required code-run requests through the MCP handler", async () => {
     const root = await tempRoot();
     process.env.THEOREM_WORKBENCH_ROOT = root;
     process.env.THEOREM_ALLOW_CODE_RUN = "1";
     delete process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN;
     await handleTheoremWorkspaceInit({ name: "MCP Code Sandbox Gate Lab" });
+    const status = handleTheoremCodeSandboxStatus().status;
+
+    if (status.available) {
+      const result = await handleTheoremCodeRun({
+        purpose: "Run only with a measured OS sandbox.",
+        command: process.execPath,
+        args: ["-e", "console.log('sandbox-required')"],
+        outputRefs: ["stdout"],
+        policy: {
+          allowedExecutables: [process.execPath],
+          requireSandbox: true
+        }
+      });
+
+      expect(result.error).toBe(false);
+      expect(result.result.record.policy.sandbox.required).toBe(true);
+      expect(result.result.record.privacy.networkAccess).toBe("none");
+      expect(result.result.record.stdout.text.trim()).toBe("sandbox-required");
+      return;
+    }
 
     await expect(
       handleTheoremCodeRun({
@@ -1066,7 +1092,7 @@ describe("MCP tool handlers", () => {
           requireSandbox: true
         }
       })
-    ).rejects.toThrow("requires an OS-enforced sandbox");
+    ).rejects.toThrow("requires a measured sandbox provider");
   });
 
   it("blocks risky code-run commands through the MCP handler by default", async () => {

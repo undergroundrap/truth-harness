@@ -445,9 +445,18 @@ describe("Theorem MCP server", () => {
         arguments: {}
       });
       const codeSandboxStatusText = firstText(codeSandboxStatus.content);
-      expect(codeSandboxStatus.isError).toBe(true);
+      const codeSandboxStatusJson = JSON.parse(codeSandboxStatusText) as {
+        status: { available: boolean; provider: string; canAttestNetworkNone: boolean };
+      };
+      expect(codeSandboxStatus.isError).toBe(!codeSandboxStatusJson.status.available);
       expect(codeSandboxStatusText).toContain("\"schemaVersion\": \"theorem.code-run-sandbox-status.v0\"");
-      expect(codeSandboxStatusText).toContain("\"canAttestNetworkNone\": false");
+      if (codeSandboxStatusJson.status.available) {
+        expect(codeSandboxStatusJson.status.provider).toBe("container");
+        expect(codeSandboxStatusJson.status.canAttestNetworkNone).toBe(true);
+      } else {
+        expect(codeSandboxStatusJson.status.provider).toBe("none");
+        expect(codeSandboxStatusJson.status.canAttestNetworkNone).toBe(false);
+      }
 
       const codeRunResult = await client.callTool({
         name: "theorem_code_run",

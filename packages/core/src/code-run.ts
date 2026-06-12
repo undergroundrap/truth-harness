@@ -758,7 +758,7 @@ function evaluateCodeRunPolicy(
   }
 
   if (input.requireSandbox === true && !sandboxMeasurement.available) {
-    blockedReasons.push("Code execution requires an OS-enforced sandbox, but no code-run sandbox provider is available.");
+    blockedReasons.push("Code execution requires a measured sandbox provider, but no code-run sandbox provider is available.");
   }
 
   if (categories.includes("shell-launcher") && input.allowShellLauncher !== true) {
@@ -908,9 +908,14 @@ function policyNotesFor(input: {
   sandboxMeasurement: CodeRunSandboxMeasurement;
 }): string[] {
   const notes = [
-    "The default local execution policy is default-deny for executables and also blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden.",
-    "Executable allowlists and command-name checks are not a security sandbox; unsandboxed runs record network access as unknown."
+    "The default local execution policy is default-deny for executables and also blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden."
   ];
+
+  if (input.sandboxMeasurement.canAttestNetworkNone) {
+    notes.push("A measured sandbox provider attested a network-denied execution boundary for this run.");
+  } else {
+    notes.push("Executable allowlists and command-name checks are not a security sandbox; unsandboxed runs record network access as unknown.");
+  }
 
   if (input.allowedExecutables.length > 0) {
     notes.push(`Executable allowlist applied: ${input.allowedExecutables.join(", ")}.`);
@@ -921,11 +926,11 @@ function policyNotesFor(input: {
   }
 
   if (input.sandboxRequired) {
-    notes.push("This run required an OS-enforced sandbox.");
+    notes.push("This run required a measured sandbox provider.");
   }
 
   if (!input.sandboxMeasurement.available) {
-    notes.push("No OS-enforced code-run sandbox provider was available for this run.");
+    notes.push("No measured code-run sandbox provider was available for this run.");
   }
 
   if (input.categories.includes("shell-launcher")) {
