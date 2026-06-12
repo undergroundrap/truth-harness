@@ -131,6 +131,7 @@ const receiptStore = new Map(Object.entries(seedReceipts));
 const recentReceiptKeys = ["rational", "parity", "dimension"];
 const ACTIVITY_PAGE_SIZE = 12;
 const NOTES_STORAGE_KEY = "theorem-workbench.session-notes.v0";
+const RESEARCHER_NAME_STORAGE_KEY = "theorem-workbench.researcher-name.v0";
 const SIDEBAR_WIDTH_STORAGE_KEY = "theorem-workbench.sidebar-width.v0";
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "theorem-workbench.sidebar-collapsed.v0";
 const SIDEBAR_DEFAULT_WIDTH = 300;
@@ -154,7 +155,10 @@ const state = {
 const appShell = document.querySelector("#app-shell");
 const sidebar = document.querySelector("#sidebar");
 const sidebarToggle = document.querySelector("#sidebar-toggle");
+const sidebarRestore = document.querySelector("#sidebar-restore");
 const sidebarResizer = document.querySelector("#sidebar-resizer");
+const researcherNameInput = document.querySelector("#researcher-name-input");
+const researcherNameSummary = document.querySelector("#researcher-name-summary");
 const claimList = document.querySelector("#claim-list");
 const sidebarSearch = document.querySelector("#sidebar-search");
 const sidebarSearchCount = document.querySelector("#sidebar-search-count");
@@ -187,9 +191,12 @@ const surfacePanels = document.querySelectorAll("[data-surface-panel]");
 const surfaceStatus = document.querySelector("#surface-status");
 const runbookObjective = document.querySelector("#runbook-objective");
 const runbookMode = document.querySelector("#runbook-mode");
+const runbookStandard = document.querySelector("#runbook-standard");
 const runbookStopRule = document.querySelector("#runbook-stop-rule");
+const runbookNextCommand = document.querySelector("#runbook-next-command");
 const runbookLoop = document.querySelector("#runbook-loop");
 const runbookLedger = document.querySelector("#runbook-ledger");
+const runbookStopRules = document.querySelector("#runbook-stop-rules");
 const runbookPacket = document.querySelector("#runbook-packet");
 const copyRunbookButton = document.querySelector("#copy-runbook");
 const downloadRunbookButton = document.querySelector("#download-runbook");
@@ -346,7 +353,7 @@ const runbookLedgerItems = [
   "snapshots: workspace state after meaningful changes so future agents can reproduce the path",
   "checkpoints: decisions, failed attempts, unresolved gaps, next checks, and claim-language changes"
 ];
-const runbookStopRules = [
+const universalRunbookStopRules = [
   "No final claim may outrun the strongest satisfied verification gate.",
   "No biomedical, safety, legal, financial, or patent conclusion may be presented without expert review.",
   "No hosted-model call is allowed without an inspectable context packet and disclosure record.",
@@ -725,6 +732,8 @@ let sidebarResizeStartX = 0;
 let sidebarResizeStartWidth = SIDEBAR_DEFAULT_WIDTH;
 
 researchNotes.value = loadNotes();
+researcherNameInput.value = loadResearcherName();
+updateResearcherNameSummary();
 initSidebarLayout();
 updateNotesStatus("local draft");
 addActivity("system", "Workbench opened", "Static shell loaded; no external service contacted.", "passed");
@@ -905,10 +914,13 @@ function renderRunbook(receipt) {
 
   const packet = createRunbookPacket(receipt);
   runbookObjective.textContent = packet.objective;
-  runbookMode.textContent = `${packet.lane} lane - ${packet.protocol}`;
-  runbookStopRule.textContent = packet.stopRules[0];
+  runbookMode.textContent = `${packet.lane} lane`;
+  runbookStandard.textContent = packet.claimStandard;
+  runbookStopRule.textContent = packet.nextAction;
+  runbookNextCommand.textContent = packet.commands.next;
   runbookLoop.innerHTML = packet.loop.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
   runbookLedger.innerHTML = packet.ledger.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  runbookStopRules.innerHTML = packet.stopRules.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   runbookPacket.textContent = formatRunbookPacket(packet);
 }
 
@@ -922,12 +934,14 @@ function createRunbookPacket(receipt) {
 
   return {
     schemaVersion: "theorem.agent-runbook.v0",
-    objective: `Investigate "${receipt.title}" without overclaiming beyond verified evidence.`,
+    objective: protocol.title,
     lane: protocol.name,
     protocol: protocol.title,
+    claimStandard: protocol.claimStandard,
     currentClaim: receipt.title,
     currentTrust: receipt.trust,
     currentRunId: receipt.runId,
+    nextAction: nextAction?.description ?? "Prepare a narrow reviewer packet with no unchecked claims.",
     privacy: {
       default: "local-first",
       modelCalls: "explicit context packets only",
@@ -952,9 +966,12 @@ function createRunbookPacket(receipt) {
       command: row.command,
       nextCheck: row.description
     })),
-    loop: runbookLoopSteps,
-    ledger: runbookLedgerItems,
-    stopRules: runbookStopRules,
+    loop: protocol.verificationGates,
+    ledger: protocol.acceptedEvidence,
+    universalLoop: runbookLoopSteps,
+    requiredLedger: runbookLedgerItems,
+    stopRules: [...protocol.reviewBoundary, ...universalRunbookStopRules].slice(0, 4),
+    deliverables: protocol.deliverables,
     finalArtifact: "Export a reviewer packet with report markdown, activity log, receipts, model-context packets, source citations, validation gaps, and replay commands."
   };
 }
@@ -971,8 +988,11 @@ function formatRunbookPacket(packet) {
     `Objective: ${packet.objective}`,
     `Lane: ${packet.lane}`,
     `Protocol: ${packet.protocol}`,
+    `Claim standard: ${packet.claimStandard}`,
+    `Current claim: ${packet.currentClaim}`,
     `Current trust: ${packet.currentTrust}`,
     `Run ID: ${packet.currentRunId}`,
+    `Next action: ${packet.nextAction}`,
     "",
     "## Privacy",
     `- Default: ${packet.privacy.default}`,
@@ -994,11 +1014,20 @@ function formatRunbookPacket(packet) {
     "## Open Gates",
     openGateLines,
     "",
-    "## Recursive Loop",
+    "## Lane Work Pattern",
     ...packet.loop.map((step, index) => `${index + 1}. ${step}`),
     "",
-    "## Required Ledger",
+    "## Grounded Evidence",
     ...packet.ledger.map((item) => `- ${item}`),
+    "",
+    "## Universal Agent Harness",
+    ...packet.universalLoop.map((step, index) => `${index + 1}. ${step}`),
+    "",
+    "## Required Ledger",
+    ...packet.requiredLedger.map((item) => `- ${item}`),
+    "",
+    "## Deliverables",
+    ...packet.deliverables.map((item) => `- ${item}`),
     "",
     "## Stop Rules",
     ...packet.stopRules.map((rule) => `- ${rule}`),
@@ -1436,6 +1465,26 @@ function loadNotes() {
   }
 }
 
+function loadResearcherName() {
+  return readStorageValue(RESEARCHER_NAME_STORAGE_KEY) ?? "";
+}
+
+function currentResearcherName() {
+  const name = researcherNameInput.value.trim();
+  return name || "Unsigned researcher";
+}
+
+function updateResearcherNameSummary() {
+  researcherNameSummary.textContent = currentResearcherName();
+}
+
+function saveResearcherName() {
+  const name = researcherNameInput.value.trim();
+  writeStorageValue(RESEARCHER_NAME_STORAGE_KEY, name);
+  updateResearcherNameSummary();
+  renderReport(receiptStore.get(state.receiptKey));
+}
+
 function initSidebarLayout() {
   const savedCollapsed = readStorageValue(SIDEBAR_COLLAPSED_STORAGE_KEY);
   const shouldAutoCollapse = savedCollapsed === null && window.innerWidth <= 1120;
@@ -1494,6 +1543,7 @@ function setSidebarCollapsed(collapsed, options = {}) {
   sidebarToggle.setAttribute("aria-pressed", String(collapsed));
   sidebarToggle.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
   sidebarToggle.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+  sidebarRestore.hidden = !collapsed;
 
   if (persist) {
     writeStorageValue(SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
@@ -1581,6 +1631,7 @@ function renderReport(receipt) {
   const protocol = currentLaneProtocol();
   const routes = agentRouteCommands(receipt);
   const runbook = createRunbookPacket(receipt);
+  const researcher = currentResearcherName();
   const matrixItems = verificationRows(receipt)
     .map((row) => `<li><strong>${escapeHtml(row.label)}</strong>: ${escapeHtml(statusLabel(row.status))} - <code>${escapeHtml(row.command)}</code></li>`)
     .join("");
@@ -1603,6 +1654,7 @@ function renderReport(receipt) {
     <header>
       <h2>${escapeHtml(receipt.title)}</h2>
       <p>${escapeHtml(receipt.subtitle)}</p>
+      <p>Researcher: ${escapeHtml(researcher)}. Agent/tooling: Theorem Workbench local evidence session.</p>
     </header>
     <div class="report-math">${renderMathInline(mathInput ?? receipt.title)} <span>&rarr;</span> ${renderMathInline(mathOutput ?? receipt.output)}</div>
     <dl class="report-facts">
@@ -1610,6 +1662,7 @@ function renderReport(receipt) {
       <div><dt>Output</dt><dd>${escapeHtml(receipt.output)}</dd></div>
       <div><dt>Engine</dt><dd>${escapeHtml(receipt.engine)}</dd></div>
       <div><dt>Run</dt><dd>${escapeHtml(receipt.runId)}</dd></div>
+      <div><dt>Researcher</dt><dd>${escapeHtml(researcher)}</dd></div>
       <div><dt>Replay</dt><dd><code>${escapeHtml(receipt.replay)}</code></dd></div>
     </dl>
     <h3>Agent Routes</h3>
@@ -1653,6 +1706,7 @@ function generateReportMarkdown(receipt) {
   const protocol = currentLaneProtocol();
   const routes = agentRouteCommands(receipt);
   const runbook = createRunbookPacket(receipt);
+  const researcher = currentResearcherName();
   const matrix = verificationRows(receipt);
   const notes = researchNotes.value.trim() || "No local notes added yet.";
   const mathInput = receipt.math?.input ?? receipt.title;
@@ -1661,6 +1715,12 @@ function generateReportMarkdown(receipt) {
     `# ${receipt.title}`,
     "",
     `Summary: ${receipt.subtitle}`,
+    "",
+    "## Authorship and Session Identity",
+    "",
+    `- Human researcher: ${researcher}`,
+    "- Agent/tooling: Theorem Workbench local evidence session",
+    "- Identity storage: local browser storage; include stronger signatures before public or legal use",
     "",
     "## Math View",
     "",
@@ -1898,11 +1958,18 @@ sidebarToggle.addEventListener("click", () => {
   addActivity("human", collapsed ? "Collapsed navigation" : "Expanded navigation", "Researcher workspace layout changed locally.", "passed");
 });
 
+sidebarRestore.addEventListener("click", () => {
+  setSidebarCollapsed(false);
+  addActivity("human", "Expanded navigation", "Researcher workspace layout changed locally.", "passed");
+});
+
 sidebarResizer.addEventListener("pointerdown", beginSidebarResize);
 sidebarResizer.addEventListener("pointermove", updateSidebarResize);
 sidebarResizer.addEventListener("pointerup", endSidebarResize);
 sidebarResizer.addEventListener("pointercancel", endSidebarResize);
 sidebarResizer.addEventListener("keydown", handleSidebarResizerKey);
+
+researcherNameInput.addEventListener("input", saveResearcherName);
 
 claimList.addEventListener("click", (event) => {
   const button = event.target.closest(".claim-row");

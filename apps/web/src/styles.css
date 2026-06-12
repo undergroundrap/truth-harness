@@ -68,6 +68,10 @@ button {
   color: inherit;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .app-shell {
   --sidebar-width: 300px;
   display: grid;
@@ -80,7 +84,7 @@ button {
 }
 
 .app-shell.sidebar-collapsed {
-  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-columns: 0 minmax(0, 1fr);
 }
 
 .sidebar {
@@ -197,7 +201,12 @@ button {
 }
 
 .app-shell.sidebar-collapsed .sidebar {
-  padding-inline: 6px;
+  visibility: hidden;
+  width: 0;
+  max-width: 0;
+  border-right: 0;
+  pointer-events: none;
+  padding: 0;
 }
 
 .app-shell.sidebar-collapsed .nav-item,
@@ -228,6 +237,7 @@ button {
 .app-shell.sidebar-collapsed .claim-row span:last-child,
 .app-shell.sidebar-collapsed .section-label,
 .app-shell.sidebar-collapsed .sidebar-footer,
+.app-shell.sidebar-collapsed .top-strip,
 .app-shell.sidebar-collapsed .sidebar-resizer {
   display: none;
 }
@@ -431,6 +441,85 @@ button {
   padding-top: 10px;
 }
 
+.identity-panel {
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: #141414;
+  padding: 0;
+}
+
+.identity-panel summary {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  cursor: pointer;
+  list-style: none;
+  padding: 8px 9px;
+}
+
+.identity-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-symbol {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.identity-panel strong,
+.identity-panel small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity-panel strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.identity-panel small,
+.identity-panel label,
+.identity-panel p {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.identity-panel label {
+  display: block;
+  padding: 2px 10px 5px;
+}
+
+.identity-panel input {
+  width: calc(100% - 20px);
+  min-width: 0;
+  height: 30px;
+  margin: 0 10px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  outline: none;
+  background: #0f0f0f;
+  color: var(--text);
+  padding: 0 9px;
+}
+
+.identity-panel p {
+  margin: 0;
+  padding: 0 10px 10px;
+  line-height: 1.35;
+}
+
 .workspace {
   position: relative;
   display: flex;
@@ -450,6 +539,19 @@ button {
   gap: 18px;
   border-bottom: 1px solid var(--line-soft);
   padding: 0 18px;
+}
+
+.workspace-title-group {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.sidebar-restore {
+  flex: 0 0 auto;
+  border: 1px solid var(--line-soft);
+  background: #171717;
 }
 
 h1,
@@ -751,7 +853,31 @@ h1 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   flex: 0 0 auto;
-  margin-bottom: 12px;
+  margin-bottom: 0;
+}
+
+.run-command-strip {
+  margin-top: 8px;
+}
+
+.run-command-details,
+.runbook-packet-card {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  margin-top: 10px;
+  padding: 0;
+}
+
+.run-command-details summary,
+.runbook-packet-card summary {
+  cursor: pointer;
+  color: #f2eadc;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 10px 12px;
 }
 
 .route-pill {
@@ -824,7 +950,7 @@ h1 {
 }
 
 #surface-runbook.active {
-  overflow: auto hidden;
+  overflow: auto;
   padding-right: 2px;
 }
 
@@ -988,13 +1114,14 @@ dd {
 
 .runbook-hero {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  grid-template-columns: minmax(0, 1.45fr) minmax(220px, 0.75fr);
   gap: 10px;
   flex: 0 0 auto;
-  margin-bottom: 10px;
+  margin-bottom: 0;
 }
 
-.runbook-hero > div,
+.runbook-brief,
+.runbook-next,
 .runbook-card {
   min-width: 0;
   border: 1px solid var(--line-soft);
@@ -1002,24 +1129,56 @@ dd {
   background: #121212;
 }
 
-.runbook-hero > div {
+.runbook-brief,
+.runbook-next {
   padding: 12px;
+}
+
+.runbook-brief h4 {
+  color: #f4eddf;
+  font-size: 15px;
+  margin: 6px 0;
+}
+
+.runbook-brief p {
+  color: #d8d2c8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.runbook-next {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .runbook-hero strong {
   display: block;
   min-width: 0;
-  overflow: hidden;
   color: #f1eadc;
   font-size: 13px;
   margin-top: 5px;
+  line-height: 1.35;
+}
+
+.runbook-next code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0f0f0f;
+  color: #eadfca;
+  padding: 7px 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
 .runbook-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
   gap: 10px;
   min-height: 0;
@@ -1028,14 +1187,13 @@ dd {
 .runbook-card {
   display: flex;
   flex-direction: column;
-  min-height: 220px;
+  min-height: 190px;
   overflow: hidden;
   padding: 13px 14px;
 }
 
-.runbook-packet-card {
-  grid-column: 1 / -1;
-  min-height: 240px;
+.runbook-card-wide {
+  grid-column: span 1;
 }
 
 .runbook-card ol,
@@ -1056,11 +1214,12 @@ dd {
 #runbook-packet {
   flex: 1 1 auto;
   min-height: 0;
-  max-height: 340px;
+  max-height: 260px;
   overflow: auto;
   white-space: pre-wrap;
-  border: 1px solid var(--line-soft);
-  border-radius: 7px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0 0 8px 8px;
   background: #0f0f0f;
   color: #e6dfce;
   padding: 10px;
@@ -1068,7 +1227,11 @@ dd {
   font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
-@container (max-width: 620px) {
+@container (max-width: 760px) {
+  .runbook-grid {
+    grid-template-columns: 1fr;
+  }
+
   .runbook-card,
   .runbook-packet-card {
     min-height: 0;
@@ -1076,6 +1239,12 @@ dd {
 
   #runbook-packet {
     max-height: 280px;
+  }
+}
+
+@container (max-width: 560px) {
+  .runbook-hero {
+    grid-template-columns: 1fr;
   }
 }
 

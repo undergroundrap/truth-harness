@@ -10,7 +10,7 @@
     <div class="app-shell" id="app-shell">
       <aside class="sidebar" id="sidebar" aria-label="Workspace navigation">
         <div class="top-strip">
-          <button class="icon-button" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-pressed="false">[]</button>
+          <button class="icon-button" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-pressed="false">&lt;</button>
           <button class="icon-button" aria-label="Back">&lt;</button>
           <button class="icon-button muted-icon" aria-label="Forward">&gt;</button>
         </div>
@@ -107,18 +107,32 @@
         </section>
 
         <div class="sidebar-footer">
-          <button class="nav-item" type="button"><span>!</span> Local only</button>
+          <details class="identity-panel" id="identity-panel">
+            <summary>
+              <span class="settings-symbol">@</span>
+              <span>
+                <strong id="researcher-name-summary">Unsigned researcher</strong>
+                <small>Settings, about, identity</small>
+              </span>
+            </summary>
+            <label for="researcher-name-input">Researcher name</label>
+            <input id="researcher-name-input" type="text" autocomplete="name" placeholder="Your name">
+            <p>Stored locally. Printed on reports as the human researcher attached to this session.</p>
+          </details>
         </div>
         <div class="sidebar-resizer" id="sidebar-resizer" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin="220" aria-valuemax="420" aria-valuenow="300" tabindex="0"></div>
       </aside>
 
       <main class="workspace">
         <header class="workspace-header">
-          <div>
-            <h1>Theorem Workbench</h1>
-            <div class="header-subline">
-              <p>Local evidence session</p>
-              <span class="lane-status" id="lane-status">Math lane</span>
+          <div class="workspace-title-group">
+            <button class="icon-button sidebar-restore" id="sidebar-restore" type="button" aria-label="Expand sidebar" hidden>&gt;</button>
+            <div>
+              <h1>Theorem Workbench</h1>
+              <div class="header-subline">
+                <p>Local evidence session</p>
+                <span class="lane-status" id="lane-status">Math lane</span>
+              </div>
             </div>
           </div>
           <div class="header-actions">
@@ -174,25 +188,6 @@
                 </div>
               </div>
 
-              <section class="agent-route-strip" aria-label="Agent and CLI coverage">
-                <div class="route-pill route-primary">
-                  <span id="route-lane">Math lane</span>
-                  <strong id="route-protocol">Proof and Computation Review</strong>
-                </div>
-                <div class="route-pill">
-                  <span>Receipt</span>
-                  <code id="route-receipt">theorem ask --json</code>
-                </div>
-                <div class="route-pill">
-                  <span>Replay</span>
-                  <code id="route-replay">theorem replay</code>
-                </div>
-                <div class="route-pill">
-                  <span>Report</span>
-                  <code id="route-report">theorem render</code>
-                </div>
-              </section>
-
               <section class="surface-panel active" id="surface-trace" role="tabpanel" aria-labelledby="tab-trace" data-surface-panel="trace" tabindex="0" aria-label="Trace">
                 <div class="panel-heading">
                   <h3>Trace</h3>
@@ -208,40 +203,63 @@
 
               <section class="surface-panel" id="surface-runbook" role="tabpanel" aria-labelledby="tab-runbook" data-surface-panel="runbook" tabindex="0" aria-label="Agent runbook" hidden>
                 <div class="panel-heading">
-                  <h3>Agent Runbook</h3>
+                  <h3>Lane Work Template</h3>
                   <div class="activity-actions" aria-label="Runbook actions">
                     <button class="text-button compact-button" id="copy-runbook" type="button">Copy packet</button>
                     <button class="text-button compact-button" id="download-runbook" type="button">Download</button>
                   </div>
                 </div>
                 <div class="runbook-hero">
-                  <div>
-                    <span class="mini-label">Objective</span>
-                    <strong id="runbook-objective">Turn the current claim into replayable evidence.</strong>
-                  </div>
-                  <div>
-                    <span class="mini-label">Harness mode</span>
-                    <strong id="runbook-mode">recursive local-first review</strong>
-                  </div>
-                  <div>
-                    <span class="mini-label">Stop rule</span>
-                    <strong id="runbook-stop-rule">no unchecked final claims</strong>
-                  </div>
+                  <section class="runbook-brief">
+                    <span class="mini-label" id="runbook-mode">Math lane</span>
+                    <h4 id="runbook-objective">Proof and Computation Review</h4>
+                    <p id="runbook-standard">Ground every result in reproducible evidence.</p>
+                  </section>
+                  <section class="runbook-next">
+                    <span class="mini-label">Next grounded action</span>
+                    <strong id="runbook-stop-rule">Run the smallest relevant verifier.</strong>
+                    <code id="runbook-next-command">theorem ask --json</code>
+                  </section>
                 </div>
                 <div class="runbook-grid">
-                  <section class="runbook-card">
-                    <h4>Recursive Loop</h4>
+                  <section class="runbook-card runbook-card-wide">
+                    <h4>Work Pattern</h4>
                     <ol id="runbook-loop"></ol>
                   </section>
                   <section class="runbook-card">
-                    <h4>Evidence Ledger</h4>
+                    <h4>Grounded Evidence</h4>
                     <ul id="runbook-ledger"></ul>
                   </section>
-                  <section class="runbook-card runbook-packet-card">
-                    <h4>Agent Packet</h4>
-                    <pre id="runbook-packet" aria-label="Agent packet"></pre>
+                  <section class="runbook-card">
+                    <h4>Stop Conditions</h4>
+                    <ul id="runbook-stop-rules"></ul>
                   </section>
                 </div>
+                <details class="runbook-packet-card">
+                  <summary>Agent packet preview</summary>
+                  <pre id="runbook-packet" aria-label="Agent packet"></pre>
+                </details>
+                <details class="run-command-details">
+                  <summary>CLI and agent routes</summary>
+                  <section class="agent-route-strip run-command-strip" aria-label="Agent and CLI coverage">
+                    <div class="route-pill route-primary">
+                      <span id="route-lane">Math lane</span>
+                      <strong id="route-protocol">Proof and Computation Review</strong>
+                    </div>
+                    <div class="route-pill">
+                      <span>Receipt</span>
+                      <code id="route-receipt">theorem ask --json</code>
+                    </div>
+                    <div class="route-pill">
+                      <span>Replay</span>
+                      <code id="route-replay">theorem replay</code>
+                    </div>
+                    <div class="route-pill">
+                      <span>Report</span>
+                      <code id="route-report">theorem render</code>
+                    </div>
+                  </section>
+                </details>
               </section>
 
               <section class="surface-panel" id="surface-checks" role="tabpanel" aria-labelledby="tab-checks" data-surface-panel="checks" tabindex="0" aria-label="Verification checks" hidden>
