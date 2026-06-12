@@ -397,10 +397,10 @@ const verificationGateCatalog = [
   {
     id: "independent-cas",
     label: "Independent CAS / proof escalation",
-    command: "theorem proof check / theorem smt check",
+    command: "theorem cas backends / theorem proof check / theorem smt check",
     description: "Same-engine symbolic sanity checks are useful, but stronger claims need a second CAS, SMT result, or proof-checker artifact.",
     applies: (receipt) => state.lane === "math" || /symbolic|cas|polynomial|equation|algebra/u.test(`${receipt.title} ${receipt.engine}`),
-    status: (receipt) => ["cross-checked", "smt-checked", "proved"].includes(receipt.trust) ? "passed" : "waiting"
+    status: (receipt) => ["cross-checked", "smt-checked", "proved"].includes(receipt.trust) || /maxima:passed/u.test(receipt.details["Independent CAS"] ?? "") ? "passed" : "waiting"
   },
   {
     id: "smt",
@@ -3204,6 +3204,7 @@ function receiptToViewModel(receipt) {
   const traces = trace ? tracesFromArithmeticArtifact(trace) : tracesFromReceipt(receipt);
   const backendTags = receipt.evidenceProfile.backends.map((item) => item.id).filter(Boolean);
   const symbolicArtifact = parseJsonArtifact(receipt, "symbolic-computation-result");
+  const independentCasArtifact = parseJsonArtifact(receipt, "independent-cas-check");
   const details = {
     "Evidence kind": receipt.evidenceProfile.kind,
     Backend: receipt.evidenceProfile.backends.map((item) => item.id).join(", ") || "none",
@@ -3219,6 +3220,12 @@ function receiptToViewModel(receipt) {
     details["CAS checks"] = symbolicArtifact.checks
       .map((check) => `${check.id}:${check.status}`)
       .join(", ");
+  }
+  if (independentCasArtifact?.status) {
+    details["Independent CAS"] = `maxima:${independentCasArtifact.status}`;
+  }
+  if (independentCasArtifact?.residual) {
+    details["CAS residual"] = String(independentCasArtifact.residual);
   }
 
   return {

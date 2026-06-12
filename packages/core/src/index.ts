@@ -194,6 +194,10 @@ export {
 export { validateWorkspaceArtifacts } from "./workspace-validation.js";
 export { proveUniversalParity } from "./parity-proof.js";
 export {
+  checkSymbolicWithMaximaSync,
+  getCasBackendStatus
+} from "./cas-backend.js";
+export {
   checkLeanProofArtifact,
   getProofBackendStatus,
   listLeanProofChecks,
@@ -462,6 +466,18 @@ export type {
   ParityResidueCase
 } from "./parity-proof.js";
 export type {
+  CasBackendCommandResult,
+  CasBackendCommandRunner,
+  CasBackendId,
+  CasBackendProbe,
+  CasBackendStatus,
+  CasBackendStatusOptions,
+  CasBackendStatusReport,
+  SymbolicCasCheckInput,
+  SymbolicCasCheckResult,
+  SymbolicCasCheckStatus
+} from "./cas-backend.js";
+export type {
   ProofBackendCommandResult,
   ProofBackendCommandRunner,
   ProofBackendId,
@@ -506,6 +522,7 @@ export type {
 } from "./smt-problem.js";
 export type { SympyCheckAggregateStatus } from "./sympy-check.js";
 export type { SymbolicPrompt, SympyCheck, SympyFailure, SympyOperation, SympyResult, SympySuccess } from "./sympy.js";
+export type { CreateReceiptOptions } from "./receipt.js";
 export type { ReceiptRenderFormat } from "./receipt-renderer.js";
 export type { ClaimBlock, ClaimCheck, ClaimFileCheck } from "./claim-file.js";
 export type {

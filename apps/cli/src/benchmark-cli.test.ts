@@ -12,6 +12,32 @@ afterEach(async () => {
 });
 
 describe("benchmark CLI", () => {
+  it("reports CAS backend status without requiring Maxima to be installed", async () => {
+    const result = await runCli([
+      "cas",
+      "backends",
+      "--maxima-command",
+      "theorem-workbench-missing-maxima-command",
+      "--json"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      casBackendsAvailable: number;
+      backends: Array<{ backendId: string; status: string; canCheckSymbolic: boolean; statusProbeMintedCheck: boolean }>;
+      trustBoundary: { statusProbeIsNotCheck: boolean; crossCheckedRequiresIndependentRun: boolean };
+    };
+
+    expect(result.exitCode).toBe(0);
+    expect(json.casBackendsAvailable).toBe(0);
+    expect(json.backends[0]).toMatchObject({
+      backendId: "maxima",
+      status: "missing",
+      canCheckSymbolic: false,
+      statusProbeMintedCheck: false
+    });
+    expect(json.trustBoundary.statusProbeIsNotCheck).toBe(true);
+    expect(json.trustBoundary.crossCheckedRequiresIndependentRun).toBe(true);
+  });
+
   it("reports proof backend status without requiring Lean to be installed", async () => {
     const result = await runCli([
       "proof",

@@ -78,7 +78,7 @@ function runTask(task: BenchmarkTask): BenchmarkTaskResult {
   const receipt = createReceipt(task.prompt);
   const failures: string[] = [];
 
-  if (receipt.trust !== task.expectTrust) {
+  if (!trustSatisfiesExpectation(receipt.trust, task.expectTrust)) {
     failures.push(`Expected trust ${task.expectTrust}, received ${receipt.trust}`);
   }
 
@@ -92,6 +92,14 @@ function runTask(task: BenchmarkTask): BenchmarkTaskResult {
     passed: failures.length === 0,
     failures
   };
+}
+
+function trustSatisfiesExpectation(actual: TrustLabel, expected: TrustLabel): boolean {
+  if (actual === expected) {
+    return true;
+  }
+
+  return expected === "exact-computed" && actual === "cross-checked";
 }
 
 function parseBenchmarkTask(raw: unknown, index: number): BenchmarkTask {

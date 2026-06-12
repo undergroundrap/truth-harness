@@ -77,6 +77,7 @@ describe("Theorem MCP server", () => {
         "theorem_benchmark_compare",
         "theorem_benchmark_list",
         "theorem_benchmark_run",
+        "theorem_cas_backends",
         "theorem_claim_add",
         "theorem_claim_chart",
         "theorem_claim_chart_list",
@@ -143,6 +144,18 @@ describe("Theorem MCP server", () => {
       expect(result.isError).toBe(false);
       const text = firstText(result.content);
       expect(text).toContain("\"trust\": \"refuted\"");
+
+      const casBackends = await client.callTool({
+        name: "theorem_cas_backends",
+        arguments: {
+          maximaCommand: "theorem-workbench-missing-maxima-command",
+          timeoutMs: 1000
+        }
+      });
+      const casBackendText = firstText(casBackends.content);
+      expect(casBackendText).toContain("\"schemaVersion\": \"theorem.cas-backends.v0\"");
+      expect(casBackendText).toContain("\"backendId\": \"maxima\"");
+      expect(casBackendText).toContain("\"statusProbeIsNotCheck\": true");
 
       const proofBackends = await client.callTool({
         name: "theorem_proof_backends",

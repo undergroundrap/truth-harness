@@ -22,6 +22,7 @@ import {
   createSimulationLogEntry,
   createSourceCitationReceipt,
   createValidationPlan,
+  getCasBackendStatus,
   isClaimLedgerDomain,
   isClaimLedgerStatus,
   getCodeRunSandboxStatus,
@@ -92,6 +93,7 @@ import {
   type ClaimLedgerRecord,
   type ClaimLedgerStatus,
   type ClaimLedgerWriteResult,
+  type CasBackendStatusReport,
   type CodeRunPolicyInput,
   type CodeRunSandboxStatus,
   type CodeRunSummary,
@@ -240,6 +242,11 @@ export interface TheoremBenchmarkCompareInput {
 
 export interface TheoremBenchmarkListInput {
   workspacePath?: string;
+}
+
+export interface TheoremCasBackendsInput {
+  timeoutMs?: number;
+  maximaCommand?: string;
 }
 
 export interface TheoremProofBackendsInput {
@@ -927,6 +934,13 @@ export async function handleTheoremBenchmarkList(input: TheoremBenchmarkListInpu
     total: artifacts.length,
     artifacts
   };
+}
+
+export function handleTheoremCasBackends(input: TheoremCasBackendsInput): CasBackendStatusReport {
+  return getCasBackendStatus({
+    maximaCommand: input.maximaCommand,
+    timeoutMs: input.timeoutMs
+  });
 }
 
 export function handleTheoremProofBackends(input: TheoremProofBackendsInput): ProofBackendStatusReport {

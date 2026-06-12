@@ -4,6 +4,7 @@ import { evaluateIntervalPrompt, parseIntervalPrompt, type IntervalPrompt } from
 import { proveUniversalParity } from "./parity-proof.js";
 import { Rational } from "./rational.js";
 import { createArithmeticTrace } from "./arithmetic-trace.js";
+import { checkSymbolicWithMaximaSync, type CasBackendCommandRunner } from "./cas-backend.js";
 import { stableHash } from "./stable-hash.js";
 import { summarizeSympyCheckStatus } from "./sympy-check.js";
 import { parseSymbolicPrompt, runSympySync, type SymbolicPrompt } from "./sympy.js";
@@ -24,7 +25,12 @@ interface UniversalParityClaim {
   parity: "even" | "odd";
 }
 
-export function createReceipt(problem: string): Receipt {
+export interface CreateReceiptOptions {
+  maximaCommand?: string;
+  casRunner?: CasBackendCommandRunner;
+}
+
+export function createReceipt(problem: string, options: CreateReceiptOptions = {}): Receipt {
   const createdAt = new Date().toISOString();
   const normalizedProblem = normalizeProblem(problem);
   const nodes: GraphNode[] = [];
@@ -86,6 +92,7 @@ export function createReceipt(problem: string): Receipt {
       problem,
       normalizedProblem,
       symbolicPrompt,
+      options,
       createdAt,
       nodes,
       edges,
@@ -305,6 +312,7 @@ function completeSymbolicReceipt(args: {
   problem: string;
   normalizedProblem: string;
   symbolicPrompt: SymbolicPrompt;
+  options: CreateReceiptOptions;
   createdAt: string;
   nodes: GraphNode[];
   edges: EvidenceEdge[];
@@ -369,7 +377,22 @@ function completeSymbolicReceipt(args: {
 
   const checks = result.checks ?? [];
   const checkStatus = summarizeSympyCheckStatus(checks);
-  const symbolicTrust: TrustLabel = checkStatus === "failed" ? "unverified" : "exact-computed";
+  const independentCasCheck = checkSymbolicWithMaximaSync({
+    prompt: args.symbolicPrompt,
+    result: result.result,
+    maximaCommand: args.options.maximaCommand,
+    runner: args.options.casRunner
+  });
+  const independentCasArtifact = addArtifact(args.artifacts, {
+    kind: "independent-cas-check",
+    mimeType: "application/json",
+    content: JSON.stringify(independentCasCheck, null, 2)
+  });
+  const symbolicTrust: TrustLabel = checkStatus === "failed" || independentCasCheck.status === "failed"
+    ? "unverified"
+    : independentCasCheck.status === "passed"
+      ? "cross-checked"
+      : "exact-computed";
   const artifactPayload = {
     adapter: "local-sympy-subprocess",
     operation: result.operation,
@@ -380,6 +403,8 @@ function completeSymbolicReceipt(args: {
     latex: result.latex,
     checks,
     checkStatus,
+    independentCasCheckRef: independentCasArtifact.id,
+    independentCasStatus: independentCasCheck.status,
     sympyVersion: result.sympyVersion,
     pythonCommand: result.pythonCommand
   };
@@ -409,9 +434,18 @@ function completeSymbolicReceipt(args: {
     payload: artifactPayload,
     trust: symbolicTrust,
     summary: `Symbolic ${result.operation} result is ${result.result}.`,
-    artifactRefs: [artifact.id]
+    artifactRefs: [artifact.id, independentCasArtifact.id]
   });
   args.edges.push({ from: toolNode.id, to: computationNode.id, label: "produced" });
+
+  const independentCasNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: independentCasCheck,
+    trust: independentCasCheck.trust,
+    summary: independentCasSummary(independentCasCheck.status),
+    artifactRefs: [independentCasArtifact.id]
+  });
+  args.edges.push({ from: computationNode.id, to: independentCasNode.id, label: "independently-checked-by" });
 
   args.findings.push({
     level: checkStatus === "failed" ? "warning" : "info",
@@ -421,15 +455,18 @@ function completeSymbolicReceipt(args: {
     level: "info",
     message: "SymPy sanity checks are same-engine checks using symbolic residuals and deterministic numeric samples; use a second CAS, SMT, or proof checker before stronger claims."
   });
+  args.findings.push(independentCasFinding(independentCasCheck.status));
 
   return buildReceipt({
     problem: args.problem,
     normalizedProblem: args.normalizedProblem,
     createdAt: args.createdAt,
     trust: symbolicTrust,
-    summary: checkStatus === "failed"
-      ? `SymPy ${result.operation} produced ${result.result}, but local sanity checks failed.`
-      : `SymPy ${result.operation} result: ${result.result}; local sanity checks ${checkStatus}.`,
+    summary: checkStatus === "failed" || independentCasCheck.status === "failed"
+      ? `SymPy ${result.operation} produced ${result.result}, but a symbolic check failed.`
+      : independentCasCheck.status === "passed"
+        ? `SymPy ${result.operation} result: ${result.result}; Maxima independently agreed.`
+        : `SymPy ${result.operation} result: ${result.result}; local sanity checks ${checkStatus}.`,
     evidenceProfile: {
       kind: "symbolic-cas",
       backends: [
@@ -439,15 +476,31 @@ function completeSymbolicReceipt(args: {
           version: result.sympyVersion,
           environment: { pythonCommand: result.pythonCommand },
           acceptedProofChecker: false
+        },
+        {
+          id: "local-maxima-symbolic-subprocess",
+          role: "cas",
+          version: independentCasCheck.backend.version ?? "unavailable",
+          environment: {
+            command: independentCasCheck.backend.command,
+            status: independentCasCheck.status
+          },
+          acceptedProofChecker: false
         }
       ],
       inputs: [result.operation, result.expression, ...(result.variable ? [`variable=${result.variable}`] : [])],
-      outputs: [result.result, `sanityChecks=${checkStatus}`, ...checks.map((check) => `${check.id}:${check.status}`)],
+      outputs: [
+        result.result,
+        `sanityChecks=${checkStatus}`,
+        `independentCas=maxima:${independentCasCheck.status}`,
+        ...checks.map((check) => `${check.id}:${check.status}`)
+      ],
       replayable: true,
       proofCheckerBacked: false,
       limitations: [
         "CAS output is exact computation, not a formal proof of arbitrary surrounding claims.",
-        "SymPy sanity checks are same-engine symbolic and numeric checks, not an independent CAS or proof-checker result."
+        "SymPy sanity checks are same-engine symbolic and numeric checks, not an independent CAS or proof-checker result.",
+        independentCasLimitation(independentCasCheck.status)
       ]
     },
     nodes: args.nodes,
@@ -455,6 +508,66 @@ function completeSymbolicReceipt(args: {
     artifacts: args.artifacts,
     findings: args.findings
   });
+}
+
+function independentCasSummary(status: string): string {
+  if (status === "passed") {
+    return "Maxima independently agreed with the symbolic result.";
+  }
+
+  if (status === "failed") {
+    return "Maxima disagreed with the symbolic result; the claim remains unverified.";
+  }
+
+  if (status === "solver-unavailable") {
+    return "Independent CAS cross-check could not run because Maxima is unavailable.";
+  }
+
+  return "Independent CAS cross-check could not produce a usable result.";
+}
+
+function independentCasFinding(status: string): Finding {
+  if (status === "passed") {
+    return {
+      level: "info",
+      message: "Independent CAS cross-check passed: Maxima agreed with the SymPy result. This supports `cross-checked`, not `proved`."
+    };
+  }
+
+  if (status === "failed") {
+    return {
+      level: "warning",
+      message: "Independent CAS cross-check failed: Maxima disagreed with the SymPy result, so the symbolic claim remains unverified."
+    };
+  }
+
+  if (status === "solver-unavailable") {
+    return {
+      level: "info",
+      message: "Independent CAS cross-check unavailable: install Maxima or set THEOREM_MAXIMA to enable a second-engine symbolic check."
+    };
+  }
+
+  return {
+    level: "warning",
+    message: "Independent CAS cross-check errored before producing a usable agreement result."
+  };
+}
+
+function independentCasLimitation(status: string): string {
+  if (status === "passed") {
+    return "Independent Maxima agreement supports `cross-checked`, but CAS agreement is still not proof-checker-backed proof.";
+  }
+
+  if (status === "failed") {
+    return "Independent Maxima disagreement leaves the symbolic result unverified until resolved by a human, SMT encoding, proof checker, or another trusted tool.";
+  }
+
+  if (status === "solver-unavailable") {
+    return "Independent CAS cross-check did not run because Maxima was unavailable.";
+  }
+
+  return "Independent CAS cross-check did not produce a parseable agreement result.";
 }
 
 function completeDimensionReceipt(args: {

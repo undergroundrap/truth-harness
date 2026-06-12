@@ -14,7 +14,7 @@ Theorem Workbench trust labels describe what local evidence currently supports. 
 | `smt-checked` | Z3 checked a concrete SMT-LIB artifact and returned a replayable `sat` or `unsat` result, with solver identity and output recorded. | This is solver evidence for the encoded constraints, not a Lean-style proof, not proof of the informal problem statement, and not evidence beyond the encoding. |
 | `dimension-checked` | Local dimensional analysis found consistent units/dimensions. | This checks units, not whether the equation or model is physically true. |
 | `source-cited` | Local retrieval found cited source material relevant to the claim. | Retrieval is not entailment; humans or stronger checks must decide whether the source actually supports the claim. |
-| `cross-checked` | Multiple independent trusted tools agree on a normalized result. | Planned until independent adapter agreement is implemented and recorded. |
+| `cross-checked` | Multiple independent trusted tools agree on a normalized result. | For symbolic CAS today, this requires a concrete independent Maxima agreement record in addition to the SymPy result. It is still not proof-checker-backed proof. |
 | `unverified` | The claim is unsupported, out of scope, or only partially checked. | This is a valid outcome and should be preserved instead of hidden. |
 | `refuted` | A counterexample, contradiction, mismatch, failed check, or solver model invalidates the claim under the stated assumptions. | Refutations should include the counterexample or failing evidence whenever possible. |
 
@@ -35,6 +35,8 @@ The local modular parity checker emits `exact-computed`, not `proved`. It can at
 When a satisfiable SMT check includes `(get-model)`, Theorem Workbench may parse Z3 `define-fun` bindings into structured JSON. Parsed model bindings are a convenience for review, replay, and follow-up constraints; the raw solver stdout remains part of the record, and the binding list is still only evidence about the encoded SMT-LIB artifact.
 
 Every receipt includes an `evidenceProfile` with the evidence kind, backend ids, backend roles, versions when available, inputs, outputs, replayability, proof-checker status, and limitations. Agents should read this field before relying on a trust label.
+
+Symbolic CAS receipts use SymPy as the primary local symbolic adapter. When Maxima is available through `THEOREM_MAXIMA` or `maxima`, Theorem also runs an independent symbolic equality check and may upgrade a symbolic result to `cross-checked` only when Maxima agrees. Missing Maxima, unparseable output, execution errors, or disagreement do not upgrade trust; a disagreement leaves the symbolic claim `unverified` until resolved by a stronger checker or human review.
 
 Receipt JSON is runtime-validated before replay, rendering, evidence audits, and discovery packages use it. Invalid or legacy receipt files must be treated as unresolved evidence, not downgraded-but-trusted claims.
 

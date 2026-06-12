@@ -7,6 +7,7 @@ import {
   handleTheoremBenchmarkCompare,
   handleTheoremBenchmarkList,
   handleTheoremBenchmarkRun,
+  handleTheoremCasBackends,
   handleTheoremClaimAdd,
   handleTheoremClaimChart,
   handleTheoremClaimChartList,
@@ -100,6 +101,22 @@ describe("MCP tool handlers", () => {
 
     expect(result.error).toBe(true);
     expect(result.receipt.trust).toBe("unverified");
+  });
+
+  it("reports local CAS backend readiness for agents", () => {
+    const result = handleTheoremCasBackends({
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      timeoutMs: 1000
+    });
+
+    expect(result.schemaVersion).toBe("theorem.cas-backends.v0");
+    expect(result.localOnly).toBe(true);
+    expect(result.networkAccess).toBe("none");
+    expect(result.backends[0]?.backendId).toBe("maxima");
+    expect(result.backends[0]?.role).toBe("cas");
+    expect(result.backends[0]?.statusProbeMintedCheck).toBe(false);
+    expect(result.trustBoundary.statusProbeIsNotCheck).toBe(true);
+    expect(result.trustBoundary.crossCheckedRequiresIndependentRun).toBe(true);
   });
 
   it("writes and reads claim ledger records for agents", async () => {

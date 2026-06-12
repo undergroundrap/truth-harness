@@ -109,18 +109,85 @@ describe("createReceipt", () => {
       const payload = JSON.parse(artifact?.content ?? "{}") as {
         checks?: Array<{ id: string; status: string }>;
         checkStatus?: string;
+        independentCasStatus?: string;
+        independentCasCheckRef?: string;
       };
       expect(payload.checkStatus).toBe("passed");
+      expect(payload.independentCasStatus).toMatch(/^(passed|solver-unavailable|error)$/u);
+      expect(payload.independentCasCheckRef).toMatch(/^artifact_/u);
       expect(payload.checks?.map((check) => `${check.id}:${check.status}`)).toEqual([
         "symbolic-equivalence:passed",
         "numeric-sample-equivalence:passed"
       ]);
       expect(receipt.evidenceProfile.outputs.join(" ")).toContain("sanityChecks=passed");
+      expect(receipt.evidenceProfile.outputs.join(" ")).toContain("independentCas=maxima:");
+      expect(receipt.artifacts.some((item) => item.kind === "independent-cas-check")).toBe(true);
       expect(receipt.findings.map((finding) => finding.message).join(" ")).toContain("same-engine");
       return;
     }
 
     expect(receipt.trust).toBe("unverified");
     expect(receipt.findings[0]?.message).toContain("SymPy adapter");
+  });
+
+  it("upgrades symbolic receipts to cross-checked only when independent Maxima agrees", () => {
+    const receipt = createReceipt("symbolic simplify sin(x)^2 + cos(x)^2", {
+      maximaCommand: "maxima-test",
+      casRunner: (_command, args) => {
+        if (args[0] === "--version") {
+          return {
+            status: 0,
+            stdout: "Maxima 5.47.0\n",
+            stderr: ""
+          };
+        }
+
+        return {
+          status: 0,
+          stdout: "THEOREM_MAXIMA_STATUS:passed:0\n",
+          stderr: ""
+        };
+      }
+    });
+
+    if (receipt.trust === "unverified" && receipt.findings[0]?.message.includes("SymPy adapter")) {
+      return;
+    }
+
+    expect(receipt.trust).toBe("cross-checked");
+    expect(receipt.summary).toContain("Maxima independently agreed");
+    expect(receipt.evidenceProfile.backends.map((backend) => backend.id)).toContain("local-maxima-symbolic-subprocess");
+    expect(receipt.evidenceProfile.outputs.join(" ")).toContain("independentCas=maxima:passed");
+    expect(receipt.findings.map((finding) => finding.message).join(" ")).toContain("supports `cross-checked`, not `proved`");
+  });
+
+  it("keeps symbolic receipts unverified when independent Maxima disagrees", () => {
+    const receipt = createReceipt("symbolic expand (x + 1)^2", {
+      maximaCommand: "maxima-test",
+      casRunner: (_command, args) => {
+        if (args[0] === "--version") {
+          return {
+            status: 0,
+            stdout: "Maxima 5.47.0\n",
+            stderr: ""
+          };
+        }
+
+        return {
+          status: 0,
+          stdout: "THEOREM_MAXIMA_STATUS:failed:x\n",
+          stderr: ""
+        };
+      }
+    });
+
+    if (receipt.trust === "unverified" && receipt.findings[0]?.message.includes("SymPy adapter")) {
+      return;
+    }
+
+    expect(receipt.trust).toBe("unverified");
+    expect(receipt.summary).toContain("symbolic check failed");
+    expect(receipt.evidenceProfile.outputs.join(" ")).toContain("independentCas=maxima:failed");
+    expect(receipt.findings.map((finding) => finding.message).join(" ")).toContain("Maxima disagreed");
   });
 });

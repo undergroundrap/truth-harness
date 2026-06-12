@@ -23,6 +23,7 @@ import {
   createReceipt,
   createSimulationLogEntry,
   createSourceCitationReceipt,
+  getCasBackendStatus,
   getCodeRunSandboxStatus,
   getLocalWorkspaceStatus,
   getProofBackendStatus,
@@ -115,6 +116,7 @@ import {
   type ClaimLedgerRecord,
   type ClaimLedgerStatus,
   type ClaimLedgerWriteResult,
+  type CasBackendStatusReport,
   type CodeRunSummary,
   type CodeRunPolicyInput,
   type CodeRunWriteResult,
@@ -2176,6 +2178,28 @@ workspace
     }
   });
 
+const cas = program.command("cas").description("Inspect independent local CAS backends and trust boundaries.");
+
+cas
+  .command("backends")
+  .description("Probe local CAS backends without checking or upgrading a claim.")
+  .option("--json", "Print the full CAS backend status JSON")
+  .option("--maxima-command <path>", "Maxima executable path or command. Defaults to THEOREM_MAXIMA or maxima.")
+  .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 3000)
+  .action((options: { json?: boolean; maximaCommand?: string; timeoutMs: number }) => {
+    const status = getCasBackendStatus({
+      maximaCommand: options.maximaCommand,
+      timeoutMs: options.timeoutMs
+    });
+
+    if (options.json) {
+      printJson(status);
+      return;
+    }
+
+    printCasBackendStatus(status);
+  });
+
 const proof = program.command("proof").description("Inspect formal proof-checker backends and trust boundaries.");
 
 proof
@@ -2545,6 +2569,37 @@ function parseRenderFormat(format: string): ReceiptRenderFormat {
   }
 
   throw new Error(`Unsupported receipt render format ${JSON.stringify(format)}. Use markdown or html.`);
+}
+
+function printCasBackendStatus(status: CasBackendStatusReport): void {
+  console.log("Theorem CAS backends");
+  console.log(`Local-only: ${String(status.localOnly)} (network: ${status.networkAccess})`);
+  console.log(`Independent CAS backends available: ${status.casBackendsAvailable}`);
+
+  for (const backend of status.backends) {
+    console.log("");
+    console.log(`${backend.displayName} (${backend.backendId})`);
+    console.log(`  Status: ${backend.status}`);
+    console.log(`  Adapter: ${backend.adapter}`);
+    console.log(`  Command: ${backend.command} ${backend.args.join(" ")}`);
+    if (backend.version) {
+      console.log(`  Version: ${backend.version}`);
+    }
+    if (backend.error) {
+      console.log(`  Error: ${backend.error}`);
+    }
+    console.log(`  Can check symbolic equality: ${String(backend.canCheckSymbolic)}`);
+    console.log(`  Status probe minted check: ${String(backend.statusProbeMintedCheck)}`);
+    for (const limitation of backend.limitations) {
+      console.log(`  Limitation: ${limitation}`);
+    }
+  }
+
+  console.log("");
+  console.log("Trust boundary:");
+  for (const warning of status.warnings) {
+    console.log(`  ${warning}`);
+  }
 }
 
 function printProofBackendStatus(status: ProofBackendStatusReport): void {

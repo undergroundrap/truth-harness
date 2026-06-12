@@ -7,6 +7,7 @@ import {
   handleTheoremBenchmarkCompare,
   handleTheoremBenchmarkList,
   handleTheoremBenchmarkRun,
+  handleTheoremCasBackends,
   theoremBenchmarkCompareOutputFailsGate,
   theoremBenchmarkRunOutputFailsGate,
   handleTheoremClaimAdd,
@@ -335,6 +336,33 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ workspacePath }) => toolJson(await handleTheoremBenchmarkList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_cas_backends",
+    {
+      title: "Probe CAS Backends",
+      description:
+        "Probe independent local CAS backends without network access. A status probe is not a symbolic check; `cross-checked` requires a concrete independent CAS agreement run.",
+      inputSchema: {
+        maximaCommand: z
+          .string()
+          .optional()
+          .describe("Maxima executable path or command. Defaults to THEOREM_MAXIMA or maxima."),
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .max(10000)
+          .optional()
+          .describe("Local backend version-probe timeout in milliseconds. Defaults to 3000.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ maximaCommand, timeoutMs }) => toolJson(handleTheoremCasBackends({ maximaCommand, timeoutMs }))
   );
 
   server.registerTool(
