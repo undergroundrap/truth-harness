@@ -7,10 +7,12 @@ ENV CI=true \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
     THEOREM_WORKBENCH_CONTAINER=1 \
+    THEOREM_MAXIMA=maxima-sage \
+    THEOREM_Z3=z3 \
     PATH="/opt/theorem-python/bin:${PATH}"
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates python3 python3-pip python3-venv tini z3 \
+  && apt-get install -y --no-install-recommends ca-certificates maxima-sage maxima-sage-share python3 python3-pip python3-venv tini z3 \
   && python3 -m venv /opt/theorem-python \
   && /opt/theorem-python/bin/python -m pip install sympy==1.14.0 \
   && useradd --create-home --uid 10001 theorem \

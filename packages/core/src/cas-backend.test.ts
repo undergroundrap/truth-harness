@@ -56,6 +56,29 @@ describe("CAS backend status", () => {
     });
   });
 
+  it("skips Lisp loader chatter when reporting Maxima-Sage availability", () => {
+    const runner: CasBackendCommandRunner = () => ({
+      status: 0,
+      stdout: [
+        ';;; Loading #P"/usr/lib/x86_64-linux-gnu/ecl-21.2.1/sockets.fas"',
+        "Maxima 5.45.1"
+      ].join("\n"),
+      stderr: ""
+    });
+
+    const report = getCasBackendStatus({
+      maximaCommand: "maxima-sage",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      runner
+    });
+
+    expect(report.backends[0]).toMatchObject({
+      backendId: "maxima",
+      status: "available",
+      version: "Maxima 5.45.1"
+    });
+  });
+
   it("keeps cross-checked unavailable when Maxima is missing", () => {
     const runner: CasBackendCommandRunner = () => ({
       status: null,
@@ -133,7 +156,7 @@ describe("Maxima symbolic cross-check", () => {
     expect(calls).toHaveLength(2);
     expect(calls[0]).toEqual(["--version"]);
     expect(calls[1]?.slice(0, 2)).toEqual(["--very-quiet", "--batch-string"]);
-    expect(calls[1]?.[2]).toContain("fullratsimp");
+    expect(calls[1]?.[2]).toContain("fullratsimp(trigsimp");
     expect(calls[1]?.[2]).toContain("sin(x)^2 + cos(x)^2");
     expect(record.schemaVersion).toBe("theorem.symbolic-cas-check.v0");
     expect(record.status).toBe("passed");
@@ -141,6 +164,46 @@ describe("Maxima symbolic cross-check", () => {
     expect(record.proofCheckerBacked).toBe(false);
     expect(record.residual).toBe("0");
     expect(record.limitations.join(" ")).toContain("not a proof-checker-backed proof");
+  });
+
+  it("ignores echoed Maxima input lines before parsing the real marker", () => {
+    const runner: CasBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: [
+            ';;; Loading #P"/usr/lib/x86_64-linux-gnu/ecl-21.2.1/sockets.fas"',
+            "Maxima 5.45.1"
+          ].join("\n"),
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: [
+          'printf(true,"THEOREM_MAXIMA_STATUS:~a:~a~%",status,residual)',
+          "THEOREM_MAXIMA_STATUS:passed:0"
+        ].join("\n"),
+        stderr: ""
+      };
+    };
+
+    const record = checkSymbolicWithMaximaSync({
+      prompt: {
+        operation: "simplify",
+        expression: "sin(x)^2 + cos(x)^2",
+        variable: "x"
+      },
+      result: "1",
+      maximaCommand: "maxima-sage",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      runner
+    });
+
+    expect(record.status).toBe("passed");
+    expect(record.trust).toBe("cross-checked");
+    expect(record.backend.version).toBe("Maxima 5.45.1");
   });
 
   it("writes, lists, and validates first-class CAS check records", async () => {

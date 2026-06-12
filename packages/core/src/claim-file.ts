@@ -90,7 +90,9 @@ export function checkClaimFile(markdown: string, filePath: string): ClaimFileChe
 
 export function checkClaimBlock(block: ClaimBlock): ClaimCheck {
   const receipt = createReceipt(block.problem);
-  const passed = block.expectTrust ? receipt.trust === block.expectTrust : STRICT_PASS_TRUST.has(receipt.trust);
+  const passed = block.expectTrust
+    ? trustSatisfiesExpectation(block.expectTrust, receipt.trust)
+    : STRICT_PASS_TRUST.has(receipt.trust);
   const message = passed ? passMessage(block, receipt) : failMessage(block, receipt);
 
   return {
@@ -99,6 +101,14 @@ export function checkClaimBlock(block: ClaimBlock): ClaimCheck {
     passed,
     message
   };
+}
+
+export function trustSatisfiesExpectation(expected: TrustLabel, actual: TrustLabel): boolean {
+  if (actual === expected) {
+    return true;
+  }
+
+  return expected === "exact-computed" && actual === "cross-checked";
 }
 
 function parseClaimBlock(

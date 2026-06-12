@@ -100,7 +100,9 @@ describe("createReceipt", () => {
   });
 
   it("creates symbolic receipts when the SymPy adapter is available", () => {
-    const receipt = createReceipt("symbolic simplify sin(x)^2 + cos(x)^2");
+    const receipt = createReceipt("symbolic simplify sin(x)^2 + cos(x)^2", {
+      maximaCommand: "theorem-workbench-missing-maxima-command"
+    });
 
     if (receipt.trust === "exact-computed") {
       expect(receipt.summary).toContain("1");

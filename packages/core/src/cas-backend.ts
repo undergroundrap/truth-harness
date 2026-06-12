@@ -474,7 +474,7 @@ function probeMaximaBackend(args: {
 }): CasBackendProbe {
   const versionArgs = ["--version"];
   const result = args.runner(args.command, versionArgs, args.timeoutMs);
-  const version = firstNonEmptyLine(result.stdout);
+  const version = firstMaximaVersionLine(result.stdout) ?? firstNonEmptyLine(result.stdout);
   const launchFailure = result.error ? isLaunchFailure(result.error) : false;
   const errorText = result.error?.message
     ?? (result.signal ? `Maxima exited by signal ${result.signal}.` : undefined)
@@ -518,7 +518,7 @@ function buildMaximaCheckScript(prompt: SymbolicPrompt, result: string): string 
 
   return [
     "display2d:false$",
-    `residual: fullratsimp((${left}) - (${right}))$`,
+    `residual: fullratsimp(trigsimp((${left}) - (${right})))$`,
     'status: if is(residual = 0) then "passed" else "failed"$',
     `printf(true, "${MAXIMA_MARKER}~a:~a~%", status, residual)$`,
     "quit();"
@@ -564,22 +564,23 @@ function toMaximaIdentifier(source: string): string {
 }
 
 function parseMaximaMarker(stdout: string): { status: "passed" | "failed"; residual: string } | undefined {
-  const line = stdout.split(/\r?\n/u).find((item) => item.includes(MAXIMA_MARKER));
-  if (!line) {
-    return undefined;
+  for (const line of stdout.split(/\r?\n/u)) {
+    const markerStart = line.indexOf(MAXIMA_MARKER);
+    if (markerStart < 0) {
+      continue;
+    }
+
+    const payload = line.slice(markerStart + MAXIMA_MARKER.length).trim();
+    const match = /^(passed|failed):(.*)$/u.exec(payload);
+    if (match) {
+      return {
+        status: match[1] as "passed" | "failed",
+        residual: match[2].trim()
+      };
+    }
   }
 
-  const markerStart = line.indexOf(MAXIMA_MARKER);
-  const payload = line.slice(markerStart + MAXIMA_MARKER.length).trim();
-  const match = /^(passed|failed):(.*)$/u.exec(payload);
-  if (!match) {
-    return undefined;
-  }
-
-  return {
-    status: match[1] as "passed" | "failed",
-    residual: match[2].trim()
-  };
+  return undefined;
 }
 
 function resolveMaximaCommand(command: string | undefined): string {
@@ -675,6 +676,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function firstNonEmptyLine(text: string): string | undefined {
   return text.split(/\r?\n/u).map((line) => line.trim()).find(Boolean);
+}
+
+function firstMaximaVersionLine(text: string): string | undefined {
+  return text
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find((line) => /^Maxima\s+\d+(?:\.\d+)*/u.test(line));
 }
 
 function trimOptional(text: string): string | undefined {
