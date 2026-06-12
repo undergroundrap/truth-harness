@@ -49,6 +49,12 @@ describe("local web route ledger API", () => {
     expect(receiptPayload.localOnly).toBe(true);
     expect(receiptPayload.externalCalls).toEqual([]);
     expect(receiptPayload.route.routeId).toMatch(/^route_[a-f0-9]{16}$/u);
+    expect(receiptPayload.route.proofObligations).toContainEqual(
+      expect.objectContaining({
+        kind: "formal-proof",
+        sourceCapabilityId: "accepted-proof-checker"
+      })
+    );
     expect(receiptPayload.routePaths.json).toContain(".theorem-workbench");
     expect(existsSync(receiptPayload.routePaths.json)).toBe(true);
     expect(existsSync(receiptPayload.routePaths.markdown)).toBe(true);
@@ -63,7 +69,8 @@ describe("local web route ledger API", () => {
       routeId: receiptPayload.route.routeId,
       finalTrust: "exact-computed",
       status: "verified",
-      evidenceKind: "exact-arithmetic"
+      evidenceKind: "exact-arithmetic",
+      proofObligations: receiptPayload.route.proofObligations.length
     });
     expect(listPayload.routes[0].routePaths.json).toBe(receiptPayload.routePaths.json);
 
@@ -74,6 +81,7 @@ describe("local web route ledger API", () => {
     expect(routePayload.externalCalls).toEqual([]);
     expect(routePayload.route.routeId).toBe(receiptPayload.route.routeId);
     expect(routePayload.route.receipt.runId).toBe(receiptPayload.receipt.runId);
+    expect(routePayload.route.proofObligations[0].obligationId).toMatch(/^obl_[a-f0-9]{16}$/u);
     expect(routePayload.routePaths.markdown).toBe(receiptPayload.routePaths.markdown);
 
     const claimResponse = await fetch(`${baseUrl}/api/claims`, {

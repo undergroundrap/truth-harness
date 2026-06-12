@@ -1027,7 +1027,8 @@ function routeLedgerRows(receipt, route) {
     ["Replay", routeReplay],
     ["JSON", routePaths.json ?? "local route JSON path not returned"],
     ["Markdown", routePaths.markdown ?? "local route Markdown path not returned"],
-    ["Gaps", String(route.gaps?.length ?? 0)]
+    ["Gaps", String(route.gaps?.length ?? 0)],
+    ["Obligations", String(route.proofObligations?.length ?? 0)]
   ];
 }
 
@@ -1057,7 +1058,8 @@ function verifierRouteReportFacts(receipt) {
     ["Replay", route.replay?.command ?? receipt.replay],
     ["JSON", routePaths.json ?? "local route JSON path not returned"],
     ["Markdown", routePaths.markdown ?? "local route Markdown path not returned"],
-    ["Gaps", String(route.gaps?.length ?? 0)]
+    ["Gaps", String(route.gaps?.length ?? 0)],
+    ["Obligations", String(route.proofObligations?.length ?? 0)]
   ];
 }
 
@@ -1068,6 +1070,35 @@ function routeReportValueHtml(label, value) {
   }
 
   return `<code>${escapeHtml(value)}</code>`;
+}
+
+function verifierRouteObligationItems(receipt) {
+  const obligations = receipt.verifierRoute?.proofObligations ?? [];
+  if (obligations.length === 0) {
+    return ["No proof obligations recorded for this route."];
+  }
+
+  return obligations.map((obligation) => {
+    const command = obligation.command ? ` <code>${escapeHtml(obligation.command)}</code>` : "";
+    return `<strong>${escapeHtml(obligation.title)}</strong> <code>${escapeHtml(obligation.obligationId)}</code>: ${escapeHtml(obligation.requiredBefore)}${command}`;
+  });
+}
+
+function verifierRouteObligationMarkdown(receipt) {
+  const obligations = receipt.verifierRoute?.proofObligations ?? [];
+  if (obligations.length === 0) {
+    return ["- none recorded"];
+  }
+
+  return obligations.flatMap((obligation) => [
+    `- ${obligation.title} (${obligation.obligationId})`,
+    `  - Status: ${obligation.status}`,
+    `  - Severity: ${obligation.severity}`,
+    `  - Statement: ${obligation.statement}`,
+    `  - Required before: ${obligation.requiredBefore}`,
+    ...(obligation.command ? [`  - Command: \`${obligation.command}\``] : []),
+    ...((obligation.acceptanceCriteria ?? []).map((criterion) => `  - Accept: ${criterion}`))
+  ]);
 }
 
 function renderClaimList() {
@@ -1532,13 +1563,16 @@ function renderRouteHistory() {
         const gapText = route.gaps === 0
           ? "no gaps"
           : `${route.gaps} gap${route.gaps === 1 ? "" : "s"}${route.criticalGaps ? ` / ${route.criticalGaps} critical` : ""}`;
+        const obligationText = route.proofObligations === 1
+          ? "1 obligation"
+          : `${route.proofObligations ?? 0} obligations`;
         const capabilities = route.usedCapabilities?.slice(0, 3).join(", ") || "no capabilities recorded";
         const created = formatRouteDate(route.createdAt);
         return `<button class="route-record ${active ? "active" : ""}" data-route-id="${escapeHtml(route.routeId)}" type="button">
           <span class="trust-dot ${trustClass(route.finalTrust)}"></span>
           <span>
             <strong>${escapeHtml(route.problem)}</strong>
-            <small>${escapeHtml(route.finalTrust)} - ${escapeHtml(route.status)} - ${escapeHtml(gapText)}</small>
+            <small>${escapeHtml(route.finalTrust)} - ${escapeHtml(route.status)} - ${escapeHtml(gapText)} - ${escapeHtml(obligationText)}</small>
             <small><code>${escapeHtml(route.routeId)}</code> - ${escapeHtml(created)} - ${escapeHtml(route.evidenceKind)}</small>
             <small>${escapeHtml(capabilities)}</small>
           </span>
@@ -1570,7 +1604,8 @@ function matchesRouteHistorySearch(route, query) {
     ...(route.usedCapabilities ?? []),
     ...(route.nextActions ?? []),
     route.routePaths?.json,
-    route.routePaths?.markdown
+    route.routePaths?.markdown,
+    String(route.proofObligations ?? "")
   ]
     .filter(Boolean)
     .join(" ")
@@ -3159,6 +3194,9 @@ function formatRouteLedgerPacket(receipt) {
   const gaps = Array.isArray(route.gaps) && route.gaps.length > 0
     ? route.gaps.map((gap) => `- ${routeItemSummary(gap)}`)
     : ["- No route gaps recorded."];
+  const obligations = Array.isArray(route.proofObligations) && route.proofObligations.length > 0
+    ? route.proofObligations.map((obligation) => `- ${obligation.obligationId}: ${obligation.title} (${obligation.status}) - ${obligation.requiredBefore}`)
+    : ["- No proof obligations recorded."];
   const warnings = Array.isArray(route.warnings) && route.warnings.length > 0
     ? route.warnings.map((warning) => `- ${routeItemSummary(warning)}`)
     : ["- No route warnings recorded."];
@@ -3184,6 +3222,10 @@ function formatRouteLedgerPacket(receipt) {
     "## Used Capabilities",
     "",
     ...capabilities,
+    "",
+    "## Proof Obligations",
+    "",
+    ...obligations,
     "",
     "## Gaps",
     "",
@@ -3436,6 +3478,9 @@ function renderReport(receipt) {
   const routeFactRows = verifierRouteReportFacts(receipt)
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${routeReportValueHtml(label, value)}</dd></div>`)
     .join("");
+  const obligationItems = verifierRouteObligationItems(receipt)
+    .map((item) => `<li>${item}</li>`)
+    .join("");
 
   reportPreview.innerHTML = `
     <header>
@@ -3468,6 +3513,8 @@ function renderReport(receipt) {
     </dl>
     <h3>Saved Verifier Route</h3>
     <dl class="report-facts">${routeFactRows}</dl>
+    <h3>Proof Obligations</h3>
+    <ol>${obligationItems}</ol>
     <h3>Ledger Metadata</h3>
     <div class="report-tags">${tagItems}</div>
     <dl class="report-facts">
@@ -3567,6 +3614,10 @@ function generateReportMarkdown(receipt) {
     "## Saved Verifier Route",
     "",
     ...verifierRouteReportFacts(receipt).map(([label, value]) => `- ${label}: ${value}`),
+    "",
+    "## Proof Obligations",
+    "",
+    ...verifierRouteObligationMarkdown(receipt),
     "",
     "## Ledger Metadata",
     "",
@@ -3723,6 +3774,7 @@ function receiptToViewModel(receipt, route, routePaths) {
     details["Verifier route"] = route.routeId;
     details["Route status"] = route.status;
     details["Route gaps"] = String(route.gaps?.length ?? 0);
+    details["Proof obligations"] = String(route.proofObligations?.length ?? 0);
   }
 
   return {

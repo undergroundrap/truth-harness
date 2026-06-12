@@ -167,6 +167,12 @@
         "$ref": "#/$defs/routeGap"
       }
     },
+    "proofObligations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/proofObligation"
+      }
+    },
     "nextActions": {
       "$ref": "#/$defs/stringArray"
     },
@@ -321,6 +327,61 @@
         "reason": {
           "type": "string",
           "minLength": 1
+        },
+        "command": {
+          "type": "string"
+        },
+        "nextStep": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "proofObligation": {
+      "type": "object",
+      "required": [
+        "obligationId",
+        "kind",
+        "status",
+        "severity",
+        "sourceCapabilityId",
+        "title",
+        "statement",
+        "requiredBefore",
+        "acceptanceCriteria"
+      ],
+      "properties": {
+        "obligationId": {
+          "type": "string",
+          "pattern": "^obl_[a-f0-9]{16}$"
+        },
+        "kind": {
+          "enum": ["formal-proof", "independent-check", "solver-encoding", "reproducibility"]
+        },
+        "status": {
+          "enum": ["open", "satisfied", "not-required"]
+        },
+        "severity": {
+          "enum": ["info", "warning", "critical"]
+        },
+        "sourceCapabilityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requiredBefore": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acceptanceCriteria": {
+          "$ref": "#/$defs/stringArray"
         },
         "command": {
           "type": "string"

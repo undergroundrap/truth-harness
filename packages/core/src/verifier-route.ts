@@ -33,6 +33,23 @@ export interface VerifierRouteGap {
   nextStep?: string;
 }
 
+export type ProofObligationKind = "formal-proof" | "independent-check" | "solver-encoding" | "reproducibility";
+export type ProofObligationStatus = "open" | "satisfied" | "not-required";
+
+export interface ProofObligation {
+  obligationId: string;
+  kind: ProofObligationKind;
+  status: ProofObligationStatus;
+  severity: VerifierRouteGapSeverity;
+  sourceCapabilityId: string;
+  title: string;
+  statement: string;
+  requiredBefore: string;
+  acceptanceCriteria: string[];
+  command?: string;
+  nextStep?: string;
+}
+
 export interface VerifierRoute {
   schemaVersion: "theorem.verifier-route.v0";
   routeId: string;
@@ -59,6 +76,7 @@ export interface VerifierRoute {
   blockedCapabilities: VerifierRouteStep[];
   plannedCapabilities: VerifierRouteStep[];
   gaps: VerifierRouteGap[];
+  proofObligations: ProofObligation[];
   nextActions: string[];
   trustBoundary: EngineManifest["trustBoundary"] & {
     routeIsNotProof: true;
@@ -91,6 +109,7 @@ export interface VerifierRouteSummary {
   usedCapabilities: string[];
   gaps: number;
   criticalGaps: number;
+  proofObligations: number;
   nextActions: string[];
 }
 
@@ -112,16 +131,17 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
     .map((capability) => routeStep(capabilityById, capability.id, "planned", "Planned adapter is relevant but cannot support this route yet."));
   const gaps = routeGaps(receipt, [...blockedCapabilities, ...plannedCapabilities]);
   const nextActions = nextRouteActions(receipt, gaps);
+  const routeId = `route_${stableHash({
+    problem,
+    receipt: receipt.runId,
+    finalTrust: receipt.trust,
+    evidenceKind: receipt.evidenceProfile.kind,
+    createdAt
+  }).slice(0, 16)}`;
 
   return {
     schemaVersion: "theorem.verifier-route.v0",
-    routeId: `route_${stableHash({
-      problem,
-      receipt: receipt.runId,
-      finalTrust: receipt.trust,
-      evidenceKind: receipt.evidenceProfile.kind,
-      createdAt
-    }).slice(0, 16)}`,
+    routeId,
     createdAt,
     localOnly: true,
     networkAccess: "none",
@@ -145,6 +165,12 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
     blockedCapabilities,
     plannedCapabilities,
     gaps,
+    proofObligations: proofObligationsForRoute({
+      routeId,
+      problem,
+      receipt,
+      gaps
+    }),
     nextActions,
     trustBoundary: {
       ...manifest.trustBoundary,
@@ -261,6 +287,27 @@ export function renderVerifierRouteMarkdown(route: VerifierRoute): string {
 
   pushRouteSteps(lines, route.usedCapabilities);
 
+  lines.push("", "## Proof Obligations", "");
+  const proofObligations = route.proofObligations ?? [];
+  if (proofObligations.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const obligation of proofObligations) {
+      lines.push(`- ${obligation.status}: ${obligation.title} (${obligation.obligationId})`);
+      lines.push(`  - Statement: ${obligation.statement}`);
+      lines.push(`  - Required before: ${obligation.requiredBefore}`);
+      if (obligation.nextStep) {
+        lines.push(`  - Next: ${obligation.nextStep}`);
+      }
+      if (obligation.command) {
+        lines.push(`  - Command: \`${obligation.command}\``);
+      }
+      for (const criterion of obligation.acceptanceCriteria) {
+        lines.push(`  - Accept: ${criterion}`);
+      }
+    }
+  }
+
   lines.push("", "## Verification Gaps", "");
   if (route.gaps.length === 0) {
     lines.push("- none");
@@ -370,6 +417,136 @@ function routeGaps(receipt: Receipt, steps: VerifierRouteStep[]): VerifierRouteG
   }
 
   return gaps;
+}
+
+function proofObligationsForRoute(input: {
+  routeId: string;
+  problem: string;
+  receipt: Receipt;
+  gaps: VerifierRouteGap[];
+}): ProofObligation[] {
+  return input.gaps.map((gap) => {
+    const kind = obligationKind(gap);
+    const requiredTrust = requiredTrustForGap(gap);
+    const title = obligationTitle(gap, requiredTrust);
+    const statement = obligationStatement(input.problem, input.receipt, gap, requiredTrust);
+    const requiredBefore = requiredTrust
+      ? `Before labeling this scoped claim ${requiredTrust}.`
+      : "Before making a stronger claim than the current receipt supports.";
+
+    return {
+      obligationId: `obl_${stableHash({
+        routeId: input.routeId,
+        runId: input.receipt.runId,
+        capabilityId: gap.capabilityId,
+        statement,
+        severity: gap.severity
+      }).slice(0, 16)}`,
+      kind,
+      status: gap.severity === "info" ? "not-required" : "open",
+      severity: gap.severity,
+      sourceCapabilityId: gap.capabilityId,
+      title,
+      statement,
+      requiredBefore,
+      acceptanceCriteria: obligationAcceptanceCriteria(gap, requiredTrust),
+      command: gap.command,
+      nextStep: gap.nextStep
+    };
+  });
+}
+
+function obligationKind(gap: VerifierRouteGap): ProofObligationKind {
+  if (gap.capabilityId.includes("proof") || gap.capabilityId === "accepted-proof-checker") {
+    return "formal-proof";
+  }
+
+  if (gap.capabilityId.includes("smt") || gap.capabilityId.includes("z3")) {
+    return "solver-encoding";
+  }
+
+  if (gap.capabilityId.includes("cas") || gap.capabilityId.includes("maxima")) {
+    return "independent-check";
+  }
+
+  return "reproducibility";
+}
+
+function requiredTrustForGap(gap: VerifierRouteGap): TrustLabel | undefined {
+  if (gap.capabilityId.includes("proof") || gap.capabilityId === "accepted-proof-checker") {
+    return "proved";
+  }
+
+  if (gap.capabilityId.includes("smt") || gap.capabilityId.includes("z3")) {
+    return "smt-checked";
+  }
+
+  if (gap.capabilityId.includes("cas") || gap.capabilityId.includes("maxima")) {
+    return "cross-checked";
+  }
+
+  return undefined;
+}
+
+function obligationTitle(gap: VerifierRouteGap, requiredTrust: TrustLabel | undefined): string {
+  if (requiredTrust === "proved") {
+    return "Formal proof-checker obligation";
+  }
+
+  if (requiredTrust === "smt-checked") {
+    return "SMT encoding obligation";
+  }
+
+  if (requiredTrust === "cross-checked") {
+    return "Independent CAS cross-check obligation";
+  }
+
+  return `${gap.displayName} obligation`;
+}
+
+function obligationStatement(
+  problem: string,
+  receipt: Receipt,
+  gap: VerifierRouteGap,
+  requiredTrust: TrustLabel | undefined
+): string {
+  const scopedClaim = receipt.trust === "refuted"
+    ? `The claim '${problem}' is refuted by the recorded counterexample.`
+    : `The scoped claim '${problem}' currently has trust '${receipt.trust}'.`;
+
+  if (requiredTrust === "proved") {
+    return `${scopedClaim} To call it proved, attach an accepted proof-checker artifact for the exact formal statement.`;
+  }
+
+  if (requiredTrust === "smt-checked") {
+    return `${scopedClaim} To call it SMT-checked, attach a concrete solver run for the exact encoded constraints and assumptions.`;
+  }
+
+  if (requiredTrust === "cross-checked") {
+    return `${scopedClaim} To call it cross-checked, attach an independent CAS agreement run for the exact expression and assumptions.`;
+  }
+
+  return `${scopedClaim} Resolve ${gap.displayName}: ${gap.reason}`;
+}
+
+function obligationAcceptanceCriteria(gap: VerifierRouteGap, requiredTrust: TrustLabel | undefined): string[] {
+  const criteria = [
+    "The artifact is stored locally in the workspace and can be replayed.",
+    "The artifact records backend, version, input, output, command, and limitations.",
+    "The reviewed claim does not exceed the exact statement checked by the artifact."
+  ];
+
+  if (requiredTrust === "proved") {
+    criteria.unshift("An accepted proof checker returns success for a concrete proof artifact.");
+  } else if (requiredTrust === "smt-checked") {
+    criteria.unshift("A concrete SMT solver run returns sat or unsat for the recorded SMT-LIB problem.");
+  } else if (requiredTrust === "cross-checked") {
+    criteria.unshift("An independent CAS agrees with the recorded result on the same scoped expression.");
+  } else if (gap.command) {
+    criteria.unshift(`The recorded command succeeds: ${gap.command}`);
+  }
+
+  return criteria;
 }
 
 function nextRouteActions(receipt: Receipt, gaps: VerifierRouteGap[]): string[] {
@@ -544,6 +721,7 @@ function summarizeVerifierRoute(root: string, path: string, raw: string): Verifi
     usedCapabilities: route.usedCapabilities.map((step) => step.capabilityId),
     gaps: route.gaps.length,
     criticalGaps: route.gaps.filter((gap) => gap.severity === "critical").length,
+    proofObligations: route.proofObligations?.length ?? 0,
     nextActions: route.nextActions
   };
 }

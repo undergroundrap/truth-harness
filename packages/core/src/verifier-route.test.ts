@@ -42,6 +42,14 @@ describe("verifier route", () => {
         severity: "info"
       })
     );
+    expect(route.proofObligations).toContainEqual(
+      expect.objectContaining({
+        kind: "formal-proof",
+        status: "not-required",
+        sourceCapabilityId: "accepted-proof-checker",
+        title: "Formal proof-checker obligation"
+      })
+    );
     expect(route.trustBoundary.routeIsNotProof).toBe(true);
     expect(route.trustBoundary.receiptTrustIsUpperBound).toBe(true);
   });
@@ -105,6 +113,25 @@ describe("verifier route", () => {
       "maxima-cas"
     ]);
     expect(route.gaps.every((gap) => gap.severity === "critical" || gap.severity === "info")).toBe(true);
+    expect(route.proofObligations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "formal-proof",
+          status: "open",
+          sourceCapabilityId: "lean-proof-checker"
+        }),
+        expect.objectContaining({
+          kind: "solver-encoding",
+          status: "open",
+          sourceCapabilityId: "z3-smt-solver"
+        }),
+        expect.objectContaining({
+          kind: "independent-check",
+          status: "open",
+          sourceCapabilityId: "maxima-cas"
+        })
+      ])
+    );
     expect(route.nextActions.join(" ")).toContain("Lean");
   });
 
@@ -129,6 +156,7 @@ describe("verifier route", () => {
 
     expect(result.jsonPath).toContain(join(".theorem-workbench", "routes"));
     expect(result.markdown).toContain(`# Verifier Route ${result.route.routeId}`);
+    expect(result.markdown).toContain("## Proof Obligations");
     expect(result.route.replay).toBe("theorem verify \"compute 3 / 4 + 5 / 8\" --json");
     expect(routes).toHaveLength(1);
     expect(routes[0]).toMatchObject({
@@ -136,7 +164,8 @@ describe("verifier route", () => {
       finalTrust: "exact-computed",
       evidenceKind: "exact-arithmetic",
       receiptRunId: result.route.receipt.runId,
-      usedCapabilities: ["local-rational-arithmetic"]
+      usedCapabilities: ["local-rational-arithmetic"],
+      proofObligations: result.route.proofObligations.length
     });
     expect(readBack.routeId).toBe(result.route.routeId);
     expect(validation.passed).toBe(true);
