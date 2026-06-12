@@ -60,6 +60,8 @@ Do not fork one large repo as the foundation. The better strategy is a small, st
 
 AI should plan and explain. Verification engines should decide what is trusted.
 
+Theorem Workbench is not only a bundle of third-party solvers, and it is not a plan to rewrite every solver from scratch. The native engine is the verification operating system: problem normalization, verifier routing, trust-label policy, receipt generation, evidence graphs, claim-ledger gates, workspace validation, model disclosure, replay, benchmarks, and reports. Specialized tools such as SymPy, Z3, Lean, SageMath, Maxima, notebooks, RAG indexes, and simulators should plug into that engine as adapters with explicit trust boundaries. See [ENGINE_STRATEGY.md](ENGINE_STRATEGY.md) for the detailed boundary between native kernels and external engines.
+
 The system should never return a naked answer when it can return:
 
 1. A normalized problem statement.

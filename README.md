@@ -4,7 +4,7 @@
 
 Theorem Workbench is a verification-first mathematical workbench for humans, Claude, Codex, and other agentic tools.
 
-The project goal is not to replace WolframAlpha by rebuilding every math engine. The goal is to make AI-assisted math auditable and private by default: every answer should be backed by a replayable local tool run, proof check, cited source, counterexample search, workspace snapshot, or an explicit uncertainty label. Claude, Codex, and other frontier models can still help reason, plan, and critique, but the app is local-first: project data and artifacts stay in the local workspace unless the user explicitly sends selected context to a hosted model or network service, and that selected context plus disclosure is recorded locally.
+The project goal is not to replace WolframAlpha by rebuilding every math engine. The goal is to build the missing verification engine around AI-assisted work: problem normalization, verifier routing, receipts, trust labels, claim ledgers, replay, disclosures, benchmarks, and reports. Every answer should be backed by a replayable local tool run, proof check, cited source, counterexample search, workspace snapshot, or an explicit uncertainty label. Claude, Codex, and other frontier models can still help reason, plan, and critique, but the app is local-first: project data and artifacts stay in the local workspace unless the user explicitly sends selected context to a hosted model or network service, and that selected context plus disclosure is recorded locally.
 
 The long-term mission is open-source discovery infrastructure: help humans and agents investigate hard math, physics, materials, climate, biomedical, and engineering problems without turning model output into fake certainty. The workbench should make it easy to use the best available local solvers and, when the user chooses, the latest capable frontier models as outside critics while keeping the private workspace private.
 
@@ -18,6 +18,7 @@ AI is already good at writing plausible math. The hard part is knowing when the 
 
 Theorem Workbench turns math answers into receipts:
 
+- Theorem owns the trust policy, verifier router, evidence graph, claim ledger, replay contracts, and agent-facing local workspace,
 - exact computations use exact rational arithmetic or CAS adapters,
 - exact arithmetic receipts include machine-readable step traces and deterministic audience-level explanations,
 - false universal claims get counterexample search before explanation,
@@ -205,6 +206,8 @@ npm run docker:proof
 ```
 
 See [docs/TRUST_LABELS.md](docs/TRUST_LABELS.md) for the conservative meaning of each trust label and the current rule that local parity certificates are `exact-computed`, not `proved`.
+
+See [docs/ENGINE_STRATEGY.md](docs/ENGINE_STRATEGY.md) for the boundary between Theorem's native verification engine and the external solvers/adapters it uses.
 
 See [docs/RESEARCH_AND_ARCHITECTURE.md](docs/RESEARCH_AND_ARCHITECTURE.md) for the current naming check, open-source landscape, architecture, data structures, CLI/MCP surface, benchmarking surface, and test strategy.
 

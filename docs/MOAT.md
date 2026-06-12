@@ -19,6 +19,28 @@ The short version:
 
 > Git + CI + receipts + proof engines for reasoning.
 
+## Engine Positioning
+
+Theorem Workbench is building its own engine, but the engine is the verification layer around research work, not a from-scratch replacement for every specialized solver.
+
+Theorem owns:
+
+- the trust policy,
+- verifier routing,
+- evidence graph,
+- claim ledger,
+- receipt runtime,
+- workspace validation,
+- model-context disclosure,
+- replay/report contracts,
+- agent-facing CLI/MCP/web surfaces.
+
+Theorem adapts mature engines such as SymPy, Z3, Lean, SageMath, Maxima, notebooks, local search, and later domain simulators. That is a strength, not a weakness. The core product decides what each engine output can and cannot prove, records the exact artifact, and blocks claims from outrunning the evidence.
+
+Native kernels should stay small and auditable: exact rational arithmetic, expression normalization, counterexample search, dimensions, intervals, evidence-reference resolution, and trust-label gates. Large domain engines should be adapters until there is a clear reason to own a narrow kernel ourselves.
+
+See [ENGINE_STRATEGY.md](ENGINE_STRATEGY.md) for the full boundary.
+
 ## Why This Is Different
 
 Existing tools are excellent at parts of the workflow:
