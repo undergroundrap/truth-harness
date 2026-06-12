@@ -193,6 +193,13 @@ const seedReceipts = {
 };
 
 const receiptStore = new Map(Object.entries(seedReceipts));
+const claimLedgerStore = new Map();
+let claimLedgerGraph = {
+  schemaVersion: "theorem.claim-graph.v0",
+  nodes: [],
+  edges: [],
+  warnings: []
+};
 const recentReceiptKeys = ["rational", "denominator", "parity", "dimension"];
 const ACTIVITY_PAGE_SIZE = 12;
 const NOTES_STORAGE_KEY = "theorem-workbench.session-notes.v0";
@@ -233,6 +240,8 @@ const laneStatus = document.querySelector("#lane-status");
 const traceList = document.querySelector("#trace-list");
 const receiptDetails = document.querySelector("#receipt-details");
 const graphList = document.querySelector("#graph-list");
+const claimLedgerList = document.querySelector("#claim-ledger-list");
+const claimLedgerCount = document.querySelector("#claim-ledger-count");
 const mainGraphList = document.querySelector("#main-graph-list");
 const matrixSummary = document.querySelector("#matrix-summary");
 const matrixCurrentClaim = document.querySelector("#matrix-current-claim");
@@ -284,6 +293,7 @@ const routeReceipt = document.querySelector("#route-receipt");
 const routeReplay = document.querySelector("#route-replay");
 const routeReport = document.querySelector("#route-report");
 const openReplayButton = document.querySelector("#open-replay");
+const recordClaimButton = document.querySelector("#record-claim");
 const playReplayButton = document.querySelector("#play-replay");
 const resetReplayButton = document.querySelector("#reset-replay");
 const exportReplayButton = document.querySelector("#export-replay");
@@ -879,9 +889,10 @@ updateResearcherNameSummary();
 initSidebarLayout();
 updateNotesStatus("local draft");
 addActivity("system", "Workbench opened", "Static shell loaded; no external service contacted.", "passed");
-addActivity("system", "Local API ready", "UI will submit prompts only to /api/receipt on this machine.", "waiting");
+addActivity("system", "Local API ready", "UI will submit prompts only to local receipt and claim ledger routes on this machine.", "waiting");
 render();
 void refreshSafetyStatus();
+void refreshClaimLedger();
 
 function render() {
   const receipt = receiptStore.get(state.receiptKey);
@@ -904,12 +915,16 @@ function render() {
   replayCommand.textContent = receipt.replay;
   receiptSummary.innerHTML = [
     receipt.runId,
+    ...(receipt.claimId ? [`claim ${receipt.claimId}`] : []),
     `engine ${receipt.engine}`,
     `trust ${receipt.trust}`,
     ...receiptTags(receipt).map((tag) => `#${tag}`)
   ].map((item) => `<span>${escapeHtml(item)}</span>`).join("");
 
-  receiptDetails.innerHTML = Object.entries(receipt.details)
+  receiptDetails.innerHTML = [
+    ...Object.entries(receipt.details),
+    ["Claim ledger", receipt.claimId ?? "not recorded"]
+  ]
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join("");
 
@@ -927,6 +942,7 @@ function render() {
     .join("");
 
   renderClaimList();
+  renderClaimLedger();
   renderActivityLog();
   renderSurface();
   renderLane();
@@ -939,6 +955,7 @@ function render() {
   renderTaskDock(receipt);
   renderReplay(receipt);
   renderReport(receipt);
+  updateRecordClaimButton(receipt);
   applySidebarSearch();
   document.querySelectorAll(".segment").forEach((button) => {
     button.classList.toggle("active", button.dataset.level === state.level);
@@ -962,11 +979,225 @@ function renderClaimList() {
         <span>
           <strong>${escapeHtml(receipt.title)}</strong>
           <small>${escapeHtml(receipt.subtitle)}</small>
+          ${receipt.claimId ? `<small class="claim-ledger-id">${escapeHtml(receipt.claimId)}</small>` : ""}
           ${renderTagPills(receiptTags(receipt).slice(0, 3))}
         </span>
       </button>`;
     })
     .join("");
+}
+
+function renderClaimLedger() {
+  if (!claimLedgerList || !claimLedgerCount) {
+    return;
+  }
+
+  const claims = [...claimLedgerStore.values()];
+  const visibleClaims = claims.slice(0, 6);
+  const edgeCount = Array.isArray(claimLedgerGraph.edges) ? claimLedgerGraph.edges.length : 0;
+  claimLedgerCount.textContent = `${claims.length} records / ${edgeCount} links`;
+
+  claimLedgerList.innerHTML = visibleClaims.length === 0
+    ? `<div class="activity-empty">No local claim records yet. Record the current receipt to create the first project claim.</div>`
+    : visibleClaims
+      .map((claim) => {
+        const linkedKey = receiptKeyForClaimId(claim.claimId);
+        const tagText = claim.tags?.slice(0, 3).map((tag) => `#${tag}`).join(" ") || "untagged";
+        const ready = claim.finalization?.readyForNarrowClaim ? "ready" : `${claim.finalization?.openChecks?.length ?? 0} open checks`;
+        const dependencyText = claim.dependsOn?.length
+          ? `${claim.dependsOn.length} upstream`
+          : "root claim";
+        return `<button class="ledger-record ${linkedKey ? "clickable" : ""}" data-claim-id="${escapeHtml(claim.claimId)}" type="button">
+          <span class="trust-dot ${trustClass(claim.trust)}"></span>
+          <span>
+            <strong>${escapeHtml(claim.title)}</strong>
+            <small>${escapeHtml(claim.domain)} - ${escapeHtml(claim.trust)} - ${escapeHtml(ready)}</small>
+            <small>${escapeHtml(claim.claimId)} - ${escapeHtml(dependencyText)}</small>
+            <small>${escapeHtml(tagText)}</small>
+          </span>
+        </button>`;
+      })
+      .join("");
+}
+
+async function refreshClaimLedger({ announce = true } = {}) {
+  try {
+    const response = await fetch("/api/claims", {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Local claim ledger API failed.");
+    }
+
+    applyClaimLedgerPayload(payload);
+    if (announce) {
+      addActivity("local-api", "Loaded claim ledger", `${claimLedgerStore.size} local claim records available.`, "passed");
+    }
+    render();
+  } catch (error) {
+    claimLedgerCount.textContent = "unavailable";
+    claimLedgerList.innerHTML = `<div class="activity-empty">Claim ledger unavailable from the local API.</div>`;
+    addActivity("local-api", "Claim ledger unavailable", error instanceof Error ? error.message : "Unknown claim ledger failure.", "waiting");
+  }
+}
+
+function applyClaimLedgerPayload(payload) {
+  claimLedgerStore.clear();
+  for (const claim of payload.claims ?? []) {
+    if (claim?.claimId) {
+      claimLedgerStore.set(claim.claimId, claim);
+    }
+  }
+
+  claimLedgerGraph = payload.graph ?? {
+    schemaVersion: "theorem.claim-graph.v0",
+    nodes: [],
+    edges: [],
+    warnings: []
+  };
+  linkClaimLedgerToReceipts();
+}
+
+function linkClaimLedgerToReceipts() {
+  for (const receipt of receiptStore.values()) {
+    if (receipt.claimId && !claimLedgerStore.has(receipt.claimId)) {
+      delete receipt.claimId;
+    }
+  }
+
+  for (const claim of claimLedgerStore.values()) {
+    for (const ref of claim.evidenceRefs ?? []) {
+      const receiptRunId = receiptRunIdFromEvidenceRef(ref);
+      if (!receiptRunId) {
+        continue;
+      }
+
+      for (const receipt of receiptStore.values()) {
+        if (receipt.runId === receiptRunId && !receipt.claimId) {
+          receipt.claimId = claim.claimId;
+        }
+      }
+    }
+  }
+}
+
+function receiptRunIdFromEvidenceRef(ref) {
+  if (!ref || typeof ref.ref !== "string") {
+    return undefined;
+  }
+
+  if (ref.ref.startsWith("local-web-receipt:")) {
+    return ref.ref.slice("local-web-receipt:".length);
+  }
+
+  if (ref.ref.startsWith("receipt:")) {
+    return ref.ref.slice("receipt:".length);
+  }
+
+  return undefined;
+}
+
+function receiptKeyForClaimId(claimId) {
+  for (const [key, receipt] of receiptStore.entries()) {
+    if (receipt.claimId === claimId) {
+      return key;
+    }
+  }
+
+  return undefined;
+}
+
+function updateRecordClaimButton(receipt) {
+  if (!recordClaimButton || !receipt) {
+    return;
+  }
+
+  const recorded = Boolean(receipt.claimId);
+  recordClaimButton.disabled = recorded;
+  recordClaimButton.textContent = recorded ? "Claim recorded" : "Record claim";
+  recordClaimButton.title = recorded
+    ? `${receipt.claimId} is already stored in the local claim ledger.`
+    : "Write this receipt into the local claim ledger.";
+}
+
+async function recordCurrentClaim() {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt || receipt.claimId) {
+    updateRecordClaimButton(receipt);
+    return;
+  }
+
+  recordClaimButton.disabled = true;
+  recordClaimButton.textContent = "Recording";
+  addActivity("human", "Recording claim", `${receipt.title} is being written to the local claim ledger.`, "waiting");
+
+  try {
+    const response = await fetch("/api/claims", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(createClaimLedgerPayload(receipt))
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Local claim ledger write failed.");
+    }
+
+    applyClaimLedgerPayload(payload);
+    receipt.claimId = payload.claim.claimId;
+    updateLatestActivity("Recording claim", "passed", `${payload.claim.claimId} written to .theorem-workbench/claims.`);
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, "passed", item.at);
+    }
+  } catch (error) {
+    updateLatestActivity("Recording claim", "refuted", error instanceof Error ? error.message : "Unknown claim ledger failure.");
+  } finally {
+    render();
+  }
+}
+
+function createClaimLedgerPayload(receipt) {
+  const dependencies = receiptDependencies(receipt)
+    .map((key) => receiptStore.get(key)?.claimId)
+    .filter(Boolean);
+  const nextChecks = verificationRows(receipt)
+    .filter((row) => ["missing", "waiting"].includes(row.status))
+    .slice(0, 5)
+    .map((row) => `${row.label}: ${row.command}`);
+  const researcher = currentResearcherName();
+
+  return {
+    title: receipt.title,
+    statement: claimStatementForReceipt(receipt),
+    domain: state.lane,
+    trust: receipt.trust,
+    tags: receiptTags(receipt),
+    dependsOn: dependencies,
+    derivedBy: receipt.derivedBy,
+    authors: researcher === "Unsigned researcher" ? [] : [researcher],
+    evidenceRefs: [
+      {
+        kind: "other",
+        ref: `local-web-receipt:${receipt.runId}`,
+        trust: receipt.trust,
+        summary: `${receipt.engine}: ${receipt.subtitle}`
+      }
+    ],
+    nextChecks
+  };
+}
+
+function claimStatementForReceipt(receipt) {
+  const mathInput = receipt.math?.input ?? receipt.title;
+  const mathOutput = receipt.math?.output ?? receipt.output;
+  if (mathInput && mathOutput && receipt.trust !== "refuted") {
+    return `${mathInput} = ${mathOutput}`;
+  }
+
+  return `${receipt.title}: ${receipt.output}`;
 }
 
 function matchesReceiptSearch(receipt, query) {
@@ -978,6 +1209,7 @@ function matchesReceiptSearch(receipt, query) {
     receipt.title,
     receipt.subtitle,
     receipt.trust,
+    receipt.claimId,
     receipt.runId,
     receipt.engine,
     receipt.output,
@@ -2098,6 +2330,7 @@ function renderReport(receipt) {
       <div><dt>Output</dt><dd>${escapeHtml(receipt.output)}</dd></div>
       <div><dt>Engine</dt><dd>${escapeHtml(receipt.engine)}</dd></div>
       <div><dt>Run</dt><dd>${escapeHtml(receipt.runId)}</dd></div>
+      <div><dt>Claim ledger</dt><dd>${escapeHtml(receipt.claimId ?? "not recorded")}</dd></div>
       <div><dt>Researcher</dt><dd>${escapeHtml(researcher)}</dd></div>
       <div><dt>Workbench</dt><dd>Theorem Workbench by Ocean Bennett</dd></div>
       <div><dt>License</dt><dd>AGPL-3.0 with visible attribution</dd></div>
@@ -2183,6 +2416,7 @@ function generateReportMarkdown(receipt) {
     `- Output: ${receipt.output}`,
     `- Engine: ${receipt.engine}`,
     `- Run ID: ${receipt.runId}`,
+    `- Claim ledger ID: ${receipt.claimId ?? "not recorded"}`,
     `- Replay: \`${receipt.replay}\``,
     "",
     "## Ledger Metadata",
@@ -2460,6 +2694,26 @@ claimList.addEventListener("click", (event) => {
   document.querySelector("#surface-checks").scrollTop = 0;
 });
 
+claimLedgerList.addEventListener("click", (event) => {
+  const button = event.target.closest(".ledger-record");
+  if (!button) {
+    return;
+  }
+
+  const key = receiptKeyForClaimId(button.dataset.claimId);
+  if (!key) {
+    addActivity("human", "Opened claim ledger row", `${button.dataset.claimId} is stored locally but not linked to a visible receipt in this session.`, "waiting");
+    return;
+  }
+
+  setReplayPlaying(false);
+  state.receiptKey = key;
+  state.level = "middle";
+  state.replayIndex = 0;
+  promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
+  render();
+});
+
 laneButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const nextLane = button.dataset.lane;
@@ -2486,6 +2740,10 @@ sidebarSearch.addEventListener("input", () => {
 openReplayButton.addEventListener("click", () => {
   state.surface = "replay";
   render();
+});
+
+recordClaimButton.addEventListener("click", () => {
+  void recordCurrentClaim();
 });
 
 playReplayButton.addEventListener("click", () => {

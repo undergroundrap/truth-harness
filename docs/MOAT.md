@@ -124,3 +124,14 @@ claim -> verifier -> receipt -> ledger -> snapshot -> report -> next claim
 ```
 
 That loop is the moat.
+
+## Current Web Loop
+
+The web app now participates in the same local evidence loop as the CLI and MCP server:
+
+- `/api/receipt` creates local receipt view models without hosted model calls.
+- `/api/claims` writes selected receipts into `.theorem-workbench/claims` through the core claim-ledger module.
+- The browser shows persisted claim IDs in the sidebar, inspector, and report export.
+- Claim records keep tags, trust labels, dependencies, evidence refs, open checks, authors, and Markdown output as project-local artifacts.
+
+This is the wedge: researchers and agents should not have to choose between a usable front end and verifiable local provenance.

@@ -5,6 +5,7 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const root = resolve("apps/web");
+const projectRoot = resolve(".");
 const MAX_JSON_BODY_BYTES = 16 * 1024;
 let coreModulePromise;
 const args = new Map(
@@ -112,8 +113,96 @@ async function handleApiRequest(request, response, requestUrl) {
           selectedContextRequiredForExternalModels: true
         }
       },
-      capabilities: ["receipt-create", "trace-render", "activity-log", "agent-runbook", "research-session", "validation-plan", "sandbox-status", "safety-center"]
+      capabilities: [
+        "receipt-create",
+        "claim-ledger",
+        "trace-render",
+        "activity-log",
+        "agent-runbook",
+        "research-session",
+        "validation-plan",
+        "sandbox-status",
+        "safety-center"
+      ]
     });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/claims" && request.method === "GET") {
+    const snapshot = await readClaimLedgerSnapshot();
+    writeJson(response, 200, {
+      schemaVersion: "theorem.web-claims-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      ...snapshot
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/claims" && request.method === "POST") {
+    const input = await readJsonBody(request);
+    try {
+      const { writeClaimLedgerRecord } = await loadCoreModule();
+      const result = await writeClaimLedgerRecord({
+        rootPath: projectRoot,
+        title: optionalText(input.title),
+        statement: String(input.statement ?? "").trim(),
+        domain: optionalText(input.domain),
+        status: optionalText(input.status),
+        trust: optionalText(input.trust),
+        tags: stringList(input.tags),
+        dependsOn: stringList(input.dependsOn),
+        supersedes: stringList(input.supersedes),
+        derivedBy: optionalText(input.derivedBy),
+        authors: stringList(input.authors),
+        evidenceRefs: evidenceRefList(input.evidenceRefs),
+        nextChecks: stringList(input.nextChecks)
+      });
+      const snapshot = await readClaimLedgerSnapshot();
+      writeJson(response, 200, {
+        schemaVersion: "theorem.web-claim-write-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        claim: result.claim,
+        paths: {
+          json: result.jsonPath,
+          markdown: result.markdownPath
+        },
+        ...snapshot,
+        activity: [
+          {
+            actor: "local-api",
+            action: "created-claim-ledger-record",
+            detail: `${result.claim.claimId} written to the local .theorem-workbench claim ledger.`,
+            at: result.claim.createdAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeJson(response, 400, {
+        error: error instanceof Error ? error.message : "Claim ledger write failed."
+      });
+    }
+    return;
+  }
+
+  const claimReadMatch = requestUrl.pathname.match(/^\/api\/claims\/([^/]+)$/u);
+  if (claimReadMatch && request.method === "GET") {
+    try {
+      const { readClaimRecord } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const claim = await readClaimRecord(projectRoot, decodeURIComponent(claimReadMatch[1]));
+      writeJson(response, 200, {
+        schemaVersion: "theorem.web-claim-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        claim
+      });
+    } catch (error) {
+      writeJson(response, 404, {
+        error: error instanceof Error ? error.message : "Claim not found."
+      });
+    }
     return;
   }
 
@@ -157,6 +246,54 @@ async function handleApiRequest(request, response, requestUrl) {
   writeJson(response, 404, {
     error: "unknown API route"
   });
+}
+
+async function readClaimLedgerSnapshot() {
+  const { createClaimLedgerGraph, listClaimRecords } = await loadCoreModule();
+  await ensureLocalWorkspace();
+  const claims = await listClaimRecords(projectRoot);
+  return {
+    claims,
+    graph: createClaimLedgerGraph(claims)
+  };
+}
+
+async function ensureLocalWorkspace() {
+  const { initLocalWorkspace } = await loadCoreModule();
+  await initLocalWorkspace(projectRoot, {
+    displayName: "Theorem Workbench Local Web Session"
+  });
+}
+
+function optionalText(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function stringList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item) => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function evidenceRefList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      kind: optionalText(item.kind) ?? "other",
+      ref: optionalText(item.ref) ?? "",
+      trust: optionalText(item.trust),
+      summary: optionalText(item.summary)
+    }))
+    .filter((item) => item.ref);
 }
 
 function guardApiRequest(request, response) {
