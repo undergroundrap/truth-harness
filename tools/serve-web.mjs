@@ -157,6 +157,67 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/cas" && request.method === "GET") {
+    const checks = await readCasCheckSnapshot();
+    writeJson(response, 200, {
+      schemaVersion: "theorem.web-cas-list-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      checks
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/cas/check" && request.method === "POST") {
+    const input = await readJsonBody(request);
+    try {
+      const { writeSymbolicCasCheckRecord } = await loadCoreModule();
+      const operation = parseCasOperation(input.operation);
+      const expression = requiredText(input.expression, "expression");
+      const result = requiredText(input.result, "result");
+      const variable = optionalText(input.variable) ?? "x";
+      const timeoutMs = Number.isFinite(input.timeoutMs) ? Number(input.timeoutMs) : undefined;
+
+      await ensureLocalWorkspace();
+      const write = await writeSymbolicCasCheckRecord({
+        rootPath: projectRoot,
+        prompt: {
+          operation,
+          expression,
+          variable
+        },
+        result,
+        maximaCommand: optionalText(input.maximaCommand),
+        timeoutMs
+      });
+      const checks = await readCasCheckSnapshot();
+      writeJson(response, 200, {
+        schemaVersion: "theorem.web-cas-check-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        record: write.record,
+        paths: {
+          json: write.jsonPath,
+          markdown: write.markdownPath
+        },
+        checks,
+        activity: [
+          {
+            actor: "local-api",
+            action: "created-cas-check",
+            detail: `${write.record.checkId} wrote ${write.record.status} Maxima CAS record with trust ${write.record.trust}.`,
+            at: write.record.createdAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeJson(response, 400, {
+        error: error instanceof Error ? error.message : "CAS check failed."
+      });
+    }
+    return;
+  }
+
   const routeReadMatch = requestUrl.pathname.match(/^\/api\/routes\/([^/]+)$/u);
   if (routeReadMatch && request.method === "GET") {
     try {
@@ -175,6 +236,52 @@ async function handleApiRequest(request, response, requestUrl) {
     } catch (error) {
       writeJson(response, 404, {
         error: error instanceof Error ? error.message : "Verifier route not found."
+      });
+    }
+    return;
+  }
+
+  const routeSatisfyMatch = requestUrl.pathname.match(/^\/api\/routes\/([^/]+)\/obligations\/([^/]+)\/satisfy$/u);
+  if (routeSatisfyMatch && request.method === "POST") {
+    const input = await readJsonBody(request);
+    try {
+      const { satisfyVerifierRouteObligation } = await loadCoreModule();
+      const routeRef = decodeURIComponent(routeSatisfyMatch[1]);
+      const obligationId = decodeURIComponent(routeSatisfyMatch[2]);
+      const routeEvidenceRef = parseRouteEvidenceRef(input.evidenceRef);
+      await ensureLocalWorkspace();
+      const result = await satisfyVerifierRouteObligation({
+        rootPath: projectRoot,
+        routeRef,
+        obligationId,
+        evidenceRef: routeEvidenceRef
+      });
+      const routes = await readRouteLedgerSnapshot();
+      writeJson(response, 200, {
+        schemaVersion: "theorem.web-route-satisfy-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        route: result.route,
+        obligation: result.obligation,
+        evidence: result.evidence,
+        message: result.message,
+        routePaths: {
+          json: result.jsonPath,
+          markdown: result.markdownPath
+        },
+        routes,
+        activity: [
+          {
+            actor: "local-api",
+            action: "satisfied-route-obligation",
+            detail: result.message,
+            at: result.obligation.satisfiedAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeJson(response, 400, {
+        error: error instanceof Error ? error.message : "Route obligation satisfaction failed."
       });
     }
     return;
@@ -326,18 +433,32 @@ async function readRouteLedgerSnapshot() {
   }));
 }
 
+async function readCasCheckSnapshot() {
+  const { listSymbolicCasChecks } = await loadCoreModule();
+  await ensureLocalWorkspace();
+  const checks = await listSymbolicCasChecks(projectRoot);
+  return checks.map((check) => ({
+    ...check,
+    paths: artifactPathsFor(check.path)
+  }));
+}
+
 function routePathsFor(routePathOrId) {
   if (typeof routePathOrId === "string" && routePathOrId.endsWith(".json")) {
-    const json = resolve(projectRoot, routePathOrId);
-    return {
-      json,
-      markdown: json.replace(/\.json$/u, ".md")
-    };
+    return artifactPathsFor(routePathOrId);
   }
 
   return {
     json: undefined,
     markdown: undefined
+  };
+}
+
+function artifactPathsFor(relativeOrAbsoluteJsonPath) {
+  const json = resolve(projectRoot, relativeOrAbsoluteJsonPath);
+  return {
+    json,
+    markdown: json.replace(/\.json$/u, ".md")
   };
 }
 
@@ -348,8 +469,26 @@ async function ensureLocalWorkspace() {
   });
 }
 
+function requiredText(value, fieldName) {
+  const text = optionalText(value);
+  if (!text) {
+    throw new Error(`${fieldName} is required`);
+  }
+
+  return text;
+}
+
 function optionalText(value) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function parseCasOperation(value) {
+  const operation = optionalText(value) ?? "simplify";
+  if (["simplify", "factor", "expand", "differentiate", "integrate"].includes(operation)) {
+    return operation;
+  }
+
+  throw new Error(`Unsupported CAS operation: ${operation}`);
 }
 
 function stringList(value) {
@@ -377,6 +516,24 @@ function evidenceRefList(value) {
       summary: optionalText(item.summary)
     }))
     .filter((item) => item.ref);
+}
+
+function parseRouteEvidenceRef(value) {
+  if (!value || typeof value !== "object") {
+    throw new Error("evidenceRef is required");
+  }
+
+  const kind = requiredText(value.kind, "evidenceRef.kind");
+  if (!["cas", "proof", "smt", "receipt", "route"].includes(kind)) {
+    throw new Error(`Unsupported route evidence kind: ${kind}`);
+  }
+
+  return {
+    kind,
+    ref: requiredText(value.ref, "evidenceRef.ref"),
+    trust: optionalText(value.trust),
+    summary: optionalText(value.summary)
+  };
 }
 
 function guardApiRequest(request, response) {

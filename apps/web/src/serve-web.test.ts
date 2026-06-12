@@ -84,6 +84,61 @@ describe("local web route ledger API", () => {
     expect(routePayload.route.proofObligations[0].obligationId).toMatch(/^obl_[a-f0-9]{16}$/u);
     expect(routePayload.routePaths.markdown).toBe(receiptPayload.routePaths.markdown);
 
+    const casResponse = await fetch(`${baseUrl}/api/cas/check`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        operation: "simplify",
+        expression: "3 / 4 + 5 / 8",
+        result: "11/8"
+      })
+    });
+    expect(casResponse.status).toBe(200);
+    const casPayload = await casResponse.json();
+    expect(casPayload.localOnly).toBe(true);
+    expect(casPayload.externalCalls).toEqual([]);
+    expect(casPayload.record.schemaVersion).toBe("theorem.cas-check.v0");
+    expect(casPayload.record.checkId).toMatch(/^cas_[a-f0-9]{16}$/u);
+    expect(casPayload.record.networkAccess).toBe("none");
+    expect(["cross-checked", "unverified"]).toContain(casPayload.record.trust);
+    expect(existsSync(casPayload.paths.json)).toBe(true);
+    expect(existsSync(casPayload.paths.markdown)).toBe(true);
+
+    const casListResponse = await fetch(`${baseUrl}/api/cas`);
+    expect(casListResponse.status).toBe(200);
+    const casListPayload = await casListResponse.json();
+    expect(casListPayload.localOnly).toBe(true);
+    expect(casListPayload.externalCalls).toEqual([]);
+    expect(casListPayload.checks).toContainEqual(
+      expect.objectContaining({
+        checkId: casPayload.record.checkId,
+        path: expect.stringContaining(".theorem-workbench")
+      })
+    );
+
+    const formalObligation = routePayload.route.proofObligations.find((obligation: { kind: string }) => obligation.kind === "formal-proof");
+    if (!formalObligation) {
+      throw new Error("Expected a formal-proof obligation for the arithmetic route.");
+    }
+    const rejectedSatisfaction = await fetch(`${baseUrl}/api/routes/${routePayload.route.routeId}/obligations/${formalObligation.obligationId}/satisfy`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        evidenceRef: {
+          kind: "cas",
+          ref: casListPayload.checks[0].path,
+          trust: casPayload.record.trust
+        }
+      })
+    });
+    expect(rejectedSatisfaction.status).toBe(400);
+    const rejectedPayload = await rejectedSatisfaction.json();
+    expect(rejectedPayload.error).toContain("formal-proof obligations require");
+
     const claimResponse = await fetch(`${baseUrl}/api/claims`, {
       method: "POST",
       headers: {

@@ -195,6 +195,7 @@ const seedReceipts = {
 const receiptStore = new Map(Object.entries(seedReceipts));
 const claimLedgerStore = new Map();
 const routeLedgerStore = new Map();
+const casCheckStore = new Map();
 let claimLedgerGraph = {
   schemaVersion: "theorem.claim-graph.v0",
   nodes: [],
@@ -256,6 +257,8 @@ const matrixSummary = document.querySelector("#matrix-summary");
 const matrixCurrentClaim = document.querySelector("#matrix-current-claim");
 const matrixNextCommand = document.querySelector("#matrix-next-command");
 const verificationMatrix = document.querySelector("#verification-matrix");
+const casArtifactList = document.querySelector("#cas-artifact-list");
+const casArtifactCount = document.querySelector("#cas-artifact-count");
 const capabilityLedger = document.querySelector("#capability-ledger");
 const protocolLane = document.querySelector("#protocol-lane");
 const protocolSummary = document.querySelector("#protocol-summary");
@@ -929,6 +932,7 @@ render();
 void refreshSafetyStatus();
 void refreshClaimLedger();
 void refreshRouteLedger();
+void refreshCasChecks();
 
 function render() {
   const receipt = receiptStore.get(state.receiptKey);
@@ -1703,6 +1707,42 @@ function applyRouteLedgerPayload(payload) {
   }
 }
 
+async function refreshCasChecks({ announce = true } = {}) {
+  try {
+    const response = await fetch("/api/cas", {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Local CAS ledger API failed.");
+    }
+
+    applyCasCheckPayload(payload);
+    if (announce) {
+      addActivity("local-api", "Loaded CAS ledger", `${casCheckStore.size} local CAS check records available.`, "passed");
+    }
+    render();
+  } catch (error) {
+    if (casArtifactCount) {
+      casArtifactCount.textContent = "CAS unavailable";
+    }
+    if (casArtifactList) {
+      casArtifactList.innerHTML = `<div class="activity-empty">CAS artifact ledger unavailable from the local API.</div>`;
+    }
+    addActivity("local-api", "CAS ledger unavailable", error instanceof Error ? error.message : "Unknown CAS ledger failure.", "waiting");
+  }
+}
+
+function applyCasCheckPayload(payload) {
+  casCheckStore.clear();
+  for (const check of payload.checks ?? []) {
+    if (check?.checkId) {
+      casCheckStore.set(check.checkId, check);
+    }
+  }
+}
+
 async function openSavedRoute(routeId) {
   if (!routeId) {
     return;
@@ -1735,6 +1775,152 @@ async function openSavedRoute(routeId) {
   } catch (error) {
     updateLatestActivity("Opening saved verifier route", "refuted", error instanceof Error ? error.message : "Unknown verifier route read failure.");
   }
+}
+
+async function runCasForObligation(button) {
+  const receipt = receiptStore.get(state.receiptKey);
+  const routeId = button.dataset.routeId;
+  const obligationId = button.dataset.obligationId;
+  if (!receipt || !routeId || !obligationId) {
+    return;
+  }
+
+  const operation = casOperationForReceipt(receipt);
+  const expression = casExpressionForReceipt(receipt);
+  const result = casResultForReceipt(receipt);
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Running";
+  addActivity("human", "Requested CAS check", `${operation} ${expression} -> ${result}`, "waiting");
+
+  try {
+    const response = await fetch("/api/cas/check", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        operation,
+        expression,
+        result,
+        variable: "x"
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Local CAS check failed.");
+    }
+
+    applyCasCheckPayload(payload);
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, payload.record?.trust === "cross-checked" ? "passed" : "waiting", item.at);
+    }
+
+    if (payload.record?.trust !== "cross-checked") {
+      addActivity(
+        "local-api",
+        "CAS obligation still open",
+        `${payload.record?.checkId ?? "CAS check"} returned ${payload.record?.status ?? "unknown"} and cannot satisfy the route.`,
+        "waiting"
+      );
+      render();
+      return;
+    }
+
+    await attachCasEvidenceToRoute({
+      routeId,
+      obligationId,
+      evidenceRef: {
+        kind: "cas",
+        ref: relativeArtifactRef(payload.paths?.json),
+        trust: payload.record.trust,
+        summary: `CAS ${payload.record.status}: ${payload.record.operation} ${payload.record.expression} -> ${payload.record.result}`
+      }
+    });
+  } catch (error) {
+    addActivity("local-api", "CAS check failed", error instanceof Error ? error.message : "Unknown CAS check failure.", "refuted");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+async function attachCasEvidenceToRoute(input) {
+  if (!input.routeId || !input.obligationId || !input.evidenceRef?.ref) {
+    return;
+  }
+
+  addActivity("web-ui", "Attaching CAS evidence", `${input.evidenceRef.ref} -> ${input.obligationId}`, "waiting");
+
+  try {
+    const response = await fetch(`/api/routes/${encodeURIComponent(input.routeId)}/obligations/${encodeURIComponent(input.obligationId)}/satisfy`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        evidenceRef: input.evidenceRef
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Route obligation satisfaction failed.");
+    }
+
+    applyRouteLedgerPayload(payload);
+    syncRouteIntoReceipts(payload.route, payload.routePaths);
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, "passed", item.at);
+    }
+    render();
+  } catch (error) {
+    addActivity("local-api", "CAS attach rejected", error instanceof Error ? error.message : "Unknown route satisfaction failure.", "refuted");
+  }
+}
+
+async function copyObligationCommand(button) {
+  const command = button.dataset.command;
+  if (!command) {
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(command);
+    addActivity("human", "Copied verifier command", command, "passed");
+    const originalText = button.textContent;
+    button.textContent = "Copied";
+    setTimeout(() => {
+      button.textContent = originalText;
+    }, 1200);
+  } catch (error) {
+    addActivity("web-ui", "Copy command failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+  }
+}
+
+function syncRouteIntoReceipts(route, routePaths) {
+  if (!route?.routeId) {
+    return;
+  }
+
+  for (const receipt of receiptStore.values()) {
+    if (receipt.verifierRoute?.routeId === route.routeId || receipt.runId === route.receipt?.runId) {
+      receipt.verifierRoute = route;
+      receipt.routePaths = routePaths ?? receipt.routePaths;
+      receipt.details["Route status"] = route.status;
+      receipt.details["Route gaps"] = String(route.gaps?.length ?? 0);
+      receipt.details["Proof obligations"] = String(route.proofObligations?.length ?? 0);
+    }
+  }
+}
+
+function relativeArtifactRef(path) {
+  if (!path) {
+    return "";
+  }
+
+  const marker = ".theorem-workbench";
+  const index = path.indexOf(marker);
+  return index >= 0 ? path.slice(index) : path;
 }
 
 async function refreshClaimLedger({ announce = true } = {}) {
@@ -2384,9 +2570,11 @@ function renderVerificationMatrix(receipt) {
         </div>
         <p>${escapeHtml(row.description)}</p>
         <code>${escapeHtml(row.command)}</code>
+        ${verificationRowActionHtml(row)}
       </div>
     </article>`)
     .join("");
+  renderCasArtifactList(receipt);
 
   mathCoreList.innerHTML = rows
     .filter((row) => ["exact", "counterexample", "dimension", "symbolic", "smt", "proof", "bench"].includes(row.id))
@@ -2396,6 +2584,59 @@ function renderVerificationMatrix(receipt) {
       <small>${escapeHtml(statusLabel(row.status))}</small>
     </div>`)
     .join("");
+}
+
+function renderCasArtifactList(receipt) {
+  if (!casArtifactList || !casArtifactCount) {
+    return;
+  }
+
+  const checks = [...casCheckStore.values()];
+  const openCasObligation = currentOpenCasObligation(receipt);
+  casArtifactCount.textContent = checks.length === 0
+    ? "no CAS records"
+    : `${checks.length} CAS record${checks.length === 1 ? "" : "s"}`;
+
+  if (checks.length === 0) {
+    casArtifactList.innerHTML = `<div class="activity-empty">No CAS artifacts yet. Run an independent-check obligation to write the first local Maxima record.</div>`;
+    return;
+  }
+
+  casArtifactList.innerHTML = checks.slice(0, 6)
+    .map((check) => {
+      const statusClass = trustClass(check.trust);
+      const attachable = openCasObligation && check.trust === "cross-checked";
+      const summary = `${check.operation} ${check.expression} -> ${check.result}`;
+      const path = check.path ?? check.paths?.json ?? check.checkId;
+      return `<article class="cas-artifact-card">
+        <span class="task-state ${statusClass}"></span>
+        <div class="cas-artifact-body">
+          <div class="cas-artifact-head">
+            <strong>${escapeHtml(summary)}</strong>
+            <span>${escapeHtml(check.status)} / ${escapeHtml(check.trust)}</span>
+          </div>
+          <small><code>${escapeHtml(check.checkId)}</code> - ${escapeHtml(path)}</small>
+          ${check.warnings?.length ? `<small>${escapeHtml(check.warnings[0])}</small>` : ""}
+          ${attachable ? `<button class="text-button compact-button attach-cas-artifact" data-route-id="${escapeHtml(openCasObligation.routeId)}" data-obligation-id="${escapeHtml(openCasObligation.obligationId)}" data-cas-ref="${escapeHtml(path)}" data-cas-trust="${escapeHtml(check.trust)}" data-cas-summary="${escapeHtml(summary)}" type="button">Attach to open CAS obligation</button>` : ""}
+        </div>
+      </article>`;
+    })
+    .join("");
+}
+
+function currentOpenCasObligation(receipt) {
+  const route = receipt?.verifierRoute;
+  const obligation = route?.proofObligations?.find((item) =>
+    item.kind === "independent-check" && item.status === "open"
+  );
+  if (!route || !obligation) {
+    return undefined;
+  }
+
+  return {
+    routeId: route.routeId,
+    obligationId: obligation.obligationId
+  };
 }
 
 function renderCapabilityLedger() {
@@ -2697,7 +2938,7 @@ function formatSafetyPhrase(value) {
 }
 
 function verificationRows(receipt) {
-  const routeRows = routeGapVerificationRows(receipt);
+  const routeRows = routeObligationVerificationRows(receipt);
   const catalogRows = verificationGateCatalog.map((gate) => {
     const applicable = gate.applies(receipt);
     const status = applicable ? gate.status(receipt) : "skipped";
@@ -2710,18 +2951,108 @@ function verificationRows(receipt) {
   return [...routeRows, ...catalogRows];
 }
 
-function routeGapVerificationRows(receipt) {
-  const gaps = receipt?.verifierRoute?.gaps ?? [];
-  return gaps
-    .filter((gap) => gap.severity !== "info")
-    .slice(0, 5)
-    .map((gap, index) => ({
-      id: `route-gap-${index}`,
-      label: `Verifier gap: ${gap.displayName}`,
-      command: gap.command ?? `theorem verify "${truncateForCommand(receipt.title, 34)}" --json`,
-      description: gap.nextStep ? `${gap.reason} Next: ${gap.nextStep}` : gap.reason,
-      status: gap.severity === "critical" ? "missing" : "waiting"
-    }));
+function routeObligationVerificationRows(receipt) {
+  const route = receipt?.verifierRoute;
+  const obligations = route?.proofObligations ?? [];
+  return obligations
+    .filter((obligation) => obligation.status !== "not-required")
+    .slice(0, 6)
+    .map((obligation) => {
+      const command = obligation.command ?? commandForObligation(obligation, receipt);
+      return {
+        id: `route-obligation-${obligation.obligationId}`,
+        label: obligation.title,
+        command,
+        description: [
+          obligation.requiredBefore,
+          obligation.nextStep,
+          obligation.satisfactionSummary
+        ].filter(Boolean).join(" "),
+        status: obligation.status === "satisfied"
+          ? "passed"
+          : obligation.severity === "critical" ? "missing" : "waiting",
+        routeId: route.routeId,
+        obligationId: obligation.obligationId,
+        obligationKind: obligation.kind,
+        canRunCas: obligation.status === "open"
+          && obligation.kind === "independent-check"
+          && command.startsWith("theorem cas check")
+          && casResultLooksCheckable(receipt)
+      };
+    });
+}
+
+function commandForObligation(obligation, receipt) {
+  if (obligation.kind === "independent-check") {
+    return `theorem cas check --operation simplify --expression "${truncateForCommand(casExpressionForReceipt(receipt), 36)}" --result "${truncateForCommand(casResultForReceipt(receipt), 24)}" --write`;
+  }
+
+  if (obligation.kind === "solver-encoding") {
+    return "theorem smt check <constraints.smt2> --write";
+  }
+
+  if (obligation.kind === "formal-proof") {
+    return "theorem proof check <proof.lean> --write";
+  }
+
+  return receipt.replay;
+}
+
+function casOperationForReceipt(receipt) {
+  const text = `${receipt.title} ${receipt.replay}`.toLowerCase();
+  if (/\bfactor\b/u.test(text)) {
+    return "factor";
+  }
+  if (/\bexpand\b/u.test(text)) {
+    return "expand";
+  }
+  if (/\bdifferentiate\b|\bderivative\b/u.test(text)) {
+    return "differentiate";
+  }
+  if (/\bintegrate\b|\bintegral\b/u.test(text)) {
+    return "integrate";
+  }
+
+  return "simplify";
+}
+
+function casExpressionForReceipt(receipt) {
+  const raw = String(receipt.title ?? "").trim();
+  return raw
+    .replace(/^(compute|calculate|simplify|symbolic\s+simplify|factor|expand|differentiate|derive|integrate)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim() || raw;
+}
+
+function casResultForReceipt(receipt) {
+  return String(receipt.output ?? receipt.details?.Output ?? "").trim();
+}
+
+function casResultLooksCheckable(receipt) {
+  const result = casResultForReceipt(receipt);
+  if (!result) {
+    return false;
+  }
+
+  return !/\b(unavailable|unsupported|failed|failure|error|could not|missing|not installed)\b/iu.test(result);
+}
+
+function verificationRowActionHtml(row) {
+  if (row.status === "passed" || !row.obligationId) {
+    return "";
+  }
+
+  if (row.canRunCas) {
+    return `<div class="matrix-row-actions">
+      <button class="text-button compact-button run-cas-obligation" data-route-id="${escapeHtml(row.routeId)}" data-obligation-id="${escapeHtml(row.obligationId)}" type="button">Run CAS + attach</button>
+      <span class="mini-label">writes .theorem-workbench/cas first</span>
+    </div>`;
+  }
+
+  return `<div class="matrix-row-actions">
+    <button class="text-button compact-button copy-obligation-command" data-command="${escapeHtml(row.command)}" type="button">Copy command</button>
+    <span class="mini-label">${escapeHtml(row.obligationKind ?? "evidence")} evidence required</span>
+  </div>`;
 }
 
 function statusLabel(status) {
@@ -3902,7 +4233,7 @@ function trustClass(trust) {
     return "refuted";
   }
 
-  if (trust === "dimension-checked" || trust === "smt-checked" || trust === "bounded-numeric") {
+  if (trust === "dimension-checked" || trust === "smt-checked" || trust === "cross-checked" || trust === "bounded-numeric") {
     return "checked";
   }
 
@@ -4073,6 +4404,37 @@ claimLedgerSearch.addEventListener("input", () => {
 routeHistorySearch.addEventListener("input", () => {
   state.routeHistoryQuery = routeHistorySearch.value;
   renderRouteHistory();
+});
+
+verificationMatrix.addEventListener("click", (event) => {
+  const casButton = event.target.closest(".run-cas-obligation");
+  if (casButton) {
+    void runCasForObligation(casButton);
+    return;
+  }
+
+  const copyButton = event.target.closest(".copy-obligation-command");
+  if (copyButton) {
+    void copyObligationCommand(copyButton);
+  }
+});
+
+casArtifactList.addEventListener("click", (event) => {
+  const attachButton = event.target.closest(".attach-cas-artifact");
+  if (!attachButton) {
+    return;
+  }
+
+  void attachCasEvidenceToRoute({
+    routeId: attachButton.dataset.routeId,
+    obligationId: attachButton.dataset.obligationId,
+    evidenceRef: {
+      kind: "cas",
+      ref: attachButton.dataset.casRef,
+      trust: attachButton.dataset.casTrust,
+      summary: attachButton.dataset.casSummary
+    }
+  });
 });
 
 openReplayButton.addEventListener("click", () => {
