@@ -3082,6 +3082,22 @@ function printVerifierRoute(route: VerifierRoute, outPath?: string, workspaceWri
     }
   }
 
+  const proofObligations = route.proofObligations ?? [];
+  if (proofObligations.length > 0) {
+    console.log("");
+    console.log("Proof obligations:");
+    for (const obligation of proofObligations) {
+      console.log(`  ${obligation.status}: ${obligation.title} (${obligation.kind})`);
+      console.log(`    Required before: ${obligation.requiredBefore}`);
+      if (obligation.nextStep) {
+        console.log(`    Next: ${obligation.nextStep}`);
+      }
+      if (obligation.command) {
+        console.log(`    Command: ${obligation.command}`);
+      }
+    }
+  }
+
   console.log("");
   console.log("Next actions:");
   for (const action of route.nextActions) {
@@ -3121,6 +3137,7 @@ function printVerifierRouteList(routes: VerifierRouteSummary[]): void {
     console.log(`  Problem: ${singleLineSnippet(route.problem)}`);
     console.log(`  Used: ${route.usedCapabilities.length > 0 ? route.usedCapabilities.join(", ") : "none"}`);
     console.log(`  Gaps: ${route.gaps} (${route.criticalGaps} critical)`);
+    console.log(`  Proof obligations: ${route.proofObligations}`);
     console.log(`  Path: ${route.path}`);
   }
 }

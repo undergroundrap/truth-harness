@@ -98,6 +98,7 @@ describe("benchmark CLI", () => {
       receipt: { trust: string };
       usedCapabilities: Array<{ capabilityId: string }>;
       gaps: Array<{ capabilityId: string }>;
+      proofObligations: Array<{ kind: string; status: string; sourceCapabilityId: string }>;
       trustBoundary: { routeIsNotProof: boolean };
     };
 
@@ -115,7 +116,35 @@ describe("benchmark CLI", () => {
         capabilityId: "accepted-proof-checker"
       })
     );
+    expect(json.proofObligations).toContainEqual(
+      expect.objectContaining({
+        kind: "formal-proof",
+        status: "not-required",
+        sourceCapabilityId: "accepted-proof-checker"
+      })
+    );
     expect(json.trustBoundary.routeIsNotProof).toBe(true);
+  });
+
+  it("prints proof obligations in human verifier route output", async () => {
+    const result = await runCli([
+      "verify",
+      "compute",
+      "3 / 4 + 5 / 8",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "theorem-workbench-missing-maxima-command",
+      "--lean-command",
+      "theorem-workbench-missing-lean-command",
+      "--z3-command",
+      "theorem-workbench-missing-z3-command"
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Proof obligations:");
+    expect(result.stdout).toContain("not-required: Formal proof-checker obligation");
+    expect(result.stdout).toContain("Required before: Before labeling this scoped claim proved.");
   });
 
   it("writes and inspects persisted verifier routes", async () => {
@@ -145,11 +174,12 @@ describe("benchmark CLI", () => {
     };
     const listed = JSON.parse((await runCli(["route", "list", root, "--json"])).stdout) as {
       total: number;
-      routes: Array<{ routeId: string; finalTrust: string; path: string }>;
+      routes: Array<{ routeId: string; finalTrust: string; path: string; proofObligations: number }>;
     };
     const shown = JSON.parse(
       (await runCli(["route", "show", written.route.routeId, "--workspace", root, "--json"])).stdout
     ) as { routeId: string; finalTrust: string; replay: string };
+    const humanList = await runCli(["route", "list", root]);
 
     expect(write.exitCode).toBe(0);
     expect(written.written).toBe(true);
@@ -159,10 +189,12 @@ describe("benchmark CLI", () => {
     expect(listed.total).toBe(1);
     expect(listed.routes[0]).toMatchObject({
       routeId: written.route.routeId,
-      finalTrust: "exact-computed"
+      finalTrust: "exact-computed",
+      proofObligations: 1
     });
     expect(shown.routeId).toBe(written.route.routeId);
     expect(shown.replay).toContain("theorem verify");
+    expect(humanList.stdout).toContain("Proof obligations: 1");
   });
 
   it("reports proof backend status without requiring Lean to be installed", async () => {
