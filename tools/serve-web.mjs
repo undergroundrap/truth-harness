@@ -80,7 +80,7 @@ async function handleApiRequest(request, response, requestUrl) {
       externalCalls: false,
       api: "local-node",
       engine: "@theorem-workbench/core",
-      capabilities: ["receipt-create", "trace-render", "activity-log"]
+      capabilities: ["receipt-create", "trace-render", "activity-log", "agent-runbook", "research-session", "validation-plan"]
     });
     return;
   }

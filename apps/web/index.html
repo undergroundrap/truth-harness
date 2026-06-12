@@ -160,6 +160,7 @@
               <div class="surface-header">
                 <div class="surface-tabs" role="tablist" aria-label="Workbench view">
                   <button class="surface-tab active" id="tab-trace" role="tab" aria-controls="surface-trace" aria-selected="true" data-surface="trace" type="button">Trace</button>
+                  <button class="surface-tab" id="tab-runbook" role="tab" aria-controls="surface-runbook" aria-selected="false" data-surface="runbook" type="button">Run</button>
                   <button class="surface-tab" id="tab-checks" role="tab" aria-controls="surface-checks" aria-selected="false" data-surface="checks" type="button">Checks</button>
                   <button class="surface-tab" id="tab-graph" role="tab" aria-controls="surface-graph" aria-selected="false" data-surface="graph" type="button">Graph</button>
                   <button class="surface-tab" id="tab-protocol" role="tab" aria-controls="surface-protocol" aria-selected="false" data-surface="protocol" type="button">Protocol</button>
@@ -202,6 +203,44 @@
                   </div>
                 </div>
                 <ol class="trace-list" id="trace-list"></ol>
+              </section>
+
+              <section class="surface-panel" id="surface-runbook" role="tabpanel" aria-labelledby="tab-runbook" data-surface-panel="runbook" tabindex="0" aria-label="Agent runbook" hidden>
+                <div class="panel-heading">
+                  <h3>Agent Runbook</h3>
+                  <div class="activity-actions" aria-label="Runbook actions">
+                    <button class="text-button compact-button" id="copy-runbook" type="button">Copy packet</button>
+                    <button class="text-button compact-button" id="download-runbook" type="button">Download</button>
+                  </div>
+                </div>
+                <div class="runbook-hero">
+                  <div>
+                    <span class="mini-label">Objective</span>
+                    <strong id="runbook-objective">Turn the current claim into replayable evidence.</strong>
+                  </div>
+                  <div>
+                    <span class="mini-label">Harness mode</span>
+                    <strong id="runbook-mode">recursive local-first review</strong>
+                  </div>
+                  <div>
+                    <span class="mini-label">Stop rule</span>
+                    <strong id="runbook-stop-rule">no unchecked final claims</strong>
+                  </div>
+                </div>
+                <div class="runbook-grid">
+                  <section class="runbook-card">
+                    <h4>Recursive Loop</h4>
+                    <ol id="runbook-loop"></ol>
+                  </section>
+                  <section class="runbook-card">
+                    <h4>Evidence Ledger</h4>
+                    <ul id="runbook-ledger"></ul>
+                  </section>
+                  <section class="runbook-card">
+                    <h4>Agent Packet</h4>
+                    <pre id="runbook-packet" aria-label="Agent packet"></pre>
+                  </section>
+                </div>
               </section>
 
               <section class="surface-panel" id="surface-checks" role="tabpanel" aria-labelledby="tab-checks" data-surface-panel="checks" tabindex="0" aria-label="Verification checks" hidden>

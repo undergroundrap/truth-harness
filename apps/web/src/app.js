@@ -175,6 +175,14 @@ const downloadActivityButton = document.querySelector("#download-activity");
 const surfaceTabs = document.querySelectorAll(".surface-tab");
 const surfacePanels = document.querySelectorAll("[data-surface-panel]");
 const surfaceStatus = document.querySelector("#surface-status");
+const runbookObjective = document.querySelector("#runbook-objective");
+const runbookMode = document.querySelector("#runbook-mode");
+const runbookStopRule = document.querySelector("#runbook-stop-rule");
+const runbookLoop = document.querySelector("#runbook-loop");
+const runbookLedger = document.querySelector("#runbook-ledger");
+const runbookPacket = document.querySelector("#runbook-packet");
+const copyRunbookButton = document.querySelector("#copy-runbook");
+const downloadRunbookButton = document.querySelector("#download-runbook");
 const researchNotes = document.querySelector("#research-notes");
 const notesStatus = document.querySelector("#notes-status");
 const reportPreview = document.querySelector("#report-preview");
@@ -205,6 +213,7 @@ const composer = document.querySelector("#composer");
 const verifyButton = document.querySelector("#verify-button");
 const surfaceStatusText = {
   trace: "explainable steps",
+  runbook: "agent harness",
   checks: "verification gates",
   graph: "evidence path",
   protocol: "review standard",
@@ -308,6 +317,30 @@ const verificationGateCatalog = [
     applies: () => true,
     status: () => "waiting"
   }
+];
+const runbookLoopSteps = [
+  "Restate the objective as a narrow claim and list assumptions before using a model.",
+  "Create a model-context packet that includes only the local evidence needed for the next step.",
+  "Run the smallest relevant verifier first: exact math, source citation, code test, simulation, or validation gate.",
+  "Attach every output as a receipt, source citation, notebook run, code run, benchmark, or snapshot reference.",
+  "Update the evidence graph and activity log before asking the next agent question.",
+  "Branch only when a gap is explicit, budgeted, and tied to a validation gate.",
+  "Stop or narrow the claim when proof, citation, replication, safety, or expert-review gates remain open.",
+  "Export a reviewer packet with commands, receipts, limitations, and unanswered questions."
+];
+const runbookLedgerItems = [
+  "model-context packets: exact prompt context, target model, privacy disclosure, and approval state",
+  "receipts: mathematical claims, proof checks, SMT/CAS runs, refutations, and replay commands",
+  "sources: local corpus hits, page spans, quotes, DOI or file hash metadata, and entailment notes",
+  "execution records: code runs, notebooks, simulations, benchmark runs, environment and seed metadata",
+  "snapshots: workspace state after meaningful changes so future agents can reproduce the path",
+  "checkpoints: decisions, failed attempts, unresolved gaps, next checks, and claim-language changes"
+];
+const runbookStopRules = [
+  "No final claim may outrun the strongest satisfied verification gate.",
+  "No biomedical, safety, legal, financial, or patent conclusion may be presented without expert review.",
+  "No hosted-model call is allowed without an inspectable context packet and disclosure record.",
+  "No long-running branch continues without a receipt, checkpoint, or explicit failed-result artifact."
 ];
 const laneProtocols = {
   math: {
@@ -731,6 +764,7 @@ function render() {
   renderLane();
   renderProtocol();
   renderAgentRoutes(receipt);
+  renderRunbook(receipt);
   renderVerificationMatrix(receipt);
   renderReplay(receipt);
   renderReport(receipt);
@@ -802,6 +836,10 @@ function renderSurface() {
   surfaceStatus.textContent = surfaceStatusText[state.surface] ?? "local surface";
 }
 
+function resetActiveSurfaceScroll() {
+  document.querySelector(`[data-surface-panel="${state.surface}"]`)?.scrollTo({ top: 0, left: 0 });
+}
+
 function renderLane() {
   laneButtons.forEach((button) => {
     const active = button.dataset.lane === state.lane;
@@ -843,6 +881,115 @@ function renderAgentRoutes(receipt) {
   routeReceipt.textContent = routes.receipt;
   routeReplay.textContent = routes.replay;
   routeReport.textContent = routes.report;
+}
+
+function renderRunbook(receipt) {
+  if (!receipt) {
+    return;
+  }
+
+  const packet = createRunbookPacket(receipt);
+  runbookObjective.textContent = packet.objective;
+  runbookMode.textContent = `${packet.lane} lane - ${packet.protocol}`;
+  runbookStopRule.textContent = packet.stopRules[0];
+  runbookLoop.innerHTML = packet.loop.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
+  runbookLedger.innerHTML = packet.ledger.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  runbookPacket.textContent = formatRunbookPacket(packet);
+}
+
+function createRunbookPacket(receipt) {
+  const protocol = currentLaneProtocol();
+  const routes = agentRouteCommands(receipt);
+  const rows = verificationRows(receipt);
+  const openGates = rows.filter((row) => ["missing", "waiting"].includes(row.status));
+  const satisfiedGates = rows.filter((row) => row.status === "passed");
+  const nextAction = openGates[0] ?? rows.find((row) => row.status === "skipped") ?? rows[0];
+
+  return {
+    schemaVersion: "theorem.agent-runbook.v0",
+    objective: `Investigate "${receipt.title}" without overclaiming beyond verified evidence.`,
+    lane: protocol.name,
+    protocol: protocol.title,
+    currentClaim: receipt.title,
+    currentTrust: receipt.trust,
+    currentRunId: receipt.runId,
+    privacy: {
+      default: "local-first",
+      modelCalls: "explicit context packets only",
+      network: receipt.details.Network ?? "unknown"
+    },
+    budgets: {
+      maxDepth: 6,
+      maxBranches: 4,
+      checkpointEvery: "after each tool run or claim change",
+      maxUnverifiedFinalClaims: 0
+    },
+    commands: {
+      receipt: routes.receipt,
+      replay: routes.replay,
+      report: routes.report,
+      next: nextAction?.command ?? receipt.replay
+    },
+    satisfiedGates: satisfiedGates.map((row) => row.label),
+    openGates: openGates.map((row) => ({
+      label: row.label,
+      status: statusLabel(row.status),
+      command: row.command,
+      nextCheck: row.description
+    })),
+    loop: runbookLoopSteps,
+    ledger: runbookLedgerItems,
+    stopRules: runbookStopRules,
+    finalArtifact: "Export a reviewer packet with report markdown, activity log, receipts, model-context packets, source citations, validation gaps, and replay commands."
+  };
+}
+
+function formatRunbookPacket(packet) {
+  const openGateLines = packet.openGates.length > 0
+    ? packet.openGates.map((gate) => `- ${gate.label}: ${gate.status}; run ${gate.command}; ${gate.nextCheck}`).join("\n")
+    : "- No open gates. Prepare narrow reviewer packet.";
+  return [
+    "# Theorem Workbench Agent Runbook",
+    "",
+    `Schema: ${packet.schemaVersion}`,
+    "",
+    `Objective: ${packet.objective}`,
+    `Lane: ${packet.lane}`,
+    `Protocol: ${packet.protocol}`,
+    `Current trust: ${packet.currentTrust}`,
+    `Run ID: ${packet.currentRunId}`,
+    "",
+    "## Privacy",
+    `- Default: ${packet.privacy.default}`,
+    `- Model calls: ${packet.privacy.modelCalls}`,
+    `- Network: ${packet.privacy.network}`,
+    "",
+    "## Budgets",
+    `- Max depth: ${packet.budgets.maxDepth}`,
+    `- Max branches: ${packet.budgets.maxBranches}`,
+    `- Checkpoint cadence: ${packet.budgets.checkpointEvery}`,
+    `- Max unverified final claims: ${packet.budgets.maxUnverifiedFinalClaims}`,
+    "",
+    "## Commands",
+    `- Receipt: ${packet.commands.receipt}`,
+    `- Replay: ${packet.commands.replay}`,
+    `- Report: ${packet.commands.report}`,
+    `- Next: ${packet.commands.next}`,
+    "",
+    "## Open Gates",
+    openGateLines,
+    "",
+    "## Recursive Loop",
+    ...packet.loop.map((step, index) => `${index + 1}. ${step}`),
+    "",
+    "## Required Ledger",
+    ...packet.ledger.map((item) => `- ${item}`),
+    "",
+    "## Stop Rules",
+    ...packet.stopRules.map((rule) => `- ${rule}`),
+    "",
+    `Final artifact: ${packet.finalArtifact}`
+  ].join("\n");
 }
 
 function renderVerificationMatrix(receipt) {
@@ -1230,6 +1377,32 @@ function downloadActivityLog() {
   addActivity("human", "Downloaded activity log", `${payload.eventCount} events saved as JSON.`, "passed");
 }
 
+async function copyRunbookPacket() {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt) {
+    return;
+  }
+
+  const packet = formatRunbookPacket(createRunbookPacket(receipt));
+  await navigator.clipboard.writeText(packet);
+  const originalText = copyRunbookButton.textContent;
+  copyRunbookButton.textContent = "Copied";
+  addActivity("human", "Copied agent runbook", `${receipt.runId} runbook copied for agent handoff.`, "passed");
+  setTimeout(() => {
+    copyRunbookButton.textContent = originalText;
+  }, 1200);
+}
+
+function downloadRunbookPacket() {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt) {
+    return;
+  }
+
+  downloadTextFile(`${receipt.runId}-agent-runbook.md`, formatRunbookPacket(createRunbookPacket(receipt)), "text/markdown");
+  addActivity("human", "Downloaded agent runbook", `${receipt.runId} recursive runbook saved as Markdown.`, "passed");
+}
+
 function showOlderActivity() {
   const filteredEvents = filteredActivityEvents();
   if (state.activityLimit >= filteredEvents.length) {
@@ -1270,6 +1443,7 @@ function renderReport(receipt) {
 
   const protocol = currentLaneProtocol();
   const routes = agentRouteCommands(receipt);
+  const runbook = createRunbookPacket(receipt);
   const matrixItems = verificationRows(receipt)
     .map((row) => `<li><strong>${escapeHtml(row.label)}</strong>: ${escapeHtml(statusLabel(row.status))} - <code>${escapeHtml(row.command)}</code></li>`)
     .join("");
@@ -1307,6 +1481,13 @@ function renderReport(receipt) {
       <div><dt>Replay</dt><dd><code>${escapeHtml(routes.replay)}</code></dd></div>
       <div><dt>Report</dt><dd><code>${escapeHtml(routes.report)}</code></dd></div>
     </dl>
+    <h3>Agent Runbook</h3>
+    <dl class="report-facts">
+      <div><dt>Mode</dt><dd>${escapeHtml(runbook.lane)} - ${escapeHtml(runbook.protocol)}</dd></div>
+      <div><dt>Next</dt><dd><code>${escapeHtml(runbook.commands.next)}</code></dd></div>
+      <div><dt>Budget</dt><dd>depth ${escapeHtml(runbook.budgets.maxDepth)}, branches ${escapeHtml(runbook.budgets.maxBranches)}</dd></div>
+      <div><dt>Stop</dt><dd>${escapeHtml(runbook.stopRules[0])}</dd></div>
+    </dl>
     <h3>Verification Matrix</h3>
     <ol>${matrixItems}</ol>
     <h3>${escapeHtml(protocol.name)} Review Standard</h3>
@@ -1334,6 +1515,7 @@ function generateReportMarkdown(receipt) {
   const trace = receipt.traces[state.level] ?? receipt.traces.middle;
   const protocol = currentLaneProtocol();
   const routes = agentRouteCommands(receipt);
+  const runbook = createRunbookPacket(receipt);
   const matrix = verificationRows(receipt);
   const notes = researchNotes.value.trim() || "No local notes added yet.";
   const mathInput = receipt.math?.input ?? receipt.title;
@@ -1361,6 +1543,19 @@ function generateReportMarkdown(receipt) {
     `- Receipt: \`${routes.receipt}\``,
     `- Replay: \`${routes.replay}\``,
     `- Report: \`${routes.report}\``,
+    "",
+    "## Agent Runbook",
+    "",
+    `- Mode: ${runbook.lane} / ${runbook.protocol}`,
+    `- Next command: \`${runbook.commands.next}\``,
+    `- Max depth: ${runbook.budgets.maxDepth}`,
+    `- Max branches: ${runbook.budgets.maxBranches}`,
+    `- Checkpoint cadence: ${runbook.budgets.checkpointEvery}`,
+    `- Stop rule: ${runbook.stopRules[0]}`,
+    "",
+    "Recursive loop:",
+    "",
+    ...runbook.loop.map((step, index) => `${index + 1}. ${step}`),
     "",
     "## Verification Matrix",
     "",
@@ -1586,6 +1781,7 @@ laneButtons.forEach((button) => {
     renderLane();
     renderProtocol();
     renderAgentRoutes(receiptStore.get(state.receiptKey));
+    renderRunbook(receiptStore.get(state.receiptKey));
     renderVerificationMatrix(receiptStore.get(state.receiptKey));
     renderReport(receiptStore.get(state.receiptKey));
   });
@@ -1636,6 +1832,7 @@ surfaceTabs.forEach((button) => {
 
     state.surface = nextSurface;
     render();
+    resetActiveSurfaceScroll();
   });
 });
 
@@ -1655,6 +1852,14 @@ copyActivityButton.addEventListener("click", () => {
 });
 
 downloadActivityButton.addEventListener("click", downloadActivityLog);
+
+copyRunbookButton.addEventListener("click", () => {
+  copyRunbookPacket().catch((error) => {
+    addActivity("web-ui", "Copy runbook failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+  });
+});
+
+downloadRunbookButton.addEventListener("click", downloadRunbookPacket);
 
 researchNotes.addEventListener("input", saveNotes);
 

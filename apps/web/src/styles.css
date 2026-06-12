@@ -607,14 +607,14 @@ h1 {
 
 .surface-tabs {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
   gap: 3px;
   min-width: 0;
   padding: 2px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #202020;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .surface-tab {
@@ -731,6 +731,11 @@ h1 {
 }
 
 #surface-checks.active {
+  overflow: auto;
+  padding-right: 2px;
+}
+
+#surface-runbook.active {
   overflow: auto;
   padding-right: 2px;
 }
@@ -891,6 +896,80 @@ dd {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.runbook-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(150px, 0.85fr) minmax(150px, 0.9fr);
+  gap: 10px;
+  flex: 0 0 auto;
+  margin-bottom: 10px;
+}
+
+.runbook-hero > div,
+.runbook-card {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #121212;
+}
+
+.runbook-hero > div {
+  padding: 12px;
+}
+
+.runbook-hero strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #f1eadc;
+  font-size: 13px;
+  margin-top: 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runbook-grid {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.9fr) minmax(210px, 0.9fr) minmax(260px, 1.25fr);
+  gap: 10px;
+  min-height: 0;
+}
+
+.runbook-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 260px;
+  padding: 13px 14px;
+}
+
+.runbook-card ol,
+.runbook-card ul {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: #d8d2c8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.runbook-card li {
+  padding-right: 4px;
+}
+
+#runbook-packet {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0f0f0f;
+  color: #e6dfce;
+  padding: 10px;
+  scrollbar-gutter: stable;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
 .matrix-hero {
@@ -1675,6 +1754,16 @@ textarea:focus-visible {
 
   .agent-route-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .runbook-hero,
+  .runbook-grid,
+  .matrix-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .runbook-card {
+    min-height: 0;
   }
 
   .surface-status {
