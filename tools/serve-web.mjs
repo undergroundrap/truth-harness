@@ -145,6 +145,40 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/routes" && request.method === "GET") {
+    const routes = await readRouteLedgerSnapshot();
+    writeJson(response, 200, {
+      schemaVersion: "theorem.web-routes-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      routes
+    });
+    return;
+  }
+
+  const routeReadMatch = requestUrl.pathname.match(/^\/api\/routes\/([^/]+)$/u);
+  if (routeReadMatch && request.method === "GET") {
+    try {
+      const { listVerifierRoutes, readVerifierRoute } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const routeRef = decodeURIComponent(routeReadMatch[1]);
+      const route = await readVerifierRoute(projectRoot, routeRef);
+      const summary = (await listVerifierRoutes(projectRoot)).find((item) => item.routeId === route.routeId);
+      writeJson(response, 200, {
+        schemaVersion: "theorem.web-route-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        route,
+        routePaths: routePathsFor(summary?.path ?? routeRef)
+      });
+    } catch (error) {
+      writeJson(response, 404, {
+        error: error instanceof Error ? error.message : "Verifier route not found."
+      });
+    }
+    return;
+  }
+
   if (requestUrl.pathname === "/api/claims" && request.method === "POST") {
     const input = await readJsonBody(request);
     try {
@@ -278,6 +312,31 @@ async function readClaimLedgerSnapshot() {
   return {
     claims,
     graph: createClaimLedgerGraph(claims)
+  };
+}
+
+async function readRouteLedgerSnapshot() {
+  const { listVerifierRoutes } = await loadCoreModule();
+  await ensureLocalWorkspace();
+  const routes = await listVerifierRoutes(projectRoot);
+  return routes.map((route) => ({
+    ...route,
+    routePaths: routePathsFor(route.path)
+  }));
+}
+
+function routePathsFor(routePathOrId) {
+  if (typeof routePathOrId === "string" && routePathOrId.endsWith(".json")) {
+    const json = resolve(projectRoot, routePathOrId);
+    return {
+      json,
+      markdown: json.replace(/\.json$/u, ".md")
+    };
+  }
+
+  return {
+    json: undefined,
+    markdown: undefined
   };
 }
 

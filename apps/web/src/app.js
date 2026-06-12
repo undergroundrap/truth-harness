@@ -194,6 +194,7 @@ const seedReceipts = {
 
 const receiptStore = new Map(Object.entries(seedReceipts));
 const claimLedgerStore = new Map();
+const routeLedgerStore = new Map();
 let claimLedgerGraph = {
   schemaVersion: "theorem.claim-graph.v0",
   nodes: [],
@@ -221,6 +222,7 @@ const state = {
   replayPlaying: false,
   sidebarQuery: "",
   claimLedgerQuery: "",
+  routeHistoryQuery: "",
   sidebarCollapsed: false,
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE,
@@ -245,6 +247,9 @@ const graphList = document.querySelector("#graph-list");
 const claimLedgerList = document.querySelector("#claim-ledger-list");
 const claimLedgerCount = document.querySelector("#claim-ledger-count");
 const claimLedgerSearch = document.querySelector("#claim-ledger-search");
+const routeHistoryList = document.querySelector("#route-history-list");
+const routeHistoryCount = document.querySelector("#route-history-count");
+const routeHistorySearch = document.querySelector("#route-history-search");
 const mainGraphList = document.querySelector("#main-graph-list");
 const graphDetail = document.querySelector("#graph-detail");
 const matrixSummary = document.querySelector("#matrix-summary");
@@ -923,6 +928,7 @@ addActivity("system", "Local API ready", "UI will submit prompts only to local r
 render();
 void refreshSafetyStatus();
 void refreshClaimLedger();
+void refreshRouteLedger();
 
 function render() {
   const receipt = receiptStore.get(state.receiptKey);
@@ -975,6 +981,7 @@ function render() {
 
   renderClaimList();
   renderClaimLedger();
+  renderRouteHistory();
   renderActivityLog();
   renderSurface();
   renderLane();
@@ -1473,6 +1480,162 @@ function matchesClaimLedgerSearch(claim, query) {
     .includes(query);
 }
 
+function renderRouteHistory() {
+  if (!routeHistoryList || !routeHistoryCount) {
+    return;
+  }
+
+  const query = state.routeHistoryQuery.trim().toLowerCase();
+  const currentRouteId = receiptStore.get(state.receiptKey)?.verifierRoute?.routeId;
+  const routes = [...routeLedgerStore.values()];
+  const filteredRoutes = routes.filter((route) => matchesRouteHistorySearch(route, query));
+  const visibleRoutes = filteredRoutes.slice(0, 10);
+  routeHistoryCount.textContent = query
+    ? `${filteredRoutes.length} of ${routes.length} routes`
+    : `${routes.length} routes`;
+
+  routeHistoryList.innerHTML = visibleRoutes.length === 0
+    ? `<div class="activity-empty">${routes.length === 0 ? "No persisted verifier routes yet. Submit a prompt to create the first local route." : "No saved routes match this filter."}</div>`
+    : visibleRoutes
+      .map((route) => {
+        const active = route.routeId === currentRouteId;
+        const gapText = route.gaps === 0
+          ? "no gaps"
+          : `${route.gaps} gap${route.gaps === 1 ? "" : "s"}${route.criticalGaps ? ` / ${route.criticalGaps} critical` : ""}`;
+        const capabilities = route.usedCapabilities?.slice(0, 3).join(", ") || "no capabilities recorded";
+        const created = formatRouteDate(route.createdAt);
+        return `<button class="route-record ${active ? "active" : ""}" data-route-id="${escapeHtml(route.routeId)}" type="button">
+          <span class="trust-dot ${trustClass(route.finalTrust)}"></span>
+          <span>
+            <strong>${escapeHtml(route.problem)}</strong>
+            <small>${escapeHtml(route.finalTrust)} - ${escapeHtml(route.status)} - ${escapeHtml(gapText)}</small>
+            <small><code>${escapeHtml(route.routeId)}</code> - ${escapeHtml(created)} - ${escapeHtml(route.evidenceKind)}</small>
+            <small>${escapeHtml(capabilities)}</small>
+          </span>
+        </button>`;
+      })
+      .join("");
+
+  routeHistoryList.querySelectorAll(".route-record").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      void openSavedRoute(button.dataset.routeId);
+    });
+  });
+}
+
+function matchesRouteHistorySearch(route, query) {
+  if (!query) {
+    return true;
+  }
+
+  return [
+    route.routeId,
+    route.path,
+    route.problem,
+    route.finalTrust,
+    route.status,
+    route.evidenceKind,
+    route.receiptRunId,
+    ...(route.usedCapabilities ?? []),
+    ...(route.nextActions ?? []),
+    route.routePaths?.json,
+    route.routePaths?.markdown
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(query);
+}
+
+function formatRouteDate(isoTime) {
+  if (!isoTime) {
+    return "unknown time";
+  }
+
+  const date = new Date(isoTime);
+  if (Number.isNaN(date.getTime())) {
+    return isoTime;
+  }
+
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+async function refreshRouteLedger({ announce = true } = {}) {
+  if (!routeHistoryList || !routeHistoryCount) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/routes", {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Local route ledger API failed.");
+    }
+
+    applyRouteLedgerPayload(payload);
+    if (announce) {
+      addActivity("local-api", "Loaded route ledger", `${routeLedgerStore.size} persisted verifier routes available.`, "passed");
+    }
+    render();
+  } catch (error) {
+    routeHistoryCount.textContent = "unavailable";
+    routeHistoryList.innerHTML = `<div class="activity-empty">Route ledger unavailable from the local API.</div>`;
+    addActivity("local-api", "Route ledger unavailable", error instanceof Error ? error.message : "Unknown route ledger failure.", "waiting");
+  }
+}
+
+function applyRouteLedgerPayload(payload) {
+  routeLedgerStore.clear();
+  for (const route of payload.routes ?? []) {
+    if (route?.routeId) {
+      routeLedgerStore.set(route.routeId, route);
+    }
+  }
+}
+
+async function openSavedRoute(routeId) {
+  if (!routeId) {
+    return;
+  }
+
+  addActivity("human", "Opening saved verifier route", routeId, "waiting");
+
+  try {
+    const response = await fetch(`/api/routes/${encodeURIComponent(routeId)}`, {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? "Local verifier route read failed.");
+    }
+
+    const viewModel = receiptToViewModel(payload.route.receipt, payload.route, payload.routePaths);
+    const key = payload.route.receipt.runId;
+    receiptStore.set(key, viewModel);
+    promoteRecentReceiptKey(key);
+    setReplayPlaying(false);
+    state.receiptKey = key;
+    state.level = "middle";
+    state.selectedGraphIndex = 0;
+    state.replayIndex = 0;
+    promptInput.value = viewModel.title;
+    updateLatestActivity("Opening saved verifier route", "passed", `${payload.route.routeId} loaded from .theorem-workbench/routes.`);
+    render();
+  } catch (error) {
+    updateLatestActivity("Opening saved verifier route", "refuted", error instanceof Error ? error.message : "Unknown verifier route read failure.");
+  }
+}
+
 async function refreshClaimLedger({ announce = true } = {}) {
   try {
     const response = await fetch("/api/claims", {
@@ -1560,6 +1723,15 @@ function receiptKeyForClaimId(claimId) {
   }
 
   return undefined;
+}
+
+function promoteRecentReceiptKey(key) {
+  const existingIndex = recentReceiptKeys.indexOf(key);
+  if (existingIndex >= 0) {
+    recentReceiptKeys.splice(existingIndex, 1);
+  }
+  recentReceiptKeys.unshift(key);
+  recentReceiptKeys.splice(6);
 }
 
 function updateClaimRecordButtons(receipt) {
@@ -3752,6 +3924,11 @@ claimLedgerSearch.addEventListener("input", () => {
   renderClaimLedger();
 });
 
+routeHistorySearch.addEventListener("input", () => {
+  state.routeHistoryQuery = routeHistorySearch.value;
+  renderRouteHistory();
+});
+
 openReplayButton.addEventListener("click", () => {
   state.surface = "replay";
   render();
@@ -3927,8 +4104,7 @@ composer.addEventListener("submit", async (event) => {
     viewModel.tags = uniqueTags([...receiptTags(viewModel), ...promptTags]);
     const key = payload.receipt.runId;
     receiptStore.set(key, viewModel);
-    recentReceiptKeys.unshift(key);
-    recentReceiptKeys.splice(6);
+    promoteRecentReceiptKey(key);
     setReplayPlaying(false);
     state.receiptKey = key;
     state.level = "middle";
@@ -3936,6 +4112,7 @@ composer.addEventListener("submit", async (event) => {
     for (const item of payload.activity ?? []) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }
+    await refreshRouteLedger({ announce: false });
     addActivity("web-ui", "Rendered receipt", `${payload.receipt.runId} displayed with trace and evidence graph.`, "passed");
   } catch (error) {
     updateLatestActivity("Calling local API", "refuted", "POST /api/receipt failed");

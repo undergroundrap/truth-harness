@@ -1116,6 +1116,10 @@ h4 {
   background: #121212;
 }
 
+.route-history-section {
+  background: #111;
+}
+
 .route-ledger-status-live {
   color: var(--exact);
 }
@@ -1150,7 +1154,8 @@ h4 {
   margin-top: 10px;
 }
 
-.claim-ledger-list {
+.claim-ledger-list,
+.route-history-list {
   display: grid;
   gap: 8px;
   max-height: 320px;
@@ -1179,7 +1184,8 @@ h4 {
   color: var(--faint);
 }
 
-.ledger-record {
+.ledger-record,
+.route-record {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr);
   align-items: start;
@@ -1194,17 +1200,26 @@ h4 {
   text-align: left;
 }
 
-.ledger-record.clickable {
+.ledger-record.clickable,
+.route-record {
   cursor: pointer;
 }
 
-.ledger-record:hover {
+.ledger-record:hover,
+.route-record:hover,
+.route-record.active {
   border-color: rgba(183, 169, 138, 0.26);
   background: #151515;
 }
 
+.route-record.active {
+  border-color: rgba(123, 214, 163, 0.36);
+}
+
 .ledger-record strong,
-.ledger-record small {
+.ledger-record small,
+.route-record strong,
+.route-record small {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -1212,15 +1227,22 @@ h4 {
   white-space: nowrap;
 }
 
-.ledger-record strong {
+.ledger-record strong,
+.route-record strong {
   font-size: 13px;
   font-weight: 650;
 }
 
-.ledger-record small {
+.ledger-record small,
+.route-record small {
   color: var(--muted);
   font-size: 11px;
   margin-top: 3px;
+}
+
+.route-record code {
+  color: #ded6c8;
+  font-size: 11px;
 }
 
 .key-values {
