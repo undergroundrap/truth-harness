@@ -673,6 +673,13 @@ h3 {
   font-weight: 650;
 }
 
+h4 {
+  margin: 0;
+  color: #efe9dc;
+  font-size: 12px;
+  font-weight: 680;
+}
+
 .segmented {
   display: flex;
   gap: 2px;
@@ -809,6 +816,62 @@ dd {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.protocol-summary {
+  flex: 0 0 auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  padding: 12px;
+}
+
+.protocol-summary strong {
+  display: block;
+  color: #f1eadc;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.protocol-summary p,
+.review-standard {
+  color: #d8d2c8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.protocol-grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  margin-top: 10px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.protocol-card {
+  min-height: 172px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #121212;
+  padding: 12px;
+}
+
+.protocol-card ul {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: #d8d2c8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.review-standard {
+  margin-top: -4px;
 }
 
 #research-notes {

@@ -161,6 +161,7 @@
                 <div class="surface-tabs" role="tablist" aria-label="Workbench view">
                   <button class="surface-tab active" id="tab-trace" role="tab" aria-controls="surface-trace" aria-selected="true" data-surface="trace" type="button">Trace</button>
                   <button class="surface-tab" id="tab-graph" role="tab" aria-controls="surface-graph" aria-selected="false" data-surface="graph" type="button">Graph</button>
+                  <button class="surface-tab" id="tab-protocol" role="tab" aria-controls="surface-protocol" aria-selected="false" data-surface="protocol" type="button">Protocol</button>
                   <button class="surface-tab" id="tab-notes" role="tab" aria-controls="surface-notes" aria-selected="false" data-surface="notes" type="button">Notes</button>
                   <button class="surface-tab" id="tab-replay" role="tab" aria-controls="surface-replay" aria-selected="false" data-surface="replay" type="button">Replay</button>
                   <button class="surface-tab" id="tab-report" role="tab" aria-controls="surface-report" aria-selected="false" data-surface="report" type="button">Report</button>
@@ -189,6 +190,32 @@
                   <span class="mini-label">receipt evidence path</span>
                 </div>
                 <div class="graph-canvas" id="main-graph-list"></div>
+              </section>
+
+              <section class="surface-panel" id="surface-protocol" role="tabpanel" aria-labelledby="tab-protocol" data-surface-panel="protocol" tabindex="0" aria-label="Lane review protocol" hidden>
+                <div class="panel-heading">
+                  <h3>Lane Protocol</h3>
+                  <span class="mini-label" id="protocol-lane">Math lane</span>
+                </div>
+                <div class="protocol-summary" id="protocol-summary"></div>
+                <div class="protocol-grid">
+                  <section class="protocol-card">
+                    <h4>Accepted Evidence</h4>
+                    <ul id="protocol-evidence"></ul>
+                  </section>
+                  <section class="protocol-card">
+                    <h4>Verification Gates</h4>
+                    <ul id="protocol-gates"></ul>
+                  </section>
+                  <section class="protocol-card">
+                    <h4>Review Boundary</h4>
+                    <ul id="protocol-review"></ul>
+                  </section>
+                  <section class="protocol-card">
+                    <h4>Review Packet</h4>
+                    <ul id="protocol-deliverables"></ul>
+                  </section>
+                </div>
               </section>
 
               <section class="surface-panel" id="surface-notes" role="tabpanel" aria-labelledby="tab-notes" data-surface-panel="notes" tabindex="0" aria-label="Research notes" hidden>
@@ -239,6 +266,14 @@
             <section class="inspector-section">
               <h3>Evidence Graph</h3>
               <div class="graph-list" id="graph-list"></div>
+            </section>
+
+            <section class="inspector-section">
+              <div class="panel-heading">
+                <h3>Review Standard</h3>
+                <span class="mini-label" id="review-standard-lane">Math</span>
+              </div>
+              <p class="review-standard" id="review-standard"></p>
             </section>
 
             <section class="inspector-section activity-section">

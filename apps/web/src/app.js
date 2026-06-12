@@ -154,6 +154,14 @@ const traceList = document.querySelector("#trace-list");
 const receiptDetails = document.querySelector("#receipt-details");
 const graphList = document.querySelector("#graph-list");
 const mainGraphList = document.querySelector("#main-graph-list");
+const protocolLane = document.querySelector("#protocol-lane");
+const protocolSummary = document.querySelector("#protocol-summary");
+const protocolEvidence = document.querySelector("#protocol-evidence");
+const protocolGates = document.querySelector("#protocol-gates");
+const protocolReview = document.querySelector("#protocol-review");
+const protocolDeliverables = document.querySelector("#protocol-deliverables");
+const reviewStandardLane = document.querySelector("#review-standard-lane");
+const reviewStandard = document.querySelector("#review-standard");
 const activityLog = document.querySelector("#activity-log");
 const activitySearch = document.querySelector("#activity-search");
 const activityCount = document.querySelector("#activity-count");
@@ -188,6 +196,7 @@ const verifyButton = document.querySelector("#verify-button");
 const surfaceStatusText = {
   trace: "explainable steps",
   graph: "evidence path",
+  protocol: "review standard",
   notes: "local scratchpad",
   replay: "session reel",
   report: "printable draft"
@@ -206,6 +215,372 @@ const laneStatusText = {
   quantum: "Quantum lane",
   security: "Security lane",
   patent: "Patent lane"
+};
+const laneProtocols = {
+  math: {
+    name: "Math",
+    title: "Proof and Computation Review",
+    claimStandard: "A math result is not trusted because an AI says it. It must be exact, reproducible, and either formally proved, independently checked, or explicitly labeled as conjecture.",
+    acceptedEvidence: [
+      "Formal proof objects from Lean or another proof checker when the claim says proved.",
+      "Exact symbolic or rational traces with every transformation replayable.",
+      "Independent CAS or SMT checks for algebraic, bounded, or satisfiability claims.",
+      "Counterexample searches that record domains, bounds, and search completeness."
+    ],
+    verificationGates: [
+      "Parse the problem into a typed mathematical statement before solving.",
+      "Separate conjecture, computed result, refuted claim, and formally proved claim.",
+      "Run at least one independent checker for nontrivial algebra or logic.",
+      "Record definitions, assumptions, domain restrictions, and failed proof attempts."
+    ],
+    reviewBoundary: [
+      "A numeric pattern is not a theorem.",
+      "A CAS simplification is not a proof unless the accepted checker backs it.",
+      "A bounded search only covers the stated range."
+    ],
+    deliverables: [
+      "Statement packet with definitions and assumptions.",
+      "Machine-checkable proof or replayable computation trace.",
+      "Counterexample and benchmark appendix.",
+      "Plain-language explanation at multiple audience levels."
+    ]
+  },
+  sources: {
+    name: "Sources",
+    title: "Citation and Provenance Review",
+    claimStandard: "A sourced claim must link every sentence-level assertion to inspectable evidence, with quotes, bibliographic metadata, and retrieval boundaries preserved.",
+    acceptedEvidence: [
+      "Local PDFs, notes, web archives, DOI metadata, and versioned datasets.",
+      "Quoted passages with page, section, or timestamp references.",
+      "Claim-to-source mappings that distinguish primary evidence from commentary.",
+      "RAG packets showing exactly what context was sent to a model."
+    ],
+    verificationGates: [
+      "Prefer primary sources over summaries for factual claims.",
+      "Flag source conflict, retraction, date drift, and missing citation spans.",
+      "Record retrieval time, file hash, document version, and query terms.",
+      "Keep model synthesis separate from the evidence excerpt it used."
+    ],
+    reviewBoundary: [
+      "A citation proves that a source said something, not that the source is correct.",
+      "A model summary cannot replace the original passage.",
+      "Paywalled or inaccessible context must be labeled incomplete."
+    ],
+    deliverables: [
+      "Claim ledger with citation spans.",
+      "Source bundle manifest with hashes.",
+      "Conflict table and open verification questions.",
+      "Exportable bibliography and evidence packet."
+    ]
+  },
+  code: {
+    name: "Code",
+    title: "Software Verification Review",
+    claimStandard: "A code claim must be tied to tests, static checks, reproducible execution, and an environment receipt that an agent or human can replay.",
+    acceptedEvidence: [
+      "Unit, integration, property, regression, and headless UI tests.",
+      "Type checks, linters, security scans, dependency audits, and SBOMs.",
+      "Build logs with runtime, OS, toolchain, commit, and command metadata.",
+      "Reproducers for bugs, fixes, and performance regressions."
+    ],
+    verificationGates: [
+      "Run the smallest meaningful test first, then the broader suite for shared behavior.",
+      "Record exact commands, exit codes, logs, and changed files.",
+      "Sandbox untrusted code and deny network/file-system access unless explicitly granted.",
+      "Preserve failing cases as regression tests before declaring a fix."
+    ],
+    reviewBoundary: [
+      "Passing tests are evidence, not proof of absence of bugs.",
+      "AI-written code needs the same review and exploit thinking as human code.",
+      "A command receipt must not claim a sandbox property it did not measure."
+    ],
+    deliverables: [
+      "Patch summary with linked tests.",
+      "Reproduction recipe and rollback notes.",
+      "Security and dependency review packet.",
+      "Human-readable change log."
+    ]
+  },
+  data: {
+    name: "Data",
+    title: "Statistical and Causal Review",
+    claimStandard: "A data claim must preserve lineage from raw data to conclusion, expose uncertainty, and distinguish association, prediction, and causal inference.",
+    acceptedEvidence: [
+      "Dataset manifests with schema, provenance, licenses, and hashes.",
+      "Notebook runs with deterministic seeds and captured environments.",
+      "Exploratory plots, model diagnostics, confidence intervals, and sensitivity checks.",
+      "Causal diagrams and identification assumptions for causal claims."
+    ],
+    verificationGates: [
+      "Validate schema, missingness, outliers, leakage, and sample selection.",
+      "Separate train, validation, test, and holdout decisions in the audit trail.",
+      "Run robustness checks and baseline comparisons.",
+      "State uncertainty, effect sizes, and power limits."
+    ],
+    reviewBoundary: [
+      "Correlation is not causation without an explicit identification strategy.",
+      "A high model score can still hide leakage or distribution shift.",
+      "A dashboard chart is not a reproducible analysis by itself."
+    ],
+    deliverables: [
+      "Data card and lineage graph.",
+      "Reproducible notebook receipt.",
+      "Diagnostics appendix.",
+      "Decision memo with uncertainty and limitations."
+    ]
+  },
+  writing: {
+    name: "Writing",
+    title: "Argument and Source Review",
+    claimStandard: "A writing claim must be traceable from outline to sources, revisions, fact checks, and reader-level explanations without hiding unsupported assertions.",
+    acceptedEvidence: [
+      "Argument maps showing thesis, subclaims, evidence, and objections.",
+      "Citation-backed paragraphs with source spans and quote checks.",
+      "Revision history showing what changed and why.",
+      "Audience-level summaries that preserve the same claim boundaries."
+    ],
+    verificationGates: [
+      "Detect uncited factual claims and ambiguous definitions.",
+      "Check citations against the exact text they support.",
+      "Maintain a contradiction and open-question log.",
+      "Export drafts with source packets for peer review."
+    ],
+    reviewBoundary: [
+      "Clear prose does not make a claim true.",
+      "Paraphrases can drift from the source and must be checked.",
+      "The app can help draft; humans remain accountable for publication claims."
+    ],
+    deliverables: [
+      "Claim-backed manuscript draft.",
+      "Citation and quote audit.",
+      "Reviewer response log.",
+      "Teaching summaries for different audiences."
+    ]
+  },
+  physics: {
+    name: "Physics",
+    title: "Model, Unit, and Simulation Review",
+    claimStandard: "A physics claim must state its model, units, conservation assumptions, numerical method, and regime of validity before it can be treated as evidence.",
+    acceptedEvidence: [
+      "Dimensional analysis and unit-consistency receipts.",
+      "Analytic derivations with assumptions and boundary conditions.",
+      "Numerical simulations with solver, mesh, timestep, tolerance, and convergence logs.",
+      "Benchmark comparisons against known textbook or experimental cases."
+    ],
+    verificationGates: [
+      "Check units and conserved quantities before trusting a simulation.",
+      "Run convergence, stability, and sensitivity checks.",
+      "Compare against a simpler analytic or limiting case.",
+      "Record physical constants, coordinate systems, and approximations."
+    ],
+    reviewBoundary: [
+      "A simulation is only as valid as the model and boundary conditions.",
+      "Dimensional consistency is necessary but not sufficient.",
+      "Agreement with one benchmark does not validate all regimes."
+    ],
+    deliverables: [
+      "Model card with assumptions and validity regime.",
+      "Solver receipt and convergence appendix.",
+      "Benchmark comparison table.",
+      "Reproducible plots and data export."
+    ]
+  },
+  biology: {
+    name: "Biology",
+    title: "Biological Evidence Review",
+    claimStandard: "A biology claim must separate hypothesis, literature signal, in vitro evidence, animal evidence, clinical evidence, and safety boundaries with no medical overclaiming.",
+    acceptedEvidence: [
+      "Primary literature, protocols, assay data, omics pipelines, and preregistrations.",
+      "Dose-response curves, controls, replicates, blinding, and statistical plans.",
+      "Pathway graphs with species, tissue, cell line, and context labels.",
+      "Safety, ethics, IRB, biosafety, and clinical-trial context where relevant."
+    ],
+    verificationGates: [
+      "Classify evidence tier before generating conclusions.",
+      "Check controls, batch effects, sample size, and endpoint validity.",
+      "Separate mechanism hypotheses from therapeutic claims.",
+      "Require expert and regulatory review for medical or clinical interpretation."
+    ],
+    reviewBoundary: [
+      "The app does not diagnose, prescribe, or validate a treatment.",
+      "Cell or animal evidence does not imply human efficacy.",
+      "Literature support can be weak, biased, or nonreplicable."
+    ],
+    deliverables: [
+      "Evidence-tier map.",
+      "Protocol and assay review packet.",
+      "Replication and validation plan.",
+      "Clinical and safety boundary memo."
+    ]
+  },
+  chemistry: {
+    name: "Chemistry",
+    title: "Molecular and Materials Review",
+    claimStandard: "A chemistry claim must ground structures, reactions, stoichiometry, spectra, hazards, and conditions in reproducible records and safety-aware validation.",
+    acceptedEvidence: [
+      "Molecular structures, reaction schemes, stoichiometry, and balance checks.",
+      "Spectroscopy, chromatography, crystallography, or materials characterization data.",
+      "Thermodynamic, kinetic, or quantum-chemistry calculations with method metadata.",
+      "SDS, hazard, storage, and waste-handling references."
+    ],
+    verificationGates: [
+      "Validate structures, charges, stereochemistry, and atom balance.",
+      "Record solvents, temperature, pressure, catalysts, purity, and yields.",
+      "Compare computed properties to experimental or reference data when possible.",
+      "Require safety review before any wet-lab procedure."
+    ],
+    reviewBoundary: [
+      "A plausible reaction is not a safe or proven synthesis.",
+      "Computed chemistry depends strongly on method and basis assumptions.",
+      "The app must not provide hazardous operational guidance without safety framing."
+    ],
+    deliverables: [
+      "Reaction or molecule evidence packet.",
+      "Characterization table.",
+      "Method and uncertainty report.",
+      "Safety and handling boundary sheet."
+    ]
+  },
+  finance: {
+    name: "Finance",
+    title: "Audit and Risk Review",
+    claimStandard: "A finance claim must be ledger-backed, reconciled, timestamped, and clear about risk, assumptions, and whether it is accounting, forecasting, or advice.",
+    acceptedEvidence: [
+      "Bank, brokerage, invoice, receipt, and ledger imports with hashes.",
+      "Reconciliation reports tying source records to computed balances.",
+      "Forecast assumptions, scenario tables, and sensitivity analysis.",
+      "Tax, compliance, or policy references with jurisdiction and date."
+    ],
+    verificationGates: [
+      "Reconcile every balance to source records before summarizing.",
+      "Classify transactions with reviewable rules and exceptions.",
+      "Separate historical facts from projections and recommendations.",
+      "Flag missing records, stale prices, and jurisdiction-specific uncertainty."
+    ],
+    reviewBoundary: [
+      "The app is not a fiduciary, accountant, or tax attorney.",
+      "Forecasts can fail under market or life changes.",
+      "A clean dashboard can still hide bad source data."
+    ],
+    deliverables: [
+      "Reconciled ledger packet.",
+      "Cash-flow and risk report.",
+      "Exception queue.",
+      "Advisor-ready export with assumptions."
+    ]
+  },
+  hardware: {
+    name: "Hardware",
+    title: "Design, Calibration, and Safety Review",
+    claimStandard: "A hardware claim must connect requirements, CAD or schematics, tolerances, BOM, firmware, calibration, and bench-test evidence before being trusted.",
+    acceptedEvidence: [
+      "CAD files, schematics, PCB layouts, firmware builds, and BOM manifests.",
+      "Tolerance analyses, thermal, mechanical, and electrical calculations.",
+      "Sensor calibration records and bench-test logs.",
+      "Safety, standards, and failure-mode reviews."
+    ],
+    verificationGates: [
+      "Trace each requirement to a design artifact and test.",
+      "Check units, tolerances, ratings, and worst-case limits.",
+      "Record instrument model, calibration date, setup photos, and raw measurements.",
+      "Run failure-mode, safety, and manufacturability review before release."
+    ],
+    reviewBoundary: [
+      "A design file is not proof the physical object works.",
+      "Bench tests are limited by instruments, setup, and sample count.",
+      "Safety-critical systems require expert certification."
+    ],
+    deliverables: [
+      "Requirement-to-test matrix.",
+      "BOM and design artifact bundle.",
+      "Calibration and bench-test report.",
+      "Failure-mode and safety review packet."
+    ]
+  },
+  quantum: {
+    name: "Quantum",
+    title: "Quantum Circuit and Experiment Review",
+    claimStandard: "A quantum claim must state the circuit, backend, noise model, measurement basis, shot count, simulator settings, and classical verification boundary.",
+    acceptedEvidence: [
+      "Circuit diagrams, QASM, simulator configs, and backend calibration metadata.",
+      "State-vector, stabilizer, tensor, or hardware execution receipts.",
+      "Noise models, shot statistics, confidence intervals, and error mitigation logs.",
+      "Classical cross-checks for small systems."
+    ],
+    verificationGates: [
+      "Version the circuit and measurement mapping.",
+      "Compare ideal simulation, noisy simulation, and hardware results when possible.",
+      "Report shot count, seed, backend, queue time, and calibration snapshot.",
+      "Classify claims as educational, simulated, hardware-observed, or experimentally validated."
+    ],
+    reviewBoundary: [
+      "A simulator result is not a hardware experiment.",
+      "A hardware sample can be noise-dominated or calibration-specific.",
+      "Quantum advantage claims require extraordinary independent review."
+    ],
+    deliverables: [
+      "Circuit receipt and QASM export.",
+      "Backend and noise report.",
+      "Measurement statistics packet.",
+      "Classical verification appendix."
+    ]
+  },
+  security: {
+    name: "Security",
+    title: "Threat, Reproduction, and Disclosure Review",
+    claimStandard: "A security claim must include a threat model, isolated reproduction, impact analysis, remediation evidence, and responsible-disclosure boundaries.",
+    acceptedEvidence: [
+      "Threat models, attack trees, repro scripts, logs, and environment manifests.",
+      "Static and dynamic analysis with tool versions and findings.",
+      "Patch diffs, regression tests, and exploitability notes.",
+      "Disclosure timeline and affected-version matrix."
+    ],
+    verificationGates: [
+      "Reproduce only in authorized, isolated environments.",
+      "Record exact versions, inputs, privileges, and network conditions.",
+      "Separate suspected issue, confirmed vulnerability, exploit, and fixed state.",
+      "Validate remediation with tests and negative controls."
+    ],
+    reviewBoundary: [
+      "The app must not help unauthorized exploitation.",
+      "Scanner output can be false positive or false negative.",
+      "Severity labels require context and owner review."
+    ],
+    deliverables: [
+      "Threat model packet.",
+      "Safe reproduction record.",
+      "Fix and regression-test report.",
+      "Disclosure-ready advisory draft."
+    ]
+  },
+  patent: {
+    name: "Patent",
+    title: "Invention and Prior-Art Review",
+    claimStandard: "A patent claim must be treated as an invention-support workflow, not legal advice, with dated records, prior art, claim charts, and counsel-review boundaries.",
+    acceptedEvidence: [
+      "Invention disclosures, dated notebooks, diagrams, prototypes, and test receipts.",
+      "Patent, paper, product, and web prior-art collections with citation spans.",
+      "Claim charts mapping features to evidence and prior art.",
+      "Novelty, utility, enablement, and non-obviousness questions for counsel."
+    ],
+    verificationGates: [
+      "Hash and timestamp invention records before drafting claims.",
+      "Separate what was built, what was imagined, and what was verified.",
+      "Search prior art across patents, papers, products, and public disclosures.",
+      "Export counsel-ready packets without pretending to provide legal opinion."
+    ],
+    reviewBoundary: [
+      "The app is not a patent attorney.",
+      "Prior-art search can miss material references.",
+      "Patentability and freedom to operate require qualified legal review."
+    ],
+    deliverables: [
+      "Invention disclosure packet.",
+      "Prior-art matrix.",
+      "Claim-chart draft.",
+      "Attorney handoff export."
+    ]
+  }
 };
 let replayTimer;
 
@@ -261,6 +636,7 @@ function render() {
   renderActivityLog();
   renderSurface();
   renderLane();
+  renderProtocol();
   renderReplay(receipt);
   renderReport(receipt);
   applySidebarSearch();
@@ -340,6 +716,26 @@ function renderLane() {
   laneStatus.textContent = laneStatusText[state.lane] ?? "General lane";
 }
 
+function renderProtocol() {
+  const protocol = currentLaneProtocol();
+  protocolLane.textContent = `${protocol.name} lane`;
+  protocolSummary.innerHTML = `<strong>${escapeHtml(protocol.title)}</strong><p>${escapeHtml(protocol.claimStandard)}</p>`;
+  protocolEvidence.innerHTML = renderProtocolItems(protocol.acceptedEvidence);
+  protocolGates.innerHTML = renderProtocolItems(protocol.verificationGates);
+  protocolReview.innerHTML = renderProtocolItems(protocol.reviewBoundary);
+  protocolDeliverables.innerHTML = renderProtocolItems(protocol.deliverables);
+  reviewStandardLane.textContent = protocol.name;
+  reviewStandard.textContent = protocol.claimStandard;
+}
+
+function currentLaneProtocol() {
+  return laneProtocols[state.lane] ?? laneProtocols.math;
+}
+
+function renderProtocolItems(items) {
+  return items.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+}
+
 function applySidebarSearch() {
   const query = state.sidebarQuery.trim().toLowerCase();
   let matched = 0;
@@ -347,7 +743,7 @@ function applySidebarSearch() {
 
   document.querySelectorAll(".project-row, .lane-row, .task-row, .progress-row").forEach((row) => {
     total += 1;
-    const visible = !query || row.textContent.toLowerCase().includes(query);
+    const visible = !query || searchableSidebarText(row).includes(query);
     row.hidden = !visible;
     if (visible) {
       matched += 1;
@@ -356,6 +752,21 @@ function applySidebarSearch() {
 
   matched += claimList.querySelectorAll(".claim-row").length;
   sidebarSearchCount.textContent = query ? `${matched} of ${total}` : "all items";
+}
+
+function searchableSidebarText(row) {
+  const protocol = row.dataset.lane ? laneProtocols[row.dataset.lane] : undefined;
+  return [
+    row.textContent,
+    protocol?.title,
+    protocol?.claimStandard,
+    ...(protocol?.acceptedEvidence ?? []),
+    ...(protocol?.verificationGates ?? []),
+    ...(protocol?.reviewBoundary ?? []),
+    ...(protocol?.deliverables ?? [])
+  ]
+    .join(" ")
+    .toLowerCase();
 }
 
 function renderReplay(receipt) {
@@ -668,6 +1079,7 @@ function renderReport(receipt) {
     return;
   }
 
+  const protocol = currentLaneProtocol();
   const notes = researchNotes.value.trim();
   const mathInput = receipt.math?.input;
   const mathOutput = receipt.math?.output;
@@ -696,6 +1108,14 @@ function renderReport(receipt) {
       <div><dt>Run</dt><dd>${escapeHtml(receipt.runId)}</dd></div>
       <div><dt>Replay</dt><dd><code>${escapeHtml(receipt.replay)}</code></dd></div>
     </dl>
+    <h3>${escapeHtml(protocol.name)} Review Standard</h3>
+    <p>${escapeHtml(protocol.claimStandard)}</p>
+    <dl class="report-facts">
+      <div><dt>Protocol</dt><dd>${escapeHtml(protocol.title)}</dd></div>
+      <div><dt>Primary gate</dt><dd>${escapeHtml(protocol.verificationGates[0])}</dd></div>
+      <div><dt>Boundary</dt><dd>${escapeHtml(protocol.reviewBoundary[0])}</dd></div>
+      <div><dt>Packet</dt><dd>${escapeHtml(protocol.deliverables[0])}</dd></div>
+    </dl>
     <h3>Evidence Path</h3>
     <ol>${graphItems}</ol>
     <h3>Trace Excerpt</h3>
@@ -711,6 +1131,7 @@ function renderReport(receipt) {
 
 function generateReportMarkdown(receipt) {
   const trace = receipt.traces[state.level] ?? receipt.traces.middle;
+  const protocol = currentLaneProtocol();
   const notes = researchNotes.value.trim() || "No local notes added yet.";
   const mathInput = receipt.math?.input ?? receipt.title;
   const mathOutput = receipt.math?.output ?? receipt.output;
@@ -731,6 +1152,28 @@ function generateReportMarkdown(receipt) {
     `- Engine: ${receipt.engine}`,
     `- Run ID: ${receipt.runId}`,
     `- Replay: \`${receipt.replay}\``,
+    "",
+    `## ${protocol.name} Review Standard`,
+    "",
+    protocol.claimStandard,
+    "",
+    `Protocol: ${protocol.title}`,
+    "",
+    "Accepted evidence:",
+    "",
+    ...protocol.acceptedEvidence.map((item) => `- ${item}`),
+    "",
+    "Verification gates:",
+    "",
+    ...protocol.verificationGates.map((item) => `- ${item}`),
+    "",
+    "Review boundary:",
+    "",
+    ...protocol.reviewBoundary.map((item) => `- ${item}`),
+    "",
+    "Review packet:",
+    "",
+    ...protocol.deliverables.map((item) => `- ${item}`),
     "",
     "## Evidence Path",
     "",
@@ -927,6 +1370,8 @@ laneButtons.forEach((button) => {
 
     state.lane = nextLane;
     renderLane();
+    renderProtocol();
+    renderReport(receiptStore.get(state.receiptKey));
   });
 });
 
