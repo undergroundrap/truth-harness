@@ -43,6 +43,8 @@ import {
   handleTheoremResearchSessionCheckpoint,
   handleTheoremResearchSessionList,
   handleTheoremResearchSessionStart,
+  handleTheoremRouteList,
+  handleTheoremRouteShow,
   handleTheoremSimulationList,
   handleTheoremSimulationLog,
   handleTheoremSmtBackends,
@@ -106,8 +108,8 @@ describe("MCP tool handlers", () => {
     expect(result.receipt.trust).toBe("unverified");
   });
 
-  it("routes verification for agents before they rely on a claim", () => {
-    const result = handleTheoremVerify({
+  it("routes verification for agents before they rely on a claim", async () => {
+    const result = await handleTheoremVerify({
       problem: "compute 3 / 4 + 5 / 8",
       maximaCommand: "theorem-workbench-missing-maxima-command",
       leanCommand: "theorem-workbench-missing-lean-command",
@@ -116,6 +118,7 @@ describe("MCP tool handlers", () => {
     });
 
     expect(result.error).toBe(false);
+    expect(result.written).toBe(false);
     expect(result.route.schemaVersion).toBe("theorem.verifier-route.v0");
     expect(result.route.finalTrust).toBe("exact-computed");
     expect(result.route.usedCapabilities).toContainEqual(
@@ -125,6 +128,34 @@ describe("MCP tool handlers", () => {
     );
     expect(result.route.trustBoundary.routeIsNotProof).toBe(true);
     expect(result.message).toContain(result.route.routeId);
+  });
+
+  it("writes and reopens verifier routes for agents", async () => {
+    const root = await tempRoot();
+    process.env.THEOREM_WORKBENCH_ROOT = root;
+    await handleTheoremWorkspaceInit({ name: "MCP Route Lab" });
+    const result = await handleTheoremVerify({
+      write: true,
+      problem: "compute 3 / 4 + 5 / 8",
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+    const list = await handleTheoremRouteList({});
+    const shown = await handleTheoremRouteShow({
+      routeRef: result.route.routeId
+    });
+
+    expect(result.error).toBe(false);
+    expect(result.written).toBe(true);
+    expect(result.result?.jsonPath).toContain(".theorem-workbench");
+    expect(list.total).toBe(1);
+    expect(list.routes[0]).toMatchObject({
+      routeId: result.route.routeId,
+      finalTrust: "exact-computed"
+    });
+    expect(shown.routeId).toBe(result.route.routeId);
   });
 
   it("reports local CAS backend readiness for agents", () => {

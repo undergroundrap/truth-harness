@@ -23,6 +23,7 @@ import { writeValidationPlan } from "./validation-plan.js";
 import { sealVaultFile } from "./vault.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { writeWorkspaceSnapshot } from "./workspace-snapshot.js";
+import { writeVerifierRoute } from "./verifier-route.js";
 
 const roots: string[] = [];
 
@@ -267,6 +268,15 @@ describe("workspace artifact validation", () => {
       now: "2026-06-10T00:05:00.000Z"
     });
     await writeReceipt(root, "exact.json", createReceipt("compute 3 / 4 + 5 / 8"));
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "compute 3 / 4 + 5 / 8",
+      now: new Date("2026-06-10T00:06:00.000Z"),
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
     const simulation = await createSimulationLogEntry({
       rootPath: root,
       title: "Golden toy simulation",
@@ -549,6 +559,7 @@ describe("workspace artifact validation", () => {
     expect(validation.summary.errors).toBe(0);
     expect(validation.summary.byKind.manifest).toBe(1);
     expect(validation.summary.byKind.indexes).toBe(1);
+    expect(validation.summary.byKind.routes).toBe(1);
     expect(validation.summary.byKind.simulations).toBe(1);
     expect(validation.summary.byKind.experiments).toBe(1);
     expect(validation.summary.byKind.literature).toBe(1);
@@ -571,6 +582,7 @@ describe("workspace artifact validation", () => {
         expect.objectContaining({ artifactId: claimChart.chart.chartId, valid: true }),
         expect.objectContaining({ artifactId: benchmark.record.benchmarkRunId, valid: true }),
         expect.objectContaining({ artifactId: benchmarkComparison.record.comparisonId, valid: true }),
+        expect.objectContaining({ artifactId: route.route.routeId, valid: true }),
         expect.objectContaining({ artifactId: smt.record.checkId, valid: true }),
         expect.objectContaining({ artifactId: session.session.sessionId, valid: true }),
         expect.objectContaining({ artifactId: snapshot.snapshot.snapshotId, valid: true })

@@ -80,7 +80,8 @@
         "literature",
         "notebook-runs",
         "code-runs",
-        "model-contexts"
+        "model-contexts",
+        "routes"
       ],
       "properties": {
         "receipts": {
@@ -151,6 +152,9 @@
         },
         "model-contexts": {
           "const": ".theorem-workbench/model-contexts"
+        },
+        "routes": {
+          "const": ".theorem-workbench/routes"
         }
       },
       "additionalProperties": false

@@ -252,6 +252,13 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
     idKey: "packetId",
     required: true
   },
+  routes: {
+    kind: "routes",
+    schemaVersion: "theorem.verifier-route.v0",
+    schemaFile: "verifier-route.schema.json",
+    idKey: "routeId",
+    required: true
+  },
   artifacts: {
     kind: "artifacts"
   },
@@ -987,6 +994,9 @@ function kindToArtifactKind(kind: string | undefined): WorkspaceValidationArtifa
       return "patents";
     case "model-context":
       return "model-contexts";
+    case "route":
+    case "verifier-route":
+      return "routes";
     default:
       return undefined;
   }

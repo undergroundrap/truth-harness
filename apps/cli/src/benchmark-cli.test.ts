@@ -118,6 +118,53 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.routeIsNotProof).toBe(true);
   });
 
+  it("writes and inspects persisted verifier routes", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    const write = await runCli([
+      "verify",
+      "compute",
+      "3 / 4 + 5 / 8",
+      "--write",
+      "--workspace",
+      root,
+      "--json",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "theorem-workbench-missing-maxima-command",
+      "--lean-command",
+      "theorem-workbench-missing-lean-command",
+      "--z3-command",
+      "theorem-workbench-missing-z3-command"
+    ]);
+    const written = JSON.parse(write.stdout) as {
+      written: true;
+      route: { routeId: string; finalTrust: string };
+      result: { jsonPath: string; markdownPath: string };
+    };
+    const listed = JSON.parse((await runCli(["route", "list", root, "--json"])).stdout) as {
+      total: number;
+      routes: Array<{ routeId: string; finalTrust: string; path: string }>;
+    };
+    const shown = JSON.parse(
+      (await runCli(["route", "show", written.route.routeId, "--workspace", root, "--json"])).stdout
+    ) as { routeId: string; finalTrust: string; replay: string };
+
+    expect(write.exitCode).toBe(0);
+    expect(written.written).toBe(true);
+    expect(written.route.finalTrust).toBe("exact-computed");
+    expect(written.result.jsonPath).toContain(".theorem-workbench");
+    expect(written.result.markdownPath).toContain(".theorem-workbench");
+    expect(listed.total).toBe(1);
+    expect(listed.routes[0]).toMatchObject({
+      routeId: written.route.routeId,
+      finalTrust: "exact-computed"
+    });
+    expect(shown.routeId).toBe(written.route.routeId);
+    expect(shown.replay).toContain("theorem verify");
+  });
+
   it("reports proof backend status without requiring Lean to be installed", async () => {
     const result = await runCli([
       "proof",

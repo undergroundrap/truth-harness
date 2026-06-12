@@ -198,6 +198,7 @@
             "model-context",
             "proof",
             "smt",
+            "route",
             "invention",
             "claim-chart",
             "discovery-package",

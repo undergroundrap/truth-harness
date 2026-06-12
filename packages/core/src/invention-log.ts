@@ -33,6 +33,7 @@ export interface InventionEvidenceRef {
     | "vault"
     | "review"
     | "validation"
+    | "route"
     | "other";
   ref: string;
   trust?: TrustLabel;

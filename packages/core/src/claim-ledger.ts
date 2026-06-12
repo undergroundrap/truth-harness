@@ -4,6 +4,7 @@ import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus 
 import { parseReceiptJson } from "./receipt-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
+import { readVerifierRoute } from "./verifier-route.js";
 
 export const CLAIM_LEDGER_DOMAINS = [
   "math",
@@ -59,6 +60,7 @@ export interface ClaimLedgerEvidenceRef {
     | "model-context"
     | "proof"
     | "smt"
+    | "route"
     | "invention"
     | "claim-chart"
     | "discovery-package"
@@ -597,6 +599,15 @@ async function inferEvidenceRefTrust(input: {
     return claim ? { trust: claim.trust, summary: claim.title } : undefined;
   }
 
+  if (input.ref.kind === "route") {
+    try {
+      const route = await readVerifierRoute(input.root, input.ref.ref);
+      return { trust: route.finalTrust, summary: `Verifier route ${route.routeId} ended with ${route.finalTrust}.` };
+    } catch {
+      return undefined;
+    }
+  }
+
   if (input.ref.kind !== "receipt" && input.ref.kind !== "proof" && input.ref.kind !== "smt") {
     return undefined;
   }
@@ -813,7 +824,7 @@ function trustRank(value: TrustLabel): number {
 }
 
 function shouldResolveEvidenceKind(kind: ClaimLedgerEvidenceRef["kind"]): boolean {
-  return kind === "claim" || kind === "receipt" || kind === "proof" || kind === "smt";
+  return kind === "claim" || kind === "receipt" || kind === "proof" || kind === "smt" || kind === "route";
 }
 
 function formatEvidenceRefs(refs: ClaimLedgerEvidenceRef[]): string {

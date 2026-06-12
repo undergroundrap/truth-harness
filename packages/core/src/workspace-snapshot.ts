@@ -374,7 +374,8 @@ function isWorkspaceDirectory(value: string | undefined): value is LocalWorkspac
     value === "literature" ||
     value === "notebook-runs" ||
     value === "code-runs" ||
-    value === "model-contexts"
+    value === "model-contexts" ||
+    value === "routes"
   );
 }
 

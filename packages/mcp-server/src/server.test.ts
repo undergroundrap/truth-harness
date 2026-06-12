@@ -112,6 +112,8 @@ describe("Theorem MCP server", () => {
         "theorem_research_session_checkpoint",
         "theorem_research_session_list",
         "theorem_research_session_start",
+        "theorem_route_list",
+        "theorem_route_show",
         "theorem_simulation_list",
         "theorem_simulation_log",
         "theorem_smt_backends",
@@ -242,6 +244,38 @@ describe("Theorem MCP server", () => {
         }
       });
       expect(firstText(workspaceResult.content)).toContain("\"networkAccess\": \"none\"");
+
+      const routeWrite = await client.callTool({
+        name: "theorem_verify",
+        arguments: {
+          problem: "compute 3 / 4 + 5 / 8",
+          write: true,
+          maximaCommand: "theorem-workbench-missing-maxima-command",
+          leanCommand: "theorem-workbench-missing-lean-command",
+          z3Command: "theorem-workbench-missing-z3-command",
+          timeoutMs: 50
+        }
+      });
+      expect(routeWrite.isError).toBe(false);
+      const routeWriteJson = JSON.parse(firstText(routeWrite.content)) as {
+        written: boolean;
+        route: { routeId: string };
+      };
+      expect(routeWriteJson.written).toBe(true);
+
+      const routeList = await client.callTool({
+        name: "theorem_route_list",
+        arguments: {}
+      });
+      expect(firstText(routeList.content)).toContain("\"total\": 1");
+
+      const routeShow = await client.callTool({
+        name: "theorem_route_show",
+        arguments: {
+          routeRef: routeWriteJson.route.routeId
+        }
+      });
+      expect(firstText(routeShow.content)).toContain(routeWriteJson.route.routeId);
 
       const proofCheckWrite = await client.callTool({
         name: "theorem_proof_check",

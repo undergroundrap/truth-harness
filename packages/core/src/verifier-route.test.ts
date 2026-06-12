@@ -1,5 +1,17 @@
-import { describe, expect, it } from "vitest";
-import { createVerifierRoute } from "./verifier-route.js";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { initLocalWorkspace } from "./local-workspace.js";
+import { validateWorkspaceArtifacts } from "./workspace-validation.js";
+import { createVerifierRoute, listVerifierRoutes, readVerifierRoute, writeVerifierRoute } from "./verifier-route.js";
+
+const roots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
+  roots.length = 0;
+});
 
 describe("verifier route", () => {
   it("routes exact arithmetic through the native rational kernel without pretending proof", () => {
@@ -95,4 +107,45 @@ describe("verifier route", () => {
     expect(route.gaps.every((gap) => gap.severity === "critical" || gap.severity === "info")).toBe(true);
     expect(route.nextActions.join(" ")).toContain("Lean");
   });
+
+  it("writes, lists, reads, and validates verifier route artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-12T00:00:00.000Z"
+    });
+
+    const result = await writeVerifierRoute({
+      rootPath: root,
+      problem: "compute 3 / 4 + 5 / 8",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+    const routes = await listVerifierRoutes(root);
+    const readBack = await readVerifierRoute(root, result.route.routeId);
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(result.jsonPath).toContain(join(".theorem-workbench", "routes"));
+    expect(result.markdown).toContain(`# Verifier Route ${result.route.routeId}`);
+    expect(result.route.replay).toBe("theorem verify \"compute 3 / 4 + 5 / 8\" --json");
+    expect(routes).toHaveLength(1);
+    expect(routes[0]).toMatchObject({
+      routeId: result.route.routeId,
+      finalTrust: "exact-computed",
+      evidenceKind: "exact-arithmetic",
+      receiptRunId: result.route.receipt.runId,
+      usedCapabilities: ["local-rational-arithmetic"]
+    });
+    expect(readBack.routeId).toBe(result.route.routeId);
+    expect(validation.passed).toBe(true);
+    expect(validation.summary.byKind.routes).toBe(1);
+  });
 });
+
+async function tempRoot(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-"));
+  roots.push(root);
+  return root;
+}

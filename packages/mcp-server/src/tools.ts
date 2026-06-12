@@ -51,12 +51,14 @@ import {
   listSimulationLogEntries,
   listSmtChecks,
   listValidationPlans,
+  listVerifierRoutes,
   listWorkspaceSnapshots,
   listVaultEntries,
   parseReceiptJson,
   parseBenchmarkRunRecordJson,
   repairLocalWorkspace,
   readClaimRecord,
+  readVerifierRoute,
   renderEvidenceAuditMarkdown,
   sealVaultFile,
   solveSmtProblem,
@@ -82,6 +84,7 @@ import {
   writeNotebookRun,
   writeResearchSession,
   writeValidationPlan,
+  writeVerifierRoute,
   writeWorkspaceSnapshot,
   type BenchmarkArtifactSummary,
   type BenchmarkComparisonRecord,
@@ -176,6 +179,8 @@ import {
   type VaultSealResult,
   type VaultVerifyResult,
   type VerifierRoute,
+  type VerifierRouteSummary,
+  type VerifierRouteWriteResult,
   type WorkspaceSnapshotSummary,
   type WorkspaceSnapshotVerification,
   type WorkspaceSnapshotWriteResult,
@@ -196,6 +201,8 @@ export interface TheoremAskOutput {
 
 export interface TheoremVerifyInput {
   problem: string;
+  workspacePath?: string;
+  write?: boolean;
   strict?: boolean;
   timeoutMs?: number;
   maximaCommand?: string;
@@ -205,8 +212,19 @@ export interface TheoremVerifyInput {
 
 export interface TheoremVerifyOutput {
   error: boolean;
+  written: boolean;
   route: VerifierRoute;
+  result?: VerifierRouteWriteResult;
   message: string;
+}
+
+export interface TheoremRouteListInput {
+  workspacePath?: string;
+}
+
+export interface TheoremRouteShowInput {
+  workspacePath?: string;
+  routeRef: string;
 }
 
 export interface TheoremEngineManifestInput {
@@ -842,22 +860,51 @@ export function handleTheoremAsk(input: TheoremAskInput): TheoremAskOutput {
   };
 }
 
-export function handleTheoremVerify(input: TheoremVerifyInput): TheoremVerifyOutput {
-  const route = createVerifierRoute(input.problem, {
-    timeoutMs: input.timeoutMs,
-    maximaCommand: input.maximaCommand,
-    leanCommand: input.leanCommand,
-    z3Command: input.z3Command
-  });
+export async function handleTheoremVerify(input: TheoremVerifyInput): Promise<TheoremVerifyOutput> {
+  const write = input.write === true
+    ? await writeVerifierRoute({
+        rootPath: resolveWorkspaceRoot(input.workspacePath),
+        problem: input.problem,
+        timeoutMs: input.timeoutMs,
+        maximaCommand: input.maximaCommand,
+        leanCommand: input.leanCommand,
+        z3Command: input.z3Command
+      })
+    : undefined;
+  const route =
+    write?.route ??
+    createVerifierRoute(input.problem, {
+      timeoutMs: input.timeoutMs,
+      maximaCommand: input.maximaCommand,
+      leanCommand: input.leanCommand,
+      z3Command: input.z3Command
+    });
   const strictFailure = input.strict === true && route.finalTrust === "unverified";
 
   return {
     error: strictFailure,
+    written: write !== undefined,
     route,
+    result: write,
     message: strictFailure
       ? "Strict mode failed because the verifier route ended unverified."
-      : `Verifier route ${route.routeId} completed with final trust ${route.finalTrust}.`
+      : `Verifier route ${route.routeId} completed with final trust ${route.finalTrust}${write ? " and was written to the local route ledger" : ""}.`
   };
+}
+
+export async function handleTheoremRouteList(input: TheoremRouteListInput): Promise<{
+  total: number;
+  routes: VerifierRouteSummary[];
+}> {
+  const routes = await listVerifierRoutes(resolveWorkspaceRoot(input.workspacePath));
+  return {
+    total: routes.length,
+    routes
+  };
+}
+
+export async function handleTheoremRouteShow(input: TheoremRouteShowInput): Promise<VerifierRoute> {
+  return readVerifierRoute(resolveWorkspaceRoot(input.workspacePath), input.routeRef);
 }
 
 export function handleTheoremEngineManifest(input: TheoremEngineManifestInput = {}): EngineManifest {

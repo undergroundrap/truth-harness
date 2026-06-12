@@ -47,6 +47,7 @@ describe("local workspace", () => {
     expect(manifest.directories["notebook-runs"]).toBe(".theorem-workbench/notebook-runs");
     expect(manifest.directories["code-runs"]).toBe(".theorem-workbench/code-runs");
     expect(manifest.directories["model-contexts"]).toBe(".theorem-workbench/model-contexts");
+    expect(manifest.directories.routes).toBe(".theorem-workbench/routes");
     expect(manifest.policies.externalCalls).toBe("disabled-by-default");
     expect(manifest.policies.disclosure).toBe("required-for-external-calls");
   });
@@ -91,24 +92,24 @@ describe("local workspace", () => {
     const root = await tempRoot();
     const initialized = await initLocalWorkspace(root, { now: "2026-06-08T00:00:00.000Z" });
     const legacyDirectories = { ...initialized.manifest.directories } as Partial<typeof initialized.manifest.directories>;
-    delete legacyDirectories["code-runs"];
+    delete legacyDirectories.routes;
     const legacyManifest = {
       ...initialized.manifest,
       directories: legacyDirectories
     };
-    await rm(join(root, initialized.manifest.directories["code-runs"]), { recursive: true, force: true });
+    await rm(join(root, initialized.manifest.directories.routes), { recursive: true, force: true });
     await writeFile(initialized.manifestPath, `${JSON.stringify(legacyManifest, null, 2)}\n`, "utf8");
 
     const status = await getLocalWorkspaceStatus(root);
 
     expect(status.exists).toBe(true);
-    expect(status.manifest?.directories["code-runs"]).toBe(".theorem-workbench/code-runs");
+    expect(status.manifest?.directories.routes).toBe(".theorem-workbench/routes");
     expect(status.manifestRepair).toEqual({
       applied: false,
-      addedDirectories: ["code-runs"]
+      addedDirectories: ["routes"]
     });
-    expect(status.missingDirectories).toEqual([".theorem-workbench/code-runs"]);
-    expect(JSON.parse(await readFile(initialized.manifestPath, "utf8")).directories["code-runs"]).toBeUndefined();
+    expect(status.missingDirectories).toEqual([".theorem-workbench/routes"]);
+    expect(JSON.parse(await readFile(initialized.manifestPath, "utf8")).directories.routes).toBeUndefined();
 
     const repaired = await repairLocalWorkspace(root, { now: "2026-06-09T00:00:00.000Z" });
     const repairedStatus = await getLocalWorkspaceStatus(root);
@@ -118,11 +119,11 @@ describe("local workspace", () => {
     expect(repaired.manifest.updatedAt).toBe("2026-06-09T00:00:00.000Z");
     expect(repaired.manifestRepair).toEqual({
       applied: true,
-      addedDirectories: ["code-runs"]
+      addedDirectories: ["routes"]
     });
-    expect(repaired.createdDirectories).toEqual([".theorem-workbench/code-runs"]);
+    expect(repaired.createdDirectories).toEqual([".theorem-workbench/routes"]);
     expect(repaired.missingDirectoriesAfter).toEqual([]);
-    expect(rawManifest.directories["code-runs"]).toBe(".theorem-workbench/code-runs");
+    expect(rawManifest.directories.routes).toBe(".theorem-workbench/routes");
     expect(repairedStatus.manifestRepair).toBeUndefined();
     expect(repairedStatus.missingDirectories).toEqual([]);
   });

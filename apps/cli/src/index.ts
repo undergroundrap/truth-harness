@@ -71,12 +71,14 @@ import {
   listSimulationLogEntries,
   listSmtChecks,
   listValidationPlans,
+  listVerifierRoutes,
   listWorkspaceSnapshots,
   listVaultEntries,
   openVaultEntry,
   parseReceiptJson,
   parseBenchmarkRunRecordJson,
   readClaimRecord,
+  readVerifierRoute,
   renderReceipt,
   repairLocalWorkspace,
   replayReceipt,
@@ -102,6 +104,7 @@ import {
   writeNotebookRun,
   writeResearchSession,
   writeValidationPlan,
+  writeVerifierRoute,
   writeWorkspaceSnapshot,
   writeClaimChart,
   createValidationPlan,
@@ -189,6 +192,8 @@ import {
   type SmtCheckWriteResult,
   type SmtProblemSolveResult,
   type VerifierRoute,
+  type VerifierRouteSummary,
+  type VerifierRouteWriteResult,
   type ValidationEvidenceRef,
   type ValidationGateInput,
   type ValidationPlan,
@@ -251,6 +256,8 @@ program
   .argument("<problem...>", "Math prompt or claim to route through local verifiers")
   .option("--json", "Print the full verifier route JSON")
   .option("--out <path>", "Write the full verifier route JSON to a file")
+  .option("--write", "Write JSON and Markdown into .theorem-workbench/routes")
+  .option("--workspace <path>", "Project root path for writing route artifacts", ".")
   .option("--strict", "Exit non-zero if the final receipt trust is unverified")
   .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 1500)
   .option("--maxima-command <command>", "Override Maxima executable for this route")
@@ -262,6 +269,8 @@ program
       options: {
         json?: boolean;
         out?: string;
+        write?: boolean;
+        workspace: string;
         strict?: boolean;
         timeoutMs: number;
         maximaCommand?: string;
@@ -269,21 +278,34 @@ program
         z3Command?: string;
       }
     ) => {
-      const route = createVerifierRoute(problemTokens.join(" "), {
-        timeoutMs: options.timeoutMs,
-        maximaCommand: options.maximaCommand,
-        leanCommand: options.leanCommand,
-        z3Command: options.z3Command
-      });
+      const problem = problemTokens.join(" ");
+      const workspaceWrite = options.write
+        ? await writeVerifierRoute({
+            rootPath: options.workspace,
+            problem,
+            timeoutMs: options.timeoutMs,
+            maximaCommand: options.maximaCommand,
+            leanCommand: options.leanCommand,
+            z3Command: options.z3Command
+          })
+        : undefined;
+      const route =
+        workspaceWrite?.route ??
+        createVerifierRoute(problem, {
+          timeoutMs: options.timeoutMs,
+          maximaCommand: options.maximaCommand,
+          leanCommand: options.leanCommand,
+          z3Command: options.z3Command
+        });
 
       if (options.out) {
         await writeJson(options.out, route);
       }
 
       if (options.json) {
-        printJson(route);
+        printJson(workspaceWrite ? { route, written: true, result: workspaceWrite } : route);
       } else {
-        printVerifierRoute(route, options.out);
+        printVerifierRoute(route, options.out, workspaceWrite);
       }
 
       if (options.strict && route.finalTrust === "unverified") {
@@ -291,6 +313,41 @@ program
       }
     }
   );
+
+const route = program.command("route").description("Manage persisted verifier routes in the local workspace.");
+
+route
+  .command("list")
+  .description("List local verifier-route records.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full verifier-route list JSON")
+  .action(async (path: string, options: { json?: boolean }) => {
+    const routes = await listVerifierRoutes(path);
+
+    if (options.json) {
+      printJson({ total: routes.length, routes });
+      return;
+    }
+
+    printVerifierRouteList(routes);
+  });
+
+route
+  .command("show")
+  .description("Show a verifier route by route id or workspace-local JSON path.")
+  .argument("<route>", "Route id or workspace-local JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--json", "Print the full verifier route JSON")
+  .action(async (routeRef: string, options: { workspace: string; json?: boolean }) => {
+    const storedRoute = await readVerifierRoute(options.workspace, routeRef);
+
+    if (options.json) {
+      printJson(storedRoute);
+      return;
+    }
+
+    printVerifierRoute(storedRoute);
+  });
 
 const claim = program.command("claim").description("Manage git-like local claim ledger records.");
 
@@ -1442,7 +1499,7 @@ validation
   .option("--title <title>", "Short validation plan title")
   .option("--objective <text>", "Validation objective")
   .option("--domain <domain>", "math, source, literature, simulation, experiment, biomedical, clinical, safety, regulatory, patent, engineering, software, physics, or general. Repeatable", collectRepeated, [])
-  .option("--evidence <ref>", "Evidence ref, optionally prefixed as receipt:path, simulation:id, experiment:id, review:id, audit:id, snapshot:id, claim-chart:id, literature:id, or source:path", collectRepeated, [])
+  .option("--evidence <ref>", "Evidence ref, optionally prefixed as receipt:path, route:id, simulation:id, experiment:id, review:id, audit:id, snapshot:id, claim-chart:id, literature:id, or source:path", collectRepeated, [])
   .option("--gate <gate>", "Manual gate as kind:description or description; repeatable", collectRepeated, [])
   .option("--preview", "Derive the validation plan without writing files")
   .option("--json", "Print the full validation plan JSON")
@@ -2993,12 +3050,13 @@ function printReceipt(receipt: Receipt, outPath?: string): void {
   }
 }
 
-function printVerifierRoute(route: VerifierRoute, outPath?: string): void {
+function printVerifierRoute(route: VerifierRoute, outPath?: string, workspaceWrite?: VerifierRouteWriteResult): void {
   console.log(`Theorem verifier route ${route.routeId}`);
   console.log(`Status: ${route.status}`);
   console.log(`Final trust: ${route.finalTrust}`);
   console.log(`Evidence kind: ${route.evidenceKind}`);
   console.log(`Receipt: ${route.receipt.runId}`);
+  console.log(`Replay: ${route.replay}`);
   console.log(`Manifest: ${route.manifest.status} (${route.manifest.readyCount}/${route.manifest.totalCount} ready)`);
   console.log("");
   console.log("Used capabilities:");
@@ -3041,6 +3099,29 @@ function printVerifierRoute(route: VerifierRoute, outPath?: string): void {
   if (outPath) {
     console.log("");
     console.log(`Wrote verifier route JSON: ${outPath}`);
+  }
+
+  if (workspaceWrite) {
+    console.log("");
+    console.log(`Wrote workspace verifier route JSON: ${workspaceWrite.jsonPath}`);
+    console.log(`Wrote workspace verifier route Markdown: ${workspaceWrite.markdownPath}`);
+  }
+}
+
+function printVerifierRouteList(routes: VerifierRouteSummary[]): void {
+  console.log(`Theorem verifier routes: ${routes.length}`);
+
+  for (const route of routes) {
+    console.log("");
+    console.log(`${route.routeId} ${route.createdAt}`);
+    console.log(`  Trust: ${route.finalTrust}`);
+    console.log(`  Status: ${route.status}`);
+    console.log(`  Evidence: ${route.evidenceKind}`);
+    console.log(`  Receipt: ${route.receiptRunId}`);
+    console.log(`  Problem: ${singleLineSnippet(route.problem)}`);
+    console.log(`  Used: ${route.usedCapabilities.length > 0 ? route.usedCapabilities.join(", ") : "none"}`);
+    console.log(`  Gaps: ${route.gaps} (${route.criticalGaps} critical)`);
+    console.log(`  Path: ${route.path}`);
   }
 }
 
@@ -4434,6 +4515,7 @@ function parseClaimLedgerEvidenceRef(value: string): ClaimLedgerEvidenceRef {
     maybeKind === "model-context" ||
     maybeKind === "proof" ||
     maybeKind === "smt" ||
+    maybeKind === "route" ||
     maybeKind === "invention" ||
     maybeKind === "claim-chart" ||
     maybeKind === "discovery-package" ||
@@ -4468,6 +4550,7 @@ function parseEvidenceRef(value: string): InventionEvidenceRef {
     maybeKind === "vault" ||
     maybeKind === "review" ||
     maybeKind === "validation" ||
+    maybeKind === "route" ||
     maybeKind === "other"
   ) {
     return { kind: maybeKind, ref };
@@ -4502,6 +4585,7 @@ function parseResearchEvidenceRef(value: string): ResearchEvidenceRef {
     maybeKind === "review" ||
     maybeKind === "validation" ||
     maybeKind === "model-context" ||
+    maybeKind === "route" ||
     maybeKind === "invention" ||
     maybeKind === "claim-chart" ||
     maybeKind === "discovery-package" ||
@@ -4540,6 +4624,7 @@ function parseExpertReviewEvidenceRef(value: string): ExpertReviewEvidenceRef {
     maybeKind === "validation" ||
     maybeKind === "model-context" ||
     maybeKind === "session" ||
+    maybeKind === "route" ||
     maybeKind === "invention" ||
     maybeKind === "claim-chart" ||
     maybeKind === "discovery-package" ||
@@ -4578,6 +4663,7 @@ function parseValidationEvidenceRef(value: string): ValidationEvidenceRef {
     maybeKind === "review" ||
     maybeKind === "validation" ||
     maybeKind === "model-context" ||
+    maybeKind === "route" ||
     maybeKind === "invention" ||
     maybeKind === "claim-chart" ||
     maybeKind === "discovery-package" ||

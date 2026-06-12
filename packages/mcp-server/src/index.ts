@@ -44,6 +44,8 @@ import {
   handleTheoremResearchSessionCheckpoint,
   handleTheoremResearchSessionList,
   handleTheoremResearchSessionStart,
+  handleTheoremRouteList,
+  handleTheoremRouteShow,
   handleTheoremSimulationList,
   handleTheoremSimulationLog,
   handleTheoremSmtBackends,
@@ -113,6 +115,14 @@ export function createTheoremMcpServer(): McpServer {
         "Create a manifest-aware verifier route plus receipt for a math prompt. Returns used capabilities, missing verifier gaps, next actions, and the final conservative trust label.",
       inputSchema: {
         problem: z.string().min(1).describe("Math prompt or claim to route through local verifiers."),
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root for writing route artifacts. Defaults to the MCP workspace root."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write JSON and Markdown into .theorem-workbench/routes."),
         strict: z
           .boolean()
           .optional()
@@ -138,14 +148,55 @@ export function createTheoremMcpServer(): McpServer {
           .describe("Local backend version-probe timeout in milliseconds. Defaults to 1500.")
       },
       annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         openWorldHint: false
       }
     },
     async (input) => {
-      const result = handleTheoremVerify(input);
+      const result = await handleTheoremVerify(input);
       return toolJson(result, { isError: result.error });
     }
+  );
+
+  server.registerTool(
+    "theorem_route_list",
+    {
+      title: "List Verifier Routes",
+      description:
+        "List local theorem.verifier-route.v0 artifacts with route ids, trust labels, receipt ids, gaps, and paths agents can cite later.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTheoremRouteList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "theorem_route_show",
+    {
+      title: "Show Verifier Route",
+      description:
+        "Read a persisted verifier route by route id or workspace-local JSON path so agents can inspect the exact route, receipt, gaps, and replay command.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root."),
+        routeRef: z.string().min(1).describe("Route id such as route_<hash> or workspace-local JSON path.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, routeRef }) => toolJson(await handleTheoremRouteShow({ workspacePath, routeRef }))
   );
 
   const claimTrustSchema = z.enum([
@@ -198,6 +249,7 @@ export function createTheoremMcpServer(): McpServer {
       "model-context",
       "proof",
       "smt",
+      "route",
       "invention",
       "claim-chart",
       "discovery-package",
@@ -1391,6 +1443,7 @@ export function createTheoremMcpServer(): McpServer {
       "vault",
       "review",
       "validation",
+      "route",
       "other"
     ]),
     ref: z.string().min(1),
@@ -1475,6 +1528,7 @@ export function createTheoremMcpServer(): McpServer {
       "review",
       "validation",
       "model-context",
+      "route",
       "invention",
       "claim-chart",
       "discovery-package",
@@ -1619,6 +1673,7 @@ export function createTheoremMcpServer(): McpServer {
       "review",
       "validation",
       "model-context",
+      "route",
       "invention",
       "claim-chart",
       "discovery-package",
@@ -1741,6 +1796,7 @@ export function createTheoremMcpServer(): McpServer {
       "review",
       "validation",
       "model-context",
+      "route",
       "invention",
       "claim-chart",
       "discovery-package",
@@ -1892,6 +1948,7 @@ export function createTheoremMcpServer(): McpServer {
                 "vault",
                 "review",
                 "validation",
+                "route",
                 "other"
               ]),
               ref: z.string().min(1),
@@ -1972,7 +2029,7 @@ export function createTheoremMcpServer(): McpServer {
   );
 
   const claimChartEvidenceRefSchema = z.object({
-    kind: z.enum(["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "other"]),
+    kind: z.enum(["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "route", "other"]),
     ref: z.string().min(1),
     trust: z
       .enum([

@@ -122,6 +122,7 @@
             "notebook-runs",
             "code-runs",
             "model-contexts",
+            "routes",
             "manifest"
           ]
         },

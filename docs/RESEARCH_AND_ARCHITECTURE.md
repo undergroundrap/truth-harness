@@ -224,6 +224,8 @@ theorem code list
 
 Current benchmark-run records use `theorem.benchmark-run.v0` and live under `.theorem-workbench/benchmarks/`. They store suite metadata, runner metadata, replay command, per-case receipt ids/hashes/trust labels/backend ids, aggregate trust accuracy, failures, and warnings that benchmarks measure system behavior rather than proving the underlying tasks or downstream claims. Benchmark comparisons use `theorem.benchmark-comparison.v0` in the same directory and flag regressions, improvements, trust-label changes, changed receipt hashes, added/removed cases, and suite drift between recorded runs.
 
+Current verifier-route records use `theorem.verifier-route.v0` and live under `.theorem-workbench/routes/` when `theorem verify <claim> --write` or MCP `theorem_verify` with `write: true` is used. They store the prompt, conservative final trust label, nested receipt, engine-manifest summary, used capabilities, blocked/planned verifier gaps, next actions, replay command, JSON path, and Markdown report path. `theorem route list/show` and MCP `theorem_route_list`/`theorem_route_show` expose those records for claim ledger refs, audits, validation plans, snapshots, research sessions, and reports. A route explains verifier selection and missing gates; it is not a proof by itself.
+
 Current proof-check records use `theorem.proof-check.v0` and live under `.theorem-workbench/proofs/` when `theorem proof check <file> --write` or MCP `theorem_proof_check` with `write: true` is used. They store the Lean command, source path, source hash, optional theorem name, stdout/stderr, replay command, proof boundary, JSON path, and Markdown report path. `theorem proof list` and `theorem_proof_list` expose those records for audits, snapshots, research-session evidence refs, and agent follow-up.
 
 Current SMT-check records use `theorem.smt-check.v0` and live under `.theorem-workbench/smt/` when `theorem smt check <file> --write`, `theorem smt solve`, MCP `theorem_smt_check` with `write: true`, or MCP `theorem_smt_solve` is used. They store the Z3 command, source path, source hash, optional query name, stdout/stderr, replay command, solver boundary, JSON path, and Markdown report path. `theorem smt solve` and `theorem_smt_solve` generate `.smt2` sources under `.theorem-workbench/smt/sources/` from explicit integer variables and constraints before checking them. When `get-model` is present and Z3 returns `sat`, records also extract simple `define-fun` model bindings into structured JSON while preserving raw stdout. `sat` and `unsat` map to `smt-checked`; missing Z3, execution errors, `unknown`, or unrecognized output stay `unverified`. `theorem smt list` and `theorem_smt_list` expose those records for audits, snapshots, research-session evidence refs, and agent follow-up.
@@ -639,6 +641,9 @@ Current MCP tools:
 | Tool | Purpose |
 | --- | --- |
 | `theorem_ask` | Create proof receipts for supported math prompts. |
+| `theorem_verify` | Create a manifest-aware verifier route plus receipt; optionally write local `theorem.verifier-route.v0` JSON and Markdown records. |
+| `theorem_route_list` | List local verifier-route records and reusable route ids/paths. |
+| `theorem_route_show` | Read one verifier route by id or workspace-local JSON path. |
 | `theorem_benchmark_run` | Run benchmark suites against the local receipt engine; optionally write local `theorem.benchmark-run.v0` records. |
 | `theorem_benchmark_compare` | Compare two benchmark-run records; optionally write local `theorem.benchmark-comparison.v0` records. |
 | `theorem_benchmark_list` | List benchmark run/comparison artifacts and reusable local paths. |

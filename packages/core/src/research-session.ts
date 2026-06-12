@@ -41,6 +41,7 @@ export interface ResearchEvidenceRef {
     | "review"
     | "validation"
     | "model-context"
+    | "route"
     | "invention"
     | "claim-chart"
     | "discovery-package"

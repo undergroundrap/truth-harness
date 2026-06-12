@@ -29,7 +29,8 @@ export type LocalWorkspaceDirectory =
   | "literature"
   | "notebook-runs"
   | "code-runs"
-  | "model-contexts";
+  | "model-contexts"
+  | "routes";
 
 export interface LocalWorkspaceManifest {
   schemaVersion: "theorem.workspace.v0";
@@ -70,7 +71,8 @@ const DEFAULT_WORKSPACE_DIRECTORIES: Record<LocalWorkspaceDirectory, string> = {
   literature: ".theorem-workbench/literature",
   "notebook-runs": ".theorem-workbench/notebook-runs",
   "code-runs": ".theorem-workbench/code-runs",
-  "model-contexts": ".theorem-workbench/model-contexts"
+  "model-contexts": ".theorem-workbench/model-contexts",
+  routes: ".theorem-workbench/routes"
 };
 
 export interface LocalWorkspaceInitResult {

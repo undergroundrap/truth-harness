@@ -1,4 +1,7 @@
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { join, relative, resolve, sep } from "node:path";
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
+import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { createReceipt, type CreateReceiptOptions } from "./receipt.js";
 import { stableHash } from "./stable-hash.js";
 import type { Receipt, ReceiptEvidenceProfile, TrustLabel } from "./types.js";
@@ -42,6 +45,7 @@ export interface VerifierRoute {
   finalTrust: TrustLabel;
   evidenceKind: ReceiptEvidenceProfile["kind"];
   receipt: Receipt;
+  replay: string;
   manifest: {
     schemaVersion: EngineManifest["schemaVersion"];
     status: EngineManifest["status"];
@@ -61,6 +65,33 @@ export interface VerifierRoute {
     receiptTrustIsUpperBound: true;
   };
   warnings: string[];
+}
+
+export interface WriteVerifierRouteInput extends CreateVerifierRouteOptions {
+  rootPath: string;
+  problem: string;
+}
+
+export interface VerifierRouteWriteResult {
+  route: VerifierRoute;
+  jsonPath: string;
+  markdownPath: string;
+  markdown: string;
+}
+
+export interface VerifierRouteSummary {
+  path: string;
+  routeId: string;
+  createdAt: string;
+  problem: string;
+  finalTrust: TrustLabel;
+  status: VerifierRouteStatus;
+  evidenceKind: ReceiptEvidenceProfile["kind"];
+  receiptRunId: string;
+  usedCapabilities: string[];
+  gaps: number;
+  criticalGaps: number;
+  nextActions: string[];
 }
 
 export function createVerifierRoute(problem: string, options: CreateVerifierRouteOptions = {}): VerifierRoute {
@@ -100,6 +131,7 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
     finalTrust: receipt.trust,
     evidenceKind: receipt.evidenceProfile.kind,
     receipt,
+    replay: `theorem verify ${quoteCommandArg(problem)} --json`,
     manifest: {
       schemaVersion: manifest.schemaVersion,
       status: manifest.status,
@@ -121,6 +153,146 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
     },
     warnings: [...manifest.warnings, ...receipt.findings.filter((finding) => finding.level !== "info").map((finding) => finding.message)]
   };
+}
+
+export async function writeVerifierRoute(input: WriteVerifierRouteInput): Promise<VerifierRouteWriteResult> {
+  const status = await requireLocalWorkspace(input.rootPath);
+  const route = createVerifierRoute(input.problem, {
+    timeoutMs: input.timeoutMs,
+    maximaCommand: input.maximaCommand,
+    leanCommand: input.leanCommand,
+    z3Command: input.z3Command,
+    now: input.now,
+    casRunner: input.casRunner
+  });
+  const routesDir = resolve(status.root, status.manifest.directories.routes);
+  await mkdir(routesDir, { recursive: true });
+
+  const baseName = `${route.createdAt.slice(0, 10)}-${route.routeId}`;
+  const jsonPath = join(routesDir, `${baseName}.json`);
+  const markdownPath = join(routesDir, `${baseName}.md`);
+  const markdown = renderVerifierRouteMarkdown(route);
+
+  await writeFile(jsonPath, `${JSON.stringify(route, null, 2)}\n`, "utf8");
+  await writeFile(markdownPath, markdown, "utf8");
+
+  return {
+    route,
+    jsonPath,
+    markdownPath,
+    markdown
+  };
+}
+
+export async function listVerifierRoutes(rootPath: string): Promise<VerifierRouteSummary[]> {
+  const status = await requireLocalWorkspace(rootPath);
+  const routesDir = resolve(status.root, status.manifest.directories.routes);
+
+  let files: string[];
+  try {
+    files = await readdir(routesDir);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const summaries = await Promise.all(
+    files
+      .filter((file) => file.endsWith(".json"))
+      .map(async (file) => {
+        const path = join(routesDir, file);
+        return summarizeVerifierRoute(status.root, path, await readFile(path, "utf8"));
+      })
+  );
+
+  return summaries
+    .filter((summary): summary is VerifierRouteSummary => summary !== undefined)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export async function readVerifierRoute(rootPath: string, routeRef: string): Promise<VerifierRoute> {
+  const status = await requireLocalWorkspace(rootPath);
+  let path: string;
+
+  if (/^route_[a-f0-9]{16}$/u.test(routeRef)) {
+    const route = (await listVerifierRoutes(status.root)).find((summary) => summary.routeId === routeRef);
+    if (!route) {
+      throw new Error(`No verifier route found for id ${routeRef}.`);
+    }
+    path = resolve(status.root, route.path);
+  } else {
+    path = resolveWorkspacePath(status.root, routeRef);
+  }
+
+  return parseVerifierRouteJson(await readFile(path, "utf8"), path);
+}
+
+export function renderVerifierRouteMarkdown(route: VerifierRoute): string {
+  const lines = [
+    `# Verifier Route ${route.routeId}`,
+    "",
+    `Status: \`${route.status}\``,
+    `Final trust: \`${route.finalTrust}\``,
+    `Evidence kind: \`${route.evidenceKind}\``,
+    `Created: ${route.createdAt}`,
+    `Privacy: local-only (network: none)`,
+    "",
+    "## Problem",
+    "",
+    route.problem,
+    "",
+    "## Receipt",
+    "",
+    `- Run: \`${route.receipt.runId}\``,
+    `- Trust: \`${route.receipt.trust}\``,
+    `- Replay: \`${route.receipt.replay}\``,
+    "",
+    "## Route Replay",
+    "",
+    `\`${route.replay}\``,
+    "",
+    "## Used Capabilities",
+    ""
+  ];
+
+  pushRouteSteps(lines, route.usedCapabilities);
+
+  lines.push("", "## Verification Gaps", "");
+  if (route.gaps.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const gap of route.gaps) {
+      lines.push(`- ${gap.severity}: ${gap.displayName} - ${gap.reason}`);
+      if (gap.nextStep) {
+        lines.push(`  - Next: ${gap.nextStep}`);
+      }
+      if (gap.command) {
+        lines.push(`  - Command: \`${gap.command}\``);
+      }
+    }
+  }
+
+  lines.push("", "## Next Actions", "");
+  pushStringList(lines, route.nextActions);
+
+  if (route.warnings.length > 0) {
+    lines.push("", "## Warnings", "");
+    pushStringList(lines, route.warnings);
+  }
+
+  lines.push(
+    "",
+    "## Boundary",
+    "",
+    "- A verifier route explains which engines were used or missing. It is not a proof by itself.",
+    "- The receipt trust label is an upper bound; stronger scientific, medical, safety, regulatory, or patent claims need the matching human and domain validation gates."
+  );
+
+  return `${lines.join("\n")}\n`;
 }
 
 function capabilityIdsForReceipt(receipt: Receipt): string[] {
@@ -325,4 +497,104 @@ function missingCapability(capabilityId: string): EngineCapability {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function pushRouteSteps(lines: string[], steps: VerifierRouteStep[]): void {
+  if (steps.length === 0) {
+    lines.push("- none");
+    return;
+  }
+
+  for (const step of steps) {
+    lines.push(`- ${step.displayName} (${step.capabilityId}) - ${step.reason}`);
+    if (step.command) {
+      lines.push(`  - Command: \`${step.command}\``);
+    }
+  }
+}
+
+function pushStringList(lines: string[], values: string[]): void {
+  if (values.length === 0) {
+    lines.push("- none");
+    return;
+  }
+
+  for (const value of values) {
+    lines.push(`- ${value}`);
+  }
+}
+
+function summarizeVerifierRoute(root: string, path: string, raw: string): VerifierRouteSummary | undefined {
+  let route: VerifierRoute;
+  try {
+    route = parseVerifierRouteJson(raw, path);
+  } catch {
+    return undefined;
+  }
+
+  return {
+    path: toPortablePath(relative(root, path)),
+    routeId: route.routeId,
+    createdAt: route.createdAt,
+    problem: route.problem,
+    finalTrust: route.finalTrust,
+    status: route.status,
+    evidenceKind: route.evidenceKind,
+    receiptRunId: route.receipt.runId,
+    usedCapabilities: route.usedCapabilities.map((step) => step.capabilityId),
+    gaps: route.gaps.length,
+    criticalGaps: route.gaps.filter((gap) => gap.severity === "critical").length,
+    nextActions: route.nextActions
+  };
+}
+
+function parseVerifierRouteJson(raw: string, sourcePath: string): VerifierRoute {
+  const parsed = JSON.parse(raw) as unknown;
+  if (!isRecord(parsed)) {
+    throw new Error(`Verifier route JSON must be an object: ${sourcePath}.`);
+  }
+
+  if (parsed.schemaVersion !== "theorem.verifier-route.v0") {
+    throw new Error(`Unsupported verifier route schema in ${sourcePath}: ${JSON.stringify(parsed.schemaVersion)}.`);
+  }
+
+  if (typeof parsed.routeId !== "string") {
+    throw new Error(`Verifier route is missing routeId: ${sourcePath}.`);
+  }
+
+  return parsed as unknown as VerifierRoute;
+}
+
+function quoteCommandArg(value: string): string {
+  return /^[A-Za-z0-9_./\\:-]+$/.test(value) ? value : JSON.stringify(value);
+}
+
+async function requireLocalWorkspace(
+  rootPath: string
+): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
+  const status = await getLocalWorkspaceStatus(rootPath);
+  if (!status.exists || !status.manifest) {
+    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing verifier route records.");
+  }
+
+  return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
+}
+
+function resolveWorkspacePath(root: string, path: string): string {
+  const target = resolve(root, path);
+  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
+
+  if (target !== root && !target.startsWith(rootWithSep)) {
+    throw new Error(`Path escapes workspace root: ${path}`);
+  }
+
+  return target;
+}
+
+function toPortablePath(path: string): string {
+  return path.split(sep).join("/");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

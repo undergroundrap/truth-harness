@@ -223,8 +223,13 @@ async function handleApiRequest(request, response, requestUrl) {
       return;
     }
 
-    const { createVerifierRoute } = await loadCoreModule();
-    const route = createVerifierRoute(problem);
+    const { writeVerifierRoute } = await loadCoreModule();
+    await ensureLocalWorkspace();
+    const routeWrite = await writeVerifierRoute({
+      rootPath: projectRoot,
+      problem
+    });
+    const route = routeWrite.route;
     const receipt = route.receipt;
     const completedAt = new Date().toISOString();
     writeJson(response, 200, {
@@ -232,6 +237,10 @@ async function handleApiRequest(request, response, requestUrl) {
       localOnly: true,
       externalCalls: [],
       route,
+      routePaths: {
+        json: routeWrite.jsonPath,
+        markdown: routeWrite.markdownPath
+      },
       receipt,
       activity: [
         {
@@ -243,7 +252,7 @@ async function handleApiRequest(request, response, requestUrl) {
         {
           actor: "local-api",
           action: "created-verifier-route",
-          detail: `The local API selected ${route.usedCapabilities.length} verifier capabilities and recorded ${route.gaps.length} route gaps.`,
+          detail: `The local API selected ${route.usedCapabilities.length} verifier capabilities, recorded ${route.gaps.length} route gaps, and wrote ${route.routeId} to .theorem-workbench/routes.`,
           at: completedAt
         },
         {

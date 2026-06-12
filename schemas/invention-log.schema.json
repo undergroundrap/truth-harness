@@ -145,7 +145,7 @@
       "required": ["kind", "ref"],
       "properties": {
         "kind": {
-          "enum": ["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "other"]
+          "enum": ["receipt", "artifact", "source", "literature", "notebook", "notebook-run", "code-run", "benchmark", "disclosure", "simulation", "experiment", "vault", "review", "validation", "route", "other"]
         },
         "ref": {
           "type": "string"

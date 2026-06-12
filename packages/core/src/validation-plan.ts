@@ -79,6 +79,7 @@ export interface ValidationEvidenceRef {
     | "review"
     | "validation"
     | "model-context"
+    | "route"
     | "invention"
     | "claim-chart"
     | "discovery-package"
