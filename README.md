@@ -10,6 +10,8 @@ The long-term mission is open-source discovery infrastructure: help humans and a
 
 The name is intentional: it is both a workbench for doing verified math and a benchmark harness for measuring agents, tools, prompts, and solver portfolios against reproducible math tasks.
 
+The public name should remain **Theorem Workbench**. Use `theorem` as the CLI shorthand, but avoid branding the product as only "Theorem"; the combined name is clearer, more searchable, and more honest. See [docs/PARITY_LEDGER.md](docs/PARITY_LEDGER.md) for the naming decision and parity gates against WolframAlpha, SageMath, Lean, JupyterLab, provenance tools, and scientific RAG.
+
 ## Why It Exists
 
 AI is already good at writing plausible math. The hard part is knowing when the math is true.

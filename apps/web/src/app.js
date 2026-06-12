@@ -238,6 +238,7 @@ const matrixSummary = document.querySelector("#matrix-summary");
 const matrixCurrentClaim = document.querySelector("#matrix-current-claim");
 const matrixNextCommand = document.querySelector("#matrix-next-command");
 const verificationMatrix = document.querySelector("#verification-matrix");
+const capabilityLedger = document.querySelector("#capability-ledger");
 const protocolLane = document.querySelector("#protocol-lane");
 const protocolSummary = document.querySelector("#protocol-summary");
 const protocolEvidence = document.querySelector("#protocol-evidence");
@@ -407,6 +408,72 @@ const verificationGateCatalog = [
     description: "Export evidence, limitations, citations, open gaps, and reviewer-ready reproduction steps.",
     applies: () => true,
     status: () => "waiting"
+  }
+];
+const capabilityLedgerRows = [
+  {
+    category: "Computation",
+    compare: "WolframAlpha / CAS",
+    status: "building",
+    theorem: "Exact rational arithmetic, traces, counterexamples, units, SymPy adapter, benchmark records.",
+    gap: "Broader calculus, plotting, optimization, ODEs, assumptions, and multi-engine CAS cross-checks.",
+    next: "Add a typed math router that escalates arithmetic -> symbolic -> SMT/proof -> report packet."
+  },
+  {
+    category: "Open Math Engines",
+    compare: "SageMath / SymPy",
+    status: "adapter-first",
+    theorem: "Uses local adapters and records backend ids, outputs, limits, and replay commands.",
+    gap: "Sage, Julia, R, and richer numerical libraries are not first-class adapters yet.",
+    next: "Define engine capability manifests and golden tests per adapter."
+  },
+  {
+    category: "Formal Trust",
+    compare: "Lean / Coq / Isabelle",
+    status: "strict-gate",
+    theorem: "Only accepted proof-checker output may mint proved; failed proof attempts stay unverified.",
+    gap: "Informal-to-formal statement help, proof search history, and mathlib-aware guidance are early.",
+    next: "Make Lean proof attempts a visible chain: statement, attempt, error, repair, accepted artifact."
+  },
+  {
+    category: "Notebooks",
+    compare: "JupyterLab",
+    status: "gap",
+    theorem: "Notebook-run records exist for provenance, but execution is not yet a notebook IDE.",
+    gap: "No cell runtime, rich outputs, plots, or file explorer in the web shell.",
+    next: "Add notebook/output receipts before adding a full kernel UI."
+  },
+  {
+    category: "Provenance",
+    compare: "DVC / DataLad / MLflow",
+    status: "ahead",
+    theorem: "Claim-level receipts, snapshots, replay commands, activity log, trust labels, and local store.",
+    gap: "No large artifact pointer strategy or visual diff/rollback yet.",
+    next: "Make claim chains git-like: dependencies, versions, diffs, revert, and bundle export."
+  },
+  {
+    category: "Scientific RAG",
+    compare: "PaperQA / literature tools",
+    status: "building",
+    theorem: "Local source ingest, cite receipts, literature records, model-context and disclosure packets.",
+    gap: "No semantic retrieval, DOI enrichment, contradiction detection, or citation-span verifier yet.",
+    next: "Promote every cited sentence to a source receipt with entailment and contradiction checks."
+  },
+  {
+    category: "Agent Harness",
+    compare: "Claude / Codex alone",
+    status: "ahead",
+    theorem: "MCP/CLI/API routes, activity log, runbooks, receipts, safety center, reports, local evidence graph.",
+    gap: "Front end is not yet a full mirror for every CLI/MCP route.",
+    next: "Every CLI command gets a UI route, and every UI action emits the same artifact contract."
+  },
+  {
+    category: "Research Reports",
+    compare: "Lab notebooks / paper drafts",
+    status: "building",
+    theorem: "Printable report drafts include identity, trace, evidence graph, activity citations, and boundaries.",
+    gap: "No signed finalization, DOI/source bibliography, PDF polish, or peer-review checklist yet.",
+    next: "Add finalized report packets with signatures, citations, artifact bundle, and validation checklist."
   }
 ];
 const runbookLoopSteps = [
@@ -867,6 +934,7 @@ function render() {
   renderAgentRoutes(receipt);
   renderRunbook(receipt);
   renderVerificationMatrix(receipt);
+  renderCapabilityLedger();
   renderTaskDock(receipt);
   renderReplay(receipt);
   renderReport(receipt);
@@ -1229,6 +1297,59 @@ function renderVerificationMatrix(receipt) {
       <small>${escapeHtml(statusLabel(row.status))}</small>
     </div>`)
     .join("");
+}
+
+function renderCapabilityLedger() {
+  if (!capabilityLedger) {
+    return;
+  }
+
+  capabilityLedger.innerHTML = capabilityLedgerRows
+    .map((row) => `<article class="parity-row ${escapeHtml(row.status)}">
+      <div class="parity-row-head">
+        <span class="ledger-state ${escapeHtml(row.status)}"></span>
+        <div>
+          <strong>${escapeHtml(row.category)}</strong>
+          <small>${escapeHtml(row.compare)}</small>
+        </div>
+        <span>${escapeHtml(parityStatusLabel(row.status))}</span>
+      </div>
+      <dl>
+        <div>
+          <dt>Today</dt>
+          <dd>${escapeHtml(row.theorem)}</dd>
+        </div>
+        <div>
+          <dt>Gap</dt>
+          <dd>${escapeHtml(row.gap)}</dd>
+        </div>
+        <div>
+          <dt>Next</dt>
+          <dd>${escapeHtml(row.next)}</dd>
+        </div>
+      </dl>
+    </article>`)
+    .join("");
+}
+
+function parityStatusLabel(status) {
+  if (status === "ahead") {
+    return "ahead";
+  }
+
+  if (status === "strict-gate") {
+    return "trust edge";
+  }
+
+  if (status === "adapter-first") {
+    return "adapter edge";
+  }
+
+  if (status === "gap") {
+    return "gap";
+  }
+
+  return "building";
 }
 
 function renderTaskDock(receipt) {
