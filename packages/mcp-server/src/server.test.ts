@@ -89,6 +89,7 @@ describe("Theorem MCP server", () => {
         "theorem_disclosure_list",
         "theorem_disclosure_log",
         "theorem_discovery_package",
+        "theorem_engine_manifest",
         "theorem_evidence_audit",
         "theorem_evidence_audit_list",
         "theorem_experiment_list",
@@ -156,6 +157,20 @@ describe("Theorem MCP server", () => {
       expect(casBackendText).toContain("\"schemaVersion\": \"theorem.cas-backends.v0\"");
       expect(casBackendText).toContain("\"backendId\": \"maxima\"");
       expect(casBackendText).toContain("\"statusProbeIsNotCheck\": true");
+
+      const engineManifest = await client.callTool({
+        name: "theorem_engine_manifest",
+        arguments: {
+          maximaCommand: "theorem-workbench-missing-maxima-command",
+          leanCommand: "theorem-workbench-missing-lean-command",
+          z3Command: "theorem-workbench-missing-z3-command",
+          timeoutMs: 50
+        }
+      });
+      const engineManifestText = firstText(engineManifest.content);
+      expect(engineManifestText).toContain("\"schemaVersion\": \"theorem.engine-manifest.v0\"");
+      expect(engineManifestText).toContain("\"id\": \"local-rational-arithmetic\"");
+      expect(engineManifestText).toContain("\"statusProbeIsNotEvidence\": true");
 
       const proofBackends = await client.callTool({
         name: "theorem_proof_backends",

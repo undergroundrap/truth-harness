@@ -39,6 +39,44 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.crossCheckedRequiresIndependentRun).toBe(true);
   });
 
+  it("prints an engine manifest for humans and agents", async () => {
+    const result = await runCli([
+      "engines",
+      "--json",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "theorem-workbench-missing-maxima-command",
+      "--lean-command",
+      "theorem-workbench-missing-lean-command",
+      "--z3-command",
+      "theorem-workbench-missing-z3-command"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      schemaVersion: string;
+      nativeCount: number;
+      adapterCount: number;
+      plannedCount: number;
+      capabilities: Array<{ id: string; status: string; canMintTrust: boolean }>;
+      trustBoundary: { statusProbeIsNotEvidence: boolean; provedRequiresAcceptedProofCheckerRun: boolean };
+    };
+
+    expect(result.exitCode).toBe(0);
+    expect(json.schemaVersion).toBe("theorem.engine-manifest.v0");
+    expect(json.nativeCount).toBeGreaterThan(0);
+    expect(json.adapterCount).toBeGreaterThan(0);
+    expect(json.plannedCount).toBeGreaterThan(0);
+    expect(json.capabilities).toContainEqual(
+      expect.objectContaining({
+        id: "lean-proof-checker",
+        status: "missing",
+        canMintTrust: false
+      })
+    );
+    expect(json.trustBoundary.statusProbeIsNotEvidence).toBe(true);
+    expect(json.trustBoundary.provedRequiresAcceptedProofCheckerRun).toBe(true);
+  });
+
   it("reports proof backend status without requiring Lean to be installed", async () => {
     const result = await runCli([
       "proof",

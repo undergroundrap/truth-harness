@@ -2267,15 +2267,23 @@ function renderEngineReadinessStatus(payload) {
   }
 
   const readiness = payload.verification ?? {};
+  const manifest = payload.engineManifest ?? {};
   const engines = Array.isArray(readiness.engines) ? readiness.engines : [];
   const totalCount = Number.isFinite(readiness.totalCount) ? readiness.totalCount : engines.length;
   const readyCount = Number.isFinite(readiness.readyCount)
     ? readiness.readyCount
     : engines.filter((engine) => engine.status === "available").length;
+  const manifestReadyCount = Number.isFinite(manifest.readyCount) ? manifest.readyCount : 0;
+  const manifestTotalCount = Number.isFinite(manifest.totalCount) ? manifest.totalCount : 0;
+  const nativeCount = Number.isFinite(manifest.nativeCount) ? manifest.nativeCount : 0;
+  const plannedCount = Number.isFinite(manifest.plannedCount) ? manifest.plannedCount : 0;
   const allReady = totalCount > 0 && readyCount === totalCount;
   const anyReady = readyCount > 0;
   const rows = [
-    ["Ready", `${readyCount}/${totalCount} local engines`],
+    ["Adapters", `${readyCount}/${totalCount} verification backends`],
+    ["Manifest", `${manifestReadyCount}/${manifestTotalCount} active capabilities`],
+    ["Native", `${nativeCount} local kernels`],
+    ["Roadmap", `${plannedCount} planned adapters`],
     ...engines.map((engine) => [
       engine.lane ?? engine.displayName ?? "Backend",
       engineReadinessValue(engine)
@@ -2319,6 +2327,7 @@ function safetyStatusSummary(payload) {
 
 function engineReadinessSummary(payload) {
   const readiness = payload?.verification;
+  const manifest = payload?.engineManifest;
   if (!readiness) {
     return "No verification engine readiness metadata returned.";
   }
@@ -2328,16 +2337,18 @@ function engineReadinessSummary(payload) {
     ? readiness.readyCount
     : engines.filter((engine) => engine.status === "available").length;
   const totalCount = Number.isFinite(readiness.totalCount) ? readiness.totalCount : engines.length;
+  const nativeCount = Number.isFinite(manifest?.nativeCount) ? manifest.nativeCount : 0;
+  const activeCapabilities = Number.isFinite(manifest?.totalCount) ? manifest.totalCount : 0;
   const missing = engines
     .filter((engine) => engine.status !== "available")
     .map((engine) => engine.displayName ?? engine.id)
     .filter(Boolean);
 
   if (missing.length === 0 && totalCount > 0) {
-    return `${readyCount}/${totalCount} local verification engines available. Probes are readiness only, not evidence.`;
+    return `${readyCount}/${totalCount} local verification engines available, with ${nativeCount}/${activeCapabilities} native/workspace capabilities active. Probes are readiness only, not evidence.`;
   }
 
-  return `${readyCount}/${totalCount} local verification engines available. Missing: ${missing.join(", ") || "unknown"}.`;
+  return `${readyCount}/${totalCount} local verification engines available, with ${nativeCount}/${activeCapabilities} native/workspace capabilities active. Missing: ${missing.join(", ") || "unknown"}.`;
 }
 
 function engineReadinessValue(engine) {

@@ -85,6 +85,7 @@ async function resolveRequestPath(pathname) {
 async function handleApiRequest(request, response, requestUrl) {
   if (requestUrl.pathname === "/api/status" && request.method === "GET") {
     const codeRunSandbox = await readCodeRunSandboxStatus();
+    const engineManifest = await readEngineManifest();
     const verification = await readVerificationEngineStatus();
     const mcpCodeRunExposed = isTruthyEnv(process.env.THEOREM_ALLOW_CODE_RUN);
     const unsandboxedCodeRunAllowed = isTruthyEnv(process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN);
@@ -114,6 +115,7 @@ async function handleApiRequest(request, response, requestUrl) {
           selectedContextRequiredForExternalModels: true
         }
       },
+      engineManifest,
       verification,
       capabilities: [
         "receipt-create",
@@ -123,6 +125,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "agent-runbook",
         "research-session",
         "validation-plan",
+        "engine-manifest",
         "verification-readiness",
         "sandbox-status",
         "safety-center"
@@ -396,6 +399,38 @@ async function readCodeRunSandboxStatus() {
         "The local web status endpoint could not load the core sandbox detector.",
         "Treat agent-triggered code execution as unavailable until the local API reports a measured sandbox.",
         "Receipt creation can still run, but code-run networkAccess none must not be claimed from this process."
+      ]
+    };
+  }
+}
+
+async function readEngineManifest() {
+  try {
+    const { getEngineManifest } = await loadCoreModule();
+    return getEngineManifest({ timeoutMs: 1500 });
+  } catch (error) {
+    return {
+      schemaVersion: "theorem.engine-manifest.v0",
+      createdAt: new Date().toISOString(),
+      localOnly: true,
+      networkAccess: "none",
+      status: "missing",
+      readyCount: 0,
+      totalCount: 0,
+      nativeCount: 0,
+      adapterCount: 0,
+      plannedCount: 0,
+      capabilities: [],
+      trustBoundary: {
+        aiOutputIsNotEvidence: true,
+        statusProbeIsNotEvidence: true,
+        claimTrustRequiresResolvableEvidence: true,
+        provedRequiresAcceptedProofCheckerRun: true,
+        smtCheckedRequiresConcreteSolverRun: true,
+        crossCheckedRequiresIndependentAgreementRun: true
+      },
+      warnings: [
+        `Engine manifest unavailable: ${error instanceof Error ? error.message : "unknown error"}`
       ]
     };
   }

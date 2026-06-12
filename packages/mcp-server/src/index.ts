@@ -19,6 +19,7 @@ import {
   handleTheoremCodeRunList,
   handleTheoremCodeSandboxStatus,
   handleTheoremDiscoveryPackage,
+  handleTheoremEngineManifest,
   handleTheoremEvidenceAudit,
   handleTheoremEvidenceAuditList,
   handleTheoremExpertReviewList,
@@ -365,6 +366,41 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ maximaCommand, timeoutMs }) => toolJson(handleTheoremCasBackends({ maximaCommand, timeoutMs }))
+  );
+
+  server.registerTool(
+    "theorem_engine_manifest",
+    {
+      title: "Engine Capability Manifest",
+      description:
+        "Return the local Theorem engine manifest: native kernels, external adapters, safety boundaries, planned engines, and which trust labels each can mint after concrete evidence runs.",
+      inputSchema: {
+        maximaCommand: z
+          .string()
+          .optional()
+          .describe("Maxima executable path or command for this manifest probe."),
+        leanCommand: z
+          .string()
+          .optional()
+          .describe("Lean executable path or command for this manifest probe."),
+        z3Command: z
+          .string()
+          .optional()
+          .describe("Z3 executable path or command for this manifest probe."),
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .max(10000)
+          .optional()
+          .describe("Local backend version-probe timeout in milliseconds. Defaults to 1500.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(handleTheoremEngineManifest(input))
   );
 
   server.registerTool(

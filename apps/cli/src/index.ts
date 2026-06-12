@@ -25,6 +25,7 @@ import {
   createSourceCitationReceipt,
   getCasBackendStatus,
   getCodeRunSandboxStatus,
+  getEngineManifest,
   getLocalWorkspaceStatus,
   getProofBackendStatus,
   getSmtBackendStatus,
@@ -118,6 +119,7 @@ import {
   type ClaimLedgerWriteResult,
   type CasBackendStatusReport,
   type CodeRunSummary,
+  type EngineManifest,
   type CodeRunPolicyInput,
   type CodeRunWriteResult,
   type DiscoveryPackage,
@@ -2463,64 +2465,52 @@ smt
   });
 
 program
+  .command("engines")
+  .description("Show the local engine capability manifest and trust boundaries.")
+  .option("--json", "Print the full engine manifest JSON")
+  .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 1500)
+  .option("--maxima-command <command>", "Override Maxima executable for this probe")
+  .option("--lean-command <command>", "Override Lean executable for this probe")
+  .option("--z3-command <command>", "Override Z3 executable for this probe")
+  .action(
+    (options: {
+      json?: boolean;
+      timeoutMs: number;
+      maximaCommand?: string;
+      leanCommand?: string;
+      z3Command?: string;
+    }) => {
+      const manifest = getEngineManifest({
+        timeoutMs: options.timeoutMs,
+        maximaCommand: options.maximaCommand,
+        leanCommand: options.leanCommand,
+        z3Command: options.z3Command
+      });
+
+      if (options.json) {
+        printJson(manifest);
+        return;
+      }
+
+      printEngineManifest(manifest);
+    }
+  );
+
+program
   .command("doctor")
   .description("Show local adapter and trust-surface status.")
-  .action(() => {
-    const proofStatus = getProofBackendStatus();
-    const smtStatus = getSmtBackendStatus();
+  .option("--json", "Print the full engine manifest JSON")
+  .action((options: { json?: boolean }) => {
+    const manifest = getEngineManifest();
+
+    if (options.json) {
+      printJson(manifest);
+      return;
+    }
+
     console.log("Theorem Workbench doctor");
     console.log("");
-    console.log("Available local adapters:");
-    console.log("  exact arithmetic      ready   local Rational evaluator");
-    console.log("  counterexample search ready   finite integer search over exact arithmetic");
-    console.log("  parity checker        ready   local Z/2Z exact check for integer polynomial parity");
-    console.log("  interval arithmetic   ready   conservative rational bounds over input ranges");
-    console.log("  dimensional analysis  ready   local SI base-dimension evaluator");
-    console.log("  SymPy CAS             ready   local Python subprocess when sympy is installed");
-    console.log("  local corpus search   ready   private Markdown/text lexical index");
-    for (const backend of proofStatus.backends) {
-      console.log(
-        `  ${backend.displayName.padEnd(22)} ${formatProofBackendStatus(backend.status)} ${backend.version ?? backend.error ?? "not detected"}`
-      );
-    }
-    for (const backend of smtStatus.backends) {
-      console.log(
-        `  ${backend.displayName.padEnd(22)} ${formatSmtBackendStatus(backend.status)} ${backend.version ?? backend.error ?? "not detected"}`
-      );
-    }
-    console.log("  Sage CAS              planned adapter");
-    console.log("  cvc5 SMT              planned adapter");
-    console.log("  vector/PDF RAG        planned adapter");
-    console.log("");
-    console.log("Privacy posture:");
-    console.log("  receipts              ready   local-only metadata, no network access by default");
-    console.log("  source-cited receipts ready   local corpus hits converted into evidence receipts");
-    console.log("  claim ledger          ready   git-like claim ids, dependencies, supersession, tags, and finalization gates");
-    console.log("  literature records    ready   local paper, patent, dataset, and database-export evidence records");
-    console.log("  notebook runs         ready   local notebook/script/pipeline provenance records");
-    console.log("  invention logs        ready   local hypothesis/provenance records with overclaim warnings");
-    console.log("  discovery packages    ready   local Markdown review bundles for invention logs");
-    console.log("  simulation logs       ready   local computational evidence records with validation boundaries");
-    console.log("  experiment logs       ready   local protocol/data/observation records with review boundaries");
-    console.log("  claim charts          ready   local patent-review aids with human legal review required");
-    console.log("  encrypted vault       ready   local AES-GCM sealing for sensitive project files");
-    console.log("  evidence audits       ready   local claim posture and overclaim review");
-    console.log("  validation plans      ready   local gate checklists before stronger discovery claims");
-    console.log("  workspace snapshots   ready   portable hashes for provenance and drift checks");
-    console.log("  research sessions     ready   local runbooks and checkpoints for agentic investigations");
-    console.log("  expert reviews        ready   local human-review records with scope and limitations");
-    console.log("  model contexts        ready   local selected-context packets before hosted model use");
-    console.log("  hosted model calls    ready   explicit opt-in disclosure records");
-    console.log("  local project store   ready   portable private workspace");
-    console.log("");
-    console.log("Formal proof boundary:");
-    for (const warning of proofStatus.warnings) {
-      console.log(`  ${warning}`);
-    }
-    for (const warning of smtStatus.warnings) {
-      console.log(`  ${warning}`);
-    }
-    console.log("  A status probe is not a proof; `proved` requires a successful accepted proof-checking run.");
+    printEngineManifest(manifest);
   });
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -2574,6 +2564,77 @@ function parseRenderFormat(format: string): ReceiptRenderFormat {
   }
 
   throw new Error(`Unsupported receipt render format ${JSON.stringify(format)}. Use markdown or html.`);
+}
+
+function printEngineManifest(manifest: EngineManifest): void {
+  console.log("Theorem engine manifest");
+  console.log(`Status: ${manifest.status}`);
+  console.log(`Ready: ${manifest.readyCount}/${manifest.totalCount}`);
+  console.log(
+    `Native kernels: ${manifest.nativeCount}; adapters: ${manifest.adapterCount}; planned adapters: ${manifest.plannedCount}`
+  );
+  console.log(`Network: ${manifest.networkAccess}`);
+
+  printEngineCapabilityGroup(
+    "Native kernels",
+    manifest.capabilities.filter((capability) => capability.kind === "native-kernel")
+  );
+  printEngineCapabilityGroup(
+    "Adapters",
+    manifest.capabilities.filter((capability) => capability.kind === "adapter")
+  );
+  printEngineCapabilityGroup(
+    "Workspace and safety services",
+    manifest.capabilities.filter((capability) => capability.kind === "workspace-service" || capability.kind === "safety-boundary")
+  );
+  printEngineCapabilityGroup(
+    "Planned adapters",
+    manifest.capabilities.filter((capability) => capability.kind === "planned-adapter")
+  );
+
+  console.log("");
+  console.log("Trust boundary:");
+  console.log("  AI output is not evidence.");
+  console.log("  Status probes do not mint evidence.");
+  console.log("  Claim trust requires resolvable local evidence.");
+  console.log("  `proved` requires an accepted proof-checker run.");
+  console.log("  `smt-checked` requires a concrete SMT solver run.");
+  console.log("  `cross-checked` requires independent agreement.");
+
+  if (manifest.warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const warning of manifest.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printEngineCapabilityGroup(
+  title: string,
+  capabilities: EngineManifest["capabilities"]
+): void {
+  if (capabilities.length === 0) {
+    return;
+  }
+
+  console.log("");
+  console.log(`${title}:`);
+  for (const capability of capabilities) {
+    const trust = capability.canMintTrust ? capability.strongestTrust : "no direct trust";
+    console.log(`  ${capability.displayName}`);
+    console.log(`    Status: ${capability.status}; lane: ${capability.lane}; role: ${capability.role}; strongest: ${trust}`);
+    if (capability.command) {
+      console.log(`    Route: ${capability.command}`);
+    }
+    if (capability.version) {
+      console.log(`    Version: ${capability.version}`);
+    }
+    console.log(`    Boundary: ${capability.trustBoundary}`);
+    if (capability.nextStep) {
+      console.log(`    Next: ${capability.nextStep}`);
+    }
+  }
 }
 
 function printCasBackendStatus(status: CasBackendStatusReport): void {

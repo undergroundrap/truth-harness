@@ -192,6 +192,7 @@ export {
   writeWorkspaceSnapshot
 } from "./workspace-snapshot.js";
 export { validateWorkspaceArtifacts } from "./workspace-validation.js";
+export { getEngineManifest } from "./engine-manifest.js";
 export { proveUniversalParity } from "./parity-proof.js";
 export {
   checkSymbolicWithMaximaSync,
@@ -446,6 +447,13 @@ export type {
   WorkspaceValidationIssue,
   WorkspaceValidationIssueSeverity
 } from "./workspace-validation.js";
+export type {
+  EngineCapability,
+  EngineCapabilityKind,
+  EngineCapabilityStatus,
+  EngineManifest,
+  EngineManifestOptions
+} from "./engine-manifest.js";
 export type {
   LocalCorpusChunk,
   LocalCorpusDocument,

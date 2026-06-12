@@ -26,6 +26,7 @@ import {
   isClaimLedgerDomain,
   isClaimLedgerStatus,
   getCodeRunSandboxStatus,
+  getEngineManifest,
   getLocalWorkspaceStatus,
   getProofBackendStatus,
   getSmtBackendStatus,
@@ -100,6 +101,7 @@ import {
   type CodeRunWriteResult,
   type DiscoveryPackage,
   type DiscoveryPackageWriteResult,
+  type EngineManifest,
   type EvidenceAudit,
   type EvidenceAuditReportWriteResult,
   type EvidenceAuditWriteResult,
@@ -188,6 +190,13 @@ export interface TheoremAskOutput {
   error: boolean;
   receipt: Receipt;
   message: string;
+}
+
+export interface TheoremEngineManifestInput {
+  timeoutMs?: number;
+  maximaCommand?: string;
+  leanCommand?: string;
+  z3Command?: string;
 }
 
 export interface TheoremClaimAddInput {
@@ -814,6 +823,15 @@ export function handleTheoremAsk(input: TheoremAskInput): TheoremAskOutput {
       ? "Strict mode failed because the receipt is unverified."
       : `Receipt ${receipt.runId} completed with trust ${receipt.trust}.`
   };
+}
+
+export function handleTheoremEngineManifest(input: TheoremEngineManifestInput = {}): EngineManifest {
+  return getEngineManifest({
+    timeoutMs: input.timeoutMs,
+    maximaCommand: input.maximaCommand,
+    leanCommand: input.leanCommand,
+    z3Command: input.z3Command
+  });
 }
 
 export async function handleTheoremClaimAdd(input: TheoremClaimAddInput): Promise<ClaimLedgerWriteResult> {

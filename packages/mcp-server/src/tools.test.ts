@@ -18,6 +18,7 @@ import {
   handleTheoremCodeRunList,
   handleTheoremCodeSandboxStatus,
   handleTheoremDiscoveryPackage,
+  handleTheoremEngineManifest,
   handleTheoremEvidenceAudit,
   handleTheoremEvidenceAuditList,
   handleTheoremExpertReviewList,
@@ -118,6 +119,36 @@ describe("MCP tool handlers", () => {
     expect(result.backends[0]?.statusProbeMintedCheck).toBe(false);
     expect(result.trustBoundary.statusProbeIsNotCheck).toBe(true);
     expect(result.trustBoundary.crossCheckedRequiresIndependentRun).toBe(true);
+  });
+
+  it("reports the local engine capability manifest for agents", () => {
+    const result = handleTheoremEngineManifest({
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    expect(result.schemaVersion).toBe("theorem.engine-manifest.v0");
+    expect(result.localOnly).toBe(true);
+    expect(result.networkAccess).toBe("none");
+    expect(result.capabilities).toContainEqual(
+      expect.objectContaining({
+        id: "local-rational-arithmetic",
+        kind: "native-kernel",
+        status: "ready",
+        canMintTrust: true
+      })
+    );
+    expect(result.capabilities).toContainEqual(
+      expect.objectContaining({
+        id: "z3-smt-solver",
+        kind: "adapter",
+        status: "missing",
+        canMintTrust: false
+      })
+    );
+    expect(result.trustBoundary.statusProbeIsNotEvidence).toBe(true);
   });
 
   it("writes and reads claim ledger records for agents", async () => {

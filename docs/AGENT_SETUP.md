@@ -19,12 +19,15 @@ node packages/mcp-server/dist/index.js
 
 ## Tools
 
+Agents should call `theorem_engine_manifest` before routing serious work through proof, SMT, CAS, code, simulation, or source workflows. The manifest is a local readiness and trust-boundary map: it can say which capabilities are ready, missing, planned, or safety-gated, but the manifest itself is not evidence for a claim.
+
 | Tool | Purpose |
 | --- | --- |
 | `theorem_ask` | Create a receipt for a math prompt, with optional strict mode. |
 | `theorem_benchmark_run` | Run the seed benchmark suite or a workspace-local suite path. |
 | `theorem_benchmark_compare` | Compare two benchmark-run records and optionally write a local benchmark-comparison artifact. |
 | `theorem_benchmark_list` | List local benchmark run/comparison artifacts with reusable paths. |
+| `theorem_engine_manifest` | Inspect native kernels, external adapters, safety boundaries, planned engines, and the trust labels each can mint only after concrete evidence runs. |
 | `theorem_proof_backends` | Probe accepted local proof-checker backend readiness without network access; a status probe is not proof. |
 | `theorem_proof_check` | Check a workspace-local Lean proof artifact and optionally write a local proof-check record; only accepted Lean runs can return `proved`. |
 | `theorem_proof_list` | List private local proof-check records with reusable JSON and Markdown paths. |
