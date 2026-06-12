@@ -309,6 +309,10 @@ const replayFrame = document.querySelector("#replay-frame");
 const replayList = document.querySelector("#replay-list");
 const replayProgressBar = document.querySelector("#replay-progress-bar");
 const inspectorTrust = document.querySelector("#inspector-trust");
+const routeLedgerStatus = document.querySelector("#route-ledger-status");
+const routeLedgerDetails = document.querySelector("#route-ledger-details");
+const copyRouteLedgerButton = document.querySelector("#copy-route-ledger");
+const downloadRouteLedgerButton = document.querySelector("#download-route-ledger");
 const mathCoreList = document.querySelector("#math-core-list");
 const replayCommand = document.querySelector(".replay-command");
 const answerValue = document.querySelector(".answer-value");
@@ -953,6 +957,7 @@ function render() {
   ]
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join("");
+  renderRouteLedger(receipt);
 
   graphList.innerHTML = evidenceGraphEntries(receipt)
     .map(([kind, summary]) => `<div class="graph-node"><span>${escapeHtml(kind)}</span><strong>${escapeHtml(summary)}</strong></div>`)
@@ -987,6 +992,45 @@ function render() {
   document.querySelectorAll(".segment").forEach((button) => {
     button.classList.toggle("active", button.dataset.level === state.level);
   });
+}
+
+function renderRouteLedger(receipt) {
+  const route = receipt.verifierRoute;
+  const rows = route ? routeLedgerRows(receipt, route) : [
+    ["Status", "not persisted"],
+    ["Next", "Submit a prompt to write a local verifier route."]
+  ];
+
+  routeLedgerStatus.textContent = route ? "persisted locally" : "seed receipt";
+  routeLedgerStatus.className = route ? "mini-label route-ledger-status-live" : "mini-label";
+  routeLedgerDetails.innerHTML = rows
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${routeLedgerValueHtml(label, value)}</dd></div>`)
+    .join("");
+
+  copyRouteLedgerButton.disabled = !route;
+  downloadRouteLedgerButton.disabled = !route;
+}
+
+function routeLedgerRows(receipt, route) {
+  const routePaths = receipt.routePaths ?? {};
+  const routeReplay = route.replay?.command ?? receipt.replay;
+  return [
+    ["Route ID", route.routeId],
+    ["Status", `${route.status} / ${route.finalTrust ?? receipt.trust}`],
+    ["Replay", routeReplay],
+    ["JSON", routePaths.json ?? "local route JSON path not returned"],
+    ["Markdown", routePaths.markdown ?? "local route Markdown path not returned"],
+    ["Gaps", String(route.gaps?.length ?? 0)]
+  ];
+}
+
+function routeLedgerValueHtml(label, value) {
+  const codeLabels = new Set(["Route ID", "Replay", "JSON", "Markdown"]);
+  if (!codeLabels.has(label)) {
+    return escapeHtml(value);
+  }
+
+  return `<code title="${escapeHtml(value)}">${escapeHtml(value)}</code>`;
 }
 
 function renderClaimList() {
@@ -2862,6 +2906,97 @@ function downloadRunbookPacket() {
   addActivity("human", "Downloaded agent runbook", `${receipt.runId} recursive runbook saved as Markdown.`, "passed");
 }
 
+async function copyRouteLedgerPacket() {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt?.verifierRoute) {
+    return;
+  }
+
+  await copyTextToClipboard(formatRouteLedgerPacket(receipt));
+  const originalText = copyRouteLedgerButton.textContent;
+  copyRouteLedgerButton.textContent = "Copied";
+  addActivity("human", "Copied verifier route", `${receipt.verifierRoute.routeId} route packet copied.`, "passed");
+  setTimeout(() => {
+    copyRouteLedgerButton.textContent = originalText;
+  }, 1200);
+}
+
+function downloadRouteLedgerPacket() {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt?.verifierRoute) {
+    return;
+  }
+
+  downloadTextFile(`${receipt.verifierRoute.routeId}-route.md`, formatRouteLedgerPacket(receipt), "text/markdown");
+  addActivity("human", "Downloaded verifier route", `${receipt.verifierRoute.routeId} route packet saved as Markdown.`, "passed");
+}
+
+function formatRouteLedgerPacket(receipt) {
+  const route = receipt.verifierRoute;
+  if (!route) {
+    return "";
+  }
+
+  const routePaths = receipt.routePaths ?? {};
+  const routeReplay = route.replay?.command ?? receipt.replay;
+  const gaps = Array.isArray(route.gaps) && route.gaps.length > 0
+    ? route.gaps.map((gap) => `- ${routeItemSummary(gap)}`)
+    : ["- No route gaps recorded."];
+  const warnings = Array.isArray(route.warnings) && route.warnings.length > 0
+    ? route.warnings.map((warning) => `- ${routeItemSummary(warning)}`)
+    : ["- No route warnings recorded."];
+  const capabilities = route.manifestSummary?.usedCapabilities?.length
+    ? route.manifestSummary.usedCapabilities.map((capability) => `- ${routeItemSummary(capability)}`)
+    : ["- Capability summary not recorded in the UI payload."];
+
+  return `${[
+    `# Verifier Route ${route.routeId}`,
+    "",
+    `Claim: ${receipt.title}`,
+    `Trust: ${route.finalTrust ?? receipt.trust}`,
+    `Status: ${route.status}`,
+    `Evidence kind: ${route.evidenceKind ?? receipt.details["Evidence kind"] ?? "unknown"}`,
+    `Receipt run: ${route.receipt?.runId ?? receipt.runId}`,
+    `Replay: \`${routeReplay}\``,
+    "",
+    "## Local Artifacts",
+    "",
+    `- JSON: ${routePaths.json ?? "not returned by current UI response"}`,
+    `- Markdown: ${routePaths.markdown ?? "not returned by current UI response"}`,
+    "",
+    "## Used Capabilities",
+    "",
+    ...capabilities,
+    "",
+    "## Gaps",
+    "",
+    ...gaps,
+    "",
+    "## Warnings",
+    "",
+    ...warnings,
+    "",
+    "## Reproducibility Boundary",
+    "",
+    route.reproducibilityBoundary ?? receipt.limitations.join(" ")
+  ].join("\n")}\n`;
+}
+
+function routeItemSummary(item) {
+  if (typeof item === "string") {
+    return item;
+  }
+
+  if (!item || typeof item !== "object") {
+    return String(item);
+  }
+
+  const label = item.displayName ?? item.id ?? item.kind ?? item.title ?? item.command ?? "item";
+  const status = item.status ?? item.trust ?? item.finalTrust ?? item.severity;
+  const detail = item.summary ?? item.description ?? item.reason ?? item.nextStep ?? item.role;
+  return [label, status, detail].filter(Boolean).join(" - ");
+}
+
 function showOlderActivity() {
   const filteredEvents = filteredActivityEvents();
   if (state.activityLimit >= filteredEvents.length) {
@@ -3326,7 +3461,7 @@ async function copyTextToClipboard(text) {
   }
 }
 
-function receiptToViewModel(receipt, route) {
+function receiptToViewModel(receipt, route, routePaths) {
   const trace = parseTraceArtifact(receipt);
   const outputs = receipt.evidenceProfile.outputs ?? [];
   const primaryOutput = outputs[0] ?? receipt.summary;
@@ -3379,7 +3514,8 @@ function receiptToViewModel(receipt, route) {
     graph,
     traces,
     limitations: receipt.evidenceProfile.limitations,
-    verifierRoute: route
+    verifierRoute: route,
+    routePaths
   };
 }
 
@@ -3692,6 +3828,14 @@ copyRunbookButton.addEventListener("click", () => {
 
 downloadRunbookButton.addEventListener("click", downloadRunbookPacket);
 
+copyRouteLedgerButton.addEventListener("click", () => {
+  copyRouteLedgerPacket().catch((error) => {
+    addActivity("web-ui", "Copy route failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+  });
+});
+
+downloadRouteLedgerButton.addEventListener("click", downloadRouteLedgerPacket);
+
 copyPlotDataButton.addEventListener("click", () => {
   copyCurrentPlotData().catch((error) => {
     addActivity("web-ui", "Copy plot data failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
@@ -3779,7 +3923,7 @@ composer.addEventListener("submit", async (event) => {
     }
     updateLatestActivity("Calling local API", "passed", "POST /api/receipt completed");
 
-    const viewModel = receiptToViewModel(payload.receipt, payload.route);
+    const viewModel = receiptToViewModel(payload.receipt, payload.route, payload.routePaths);
     viewModel.tags = uniqueTags([...receiptTags(viewModel), ...promptTags]);
     const key = payload.receipt.runId;
     receiptStore.set(key, viewModel);

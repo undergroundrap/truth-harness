@@ -128,12 +128,12 @@
         <header class="workspace-header">
           <div class="workspace-title-group">
             <button class="icon-button sidebar-restore" id="sidebar-restore" type="button" aria-label="Expand sidebar" hidden>&gt;</button>
-            <div>
-              <h1>Theorem Workbench</h1>
-              <div class="header-subline">
-                <p>Local evidence session</p>
+            <div class="workspace-title-copy">
+              <div class="workspace-title-row">
+                <h1>Theorem Workbench</h1>
                 <span class="lane-status" id="lane-status">Math lane</span>
               </div>
+              <p class="header-subtitle">Local evidence session</p>
             </div>
           </div>
           <div class="header-actions">
@@ -408,6 +408,20 @@
                 <span class="status-pill exact" id="inspector-trust">exact-computed</span>
               </div>
               <dl class="key-values" id="receipt-details"></dl>
+            </section>
+
+            <section class="inspector-section route-ledger-section">
+              <div class="panel-heading">
+                <h3>Saved Route</h3>
+                <span class="mini-label" id="route-ledger-status">seed receipt</span>
+              </div>
+              <dl class="key-values route-ledger-values" id="route-ledger-details">
+                <div><dt>Status</dt><dd>Submit a prompt to write a local verifier route.</dd></div>
+              </dl>
+              <div class="route-ledger-actions">
+                <button class="text-button compact-button" id="copy-route-ledger" type="button" disabled>Copy route</button>
+                <button class="text-button compact-button" id="download-route-ledger" type="button" disabled>Download</button>
+              </div>
             </section>
 
             <section class="inspector-section">
