@@ -2365,7 +2365,8 @@ function formatSafetyPhrase(value) {
 }
 
 function verificationRows(receipt) {
-  return verificationGateCatalog.map((gate) => {
+  const routeRows = routeGapVerificationRows(receipt);
+  const catalogRows = verificationGateCatalog.map((gate) => {
     const applicable = gate.applies(receipt);
     const status = applicable ? gate.status(receipt) : "skipped";
     return {
@@ -2373,6 +2374,22 @@ function verificationRows(receipt) {
       status
     };
   });
+
+  return [...routeRows, ...catalogRows];
+}
+
+function routeGapVerificationRows(receipt) {
+  const gaps = receipt?.verifierRoute?.gaps ?? [];
+  return gaps
+    .filter((gap) => gap.severity !== "info")
+    .slice(0, 5)
+    .map((gap, index) => ({
+      id: `route-gap-${index}`,
+      label: `Verifier gap: ${gap.displayName}`,
+      command: gap.command ?? `theorem verify "${truncateForCommand(receipt.title, 34)}" --json`,
+      description: gap.nextStep ? `${gap.reason} Next: ${gap.nextStep}` : gap.reason,
+      status: gap.severity === "critical" ? "missing" : "waiting"
+    }));
 }
 
 function statusLabel(status) {
@@ -3309,7 +3326,7 @@ async function copyTextToClipboard(text) {
   }
 }
 
-function receiptToViewModel(receipt) {
+function receiptToViewModel(receipt, route) {
   const trace = parseTraceArtifact(receipt);
   const outputs = receipt.evidenceProfile.outputs ?? [];
   const primaryOutput = outputs[0] ?? receipt.summary;
@@ -3341,6 +3358,11 @@ function receiptToViewModel(receipt) {
   if (independentCasArtifact?.residual) {
     details["CAS residual"] = String(independentCasArtifact.residual);
   }
+  if (route?.routeId) {
+    details["Verifier route"] = route.routeId;
+    details["Route status"] = route.status;
+    details["Route gaps"] = String(route.gaps?.length ?? 0);
+  }
 
   return {
     trust: receipt.trust,
@@ -3356,7 +3378,8 @@ function receiptToViewModel(receipt) {
     details,
     graph,
     traces,
-    limitations: receipt.evidenceProfile.limitations
+    limitations: receipt.evidenceProfile.limitations,
+    verifierRoute: route
   };
 }
 
@@ -3756,7 +3779,7 @@ composer.addEventListener("submit", async (event) => {
     }
     updateLatestActivity("Calling local API", "passed", "POST /api/receipt completed");
 
-    const viewModel = receiptToViewModel(payload.receipt);
+    const viewModel = receiptToViewModel(payload.receipt, payload.route);
     viewModel.tags = uniqueTags([...receiptTags(viewModel), ...promptTags]);
     const key = payload.receipt.runId;
     receiptStore.set(key, viewModel);

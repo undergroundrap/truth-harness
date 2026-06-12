@@ -77,6 +77,47 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.provedRequiresAcceptedProofCheckerRun).toBe(true);
   });
 
+  it("prints a verifier route with receipt trust and manifest gaps", async () => {
+    const result = await runCli([
+      "verify",
+      "compute",
+      "3 / 4 + 5 / 8",
+      "--json",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "theorem-workbench-missing-maxima-command",
+      "--lean-command",
+      "theorem-workbench-missing-lean-command",
+      "--z3-command",
+      "theorem-workbench-missing-z3-command"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      schemaVersion: string;
+      finalTrust: string;
+      receipt: { trust: string };
+      usedCapabilities: Array<{ capabilityId: string }>;
+      gaps: Array<{ capabilityId: string }>;
+      trustBoundary: { routeIsNotProof: boolean };
+    };
+
+    expect(result.exitCode).toBe(0);
+    expect(json.schemaVersion).toBe("theorem.verifier-route.v0");
+    expect(json.finalTrust).toBe("exact-computed");
+    expect(json.receipt.trust).toBe("exact-computed");
+    expect(json.usedCapabilities).toContainEqual(
+      expect.objectContaining({
+        capabilityId: "local-rational-arithmetic"
+      })
+    );
+    expect(json.gaps).toContainEqual(
+      expect.objectContaining({
+        capabilityId: "accepted-proof-checker"
+      })
+    );
+    expect(json.trustBoundary.routeIsNotProof).toBe(true);
+  });
+
   it("reports proof backend status without requiring Lean to be installed", async () => {
     const result = await runCli([
       "proof",

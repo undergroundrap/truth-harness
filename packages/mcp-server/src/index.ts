@@ -58,6 +58,7 @@ import {
   handleTheoremVaultList,
   handleTheoremVaultSeal,
   handleTheoremVaultVerify,
+  handleTheoremVerify,
   handleTheoremWorkspaceInit,
   handleTheoremWorkspaceRepair,
   handleTheoremWorkspaceSnapshot,
@@ -100,6 +101,49 @@ export function createTheoremMcpServer(): McpServer {
     },
     async ({ problem, strict }) => {
       const result = handleTheoremAsk({ problem, strict });
+      return toolJson(result, { isError: result.error });
+    }
+  );
+
+  server.registerTool(
+    "theorem_verify",
+    {
+      title: "Route and Verify Math Claim",
+      description:
+        "Create a manifest-aware verifier route plus receipt for a math prompt. Returns used capabilities, missing verifier gaps, next actions, and the final conservative trust label.",
+      inputSchema: {
+        problem: z.string().min(1).describe("Math prompt or claim to route through local verifiers."),
+        strict: z
+          .boolean()
+          .optional()
+          .describe("When true, return an MCP tool error if the verifier route ends unverified."),
+        maximaCommand: z
+          .string()
+          .optional()
+          .describe("Maxima executable path or command for this route."),
+        leanCommand: z
+          .string()
+          .optional()
+          .describe("Lean executable path or command for this route."),
+        z3Command: z
+          .string()
+          .optional()
+          .describe("Z3 executable path or command for this route."),
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .max(10000)
+          .optional()
+          .describe("Local backend version-probe timeout in milliseconds. Defaults to 1500.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => {
+      const result = handleTheoremVerify(input);
       return toolJson(result, { isError: result.error });
     }
   );

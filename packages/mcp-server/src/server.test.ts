@@ -126,6 +126,7 @@ describe("Theorem MCP server", () => {
         "theorem_vault_list",
         "theorem_vault_seal",
         "theorem_vault_verify",
+        "theorem_verify",
         "theorem_workspace_init",
         "theorem_workspace_repair",
         "theorem_workspace_snapshot",
@@ -145,6 +146,22 @@ describe("Theorem MCP server", () => {
       expect(result.isError).toBe(false);
       const text = firstText(result.content);
       expect(text).toContain("\"trust\": \"refuted\"");
+
+      const verifyResult = await client.callTool({
+        name: "theorem_verify",
+        arguments: {
+          problem: "compute 3 / 4 + 5 / 8",
+          maximaCommand: "theorem-workbench-missing-maxima-command",
+          leanCommand: "theorem-workbench-missing-lean-command",
+          z3Command: "theorem-workbench-missing-z3-command",
+          timeoutMs: 50
+        }
+      });
+      expect(verifyResult.isError).toBe(false);
+      const verifyText = firstText(verifyResult.content);
+      expect(verifyText).toContain("\"schemaVersion\": \"theorem.verifier-route.v0\"");
+      expect(verifyText).toContain("\"finalTrust\": \"exact-computed\"");
+      expect(verifyText).toContain("\"capabilityId\": \"local-rational-arithmetic\"");
 
       const casBackends = await client.callTool({
         name: "theorem_cas_backends",

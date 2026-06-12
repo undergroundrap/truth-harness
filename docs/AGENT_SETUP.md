@@ -19,11 +19,12 @@ node packages/mcp-server/dist/index.js
 
 ## Tools
 
-Agents should call `theorem_engine_manifest` before routing serious work through proof, SMT, CAS, code, simulation, or source workflows. The manifest is a local readiness and trust-boundary map: it can say which capabilities are ready, missing, planned, or safety-gated, but the manifest itself is not evidence for a claim.
+Agents should call `theorem_engine_manifest` before routing serious work through proof, SMT, CAS, code, simulation, or source workflows. The manifest is a local readiness and trust-boundary map: it can say which capabilities are ready, missing, planned, or safety-gated, but the manifest itself is not evidence for a claim. Use `theorem_verify` when an agent needs both a receipt and a verifier route/gap ledger; use `theorem_ask` when a receipt alone is enough.
 
 | Tool | Purpose |
 | --- | --- |
 | `theorem_ask` | Create a receipt for a math prompt, with optional strict mode. |
+| `theorem_verify` | Create a manifest-aware verifier route plus receipt, including used capabilities, missing verifier gaps, next actions, and conservative final trust. |
 | `theorem_benchmark_run` | Run the seed benchmark suite or a workspace-local suite path. |
 | `theorem_benchmark_compare` | Compare two benchmark-run records and optionally write a local benchmark-comparison artifact. |
 | `theorem_benchmark_list` | List local benchmark run/comparison artifacts with reusable paths. |

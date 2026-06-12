@@ -22,6 +22,7 @@ import {
   createSimulationLogEntry,
   createSourceCitationReceipt,
   createValidationPlan,
+  createVerifierRoute,
   getCasBackendStatus,
   isClaimLedgerDomain,
   isClaimLedgerStatus,
@@ -174,6 +175,7 @@ import {
   type VaultEnvelopeSummary,
   type VaultSealResult,
   type VaultVerifyResult,
+  type VerifierRoute,
   type WorkspaceSnapshotSummary,
   type WorkspaceSnapshotVerification,
   type WorkspaceSnapshotWriteResult,
@@ -189,6 +191,21 @@ export interface TheoremAskInput {
 export interface TheoremAskOutput {
   error: boolean;
   receipt: Receipt;
+  message: string;
+}
+
+export interface TheoremVerifyInput {
+  problem: string;
+  strict?: boolean;
+  timeoutMs?: number;
+  maximaCommand?: string;
+  leanCommand?: string;
+  z3Command?: string;
+}
+
+export interface TheoremVerifyOutput {
+  error: boolean;
+  route: VerifierRoute;
   message: string;
 }
 
@@ -822,6 +839,24 @@ export function handleTheoremAsk(input: TheoremAskInput): TheoremAskOutput {
     message: strictFailure
       ? "Strict mode failed because the receipt is unverified."
       : `Receipt ${receipt.runId} completed with trust ${receipt.trust}.`
+  };
+}
+
+export function handleTheoremVerify(input: TheoremVerifyInput): TheoremVerifyOutput {
+  const route = createVerifierRoute(input.problem, {
+    timeoutMs: input.timeoutMs,
+    maximaCommand: input.maximaCommand,
+    leanCommand: input.leanCommand,
+    z3Command: input.z3Command
+  });
+  const strictFailure = input.strict === true && route.finalTrust === "unverified";
+
+  return {
+    error: strictFailure,
+    route,
+    message: strictFailure
+      ? "Strict mode failed because the verifier route ended unverified."
+      : `Verifier route ${route.routeId} completed with final trust ${route.finalTrust}.`
   };
 }
 

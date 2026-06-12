@@ -23,6 +23,7 @@ import {
   createReceipt,
   createSimulationLogEntry,
   createSourceCitationReceipt,
+  createVerifierRoute,
   getCasBackendStatus,
   getCodeRunSandboxStatus,
   getEngineManifest,
@@ -187,6 +188,7 @@ import {
   type SmtCheckSummary,
   type SmtCheckWriteResult,
   type SmtProblemSolveResult,
+  type VerifierRoute,
   type ValidationEvidenceRef,
   type ValidationGateInput,
   type ValidationPlan,
@@ -242,6 +244,53 @@ With npm scripts, pass ask flags after an extra separator:
 
     printReceipt(receipt, options.out);
   });
+
+program
+  .command("verify")
+  .description("Create a manifest-aware verifier route plus receipt for a math prompt.")
+  .argument("<problem...>", "Math prompt or claim to route through local verifiers")
+  .option("--json", "Print the full verifier route JSON")
+  .option("--out <path>", "Write the full verifier route JSON to a file")
+  .option("--strict", "Exit non-zero if the final receipt trust is unverified")
+  .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 1500)
+  .option("--maxima-command <command>", "Override Maxima executable for this route")
+  .option("--lean-command <command>", "Override Lean executable for this route")
+  .option("--z3-command <command>", "Override Z3 executable for this route")
+  .action(
+    async (
+      problemTokens: string[],
+      options: {
+        json?: boolean;
+        out?: string;
+        strict?: boolean;
+        timeoutMs: number;
+        maximaCommand?: string;
+        leanCommand?: string;
+        z3Command?: string;
+      }
+    ) => {
+      const route = createVerifierRoute(problemTokens.join(" "), {
+        timeoutMs: options.timeoutMs,
+        maximaCommand: options.maximaCommand,
+        leanCommand: options.leanCommand,
+        z3Command: options.z3Command
+      });
+
+      if (options.out) {
+        await writeJson(options.out, route);
+      }
+
+      if (options.json) {
+        printJson(route);
+      } else {
+        printVerifierRoute(route, options.out);
+      }
+
+      if (options.strict && route.finalTrust === "unverified") {
+        process.exitCode = 1;
+      }
+    }
+  );
 
 const claim = program.command("claim").description("Manage git-like local claim ledger records.");
 
@@ -2941,6 +2990,57 @@ function printReceipt(receipt: Receipt, outPath?: string): void {
   if (outPath) {
     console.log("");
     console.log(`Wrote receipt JSON: ${outPath}`);
+  }
+}
+
+function printVerifierRoute(route: VerifierRoute, outPath?: string): void {
+  console.log(`Theorem verifier route ${route.routeId}`);
+  console.log(`Status: ${route.status}`);
+  console.log(`Final trust: ${route.finalTrust}`);
+  console.log(`Evidence kind: ${route.evidenceKind}`);
+  console.log(`Receipt: ${route.receipt.runId}`);
+  console.log(`Manifest: ${route.manifest.status} (${route.manifest.readyCount}/${route.manifest.totalCount} ready)`);
+  console.log("");
+  console.log("Used capabilities:");
+  if (route.usedCapabilities.length === 0) {
+    console.log("  none");
+  } else {
+    for (const step of route.usedCapabilities) {
+      console.log(`  ${step.displayName} (${step.capabilityId}) - ${step.reason}`);
+    }
+  }
+
+  if (route.gaps.length > 0) {
+    console.log("");
+    console.log("Verification gaps:");
+    for (const gap of route.gaps) {
+      console.log(`  ${gap.severity}: ${gap.displayName} - ${gap.reason}`);
+      if (gap.nextStep) {
+        console.log(`    Next: ${gap.nextStep}`);
+      }
+      if (gap.command) {
+        console.log(`    Command: ${gap.command}`);
+      }
+    }
+  }
+
+  console.log("");
+  console.log("Next actions:");
+  for (const action of route.nextActions) {
+    console.log(`  ${action}`);
+  }
+
+  if (route.warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const warning of route.warnings.slice(0, 8)) {
+      console.log(`  ${warning}`);
+    }
+  }
+
+  if (outPath) {
+    console.log("");
+    console.log(`Wrote verifier route JSON: ${outPath}`);
   }
 }
 

@@ -193,6 +193,7 @@ export {
 } from "./workspace-snapshot.js";
 export { validateWorkspaceArtifacts } from "./workspace-validation.js";
 export { getEngineManifest } from "./engine-manifest.js";
+export { createVerifierRoute } from "./verifier-route.js";
 export { proveUniversalParity } from "./parity-proof.js";
 export {
   checkSymbolicWithMaximaSync,
@@ -454,6 +455,15 @@ export type {
   EngineManifest,
   EngineManifestOptions
 } from "./engine-manifest.js";
+export type {
+  CreateVerifierRouteOptions,
+  VerifierRoute,
+  VerifierRouteGap,
+  VerifierRouteGapSeverity,
+  VerifierRouteStatus,
+  VerifierRouteStep,
+  VerifierRouteStepStatus
+} from "./verifier-route.js";
 export type {
   LocalCorpusChunk,
   LocalCorpusDocument,

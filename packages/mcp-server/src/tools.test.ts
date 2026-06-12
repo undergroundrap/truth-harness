@@ -57,6 +57,7 @@ import {
   handleTheoremVaultList,
   handleTheoremVaultSeal,
   handleTheoremVaultVerify,
+  handleTheoremVerify,
   handleTheoremWorkspaceInit,
   handleTheoremWorkspaceRepair,
   handleTheoremWorkspaceSnapshot,
@@ -103,6 +104,27 @@ describe("MCP tool handlers", () => {
 
     expect(result.error).toBe(true);
     expect(result.receipt.trust).toBe("unverified");
+  });
+
+  it("routes verification for agents before they rely on a claim", () => {
+    const result = handleTheoremVerify({
+      problem: "compute 3 / 4 + 5 / 8",
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    expect(result.error).toBe(false);
+    expect(result.route.schemaVersion).toBe("theorem.verifier-route.v0");
+    expect(result.route.finalTrust).toBe("exact-computed");
+    expect(result.route.usedCapabilities).toContainEqual(
+      expect.objectContaining({
+        capabilityId: "local-rational-arithmetic"
+      })
+    );
+    expect(result.route.trustBoundary.routeIsNotProof).toBe(true);
+    expect(result.message).toContain(result.route.routeId);
   });
 
   it("reports local CAS backend readiness for agents", () => {

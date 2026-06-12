@@ -223,13 +223,15 @@ async function handleApiRequest(request, response, requestUrl) {
       return;
     }
 
-    const { createReceipt } = await loadCoreModule();
-    const receipt = createReceipt(problem);
+    const { createVerifierRoute } = await loadCoreModule();
+    const route = createVerifierRoute(problem);
+    const receipt = route.receipt;
     const completedAt = new Date().toISOString();
     writeJson(response, 200, {
       schemaVersion: "theorem.web-receipt-response.v0",
       localOnly: true,
       externalCalls: [],
+      route,
       receipt,
       activity: [
         {
@@ -237,6 +239,12 @@ async function handleApiRequest(request, response, requestUrl) {
           action: "submitted-local-problem",
           detail: "Browser submitted selected prompt text to the local Theorem Workbench API.",
           at: receivedAt
+        },
+        {
+          actor: "local-api",
+          action: "created-verifier-route",
+          detail: `The local API selected ${route.usedCapabilities.length} verifier capabilities and recorded ${route.gaps.length} route gaps.`,
+          at: completedAt
         },
         {
           actor: "local-api",
