@@ -16,7 +16,7 @@
     "docker:check": "docker compose run --rm theorem npm run check",
     "docker:cli": "docker compose run --rm theorem npm run cli --",
     "docker:mcp": "docker compose run --rm -i mcp",
-    "docker:proof": "docker compose run --rm theorem npm run proof:launch",
+    "docker:proof": "docker compose run --rm theorem npm run proof:launch:engines",
     "docker:verify": "docker build --target verify -t theorem-workbench:verify .",
     "docker:web": "docker compose up web",
     "cli": "node apps/cli/dist/index.js",
@@ -32,9 +32,11 @@
     "demo:numeric": "npm run cli -- bench run packages/benchmarks/suites/numeric-seed.json",
     "demo:replay": "npm run cli -- ask \"for all integers n, n^2+n+1 is even\" -- --out receipts/false-parity.json && npm run cli -- replay receipts/false-parity.json",
     "demo:render": "npm run cli -- render receipts/false-parity.json markdown receipts/false-parity.md && npm run cli -- render receipts/false-parity.json html receipts/false-parity.html",
+    "demo:smt": "npm run cli -- smt check docs/examples/constraints.smt2 --fail-on-unverified",
     "demo:symbolic": "npm run cli -- bench run packages/benchmarks/suites/symbolic-seed.json",
     "mcp": "node packages/mcp-server/dist/index.js",
     "proof:launch": "npm run demo:replay && npm run demo:render && npm run demo:parity && npm run demo:bench && npm run demo:physics && npm run demo:numeric && npm run demo:symbolic && npm run demo:check",
+    "proof:launch:engines": "npm run proof:launch && npm run demo:smt",
     "test": "vitest run"
   },
   "devDependencies": {

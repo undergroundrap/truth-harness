@@ -38,4 +38,4 @@ CMD ["npm", "run", "check"]
 
 FROM dev AS verify
 
-RUN npm run check && npm run proof:launch
+RUN npm run check && npm run proof:launch:engines

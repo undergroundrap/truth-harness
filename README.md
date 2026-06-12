@@ -37,12 +37,14 @@ docker --version
 docker build --target verify -t theorem-workbench:verify .
 ```
 
+This verification image runs the TypeScript build, test suite, launch demos, and a concrete Z3 SMT-LIB check inside the container image.
+
 Day-to-day container workflow:
 
 ```bash
 docker compose build
 docker compose run --rm theorem npm run check
-docker compose run --rm theorem npm run proof:launch
+docker compose run --rm theorem npm run proof:launch:engines
 docker compose run --rm theorem npm run cli -- workspace init --name "Local Math Lab"
 docker compose run --rm theorem npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
 docker compose run --rm theorem npm run cli -- cas backends
@@ -92,6 +94,7 @@ npm run cli -- proof check docs/examples/trivial.lean --write
 npm run cli -- proof list
 npm run cli -- smt backends
 npm run cli -- smt check docs/examples/constraints.smt2
+npm run cli -- smt check docs/examples/constraints.smt2 --fail-on-unverified
 npm run cli -- smt check docs/examples/constraints.smt2 --write
 npm run cli -- smt solve --int x --constraint "x > 0" --constraint "x < 3"
 npm run cli -- smt list
@@ -115,7 +118,7 @@ The first web surface lives at [apps/web](apps/web). It is a local workbench she
 
 The web inspector also calls localhost `/api/status` to show safety and verification-engine readiness. It reports the measured code-run sandbox boundary plus local Maxima, Lean, and Z3 availability probes. These probes are readiness checks only: they never mint `cross-checked`, `smt-checked`, or `proved` by themselves. Those labels still require a concrete replayable Maxima agreement run, Z3 solver run, or accepted Lean proof-check artifact.
 
-The Docker image installs Z3 so the containerized web UI and CLI can show real SMT readiness without changing the host machine. Maxima and Lean are intentionally not bundled yet; configure `THEOREM_MAXIMA` or `THEOREM_LEAN`, or extend the image with validated/pinned engine builds, when the CAS or proof lanes need a reproducible environment.
+The Docker image installs Z3 so the containerized web UI and CLI can show real SMT readiness without changing the host machine. `npm run docker:proof` uses `proof:launch:engines`, which runs the standard launch proof suite and then requires `docs/examples/constraints.smt2` to return a concrete `smt-checked` result through Z3. Maxima and Lean are intentionally not bundled yet; configure `THEOREM_MAXIMA` or `THEOREM_LEAN`, or extend the image with validated/pinned engine builds, when the CAS or proof lanes need a reproducible environment.
 
 On Windows during UI iteration, prefer `npm run web:restart`. It stops the Node listener on port `4180`, starts the web server again in the background, and keeps the browser URL stable. Static web edits usually need only a browser reload; server/API edits need `npm run web:restart`.
 
@@ -192,6 +195,13 @@ The launch proof script runs the public demo gates:
 
 ```bash
 npm run proof:launch
+```
+
+The stricter engine-backed launch gate adds a real SMT-LIB solver run. Use Docker for this path unless the host already has Z3 installed:
+
+```bash
+npm run proof:launch:engines
+npm run docker:proof
 ```
 
 See [docs/TRUST_LABELS.md](docs/TRUST_LABELS.md) for the conservative meaning of each trust label and the current rule that local parity certificates are `exact-computed`, not `proved`.

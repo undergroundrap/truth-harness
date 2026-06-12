@@ -8,7 +8,7 @@ Docker is still not magic security. The Docker daemon is powerful, and a dev con
 
 Start Docker Desktop first and make sure the Linux engine is running.
 
-This builds a verification image from the committed source without bind-mounting the repo into the running checks. It runs the TypeScript build, test suite, and launch proof gate inside the image build.
+This builds a verification image from the committed source without bind-mounting the repo into the running checks. It runs the TypeScript build, test suite, launch proof gate, and a concrete Z3 SMT-LIB check inside the image build.
 
 ```bash
 docker build --target verify -t theorem-workbench:verify .
@@ -30,11 +30,13 @@ Run the normal verification gate with no runtime network:
 docker compose run --rm theorem npm run check
 ```
 
-Run the public launch proof suite with no runtime network:
+Run the public launch proof suite plus the engine-backed SMT gate with no runtime network:
 
 ```bash
-docker compose run --rm theorem npm run proof:launch
+docker compose run --rm theorem npm run proof:launch:engines
 ```
+
+The engine-backed gate runs the standard launch suite first, then checks `docs/examples/constraints.smt2` with `--fail-on-unverified`. If Z3 is missing, returns `unknown`, or fails to produce a concrete `sat`/`unsat` result, the command exits non-zero instead of printing a comforting but unsupported success.
 
 Run CLI commands:
 
