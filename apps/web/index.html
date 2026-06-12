@@ -160,6 +160,7 @@
               <div class="surface-header">
                 <div class="surface-tabs" role="tablist" aria-label="Workbench view">
                   <button class="surface-tab active" id="tab-trace" role="tab" aria-controls="surface-trace" aria-selected="true" data-surface="trace" type="button">Trace</button>
+                  <button class="surface-tab" id="tab-checks" role="tab" aria-controls="surface-checks" aria-selected="false" data-surface="checks" type="button">Checks</button>
                   <button class="surface-tab" id="tab-graph" role="tab" aria-controls="surface-graph" aria-selected="false" data-surface="graph" type="button">Graph</button>
                   <button class="surface-tab" id="tab-protocol" role="tab" aria-controls="surface-protocol" aria-selected="false" data-surface="protocol" type="button">Protocol</button>
                   <button class="surface-tab" id="tab-notes" role="tab" aria-controls="surface-notes" aria-selected="false" data-surface="notes" type="button">Notes</button>
@@ -201,6 +202,24 @@
                   </div>
                 </div>
                 <ol class="trace-list" id="trace-list"></ol>
+              </section>
+
+              <section class="surface-panel" id="surface-checks" role="tabpanel" aria-labelledby="tab-checks" data-surface-panel="checks" tabindex="0" aria-label="Verification checks" hidden>
+                <div class="panel-heading">
+                  <h3>Verification Matrix</h3>
+                  <span class="mini-label" id="matrix-summary">claim gates</span>
+                </div>
+                <div class="matrix-hero">
+                  <div>
+                    <span class="mini-label">Current claim</span>
+                    <strong id="matrix-current-claim">3 / 4 + 5 / 8</strong>
+                  </div>
+                  <div>
+                    <span class="mini-label">Next agent action</span>
+                    <code id="matrix-next-command">theorem bench run</code>
+                  </div>
+                </div>
+                <div class="verification-matrix" id="verification-matrix"></div>
               </section>
 
               <section class="surface-panel" id="surface-graph" role="tabpanel" aria-labelledby="tab-graph" data-surface-panel="graph" tabindex="0" aria-label="Graph canvas" hidden>
@@ -327,13 +346,7 @@
 
             <section class="inspector-section">
               <h3>Math Core</h3>
-              <div class="progress-list">
-                <div class="progress-row"><span class="task-state passed"></span><strong>Exact arithmetic</strong><small>fractions, traces, replay</small></div>
-                <div class="progress-row"><span class="task-state passed"></span><strong>Counterexamples</strong><small>finite exact search</small></div>
-                <div class="progress-row"><span class="task-state waiting"></span><strong>Symbolic engine</strong><small>deeper CAS coverage</small></div>
-                <div class="progress-row"><span class="task-state waiting"></span><strong>Proof bridge</strong><small>Lean-first proved path</small></div>
-                <div class="progress-row"><span class="task-state waiting"></span><strong>Benchmark ladder</strong><small>school to research</small></div>
-              </div>
+              <div class="progress-list" id="math-core-list"></div>
             </section>
 
             <section class="inspector-section">

@@ -485,11 +485,17 @@ h1 {
 .answer-line {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
   gap: 10px;
+  min-width: 0;
   margin-bottom: 10px;
 }
 
 .answer-value {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: clamp(32px, 5vw, 56px);
   line-height: 1;
   font-weight: 720;
@@ -570,7 +576,9 @@ h1 {
 }
 
 .answer-value .math-inline {
+  flex-wrap: wrap;
   font-size: 0.98em;
+  white-space: normal;
 }
 
 .trace-panel,
@@ -599,7 +607,7 @@ h1 {
 
 .surface-tabs {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 3px;
   min-width: 0;
   padding: 2px;
@@ -718,6 +726,11 @@ h1 {
 }
 
 #surface-protocol.active {
+  overflow: auto;
+  padding-right: 2px;
+}
+
+#surface-checks.active {
   overflow: auto;
   padding-right: 2px;
 }
@@ -878,6 +891,113 @@ dd {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.matrix-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.8fr);
+  gap: 10px;
+  flex: 0 0 auto;
+  margin-bottom: 10px;
+}
+
+.matrix-hero > div {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  padding: 12px;
+}
+
+.matrix-hero strong,
+.matrix-hero code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #f1eadc;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matrix-hero strong {
+  font-size: 14px;
+  margin-top: 5px;
+}
+
+.matrix-hero code {
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  margin-top: 5px;
+}
+
+.verification-matrix {
+  display: grid;
+  gap: 8px;
+}
+
+.matrix-row {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #121212;
+  padding: 10px 12px;
+}
+
+.matrix-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.matrix-row strong {
+  color: #eee7d8;
+  font-size: 13px;
+}
+
+.matrix-row-head span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.matrix-row.passed .matrix-row-head span {
+  color: var(--exact);
+}
+
+.matrix-row.missing .matrix-row-head span {
+  color: var(--refuted);
+}
+
+.matrix-row.waiting .matrix-row-head span {
+  color: var(--warn);
+}
+
+.matrix-row.skipped .matrix-row-head span {
+  color: var(--faint);
+}
+
+.matrix-row p {
+  color: #d8d2c8;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 5px;
+}
+
+.matrix-row code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #0f0f0f;
+  color: #e6dfce;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  margin-top: 8px;
+  padding: 6px 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .protocol-summary {
@@ -1385,6 +1505,14 @@ textarea:focus-visible {
 
 .task-state.refuted {
   background: var(--refuted);
+}
+
+.task-state.missing {
+  background: var(--refuted);
+}
+
+.task-state.skipped {
+  background: var(--faint);
 }
 
 .text-button:disabled {

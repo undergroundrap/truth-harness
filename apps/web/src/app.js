@@ -154,6 +154,10 @@ const traceList = document.querySelector("#trace-list");
 const receiptDetails = document.querySelector("#receipt-details");
 const graphList = document.querySelector("#graph-list");
 const mainGraphList = document.querySelector("#main-graph-list");
+const matrixSummary = document.querySelector("#matrix-summary");
+const matrixCurrentClaim = document.querySelector("#matrix-current-claim");
+const matrixNextCommand = document.querySelector("#matrix-next-command");
+const verificationMatrix = document.querySelector("#verification-matrix");
 const protocolLane = document.querySelector("#protocol-lane");
 const protocolSummary = document.querySelector("#protocol-summary");
 const protocolEvidence = document.querySelector("#protocol-evidence");
@@ -190,6 +194,7 @@ const replayFrame = document.querySelector("#replay-frame");
 const replayList = document.querySelector("#replay-list");
 const replayProgressBar = document.querySelector("#replay-progress-bar");
 const inspectorTrust = document.querySelector("#inspector-trust");
+const mathCoreList = document.querySelector("#math-core-list");
 const replayCommand = document.querySelector(".replay-command");
 const answerValue = document.querySelector(".answer-value");
 const answerLabel = document.querySelector(".answer-label");
@@ -200,6 +205,7 @@ const composer = document.querySelector("#composer");
 const verifyButton = document.querySelector("#verify-button");
 const surfaceStatusText = {
   trace: "explainable steps",
+  checks: "verification gates",
   graph: "evidence path",
   protocol: "review standard",
   notes: "local scratchpad",
@@ -221,6 +227,88 @@ const laneStatusText = {
   security: "Security lane",
   patent: "Patent lane"
 };
+const verificationGateCatalog = [
+  {
+    id: "receipt",
+    label: "Receipt envelope",
+    command: "theorem ask --json",
+    description: "Problem, output, evidence profile, privacy, artifacts, and replay command are captured.",
+    applies: () => true,
+    status: (receipt) => receipt.runId && receipt.replay ? "passed" : "missing"
+  },
+  {
+    id: "exact",
+    label: "Exact arithmetic trace",
+    command: "theorem ask \"compute ...\" --json",
+    description: "Arithmetic is represented as exact rationals or integers with replayable steps.",
+    applies: (receipt) => /arithmetic|counterexample|parity/u.test(receipt.details["Evidence kind"] ?? receipt.engine),
+    status: (receipt) => receipt.engine.includes("rational") || receipt.engine.includes("counterexample") ? "passed" : "missing"
+  },
+  {
+    id: "counterexample",
+    label: "Counterexample search",
+    command: "theorem ask \"for all ...\" --json",
+    description: "Universal claims can be refuted with exact witnesses and recorded search bounds.",
+    applies: (receipt) => /for all|universal|counterexample|parity/u.test(`${receipt.title} ${receipt.engine} ${receipt.details["Evidence kind"]}`),
+    status: (receipt) => receipt.trust === "refuted" || receipt.engine.includes("counterexample") ? "passed" : "missing"
+  },
+  {
+    id: "dimension",
+    label: "Dimensional analysis",
+    command: "npm run demo:physics",
+    description: "Physics expressions get unit and base-dimension checks before simulation trust.",
+    applies: (receipt) => /dimension|force|mass|acceleration|physics/u.test(`${receipt.title} ${receipt.engine} ${receipt.details["Evidence kind"]}`),
+    status: (receipt) => receipt.trust === "dimension-checked" || receipt.engine.includes("dimensional") ? "passed" : "missing"
+  },
+  {
+    id: "symbolic",
+    label: "Symbolic / CAS cross-check",
+    command: "npm run demo:symbolic",
+    description: "Algebraic transformations need a second symbolic engine or recorded unsupported status.",
+    applies: (receipt) => state.lane === "math" || /symbolic|polynomial|equation|algebra/u.test(receipt.title),
+    status: (receipt) => /symbolic|cas/u.test(receipt.engine) ? "passed" : "waiting"
+  },
+  {
+    id: "smt",
+    label: "SMT solver check",
+    command: "theorem smt check --json",
+    description: "Bounded logic, satisfiability, and equivalence claims should route through SMT when applicable.",
+    applies: (receipt) => state.lane === "math" || /all|exists|integer|constraint|satisf/u.test(receipt.title),
+    status: (receipt) => receipt.trust === "smt-checked" || /smt|z3/u.test(receipt.engine) ? "passed" : "waiting"
+  },
+  {
+    id: "proof",
+    label: "Lean proof bridge",
+    command: "theorem proof check --backend lean",
+    description: "Only accepted proof-checker output may mint a formally proved trust label.",
+    applies: (receipt) => state.lane === "math" || /proof|theorem|lemma|forall|for all/u.test(receipt.title),
+    status: (receipt) => receipt.details["Proof checker"] === "true" || receipt.trust === "proved" ? "passed" : "waiting"
+  },
+  {
+    id: "bench",
+    label: "Benchmark suite",
+    command: "npm run proof:launch",
+    description: "Claims and engines should be regression-tested against seed and research-grade benchmark suites.",
+    applies: () => true,
+    status: () => "waiting"
+  },
+  {
+    id: "privacy",
+    label: "Privacy and replay audit",
+    command: "theorem replay <receipt.json>",
+    description: "Network, model context, command logs, and replay boundaries must match the receipt.",
+    applies: () => true,
+    status: (receipt) => (receipt.details.Network ?? "").toLowerCase() === "none" ? "passed" : "waiting"
+  },
+  {
+    id: "paper",
+    label: "Paper-ready packet",
+    command: "theorem render <receipt.json> markdown",
+    description: "Export evidence, limitations, citations, open gaps, and reviewer-ready reproduction steps.",
+    applies: () => true,
+    status: () => "waiting"
+  }
+];
 const laneProtocols = {
   math: {
     name: "Math",
@@ -643,6 +731,7 @@ function render() {
   renderLane();
   renderProtocol();
   renderAgentRoutes(receipt);
+  renderVerificationMatrix(receipt);
   renderReplay(receipt);
   renderReport(receipt);
   applySidebarSearch();
@@ -754,6 +843,73 @@ function renderAgentRoutes(receipt) {
   routeReceipt.textContent = routes.receipt;
   routeReplay.textContent = routes.replay;
   routeReport.textContent = routes.report;
+}
+
+function renderVerificationMatrix(receipt) {
+  if (!receipt) {
+    return;
+  }
+
+  const rows = verificationRows(receipt);
+  const counts = rows.reduce((accumulator, row) => {
+    accumulator[row.status] = (accumulator[row.status] ?? 0) + 1;
+    return accumulator;
+  }, {});
+  const nextAction = rows.find((row) => ["missing", "waiting"].includes(row.status)) ?? rows.find((row) => row.status === "skipped") ?? rows[0];
+
+  matrixCurrentClaim.textContent = receipt.title;
+  matrixNextCommand.textContent = nextAction?.command ?? receipt.replay;
+  matrixSummary.textContent = `${counts.passed ?? 0} passed / ${counts.waiting ?? 0} waiting / ${counts.missing ?? 0} missing`;
+
+  verificationMatrix.innerHTML = rows
+    .map((row) => `<article class="matrix-row ${row.status}">
+      <span class="task-state ${row.status}"></span>
+      <div>
+        <div class="matrix-row-head">
+          <strong>${escapeHtml(row.label)}</strong>
+          <span>${escapeHtml(statusLabel(row.status))}</span>
+        </div>
+        <p>${escapeHtml(row.description)}</p>
+        <code>${escapeHtml(row.command)}</code>
+      </div>
+    </article>`)
+    .join("");
+
+  mathCoreList.innerHTML = rows
+    .filter((row) => ["exact", "counterexample", "dimension", "symbolic", "smt", "proof", "bench"].includes(row.id))
+    .map((row) => `<div class="progress-row">
+      <span class="task-state ${row.status}"></span>
+      <strong>${escapeHtml(row.label)}</strong>
+      <small>${escapeHtml(statusLabel(row.status))}</small>
+    </div>`)
+    .join("");
+}
+
+function verificationRows(receipt) {
+  return verificationGateCatalog.map((gate) => {
+    const applicable = gate.applies(receipt);
+    const status = applicable ? gate.status(receipt) : "skipped";
+    return {
+      ...gate,
+      status
+    };
+  });
+}
+
+function statusLabel(status) {
+  if (status === "passed") {
+    return "verified";
+  }
+
+  if (status === "missing") {
+    return "required gap";
+  }
+
+  if (status === "skipped") {
+    return "not applicable";
+  }
+
+  return "waiting";
 }
 
 function agentRouteCommands(receipt) {
@@ -1114,6 +1270,9 @@ function renderReport(receipt) {
 
   const protocol = currentLaneProtocol();
   const routes = agentRouteCommands(receipt);
+  const matrixItems = verificationRows(receipt)
+    .map((row) => `<li><strong>${escapeHtml(row.label)}</strong>: ${escapeHtml(statusLabel(row.status))} - <code>${escapeHtml(row.command)}</code></li>`)
+    .join("");
   const notes = researchNotes.value.trim();
   const mathInput = receipt.math?.input;
   const mathOutput = receipt.math?.output;
@@ -1148,6 +1307,8 @@ function renderReport(receipt) {
       <div><dt>Replay</dt><dd><code>${escapeHtml(routes.replay)}</code></dd></div>
       <div><dt>Report</dt><dd><code>${escapeHtml(routes.report)}</code></dd></div>
     </dl>
+    <h3>Verification Matrix</h3>
+    <ol>${matrixItems}</ol>
     <h3>${escapeHtml(protocol.name)} Review Standard</h3>
     <p>${escapeHtml(protocol.claimStandard)}</p>
     <dl class="report-facts">
@@ -1173,6 +1334,7 @@ function generateReportMarkdown(receipt) {
   const trace = receipt.traces[state.level] ?? receipt.traces.middle;
   const protocol = currentLaneProtocol();
   const routes = agentRouteCommands(receipt);
+  const matrix = verificationRows(receipt);
   const notes = researchNotes.value.trim() || "No local notes added yet.";
   const mathInput = receipt.math?.input ?? receipt.title;
   const mathOutput = receipt.math?.output ?? receipt.output;
@@ -1199,6 +1361,10 @@ function generateReportMarkdown(receipt) {
     `- Receipt: \`${routes.receipt}\``,
     `- Replay: \`${routes.replay}\``,
     `- Report: \`${routes.report}\``,
+    "",
+    "## Verification Matrix",
+    "",
+    ...matrix.map((row) => `- ${row.label}: ${statusLabel(row.status)}. Command: \`${row.command}\``),
     "",
     `## ${protocol.name} Review Standard`,
     "",
@@ -1406,6 +1572,7 @@ claimList.addEventListener("click", (event) => {
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
+  document.querySelector("#surface-checks").scrollTop = 0;
 });
 
 laneButtons.forEach((button) => {
@@ -1419,6 +1586,7 @@ laneButtons.forEach((button) => {
     renderLane();
     renderProtocol();
     renderAgentRoutes(receiptStore.get(state.receiptKey));
+    renderVerificationMatrix(receiptStore.get(state.receiptKey));
     renderReport(receiptStore.get(state.receiptKey));
   });
 });
