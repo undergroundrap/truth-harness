@@ -178,9 +178,10 @@
               <div class="surface-header">
                 <div class="surface-tabs" role="tablist" aria-label="Workbench view">
                   <button class="surface-tab active" id="tab-trace" role="tab" aria-controls="surface-trace" aria-selected="true" data-surface="trace" type="button">Trace</button>
+                  <button class="surface-tab" id="tab-plot" role="tab" aria-controls="surface-plot" aria-selected="false" data-surface="plot" type="button">Plot</button>
                   <button class="surface-tab" id="tab-runbook" role="tab" aria-controls="surface-runbook" aria-selected="false" data-surface="runbook" type="button">Run</button>
                   <button class="surface-tab" id="tab-checks" role="tab" aria-controls="surface-checks" aria-selected="false" data-surface="checks" type="button">Checks</button>
-                  <button class="surface-tab" id="tab-graph" role="tab" aria-controls="surface-graph" aria-selected="false" data-surface="graph" type="button">Graph</button>
+                  <button class="surface-tab" id="tab-graph" role="tab" aria-controls="surface-graph" aria-selected="false" data-surface="graph" type="button">Lineage</button>
                   <button class="surface-tab" id="tab-protocol" role="tab" aria-controls="surface-protocol" aria-selected="false" data-surface="protocol" type="button">Protocol</button>
                   <button class="surface-tab" id="tab-notes" role="tab" aria-controls="surface-notes" aria-selected="false" data-surface="notes" type="button">Notes</button>
                   <button class="surface-tab" id="tab-replay" role="tab" aria-controls="surface-replay" aria-selected="false" data-surface="replay" type="button">Replay</button>
@@ -202,6 +203,21 @@
                   </div>
                 </div>
                 <ol class="trace-list" id="trace-list"></ol>
+              </section>
+
+              <section class="surface-panel" id="surface-plot" role="tabpanel" aria-labelledby="tab-plot" data-surface-panel="plot" tabindex="0" aria-label="Math plot" hidden>
+                <div class="panel-heading">
+                  <h3>Math Plot</h3>
+                  <span class="mini-label" id="plot-kind">exact visualization</span>
+                </div>
+                <div class="plot-layout">
+                  <div class="plot-canvas" id="plot-canvas" aria-label="Rendered math visualization"></div>
+                  <aside class="plot-detail" aria-label="Plot explanation">
+                    <h4 id="plot-title">Visualization</h4>
+                    <p id="plot-caption">The plot is generated from the verified receipt output.</p>
+                    <dl class="plot-facts" id="plot-facts"></dl>
+                  </aside>
+                </div>
               </section>
 
               <section class="surface-panel" id="surface-runbook" role="tabpanel" aria-labelledby="tab-runbook" data-surface-panel="runbook" tabindex="0" aria-label="Agent runbook" hidden>
@@ -306,10 +322,10 @@
                 </section>
               </section>
 
-              <section class="surface-panel" id="surface-graph" role="tabpanel" aria-labelledby="tab-graph" data-surface-panel="graph" tabindex="0" aria-label="Graph canvas" hidden>
+              <section class="surface-panel" id="surface-graph" role="tabpanel" aria-labelledby="tab-graph" data-surface-panel="graph" tabindex="0" aria-label="Claim lineage" hidden>
                 <div class="panel-heading">
-                  <h3>Graph Canvas</h3>
-                  <span class="mini-label">receipt and claim lineage</span>
+                  <h3>Claim Lineage</h3>
+                  <span class="mini-label">receipt/claim dependency graph</span>
                 </div>
                 <div class="graph-layout">
                   <div class="graph-canvas" id="main-graph-list"></div>
@@ -389,7 +405,7 @@
             </section>
 
             <section class="inspector-section">
-              <h3>Evidence Graph</h3>
+              <h3>Evidence Lineage</h3>
               <div class="graph-list" id="graph-list"></div>
             </section>
 

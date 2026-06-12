@@ -1206,6 +1206,66 @@ dd {
   gap: 7px;
 }
 
+.plot-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.36fr);
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.plot-canvas {
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  padding: 10px;
+  scrollbar-gutter: stable;
+}
+
+.plot-canvas svg {
+  display: block;
+  width: 100%;
+  min-width: 620px;
+  height: auto;
+}
+
+.plot-detail {
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  padding: 12px;
+  scrollbar-gutter: stable;
+}
+
+.plot-detail h4 {
+  color: #f1eadc;
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.plot-detail p {
+  color: #d8d2c8;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+.plot-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.plot-facts div {
+  display: grid;
+  grid-template-columns: minmax(74px, 0.62fr) minmax(0, 1.38fr);
+  gap: 8px;
+}
+
 .graph-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
@@ -2385,6 +2445,10 @@ textarea:focus-visible {
   }
 
   .graph-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .plot-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 }

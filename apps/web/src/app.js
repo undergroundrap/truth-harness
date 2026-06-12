@@ -315,14 +315,20 @@ const receiptSummary = document.querySelector(".receipt-summary");
 const promptInput = document.querySelector("#prompt-input");
 const composer = document.querySelector("#composer");
 const verifyButton = document.querySelector("#verify-button");
+const plotCanvas = document.querySelector("#plot-canvas");
+const plotKind = document.querySelector("#plot-kind");
+const plotTitle = document.querySelector("#plot-title");
+const plotCaption = document.querySelector("#plot-caption");
+const plotFacts = document.querySelector("#plot-facts");
 const taskDockState = document.querySelector("#task-dock-state");
 const taskDockSummary = document.querySelector("#task-dock-summary");
 const taskList = document.querySelector("#task-list");
 const surfaceStatusText = {
   trace: "explainable steps",
+  plot: "math visualization",
   runbook: "agent harness",
   checks: "verification gates",
-  graph: "evidence path",
+  graph: "claim lineage",
   protocol: "review standard",
   notes: "local scratchpad",
   replay: "session reel",
@@ -937,6 +943,7 @@ function render() {
     .map(([kind, summary]) => `<div class="graph-node"><span>${escapeHtml(kind)}</span><strong>${escapeHtml(summary)}</strong></div>`)
     .join("");
   renderMainGraph(receipt);
+  renderMathPlot(receipt);
 
   traceList.innerHTML = (receipt.traces[state.level] ?? receipt.traces.middle)
     .map((step) => `<li>${escapeHtml(step)}</li>`)
@@ -990,6 +997,255 @@ function renderClaimList() {
       </button>`;
     })
     .join("");
+}
+
+function renderMathPlot(receipt) {
+  if (!plotCanvas || !plotKind || !plotTitle || !plotCaption || !plotFacts) {
+    return;
+  }
+
+  const plot = createPlotModel(receipt);
+  plotKind.textContent = plot.kind;
+  plotTitle.textContent = plot.title;
+  plotCaption.textContent = plot.caption;
+  plotCanvas.innerHTML = plot.svg;
+  plotFacts.innerHTML = plot.facts
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
+    .join("");
+}
+
+function createPlotModel(receipt) {
+  if (/dimension|force|acceleration|M L T/u.test(`${receipt.title} ${receipt.engine} ${receipt.output}`)) {
+    return createDimensionPlotModel(receipt);
+  }
+
+  if (/n\^2\+n/u.test(`${receipt.title} ${receipt.math?.input ?? ""}`)) {
+    return createDiscretePolynomialPlotModel(receipt);
+  }
+
+  const fractions = parseFractionsFromText(`${receipt.title} ${receipt.output} ${receipt.math?.input ?? ""} ${receipt.math?.output ?? ""}`);
+  const outputFraction = parseFraction(receipt.output) ?? parseFractionsFromText(receipt.math?.output ?? "").at(-1);
+  if (fractions.length > 0 || outputFraction) {
+    return createNumberLinePlotModel(receipt, fractions, outputFraction);
+  }
+
+  return createFallbackPlotModel(receipt);
+}
+
+function createNumberLinePlotModel(receipt, fractions, outputFraction) {
+  const uniqueFractions = uniqueFractionsByLabel([
+    ...fractions.slice(0, 4),
+    ...(outputFraction ? [outputFraction] : [])
+  ]);
+  const values = uniqueFractions.map(fractionValue);
+  const maxValue = Math.max(1, ...values, outputFraction ? fractionValue(outputFraction) : 0);
+  const axisMax = Math.ceil(maxValue + 0.35);
+  const denominator = Math.min(24, lcmMany(uniqueFractions.map((item) => item.denominator).filter(Boolean)) || 8);
+  const width = 760;
+  const height = 300;
+  const left = 54;
+  const right = 36;
+  const y = 164;
+  const axisWidth = width - left - right;
+  const xFor = (value) => left + (value / axisMax) * axisWidth;
+  const ticks = [];
+  for (let index = 0; index <= axisMax * denominator; index += 1) {
+    const value = index / denominator;
+    const x = xFor(value);
+    const major = Number.isInteger(value);
+    ticks.push(`<g>
+      <line x1="${x}" y1="${major ? y - 13 : y - 7}" x2="${x}" y2="${major ? y + 13 : y + 7}" stroke="${major ? "#6f6960" : "#343230"}" />
+      ${major ? `<text x="${x}" y="${y + 38}" text-anchor="middle" fill="#aaa59d" font-size="13">${value}</text>` : ""}
+    </g>`);
+  }
+
+  const markerRows = uniqueFractions.map((fraction, index) => {
+    const value = fractionValue(fraction);
+    const x = xFor(value);
+    const isOutput = outputFraction && fractionLabel(fraction) === fractionLabel(outputFraction);
+    const markerY = y - 52 - (index % 2) * 32;
+    const color = isOutput ? "#7dd3a8" : "#b7a98a";
+    return `<g>
+      <line x1="${x}" y1="${markerY + 10}" x2="${x}" y2="${y - 15}" stroke="${color}" stroke-width="2" stroke-dasharray="${isOutput ? "0" : "4 5"}" />
+      <circle cx="${x}" cy="${y}" r="${isOutput ? 7 : 5}" fill="${color}" />
+      <rect x="${x - 42}" y="${markerY - 10}" width="84" height="24" rx="6" fill="#171717" stroke="${color}" opacity="0.96" />
+      <text x="${x}" y="${markerY + 7}" text-anchor="middle" fill="#f2f2ee" font-size="13" font-weight="700">${escapeXml(fractionLabel(fraction))}</text>
+    </g>`;
+  });
+
+  return {
+    kind: "number line",
+    title: "Exact Rational Number Line",
+    caption: "Fractions are plotted from the receipt text and verified output; the result marker is highlighted.",
+    svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Exact rational number line">
+      <rect width="${width}" height="${height}" rx="14" fill="#101010" />
+      <text x="${left}" y="42" fill="#f2f2ee" font-size="20" font-weight="750">${escapeXml(receipt.title)}</text>
+      <text x="${left}" y="68" fill="#aaa59d" font-size="13">verified output: ${escapeXml(receipt.output)}</text>
+      <line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" stroke="#6f6960" stroke-width="2" />
+      ${ticks.join("")}
+      ${markerRows.join("")}
+    </svg>`,
+    facts: [
+      ["Engine", receipt.engine],
+      ["Trust", receipt.trust],
+      ["Output", receipt.output],
+      ["Ticks", `1/${denominator} subdivisions`]
+    ]
+  };
+}
+
+function createDiscretePolynomialPlotModel(receipt) {
+  const width = 760;
+  const height = 320;
+  const left = 58;
+  const right = 30;
+  const top = 42;
+  const bottom = 54;
+  const points = [];
+  for (let n = -6; n <= 6; n += 1) {
+    const y = receipt.title.includes("n^2+n+1") ? n * n + n + 1 : n * n + n;
+    points.push({ n, y, even: y % 2 === 0 });
+  }
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxY = Math.max(...points.map((point) => point.y));
+  const xFor = (n) => left + ((n + 6) / 12) * (width - left - right);
+  const yFor = (value) => top + ((maxY - value) / Math.max(1, maxY - minY)) * (height - top - bottom);
+  const zeroY = yFor(0);
+  const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${xFor(point.n)} ${yFor(point.y)}`).join(" ");
+  const pointSvg = points.map((point) => {
+    const color = point.even ? "#7dd3a8" : "#f28b82";
+    return `<g>
+      <circle cx="${xFor(point.n)}" cy="${yFor(point.y)}" r="5" fill="${color}" />
+      <text x="${xFor(point.n)}" y="${height - 24}" text-anchor="middle" fill="#aaa59d" font-size="12">${point.n}</text>
+    </g>`;
+  });
+
+  return {
+    kind: "discrete plot",
+    title: "Integer Sample Plot",
+    caption: "Integer samples are plotted locally; red points are odd and green points are even.",
+    svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Discrete polynomial parity plot">
+      <rect width="${width}" height="${height}" rx="14" fill="#101010" />
+      <text x="${left}" y="28" fill="#f2f2ee" font-size="20" font-weight="750">${escapeXml(receipt.math?.input ?? receipt.title)}</text>
+      <line x1="${left}" y1="${zeroY}" x2="${width - right}" y2="${zeroY}" stroke="#343230" />
+      <line x1="${left}" y1="${top}" x2="${left}" y2="${height - bottom}" stroke="#6f6960" />
+      <path d="${path}" fill="none" stroke="#b7a98a" stroke-width="2" />
+      ${pointSvg.join("")}
+      <text x="${left}" y="${height - 14}" fill="#aaa59d" font-size="12">n</text>
+    </svg>`,
+    facts: [
+      ["Sample", "integers -6..6"],
+      ["Red", "odd value"],
+      ["Green", "even value"],
+      ["Receipt output", receipt.output]
+    ]
+  };
+}
+
+function createDimensionPlotModel(receipt) {
+  return {
+    kind: "dimension diagram",
+    title: "Dimensional Balance",
+    caption: "This is not a physical simulation; it visualizes that both sides reduce to the same base dimensions.",
+    svg: `<svg viewBox="0 0 760 280" role="img" aria-label="Dimensional balance diagram">
+      <rect width="760" height="280" rx="14" fill="#101010" />
+      <text x="54" y="42" fill="#f2f2ee" font-size="20" font-weight="750">${escapeXml(receipt.title)}</text>
+      <g transform="translate(72 92)">
+        <rect width="250" height="92" rx="10" fill="#171717" stroke="#30302f" />
+        <text x="24" y="34" fill="#aaa59d" font-size="13">Left side</text>
+        <text x="24" y="68" fill="#f2f2ee" font-size="26" font-weight="750">M L T^-2</text>
+      </g>
+      <g transform="translate(438 92)">
+        <rect width="250" height="92" rx="10" fill="#171717" stroke="#30302f" />
+        <text x="24" y="34" fill="#aaa59d" font-size="13">Right side</text>
+        <text x="24" y="68" fill="#f2f2ee" font-size="26" font-weight="750">M L T^-2</text>
+      </g>
+      <line x1="332" y1="138" x2="428" y2="138" stroke="#7dd3a8" stroke-width="3" />
+      <text x="380" y="124" text-anchor="middle" fill="#7dd3a8" font-size="13" font-weight="700">match</text>
+    </svg>`,
+    facts: [
+      ["Engine", receipt.engine],
+      ["Trust", receipt.trust],
+      ["Output", receipt.output],
+      ["Boundary", "dimensions only"]
+    ]
+  };
+}
+
+function createFallbackPlotModel(receipt) {
+  return {
+    kind: "plot unavailable",
+    title: "No Numeric Plot Yet",
+    caption: "This receipt has lineage and verification data, but no recognized numeric or symbolic plot adapter yet.",
+    svg: `<svg viewBox="0 0 760 260" role="img" aria-label="No plot available">
+      <rect width="760" height="260" rx="14" fill="#101010" />
+      <text x="54" y="60" fill="#f2f2ee" font-size="22" font-weight="750">No plot adapter for this receipt yet</text>
+      <text x="54" y="96" fill="#aaa59d" font-size="14">Next: attach a CAS, chart, simulation, or domain-specific visualizer.</text>
+      <rect x="54" y="128" width="652" height="58" rx="8" fill="#171717" stroke="#30302f" />
+      <text x="76" y="162" fill="#f2f2ee" font-size="14">${escapeXml(receipt.title)}</text>
+    </svg>`,
+    facts: [
+      ["Engine", receipt.engine],
+      ["Trust", receipt.trust],
+      ["Output", receipt.output],
+      ["Next", "add plot adapter"]
+    ]
+  };
+}
+
+function parseFractionsFromText(text) {
+  return [...String(text).matchAll(/(-?\d+)\s*\/\s*(\d+)/gu)]
+    .map((match) => ({ numerator: Number(match[1]), denominator: Number(match[2]) }))
+    .filter((fraction) => Number.isFinite(fraction.numerator) && Number.isFinite(fraction.denominator) && fraction.denominator !== 0);
+}
+
+function parseFraction(text) {
+  const match = String(text).trim().match(/^(-?\d+)\s*\/\s*(\d+)$/u);
+  if (match) {
+    return { numerator: Number(match[1]), denominator: Number(match[2]) };
+  }
+
+  const integer = Number(String(text).trim());
+  return Number.isInteger(integer) ? { numerator: integer, denominator: 1 } : undefined;
+}
+
+function uniqueFractionsByLabel(fractions) {
+  const seen = new Set();
+  return fractions.filter((fraction) => {
+    const label = fractionLabel(fraction);
+    if (seen.has(label)) {
+      return false;
+    }
+    seen.add(label);
+    return true;
+  });
+}
+
+function fractionValue(fraction) {
+  return fraction.numerator / fraction.denominator;
+}
+
+function fractionLabel(fraction) {
+  return fraction.denominator === 1 ? String(fraction.numerator) : `${fraction.numerator}/${fraction.denominator}`;
+}
+
+function gcd(left, right) {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
+  while (b !== 0) {
+    const next = a % b;
+    a = b;
+    b = next;
+  }
+  return a || 1;
+}
+
+function lcm(left, right) {
+  return Math.abs(left * right) / gcd(left, right);
+}
+
+function lcmMany(values) {
+  return values.reduce((accumulator, value) => lcm(accumulator, value), 1);
 }
 
 function renderClaimLedger() {
