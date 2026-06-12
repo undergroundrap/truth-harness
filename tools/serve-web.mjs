@@ -4,8 +4,6 @@ import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const root = resolve("apps/web");
-const projectRoot = resolve(".");
 const MAX_JSON_BODY_BYTES = 16 * 1024;
 let coreModulePromise;
 const args = new Map(
@@ -17,6 +15,9 @@ const args = new Map(
     return [[arg.slice(2), next && !next.startsWith("--") ? next : "true"]];
   })
 );
+const root = resolve(args.get("web-root") ?? "apps/web");
+const projectRoot = resolve(args.get("project-root") ?? ".");
+const coreModulePath = args.get("core-module") ?? process.env.THEOREM_WEB_CORE_MODULE ?? "packages/core/dist/index.js";
 const host = args.get("host") ?? "127.0.0.1";
 const port = Number(args.get("port") ?? "4180");
 const allowNonLocalWeb = isTruthyEnv(process.env.THEOREM_WEB_ALLOW_NONLOCAL);
@@ -620,7 +621,7 @@ function engineProbeRow(input) {
 }
 
 function loadCoreModule() {
-  coreModulePromise ??= import(pathToFileURL(resolve("packages/core/dist/index.js")).href);
+  coreModulePromise ??= import(pathToFileURL(resolve(coreModulePath)).href);
   return coreModulePromise;
 }
 
