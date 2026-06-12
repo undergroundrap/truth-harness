@@ -383,6 +383,29 @@ button {
   margin-top: 2px;
 }
 
+.tag-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+  min-width: 0;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 18px;
+  border: 1px solid rgba(183, 169, 138, 0.18);
+  border-radius: 999px;
+  background: #181715;
+  color: #bdb3a1;
+  padding: 1px 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .sidebar-empty {
   border: 1px dashed var(--line);
   border-radius: 7px;
@@ -1696,6 +1719,19 @@ textarea:focus-visible {
   border-radius: 7px;
   background: #151515;
   padding: 8px;
+}
+
+.report-facts ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 16px;
+}
+
+.report-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .mini-label {

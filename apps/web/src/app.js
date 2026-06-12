@@ -7,6 +7,9 @@ const seedReceipts = {
     engine: "local-rational-arithmetic",
     replay: 'theorem ask "compute 3 / 4 + 5 / 8" --json',
     output: "11/8",
+    tags: ["math", "fractions", "exact-arithmetic", "linked-work"],
+    dependsOn: ["denominator"],
+    derivedBy: "Uses the verified common-denominator subclaim, then adds 6/8 and 5/8.",
     math: {
       input: "\\frac{3}{4}+\\frac{5}{8}",
       output: "\\frac{11}{8}"
@@ -57,6 +60,62 @@ const seedReceipts = {
       "This is not a broader financial or scientific claim."
     ]
   },
+  denominator: {
+    trust: "exact-computed",
+    title: "common denominator for 3 / 4 and 5 / 8",
+    subtitle: "linked arithmetic lemma",
+    runId: "run_common_denominator_sample",
+    engine: "local-rational-arithmetic",
+    replay: 'theorem ask "common denominator for 3 / 4 and 5 / 8" --json',
+    output: "lcm(4,8)=8; 3/4=6/8",
+    tags: ["math", "fractions", "subclaim", "reusable-lemma"],
+    dependsOn: [],
+    derivedBy: "Exact integer lcm plus rational equivalence rewrite.",
+    math: {
+      input: "\\operatorname{lcm}(4,8)",
+      output: "8,\\ \\frac{3}{4}=\\frac{6}{8}"
+    },
+    details: {
+      "Evidence kind": "exact-arithmetic",
+      Backend: "local-rational-arithmetic",
+      Output: "lcm(4,8)=8; 3/4=6/8",
+      "Trace steps": "4",
+      Network: "none",
+      "Proof checker": "false"
+    },
+    graph: [
+      ["problem", "Prepare fraction addition subclaim"],
+      ["integer_lcm", "lcm(4,8)=8"],
+      ["rewrite", "3/4 rewrites to 6/8"],
+      ["module", "Reusable input for final addition"]
+    ],
+    traces: {
+      middle: [
+        "The denominators are 4 and 8.",
+        "The least common denominator is 8.",
+        "Rewrite 3/4 as 6/8 so both fractions share denominator 8."
+      ],
+      high: [
+        "Compute lcm(4, 8) exactly.",
+        "Because 8 is a multiple of 4, multiply numerator and denominator of 3/4 by 2.",
+        "The equivalent fraction is 6/8."
+      ],
+      college: [
+        "lcm(4,8)=8 in Z.",
+        "3/4 = (3*2)/(4*2) = 6/8.",
+        "This subclaim can be referenced by a later rational-addition receipt."
+      ],
+      expert: [
+        "op=lcm; inputs=[4,8]; result=8",
+        "op=rewrite_fraction; input=3/4; denominator=8; result=6/8",
+        "module=common-denominator; reusable=true"
+      ]
+    },
+    limitations: [
+      "This receipt only proves the denominator rewrite for these two fractions.",
+      "It does not by itself compute the final sum."
+    ]
+  },
   parity: {
     trust: "refuted",
     title: "for all integers n, n^2+n+1 is even",
@@ -65,6 +124,9 @@ const seedReceipts = {
     engine: "finite-counterexample-search",
     replay: 'theorem ask "for all integers n, n^2+n+1 is even" --json',
     output: "n=-20, value=381",
+    tags: ["math", "number-theory", "counterexample", "universal-claim"],
+    dependsOn: [],
+    derivedBy: "Finite exact search over recorded integer bounds.",
     math: {
       input: "n^2+n+1 \\text{ even}",
       output: "n=-20,\\ n^2+n+1=381"
@@ -99,6 +161,9 @@ const seedReceipts = {
     engine: "local-dimensional-analysis",
     replay: 'theorem ask "dimension check force = mass * acceleration" --json',
     output: "M L T^-2",
+    tags: ["physics", "units", "dimension-analysis", "model-check"],
+    dependsOn: [],
+    derivedBy: "Maps both sides into SI base dimensions and compares them.",
     math: {
       input: "F=m a",
       output: "M L T^{-2}"
@@ -128,7 +193,7 @@ const seedReceipts = {
 };
 
 const receiptStore = new Map(Object.entries(seedReceipts));
-const recentReceiptKeys = ["rational", "parity", "dimension"];
+const recentReceiptKeys = ["rational", "denominator", "parity", "dimension"];
 const ACTIVITY_PAGE_SIZE = 12;
 const NOTES_STORAGE_KEY = "theorem-workbench.session-notes.v0";
 const RESEARCHER_NAME_STORAGE_KEY = "theorem-workbench.researcher-name.v0";
@@ -767,14 +832,15 @@ function render() {
   receiptSummary.innerHTML = [
     receipt.runId,
     `engine ${receipt.engine}`,
-    `trust ${receipt.trust}`
+    `trust ${receipt.trust}`,
+    ...receiptTags(receipt).map((tag) => `#${tag}`)
   ].map((item) => `<span>${escapeHtml(item)}</span>`).join("");
 
   receiptDetails.innerHTML = Object.entries(receipt.details)
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join("");
 
-  graphList.innerHTML = receipt.graph
+  graphList.innerHTML = evidenceGraphEntries(receipt)
     .map(([kind, summary]) => `<div class="graph-node"><span>${escapeHtml(kind)}</span><strong>${escapeHtml(summary)}</strong></div>`)
     .join("");
   renderMainGraph(receipt);
@@ -821,6 +887,7 @@ function renderClaimList() {
         <span>
           <strong>${escapeHtml(receipt.title)}</strong>
           <small>${escapeHtml(receipt.subtitle)}</small>
+          ${renderTagPills(receiptTags(receipt).slice(0, 3))}
         </span>
       </button>`;
     })
@@ -840,6 +907,16 @@ function matchesReceiptSearch(receipt, query) {
     receipt.engine,
     receipt.output,
     receipt.replay,
+    ...receiptTags(receipt),
+    ...receiptTags(receipt).map((tag) => `#${tag}`),
+    ...receiptDependencies(receipt).flatMap((key) => {
+      const upstream = receiptStore.get(key);
+      return upstream ? [key, upstream.title, upstream.runId, ...(upstream.tags ?? [])] : [key];
+    }),
+    ...dependentReceiptKeys(receipt).flatMap((key) => {
+      const downstream = receiptStore.get(key);
+      return downstream ? [key, downstream.title, downstream.runId, ...(downstream.tags ?? [])] : [key];
+    }),
     ...Object.entries(receipt.details).flat(),
     ...receipt.graph.flat(),
     ...Object.values(receipt.traces).flat(),
@@ -848,6 +925,52 @@ function matchesReceiptSearch(receipt, query) {
     .join(" ")
     .toLowerCase()
     .includes(query);
+}
+
+function receiptTags(receipt) {
+  return Array.isArray(receipt.tags) ? receipt.tags : [];
+}
+
+function receiptDependencies(receipt) {
+  return Array.isArray(receipt.dependsOn) ? receipt.dependsOn : [];
+}
+
+function receiptKeyFor(receipt) {
+  for (const [key, value] of receiptStore.entries()) {
+    if (value === receipt) {
+      return key;
+    }
+  }
+
+  return undefined;
+}
+
+function dependentReceiptKeys(receipt) {
+  const key = receiptKeyFor(receipt);
+  if (!key) {
+    return [];
+  }
+
+  return [...receiptStore.keys()].filter((candidateKey) => {
+    if (candidateKey === key) {
+      return false;
+    }
+    const candidate = receiptStore.get(candidateKey);
+    return candidate && receiptDependencies(candidate).includes(key);
+  });
+}
+
+function renderTagPills(tags) {
+  if (!tags || tags.length === 0) {
+    return "";
+  }
+
+  return `<span class="tag-strip">${tags.map((tag) => `<span class="tag-pill">#${escapeHtml(tag)}</span>`).join("")}</span>`;
+}
+
+function linkedClaimLabel(key) {
+  const receipt = receiptStore.get(key);
+  return receipt ? `${receipt.title} (${receipt.trust})` : key;
 }
 
 function renderSurface() {
@@ -954,6 +1077,12 @@ function createRunbookPacket(receipt) {
     currentClaim: receipt.title,
     currentTrust: receipt.trust,
     currentRunId: receipt.runId,
+    tags: receiptTags(receipt),
+    dependsOn: receiptDependencies(receipt).map((key) => ({
+      key,
+      label: linkedClaimLabel(key)
+    })),
+    derivedBy: receipt.derivedBy ?? "No derivation note recorded.",
     nextAction: nextAction?.description ?? "Prepare a narrow reviewer packet with no unchecked claims.",
     privacy: {
       default: "local-first",
@@ -1005,6 +1134,13 @@ function formatRunbookPacket(packet) {
     `Current claim: ${packet.currentClaim}`,
     `Current trust: ${packet.currentTrust}`,
     `Run ID: ${packet.currentRunId}`,
+    `Tags: ${packet.tags.length > 0 ? packet.tags.map((tag) => `#${tag}`).join(", ") : "none"}`,
+    `Derived by: ${packet.derivedBy}`,
+    "",
+    "## Upstream Claims",
+    "",
+    ...(packet.dependsOn.length > 0 ? packet.dependsOn.map((item) => `- ${item.label}`) : ["- none"]),
+    "",
     `Next action: ${packet.nextAction}`,
     "",
     "## Privacy",
@@ -1322,8 +1458,20 @@ function truncateForImage(value, maxLength) {
   return text.length <= maxLength ? text : `${text.slice(0, maxLength - 3)}...`;
 }
 
+function evidenceGraphEntries(receipt) {
+  const upstream = receiptDependencies(receipt)
+    .map((key) => ["depends_on", linkedClaimLabel(key)]);
+  const downstream = dependentReceiptKeys(receipt)
+    .map((key) => ["unlocks", linkedClaimLabel(key)]);
+  const tags = receiptTags(receipt).length > 0
+    ? [["tags", receiptTags(receipt).map((tag) => `#${tag}`).join(" ")]]
+    : [];
+
+  return [...upstream, ...receipt.graph, ...downstream, ...tags];
+}
+
 function renderMainGraph(receipt) {
-  mainGraphList.innerHTML = receipt.graph
+  mainGraphList.innerHTML = evidenceGraphEntries(receipt)
     .map(([kind, summary], index) => `<div class="canvas-node">
       <span class="canvas-index">${index + 1}</span>
       <div>
@@ -1677,9 +1825,21 @@ function renderReport(receipt) {
   const notes = researchNotes.value.trim();
   const mathInput = receipt.math?.input;
   const mathOutput = receipt.math?.output;
-  const graphItems = receipt.graph
+  const tags = receiptTags(receipt);
+  const dependencies = receiptDependencies(receipt);
+  const dependents = dependentReceiptKeys(receipt);
+  const graphItems = evidenceGraphEntries(receipt)
     .map(([kind, summary]) => `<li><strong>${escapeHtml(kind)}</strong>: ${escapeHtml(summary)}</li>`)
     .join("");
+  const tagItems = tags.length > 0
+    ? tags.map((tag) => `<span class="tag-pill">#${escapeHtml(tag)}</span>`).join("")
+    : `<span class="mini-label">No tags yet.</span>`;
+  const upstreamItems = dependencies.length > 0
+    ? dependencies.map((key) => `<li>${escapeHtml(linkedClaimLabel(key))}</li>`).join("")
+    : `<li>No upstream claims recorded.</li>`;
+  const downstreamItems = dependents.length > 0
+    ? dependents.map((key) => `<li>${escapeHtml(linkedClaimLabel(key))}</li>`).join("")
+    : `<li>No downstream claims recorded.</li>`;
   const traceItems = (receipt.traces[state.level] ?? receipt.traces.middle)
     .slice(0, 8)
     .map((step) => `<li>${escapeHtml(step)}</li>`)
@@ -1703,6 +1863,13 @@ function renderReport(receipt) {
       <div><dt>Run</dt><dd>${escapeHtml(receipt.runId)}</dd></div>
       <div><dt>Researcher</dt><dd>${escapeHtml(researcher)}</dd></div>
       <div><dt>Replay</dt><dd><code>${escapeHtml(receipt.replay)}</code></dd></div>
+    </dl>
+    <h3>Ledger Metadata</h3>
+    <div class="report-tags">${tagItems}</div>
+    <dl class="report-facts">
+      <div><dt>Derived by</dt><dd>${escapeHtml(receipt.derivedBy ?? "No derivation note recorded.")}</dd></div>
+      <div><dt>Upstream claims</dt><dd><ul>${upstreamItems}</ul></dd></div>
+      <div><dt>Downstream claims</dt><dd><ul>${downstreamItems}</ul></dd></div>
     </dl>
     <h3>Agent Routes</h3>
     <dl class="report-facts">
@@ -1750,6 +1917,9 @@ function generateReportMarkdown(receipt) {
   const notes = researchNotes.value.trim() || "No local notes added yet.";
   const mathInput = receipt.math?.input ?? receipt.title;
   const mathOutput = receipt.math?.output ?? receipt.output;
+  const tags = receiptTags(receipt);
+  const dependencies = receiptDependencies(receipt);
+  const dependents = dependentReceiptKeys(receipt);
   const lines = [
     `# ${receipt.title}`,
     "",
@@ -1773,6 +1943,15 @@ function generateReportMarkdown(receipt) {
     `- Engine: ${receipt.engine}`,
     `- Run ID: ${receipt.runId}`,
     `- Replay: \`${receipt.replay}\``,
+    "",
+    "## Ledger Metadata",
+    "",
+    `- Tags: ${tags.length > 0 ? tags.map((tag) => `#${tag}`).join(", ") : "none"}`,
+    `- Derived by: ${receipt.derivedBy ?? "No derivation note recorded."}`,
+    "- Upstream claims:",
+    ...(dependencies.length > 0 ? dependencies.map((key) => `  - ${linkedClaimLabel(key)}`) : ["  - none"]),
+    "- Downstream claims:",
+    ...(dependents.length > 0 ? dependents.map((key) => `  - ${linkedClaimLabel(key)}`) : ["  - none"]),
     "",
     "## Agent Routes",
     "",
@@ -1821,7 +2000,7 @@ function generateReportMarkdown(receipt) {
     "",
     "## Evidence Path",
     "",
-    ...receipt.graph.map(([kind, summary], index) => `${index + 1}. ${kind}: ${summary}`),
+    ...evidenceGraphEntries(receipt).map(([kind, summary], index) => `${index + 1}. ${kind}: ${summary}`),
     "",
     "## Trace Excerpt",
     "",
@@ -1864,6 +2043,7 @@ function receiptToViewModel(receipt) {
   const backend = receipt.evidenceProfile.backends[0]?.id ?? receipt.evidenceProfile.kind;
   const graph = receipt.graph.nodes.map((node) => [node.kind, node.summary]);
   const traces = trace ? tracesFromArithmeticArtifact(trace) : tracesFromReceipt(receipt);
+  const backendTags = receipt.evidenceProfile.backends.map((item) => item.id).filter(Boolean);
 
   return {
     trust: receipt.trust,
@@ -1873,6 +2053,9 @@ function receiptToViewModel(receipt) {
     engine: backend,
     replay: receipt.replay,
     output: primaryOutput,
+    tags: uniqueTags(["imported", receipt.evidenceProfile.kind, ...backendTags]),
+    dependsOn: [],
+    derivedBy: "Imported from local receipt API response.",
     details: {
       "Evidence kind": receipt.evidenceProfile.kind,
       Backend: receipt.evidenceProfile.backends.map((item) => item.id).join(", ") || "none",
@@ -1885,6 +2068,17 @@ function receiptToViewModel(receipt) {
     traces,
     limitations: receipt.evidenceProfile.limitations
   };
+}
+
+function extractPromptTags(problem) {
+  return [...problem.matchAll(/(?:^|\s)#([a-z0-9][a-z0-9-]{1,40})/giu)]
+    .map((match) => match[1].toLowerCase());
+}
+
+function uniqueTags(tags) {
+  return [...new Set(tags
+    .map((tag) => String(tag).trim().replace(/^#/u, "").toLowerCase())
+    .filter(Boolean))];
 }
 
 function parseTraceArtifact(receipt) {
@@ -2171,10 +2365,12 @@ composer.addEventListener("submit", async (event) => {
   if (!problem) {
     return;
   }
+  const promptTags = extractPromptTags(problem);
+  const problemForApi = problem.replace(/(?:^|\s)#[a-z0-9][a-z0-9-]{1,40}/giu, " ").replace(/\s+/gu, " ").trim() || problem;
 
   verifyButton.disabled = true;
   verifyButton.textContent = "Verifying";
-  addActivity("human", "Submitted prompt", problem, "passed");
+  addActivity("human", "Submitted prompt", promptTags.length > 0 ? `${problemForApi} (${promptTags.map((tag) => `#${tag}`).join(" ")})` : problemForApi, "passed");
   addActivity("web-ui", "Calling local API", "POST /api/receipt", "waiting");
 
   try {
@@ -2183,7 +2379,7 @@ composer.addEventListener("submit", async (event) => {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ problem })
+      body: JSON.stringify({ problem: problemForApi })
     });
     const payload = await response.json();
     if (!response.ok) {
@@ -2192,6 +2388,7 @@ composer.addEventListener("submit", async (event) => {
     updateLatestActivity("Calling local API", "passed", "POST /api/receipt completed");
 
     const viewModel = receiptToViewModel(payload.receipt);
+    viewModel.tags = uniqueTags([...receiptTags(viewModel), ...promptTags]);
     const key = payload.receipt.runId;
     receiptStore.set(key, viewModel);
     recentReceiptKeys.unshift(key);
