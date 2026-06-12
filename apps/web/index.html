@@ -209,57 +209,73 @@
                     <button class="text-button compact-button" id="download-runbook" type="button">Download</button>
                   </div>
                 </div>
-                <div class="runbook-hero">
-                  <section class="runbook-brief">
-                    <span class="mini-label" id="runbook-mode">Math lane</span>
-                    <h4 id="runbook-objective">Proof and Computation Review</h4>
-                    <p id="runbook-standard">Ground every result in reproducible evidence.</p>
+                <div class="runbook-shell">
+                  <section class="runbook-hero">
+                    <div class="runbook-brief">
+                      <span class="mini-label" id="runbook-mode">Math lane</span>
+                      <h4 id="runbook-objective">Proof and Computation Review</h4>
+                      <p id="runbook-standard">Ground every result in reproducible evidence.</p>
+                    </div>
+                    <dl class="runbook-facts" aria-label="Current claim state">
+                      <div>
+                        <dt>Claim</dt>
+                        <dd id="runbook-claim">No claim selected.</dd>
+                      </div>
+                      <div>
+                        <dt>Trust</dt>
+                        <dd id="runbook-trust">unsupported</dd>
+                      </div>
+                    </dl>
                   </section>
                   <section class="runbook-next">
-                    <span class="mini-label">Next grounded action</span>
-                    <strong id="runbook-stop-rule">Run the smallest relevant verifier.</strong>
+                    <div>
+                      <span class="mini-label">Next verifier</span>
+                      <strong id="runbook-stop-rule">Run the smallest relevant verifier.</strong>
+                    </div>
                     <code id="runbook-next-command">theorem ask --json</code>
                   </section>
+                  <div class="runbook-grid" aria-label="Lane work plan">
+                    <section class="runbook-card runbook-card-wide">
+                      <h4>Workflow</h4>
+                      <ol id="runbook-loop"></ol>
+                    </section>
+                    <section class="runbook-card">
+                      <h4>Evidence Inputs</h4>
+                      <ul id="runbook-ledger"></ul>
+                    </section>
+                    <section class="runbook-card runbook-warning">
+                      <h4>Do Not Claim</h4>
+                      <ul id="runbook-stop-rules"></ul>
+                    </section>
+                  </div>
                 </div>
-                <div class="runbook-grid">
-                  <section class="runbook-card runbook-card-wide">
-                    <h4>Work Pattern</h4>
-                    <ol id="runbook-loop"></ol>
-                  </section>
-                  <section class="runbook-card">
-                    <h4>Grounded Evidence</h4>
-                    <ul id="runbook-ledger"></ul>
-                  </section>
-                  <section class="runbook-card">
-                    <h4>Stop Conditions</h4>
-                    <ul id="runbook-stop-rules"></ul>
-                  </section>
+                <div class="runbook-utility-row">
+                  <details class="runbook-packet-card">
+                    <summary>Agent packet preview</summary>
+                    <pre id="runbook-packet" aria-label="Agent packet"></pre>
+                  </details>
+                  <details class="run-command-details">
+                    <summary>CLI and agent routes</summary>
+                    <section class="agent-route-strip run-command-strip" aria-label="Agent and CLI coverage">
+                      <div class="route-pill route-primary">
+                        <span id="route-lane">Math lane</span>
+                        <strong id="route-protocol">Proof and Computation Review</strong>
+                      </div>
+                      <div class="route-pill">
+                        <span>Receipt</span>
+                        <code id="route-receipt">theorem ask --json</code>
+                      </div>
+                      <div class="route-pill">
+                        <span>Replay</span>
+                        <code id="route-replay">theorem replay</code>
+                      </div>
+                      <div class="route-pill">
+                        <span>Report</span>
+                        <code id="route-report">theorem render</code>
+                      </div>
+                    </section>
+                  </details>
                 </div>
-                <details class="runbook-packet-card">
-                  <summary>Agent packet preview</summary>
-                  <pre id="runbook-packet" aria-label="Agent packet"></pre>
-                </details>
-                <details class="run-command-details">
-                  <summary>CLI and agent routes</summary>
-                  <section class="agent-route-strip run-command-strip" aria-label="Agent and CLI coverage">
-                    <div class="route-pill route-primary">
-                      <span id="route-lane">Math lane</span>
-                      <strong id="route-protocol">Proof and Computation Review</strong>
-                    </div>
-                    <div class="route-pill">
-                      <span>Receipt</span>
-                      <code id="route-receipt">theorem ask --json</code>
-                    </div>
-                    <div class="route-pill">
-                      <span>Replay</span>
-                      <code id="route-replay">theorem replay</code>
-                    </div>
-                    <div class="route-pill">
-                      <span>Report</span>
-                      <code id="route-report">theorem render</code>
-                    </div>
-                  </section>
-                </details>
               </section>
 
               <section class="surface-panel" id="surface-checks" role="tabpanel" aria-labelledby="tab-checks" data-surface-panel="checks" tabindex="0" aria-label="Verification checks" hidden>

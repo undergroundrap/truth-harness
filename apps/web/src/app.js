@@ -192,6 +192,8 @@ const surfaceStatus = document.querySelector("#surface-status");
 const runbookObjective = document.querySelector("#runbook-objective");
 const runbookMode = document.querySelector("#runbook-mode");
 const runbookStandard = document.querySelector("#runbook-standard");
+const runbookClaim = document.querySelector("#runbook-claim");
+const runbookTrust = document.querySelector("#runbook-trust");
 const runbookStopRule = document.querySelector("#runbook-stop-rule");
 const runbookNextCommand = document.querySelector("#runbook-next-command");
 const runbookLoop = document.querySelector("#runbook-loop");
@@ -916,6 +918,8 @@ function renderRunbook(receipt) {
   runbookObjective.textContent = packet.objective;
   runbookMode.textContent = `${packet.lane} lane`;
   runbookStandard.textContent = packet.claimStandard;
+  runbookClaim.textContent = packet.currentClaim;
+  runbookTrust.textContent = packet.currentTrust;
   runbookStopRule.textContent = packet.nextAction;
   runbookNextCommand.textContent = packet.commands.next;
   runbookLoop.innerHTML = packet.loop.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
