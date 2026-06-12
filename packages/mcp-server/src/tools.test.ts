@@ -7,8 +7,11 @@ import {
   handleTheoremBenchmarkCompare,
   handleTheoremBenchmarkList,
   handleTheoremBenchmarkRun,
+  handleTheoremClaimAdd,
   handleTheoremClaimChart,
   handleTheoremClaimChartList,
+  handleTheoremClaimList,
+  handleTheoremClaimShow,
   handleTheoremCodeRun,
   handleTheoremCodeRunList,
   handleTheoremCodeSandboxStatus,
@@ -97,6 +100,46 @@ describe("MCP tool handlers", () => {
 
     expect(result.error).toBe(true);
     expect(result.receipt.trust).toBe("unverified");
+  });
+
+  it("writes and reads claim ledger records for agents", async () => {
+    const root = await tempRoot();
+    process.env.THEOREM_WORKBENCH_ROOT = root;
+    await handleTheoremWorkspaceInit({ name: "MCP Claim Lab" });
+
+    const base = await handleTheoremClaimAdd({
+      statement: "3 / 4 converts to 6 / 8.",
+      domain: "math",
+      trust: "exact-computed",
+      tags: ["fractions"],
+      evidenceRefs: [{ kind: "other", ref: "run_common_denominator", trust: "exact-computed" }]
+    });
+    const derived = await handleTheoremClaimAdd({
+      statement: "3 / 4 + 5 / 8 equals 11 / 8.",
+      domain: "math",
+      trust: "exact-computed",
+      dependsOn: [base.claim.claimId],
+      evidenceRefs: [
+        { kind: "claim", ref: base.claim.claimId, trust: "exact-computed" },
+        { kind: "other", ref: "run_fraction_sum", trust: "exact-computed" }
+      ]
+    });
+    const list = await handleTheoremClaimList({ domain: "math" });
+    const shown = await handleTheoremClaimShow({ claimRef: derived.claim.claimId });
+    const validation = await handleTheoremWorkspaceValidate({});
+
+    expect(base.claim.claimId).toMatch(/^claim_[a-f0-9]{16}$/);
+    expect(derived.claim.dependsOn).toEqual([base.claim.claimId]);
+    expect(derived.claim.finalization.readyForNarrowClaim).toBe(true);
+    expect(list.total).toBe(2);
+    expect(list.graph.edges).toContainEqual({
+      from: base.claim.claimId,
+      to: derived.claim.claimId,
+      kind: "depends-on"
+    });
+    expect(shown.claimId).toBe(derived.claim.claimId);
+    expect(validation.passed).toBe(true);
+    expect(validation.summary.byKind.claims).toBe(2);
   });
 
   it("reports local proof backend readiness for agents", () => {

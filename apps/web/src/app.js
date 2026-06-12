@@ -447,9 +447,9 @@ const capabilityLedgerRows = [
     category: "Provenance",
     compare: "DVC / DataLad / MLflow",
     status: "ahead",
-    theorem: "Claim-level receipts, snapshots, replay commands, activity log, trust labels, and local store.",
-    gap: "No large artifact pointer strategy or visual diff/rollback yet.",
-    next: "Make claim chains git-like: dependencies, versions, diffs, revert, and bundle export."
+    theorem: "Claim ledger records now have ids, tags, dependencies, supersession links, verification ladders, finalization gates, snapshots, receipts, and replay commands.",
+    gap: "No visual diff/rollback UI or large artifact pointer strategy yet.",
+    next: "Promote every web result into a claim record, then add graph diff, revert, and bundle export."
   },
   {
     category: "Scientific RAG",
@@ -487,6 +487,7 @@ const runbookLoopSteps = [
   "Export a reviewer packet with commands, receipts, limitations, and unanswered questions."
 ];
 const runbookLedgerItems = [
+  "claim ledger records: exact statement, claim id, dependencies, supersession, tags, trust, open checks, and report packet",
   "model-context packets: exact prompt context, target model, privacy disclosure, and approval state",
   "receipts: mathematical claims, proof checks, SMT/CAS runs, refutations, and replay commands",
   "sources: local corpus hits, page spans, quotes, DOI or file hash metadata, and entailment notes",

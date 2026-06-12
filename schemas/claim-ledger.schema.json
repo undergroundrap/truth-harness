@@ -1,0 +1,265 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theorem-workbench.local/schemas/claim-ledger.schema.json",
+  "title": "Theorem Workbench Claim Ledger Record",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "claimId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "statement",
+    "normalizedStatement",
+    "domain",
+    "status",
+    "trust",
+    "tags",
+    "dependsOn",
+    "supersedes",
+    "authors",
+    "evidenceRefs",
+    "verification",
+    "finalization",
+    "privacy",
+    "warnings",
+    "markdown"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "theorem.claim.v0"
+    },
+    "claimId": {
+      "type": "string",
+      "pattern": "^claim_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^tw_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "statement": {
+      "type": "string",
+      "minLength": 1
+    },
+    "normalizedStatement": {
+      "type": "string",
+      "minLength": 1
+    },
+    "domain": {
+      "$ref": "#/$defs/domain"
+    },
+    "status": {
+      "enum": ["active", "superseded", "retracted"]
+    },
+    "trust": {
+      "$ref": "#/$defs/trust"
+    },
+    "tags": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "dependsOn": {
+      "$ref": "#/$defs/claimRefs"
+    },
+    "supersedes": {
+      "$ref": "#/$defs/claimRefs"
+    },
+    "derivedBy": {
+      "type": "string"
+    },
+    "authors": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidenceRef"
+      }
+    },
+    "verification": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/verificationStep"
+      },
+      "minItems": 1
+    },
+    "finalization": {
+      "type": "object",
+      "required": ["strongestTrust", "readyForNarrowClaim", "openChecks", "summary"],
+      "properties": {
+        "strongestTrust": {
+          "$ref": "#/$defs/trust"
+        },
+        "readyForNarrowClaim": {
+          "type": "boolean"
+        },
+        "openChecks": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "markdown": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "domain": {
+      "enum": [
+        "math",
+        "sources",
+        "code",
+        "data",
+        "writing",
+        "physics",
+        "biology",
+        "chemistry",
+        "finance",
+        "hardware",
+        "quantum",
+        "security",
+        "patent",
+        "general"
+      ]
+    },
+    "trust": {
+      "enum": [
+        "proved",
+        "exact-computed",
+        "bounded-numeric",
+        "smt-checked",
+        "dimension-checked",
+        "source-cited",
+        "cross-checked",
+        "unverified",
+        "refuted"
+      ]
+    },
+    "claimRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^claim_[a-f0-9]{16}$"
+      },
+      "uniqueItems": true
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "evidenceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "claim",
+            "receipt",
+            "artifact",
+            "source",
+            "literature",
+            "notebook",
+            "notebook-run",
+            "code-run",
+            "benchmark",
+            "disclosure",
+            "simulation",
+            "experiment",
+            "vault",
+            "audit",
+            "snapshot",
+            "review",
+            "validation",
+            "model-context",
+            "proof",
+            "smt",
+            "invention",
+            "claim-chart",
+            "discovery-package",
+            "other"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "trust": {
+          "$ref": "#/$defs/trust"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "verificationStep": {
+      "type": "object",
+      "required": ["stage", "status", "evidenceRefs", "summary"],
+      "properties": {
+        "stage": {
+          "enum": ["claim-stated", "exact-or-computed", "source-or-citation", "independent-check", "formal-proof", "human-review"]
+        },
+        "status": {
+          "enum": ["satisfied", "waiting", "blocked", "not-applicable"]
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

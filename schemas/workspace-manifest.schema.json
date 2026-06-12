@@ -59,6 +59,7 @@
       "type": "object",
       "required": [
         "receipts",
+        "claims",
         "artifacts",
         "indexes",
         "findings",
@@ -84,6 +85,9 @@
       "properties": {
         "receipts": {
           "const": ".theorem-workbench/receipts"
+        },
+        "claims": {
+          "const": ".theorem-workbench/claims"
         },
         "artifacts": {
           "const": ".theorem-workbench/artifacts"

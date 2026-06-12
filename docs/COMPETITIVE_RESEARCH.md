@@ -52,6 +52,8 @@ The app should feel like Codex for serious research, but the primary unit is not
 
 This turns Claude, Codex, local models, and future frontier systems into workers inside a reproducible research harness instead of opaque answer machines.
 
+The unique layer is the claim ledger. Theorem should not claim that its first-party engines are better than specialized CAS, proof assistants, notebooks, or RAG systems. The claim is stronger and more defensible: Theorem coordinates those engines into local claim records with dependencies, supersession, trust labels, verifier ladders, and reportable evidence trails that agents can query through CLI/MCP.
+
 See [PARITY_LEDGER.md](PARITY_LEDGER.md) for the current scored parity targets, launch rule, and naming decision. The short version: keep **Theorem Workbench** as the public name, use `theorem` as the CLI shorthand, and do not claim the product beats specialized tools until the matching parity gate is implemented and benchmarked.
 
 ## Differentiators

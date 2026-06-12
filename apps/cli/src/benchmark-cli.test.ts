@@ -425,6 +425,70 @@ describe("benchmark CLI", () => {
     expect(comparisonJson.result.jsonPath).toContain(".theorem-workbench");
     expect(listAfterCompare.total).toBe(3);
   });
+
+  it("writes, lists, and shows claim ledger records", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+
+    const base = await runCli([
+      "claim",
+      "add",
+      "3 / 4 converts to 6 / 8",
+      "--workspace",
+      root,
+      "--domain",
+      "math",
+      "--trust",
+      "exact-computed",
+      "--tag",
+      "fractions",
+      "--evidence",
+      "other:run_common_denominator",
+      "--json"
+    ]);
+    const baseJson = JSON.parse(base.stdout) as { claim: { claimId: string; trust: string } };
+    const derived = await runCli([
+      "claim",
+      "add",
+      "3 / 4 + 5 / 8 equals 11 / 8",
+      "--workspace",
+      root,
+      "--domain",
+      "math",
+      "--trust",
+      "exact-computed",
+      "--depends-on",
+      baseJson.claim.claimId,
+      "--evidence",
+      `claim:${baseJson.claim.claimId}`,
+      "--evidence",
+      "other:run_fraction_sum",
+      "--json"
+    ]);
+    const derivedJson = JSON.parse(derived.stdout) as {
+      claim: { claimId: string; dependsOn: string[]; finalization: { readyForNarrowClaim: boolean } };
+    };
+    const list = JSON.parse((await runCli(["claim", "list", root, "--json"])).stdout) as {
+      total: number;
+      graph: { edges: Array<{ from: string; to: string; kind: string }> };
+    };
+    const shown = JSON.parse(
+      (await runCli(["claim", "show", derivedJson.claim.claimId, "--workspace", root, "--json"])).stdout
+    ) as { claimId: string; dependsOn: string[] };
+
+    expect(base.exitCode).toBe(0);
+    expect(baseJson.claim.trust).toBe("exact-computed");
+    expect(derived.exitCode).toBe(0);
+    expect(derivedJson.claim.dependsOn).toEqual([baseJson.claim.claimId]);
+    expect(derivedJson.claim.finalization.readyForNarrowClaim).toBe(true);
+    expect(list.total).toBe(2);
+    expect(list.graph.edges).toContainEqual({
+      from: baseJson.claim.claimId,
+      to: derivedJson.claim.claimId,
+      kind: "depends-on"
+    });
+    expect(shown.claimId).toBe(derivedJson.claim.claimId);
+  });
 });
 
 async function runCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {

@@ -9,8 +9,11 @@ import {
   handleTheoremBenchmarkRun,
   theoremBenchmarkCompareOutputFailsGate,
   theoremBenchmarkRunOutputFailsGate,
+  handleTheoremClaimAdd,
   handleTheoremClaimChart,
   handleTheoremClaimChartList,
+  handleTheoremClaimList,
+  handleTheoremClaimShow,
   handleTheoremCodeRun,
   handleTheoremCodeRunList,
   handleTheoremCodeSandboxStatus,
@@ -97,6 +100,143 @@ export function createTheoremMcpServer(): McpServer {
       const result = handleTheoremAsk({ problem, strict });
       return toolJson(result, { isError: result.error });
     }
+  );
+
+  const claimTrustSchema = z.enum([
+    "proved",
+    "exact-computed",
+    "bounded-numeric",
+    "smt-checked",
+    "dimension-checked",
+    "source-cited",
+    "cross-checked",
+    "unverified",
+    "refuted"
+  ]);
+  const claimDomainSchema = z.enum([
+    "math",
+    "sources",
+    "code",
+    "data",
+    "writing",
+    "physics",
+    "biology",
+    "chemistry",
+    "finance",
+    "hardware",
+    "quantum",
+    "security",
+    "patent",
+    "general"
+  ]);
+  const claimStatusSchema = z.enum(["active", "superseded", "retracted"]);
+  const claimEvidenceRefSchema = z.object({
+    kind: z.enum([
+      "claim",
+      "receipt",
+      "artifact",
+      "source",
+      "literature",
+      "notebook",
+      "notebook-run",
+      "code-run",
+      "benchmark",
+      "disclosure",
+      "simulation",
+      "experiment",
+      "vault",
+      "audit",
+      "snapshot",
+      "review",
+      "validation",
+      "model-context",
+      "proof",
+      "smt",
+      "invention",
+      "claim-chart",
+      "discovery-package",
+      "other"
+    ]),
+    ref: z.string().min(1),
+    trust: claimTrustSchema.optional(),
+    summary: z.string().optional()
+  });
+
+  server.registerTool(
+    "theorem_claim_add",
+    {
+      title: "Add Claim Ledger Record",
+      description:
+        "Write a git-like local claim record with claim id, dependencies, supersession links, tags, evidence refs, trust label, and finalization gates.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().optional().describe("Short claim title."),
+        statement: z.string().min(1).describe("Exact claim statement to record."),
+        domain: claimDomainSchema.optional().describe("Research lane/domain for filtering and review policy."),
+        status: claimStatusSchema.optional().describe("Claim lifecycle status. Defaults to active."),
+        trust: claimTrustSchema.optional().describe("Current strongest local trust label. Defaults to unverified."),
+        tags: z.array(z.string().min(1)).optional().describe("Filter tags without # prefix."),
+        dependsOn: z.array(z.string().min(1)).optional().describe("Upstream claim ids this claim depends on."),
+        supersedes: z.array(z.string().min(1)).optional().describe("Older claim ids this claim replaces or corrects."),
+        derivedBy: z.string().optional().describe("Short derivation note explaining how this claim was produced."),
+        authors: z.array(z.string().min(1)).optional().describe("Human or agent authors attached to the record."),
+        evidenceRefs: z.array(claimEvidenceRefSchema).optional().describe("Local evidence refs supporting or contextualizing the claim."),
+        nextChecks: z.array(z.string().min(1)).optional().describe("Open proof, citation, validation, or review checks.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremClaimAdd(input))
+  );
+
+  server.registerTool(
+    "theorem_claim_list",
+    {
+      title: "List Claim Ledger",
+      description:
+        "List local claim ledger records and return the dependency/supersession graph for agent follow-up.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        domain: claimDomainSchema.optional().describe("Filter by claim domain."),
+        status: claimStatusSchema.optional().describe("Filter by claim lifecycle status."),
+        trust: claimTrustSchema.optional().describe("Filter by trust label."),
+        tag: z.string().optional().describe("Filter by tag, with or without # prefix.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremClaimList(input))
+  );
+
+  server.registerTool(
+    "theorem_claim_show",
+    {
+      title: "Show Claim Ledger Record",
+      description:
+        "Read one local claim ledger record by claim id or workspace-local JSON path, including verification ladder and finalization boundary.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        claimRef: z.string().min(1).describe("Claim id or workspace-local claim JSON path.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremClaimShow(input))
   );
 
   server.registerTool(

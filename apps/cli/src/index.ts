@@ -12,6 +12,7 @@ import {
   checkSmtLibArtifact,
   createBenchmarkComparisonRecord,
   createClaimChart,
+  createClaimLedgerGraph,
   createDiscoveryPackage,
   createEvidenceAudit,
   createExperimentLogEntry,
@@ -34,6 +35,8 @@ import {
   isExperimentKind,
   isExperimentOutcome,
   isExperimentStage,
+  isClaimLedgerDomain,
+  isClaimLedgerStatus,
   isExternalDisclosureStatus,
   isInventionValidationStage,
   isLiteratureIdentifierKind,
@@ -50,6 +53,7 @@ import {
   isValidationPlanDomain,
   listBenchmarkArtifacts,
   listClaimCharts,
+  listClaimRecords,
   listCodeRuns,
   listEvidenceAudits,
   listExpertReviews,
@@ -69,6 +73,7 @@ import {
   openVaultEntry,
   parseReceiptJson,
   parseBenchmarkRunRecordJson,
+  readClaimRecord,
   renderReceipt,
   repairLocalWorkspace,
   replayReceipt,
@@ -81,6 +86,7 @@ import {
   verifyWorkspaceSnapshot,
   writeBenchmarkComparisonRecord,
   writeBenchmarkRunRecord,
+  writeClaimLedgerRecord,
   writeCodeRun,
   writeEvidenceAudit,
   writeEvidenceAuditReport,
@@ -104,6 +110,11 @@ import {
   type ClaimChart,
   type ClaimChartElementInput,
   type ClaimChartWriteResult,
+  type ClaimLedgerDomain,
+  type ClaimLedgerEvidenceRef,
+  type ClaimLedgerRecord,
+  type ClaimLedgerStatus,
+  type ClaimLedgerWriteResult,
   type CodeRunSummary,
   type CodeRunPolicyInput,
   type CodeRunWriteResult,
@@ -184,6 +195,7 @@ import {
   type WorkspaceSnapshotSummary,
   type WorkspaceSnapshotVerification,
   type WorkspaceSnapshotWriteResult,
+  type TrustLabel,
   type WorkspaceValidation
 } from "@theorem-workbench/core";
 
@@ -225,6 +237,122 @@ With npm scripts, pass ask flags after an extra separator:
     }
 
     printReceipt(receipt, options.out);
+  });
+
+const claim = program.command("claim").description("Manage git-like local claim ledger records.");
+
+claim
+  .command("add")
+  .description("Write a local claim record with lineage, evidence refs, trust label, and next checks.")
+  .argument("<statement...>", "Claim statement")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--title <title>", "Short claim title")
+  .option("--domain <domain>", "Claim lane/domain")
+  .option("--status <status>", "active, superseded, or retracted", "active")
+  .option("--trust <label>", "Current strongest trust label", "unverified")
+  .option("--tag <tag>", "Search/filter tag. Repeatable", collectRepeated, [])
+  .option("--depends-on <claim>", "Upstream claim id. Repeatable", collectRepeated, [])
+  .option("--supersedes <claim>", "Claim id this record supersedes. Repeatable", collectRepeated, [])
+  .option("--derived-by <note>", "Derivation note explaining how this claim was produced")
+  .option("--author <name>", "Human or agent author; repeatable", collectRepeated, [])
+  .option("--evidence <ref>", "Evidence ref such as claim:id, receipt:path, proof:id, smt:id, review:id, validation:id, source:path, or other:ref. Repeatable", collectRepeated, [])
+  .option("--next-check <text>", "Open validation/proof/review check. Repeatable", collectRepeated, [])
+  .option("--json", "Print the full claim write JSON")
+  .action(
+    async (
+      statementTokens: string[],
+      options: {
+        workspace: string;
+        title?: string;
+        domain?: string;
+        status: string;
+        trust: string;
+        tag: string[];
+        dependsOn: string[];
+        supersedes: string[];
+        derivedBy?: string;
+        author: string[];
+        evidence: string[];
+        nextCheck: string[];
+        json?: boolean;
+      }
+    ) => {
+      const result = await writeClaimLedgerRecord({
+        rootPath: options.workspace,
+        title: options.title,
+        statement: statementTokens.join(" "),
+        domain: options.domain ? parseClaimLedgerDomain(options.domain) : undefined,
+        status: parseClaimLedgerStatus(options.status),
+        trust: parseTrustLabel(options.trust),
+        tags: options.tag,
+        dependsOn: options.dependsOn,
+        supersedes: options.supersedes,
+        derivedBy: options.derivedBy,
+        authors: options.author,
+        evidenceRefs: options.evidence.map(parseClaimLedgerEvidenceRef),
+        nextChecks: options.nextCheck
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printClaimLedgerWrite(result);
+    }
+  );
+
+claim
+  .command("list")
+  .description("List local claim ledger records, optionally filtered by domain, trust, status, or tag.")
+  .argument("[path]", "Project root path", ".")
+  .option("--domain <domain>", "Filter by claim domain")
+  .option("--status <status>", "Filter by claim status")
+  .option("--trust <label>", "Filter by trust label")
+  .option("--tag <tag>", "Filter by tag")
+  .option("--json", "Print full claim ledger JSON with graph")
+  .action(
+    async (
+      path: string,
+      options: { domain?: string; status?: string; trust?: string; tag?: string; json?: boolean }
+    ) => {
+      const domain = options.domain ? parseClaimLedgerDomain(options.domain) : undefined;
+      const status = options.status ? parseClaimLedgerStatus(options.status) : undefined;
+      const trust = options.trust ? parseTrustLabel(options.trust) : undefined;
+      const tag = options.tag?.replace(/^#/u, "").toLowerCase();
+      const claims = (await listClaimRecords(path)).filter((record) => {
+        if (domain && record.domain !== domain) return false;
+        if (status && record.status !== status) return false;
+        if (trust && record.trust !== trust) return false;
+        if (tag && !record.tags.includes(tag)) return false;
+        return true;
+      });
+      const graph = createClaimLedgerGraph(claims);
+
+      if (options.json) {
+        printJson({ total: claims.length, claims, graph });
+        return;
+      }
+
+      printClaimLedgerList(claims, graph);
+    }
+  );
+
+claim
+  .command("show")
+  .description("Show one claim ledger record by id or workspace-local JSON path.")
+  .argument("<claim>", "Claim id or workspace-local claim JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--json", "Print the full claim JSON")
+  .action(async (claimRef: string, options: { workspace: string; json?: boolean }) => {
+    const record = await readClaimRecord(options.workspace, claimRef);
+
+    if (options.json) {
+      printJson(record);
+      return;
+    }
+
+    printClaimLedgerRecord(record);
   });
 
 const bench = program.command("bench").description("Run and compare verification benchmark suites.");
@@ -2338,6 +2466,7 @@ program
     console.log("Privacy posture:");
     console.log("  receipts              ready   local-only metadata, no network access by default");
     console.log("  source-cited receipts ready   local corpus hits converted into evidence receipts");
+    console.log("  claim ledger          ready   git-like claim ids, dependencies, supersession, tags, and finalization gates");
     console.log("  literature records    ready   local paper, patent, dataset, and database-export evidence records");
     console.log("  notebook runs         ready   local notebook/script/pipeline provenance records");
     console.log("  invention logs        ready   local hypothesis/provenance records with overclaim warnings");
@@ -3174,6 +3303,83 @@ function printCodeRunList(records: CodeRunSummary[]): void {
   }
 }
 
+function printClaimLedgerWrite(result: ClaimLedgerWriteResult): void {
+  console.log(`Wrote claim ${result.claim.claimId}`);
+  console.log(`JSON: ${result.jsonPath}`);
+  console.log(`Markdown: ${result.markdownPath}`);
+  console.log(`Domain/status/trust: ${result.claim.domain}/${result.claim.status}/${result.claim.trust}`);
+  console.log(`Ready for narrow claim: ${String(result.claim.finalization.readyForNarrowClaim)}`);
+  console.log("");
+  console.log(result.claim.title);
+  console.log(result.claim.statement);
+
+  if (result.claim.dependsOn.length > 0 || result.claim.supersedes.length > 0) {
+    console.log("");
+    console.log(`Depends on: ${result.claim.dependsOn.join(", ") || "none"}`);
+    console.log(`Supersedes: ${result.claim.supersedes.join(", ") || "none"}`);
+  }
+
+  if (result.claim.finalization.openChecks.length > 0) {
+    console.log("");
+    console.log("Open checks:");
+    for (const check of result.claim.finalization.openChecks) {
+      console.log(`  ${check}`);
+    }
+  }
+}
+
+function printClaimLedgerList(
+  claims: ClaimLedgerRecord[],
+  graph: ReturnType<typeof createClaimLedgerGraph>
+): void {
+  console.log(`Theorem claim ledger: ${claims.length} claims, ${graph.edges.length} links`);
+
+  for (const claim of claims) {
+    console.log("");
+    console.log(`${claim.claimId} ${claim.updatedAt}`);
+    console.log(`  ${claim.title}`);
+    console.log(`  Domain/status/trust: ${claim.domain}/${claim.status}/${claim.trust}`);
+    console.log(`  Tags: ${claim.tags.map((tag) => `#${tag}`).join(", ") || "none"}`);
+    console.log(`  Depends on: ${claim.dependsOn.join(", ") || "none"}`);
+    console.log(`  Ready: ${String(claim.finalization.readyForNarrowClaim)}; open checks: ${claim.finalization.openChecks.length}`);
+  }
+
+  if (graph.warnings.length > 0) {
+    console.log("");
+    console.log("Graph warnings:");
+    for (const warning of graph.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printClaimLedgerRecord(claim: ClaimLedgerRecord): void {
+  console.log(`${claim.claimId} ${claim.updatedAt}`);
+  console.log(claim.title);
+  console.log("");
+  console.log(claim.statement);
+  console.log("");
+  console.log(`Domain/status/trust: ${claim.domain}/${claim.status}/${claim.trust}`);
+  console.log(`Ready for narrow claim: ${String(claim.finalization.readyForNarrowClaim)}`);
+  console.log(`Tags: ${claim.tags.map((tag) => `#${tag}`).join(", ") || "none"}`);
+  console.log(`Depends on: ${claim.dependsOn.join(", ") || "none"}`);
+  console.log(`Supersedes: ${claim.supersedes.join(", ") || "none"}`);
+
+  console.log("");
+  console.log("Verification ladder:");
+  for (const step of claim.verification) {
+    console.log(`  ${step.stage}: ${step.status} - ${step.summary}`);
+  }
+
+  if (claim.finalization.openChecks.length > 0) {
+    console.log("");
+    console.log("Open checks:");
+    for (const check of claim.finalization.openChecks) {
+      console.log(`  ${check}`);
+    }
+  }
+}
+
 function printSimulationLogWrite(result: SimulationLogWriteResult): void {
   console.log(`Wrote simulation log ${result.entry.simulationId}`);
   console.log(`Path: ${result.path}`);
@@ -3930,6 +4136,80 @@ function parseValidationGateInput(value: string): ValidationGateInput {
 
 function parseClaimChartElement(value: string): ClaimChartElementInput {
   return { text: value };
+}
+
+function parseClaimLedgerDomain(value: string): ClaimLedgerDomain {
+  if (isClaimLedgerDomain(value)) {
+    return value;
+  }
+
+  throw new Error(`Unsupported claim ledger domain ${JSON.stringify(value)}.`);
+}
+
+function parseClaimLedgerStatus(value: string): ClaimLedgerStatus {
+  if (isClaimLedgerStatus(value)) {
+    return value;
+  }
+
+  throw new Error(`Unsupported claim ledger status ${JSON.stringify(value)}.`);
+}
+
+function parseTrustLabel(value: string): TrustLabel {
+  if (
+    value === "proved" ||
+    value === "exact-computed" ||
+    value === "bounded-numeric" ||
+    value === "smt-checked" ||
+    value === "dimension-checked" ||
+    value === "source-cited" ||
+    value === "cross-checked" ||
+    value === "unverified" ||
+    value === "refuted"
+  ) {
+    return value;
+  }
+
+  throw new Error(`Unsupported trust label ${JSON.stringify(value)}.`);
+}
+
+function parseClaimLedgerEvidenceRef(value: string): ClaimLedgerEvidenceRef {
+  const separator = value.indexOf(":");
+  if (separator <= 0) {
+    return { kind: "other", ref: value };
+  }
+
+  const maybeKind = value.slice(0, separator);
+  const ref = value.slice(separator + 1);
+  if (
+    maybeKind === "claim" ||
+    maybeKind === "receipt" ||
+    maybeKind === "artifact" ||
+    maybeKind === "source" ||
+    maybeKind === "literature" ||
+    maybeKind === "notebook" ||
+    maybeKind === "notebook-run" ||
+    maybeKind === "code-run" ||
+    maybeKind === "benchmark" ||
+    maybeKind === "disclosure" ||
+    maybeKind === "simulation" ||
+    maybeKind === "experiment" ||
+    maybeKind === "vault" ||
+    maybeKind === "audit" ||
+    maybeKind === "snapshot" ||
+    maybeKind === "review" ||
+    maybeKind === "validation" ||
+    maybeKind === "model-context" ||
+    maybeKind === "proof" ||
+    maybeKind === "smt" ||
+    maybeKind === "invention" ||
+    maybeKind === "claim-chart" ||
+    maybeKind === "discovery-package" ||
+    maybeKind === "other"
+  ) {
+    return { kind: maybeKind, ref };
+  }
+
+  return { kind: "other", ref: value };
 }
 
 function parseEvidenceRef(value: string): InventionEvidenceRef {

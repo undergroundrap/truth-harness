@@ -8,6 +8,7 @@ export const LOCAL_WORKSPACE_MANIFEST = "project.json";
 
 export type LocalWorkspaceDirectory =
   | "receipts"
+  | "claims"
   | "artifacts"
   | "indexes"
   | "findings"
@@ -48,6 +49,7 @@ export interface LocalWorkspaceManifest {
 
 const DEFAULT_WORKSPACE_DIRECTORIES: Record<LocalWorkspaceDirectory, string> = {
   receipts: ".theorem-workbench/receipts",
+  claims: ".theorem-workbench/claims",
   artifacts: ".theorem-workbench/artifacts",
   indexes: ".theorem-workbench/indexes",
   findings: ".theorem-workbench/findings",

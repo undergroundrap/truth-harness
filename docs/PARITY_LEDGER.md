@@ -4,6 +4,8 @@ Date: 2026-06-12
 
 This ledger turns "make it better than existing tools" into product gates. Theorem Workbench should not claim superiority by vibe. It should earn it by matching the best tools where they are already excellent, then adding the local-first evidence layer they do not share.
 
+The current differentiator is the claim ledger: specialized tools compute, prove, retrieve, execute, or track artifacts, but Theorem turns the human claim into a first-class local record with dependencies, supersession, tags, trust labels, evidence refs, open checks, and report output.
+
 ## Naming Decision
 
 Use **Theorem Workbench** as the public product name.
@@ -21,7 +23,7 @@ Use **Theorem Workbench** as the public product name.
 | Open math | SageMath / SymPy | Broad algebra, calculus, number theory, combinatorics, numerical methods, plotting, package ecosystem. | Adapter-first architecture with evidence profiles instead of pretending one engine is truth. | Engine manifests, version capture, capability probes, golden tests, and fallback explanations. |
 | Formal proof | Lean / Coq / Isabelle | Concrete proof objects accepted by a trusted checker. | Strict `proved` label policy and proof-attempt receipts for failed, partial, and accepted artifacts. | Make Lean attempts visible as statement -> attempt -> error -> repair -> accepted chain. |
 | Notebooks | JupyterLab | Files, notebooks, code/prose/output, rich media, kernels, extensions, export. | Notebook output becomes evidence with provenance and trust boundaries instead of a free-floating artifact. | Observed notebook-run records with input/output hashes before a full kernel UI. |
-| Provenance | DVC / DataLad / MLflow | Dataset/file versioning, pipelines, experiments, metrics, plots, reproducibility. | Claim-level evidence graph with receipts, snapshots, activity log, model context, and reports. | Git-like claim chains: dependencies, versions, diffs, revert, bundle export. |
+| Provenance | DVC / DataLad / MLflow | Dataset/file versioning, pipelines, experiments, metrics, plots, reproducibility. | Claim ledger records now preserve ids, dependencies, supersession, tags, trust, evidence refs, verifier ladders, receipts, snapshots, activity log, model context, and reports. | Visual graph diff, revert, and bundle export. |
 | Scientific RAG | PaperQA-style literature tools | Local or indexed corpus search, citations, metadata, answer history. | Citations become evidence receipts and cannot upgrade a claim beyond source support. | Citation-span verifier, contradiction checks, DOI metadata, reusable indexes. |
 | Lab record | eLabFTW-style notebooks | Identity, timestamps, signatures, export, permissions, protocols. | Computation, proof, RAG, simulation, and agent actions share one local evidence ledger. | Signed finalized reports and reviewer packets with artifact bundles. |
 | Agent workflow | Claude / Codex alone | Strong model reasoning, code execution, search, file edits, chat memory. | Agent actions flow through local receipts, safety status, MCP/CLI/API routes, and human-readable review surfaces. | Full frontend parity for every CLI/MCP route with identical artifact contracts. |
@@ -38,7 +40,7 @@ It should not claim to beat WolframAlpha, SageMath, Lean, JupyterLab, or PaperQA
 
 The first hard moat is not breadth. It is the chain:
 
-1. A claim is parsed into a narrow typed statement.
+1. A claim is recorded as a local ledger record with id, tags, dependencies, supersession links, trust, evidence refs, and open checks.
 2. The smallest local verifier runs first.
 3. Every tool result becomes a receipt.
 4. Every model request has an inspectable context packet.

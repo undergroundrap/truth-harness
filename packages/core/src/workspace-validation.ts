@@ -105,6 +105,13 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
     idKey: "runId",
     required: true
   },
+  claims: {
+    kind: "claims",
+    schemaVersion: "theorem.claim.v0",
+    schemaFile: "claim-ledger.schema.json",
+    idKey: "claimId",
+    required: true
+  },
   indexes: {
     kind: "indexes",
     schemaVersion: "theorem.corpus.v0",
@@ -826,6 +833,11 @@ function collectWorkspaceReferences(value: unknown, sourcePath: string): Workspa
         continue;
       }
 
+      if ((key === "dependsOn" || key === "supersedes") && Array.isArray(entry)) {
+        collectStringRefs(entry, sourcePath, entryPath, "claim", refs);
+        continue;
+      }
+
       if (key === "selectedContextRefs" && Array.isArray(entry)) {
         collectStringRefs(entry, sourcePath, entryPath, undefined, refs);
         continue;
@@ -939,6 +951,8 @@ function kindToArtifactKind(kind: string | undefined): WorkspaceValidationArtifa
   switch (kind) {
     case "receipt":
       return "receipts";
+    case "claim":
+      return "claims";
     case "proof":
     case "proof-check":
       return "proofs";

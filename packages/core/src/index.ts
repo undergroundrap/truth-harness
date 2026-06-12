@@ -39,6 +39,19 @@ export {
 } from "./code-run.js";
 export { getCodeRunSandboxStatus, sandboxMeasurementForStatus } from "./sandbox.js";
 export {
+  CLAIM_LEDGER_DOMAINS,
+  CLAIM_LEDGER_STATUSES,
+  CLAIM_VERIFICATION_STAGES,
+  createClaimLedgerGraph,
+  createClaimLedgerRecord,
+  isClaimLedgerDomain,
+  isClaimLedgerStatus,
+  listClaimRecords,
+  readClaimRecord,
+  renderClaimLedgerMarkdown,
+  writeClaimLedgerRecord
+} from "./claim-ledger.js";
+export {
   createClaimChart,
   listClaimCharts,
   renderClaimChartMarkdown,
@@ -269,6 +282,20 @@ export type {
   CodeRunSandboxProvider,
   CodeRunSandboxStatus
 } from "./sandbox.js";
+export type {
+  ClaimLedgerDomain,
+  ClaimLedgerEvidenceRef,
+  ClaimLedgerGraph,
+  ClaimLedgerGraphEdge,
+  ClaimLedgerGraphNode,
+  ClaimLedgerRecord,
+  ClaimLedgerStatus,
+  ClaimLedgerWriteResult,
+  ClaimVerificationStage,
+  ClaimVerificationStageStatus,
+  ClaimVerificationStep,
+  CreateClaimLedgerRecordInput
+} from "./claim-ledger.js";
 export type {
   ClaimChart,
   ClaimChartElement,

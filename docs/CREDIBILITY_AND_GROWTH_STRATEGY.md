@@ -49,6 +49,16 @@ The aspirational sentence is:
 
 > Theorem Workbench helps researchers and learners turn mathematical ideas into replayable evidence trails.
 
+## Moat Statement
+
+The defensible wedge is not "chat with math." It is:
+
+> A local claim ledger plus verifier ladder for AI-assisted reasoning.
+
+The claim ledger makes research feel more like a codebase: each claim has an id, tags, dependencies, supersession links, evidence refs, trust label, open checks, and report output. The verifier ladder makes the current truth boundary visible: stated, computed, cited, independently checked, formally proved, or human reviewed.
+
+That is why Theorem Workbench can be different from standalone CAS, notebooks, proof assistants, RAG apps, and chat agents. Those tools remain valuable engines. Theorem coordinates them into a durable local evidence graph that agents and humans can inspect together.
+
 ## Minimum Credibility Bar
 
 If we want real mathematicians and physicists to take it seriously, the system needs these rules from day one:

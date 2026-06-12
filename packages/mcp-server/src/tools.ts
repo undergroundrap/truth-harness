@@ -7,6 +7,7 @@ import {
   benchmarkRunFailsGate,
   checkLeanProofArtifact,
   checkSmtLibArtifact,
+  createClaimLedgerGraph,
   createClaimChart,
   createBenchmarkComparisonRecord,
   createDiscoveryPackage,
@@ -21,6 +22,8 @@ import {
   createSimulationLogEntry,
   createSourceCitationReceipt,
   createValidationPlan,
+  isClaimLedgerDomain,
+  isClaimLedgerStatus,
   getCodeRunSandboxStatus,
   getLocalWorkspaceStatus,
   getProofBackendStatus,
@@ -28,6 +31,7 @@ import {
   ingestLocalCorpus,
   initLocalWorkspace,
   addResearchSessionCheckpoint,
+  listClaimRecords,
   listBenchmarkArtifacts,
   listExpertReviews,
   listClaimCharts,
@@ -49,6 +53,7 @@ import {
   parseReceiptJson,
   parseBenchmarkRunRecordJson,
   repairLocalWorkspace,
+  readClaimRecord,
   renderEvidenceAuditMarkdown,
   sealVaultFile,
   solveSmtProblem,
@@ -60,6 +65,7 @@ import {
   searchLocalCorpus,
   writeExpertReview,
   writeClaimChart,
+  writeClaimLedgerRecord,
   writeLeanProofCheckRecord,
   writeSmtCheckRecord,
   writeBenchmarkComparisonRecord,
@@ -81,6 +87,11 @@ import {
   type ClaimChart,
   type ClaimChartElementInput,
   type ClaimChartWriteResult,
+  type ClaimLedgerDomain,
+  type ClaimLedgerEvidenceRef,
+  type ClaimLedgerRecord,
+  type ClaimLedgerStatus,
+  type ClaimLedgerWriteResult,
   type CodeRunPolicyInput,
   type CodeRunSandboxStatus,
   type CodeRunSummary,
@@ -162,6 +173,7 @@ import {
   type WorkspaceSnapshotSummary,
   type WorkspaceSnapshotVerification,
   type WorkspaceSnapshotWriteResult,
+  type TrustLabel,
   type WorkspaceValidation
 } from "@theorem-workbench/core";
 
@@ -174,6 +186,41 @@ export interface TheoremAskOutput {
   error: boolean;
   receipt: Receipt;
   message: string;
+}
+
+export interface TheoremClaimAddInput {
+  workspacePath?: string;
+  title?: string;
+  statement: string;
+  domain?: ClaimLedgerDomain;
+  status?: ClaimLedgerStatus;
+  trust?: TrustLabel;
+  tags?: string[];
+  dependsOn?: string[];
+  supersedes?: string[];
+  derivedBy?: string;
+  authors?: string[];
+  evidenceRefs?: ClaimLedgerEvidenceRef[];
+  nextChecks?: string[];
+}
+
+export interface TheoremClaimListInput {
+  workspacePath?: string;
+  domain?: ClaimLedgerDomain;
+  status?: ClaimLedgerStatus;
+  trust?: TrustLabel;
+  tag?: string;
+}
+
+export interface TheoremClaimListOutput {
+  total: number;
+  claims: ClaimLedgerRecord[];
+  graph: ReturnType<typeof createClaimLedgerGraph>;
+}
+
+export interface TheoremClaimShowInput {
+  workspacePath?: string;
+  claimRef: string;
 }
 
 export interface TheoremBenchmarkRunInput {
@@ -760,6 +807,45 @@ export function handleTheoremAsk(input: TheoremAskInput): TheoremAskOutput {
       ? "Strict mode failed because the receipt is unverified."
       : `Receipt ${receipt.runId} completed with trust ${receipt.trust}.`
   };
+}
+
+export async function handleTheoremClaimAdd(input: TheoremClaimAddInput): Promise<ClaimLedgerWriteResult> {
+  return writeClaimLedgerRecord({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    title: input.title,
+    statement: input.statement,
+    domain: input.domain,
+    status: input.status,
+    trust: input.trust,
+    tags: input.tags,
+    dependsOn: input.dependsOn,
+    supersedes: input.supersedes,
+    derivedBy: input.derivedBy,
+    authors: input.authors,
+    evidenceRefs: input.evidenceRefs,
+    nextChecks: input.nextChecks
+  });
+}
+
+export async function handleTheoremClaimList(input: TheoremClaimListInput): Promise<TheoremClaimListOutput> {
+  const tag = input.tag?.replace(/^#/u, "").toLowerCase();
+  const claims = (await listClaimRecords(resolveWorkspaceRoot(input.workspacePath))).filter((claim) => {
+    if (input.domain && claim.domain !== input.domain) return false;
+    if (input.status && claim.status !== input.status) return false;
+    if (input.trust && claim.trust !== input.trust) return false;
+    if (tag && !claim.tags.includes(tag)) return false;
+    return true;
+  });
+
+  return {
+    total: claims.length,
+    claims,
+    graph: createClaimLedgerGraph(claims)
+  };
+}
+
+export async function handleTheoremClaimShow(input: TheoremClaimShowInput): Promise<ClaimLedgerRecord> {
+  return readClaimRecord(resolveWorkspaceRoot(input.workspacePath), input.claimRef);
 }
 
 export async function handleTheoremBenchmarkRun(

@@ -69,6 +69,8 @@ The system should never return a naked answer when it can return:
 5. A trust label for every result.
 6. Privacy metadata that states whether the run stayed local or disclosed data to an external service.
 
+The moat is the claim ledger: Theorem treats claims as first-class local artifacts, not as loose chat messages. A claim can depend on earlier claims, supersede a mistaken claim, carry tags, attach evidence refs, expose a verifier ladder, and export a Markdown review packet. This gives long mathematical and scientific work a codebase-like structure: small claims, explicit dependencies, inspectable diffs later, and no hidden final answer detached from its evidence chain.
+
 Trust labels:
 
 | Label | Meaning |
@@ -96,6 +98,7 @@ theorem-workbench/
   .theorem-workbench/      # Git-ignored local project store
     project.json           # Local-first manifest and privacy policies
     receipts/              # Receipt JSON and rendered reports
+    claims/                # Claim ledger records with dependencies, supersession, tags, trust, and review gates
     artifacts/             # Tool outputs, plots, notebooks, traces
     indexes/               # Local RAG/search indexes
     literature/            # Structured local paper, patent, dataset, and database-export records
@@ -650,6 +653,9 @@ Current MCP tools:
 | `theorem_workspace_snapshot` | Write a local provenance hash snapshot for workspace artifacts. |
 | `theorem_workspace_snapshot_list` | List local workspace snapshots. |
 | `theorem_workspace_snapshot_verify` | Verify changed, missing, or added artifacts against a snapshot. |
+| `theorem_claim_add` | Write a local claim ledger record with dependencies, supersession, evidence refs, trust label, tags, and finalization gates. |
+| `theorem_claim_list` | List/filter local claim records and return the dependency/supersession graph. |
+| `theorem_claim_show` | Read one local claim record by id or workspace-local JSON path. |
 | `theorem_research_session_start` | Start a local research runbook with budgets, evidence refs, snapshot refs, and review boundaries. |
 | `theorem_research_session_checkpoint` | Append decisions, evidence refs, snapshot refs, and next checks to a research runbook. |
 | `theorem_research_session_list` | List local research sessions and checkpoints. |
