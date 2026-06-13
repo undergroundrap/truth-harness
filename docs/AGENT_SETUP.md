@@ -19,14 +19,15 @@ node packages/mcp-server/dist/index.js
 
 ## Tools
 
-Agents should call `theorem_engine_manifest` before routing serious work through proof, SMT, CAS, code, simulation, or source workflows. The manifest is a local readiness and trust-boundary map: it can say which capabilities are ready, missing, planned, or safety-gated, but the manifest itself is not evidence for a claim. Use `theorem_verify` when an agent needs both a receipt and a verifier route/gap ledger; set `write: true` when the route should become a durable local artifact under `.theorem-workbench/routes/`. Use `theorem_ask` when a receipt alone is enough.
+Agents should call `theorem_engine_manifest` before routing serious work through proof, SMT, CAS, code, simulation, or source workflows. The manifest is a local readiness and trust-boundary map: it can say which capabilities are ready, missing, planned, or safety-gated, but the manifest itself is not evidence for a claim. Use `theorem_verify` when an agent needs both a receipt and a verifier route/gap ledger; set `write: true` when the route should become a durable local artifact under `.theorem-workbench/routes/`. Then use `theorem_route_list`, `theorem_route_show`, and `theorem_route_satisfy` as the local work loop: find open or critical-open obligations, attach accepted local evidence, and only promote the claim after the remaining gates are visible. Use `theorem_ask` when a receipt alone is enough.
 
 | Tool | Purpose |
 | --- | --- |
 | `theorem_ask` | Create a receipt for a math prompt, with optional strict mode. |
 | `theorem_verify` | Create a manifest-aware verifier route plus receipt, including used capabilities, missing verifier gaps, next actions, and conservative final trust; can write JSON plus Markdown under `.theorem-workbench/routes/`. |
-| `theorem_route_list` | List private local verifier-route records with reusable ids and paths. |
-| `theorem_route_show` | Read one persisted verifier route by route id or workspace-local JSON path. |
+| `theorem_route_list` | List private local verifier-route records with reusable ids, paths, and proof-obligation counts for open, critical-open, satisfied, and not-required gates. |
+| `theorem_route_show` | Read one persisted verifier route by route id or workspace-local JSON path, including proof obligations, next actions, and evidence already attached. |
+| `theorem_route_satisfy` | Attach accepted local evidence to a route proof obligation and rewrite the route with updated satisfied/open obligation state. |
 | `theorem_benchmark_run` | Run the seed benchmark suite or a workspace-local suite path. |
 | `theorem_benchmark_compare` | Compare two benchmark-run records and optionally write a local benchmark-comparison artifact. |
 | `theorem_benchmark_list` | List local benchmark run/comparison artifacts with reusable paths. |
