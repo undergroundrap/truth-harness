@@ -199,6 +199,7 @@ export {
   readVerifierRoute,
   renderVerifierRouteMarkdown,
   satisfyVerifierRouteObligation,
+  verifierRouteReadiness,
   writeVerifierRoute
 } from "./verifier-route.js";
 export { proveUniversalParity } from "./parity-proof.js";
@@ -482,6 +483,7 @@ export type {
   VerifierRouteEvidenceRef,
   VerifierRouteGap,
   VerifierRouteGapSeverity,
+  VerifierRouteReadiness,
   VerifierRouteStatus,
   VerifierRouteStep,
   VerifierRouteStepStatus,

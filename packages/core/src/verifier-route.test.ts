@@ -11,6 +11,7 @@ import {
   listVerifierRoutes,
   readVerifierRoute,
   satisfyVerifierRouteObligation,
+  verifierRouteReadiness,
   writeVerifierRoute
 } from "./verifier-route.js";
 
@@ -60,6 +61,12 @@ describe("verifier route", () => {
     );
     expect(route.trustBoundary.routeIsNotProof).toBe(true);
     expect(route.trustBoundary.receiptTrustIsUpperBound).toBe(true);
+    expect(verifierRouteReadiness(route)).toMatchObject({
+      readyForNarrowClaim: true,
+      strongestTrust: "exact-computed",
+      openObligations: 0,
+      criticalOpenObligations: 0
+    });
   });
 
   it("routes symbolic claims through SymPy and records independent Maxima when available", () => {
@@ -141,6 +148,17 @@ describe("verifier route", () => {
       ])
     );
     expect(route.nextActions.join(" ")).toContain("Lean");
+    const openObligations = route.proofObligations.filter((obligation) => obligation.status === "open").length;
+    const criticalOpenObligations = route.proofObligations.filter(
+      (obligation) => obligation.status === "open" && obligation.severity === "critical"
+    ).length;
+    expect(verifierRouteReadiness(route)).toMatchObject({
+      readyForNarrowClaim: false,
+      strongestTrust: "unverified",
+      openObligations,
+      criticalOpenObligations
+    });
+    expect(verifierRouteReadiness(route).summary).toContain(`Not final: ${openObligations} open obligations`);
   });
 
   it("writes, lists, reads, and validates verifier route artifacts", async () => {
@@ -164,6 +182,8 @@ describe("verifier route", () => {
 
     expect(result.jsonPath).toContain(join(".theorem-workbench", "routes"));
     expect(result.markdown).toContain(`# Verifier Route ${result.route.routeId}`);
+    expect(result.markdown).toContain("## Readiness");
+    expect(result.markdown).toContain("Ready for narrow claim: `true`");
     expect(result.markdown).toContain("## Proof Obligations");
     expect(result.route.replay).toBe("theorem verify \"compute 3 / 4 + 5 / 8\" --json");
     expect(routes).toHaveLength(1);
@@ -179,8 +199,12 @@ describe("verifier route", () => {
       notRequiredProofObligations: result.route.proofObligations.filter((obligation) => obligation.status === "not-required").length,
       criticalOpenProofObligations: result.route.proofObligations.filter((obligation) =>
         obligation.status === "open" && obligation.severity === "critical"
-      ).length
+      ).length,
+      readyForNarrowClaim: true,
+      strongestRouteTrust: "exact-computed",
+      blockingObligations: 0
     });
+    expect(routes[0].readinessSummary).toContain("Ready only as a narrow exact-computed claim");
     expect(readBack.routeId).toBe(result.route.routeId);
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.routes).toBe(1);
@@ -251,6 +275,16 @@ describe("verifier route", () => {
     ]);
     expect(satisfied.markdown).toContain("Satisfied by:");
     expect(satisfied.markdown).toContain(`proof:${proofRef}`);
+    const openObligations = satisfied.route.proofObligations.filter((candidate) => candidate.status === "open").length;
+    const criticalOpenObligations = satisfied.route.proofObligations.filter(
+      (candidate) => candidate.status === "open" && candidate.severity === "critical"
+    ).length;
+    expect(verifierRouteReadiness(satisfied.route)).toMatchObject({
+      readyForNarrowClaim: false,
+      strongestTrust: "proved",
+      openObligations,
+      criticalOpenObligations
+    });
     expect(readBack.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
       status: "satisfied",
       satisfactionSummary: "Accepted proof-check record supplies `proved` evidence for this obligation."

@@ -87,6 +87,7 @@ import {
   searchLocalCorpus,
   sealVaultFile,
   satisfyVerifierRouteObligation,
+  verifierRouteReadiness,
   solveSmtProblem,
   addResearchSessionCheckpoint,
   validateWorkspaceArtifacts,
@@ -3247,9 +3248,12 @@ function printReceipt(receipt: Receipt, outPath?: string): void {
 }
 
 function printVerifierRoute(route: VerifierRoute, outPath?: string, workspaceWrite?: VerifierRouteWriteResult): void {
+  const readiness = verifierRouteReadiness(route);
   console.log(`Theorem verifier route ${route.routeId}`);
   console.log(`Status: ${route.status}`);
   console.log(`Final trust: ${route.finalTrust}`);
+  console.log(`Readiness: ${readiness.readyForNarrowClaim ? "ready" : "not-ready"} (${readiness.strongestTrust})`);
+  console.log(`Readiness summary: ${readiness.summary}`);
   console.log(`Evidence kind: ${route.evidenceKind}`);
   console.log(`Receipt: ${route.receipt.runId}`);
   console.log(`Replay: ${route.replay}`);
@@ -3334,6 +3338,7 @@ function printVerifierRouteList(routes: VerifierRouteSummary[]): void {
     console.log(`  Used: ${route.usedCapabilities.length > 0 ? route.usedCapabilities.join(", ") : "none"}`);
     console.log(`  Gaps: ${route.gaps} (${route.criticalGaps} critical)`);
     console.log(`  Proof obligations: ${routeObligationSummary(route)}`);
+    console.log(`  Readiness: ${route.readyForNarrowClaim ? "ready" : "not-ready"} (${route.strongestRouteTrust})`);
     console.log(`  Path: ${route.path}`);
   }
 }
@@ -3390,6 +3395,7 @@ function routeObligationSummary(route: VerifierRouteSummary | VerifierRoute): st
 }
 
 function printVerifierRouteSatisfaction(result: SatisfyVerifierRouteObligationResult): void {
+  const readiness = verifierRouteReadiness(result.route);
   console.log(result.message);
   console.log(`Route: ${result.route.routeId}`);
   console.log(`Obligation: ${result.obligation.obligationId}`);
@@ -3398,6 +3404,7 @@ function printVerifierRouteSatisfaction(result: SatisfyVerifierRouteObligationRe
   console.log(`Evidence trust: ${result.evidence.trust ?? "unknown"}`);
   console.log(`Evidence schema: ${result.evidence.schemaVersion ?? "unknown"}`);
   console.log(`Proof obligations: ${routeObligationSummary(result.route)}`);
+  console.log(`Readiness: ${readiness.readyForNarrowClaim ? "ready" : "not-ready"} (${readiness.strongestTrust})`);
   console.log("");
   console.log(`Wrote verifier route JSON: ${result.jsonPath}`);
   console.log(`Wrote verifier route Markdown: ${result.markdownPath}`);

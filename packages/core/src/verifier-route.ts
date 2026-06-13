@@ -167,7 +167,28 @@ export interface VerifierRouteSummary {
   satisfiedProofObligations: number;
   notRequiredProofObligations: number;
   criticalOpenProofObligations: number;
+  readyForNarrowClaim: boolean;
+  strongestRouteTrust: TrustLabel;
+  blockingObligations: number;
+  readinessSummary: string;
   nextActions: string[];
+}
+
+export interface VerifierRouteReadiness {
+  readyForNarrowClaim: boolean;
+  strongestTrust: TrustLabel;
+  openObligations: number;
+  criticalOpenObligations: number;
+  blockingObligations: Array<{
+    obligationId: string;
+    kind: ProofObligationKind;
+    severity: VerifierRouteGapSeverity;
+    title: string;
+    requiredBefore: string;
+    nextStep?: string;
+    command?: string;
+  }>;
+  summary: string;
 }
 
 export function createVerifierRoute(problem: string, options: CreateVerifierRouteOptions = {}): VerifierRoute {
@@ -235,6 +256,41 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
       receiptTrustIsUpperBound: true
     },
     warnings: [...manifest.warnings, ...receipt.findings.filter((finding) => finding.level !== "info").map((finding) => finding.message)]
+  };
+}
+
+export function verifierRouteReadiness(route: VerifierRoute): VerifierRouteReadiness {
+  const obligations = route.proofObligations ?? [];
+  const openObligations = obligations.filter((obligation) => obligation.status === "open");
+  const criticalOpenObligations = openObligations.filter((obligation) => obligation.severity === "critical");
+  const strongestTrust = strongestTrustFromRoute(route);
+  const readyForNarrowClaim =
+    route.status !== "refuted" &&
+    strongestTrust !== "unverified" &&
+    strongestTrust !== "refuted" &&
+    openObligations.length === 0;
+
+  return {
+    readyForNarrowClaim,
+    strongestTrust,
+    openObligations: openObligations.length,
+    criticalOpenObligations: criticalOpenObligations.length,
+    blockingObligations: openObligations.map((obligation) => ({
+      obligationId: obligation.obligationId,
+      kind: obligation.kind,
+      severity: obligation.severity,
+      title: obligation.title,
+      requiredBefore: obligation.requiredBefore,
+      nextStep: obligation.nextStep,
+      command: obligation.command
+    })),
+    summary: routeReadinessSummary({
+      route,
+      readyForNarrowClaim,
+      strongestTrust,
+      openObligations,
+      criticalOpenObligations
+    })
   };
 }
 
@@ -367,6 +423,7 @@ export async function satisfyVerifierRouteObligation(
 }
 
 export function renderVerifierRouteMarkdown(route: VerifierRoute): string {
+  const readiness = verifierRouteReadiness(route);
   const lines = [
     `# Verifier Route ${route.routeId}`,
     "",
@@ -385,6 +442,15 @@ export function renderVerifierRouteMarkdown(route: VerifierRoute): string {
     `- Run: \`${route.receipt.runId}\``,
     `- Trust: \`${route.receipt.trust}\``,
     `- Replay: \`${route.receipt.replay}\``,
+    "",
+    "## Readiness",
+    "",
+    `- Ready for narrow claim: \`${String(readiness.readyForNarrowClaim)}\``,
+    `- Strongest supported trust: \`${readiness.strongestTrust}\``,
+    `- Open obligations: \`${readiness.openObligations}\``,
+    `- Critical open obligations: \`${readiness.criticalOpenObligations}\``,
+    "",
+    readiness.summary,
     "",
     "## Route Replay",
     "",
@@ -832,6 +898,7 @@ function summarizeVerifierRoute(root: string, path: string, raw: string): Verifi
     return undefined;
   }
   const proofObligations = route.proofObligations ?? [];
+  const readiness = verifierRouteReadiness(route);
 
   return {
     path: toPortablePath(relative(root, path)),
@@ -852,6 +919,10 @@ function summarizeVerifierRoute(root: string, path: string, raw: string): Verifi
     criticalOpenProofObligations: proofObligations.filter((obligation) =>
       obligation.status === "open" && obligation.severity === "critical"
     ).length,
+    readyForNarrowClaim: readiness.readyForNarrowClaim,
+    strongestRouteTrust: readiness.strongestTrust,
+    blockingObligations: readiness.blockingObligations.length,
+    readinessSummary: readiness.summary,
     nextActions: route.nextActions
   };
 }
@@ -1098,6 +1169,61 @@ function mergeEvidenceRefs(
 function updateRouteNextActions(actions: string[], obligation: ProofObligation): string[] {
   const summary = `Proof obligation ${obligation.obligationId} is satisfied; cite its attached evidence before strengthening downstream claims.`;
   return unique([summary, ...actions]).slice(0, 6);
+}
+
+function strongestTrustFromRoute(route: VerifierRoute): TrustLabel {
+  const trusts: TrustLabel[] = [route.finalTrust];
+  for (const obligation of route.proofObligations ?? []) {
+    for (const ref of obligation.satisfiedBy ?? []) {
+      if (ref.trust) {
+        trusts.push(ref.trust);
+      }
+    }
+  }
+
+  if (trusts.includes("refuted")) {
+    return "refuted";
+  }
+
+  const ranking: TrustLabel[] = [
+    "proved",
+    "cross-checked",
+    "smt-checked",
+    "dimension-checked",
+    "exact-computed",
+    "bounded-numeric",
+    "source-cited",
+    "unverified"
+  ];
+  for (const candidate of ranking) {
+    if (trusts.includes(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "unverified";
+}
+
+function routeReadinessSummary(input: {
+  route: VerifierRoute;
+  readyForNarrowClaim: boolean;
+  strongestTrust: TrustLabel;
+  openObligations: ProofObligation[];
+  criticalOpenObligations: ProofObligation[];
+}): string {
+  if (input.route.status === "refuted" || input.strongestTrust === "refuted") {
+    return "This route is refuted under the recorded assumptions; cite it only as a refutation or supersession input.";
+  }
+
+  if (input.readyForNarrowClaim) {
+    return `Ready only as a narrow ${input.strongestTrust} claim matching the recorded inputs, outputs, evidence refs, and limitations.`;
+  }
+
+  const open = input.openObligations.length;
+  const critical = input.criticalOpenObligations.length;
+  const plural = open === 1 ? "obligation" : "obligations";
+  const criticalText = critical > 0 ? `, including ${critical} critical` : "";
+  return `Not final: ${open} open ${plural}${criticalText}. Strongest currently attached trust is ${input.strongestTrust}; keep the claim scoped or attach the required evidence.`;
 }
 
 function isTrustLabel(value: string): value is TrustLabel {

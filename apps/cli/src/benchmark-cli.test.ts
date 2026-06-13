@@ -260,6 +260,9 @@ describe("benchmark CLI", () => {
         satisfiedProofObligations: number;
         notRequiredProofObligations: number;
         criticalOpenProofObligations: number;
+        readyForNarrowClaim: boolean;
+        strongestRouteTrust: string;
+        blockingObligations: number;
       }>;
     };
     const shown = JSON.parse(
@@ -280,11 +283,15 @@ describe("benchmark CLI", () => {
       openProofObligations: 0,
       satisfiedProofObligations: 0,
       notRequiredProofObligations: 1,
-      criticalOpenProofObligations: 0
+      criticalOpenProofObligations: 0,
+      readyForNarrowClaim: true,
+      strongestRouteTrust: "exact-computed",
+      blockingObligations: 0
     });
     expect(shown.routeId).toBe(written.route.routeId);
     expect(shown.replay).toContain("theorem verify");
     expect(humanList.stdout).toContain("Proof obligations: 1 total / 1 not-required");
+    expect(humanList.stdout).toContain("Readiness: ready (exact-computed)");
   });
 
   it("satisfies verifier route obligations from accepted local evidence", async () => {
@@ -408,6 +415,7 @@ describe("benchmark CLI", () => {
     expect(human.stdout).toContain(
       `Proof obligations: ${result.route.proofObligations.length} total / ${openObligations} open / ${criticalOpenObligations} critical-open / ${satisfiedObligations} satisfied`
     );
+    expect(human.stdout).toContain("Readiness: not-ready (proved)");
     expect(human.stdout).toContain("Claim ledger follow-up:");
   });
 
