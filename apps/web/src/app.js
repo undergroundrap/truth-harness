@@ -1497,11 +1497,11 @@ function createNumberLinePlotModel(receipt, fractions, outputFraction) {
   const maxValue = Math.max(1, ...values, outputFraction ? fractionValue(outputFraction) : 0);
   const axisMax = Math.ceil(maxValue + 0.35);
   const denominator = Math.min(24, lcmMany(uniqueFractions.map((item) => item.denominator).filter(Boolean)) || 8);
-  const width = 760;
-  const height = 300;
-  const left = 54;
-  const right = 36;
-  const y = 164;
+  const width = 980;
+  const height = 420;
+  const left = 72;
+  const right = 58;
+  const y = 238;
   const axisWidth = width - left - right;
   const xFor = (value) => left + (value / axisMax) * axisWidth;
   const ticks = [];
@@ -1519,7 +1519,7 @@ function createNumberLinePlotModel(receipt, fractions, outputFraction) {
     const value = fractionValue(fraction);
     const x = xFor(value);
     const isOutput = outputFraction && fractionLabel(fraction) === fractionLabel(outputFraction);
-    const markerY = y - 52 - (index % 2) * 32;
+    const markerY = y - 76 - (index % 2) * 42;
     const color = isOutput ? "#7dd3a8" : "#b7a98a";
     return `<g>
       <line x1="${x}" y1="${markerY + 10}" x2="${x}" y2="${y - 15}" stroke="${color}" stroke-width="2" stroke-dasharray="${isOutput ? "0" : "4 5"}" />
@@ -1540,8 +1540,8 @@ function createNumberLinePlotModel(receipt, fractions, outputFraction) {
     caption: "Fractions are plotted from the receipt text and verified output; the result marker is highlighted.",
     svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Exact rational number line">
       <rect width="${width}" height="${height}" rx="14" fill="#101010" />
-      <text x="${left}" y="42" fill="#f2f2ee" font-size="20" font-weight="750">${escapeXml(receipt.title)}</text>
-      <text x="${left}" y="68" fill="#aaa59d" font-size="13">verified output: ${escapeXml(receipt.output)}</text>
+      <text x="${left}" y="58" fill="#f2f2ee" font-size="22" font-weight="750">${escapeXml(receipt.title)}</text>
+      <text x="${left}" y="88" fill="#aaa59d" font-size="14">verified output: ${escapeXml(receipt.output)}</text>
       <line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" stroke="#6f6960" stroke-width="2" />
       ${ticks.join("")}
       ${markerRows.join("")}
