@@ -126,6 +126,50 @@ describe("workspace review", () => {
     );
     expect(review.summary.readyRoutesWithoutClaims).toBe(0);
   });
+
+  it("honors route and claim limits for bounded agent handoffs", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    await writeVerifierRoute({
+      rootPath: root,
+      problem: "compute 1 / 2 + 1 / 4",
+      now: new Date("2026-06-13T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    await writeVerifierRoute({
+      rootPath: root,
+      problem: "compute 2 / 3 + 1 / 6",
+      now: new Date("2026-06-13T00:02:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    await writeClaimLedgerRecord({
+      rootPath: root,
+      title: "Blocked local claim",
+      statement: "A narrow claim still needs review.",
+      nextChecks: ["Attach supporting evidence before final use."],
+      now: "2026-06-13T00:03:00.000Z"
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 0,
+      now: "2026-06-13T00:04:00.000Z"
+    });
+
+    expect(review.summary.routes).toBe(1);
+    expect(review.summary.claims).toBe(0);
+    expect(review.items.every((item) => item.kind !== "claim-blocker")).toBe(true);
+    expect(review.markdown).toContain("## Ordered Work Queue");
+  });
 });
 
 async function tempRoot(): Promise<string> {

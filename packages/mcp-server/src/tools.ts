@@ -24,6 +24,7 @@ import {
   createSourceCitationReceipt,
   createValidationPlan,
   createVerifierRoute,
+  createWorkspaceReview,
   createSymbolicCasCheckRecord,
   getCasBackendStatus,
   isClaimLedgerDomain,
@@ -196,6 +197,7 @@ import {
   type WorkspaceSnapshotWriteResult,
   type TrustLabel,
   type WorkspaceValidation,
+  type WorkspaceReview,
   type SympyOperation
 } from "@truth-harness/core";
 
@@ -440,6 +442,12 @@ export interface TruthHarnessWorkspaceInput {
 
 export interface TruthHarnessWorkspaceSnapshotInput {
   workspacePath?: string;
+}
+
+export interface TruthHarnessWorkspaceReviewInput {
+  workspacePath?: string;
+  maxRoutes?: number;
+  maxClaims?: number;
 }
 
 export interface TruthHarnessWorkspaceSnapshotVerifyInput {
@@ -1296,6 +1304,14 @@ export async function handleTruthHarnessWorkspaceRepair(input: TruthHarnessWorks
 export async function handleTruthHarnessWorkspaceValidate(input: TruthHarnessWorkspaceSnapshotInput): Promise<WorkspaceValidation> {
   return validateWorkspaceArtifacts({
     rootPath: resolveWorkspaceRoot(input.workspacePath)
+  });
+}
+
+export async function handleTruthHarnessWorkspaceReview(input: TruthHarnessWorkspaceReviewInput): Promise<WorkspaceReview> {
+  return createWorkspaceReview({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    maxRoutes: input.maxRoutes,
+    maxClaims: input.maxClaims
   });
 }
 

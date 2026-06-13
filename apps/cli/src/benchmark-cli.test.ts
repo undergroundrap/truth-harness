@@ -762,6 +762,59 @@ describe("benchmark CLI", () => {
     expect(rawManifest.directories["code-runs"]).toBe(".truth-harness/code-runs");
   });
 
+  it("prints bounded workspace review packets from the CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    await runCli([
+      "verify",
+      "compute 3 / 4 + 5 / 8",
+      "--workspace",
+      root,
+      "--write",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
+      "--timeout-ms",
+      "50",
+      "--json"
+    ]);
+    await runCli([
+      "claim",
+      "add",
+      "A blocked finance claim needs evidence.",
+      "--workspace",
+      root,
+      "--domain",
+      "finance",
+      "--next-check",
+      "Attach audited source data before using this claim.",
+      "--json"
+    ]);
+
+    const reviewResult = await runCli(["workspace", "review", root, "--max-routes", "1", "--max-claims", "0", "--json"]);
+    const review = JSON.parse(reviewResult.stdout) as {
+      schemaVersion: string;
+      localOnly: boolean;
+      networkAccess: string;
+      summary: { routes: number; claims: number };
+      markdown: string;
+    };
+    const reviewText = await runCli(["workspace", "review", root, "--max-routes", "1", "--max-claims", "0"]);
+
+    expect(reviewResult.exitCode).toBe(0);
+    expect(review.schemaVersion).toBe("truth-harness.workspace-review.v0");
+    expect(review.localOnly).toBe(true);
+    expect(review.networkAccess).toBe("none");
+    expect(review.summary.routes).toBe(1);
+    expect(review.summary.claims).toBe(0);
+    expect(review.markdown).toContain("## Ordered Work Queue");
+    expect(reviewText.stdout).toContain("Truth Harness workspace review");
+    expect(reviewText.stdout).toContain("Queue items:");
+  });
+
   it("writes, lists, compares, and gates benchmark artifacts", async () => {
     const root = await tempRoot();
     const passingSuite = join(root, "passing-suite.json");

@@ -67,6 +67,7 @@ import {
   handleTruthHarnessVerify,
   handleTruthHarnessWorkspaceInit,
   handleTruthHarnessWorkspaceRepair,
+  handleTruthHarnessWorkspaceReview,
   handleTruthHarnessWorkspaceSnapshot,
   handleTruthHarnessWorkspaceSnapshotList,
   handleTruthHarnessWorkspaceSnapshotVerify,
@@ -948,6 +949,41 @@ export function createTruthHarnessMcpServer(): McpServer {
       }
     },
     async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceValidate({ workspacePath }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_review",
+    {
+      title: "Review Workspace Work Queue",
+      description:
+        "Return the ordered local work queue across saved verifier routes and claim-ledger records, including blockers, next commands, privacy boundary, and Markdown handoff for agents.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        maxRoutes: z
+          .number()
+          .int()
+          .min(0)
+          .max(500)
+          .optional()
+          .describe("Maximum route summaries to inspect. Defaults to 100; use 0 to skip routes."),
+        maxClaims: z
+          .number()
+          .int()
+          .min(0)
+          .max(1000)
+          .optional()
+          .describe("Maximum claim records to inspect. Defaults to 200; use 0 to skip claims.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, maxRoutes, maxClaims }) =>
+      toolJson(await handleTruthHarnessWorkspaceReview({ workspacePath, maxRoutes, maxClaims }))
   );
 
   server.registerTool(

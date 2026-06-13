@@ -2305,9 +2305,15 @@ workspace
   .description("Show the ordered local work queue across saved routes and claims.")
   .argument("[path]", "Project root path", ".")
   .option("--json", "Print the full workspace review JSON")
+  .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
+  .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
   .option("--fail-on-critical", "Exit non-zero when critical review items exist")
-  .action(async (path: string, options: { json?: boolean; failOnCritical?: boolean }) => {
-    const review = await createWorkspaceReview({ rootPath: path });
+  .action(async (path: string, options: { json?: boolean; maxRoutes?: number; maxClaims?: number; failOnCritical?: boolean }) => {
+    const review = await createWorkspaceReview({
+      rootPath: path,
+      maxRoutes: options.maxRoutes,
+      maxClaims: options.maxClaims
+    });
 
     if (options.json) {
       printJson(review);
@@ -5126,14 +5132,22 @@ function parseValidationEvidenceRef(value: string): ValidationEvidenceRef {
 }
 
 function collectRepeated(value: string, previous: string[]): string[] {
-  previous.push(value);
-  return previous;
+  return [...previous, value];
 }
 
 function parsePositiveInteger(value: string): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isInteger(parsed) || parsed <= 0) {
     throw new Error(`Expected a positive integer, received ${JSON.stringify(value)}.`);
+  }
+
+  return parsed;
+}
+
+function parseNonNegativeInteger(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`Expected a non-negative integer, received ${JSON.stringify(value)}.`);
   }
 
   return parsed;
