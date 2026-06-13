@@ -1884,10 +1884,12 @@ dd {
 
 .plot-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(248px, 300px);
+  align-items: stretch;
+  gap: 12px;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding-right: 2px;
   scrollbar-gutter: stable;
 }
@@ -1937,7 +1939,9 @@ dd {
   display: grid;
   place-items: start stretch;
   min-width: 0;
-  min-height: clamp(420px, 54vh, 640px);
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
   overflow: auto;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
@@ -1950,14 +1954,17 @@ dd {
   display: block;
   width: 100%;
   min-width: 0;
+  min-height: 280px;
   height: auto;
 }
 
 .plot-detail {
   display: grid;
-  grid-template-columns: minmax(240px, 0.7fr) minmax(320px, 1.3fr);
-  gap: 12px 16px;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 12px;
   min-width: 0;
+  max-height: 100%;
   overflow: auto;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
@@ -1995,9 +2002,9 @@ dd {
 
 .plot-data {
   min-width: 0;
-  border-left: 1px solid var(--line-soft);
-  margin-top: 0;
-  padding-left: 16px;
+  border-top: 1px solid var(--line-soft);
+  margin-top: 2px;
+  padding-top: 12px;
 }
 
 .plot-data h5 {
@@ -2044,6 +2051,26 @@ dd {
 
 .plot-data-table tr:last-child td {
   border-bottom: 0;
+}
+
+@container (max-width: 760px) {
+  .plot-layout {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .plot-canvas {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .plot-detail {
+    max-height: none;
+    overflow: visible;
+  }
 }
 
 .graph-layout {
@@ -3650,10 +3677,6 @@ textarea:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .plot-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .claim-gate-main,
   .claim-gate-grid,
   .docker-verifier-main,
@@ -3765,14 +3788,27 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .plot-layout {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .plot-canvas {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
   .plot-detail {
     grid-template-columns: 1fr;
+    max-height: none;
+    overflow: visible;
   }
 
   .plot-data {
-    border-left: 0;
     border-top: 1px solid var(--line-soft);
-    padding-left: 0;
     padding-top: 12px;
   }
 
