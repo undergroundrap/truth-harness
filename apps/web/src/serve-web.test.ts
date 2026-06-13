@@ -494,8 +494,11 @@ function expectLocalApiError(
   expect(response.statusCode).toBe(statusCode);
   expect(response.headers["cache-control"]).toBe("no-store");
   const payload = JSON.parse(response.body);
+  expect(payload.requestId).toMatch(/^web_err_[0-9a-f-]{36}$/u);
+  expect(response.headers["x-theorem-request-id"]).toBe(payload.requestId);
   expect(payload).toMatchObject({
     schemaVersion: "theorem.web-error.v0",
+    requestId: payload.requestId,
     localOnly: true,
     externalCalls: [],
     method: request.method,

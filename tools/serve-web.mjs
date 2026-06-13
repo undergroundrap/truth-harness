@@ -1,6 +1,7 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -920,17 +921,24 @@ function readJsonBody(request) {
 }
 
 function writeJson(response, status, payload) {
-  response.writeHead(status, {
+  const headers = {
     ...webSecurityHeaders(),
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store"
-  });
+  };
+  if (payload?.requestId) {
+    headers["X-Theorem-Request-Id"] = payload.requestId;
+  }
+
+  response.writeHead(status, headers);
   response.end(`${JSON.stringify(payload, null, 2)}\n`);
 }
 
 function writeApiError(response, status, error, request) {
+  const requestId = `web_err_${randomUUID()}`;
   writeJson(response, status, {
     schemaVersion: "theorem.web-error.v0",
+    requestId,
     createdAt: new Date().toISOString(),
     localOnly: true,
     externalCalls: [],
