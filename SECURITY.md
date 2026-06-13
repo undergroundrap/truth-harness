@@ -18,6 +18,8 @@ Local API JSON bodies are capped at 16 KiB. Malformed, oversized, rejected, or u
 
 Successful local JSON API responses also include a `web_req_*` request id in the response body and `X-Theorem-Request-Id` header so UI activity and agent logs can cite the exact local operation without echoing request bodies.
 
+The web activity log preserves those request ids in copy/download exports and report citations when an event references a local API request, giving humans and agents a machine-readable audit breadcrumb without including prompt bodies.
+
 Set `THEOREM_WEB_ALLOW_NONLOCAL=1` only for deliberate LAN or remote testing. Do not expose that mode to untrusted networks.
 
 The regression suite covers this boundary with a local server test that verifies:
