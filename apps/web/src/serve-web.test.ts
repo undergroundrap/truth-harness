@@ -96,6 +96,7 @@ describe("local web route ledger API", () => {
     const listResponse = await fetch(`${baseUrl}/api/routes`);
     expect(listResponse.status).toBe(200);
     const listPayload = await listResponse.json();
+    expectLocalApiSuccess(listResponse, listPayload);
     expect(listPayload.localOnly).toBe(true);
     expect(listPayload.externalCalls).toEqual([]);
     expect(listPayload.routes).toHaveLength(1);
@@ -111,6 +112,7 @@ describe("local web route ledger API", () => {
     const routeResponse = await fetch(`${baseUrl}/api/routes/${receiptPayload.route.routeId}`);
     expect(routeResponse.status).toBe(200);
     const routePayload = await routeResponse.json();
+    expectLocalApiSuccess(routeResponse, routePayload);
     expect(routePayload.localOnly).toBe(true);
     expect(routePayload.externalCalls).toEqual([]);
     expect(routePayload.route.routeId).toBe(receiptPayload.route.routeId);
@@ -131,6 +133,7 @@ describe("local web route ledger API", () => {
     });
     expect(casResponse.status).toBe(200);
     const casPayload = await casResponse.json();
+    expectLocalApiSuccess(casResponse, casPayload);
     expect(casPayload.localOnly).toBe(true);
     expect(casPayload.externalCalls).toEqual([]);
     expect(casPayload.record.schemaVersion).toBe("theorem.cas-check.v0");
@@ -143,6 +146,7 @@ describe("local web route ledger API", () => {
     const casListResponse = await fetch(`${baseUrl}/api/cas`);
     expect(casListResponse.status).toBe(200);
     const casListPayload = await casListResponse.json();
+    expectLocalApiSuccess(casListResponse, casListPayload);
     expect(casListPayload.localOnly).toBe(true);
     expect(casListPayload.externalCalls).toEqual([]);
     expect(casListPayload.checks).toContainEqual(
@@ -166,6 +170,7 @@ describe("local web route ledger API", () => {
     });
     expect(smtResponse.status).toBe(200);
     const smtPayload = await smtResponse.json();
+    expectLocalApiSuccess(smtResponse, smtPayload);
     expect(smtPayload.localOnly).toBe(true);
     expect(smtPayload.externalCalls).toEqual([]);
     expect(smtPayload.problem.problemId).toMatch(/^smt_problem_[a-f0-9]{16}$/u);
@@ -181,6 +186,7 @@ describe("local web route ledger API", () => {
     const smtListResponse = await fetch(`${baseUrl}/api/smt`);
     expect(smtListResponse.status).toBe(200);
     const smtListPayload = await smtListResponse.json();
+    expectLocalApiSuccess(smtListResponse, smtListPayload);
     expect(smtListPayload.localOnly).toBe(true);
     expect(smtListPayload.externalCalls).toEqual([]);
     expect(smtListPayload.checks).toContainEqual(
@@ -199,6 +205,7 @@ describe("local web route ledger API", () => {
     });
     expect(smtRouteResponse.status).toBe(200);
     const smtRoutePayload = await smtRouteResponse.json();
+    expectLocalApiSuccess(smtRouteResponse, smtRoutePayload);
     const solverObligation = smtRoutePayload.route.proofObligations.find((obligation: { kind: string }) => obligation.kind === "solver-encoding");
     if (!solverObligation) {
       throw new Error("Expected a solver-encoding obligation for the SMT route.");
@@ -221,6 +228,7 @@ describe("local web route ledger API", () => {
     const smtSatisfactionPayload = await smtSatisfaction.json();
     if (smtPayload.record.trust === "smt-checked") {
       expect(smtSatisfaction.status).toBe(200);
+      expectLocalApiSuccess(smtSatisfaction, smtSatisfactionPayload);
       expect(smtSatisfactionPayload.obligation.status).toBe("satisfied");
       expect(smtSatisfactionPayload.obligation.satisfiedBy[0]).toMatchObject({
         kind: "smt",
@@ -272,6 +280,7 @@ describe("local web route ledger API", () => {
     });
     expect(claimResponse.status).toBe(200);
     const claimPayload = await claimResponse.json();
+    expectLocalApiSuccess(claimResponse, claimPayload);
     const routeRef = claimPayload.claim.evidenceRefs.find((ref: { kind: string }) => ref.kind === "route");
     expect(routeRef).toMatchObject({
       kind: "route",
