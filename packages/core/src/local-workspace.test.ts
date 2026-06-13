@@ -22,6 +22,7 @@ describe("local workspace", () => {
     const manifest = createLocalWorkspaceManifest("example-project", "2026-06-08T00:00:00.000Z", "Example");
 
     expect(manifest.schemaVersion).toBe("truth-harness.workspace.v0");
+    expect(manifest.projectId).toMatch(/^th_[a-f0-9]{16}$/u);
     expect(manifest.displayName).toBe("Example");
     expect(manifest.privacy).toEqual({
       mode: "local-only",

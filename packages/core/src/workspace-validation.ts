@@ -1,6 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { validateJsonSchema } from "./json-schema-validation.js";
 import {
   getLocalWorkspaceStatus,
@@ -346,7 +347,7 @@ async function validateWorkspaceManifestFile(
   const artifactIssues: WorkspaceValidationIssue[] = [];
 
   try {
-    const parsed = JSON.parse(await readFile(status.manifestPath, "utf8")) as unknown;
+    const parsed = parseJsonWithOptionalBom(await readFile(status.manifestPath, "utf8"));
     for (const schemaIssue of await validateArtifactSchema(parsed, WORKSPACE_MANIFEST_SCHEMA_FILE)) {
       artifactIssues.push({
         severity: "error",
@@ -499,7 +500,7 @@ async function validateGenericJsonFiles(
     const artifactIssues: WorkspaceValidationIssue[] = [];
 
     try {
-      const parsed = JSON.parse(await readFile(file, "utf8")) as unknown;
+      const parsed = parseJsonWithOptionalBom(await readFile(file, "utf8"));
       const record = isRecord(parsed) ? parsed : undefined;
       const schemaVersion = typeof record?.schemaVersion === "string" ? record.schemaVersion : undefined;
       const variant = resolveRuleVariant(rule, schemaVersion);
@@ -623,7 +624,7 @@ async function loadJsonSchema(schemaFile: string): Promise<unknown> {
     return cached;
   }
 
-  const loaded = readFile(resolve(SCHEMAS_DIR, schemaFile), "utf8").then((raw) => JSON.parse(raw) as unknown);
+  const loaded = readFile(resolve(SCHEMAS_DIR, schemaFile), "utf8").then((raw) => parseJsonWithOptionalBom(raw));
   schemaCache.set(schemaFile, loaded);
   return loaded;
 }
@@ -642,7 +643,7 @@ async function validateWorkspaceReferences(
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(await readFile(resolve(root, artifact.path), "utf8")) as unknown;
+      parsed = parseJsonWithOptionalBom(await readFile(resolve(root, artifact.path), "utf8"));
     } catch {
       continue;
     }

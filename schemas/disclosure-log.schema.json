@@ -30,7 +30,7 @@
     },
     "projectId": {
       "type": "string",
-      "pattern": "^tw_[a-f0-9]{16}$"
+      "pattern": "^(?:tw|th)_[a-f0-9]{16}$"
     },
     "createdAt": {
       "type": "string",

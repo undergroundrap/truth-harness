@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import {
   validateWorkspaceArtifacts,
@@ -458,7 +459,7 @@ async function requireLocalWorkspace(
 
 async function tryReadJson(path: string): Promise<unknown | undefined> {
   try {
-    return JSON.parse(await readFile(path, "utf8")) as unknown;
+    return parseJsonWithOptionalBom(await readFile(path, "utf8"));
   } catch {
     return undefined;
   }

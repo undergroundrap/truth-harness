@@ -65,6 +65,39 @@ describe("workspace artifact validation", () => {
     }));
   });
 
+  it("accepts Truth Harness project ids and BOM-prefixed workspace JSON", async () => {
+    const root = await tempRoot();
+    const initialized = await initLocalWorkspace(root, { now: "2026-06-10T00:00:00.000Z" });
+    const receipt = createReceipt("compute 2 + 2");
+
+    expect(initialized.manifest.projectId).toMatch(/^th_[a-f0-9]{16}$/u);
+    await writeFile(initialized.manifestPath, `\uFEFF${JSON.stringify(initialized.manifest, null, 2)}\n`, "utf8");
+    await writeFile(
+      join(root, ".truth-harness", "receipts", "bom-receipt.json"),
+      `\uFEFF${JSON.stringify(receipt, null, 2)}\n`,
+      "utf8"
+    );
+
+    const validation = await validateWorkspaceArtifacts({
+      rootPath: root,
+      now: "2026-06-10T01:00:00.000Z"
+    });
+
+    expect(validation.passed).toBe(true);
+    expect(validation.projectId).toBe(initialized.manifest.projectId);
+    expect(validation.summary.checkedFiles).toBe(2);
+    expect(validation.artifacts).toContainEqual(expect.objectContaining({
+      kind: "manifest",
+      valid: true,
+      artifactId: initialized.manifest.projectId
+    }));
+    expect(validation.artifacts).toContainEqual(expect.objectContaining({
+      kind: "receipts",
+      valid: true,
+      artifactId: receipt.runId
+    }));
+  });
+
   it("fails legacy receipt artifacts before agents can rely on stale JSON", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);

@@ -1,6 +1,7 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import { stableHash } from "./stable-hash.js";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import type { PrivacyMetadata } from "./types.js";
 
 export const LOCAL_WORKSPACE_DIR = ".truth-harness";
@@ -222,7 +223,7 @@ export function createLocalWorkspaceManifest(
 
   return {
     schemaVersion: "truth-harness.workspace.v0",
-    projectId: `tw_${stableHash({ root, createdAt }).slice(0, 16)}`,
+    projectId: `th_${stableHash({ root, createdAt }).slice(0, 16)}`,
     displayName,
     createdAt,
     updatedAt: createdAt,
@@ -283,7 +284,7 @@ interface LocalWorkspaceManifestReadResult {
 
 async function tryReadManifest(path: string): Promise<LocalWorkspaceManifestReadResult | undefined> {
   try {
-    const parsed = normalizeWorkspaceManifest(JSON.parse(await readFile(path, "utf8")) as LocalWorkspaceManifest);
+    const parsed = normalizeWorkspaceManifest(parseJsonWithOptionalBom(await readFile(path, "utf8")) as LocalWorkspaceManifest);
     validateWorkspaceManifest(parsed.manifest, dirname(dirname(path)));
     return parsed;
   } catch (error) {

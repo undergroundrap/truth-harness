@@ -1,7 +1,7 @@
 export function parseJsonObject(raw: string, sourcePath: string, artifactName: string): Record<string, unknown> {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw) as unknown;
+    parsed = parseJsonWithOptionalBom(raw) as unknown;
   } catch (error) {
     throw new Error(`${artifactName} JSON is not valid JSON in ${sourcePath}: ${error instanceof Error ? error.message : String(error)}.`);
   }
@@ -11,6 +11,14 @@ export function parseJsonObject(raw: string, sourcePath: string, artifactName: s
   }
 
   return parsed;
+}
+
+export function parseJsonWithOptionalBom(raw: string): unknown {
+  return JSON.parse(stripJsonByteOrderMark(raw)) as unknown;
+}
+
+export function stripJsonByteOrderMark(raw: string): string {
+  return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
 }
 
 export function formatValidationError(artifactName: string, sourcePath: string, issues: string[]): Error {

@@ -1,4 +1,5 @@
 import type { Receipt } from "./types.js";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 
 export interface ReceiptValidationIssue {
   path: string;
@@ -69,7 +70,7 @@ const BACKEND_ROLES = new Set([
 export function parseReceiptJson(json: string, source?: string): Receipt {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(json) as unknown;
+    parsed = parseJsonWithOptionalBom(json) as unknown;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown JSON parse error.";
     throw new ReceiptValidationError([{ path: "$", message: `is not valid JSON: ${message}` }], source);

@@ -5989,7 +5989,7 @@ function renderMainGraph(receipt) {
   }
 
   mainGraphList.innerHTML = entries
-    .map((entry, index) => `<button class="canvas-node ${entry.node?.missing ? "warning-node" : ""} ${entry.node?.valid === false ? "invalid-node" : ""} ${index === state.selectedGraphIndex ? "active" : ""}" data-graph-index="${index}" type="button">
+    .map((entry, index) => `<button class="canvas-node ${entry.node?.missing ? "warning-node" : ""} ${entry.node?.valid === false && !entry.node?.missing ? "invalid-node" : ""} ${index === state.selectedGraphIndex ? "active" : ""}" data-graph-index="${index}" type="button">
       <span class="canvas-index">${index + 1}</span>
       <div>
         <strong>${escapeHtml(entry.kind)}</strong>
