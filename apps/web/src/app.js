@@ -3800,14 +3800,19 @@ function renderActivityLog() {
 }
 
 function addActivity(actor, title, detail, status = "passed", at = new Date().toISOString()) {
-  activityEvents.unshift({
+  const requestId = extractActivityRequestId(detail);
+  const event = {
     id: `activity_${++activityEventCounter}`,
     actor,
     title,
     detail,
     status,
     at
-  });
+  };
+  if (requestId) {
+    event.requestId = requestId;
+  }
+  activityEvents.unshift(event);
   if (activityLog) {
     renderActivityLog();
   }
@@ -3828,6 +3833,12 @@ function updateLatestActivity(title, status, detail) {
   event.status = status;
   if (detail) {
     event.detail = detail;
+    const requestId = extractActivityRequestId(detail);
+    if (requestId) {
+      event.requestId = requestId;
+    } else {
+      delete event.requestId;
+    }
   }
   renderActivityLog();
 }
@@ -3842,7 +3853,11 @@ function filteredActivityEvents() {
 }
 
 function activityEventText(event) {
-  return [event.at, event.status, event.actor, event.title, event.detail].join(" ");
+  return [event.at, event.status, event.actor, event.title, event.detail, event.requestId ?? ""].join(" ");
+}
+
+function extractActivityRequestId(value) {
+  return String(value ?? "").match(/\bweb_(?:req|err)_[0-9a-f-]{36}\b/u)?.[0];
 }
 
 function formatActivityTime(isoTime) {
@@ -3860,7 +3875,10 @@ function formatActivityTime(isoTime) {
 
 function formatActivityExport(events) {
   return events
-    .map((event) => `[${event.at}] ${event.status.toUpperCase()} ${event.actor}: ${event.title} - ${event.detail}`)
+    .map((event) => {
+      const requestMarker = event.requestId ? ` request=${event.requestId}` : "";
+      return `[${event.at}] ${event.status.toUpperCase()}${requestMarker} ${event.actor}: ${event.title} - ${event.detail}`;
+    })
     .join("\n");
 }
 
@@ -4353,7 +4371,10 @@ function renderReport(receipt) {
     .join("");
   const activityItems = activityEvents
     .slice(0, 8)
-    .map((event) => `<li><time datetime="${escapeHtml(event.at)}">${escapeHtml(event.at)}</time> - ${escapeHtml(event.actor)}: ${escapeHtml(event.title)}</li>`)
+    .map((event) => {
+      const requestMarker = event.requestId ? ` <code>${escapeHtml(event.requestId)}</code>` : "";
+      return `<li><time datetime="${escapeHtml(event.at)}">${escapeHtml(event.at)}</time> - ${escapeHtml(event.actor)}: ${escapeHtml(event.title)}${requestMarker}</li>`;
+    })
     .join("");
   const plotRows = plot.dataRows
     .slice(0, 8)
@@ -4581,7 +4602,10 @@ function generateReportMarkdown(receipt) {
     "",
     "## Session Citations",
     "",
-    ...activityEvents.slice(0, 20).map((event) => `- [${event.at}] ${event.actor}: ${event.title} - ${event.detail}`)
+    ...activityEvents.slice(0, 20).map((event) => {
+      const requestMarker = event.requestId ? ` [request: ${event.requestId}]` : "";
+      return `- [${event.at}]${requestMarker} ${event.actor}: ${event.title} - ${event.detail}`;
+    })
   ];
 
   return `${lines.join("\n")}\n`;
