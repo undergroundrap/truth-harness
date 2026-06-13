@@ -118,6 +118,7 @@ async function handleApiRequest(request, response, requestUrl) {
       },
       engineManifest,
       verification,
+      dockerVerifier: dockerVerifierGuidance(verification),
       capabilities: [
         "receipt-create",
         "claim-ledger",
@@ -128,6 +129,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "validation-plan",
         "engine-manifest",
         "verification-readiness",
+        "docker-verifier-guidance",
         "sandbox-status",
         "safety-center"
       ]
@@ -681,6 +683,44 @@ function webServerSafetyStatus() {
     recommendation: allowNonLocalWeb
       ? "Non-local web access was explicitly enabled; do not expose this server to untrusted networks."
       : "The local API rejects non-local Host headers and cross-origin browser writes."
+  };
+}
+
+function dockerVerifierGuidance(verification) {
+  const engines = Array.isArray(verification?.engines) ? verification.engines : [];
+  const totalCount = Number.isFinite(verification?.totalCount) ? verification.totalCount : engines.length;
+  const readyCount = Number.isFinite(verification?.readyCount)
+    ? verification.readyCount
+    : engines.filter((engine) => engine.status === "available").length;
+  const missingEngines = engines
+    .filter((engine) => engine.status !== "available")
+    .map((engine) => engine.displayName ?? engine.id ?? "Backend");
+  const recommended = totalCount === 0 || readyCount < totalCount;
+
+  return {
+    schemaVersion: "theorem.docker-verifier-guidance.v0",
+    localOnly: true,
+    externalCalls: false,
+    recommended,
+    status: recommended ? "recommended" : "optional",
+    commands: {
+      proof: "npm run docker:proof",
+      verify: "npm run docker:verify"
+    },
+    missingEngines,
+    runtimeBoundary: {
+      service: "theorem",
+      composeNetworkMode: "none",
+      autoRunsDocker: false,
+      buildMayDownloadDependencies: true,
+      repositoryBindMount: true
+    },
+    notes: [
+      "The web UI never runs Docker automatically; it only exposes copyable commands.",
+      "npm run docker:proof runs the theorem compose service with no external network route after the dev image exists.",
+      "npm run docker:verify builds and tests the verification image; image builds may download dependencies.",
+      "Docker status does not prove a claim. Trust labels still require concrete Lean, Z3, Maxima, or other accepted evidence artifacts."
+    ]
   };
 }
 

@@ -37,6 +37,31 @@ describe("local web route ledger API", () => {
     runningServer = await startWebServer(port, tempProjectRoot);
     const baseUrl = `http://127.0.0.1:${port}`;
 
+    const statusResponse = await fetch(`${baseUrl}/api/status`);
+    expect(statusResponse.status).toBe(200);
+    const statusPayload = await statusResponse.json();
+    expect(statusPayload.localOnly).toBe(true);
+    expect(statusPayload.externalCalls).toBe(false);
+    expect(statusPayload.capabilities).toContain("docker-verifier-guidance");
+    expect(statusPayload.dockerVerifier).toMatchObject({
+      schemaVersion: "theorem.docker-verifier-guidance.v0",
+      localOnly: true,
+      externalCalls: false,
+      commands: {
+        proof: "npm run docker:proof",
+        verify: "npm run docker:verify"
+      },
+      runtimeBoundary: {
+        service: "theorem",
+        composeNetworkMode: "none",
+        autoRunsDocker: false,
+        buildMayDownloadDependencies: true,
+        repositoryBindMount: true
+      }
+    });
+    expect(typeof statusPayload.dockerVerifier.recommended).toBe("boolean");
+    expect(statusPayload.dockerVerifier.notes).toContain("The web UI never runs Docker automatically; it only exposes copyable commands.");
+
     const receiptResponse = await fetch(`${baseUrl}/api/receipt`, {
       method: "POST",
       headers: {

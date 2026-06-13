@@ -73,6 +73,8 @@ Use `npm run docker:proof` for the day-to-day no-runtime-network engine suite af
 
 The UI card is guidance, not evidence. Claims still need concrete receipts: `cross-checked` requires an accepted independent CAS record, `smt-checked` requires a concrete Z3 solver record, and `proved` requires an accepted proof-checker record.
 
+Agents can also read the same guidance from local `GET /api/status` under `dockerVerifier`. That status packet is local-only metadata and does not launch Docker or mint evidence.
+
 Run the MCP server over stdio:
 
 ```bash

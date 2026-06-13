@@ -261,6 +261,9 @@ const verificationMatrix = document.querySelector("#verification-matrix");
 const dockerVerifierPill = document.querySelector("#docker-verifier-pill");
 const dockerVerifierSummary = document.querySelector("#docker-verifier-summary");
 const dockerVerifierNotes = document.querySelector("#docker-verifier-notes");
+const dockerProofCommand = document.querySelector("#docker-proof-command");
+const dockerVerifyCommand = document.querySelector("#docker-verify-command");
+const dockerCopyCommands = document.querySelectorAll(".docker-copy-command");
 const casArtifactList = document.querySelector("#cas-artifact-list");
 const casArtifactCount = document.querySelector("#cas-artifact-count");
 const capabilityLedger = document.querySelector("#capability-ledger");
@@ -3082,6 +3085,7 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
   }
 
   const readiness = payload.verification ?? {};
+  const guidance = payload.dockerVerifier ?? {};
   const engines = Array.isArray(readiness.engines) ? readiness.engines : [];
   const totalCount = Number.isFinite(readiness.totalCount) ? readiness.totalCount : engines.length;
   const readyCount = Number.isFinite(readiness.readyCount)
@@ -3090,19 +3094,41 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
   const missingEngines = engines
     .filter((engine) => engine.status !== "available")
     .map((engine) => engine.displayName ?? engine.id ?? "Backend");
-  const recommended = totalCount === 0 || readyCount < totalCount;
+  const recommended = typeof guidance.recommended === "boolean"
+    ? guidance.recommended
+    : totalCount === 0 || readyCount < totalCount;
+  const commands = guidance.commands ?? {};
+  const proofCommand = commands.proof ?? "npm run docker:proof";
+  const verifyCommand = commands.verify ?? "npm run docker:verify";
 
-  dockerVerifierPill.textContent = recommended ? "recommended" : "optional";
+  if (dockerProofCommand) {
+    dockerProofCommand.textContent = proofCommand;
+  }
+  if (dockerVerifyCommand) {
+    dockerVerifyCommand.textContent = verifyCommand;
+  }
+  dockerCopyCommands.forEach((button) => {
+    if (button.dataset.commandKey === "proof") {
+      button.dataset.command = proofCommand;
+    }
+    if (button.dataset.commandKey === "verify") {
+      button.dataset.command = verifyCommand;
+    }
+  });
+
+  dockerVerifierPill.textContent = guidance.status ?? (recommended ? "recommended" : "optional");
   dockerVerifierPill.className = `status-pill ${recommended ? "waiting" : "exact"}`;
   dockerVerifierSummary.textContent = recommended
     ? `Local host engines are incomplete${missingEngines.length > 0 ? `: ${missingEngines.join(", ")}` : ""}. Use Docker to run the pinned verifier suite without installing these tools directly on the PC.`
     : "Local engines are available; Docker remains the reproducible verifier route for clean-room replay.";
 
-  const notes = [
-    "npm run docker:proof runs the theorem service with no external network route and records engine outputs only through normal receipts.",
-    "npm run docker:verify builds and tests the verification image; builds may fetch dependencies if the image is not already cached.",
-    "Docker status does not prove a claim. Only accepted Lean, Z3, or Maxima artifacts can satisfy their matching obligations."
-  ];
+  const notes = Array.isArray(guidance.notes) && guidance.notes.length > 0
+    ? guidance.notes
+    : [
+        "npm run docker:proof runs the theorem service with no external network route and records engine outputs only through normal receipts.",
+        "npm run docker:verify builds and tests the verification image; builds may fetch dependencies if the image is not already cached.",
+        "Docker status does not prove a claim. Only accepted Lean, Z3, or Maxima artifacts can satisfy their matching obligations."
+      ];
   dockerVerifierNotes.innerHTML = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
 }
 
