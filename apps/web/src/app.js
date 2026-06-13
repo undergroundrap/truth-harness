@@ -252,10 +252,14 @@ const SIDEBAR_MAX_WIDTH = 420;
 const VISUAL_ZOOM_MIN = 0.45;
 const VISUAL_ZOOM_MAX = 2.25;
 const VISUAL_ZOOM_STEP = 0.15;
+const VISUAL_WHEEL_ZOOM_SENSITIVITY = 0.0005;
+const VISUAL_WHEEL_DELTA_MAX = 240;
 const activityEvents = [];
 let activityEventCounter = 0;
 let visualPanDrag;
 let suppressVisualClick = false;
+let pendingVisualWheelZoom;
+let pendingVisualWheelFrame;
 const state = {
   receiptKey: "rational",
   level: "middle",
@@ -1377,10 +1381,13 @@ function applyVisualZoomToCanvas(options = {}) {
   const baseWidth = Number.isFinite(viewBox[2]) && viewBox[2] > 0 ? viewBox[2] : 980;
   const baseHeight = Number.isFinite(viewBox[3]) && viewBox[3] > 0 ? viewBox[3] : 520;
   const zoom = clampVisualZoom(state.visualZoom);
+  const width = Math.round(baseWidth * zoom);
+  const height = Math.round(baseHeight * zoom);
   state.visualZoom = zoom;
-  svg.style.width = `${Math.round(baseWidth * zoom)}px`;
-  svg.style.minWidth = `${Math.round(baseWidth * zoom)}px`;
-  svg.style.minHeight = `${Math.round(baseHeight * zoom)}px`;
+  svg.style.width = `${width}px`;
+  svg.style.minWidth = `${width}px`;
+  svg.style.height = `${height}px`;
+  svg.style.minHeight = `${height}px`;
   plotCanvas.dataset.visualZoom = visualZoomPercent();
 
   if (visualZoomResetButton) {
@@ -1440,6 +1447,41 @@ function setVisualZoom(nextZoom, options = {}) {
   if (Math.abs(previousZoom - state.visualZoom) > 0.001 && options.activity) {
     addActivity("human", "Adjusted visual zoom", `Visual canvas zoom set to ${visualZoomPercent()}.`, "passed");
   }
+}
+
+function normalizedVisualWheelDelta(event) {
+  const modeMultiplier = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? plotCanvas.clientHeight : 1;
+  return Math.max(
+    -VISUAL_WHEEL_DELTA_MAX,
+    Math.min(VISUAL_WHEEL_DELTA_MAX, event.deltaY * modeMultiplier)
+  );
+}
+
+function queueVisualWheelZoom(event) {
+  const delta = normalizedVisualWheelDelta(event);
+  const nextZoom = clampVisualZoom(state.visualZoom * Math.exp(-delta * VISUAL_WHEEL_ZOOM_SENSITIVITY));
+  pendingVisualWheelZoom = {
+    zoom: nextZoom,
+    anchor: {
+      clientX: event.clientX,
+      clientY: event.clientY
+    }
+  };
+
+  if (pendingVisualWheelFrame) {
+    return;
+  }
+
+  pendingVisualWheelFrame = requestAnimationFrame(() => {
+    pendingVisualWheelFrame = undefined;
+    if (!pendingVisualWheelZoom) {
+      return;
+    }
+
+    const { zoom, anchor } = pendingVisualWheelZoom;
+    pendingVisualWheelZoom = undefined;
+    setVisualZoom(zoom, { anchor });
+  });
 }
 
 function fitVisualToCanvas(options = {}) {
@@ -8314,14 +8356,7 @@ plotCanvas.addEventListener(
   "wheel",
   (event) => {
     event.preventDefault();
-    const direction = event.deltaY > 0 ? -1 : 1;
-    setVisualZoom(state.visualZoom + direction * VISUAL_ZOOM_STEP, {
-      activity: true,
-      anchor: {
-        clientX: event.clientX,
-        clientY: event.clientY
-      }
-    });
+    queueVisualWheelZoom(event);
   },
   { passive: false }
 );
