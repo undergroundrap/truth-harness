@@ -2911,6 +2911,7 @@ async function refreshSafetyStatus() {
 
     state.safetyStatus = payload;
     renderSafetyStatus();
+    renderReport(receiptStore.get(state.receiptKey));
     addActivity(
       "local-api",
       "Loaded safety center",
@@ -2928,6 +2929,7 @@ async function refreshSafetyStatus() {
       error: error instanceof Error ? error.message : "Unknown local status failure."
     };
     renderSafetyStatus();
+    renderReport(receiptStore.get(state.receiptKey));
     addActivity("local-api", "Safety center unavailable", state.safetyStatus.error, "refuted");
   }
 }
@@ -4138,6 +4140,104 @@ function updateNotesStatus(text) {
   notesStatus.textContent = text;
 }
 
+function verificationEnvironmentReportModel() {
+  const payload = state.safetyStatus;
+  if (!payload) {
+    return {
+      facts: [["Status", "checking local verification environment"]],
+      notes: ["Engine readiness and sandbox status load from local /api/status."],
+      commands: []
+    };
+  }
+
+  if (payload.error) {
+    return {
+      facts: [["Status", `local status unavailable: ${payload.error}`]],
+      notes: ["Do not claim a sandbox, engine, or Docker verifier boundary until /api/status is available."],
+      commands: []
+    };
+  }
+
+  const readiness = payload.verification ?? {};
+  const docker = payload.dockerVerifier ?? {};
+  const sandbox = payload.safety?.codeRunSandbox ?? {};
+  const readyCount = Number.isFinite(readiness.readyCount) ? readiness.readyCount : 0;
+  const totalCount = Number.isFinite(readiness.totalCount) ? readiness.totalCount : 0;
+  const missingEngines = Array.isArray(docker.missingEngines)
+    ? docker.missingEngines
+    : Array.isArray(readiness.engines)
+      ? readiness.engines
+          .filter((engine) => engine.status !== "available")
+          .map((engine) => engine.displayName ?? engine.id ?? "Backend")
+      : [];
+  const commands = Object.entries(docker.commands ?? {})
+    .map(([label, command]) => [label, command])
+    .filter(([, command]) => command);
+  const sandboxState = sandbox.canAttestNetworkNone
+    ? `attested ${formatSafetyPhrase(sandbox.provider)} / ${formatSafetyPhrase(sandbox.networkIsolation)}`
+    : `not attested: ${sandbox.reason ?? "no measured sandbox provider"}`;
+
+  return {
+    facts: [
+      ["Local API", payload.localOnly ? "local only" : "check configuration"],
+      ["Hosted model calls", payload.externalCalls ? "possible" : "none from local API"],
+      ["Engine readiness", `${readyCount}/${totalCount} verification engines ready`],
+      ["Missing engines", missingEngines.length > 0 ? missingEngines.join(", ") : "none reported"],
+      ["Code-run sandbox", sandboxState],
+      ["Docker verifier", docker.status ?? (docker.recommended ? "recommended" : "optional")],
+      ["Docker boundary", "web UI exposes copyable commands only; it never runs Docker automatically"]
+    ],
+    commands,
+    notes: [
+      ...(Array.isArray(docker.notes) ? docker.notes : []),
+      "Environment status is not evidence. Trust labels require concrete replayable artifacts."
+    ].slice(0, 6)
+  };
+}
+
+function verificationEnvironmentFactsHtml() {
+  const environment = verificationEnvironmentReportModel();
+  return environment.facts
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
+    .join("");
+}
+
+function verificationEnvironmentCommandHtml() {
+  const environment = verificationEnvironmentReportModel();
+  if (environment.commands.length === 0) {
+    return `<li>No verifier command guidance loaded.</li>`;
+  }
+
+  return environment.commands
+    .map(([label, command]) => `<li><strong>${escapeHtml(label)}</strong>: <code>${escapeHtml(command)}</code></li>`)
+    .join("");
+}
+
+function verificationEnvironmentNotesHtml() {
+  return verificationEnvironmentReportModel().notes
+    .map((note) => `<li>${escapeHtml(note)}</li>`)
+    .join("");
+}
+
+function verificationEnvironmentMarkdown() {
+  const environment = verificationEnvironmentReportModel();
+  return [
+    "## Verification Environment",
+    "",
+    ...environment.facts.map(([label, value]) => `- ${label}: ${value}`),
+    "",
+    "Verifier commands:",
+    "",
+    ...(environment.commands.length > 0
+      ? environment.commands.map(([label, command]) => `- ${label}: \`${command}\``)
+      : ["- none loaded"]),
+    "",
+    "Environment notes:",
+    "",
+    ...environment.notes.map((note) => `- ${note}`)
+  ];
+}
+
 function renderReport(receipt) {
   if (!receipt) {
     return;
@@ -4234,6 +4334,10 @@ function renderReport(receipt) {
       <div><dt>Replay</dt><dd><code>${escapeHtml(routes.replay)}</code></dd></div>
       <div><dt>Report</dt><dd><code>${escapeHtml(routes.report)}</code></dd></div>
     </dl>
+    <h3>Verification Environment</h3>
+    <dl class="report-facts">${verificationEnvironmentFactsHtml()}</dl>
+    <ul>${verificationEnvironmentCommandHtml()}</ul>
+    <ul class="report-sublist">${verificationEnvironmentNotesHtml()}</ul>
     <h3>Agent Runbook</h3>
     <dl class="report-facts">
       <div><dt>Mode</dt><dd>${escapeHtml(runbook.lane)} - ${escapeHtml(runbook.protocol)}</dd></div>
@@ -4339,6 +4443,8 @@ function generateReportMarkdown(receipt) {
     `- Receipt: \`${routes.receipt}\``,
     `- Replay: \`${routes.replay}\``,
     `- Report: \`${routes.report}\``,
+    "",
+    ...verificationEnvironmentMarkdown(),
     "",
     "## Agent Runbook",
     "",
@@ -4905,7 +5011,8 @@ copyReportButton.addEventListener("click", () => {
     return;
   }
 
-  copyTextToClipboard(generateReportMarkdown(receipt))
+  const markdown = generateReportMarkdown(receipt);
+  copyTextToClipboard(markdown)
     .then(() => {
       addActivity("human", "Copied report draft", `${receipt.runId} report copied as Markdown.`, "passed");
       copyReportButton.textContent = "Copied";
@@ -4914,7 +5021,13 @@ copyReportButton.addEventListener("click", () => {
       }, 1200);
     })
     .catch((error) => {
-      addActivity("web-ui", "Copy report failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+      downloadTextFile(`${receipt.runId}-report.md`, markdown, "text/markdown");
+      addActivity(
+        "web-ui",
+        "Downloaded report draft",
+        `Clipboard copy was blocked (${error instanceof Error ? error.message : "clipboard write failed"}), so ${receipt.runId} report was saved as Markdown instead.`,
+        "waiting"
+      );
     });
 });
 
