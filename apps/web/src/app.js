@@ -1696,7 +1696,12 @@ async function refreshRouteLedger({ announce = true } = {}) {
 
     applyRouteLedgerPayload(payload);
     if (announce) {
-      addActivity("local-api", "Loaded route ledger", `${routeLedgerStore.size} persisted verifier routes available.`, "passed");
+      addActivity(
+        "local-api",
+        "Loaded route ledger",
+        localApiSuccessMessage(payload, `${routeLedgerStore.size} persisted verifier routes available.`),
+        "passed"
+      );
     }
     render();
   } catch (error) {
@@ -1740,7 +1745,7 @@ function localApiErrorMessage(payload, fallbackMessage) {
 
 function localApiSuccessMessage(payload, fallbackMessage) {
   return typeof payload?.requestId === "string" && payload.requestId
-    ? `${fallbackMessage} (${payload.requestId})`
+    ? `${fallbackMessage} (request ${payload.requestId})`
     : fallbackMessage;
 }
 
@@ -1763,7 +1768,12 @@ async function refreshCasChecks({ announce = true } = {}) {
 
     applyCasCheckPayload(payload);
     if (announce) {
-      addActivity("local-api", "Loaded CAS ledger", `${casCheckStore.size} local CAS check records available.`, "passed");
+      addActivity(
+        "local-api",
+        "Loaded CAS ledger",
+        localApiSuccessMessage(payload, `${casCheckStore.size} local CAS check records available.`),
+        "passed"
+      );
     }
     render();
   } catch (error) {
@@ -1796,7 +1806,12 @@ async function refreshSmtChecks({ announce = true } = {}) {
 
     applySmtCheckPayload(payload);
     if (announce) {
-      addActivity("local-api", "Loaded SMT ledger", `${smtCheckStore.size} local SMT check records available.`, "passed");
+      addActivity(
+        "local-api",
+        "Loaded SMT ledger",
+        localApiSuccessMessage(payload, `${smtCheckStore.size} local SMT check records available.`),
+        "passed"
+      );
     }
     render();
   } catch (error) {
@@ -1843,7 +1858,11 @@ async function openSavedRoute(routeId) {
     state.selectedGraphIndex = 0;
     state.replayIndex = 0;
     promptInput.value = viewModel.title;
-    updateLatestActivity("Opening saved verifier route", "passed", `${payload.route.routeId} loaded from .theorem-workbench/routes.`);
+    updateLatestActivity(
+      "Opening saved verifier route",
+      "passed",
+      localApiSuccessMessage(payload, `${payload.route.routeId} loaded from .theorem-workbench/routes.`)
+    );
     render();
   } catch (error) {
     updateLatestActivity("Opening saved verifier route", "refuted", error instanceof Error ? error.message : "Unknown verifier route read failure.");
@@ -2068,7 +2087,12 @@ async function refreshClaimLedger({ announce = true } = {}) {
 
     applyClaimLedgerPayload(payload);
     if (announce) {
-      addActivity("local-api", "Loaded claim ledger", `${claimLedgerStore.size} local claim records available.`, "passed");
+      addActivity(
+        "local-api",
+        "Loaded claim ledger",
+        localApiSuccessMessage(payload, `${claimLedgerStore.size} local claim records available.`),
+        "passed"
+      );
     }
     render();
   } catch (error) {
@@ -2194,7 +2218,11 @@ async function recordCurrentClaim() {
 
     applyClaimLedgerPayload(payload);
     receipt.claimId = payload.claim.claimId;
-    updateLatestActivity("Recording claim", "passed", `${payload.claim.claimId} written to .theorem-workbench/claims.`);
+    updateLatestActivity(
+      "Recording claim",
+      "passed",
+      localApiSuccessMessage(payload, `${payload.claim.claimId} written to .theorem-workbench/claims.`)
+    );
     for (const item of payload.activity ?? []) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }
@@ -2279,7 +2307,13 @@ async function writeReceiptClaim(receipt, { dependsOn = undefined, supersedes = 
 
   applyClaimLedgerPayload(payload);
   receipt.claimId = payload.claim.claimId;
-  addActivity("local-api", activityTitle, `${payload.claim.claimId} stored with ${payload.claim.dependsOn.length} upstream links.`, "passed", payload.claim.createdAt);
+  addActivity(
+    "local-api",
+    activityTitle,
+    localApiSuccessMessage(payload, `${payload.claim.claimId} stored with ${payload.claim.dependsOn.length} upstream links.`),
+    "passed",
+    payload.claim.createdAt
+  );
   for (const item of payload.activity ?? []) {
     addActivity(item.actor, item.action, item.detail, "passed", item.at);
   }
@@ -2936,13 +2970,13 @@ async function refreshSafetyStatus() {
     addActivity(
       "local-api",
       "Loaded safety center",
-      safetyStatusSummary(payload),
+      localApiSuccessMessage(payload, safetyStatusSummary(payload)),
       payload.safety?.codeRunSandbox?.canAttestNetworkNone ? "passed" : "waiting"
     );
     addActivity(
       "local-api",
       "Loaded engine readiness",
-      engineReadinessSummary(payload),
+      localApiSuccessMessage(payload, engineReadinessSummary(payload)),
       payload.verification?.readyCount > 0 ? "passed" : "waiting"
     );
   } catch (error) {
