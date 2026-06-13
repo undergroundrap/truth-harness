@@ -10,4 +10,4 @@ coverage/
 !.env.example
 receipts/
 runs/
-.theorem-workbench/
+.truth-harness/

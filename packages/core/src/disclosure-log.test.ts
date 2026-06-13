@@ -27,7 +27,7 @@ describe("external disclosure logs", () => {
         dataClasses: ["selected prompt"],
         contextSummary: "A short math derivation excerpt."
       })
-    ).rejects.toThrow("No Theorem workspace found");
+    ).rejects.toThrow("No Truth Harness workspace found");
   });
 
   it("writes local audit records for hosted model disclosures", async () => {
@@ -42,23 +42,23 @@ describe("external disclosure logs", () => {
       service: "OpenAI",
       model: "frontier-reasoning-model",
       purpose: "Ask a frontier model to critique a proof plan.",
-      dataClasses: ["selected theorem statement", "selected proof sketch"],
-      contextSummary: "Only the theorem statement and proof sketch are sent; local corpus files stay local.",
-      selectedContextRefs: ["receipt:.theorem-workbench/receipts/proof-plan.json"],
+      dataClasses: ["selected formal statement", "selected proof sketch"],
+      contextSummary: "Only the formal statement and proof sketch are sent; local corpus files stay local.",
+      selectedContextRefs: ["receipt:.truth-harness/receipts/proof-plan.json"],
       approvalRef: "prompt:2026-06-08-user-approved-frontier-critique",
       status: "sent",
       now: "2026-06-08T01:00:00.000Z"
     });
     const entries = await listExternalDisclosureLogEntries(root);
 
-    expect(result.path).toContain(join(".theorem-workbench", "disclosures"));
-    expect(result.entry.schemaVersion).toBe("theorem.disclosure.v0");
+    expect(result.path).toContain(join(".truth-harness", "disclosures"));
+    expect(result.entry.schemaVersion).toBe("truth-harness.disclosure.v0");
     expect(result.entry.disclosureId).toMatch(/^dis_[a-f0-9]{16}$/);
     expect(result.entry.privacy.mode).toBe("external-calls");
     expect(result.entry.privacy.externalDisclosures[0]).toEqual({
       service: "OpenAI",
       purpose: "Ask a frontier model to critique a proof plan.",
-      dataClasses: ["selected theorem statement", "selected proof sketch"],
+      dataClasses: ["selected formal statement", "selected proof sketch"],
       userInitiated: true
     });
     expect(result.entry.warnings.join("\n")).toContain("audit metadata");
@@ -93,7 +93,7 @@ describe("external disclosure logs", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-disclosure-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-disclosure-"));
   roots.push(root);
   return root;
 }

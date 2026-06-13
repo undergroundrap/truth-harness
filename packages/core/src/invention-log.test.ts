@@ -21,7 +21,7 @@ describe("invention log", () => {
         rootPath: root,
         hypothesis: "A local-only discovery note should not auto-create a project."
       })
-    ).rejects.toThrow("No Theorem workspace found");
+    ).rejects.toThrow("No Truth Harness workspace found");
   });
 
   it("writes local-only invention logs with evidence refs and validation warnings", async () => {
@@ -40,7 +40,7 @@ describe("invention log", () => {
       evidenceRefs: [
         {
           kind: "receipt",
-          ref: ".theorem-workbench/receipts/pathway-check.json",
+          ref: ".truth-harness/receipts/pathway-check.json",
           trust: "source-cited",
           summary: "Literature claim receipt."
         }
@@ -53,7 +53,7 @@ describe("invention log", () => {
     });
 
     expect(result.path.replace(/\\/g, "/")).toContain(`${LOCAL_WORKSPACE_DIR}/inventions`);
-    expect(result.entry.schemaVersion).toBe("theorem.invention.v0");
+    expect(result.entry.schemaVersion).toBe("truth-harness.invention.v0");
     expect(result.entry.privacy.mode).toBe("local-only");
     expect(result.entry.patent.humanReviewRequired).toBe(true);
     expect(result.entry.patent.legalConclusion).toBe("not-a-legal-opinion");
@@ -92,7 +92,7 @@ describe("invention log", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-invention-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-invention-"));
   roots.push(root);
   return root;
 }

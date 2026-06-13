@@ -42,7 +42,7 @@ describe("SMT backend status", () => {
     });
 
     expect(calls).toEqual([{ command: "z3-test", args: ["-version"], timeoutMs: 3000 }]);
-    expect(report.schemaVersion).toBe("theorem.smt-backends.v0");
+    expect(report.schemaVersion).toBe("truth-harness.smt-backends.v0");
     expect(report.localOnly).toBe(true);
     expect(report.networkAccess).toBe("none");
     expect(report.smtSolversAvailable).toBe(1);
@@ -111,7 +111,7 @@ describe("SMT backend status", () => {
     });
 
     expect(calls).toEqual([["-version"], ["-smt2", "constraints/nonnegative.smt2"]]);
-    expect(record.schemaVersion).toBe("theorem.smt-check.v0");
+    expect(record.schemaVersion).toBe("truth-harness.smt-check.v0");
     expect(record.checkId).toMatch(/^smt_[a-f0-9]{16}$/);
     expect(record.status).toBe("unsat");
     expect(record.trust).toBe("smt-checked");
@@ -272,8 +272,8 @@ describe("SMT backend status", () => {
         }
       ]
     });
-    expect(write.jsonPath).toContain(".theorem-workbench");
-    expect(write.markdownPath).toContain(".theorem-workbench");
+    expect(write.jsonPath).toContain(".truth-harness");
+    expect(write.markdownPath).toContain(".truth-harness");
     expect(write.markdown).toContain("SMT Check");
     expect(write.markdown).toContain("x: Int = 1");
     expect(list).toHaveLength(1);
@@ -290,7 +290,7 @@ describe("SMT backend status", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-smt-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-smt-"));
   tempRoots.push(root);
   return root;
 }

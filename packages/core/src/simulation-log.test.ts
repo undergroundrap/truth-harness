@@ -23,7 +23,7 @@ describe("simulation logs", () => {
         engine: "local notebook",
         modelName: "toy pathway ODE"
       })
-    ).rejects.toThrow("No Theorem workspace found");
+    ).rejects.toThrow("No Truth Harness workspace found");
   });
 
   it("writes local simulation evidence with validation boundaries", async () => {
@@ -44,7 +44,7 @@ describe("simulation logs", () => {
       modelName: "toy follicle pathway ODE",
       modelVersion: "0.1",
       inputRefs: ["notebook:notebooks/pathway.ipynb"],
-      outputRefs: ["artifact:.theorem-workbench/artifacts/pathway-output.json"],
+      outputRefs: ["artifact:.truth-harness/artifacts/pathway-output.json"],
       codeRefs: ["src/sim/pathway.ts"],
       parameters: [{ name: "candidate_concentration", value: "10", unit: "uM" }],
       metrics: [{ name: "pathway_score_delta", value: "-0.18", note: "toy-model-only" }],
@@ -56,8 +56,8 @@ describe("simulation logs", () => {
     });
     const entries = await listSimulationLogEntries(root);
 
-    expect(result.path).toContain(join(".theorem-workbench", "simulations"));
-    expect(result.entry.schemaVersion).toBe("theorem.simulation.v0");
+    expect(result.path).toContain(join(".truth-harness", "simulations"));
+    expect(result.entry.schemaVersion).toBe("truth-harness.simulation.v0");
     expect(result.entry.simulationId).toMatch(/^sim_[a-f0-9]{16}$/);
     expect(result.entry.privacy.mode).toBe("local-only");
     expect(result.entry.validationBoundary.simulationIsNotReality).toBe(true);
@@ -87,7 +87,7 @@ describe("simulation logs", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-simulation-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-simulation-"));
   roots.push(root);
   return root;
 }

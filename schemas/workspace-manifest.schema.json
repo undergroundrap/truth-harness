@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/workspace-manifest.schema.json",
-  "title": "Theorem Workbench Local Workspace Manifest",
+  "$id": "https://truth-harness.local/schemas/workspace-manifest.schema.json",
+  "title": "Truth Harness Local Workspace Manifest",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -15,7 +15,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.workspace.v0"
+      "const": "truth-harness.workspace.v0"
     },
     "projectId": {
       "type": "string",
@@ -86,79 +86,79 @@
       ],
       "properties": {
         "receipts": {
-          "const": ".theorem-workbench/receipts"
+          "const": ".truth-harness/receipts"
         },
         "claims": {
-          "const": ".theorem-workbench/claims"
+          "const": ".truth-harness/claims"
         },
         "artifacts": {
-          "const": ".theorem-workbench/artifacts"
+          "const": ".truth-harness/artifacts"
         },
         "indexes": {
-          "const": ".theorem-workbench/indexes"
+          "const": ".truth-harness/indexes"
         },
         "findings": {
-          "const": ".theorem-workbench/findings"
+          "const": ".truth-harness/findings"
         },
         "inventions": {
-          "const": ".theorem-workbench/inventions"
+          "const": ".truth-harness/inventions"
         },
         "cas": {
-          "const": ".theorem-workbench/cas"
+          "const": ".truth-harness/cas"
         },
         "proofs": {
-          "const": ".theorem-workbench/proofs"
+          "const": ".truth-harness/proofs"
         },
         "smt": {
-          "const": ".theorem-workbench/smt"
+          "const": ".truth-harness/smt"
         },
         "benchmarks": {
-          "const": ".theorem-workbench/benchmarks"
+          "const": ".truth-harness/benchmarks"
         },
         "disclosures": {
-          "const": ".theorem-workbench/disclosures"
+          "const": ".truth-harness/disclosures"
         },
         "simulations": {
-          "const": ".theorem-workbench/simulations"
+          "const": ".truth-harness/simulations"
         },
         "patents": {
-          "const": ".theorem-workbench/patents"
+          "const": ".truth-harness/patents"
         },
         "experiments": {
-          "const": ".theorem-workbench/experiments"
+          "const": ".truth-harness/experiments"
         },
         "vault": {
-          "const": ".theorem-workbench/vault"
+          "const": ".truth-harness/vault"
         },
         "audits": {
-          "const": ".theorem-workbench/audits"
+          "const": ".truth-harness/audits"
         },
         "snapshots": {
-          "const": ".theorem-workbench/snapshots"
+          "const": ".truth-harness/snapshots"
         },
         "sessions": {
-          "const": ".theorem-workbench/sessions"
+          "const": ".truth-harness/sessions"
         },
         "reviews": {
-          "const": ".theorem-workbench/reviews"
+          "const": ".truth-harness/reviews"
         },
         "validation": {
-          "const": ".theorem-workbench/validation"
+          "const": ".truth-harness/validation"
         },
         "literature": {
-          "const": ".theorem-workbench/literature"
+          "const": ".truth-harness/literature"
         },
         "notebook-runs": {
-          "const": ".theorem-workbench/notebook-runs"
+          "const": ".truth-harness/notebook-runs"
         },
         "code-runs": {
-          "const": ".theorem-workbench/code-runs"
+          "const": ".truth-harness/code-runs"
         },
         "model-contexts": {
-          "const": ".theorem-workbench/model-contexts"
+          "const": ".truth-harness/model-contexts"
         },
         "routes": {
-          "const": ".theorem-workbench/routes"
+          "const": ".truth-harness/routes"
         }
       },
       "additionalProperties": false

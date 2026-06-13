@@ -191,14 +191,14 @@ function buildSourceReceipt(args: {
   }).slice(0, 16);
 
   return {
-    schemaVersion: "theorem.receipt.v0",
+    schemaVersion: "truth-harness.receipt.v0",
     runId: `run_${runHash}`,
     createdAt: args.createdAt,
     problem: args.problem,
     normalizedProblem: args.normalizedProblem,
     trust: args.trust,
     summary: args.summary,
-    replay: `theorem source cite ${JSON.stringify(args.problem.replace(/^source cite:\s*/, ""))} --query ${JSON.stringify(args.query)} --json`,
+    replay: `truth-harness source cite ${JSON.stringify(args.problem.replace(/^source cite:\s*/, ""))} --query ${JSON.stringify(args.query)} --json`,
     privacy,
     evidenceProfile: args.evidenceProfile,
     graph: {

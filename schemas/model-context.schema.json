@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/model-context.schema.json",
-  "title": "Theorem Workbench Model Context Packet",
+  "$id": "https://truth-harness.local/schemas/model-context.schema.json",
+  "title": "Truth Harness Model Context Packet",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -26,7 +26,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.model-context.v0"
+      "const": "truth-harness.model-context.v0"
     },
     "packetId": {
       "type": "string",

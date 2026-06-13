@@ -12,7 +12,7 @@ export interface ParityResidueCase {
 export interface ParityProofSuccess {
   ok: true;
   adapter: "local-modular-parity-checker";
-  theorem: "universal-integer-parity";
+  claim: "universal-integer-parity";
   expression: string;
   predicate: ParityPredicate;
   modulus: 2;
@@ -61,7 +61,7 @@ export function proveUniversalParity(
     return {
       ok: true,
       adapter: "local-modular-parity-checker",
-      theorem: "universal-integer-parity",
+      claim: "universal-integer-parity",
       expression: expressionSource,
       predicate,
       modulus: 2,

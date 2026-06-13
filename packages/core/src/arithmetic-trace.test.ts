@@ -6,7 +6,7 @@ describe("arithmetic trace", () => {
   it("records exact calculation steps and audience explanations", () => {
     const trace = createArithmeticTrace("3 / 4 + 5 / 8", parseExpression("3 / 4 + 5 / 8"));
 
-    expect(trace.schemaVersion).toBe("theorem.arithmetic-trace.v0");
+    expect(trace.schemaVersion).toBe("truth-harness.arithmetic-trace.v0");
     expect(trace.result).toBe("11/8");
     expect(trace.exact).toBe(true);
     expect(trace.steps.map((step) => step.result)).toContain("3/4");

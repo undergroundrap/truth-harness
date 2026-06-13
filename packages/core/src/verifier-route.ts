@@ -86,7 +86,7 @@ export interface ProofObligation {
 }
 
 export interface VerifierRoute {
-  schemaVersion: "theorem.verifier-route.v0";
+  schemaVersion: "truth-harness.verifier-route.v0";
   routeId: string;
   createdAt: string;
   localOnly: true;
@@ -218,7 +218,7 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
   }).slice(0, 16)}`;
 
   return {
-    schemaVersion: "theorem.verifier-route.v0",
+    schemaVersion: "truth-harness.verifier-route.v0",
     routeId,
     createdAt,
     localOnly: true,
@@ -229,7 +229,7 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
     finalTrust: receipt.trust,
     evidenceKind: receipt.evidenceProfile.kind,
     receipt,
-    replay: `theorem verify ${quoteCommandArg(problem)} --json`,
+    replay: `truth-harness verify ${quoteCommandArg(problem)} --json`,
     manifest: {
       schemaVersion: manifest.schemaVersion,
       status: manifest.status,
@@ -600,7 +600,7 @@ function routeGaps(receipt: Receipt, steps: VerifierRouteStep[]): VerifierRouteG
       displayName: "Accepted proof checker",
       severity: receipt.evidenceProfile.kind === "exact-arithmetic" ? "info" : "warning",
       reason: "The current receipt is replayable evidence, but not accepted proof-checker output.",
-      command: "theorem proof check <workspace-local.lean> --write",
+      command: "truth-harness proof check <workspace-local.lean> --write",
       nextStep: "Use Lean or another accepted proof checker before saying `proved`."
     });
   }
@@ -1079,7 +1079,7 @@ function evidenceSatisfiesObligation(
 
     if (
       evidence.kind === "proof" &&
-      evidence.schemaVersion === "theorem.proof-check.v0" &&
+      evidence.schemaVersion === "truth-harness.proof-check.v0" &&
       evidence.status === "accepted" &&
       evidence.proofCheckerBacked === true &&
       evidence.acceptedProofChecker === true
@@ -1089,7 +1089,7 @@ function evidenceSatisfiesObligation(
 
     if (
       evidence.kind === "receipt" &&
-      evidence.schemaVersion === "theorem.receipt.v0" &&
+      evidence.schemaVersion === "truth-harness.receipt.v0" &&
       evidence.proofCheckerBacked === true &&
       evidence.acceptedProofChecker === true
     ) {
@@ -1243,8 +1243,8 @@ function isTrustLabel(value: string): value is TrustLabel {
 function parseVerifierRouteJson(raw: string, sourcePath: string): VerifierRoute {
   const parsed = parseJsonObject(raw, sourcePath, "Verifier route");
   const issues: string[] = [];
-  if (parsed.schemaVersion !== "theorem.verifier-route.v0") {
-    issues.push(`$.schemaVersion must equal "theorem.verifier-route.v0"`);
+  if (parsed.schemaVersion !== "truth-harness.verifier-route.v0") {
+    issues.push(`$.schemaVersion must equal "truth-harness.verifier-route.v0"`);
   }
   expectPattern(parsed, "routeId", /^route_[a-f0-9]{16}$/u, "$.routeId", issues);
   expectDateTime(parsed, "createdAt", "$.createdAt", issues);
@@ -1304,7 +1304,7 @@ async function requireLocalWorkspace(
 ): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing verifier route records.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing verifier route records.");
   }
 
   return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };

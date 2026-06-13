@@ -129,7 +129,7 @@ The credible line:
 
 The next moat-building sequence should be:
 
-1. Make the math lane brutally good at exact arithmetic, false theorem refutation, symbolic CAS checks, SMT checks, proof-check records, and benchmark reports.
+1. Make the math lane brutally good at exact arithmetic, false universal-claim refutation, symbolic CAS checks, SMT checks, proof-check records, and benchmark reports.
 2. Make every result promotable into a claim ledger record.
 3. Make the web UI show a claim graph that can be searched, filtered, copied, downloaded, and exported into a report.
 4. Make agent sessions recursively update the ledger rather than leaving important state in chat.
@@ -152,7 +152,7 @@ That loop is the moat.
 The web app now participates in the same local evidence loop as the CLI and MCP server:
 
 - `/api/receipt` creates local receipt view models without hosted model calls.
-- `/api/claims` writes selected receipts into `.theorem-workbench/claims` through the core claim-ledger module.
+- `/api/claims` writes selected receipts into `.truth-harness/claims` through the core claim-ledger module.
 - The browser shows persisted claim IDs in the sidebar, inspector, and report export.
 - Claim records keep tags, trust labels, dependencies, evidence refs, open checks, authors, and Markdown output as project-local artifacts.
 - `Record chain` recursively records upstream subclaims first, then records or revises the selected claim with ledger dependency links and `supersedes` history.

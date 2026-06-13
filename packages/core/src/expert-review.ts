@@ -67,7 +67,7 @@ export interface ExpertReviewEvidenceRef {
 }
 
 export interface ExpertReviewRecord {
-  schemaVersion: "theorem.expert-review.v0";
+  schemaVersion: "truth-harness.expert-review.v0";
   reviewId: string;
   projectId: string;
   createdAt: string;
@@ -186,7 +186,7 @@ export async function createExpertReview(input: CreateExpertReviewInput): Promis
   };
   const reviewId = `review_${stableHash(reviewWithoutId).slice(0, 16)}`;
   const review: Omit<ExpertReviewRecord, "markdown"> = {
-    schemaVersion: "theorem.expert-review.v0",
+    schemaVersion: "truth-harness.expert-review.v0",
     reviewId,
     ...reviewWithoutId,
     updatedAt: createdAt
@@ -241,7 +241,7 @@ export async function listExpertReviews(rootPath: string): Promise<ExpertReviewR
   );
 
   return reviews
-    .filter((review) => review.schemaVersion === "theorem.expert-review.v0")
+    .filter((review) => review.schemaVersion === "truth-harness.expert-review.v0")
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
@@ -314,7 +314,7 @@ export function renderExpertReviewMarkdown(review: Omit<ExpertReviewRecord, "mar
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing expert reviews.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing expert reviews.");
   }
 
   if (status.missingDirectories.length > 0) {

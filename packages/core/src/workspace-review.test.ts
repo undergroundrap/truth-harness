@@ -18,7 +18,7 @@ describe("workspace review", () => {
   it("requires a local workspace", async () => {
     const root = await tempRoot();
 
-    await expect(createWorkspaceReview({ rootPath: root })).rejects.toThrow("No Theorem workspace found");
+    await expect(createWorkspaceReview({ rootPath: root })).rejects.toThrow("No Truth Harness workspace found");
   });
 
   it("orders route obligations and blocked claims into a local work queue", async () => {
@@ -30,18 +30,18 @@ describe("workspace review", () => {
       rootPath: root,
       problem: "prove the Riemann hypothesis",
       now: new Date("2026-06-13T00:01:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const readyRoute = await writeVerifierRoute({
       rootPath: root,
       problem: "compute 3 / 4 + 5 / 8",
       now: new Date("2026-06-13T00:02:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     await writeClaimLedgerRecord({
@@ -58,7 +58,7 @@ describe("workspace review", () => {
       now: "2026-06-13T00:04:00.000Z"
     });
 
-    expect(review.schemaVersion).toBe("theorem.workspace-review.v0");
+    expect(review.schemaVersion).toBe("truth-harness.workspace-review.v0");
     expect(review.localOnly).toBe(true);
     expect(review.networkAccess).toBe("none");
     expect(review.summary.routes).toBe(2);
@@ -75,7 +75,7 @@ describe("workspace review", () => {
       expect.objectContaining({
         kind: "route-ready-claim",
         routeId: readyRoute.route.routeId,
-        command: expect.stringContaining("theorem claim add")
+        command: expect.stringContaining("truth-harness claim add")
       })
     );
     expect(review.items).toContainEqual(
@@ -83,7 +83,7 @@ describe("workspace review", () => {
         kind: "claim-blocker",
         domain: "biology",
         priority: "high",
-        command: expect.stringContaining("theorem claim review")
+        command: expect.stringContaining("truth-harness claim review")
       })
     );
     expect(review.markdown).toContain("## Ordered Work Queue");
@@ -99,9 +99,9 @@ describe("workspace review", () => {
       rootPath: root,
       problem: "compute 1 / 2 + 1 / 4",
       now: new Date("2026-06-13T00:01:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     await writeClaimLedgerRecord({
@@ -129,7 +129,7 @@ describe("workspace review", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-review-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-review-"));
   roots.push(root);
   return root;
 }

@@ -47,7 +47,7 @@ describe("code run records", () => {
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
     const sandboxStatus = getCodeRunSandboxStatus();
 
-    expect(write.record.schemaVersion).toBe("theorem.code-run.v0");
+    expect(write.record.schemaVersion).toBe("truth-harness.code-run.v0");
     expect(write.record.runId).toMatch(/^code_run_[a-f0-9]{16}$/);
     expect(write.record.command.shell).toBe(false);
     expect(write.record.policy).toMatchObject({
@@ -412,7 +412,7 @@ describe("code run records", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-code-run-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-code-run-"));
   roots.push(root);
   return root;
 }

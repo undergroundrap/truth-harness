@@ -12,7 +12,7 @@ describe("JSON Schema validation", () => {
       type: "object",
       required: ["schemaVersion", "entry", "tags"],
       properties: {
-        schemaVersion: { const: "theorem.test.v0" },
+        schemaVersion: { const: "truth-harness.test.v0" },
         entry: { $ref: "#/$defs/entry" },
         tags: { type: "array", minItems: 1, uniqueItems: true, items: { type: "string", minLength: 1 } }
       },
@@ -36,7 +36,7 @@ describe("JSON Schema validation", () => {
     expect(
       validateJsonSchema(
         {
-          schemaVersion: "theorem.test.v0",
+          schemaVersion: "truth-harness.test.v0",
           entry: {
             id: "id_ab12",
             status: "planned",
@@ -53,7 +53,7 @@ describe("JSON Schema validation", () => {
     expect(
       validateJsonSchema(
         {
-          schemaVersion: "theorem.test.v0",
+          schemaVersion: "truth-harness.test.v0",
           entry: {
             id: "bad",
             status: "uploaded",

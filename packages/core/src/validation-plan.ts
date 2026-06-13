@@ -111,7 +111,7 @@ export interface ValidationGate {
 }
 
 export interface ValidationPlan {
-  schemaVersion: "theorem.validation-plan.v0";
+  schemaVersion: "truth-harness.validation-plan.v0";
   planId: string;
   projectId: string;
   createdAt: string;
@@ -224,7 +224,7 @@ export async function createValidationPlan(input: CreateValidationPlanInput): Pr
   };
   const planId = `plan_${stableHash(planWithoutId).slice(0, 16)}`;
   const planWithoutMarkdown = {
-    schemaVersion: "theorem.validation-plan.v0" as const,
+    schemaVersion: "truth-harness.validation-plan.v0" as const,
     planId,
     ...planWithoutId
   };
@@ -277,7 +277,7 @@ export async function listValidationPlans(rootPath: string): Promise<ValidationP
   );
 
   return plans
-    .filter((plan) => plan.schemaVersion === "theorem.validation-plan.v0")
+    .filter((plan) => plan.schemaVersion === "truth-harness.validation-plan.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
@@ -574,7 +574,7 @@ function gatesFor(input: {
         status: statusForReview(input.audit),
         blocking: true,
         evidenceRefs: refsByKind(input.evidenceRefs, ["review"]),
-        rationale: "Theorem Workbench is not a patent attorney and does not determine patentability.",
+        rationale: "Truth Harness is not a patent attorney and does not determine patentability.",
         nextChecks: ["Record legal review scope, limitations, and filing decisions with a qualified patent attorney."]
       })
     );
@@ -882,7 +882,7 @@ function validationBoundary(): ValidationPlan["boundary"] {
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing validation plans.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing validation plans.");
   }
 
   if (status.missingDirectories.length > 0) {

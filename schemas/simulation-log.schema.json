@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/simulation-log.schema.json",
-  "title": "Theorem Workbench Simulation Log Entry",
+  "$id": "https://truth-harness.local/schemas/simulation-log.schema.json",
+  "title": "Truth Harness Simulation Log Entry",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -30,7 +30,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.simulation.v0"
+      "const": "truth-harness.simulation.v0"
     },
     "simulationId": {
       "type": "string",

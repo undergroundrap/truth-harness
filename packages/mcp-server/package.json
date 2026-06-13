@@ -1,11 +1,11 @@
 {
-  "name": "@theorem-workbench/mcp-server",
+  "name": "@truth-harness/mcp-server",
   "version": "0.0.0",
   "type": "module",
-  "description": "MCP server exposing Theorem Workbench proof receipts and benchmarks to AI agents.",
+  "description": "MCP server exposing Truth Harness proof receipts and benchmarks to AI agents.",
   "license": "SEE LICENSE IN LICENSE",
   "bin": {
-    "theorem-mcp": "./dist/index.js"
+    "truth-harness-mcp": "./dist/index.js"
   },
   "exports": {
     ".": {
@@ -19,8 +19,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@theorem-workbench/benchmarks": "0.0.0",
-    "@theorem-workbench/core": "0.0.0",
+    "@truth-harness/benchmarks": "0.0.0",
+    "@truth-harness/core": "0.0.0",
     "zod": "^4.1.13"
   }
 }

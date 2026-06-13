@@ -82,7 +82,7 @@ export interface ClaimVerificationStep {
 }
 
 export interface ClaimLedgerRecord {
-  schemaVersion: "theorem.claim.v0";
+  schemaVersion: "truth-harness.claim.v0";
   claimId: string;
   projectId: string;
   createdAt: string;
@@ -151,7 +151,7 @@ export interface ClaimLedgerGraphEdge {
 }
 
 export interface ClaimLedgerGraph {
-  schemaVersion: "theorem.claim-graph.v0";
+  schemaVersion: "truth-harness.claim-graph.v0";
   nodes: ClaimLedgerGraphNode[];
   edges: ClaimLedgerGraphEdge[];
   warnings: string[];
@@ -168,7 +168,7 @@ export interface ClaimReviewAction {
 }
 
 export interface ClaimReviewPacket {
-  schemaVersion: "theorem.claim-review.v0";
+  schemaVersion: "truth-harness.claim-review.v0";
   claimId: string;
   title: string;
   statement: string;
@@ -229,7 +229,7 @@ export function createClaimLedgerGraph(claims: ClaimLedgerRecord[]): ClaimLedger
   }
 
   return {
-    schemaVersion: "theorem.claim-graph.v0",
+    schemaVersion: "truth-harness.claim-graph.v0",
     nodes: claims.map((claim) => ({
       claimId: claim.claimId,
       title: claim.title,
@@ -285,7 +285,7 @@ export async function createClaimLedgerRecord(input: CreateClaimLedgerRecordInpu
   };
   const claimId = `claim_${stableHash(recordWithoutId).slice(0, 16)}`;
   const baseClaim = {
-    schemaVersion: "theorem.claim.v0" as const,
+    schemaVersion: "truth-harness.claim.v0" as const,
     claimId,
     ...recordWithoutId,
     updatedAt: createdAt,
@@ -352,7 +352,7 @@ export async function listClaimRecords(rootPath: string): Promise<ClaimLedgerRec
   );
 
   return claims
-    .filter((claim) => claim.schemaVersion === "theorem.claim.v0")
+    .filter((claim) => claim.schemaVersion === "truth-harness.claim.v0")
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
@@ -374,7 +374,7 @@ export async function createClaimReviewPacket(input: {
     .sort();
   const reviewStatus = reviewStatusForClaim(claim);
   const packetWithoutMarkdown = {
-    schemaVersion: "theorem.claim-review.v0" as const,
+    schemaVersion: "truth-harness.claim-review.v0" as const,
     claimId: claim.claimId,
     title: claim.title,
     statement: claim.statement,
@@ -398,8 +398,8 @@ export async function createClaimReviewPacket(input: {
     evidenceRefs: claim.evidenceRefs,
     nextActions: claimReviewActions(claim, reviewStatus, status.root),
     commands: {
-      showJson: `theorem claim show ${quoteCommandArg(claim.claimId)} --workspace ${quoteCommandArg(status.root)} --json`,
-      reviewJson: `theorem claim review ${quoteCommandArg(claim.claimId)} --workspace ${quoteCommandArg(status.root)} --json`
+      showJson: `truth-harness claim show ${quoteCommandArg(claim.claimId)} --workspace ${quoteCommandArg(status.root)} --json`,
+      reviewJson: `truth-harness claim review ${quoteCommandArg(claim.claimId)} --workspace ${quoteCommandArg(status.root)} --json`
     },
     warnings: claim.warnings
   };
@@ -617,7 +617,7 @@ async function readClaimRecordRef(
     for (const file of files.filter((candidate) => candidate.endsWith(".json"))) {
       const path = join(claimsDir, file);
       const claim = JSON.parse(await readFile(path, "utf8")) as ClaimLedgerRecord;
-      if (claim.schemaVersion === "theorem.claim.v0" && claim.claimId === ref) {
+      if (claim.schemaVersion === "truth-harness.claim.v0" && claim.claimId === ref) {
         return { claim, path };
       }
     }
@@ -635,7 +635,7 @@ async function readClaimRecordRef(
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing claim ledger records.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing claim ledger records.");
   }
 
   if (status.missingDirectories.length > 0) {
@@ -778,7 +778,7 @@ function claimReviewActions(claim: ClaimLedgerRecord, status: ClaimReviewStatus,
       reason: status === "refuted"
         ? "Downstream work should depend on a corrected/refuted claim, not the false statement."
         : "Inactive claims should not be used as current evidence without an active successor.",
-      commandTemplate: `theorem claim add ${statementArg} --workspace ${workspaceArg} --supersedes ${quoteCommandArg(claim.claimId)} --evidence <new-evidence-ref> --json`
+      commandTemplate: `truth-harness claim add ${statementArg} --workspace ${workspaceArg} --supersedes ${quoteCommandArg(claim.claimId)} --evidence <new-evidence-ref> --json`
     });
   }
 
@@ -793,7 +793,7 @@ function claimReviewActions(claim: ClaimLedgerRecord, status: ClaimReviewStatus,
       kind: "run-verifier-route",
       label: "Run a manifest-aware verifier route",
       reason: "The claim still needs replayable local verifier evidence before it can be narrowed.",
-      command: `theorem verify ${statementArg} --write --workspace ${workspaceArg} --json`
+      command: `truth-harness verify ${statementArg} --write --workspace ${workspaceArg} --json`
     });
   }
 
@@ -802,7 +802,7 @@ function claimReviewActions(claim: ClaimLedgerRecord, status: ClaimReviewStatus,
       kind: "cite-sources",
       label: "Create a local source-citation receipt",
       reason: "Factual or literature-backed claims need cited local source evidence and entailment review.",
-      command: `theorem source cite ${statementArg} --workspace ${workspaceArg} --json`
+      command: `truth-harness source cite ${statementArg} --workspace ${workspaceArg} --json`
     });
   }
 
@@ -811,7 +811,7 @@ function claimReviewActions(claim: ClaimLedgerRecord, status: ClaimReviewStatus,
       kind: "attach-proof",
       label: "Attach accepted proof-checker evidence",
       reason: "Only an accepted proof-check backend can satisfy a formal proof claim.",
-      commandTemplate: `theorem proof check <proof-file.lean> --write --workspace ${workspaceArg} --json`
+      commandTemplate: `truth-harness proof check <proof-file.lean> --write --workspace ${workspaceArg} --json`
     });
   }
 
@@ -820,7 +820,7 @@ function claimReviewActions(claim: ClaimLedgerRecord, status: ClaimReviewStatus,
       kind: "request-human-review",
       label: "Record scoped human expert review",
       reason: "Broad or sensitive claims need qualified review before stronger presentation.",
-      commandTemplate: `theorem review log ${statementArg} --workspace ${workspaceArg} --reviewer-role <domain-expert-role> --json`
+      commandTemplate: `truth-harness review log ${statementArg} --workspace ${workspaceArg} --reviewer-role <domain-expert-role> --json`
     });
   }
 
@@ -986,7 +986,7 @@ async function inferEvidenceRefTrust(input: {
     return undefined;
   }
 
-  if (input.ref.kind === "cas" && artifact.parsed.schemaVersion === "theorem.cas-check.v0") {
+  if (input.ref.kind === "cas" && artifact.parsed.schemaVersion === "truth-harness.cas-check.v0") {
     try {
       const record = parseSymbolicCasCheckRecord(artifact.raw, input.ref.ref);
       return { trust: record.trust, summary: `CAS check status: ${record.status}.` };
@@ -995,7 +995,7 @@ async function inferEvidenceRefTrust(input: {
     }
   }
 
-  if (input.ref.kind === "proof" && artifact.parsed.schemaVersion === "theorem.proof-check.v0") {
+  if (input.ref.kind === "proof" && artifact.parsed.schemaVersion === "truth-harness.proof-check.v0") {
     try {
       const record = parseLeanProofCheckRecord(artifact.raw, input.ref.ref);
       return { trust: record.trust, summary: `Lean proof check status: ${record.status}.` };
@@ -1004,7 +1004,7 @@ async function inferEvidenceRefTrust(input: {
     }
   }
 
-  if (input.ref.kind === "smt" && artifact.parsed.schemaVersion === "theorem.smt-check.v0") {
+  if (input.ref.kind === "smt" && artifact.parsed.schemaVersion === "truth-harness.smt-check.v0") {
     try {
       const record = parseSmtCheckRecord(artifact.raw, input.ref.ref);
       return { trust: record.trust, summary: `SMT check status: ${record.status}.` };

@@ -41,7 +41,7 @@ describe("proof backend status", () => {
     });
 
     expect(calls).toEqual([{ command: "lean-test", args: ["--version"], timeoutMs: 3000 }]);
-    expect(report.schemaVersion).toBe("theorem.proof-backends.v0");
+    expect(report.schemaVersion).toBe("truth-harness.proof-backends.v0");
     expect(report.localOnly).toBe(true);
     expect(report.networkAccess).toBe("none");
     expect(report.proofCheckersAvailable).toBe(1);
@@ -58,7 +58,7 @@ describe("proof backend status", () => {
       version: "Lean (version 4.12.0, x86_64-unknown-linux-gnu)"
     });
     expect(report.backends[0]?.limitations.join(" ")).toContain("only after Lean accepts");
-    expect(report.warnings.join(" ")).toContain("does not prove any theorem");
+    expect(report.warnings.join(" ")).toContain("does not prove any claim");
   });
 
   it("keeps proved unavailable when Lean is missing", () => {
@@ -127,7 +127,7 @@ describe("proof backend status", () => {
     const record = checkLeanProofArtifact({
       sourcePath: "proofs/parity.lean",
       sourceText: "example : 1 + 1 = 2 := by norm_num\n",
-      theoremName: "one_plus_one",
+      declarationName: "one_plus_one",
       now: new Date("2026-06-10T00:00:00.000Z"),
       runner
     });
@@ -136,7 +136,7 @@ describe("proof backend status", () => {
       { command: "lean", args: ["--version"], timeoutMs: 3000 },
       { command: "lean", args: ["proofs/parity.lean"], timeoutMs: 3000 }
     ]);
-    expect(record.schemaVersion).toBe("theorem.proof-check.v0");
+    expect(record.schemaVersion).toBe("truth-harness.proof-check.v0");
     expect(record.checkId).toMatch(/^proof_[a-f0-9]{16}$/);
     expect(record.status).toBe("accepted");
     expect(record.trust).toBe("proved");
@@ -144,7 +144,7 @@ describe("proof backend status", () => {
     expect(record.backend.acceptedProofChecker).toBe(true);
     expect(record.backend.version).toBe("Lean (version 4.12.0)");
     expect(record.source.sha256).toMatch(/^[a-f0-9]{64}$/);
-    expect(record.source.theoremName).toBe("one_plus_one");
+    expect(record.source.declarationName).toBe("one_plus_one");
     expect(record.limitations.join(" ")).toContain("formal statement checked by Lean");
   });
 
@@ -175,7 +175,7 @@ describe("proof backend status", () => {
     expect(record.trust).toBe("unverified");
     expect(record.proofCheckerBacked).toBe(false);
     expect(record.stderr).toBe("unsolved goals");
-    expect(record.limitations.join(" ")).toContain("does not refute the theorem");
+    expect(record.limitations.join(" ")).toContain("does not refute the claim");
   });
 
   it("does not run a proof check when the accepted backend is unavailable", () => {
@@ -256,21 +256,21 @@ describe("proof backend status", () => {
     const write = await writeLeanProofCheckRecord({
       rootPath: root,
       sourcePath: "trivial.lean",
-      theoremName: "trivial_true",
+      declarationName: "trivial_true",
       runner
     });
     const list = await listLeanProofChecks(root);
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
     expect(write.record.trust).toBe("proved");
-    expect(write.jsonPath).toContain(".theorem-workbench");
-    expect(write.markdownPath).toContain(".theorem-workbench");
+    expect(write.jsonPath).toContain(".truth-harness");
+    expect(write.markdownPath).toContain(".truth-harness");
     expect(write.markdown).toContain("Lean Proof Check");
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
       checkId: write.record.checkId,
       sourcePath: "trivial.lean",
-      theoremName: "trivial_true",
+      declarationName: "trivial_true",
       trust: "proved",
       proofCheckerBacked: true
     });
@@ -280,7 +280,7 @@ describe("proof backend status", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-proof-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-proof-"));
   tempRoots.push(root);
   return root;
 }

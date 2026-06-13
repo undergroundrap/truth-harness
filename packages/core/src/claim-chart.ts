@@ -25,7 +25,7 @@ export interface ClaimChartElement {
 }
 
 export interface ClaimChart {
-  schemaVersion: "theorem.claim-chart.v0";
+  schemaVersion: "truth-harness.claim-chart.v0";
   chartId: string;
   projectId: string;
   entryId: string;
@@ -108,7 +108,7 @@ export async function createClaimChart(input: CreateClaimChartInput): Promise<Cl
     validation
   }).slice(0, 16)}`;
   const baseChart = {
-    schemaVersion: "theorem.claim-chart.v0" as const,
+    schemaVersion: "truth-harness.claim-chart.v0" as const,
     chartId,
     projectId: status.manifest.projectId,
     entryId: entry.entryId,
@@ -177,7 +177,7 @@ export async function listClaimCharts(rootPath: string): Promise<ClaimChart[]> {
   );
 
   return charts
-    .filter((chart) => chart.schemaVersion === "theorem.claim-chart.v0")
+    .filter((chart) => chart.schemaVersion === "truth-harness.claim-chart.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
@@ -259,7 +259,7 @@ export function renderClaimChartMarkdown(chart: Omit<ClaimChart, "markdown">): s
 async function findInventionEntry(rootPath: string, entryId: string | undefined): Promise<InventionLogEntry> {
   const entries = await listInventionLogEntries(rootPath);
   if (entries.length === 0) {
-    throw new Error("No invention logs found. Run `theorem invention log` before creating claim charts.");
+    throw new Error("No invention logs found. Run `truth-harness invention log` before creating claim charts.");
   }
 
   if (!entryId) {
@@ -373,7 +373,7 @@ function requiredBeforeDrafting(entry: InventionLogEntry, reductionToPracticeRef
 function legalWarnings(validation: ClaimChart["validation"]): string[] {
   const warnings = [
     "This claim chart is a local drafting aid, not legal advice.",
-    "Theorem Workbench does not determine patentability, novelty, non-obviousness, inventorship, freedom to operate, enablement, or written description sufficiency.",
+    "Truth Harness does not determine patentability, novelty, non-obviousness, inventorship, freedom to operate, enablement, or written description sufficiency.",
     "Do not file or publicly disclose based only on this artifact; get human legal review."
   ];
 
@@ -400,7 +400,7 @@ function defaultNoveltyQuestions(): string[] {
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before creating claim charts.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before creating claim charts.");
   }
 
   if (status.missingDirectories.length > 0) {

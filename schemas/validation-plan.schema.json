@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/validation-plan.schema.json",
-  "title": "Theorem Workbench Validation Plan",
+  "$id": "https://truth-harness.local/schemas/validation-plan.schema.json",
+  "title": "Truth Harness Validation Plan",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -25,7 +25,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.validation-plan.v0"
+      "const": "truth-harness.validation-plan.v0"
     },
     "planId": {
       "type": "string",

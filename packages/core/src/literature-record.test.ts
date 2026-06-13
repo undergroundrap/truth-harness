@@ -21,7 +21,7 @@ describe("literature records", () => {
         rootPath: root,
         title: "Example paper"
       })
-    ).rejects.toThrow("No Theorem workspace found");
+    ).rejects.toThrow("No Truth Harness workspace found");
   });
 
   it("writes local literature records with review boundaries", async () => {
@@ -42,7 +42,7 @@ describe("literature records", () => {
       identifiers: [{ kind: "doi", value: "10.0000/example" }],
       localRefs: ["papers/pathway.md"],
       corpusRefs: ["source:chunk_1234"],
-      evidenceRefs: ["source:.theorem-workbench/indexes/local-corpus.json"],
+      evidenceRefs: ["source:.truth-harness/indexes/local-corpus.json"],
       summary: "A local note about a toy pathway model.",
       keyClaims: ["The paper reports pathway marker changes under toy conditions."],
       methodNotes: ["Toy model only; no wet-lab replication."],
@@ -53,9 +53,9 @@ describe("literature records", () => {
     });
     const records = await listLiteratureRecords(root);
 
-    expect(result.jsonPath).toContain(join(".theorem-workbench", "literature"));
-    expect(result.markdownPath).toContain(join(".theorem-workbench", "literature"));
-    expect(result.record.schemaVersion).toBe("theorem.literature.v0");
+    expect(result.jsonPath).toContain(join(".truth-harness", "literature"));
+    expect(result.markdownPath).toContain(join(".truth-harness", "literature"));
+    expect(result.record.schemaVersion).toBe("truth-harness.literature.v0");
     expect(result.record.recordId).toMatch(/^lit_[a-f0-9]{16}$/);
     expect(result.record.privacy.mode).toBe("local-only");
     expect(result.record.reviewBoundary.sourceRetrievalIsNotEntailment).toBe(true);
@@ -88,7 +88,7 @@ describe("literature records", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-literature-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-literature-"));
   roots.push(root);
   return root;
 }

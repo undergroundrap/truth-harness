@@ -60,7 +60,7 @@ export interface SmtBackendProbe {
 }
 
 export interface SmtBackendStatusReport {
-  schemaVersion: "theorem.smt-backends.v0";
+  schemaVersion: "truth-harness.smt-backends.v0";
   createdAt: string;
   localOnly: true;
   networkAccess: "none";
@@ -110,7 +110,7 @@ export interface SmtCheckInput {
 }
 
 export interface SmtCheckRecord {
-  schemaVersion: "theorem.smt-check.v0";
+  schemaVersion: "truth-harness.smt-check.v0";
   checkId: string;
   createdAt: string;
   backend: {
@@ -180,7 +180,7 @@ const DEFAULT_TIMEOUT_MS = 3000;
 export function getSmtBackendStatus(options: SmtBackendStatusOptions = {}): SmtBackendStatusReport {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const runner = options.runner ?? runCommand;
-  const z3Command = options.z3Command?.trim() || process.env.THEOREM_Z3?.trim() || "z3";
+  const z3Command = options.z3Command?.trim() || process.env.TRUTH_HARNESS_Z3?.trim() || "z3";
   const z3 = probeZ3Backend({
     command: z3Command,
     timeoutMs,
@@ -189,7 +189,7 @@ export function getSmtBackendStatus(options: SmtBackendStatusOptions = {}): SmtB
   const smtSolversAvailable = z3.status === "available" ? 1 : 0;
 
   return {
-    schemaVersion: "theorem.smt-backends.v0",
+    schemaVersion: "truth-harness.smt-backends.v0",
     createdAt: (options.now ?? new Date()).toISOString(),
     localOnly: true,
     networkAccess: "none",
@@ -207,7 +207,7 @@ export function getSmtBackendStatus(options: SmtBackendStatusOptions = {}): SmtB
             "A detected SMT solver can check SMT-LIB constraints, but this status report does not prove or refute any claim."
           ]
         : [
-            "No accepted local SMT solver was detected. Theorem Workbench must not label results `smt-checked` until a solver run returns sat or unsat for a concrete SMT-LIB artifact."
+            "No accepted local SMT solver was detected. Truth Harness must not label results `smt-checked` until a solver run returns sat or unsat for a concrete SMT-LIB artifact."
           ]
   };
 }
@@ -215,7 +215,7 @@ export function getSmtBackendStatus(options: SmtBackendStatusOptions = {}): SmtB
 export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const runner = input.runner ?? runCommand;
-  const z3Command = input.z3Command?.trim() || process.env.THEOREM_Z3?.trim() || "z3";
+  const z3Command = input.z3Command?.trim() || process.env.TRUTH_HARNESS_Z3?.trim() || "z3";
   const createdAt = (input.now ?? new Date()).toISOString();
   const sourcePath = input.sourcePath;
   const sourceRef = input.sourceRef ?? sourcePath;
@@ -229,7 +229,7 @@ export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
   });
   const checkArgs = ["-smt2", sourcePath];
   const base = {
-    schemaVersion: "theorem.smt-check.v0" as const,
+    schemaVersion: "truth-harness.smt-check.v0" as const,
     createdAt,
     backend: {
       id: "z3" as const,
@@ -250,7 +250,7 @@ export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
     proofCheckerBacked: false as const,
     localOnly: true as const,
     networkAccess: "none" as const,
-    replay: input.replayCommand ?? `theorem smt check ${quoteCommandArg(sourceRef)} --json`
+    replay: input.replayCommand ?? `truth-harness smt check ${quoteCommandArg(sourceRef)} --json`
   };
 
   if (backendProbe.status !== "available") {
@@ -383,7 +383,7 @@ export async function writeSmtCheckRecord(input: WriteSmtCheckInput): Promise<Sm
     timeoutMs: input.timeoutMs,
     now: input.now,
     runner: input.runner,
-    replayCommand: `theorem smt check ${quoteCommandArg(sourceRef)} --write --json`
+    replayCommand: `truth-harness smt check ${quoteCommandArg(sourceRef)} --write --json`
   });
   const smtDir = resolve(status.root, status.manifest.directories.smt);
   await mkdir(smtDir, { recursive: true });
@@ -436,8 +436,8 @@ export async function listSmtChecks(rootPath: string): Promise<SmtCheckSummary[]
 export function parseSmtCheckRecord(raw: string, sourcePath = "SMT check record"): SmtCheckRecord {
   const parsed = parseJsonObject(raw, sourcePath, "SMT check");
   const issues: string[] = [];
-  if (parsed.schemaVersion !== "theorem.smt-check.v0") {
-    issues.push(`$.schemaVersion must equal "theorem.smt-check.v0"`);
+  if (parsed.schemaVersion !== "truth-harness.smt-check.v0") {
+    issues.push(`$.schemaVersion must equal "truth-harness.smt-check.v0"`);
   }
   expectPattern(parsed, "checkId", /^smt_[a-f0-9]{16}$/u, "$.checkId", issues);
   expectDateTime(parsed, "createdAt", "$.createdAt", issues);
@@ -830,7 +830,7 @@ async function requireLocalWorkspace(
 ): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing SMT check records.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing SMT check records.");
   }
 
   return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };

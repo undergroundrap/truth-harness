@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/expert-review.schema.json",
-  "title": "Theorem Workbench Expert Review",
+  "$id": "https://truth-harness.local/schemas/expert-review.schema.json",
+  "title": "Truth Harness Expert Review",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -28,7 +28,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.expert-review.v0"
+      "const": "truth-harness.expert-review.v0"
     },
     "reviewId": {
       "type": "string",

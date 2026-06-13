@@ -26,7 +26,7 @@ describe("claim ledger", () => {
   it("writes claim records with verification ladder and local workspace validation", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
-    const receiptsDir = join(root, ".theorem-workbench", "receipts");
+    const receiptsDir = join(root, ".truth-harness", "receipts");
     await mkdir(receiptsDir, { recursive: true });
     await writeFile(
       join(receiptsDir, "base-fraction.json"),
@@ -46,7 +46,7 @@ describe("claim ledger", () => {
       domain: "math",
       trust: "exact-computed",
       tags: ["Math", "#fractions"],
-      evidenceRefs: [{ kind: "receipt", ref: ".theorem-workbench/receipts/base-fraction.json" }],
+      evidenceRefs: [{ kind: "receipt", ref: ".truth-harness/receipts/base-fraction.json" }],
       authors: ["Ocean Bennett"],
       now: "2026-06-12T00:10:00.000Z"
     });
@@ -58,7 +58,7 @@ describe("claim ledger", () => {
       dependsOn: [base.claim.claimId],
       evidenceRefs: [
         { kind: "claim", ref: base.claim.claimId },
-        { kind: "receipt", ref: ".theorem-workbench/receipts/fraction-sum.json" }
+        { kind: "receipt", ref: ".truth-harness/receipts/fraction-sum.json" }
       ],
       nextChecks: [],
       derivedBy: "Uses the base fraction subclaim, then checks the exact sum receipt.",
@@ -97,7 +97,7 @@ describe("claim ledger", () => {
   it("derives claim trust from a linked local receipt artifact", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
-    const receiptsDir = join(root, ".theorem-workbench", "receipts");
+    const receiptsDir = join(root, ".truth-harness", "receipts");
     await mkdir(receiptsDir, { recursive: true });
     const receipt = createReceipt("compute 3 / 4 + 5 / 8");
     await writeFile(join(receiptsDir, "fraction-sum.json"), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
@@ -105,14 +105,14 @@ describe("claim ledger", () => {
     const written = await writeClaimLedgerRecord({
       rootPath: root,
       statement: "3 / 4 + 5 / 8 equals 11 / 8.",
-      evidenceRefs: [{ kind: "receipt", ref: ".theorem-workbench/receipts/fraction-sum.json" }],
+      evidenceRefs: [{ kind: "receipt", ref: ".truth-harness/receipts/fraction-sum.json" }],
       now: "2026-06-12T00:10:00.000Z"
     });
 
     expect(written.claim.trust).toBe("exact-computed");
     expect(written.claim.evidenceRefs[0]).toMatchObject({
       kind: "receipt",
-      ref: ".theorem-workbench/receipts/fraction-sum.json",
+      ref: ".truth-harness/receipts/fraction-sum.json",
       trust: "exact-computed",
       summary: "Exact result: 11/8."
     });
@@ -126,9 +126,9 @@ describe("claim ledger", () => {
       rootPath: root,
       problem: "compute 3 / 4 + 5 / 8",
       now: new Date("2026-06-12T00:05:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
 
@@ -157,9 +157,9 @@ describe("claim ledger", () => {
       rootPath: root,
       problem: "prove the Riemann hypothesis",
       now: new Date("2026-06-12T00:05:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
 
@@ -189,7 +189,7 @@ describe("claim ledger", () => {
     expect(review.readyForNarrowClaim).toBe(false);
     expect(review.blockingChecks.some((check) => check.includes(routeWarning))).toBe(true);
     expect(review.nextActions.some((action) => action.kind === "run-verifier-route")).toBe(true);
-    expect(review.commands.reviewJson).toContain("theorem claim review");
+    expect(review.commands.reviewJson).toContain("truth-harness claim review");
     expect(review.markdown).toContain("## Agent Next Actions");
   });
 
@@ -207,7 +207,7 @@ describe("claim ledger", () => {
 
       return {
         status: 0,
-        stdout: "THEOREM_MAXIMA_STATUS:passed:0\n",
+        stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n",
         stderr: ""
       };
     };
@@ -249,12 +249,12 @@ describe("claim ledger", () => {
   it("does not derive proved claim trust from malformed proof-check JSON", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
-    const proofRef = ".theorem-workbench/proofs/forged-proof.json";
-    await mkdir(join(root, ".theorem-workbench", "proofs"), { recursive: true });
+    const proofRef = ".truth-harness/proofs/forged-proof.json";
+    await mkdir(join(root, ".truth-harness", "proofs"), { recursive: true });
     await writeFile(
       join(root, proofRef),
       `${JSON.stringify({
-        schemaVersion: "theorem.proof-check.v0",
+        schemaVersion: "truth-harness.proof-check.v0",
         checkId: "proof_0123456789abcdef",
         backend: { acceptedProofChecker: true },
         status: "accepted",
@@ -266,7 +266,7 @@ describe("claim ledger", () => {
 
     const written = await writeClaimLedgerRecord({
       rootPath: root,
-      statement: "This malformed proof-check artifact proves the theorem.",
+      statement: "This malformed proof-check artifact proves the truth-harness.",
       trust: "proved",
       evidenceRefs: [{ kind: "proof", ref: proofRef }],
       now: "2026-06-12T00:10:00.000Z"
@@ -289,14 +289,14 @@ describe("claim ledger", () => {
   it("does not derive engine claim trust from malformed CAS or SMT JSON", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
-    const casRef = ".theorem-workbench/cas/forged-cas.json";
-    const smtRef = ".theorem-workbench/smt/forged-smt.json";
-    await mkdir(join(root, ".theorem-workbench", "cas"), { recursive: true });
-    await mkdir(join(root, ".theorem-workbench", "smt"), { recursive: true });
+    const casRef = ".truth-harness/cas/forged-cas.json";
+    const smtRef = ".truth-harness/smt/forged-smt.json";
+    await mkdir(join(root, ".truth-harness", "cas"), { recursive: true });
+    await mkdir(join(root, ".truth-harness", "smt"), { recursive: true });
     await writeFile(
       join(root, casRef),
       `${JSON.stringify({
-        schemaVersion: "theorem.cas-check.v0",
+        schemaVersion: "truth-harness.cas-check.v0",
         checkId: "cas_0123456789abcdef",
         status: "passed",
         trust: "cross-checked",
@@ -307,7 +307,7 @@ describe("claim ledger", () => {
     await writeFile(
       join(root, smtRef),
       `${JSON.stringify({
-        schemaVersion: "theorem.smt-check.v0",
+        schemaVersion: "truth-harness.smt-check.v0",
         checkId: "smt_0123456789abcdef",
         status: "sat",
         trust: "smt-checked",
@@ -349,7 +349,7 @@ describe("claim ledger", () => {
 
     const written = await writeClaimLedgerRecord({
       rootPath: root,
-      statement: "This informal argument is a formally proved theorem.",
+      statement: "This informal argument is a formally proved truth-harness.",
       trust: "proved",
       evidenceRefs: [{ kind: "other", ref: "notes/informal-sketch" }],
       now: "2026-06-12T00:10:00.000Z"
@@ -387,7 +387,7 @@ describe("claim ledger", () => {
   it("reads claim records by id and preserves refuted status as non-final", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
-    const receiptsDir = join(root, ".theorem-workbench", "receipts");
+    const receiptsDir = join(root, ".truth-harness", "receipts");
     await mkdir(receiptsDir, { recursive: true });
     await writeFile(
       join(receiptsDir, "false-parity.json"),
@@ -398,7 +398,7 @@ describe("claim ledger", () => {
       rootPath: root,
       statement: "For all integers n, n^2+n+1 is even.",
       trust: "refuted",
-      evidenceRefs: [{ kind: "receipt", ref: ".theorem-workbench/receipts/false-parity.json" }],
+      evidenceRefs: [{ kind: "receipt", ref: ".truth-harness/receipts/false-parity.json" }],
       now: "2026-06-12T00:10:00.000Z"
     });
 
@@ -412,7 +412,7 @@ describe("claim ledger", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-claim-ledger-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-claim-ledger-"));
   roots.push(root);
   return root;
 }

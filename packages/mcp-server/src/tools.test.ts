@@ -1,88 +1,88 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createReceipt } from "@theorem-workbench/core";
+import { createReceipt } from "@truth-harness/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  handleTheoremAsk,
-  handleTheoremBenchmarkCompare,
-  handleTheoremBenchmarkList,
-  handleTheoremBenchmarkRun,
-  handleTheoremCasBackends,
-  handleTheoremCasCheck,
-  handleTheoremCasList,
-  handleTheoremClaimAdd,
-  handleTheoremClaimChart,
-  handleTheoremClaimChartList,
-  handleTheoremClaimList,
-  handleTheoremClaimReview,
-  handleTheoremClaimShow,
-  handleTheoremCodeRun,
-  handleTheoremCodeRunList,
-  handleTheoremCodeSandboxStatus,
-  handleTheoremDiscoveryPackage,
-  handleTheoremEngineManifest,
-  handleTheoremEvidenceAudit,
-  handleTheoremEvidenceAuditList,
-  handleTheoremExpertReviewList,
-  handleTheoremExpertReviewLog,
-  handleTheoremExperimentList,
-  handleTheoremExperimentLog,
-  handleTheoremExternalDisclosureList,
-  handleTheoremExternalDisclosureLog,
-  handleTheoremInventionList,
-  handleTheoremInventionLog,
-  handleTheoremLiteratureList,
-  handleTheoremLiteratureLog,
-  handleTheoremModelContextList,
-  handleTheoremModelContextPrepare,
-  handleTheoremNotebookRunList,
-  handleTheoremNotebookRunLog,
-  handleTheoremProofBackends,
-  handleTheoremProofCheck,
-  handleTheoremProofList,
-  handleTheoremRenderReceipt,
-  handleTheoremReplay,
-  handleTheoremResearchSessionCheckpoint,
-  handleTheoremResearchSessionList,
-  handleTheoremResearchSessionStart,
-  handleTheoremRouteList,
-  handleTheoremRouteShow,
-  handleTheoremRouteSatisfy,
-  handleTheoremSimulationList,
-  handleTheoremSimulationLog,
-  handleTheoremSmtBackends,
-  handleTheoremSmtCheck,
-  handleTheoremSmtList,
-  handleTheoremSmtSolve,
-  handleTheoremSourceCite,
-  handleTheoremSourceIngest,
-  handleTheoremSourceSearch,
-  handleTheoremValidationPlan,
-  handleTheoremValidationPlanList,
-  handleTheoremVaultList,
-  handleTheoremVaultSeal,
-  handleTheoremVaultVerify,
-  handleTheoremVerify,
-  handleTheoremWorkspaceInit,
-  handleTheoremWorkspaceRepair,
-  handleTheoremWorkspaceSnapshot,
-  handleTheoremWorkspaceSnapshotList,
-  handleTheoremWorkspaceSnapshotVerify,
-  handleTheoremWorkspaceStatus,
-  handleTheoremWorkspaceValidate,
-  theoremBenchmarkCompareOutputFailsGate,
-  theoremBenchmarkRunOutputFailsGate,
+  handleTruthHarnessAsk,
+  handleTruthHarnessBenchmarkCompare,
+  handleTruthHarnessBenchmarkList,
+  handleTruthHarnessBenchmarkRun,
+  handleTruthHarnessCasBackends,
+  handleTruthHarnessCasCheck,
+  handleTruthHarnessCasList,
+  handleTruthHarnessClaimAdd,
+  handleTruthHarnessClaimChart,
+  handleTruthHarnessClaimChartList,
+  handleTruthHarnessClaimList,
+  handleTruthHarnessClaimReview,
+  handleTruthHarnessClaimShow,
+  handleTruthHarnessCodeRun,
+  handleTruthHarnessCodeRunList,
+  handleTruthHarnessCodeSandboxStatus,
+  handleTruthHarnessDiscoveryPackage,
+  handleTruthHarnessEngineManifest,
+  handleTruthHarnessEvidenceAudit,
+  handleTruthHarnessEvidenceAuditList,
+  handleTruthHarnessExpertReviewList,
+  handleTruthHarnessExpertReviewLog,
+  handleTruthHarnessExperimentList,
+  handleTruthHarnessExperimentLog,
+  handleTruthHarnessExternalDisclosureList,
+  handleTruthHarnessExternalDisclosureLog,
+  handleTruthHarnessInventionList,
+  handleTruthHarnessInventionLog,
+  handleTruthHarnessLiteratureList,
+  handleTruthHarnessLiteratureLog,
+  handleTruthHarnessModelContextList,
+  handleTruthHarnessModelContextPrepare,
+  handleTruthHarnessNotebookRunList,
+  handleTruthHarnessNotebookRunLog,
+  handleTruthHarnessProofBackends,
+  handleTruthHarnessProofCheck,
+  handleTruthHarnessProofList,
+  handleTruthHarnessRenderReceipt,
+  handleTruthHarnessReplay,
+  handleTruthHarnessResearchSessionCheckpoint,
+  handleTruthHarnessResearchSessionList,
+  handleTruthHarnessResearchSessionStart,
+  handleTruthHarnessRouteList,
+  handleTruthHarnessRouteShow,
+  handleTruthHarnessRouteSatisfy,
+  handleTruthHarnessSimulationList,
+  handleTruthHarnessSimulationLog,
+  handleTruthHarnessSmtBackends,
+  handleTruthHarnessSmtCheck,
+  handleTruthHarnessSmtList,
+  handleTruthHarnessSmtSolve,
+  handleTruthHarnessSourceCite,
+  handleTruthHarnessSourceIngest,
+  handleTruthHarnessSourceSearch,
+  handleTruthHarnessValidationPlan,
+  handleTruthHarnessValidationPlanList,
+  handleTruthHarnessVaultList,
+  handleTruthHarnessVaultSeal,
+  handleTruthHarnessVaultVerify,
+  handleTruthHarnessVerify,
+  handleTruthHarnessWorkspaceInit,
+  handleTruthHarnessWorkspaceRepair,
+  handleTruthHarnessWorkspaceSnapshot,
+  handleTruthHarnessWorkspaceSnapshotList,
+  handleTruthHarnessWorkspaceSnapshotVerify,
+  handleTruthHarnessWorkspaceStatus,
+  handleTruthHarnessWorkspaceValidate,
+  truthHarnessBenchmarkCompareOutputFailsGate,
+  truthHarnessBenchmarkRunOutputFailsGate,
   toolJson
 } from "./tools.js";
 
 const receiptPath = join("receipts", "mcp-test.json");
 const tempRoots: string[] = [];
-const originalWorkspaceRoot = process.env.THEOREM_WORKBENCH_ROOT;
-const originalLeanCommand = process.env.THEOREM_LEAN;
-const originalCodeRunOptIn = process.env.THEOREM_ALLOW_CODE_RUN;
-const originalUnsandboxedCodeRunOptIn = process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN;
-const vaultKeyEnv = "THEOREM_WORKBENCH_MCP_TEST_VAULT_KEY";
+const originalWorkspaceRoot = process.env.TRUTH_HARNESS_ROOT;
+const originalLeanCommand = process.env.TRUTH_HARNESS_LEAN;
+const originalCodeRunOptIn = process.env.TRUTH_HARNESS_ALLOW_CODE_RUN;
+const originalUnsandboxedCodeRunOptIn = process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN;
+const vaultKeyEnv = "TRUTH_HARNESS_MCP_TEST_VAULT_KEY";
 const originalVaultKey = process.env[vaultKeyEnv];
 
 afterEach(async () => {
@@ -98,7 +98,7 @@ afterEach(async () => {
 
 describe("MCP tool handlers", () => {
   it("creates proof receipts for agents", () => {
-    const result = handleTheoremAsk({ problem: "for all integers n, n^2+n+1 is even" });
+    const result = handleTruthHarnessAsk({ problem: "for all integers n, n^2+n+1 is even" });
 
     expect(result.error).toBe(false);
     expect(result.receipt.trust).toBe("refuted");
@@ -106,24 +106,24 @@ describe("MCP tool handlers", () => {
   });
 
   it("marks strict unverified receipts as tool errors", () => {
-    const result = handleTheoremAsk({ problem: "for all integers n, 2*(n/1) is even", strict: true });
+    const result = handleTruthHarnessAsk({ problem: "for all integers n, 2*(n/1) is even", strict: true });
 
     expect(result.error).toBe(true);
     expect(result.receipt.trust).toBe("unverified");
   });
 
   it("routes verification for agents before they rely on a claim", async () => {
-    const result = await handleTheoremVerify({
+    const result = await handleTruthHarnessVerify({
       problem: "compute 3 / 4 + 5 / 8",
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
 
     expect(result.error).toBe(false);
     expect(result.written).toBe(false);
-    expect(result.route.schemaVersion).toBe("theorem.verifier-route.v0");
+    expect(result.route.schemaVersion).toBe("truth-harness.verifier-route.v0");
     expect(result.route.finalTrust).toBe("exact-computed");
     expect(result.route.usedCapabilities).toContainEqual(
       expect.objectContaining({
@@ -136,18 +136,18 @@ describe("MCP tool handlers", () => {
 
   it("writes and reopens verifier routes for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Route Lab" });
-    const result = await handleTheoremVerify({
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Route Lab" });
+    const result = await handleTruthHarnessVerify({
       write: true,
       problem: "compute 3 / 4 + 5 / 8",
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
-    const list = await handleTheoremRouteList({});
-    const shown = await handleTheoremRouteShow({
+    const list = await handleTruthHarnessRouteList({});
+    const shown = await handleTruthHarnessRouteShow({
       routeRef: result.route.routeId
     });
     const openProofObligations = result.route.proofObligations.filter(
@@ -165,7 +165,7 @@ describe("MCP tool handlers", () => {
 
     expect(result.error).toBe(false);
     expect(result.written).toBe(true);
-    expect(result.result?.jsonPath).toContain(".theorem-workbench");
+    expect(result.result?.jsonPath).toContain(".truth-harness");
     expect(list.total).toBe(1);
     expect(list.routes[0]).toMatchObject({
       routeId: result.route.routeId,
@@ -181,24 +181,24 @@ describe("MCP tool handlers", () => {
 
   it("satisfies verifier route obligations for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Obligation Lab" });
-    const result = await handleTheoremVerify({
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Obligation Lab" });
+    const result = await handleTruthHarnessVerify({
       write: true,
       problem: "prove the Riemann hypothesis",
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const obligation = result.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
-    const proofRef = join(".theorem-workbench", "proofs", "manual-proof.json");
-    await mkdir(join(root, ".theorem-workbench", "proofs"), { recursive: true });
+    const proofRef = join(".truth-harness", "proofs", "manual-proof.json");
+    await mkdir(join(root, ".truth-harness", "proofs"), { recursive: true });
     await writeFile(
       join(root, proofRef),
       `${JSON.stringify(
         {
-          schemaVersion: "theorem.proof-check.v0",
+          schemaVersion: "truth-harness.proof-check.v0",
           checkId: "proof_0123456789abcdef",
           createdAt: "2026-06-12T00:00:00.000Z",
           backend: {
@@ -221,7 +221,7 @@ describe("MCP tool handlers", () => {
           proofCheckerBacked: true,
           localOnly: true,
           networkAccess: "none",
-          replay: "theorem proof check trivial.lean --write --json",
+          replay: "truth-harness proof check trivial.lean --write --json",
           limitations: ["Test fixture for route-satisfaction contract only."],
           warnings: []
         },
@@ -231,22 +231,22 @@ describe("MCP tool handlers", () => {
       "utf8"
     );
 
-    const satisfied = await handleTheoremRouteSatisfy({
+    const satisfied = await handleTruthHarnessRouteSatisfy({
       routeRef: result.route.routeId,
       obligationId: obligation?.obligationId ?? "",
       evidenceRef: { kind: "proof", ref: proofRef }
     });
-    const shown = await handleTheoremRouteShow({
+    const shown = await handleTruthHarnessRouteShow({
       routeRef: result.route.routeId
     });
-    const list = await handleTheoremRouteList({});
+    const list = await handleTruthHarnessRouteList({});
 
     expect(satisfied.obligation.status).toBe("satisfied");
     expect(satisfied.evidence).toMatchObject({
       kind: "proof",
       ref: proofRef,
       trust: "proved",
-      schemaVersion: "theorem.proof-check.v0"
+      schemaVersion: "truth-harness.proof-check.v0"
     });
     expect(shown.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
       status: "satisfied"
@@ -261,12 +261,12 @@ describe("MCP tool handlers", () => {
   });
 
   it("reports local CAS backend readiness for agents", () => {
-    const result = handleTheoremCasBackends({
-      maximaCommand: "theorem-workbench-missing-maxima-command",
+    const result = handleTruthHarnessCasBackends({
+      maximaCommand: "truth-harness-missing-maxima-command",
       timeoutMs: 1000
     });
 
-    expect(result.schemaVersion).toBe("theorem.cas-backends.v0");
+    expect(result.schemaVersion).toBe("truth-harness.cas-backends.v0");
     expect(result.localOnly).toBe(true);
     expect(result.networkAccess).toBe("none");
     expect(result.backends[0]?.backendId).toBe("maxima");
@@ -277,18 +277,18 @@ describe("MCP tool handlers", () => {
   });
 
   it("checks symbolic CAS results for agents without minting trust when Maxima is unavailable", async () => {
-    const result = await handleTheoremCasCheck({
+    const result = await handleTruthHarnessCasCheck({
       operation: "simplify",
       expression: "sin(x)^2 + cos(x)^2",
       result: "1",
       variable: "x",
-      maximaCommand: "theorem-workbench-missing-maxima-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
       timeoutMs: 50,
       failOnUnverified: true
     });
 
     expect(result.error).toBe(true);
-    expect(result.record.schemaVersion).toBe("theorem.cas-check.v0");
+    expect(result.record.schemaVersion).toBe("truth-harness.cas-check.v0");
     expect(result.record.status).toBe("solver-unavailable");
     expect(result.record.trust).toBe("unverified");
     expect(result.record.proofCheckerBacked).toBe(false);
@@ -298,24 +298,24 @@ describe("MCP tool handlers", () => {
 
   it("writes and lists CAS check records for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP CAS Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP CAS Lab" });
 
-    const result = await handleTheoremCasCheck({
+    const result = await handleTruthHarnessCasCheck({
       operation: "simplify",
       expression: "sin(x)^2 + cos(x)^2",
       result: "1",
       variable: "x",
-      maximaCommand: "theorem-workbench-missing-maxima-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
       timeoutMs: 50,
       write: true
     });
-    const list = await handleTheoremCasList({});
-    const validation = await handleTheoremWorkspaceValidate({});
+    const list = await handleTruthHarnessCasList({});
+    const validation = await handleTruthHarnessWorkspaceValidate({});
 
     expect(result.error).toBe(false);
     expect(result.written).toBe(true);
-    expect(result.result?.jsonPath).toContain(".theorem-workbench");
+    expect(result.result?.jsonPath).toContain(".truth-harness");
     expect(result.record.trust).toBe("unverified");
     expect(list.total).toBe(1);
     expect(list.checks[0]?.checkId).toBe(result.record.checkId);
@@ -324,14 +324,14 @@ describe("MCP tool handlers", () => {
   });
 
   it("reports the local engine capability manifest for agents", () => {
-    const result = handleTheoremEngineManifest({
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+    const result = handleTruthHarnessEngineManifest({
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
 
-    expect(result.schemaVersion).toBe("theorem.engine-manifest.v0");
+    expect(result.schemaVersion).toBe("truth-harness.engine-manifest.v0");
     expect(result.localOnly).toBe(true);
     expect(result.networkAccess).toBe("none");
     expect(result.capabilities).toContainEqual(
@@ -355,9 +355,9 @@ describe("MCP tool handlers", () => {
 
   it("writes and reads claim ledger records for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Claim Lab" });
-    const receiptsDir = join(root, ".theorem-workbench", "receipts");
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Claim Lab" });
+    const receiptsDir = join(root, ".truth-harness", "receipts");
     await mkdir(receiptsDir, { recursive: true });
     await writeFile(
       join(receiptsDir, "base-fraction.json"),
@@ -370,27 +370,27 @@ describe("MCP tool handlers", () => {
       "utf8"
     );
 
-    const base = await handleTheoremClaimAdd({
+    const base = await handleTruthHarnessClaimAdd({
       statement: "3 / 4 is exactly 3 / 4.",
       domain: "math",
       trust: "exact-computed",
       tags: ["fractions"],
-      evidenceRefs: [{ kind: "receipt", ref: ".theorem-workbench/receipts/base-fraction.json" }]
+      evidenceRefs: [{ kind: "receipt", ref: ".truth-harness/receipts/base-fraction.json" }]
     });
-    const derived = await handleTheoremClaimAdd({
+    const derived = await handleTruthHarnessClaimAdd({
       statement: "3 / 4 + 5 / 8 equals 11 / 8.",
       domain: "math",
       trust: "exact-computed",
       dependsOn: [base.claim.claimId],
       evidenceRefs: [
         { kind: "claim", ref: base.claim.claimId },
-        { kind: "receipt", ref: ".theorem-workbench/receipts/fraction-sum.json" }
+        { kind: "receipt", ref: ".truth-harness/receipts/fraction-sum.json" }
       ]
     });
-    const list = await handleTheoremClaimList({ domain: "math" });
-    const shown = await handleTheoremClaimShow({ claimRef: derived.claim.claimId });
-    const review = await handleTheoremClaimReview({ claimRef: derived.claim.claimId });
-    const validation = await handleTheoremWorkspaceValidate({});
+    const list = await handleTruthHarnessClaimList({ domain: "math" });
+    const shown = await handleTruthHarnessClaimShow({ claimRef: derived.claim.claimId });
+    const review = await handleTruthHarnessClaimReview({ claimRef: derived.claim.claimId });
+    const validation = await handleTruthHarnessWorkspaceValidate({});
 
     expect(base.claim.claimId).toMatch(/^claim_[a-f0-9]{16}$/);
     expect(derived.claim.dependsOn).toEqual([base.claim.claimId]);
@@ -404,16 +404,16 @@ describe("MCP tool handlers", () => {
     expect(shown.claimId).toBe(derived.claim.claimId);
     expect(review.claimId).toBe(derived.claim.claimId);
     expect(review.reviewStatus).toBe("ready");
-    expect(review.commands.reviewJson).toContain("theorem claim review");
+    expect(review.commands.reviewJson).toContain("truth-harness claim review");
     expect(review.markdown).toContain("## Agent Next Actions");
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.claims).toBe(2);
   });
 
   it("reports local proof backend readiness for agents", () => {
-    const result = handleTheoremProofBackends({ timeoutMs: 1000 });
+    const result = handleTruthHarnessProofBackends({ timeoutMs: 1000 });
 
-    expect(result.schemaVersion).toBe("theorem.proof-backends.v0");
+    expect(result.schemaVersion).toBe("truth-harness.proof-backends.v0");
     expect(result.localOnly).toBe(true);
     expect(result.networkAccess).toBe("none");
     expect(result.backends[0]?.backendId).toBe("lean");
@@ -425,18 +425,18 @@ describe("MCP tool handlers", () => {
 
   it("checks Lean proof artifacts for agents without minting proof when Lean is unavailable", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    process.env.THEOREM_LEAN = "theorem-workbench-missing-lean-command";
+    process.env.TRUTH_HARNESS_ROOT = root;
+    process.env.TRUTH_HARNESS_LEAN = "truth-harness-missing-lean-command";
     await writeFile(join(root, "example.lean"), "example : True := by trivial\n", "utf8");
 
-    const result = await handleTheoremProofCheck({
+    const result = await handleTruthHarnessProofCheck({
       sourcePath: "example.lean",
-      theoremName: "example_true",
+      declarationName: "example_true",
       failOnUnproved: true
     });
 
     expect(result.error).toBe(true);
-    expect(result.record.schemaVersion).toBe("theorem.proof-check.v0");
+    expect(result.record.schemaVersion).toBe("truth-harness.proof-check.v0");
     expect(result.record.status).toBe("backend-unavailable");
     expect(result.record.trust).toBe("unverified");
     expect(result.record.proofCheckerBacked).toBe(false);
@@ -446,22 +446,22 @@ describe("MCP tool handlers", () => {
 
   it("writes and lists proof-check records for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    process.env.THEOREM_LEAN = "theorem-workbench-missing-lean-command";
-    await handleTheoremWorkspaceInit({ name: "MCP Proof Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    process.env.TRUTH_HARNESS_LEAN = "truth-harness-missing-lean-command";
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Proof Lab" });
     await writeFile(join(root, "example.lean"), "example : True := by trivial\n", "utf8");
 
-    const result = await handleTheoremProofCheck({
+    const result = await handleTruthHarnessProofCheck({
       sourcePath: "example.lean",
-      theoremName: "example_true",
+      declarationName: "example_true",
       write: true
     });
-    const list = await handleTheoremProofList({});
-    const validation = await handleTheoremWorkspaceValidate({});
+    const list = await handleTruthHarnessProofList({});
+    const validation = await handleTruthHarnessWorkspaceValidate({});
 
     expect(result.error).toBe(false);
     expect(result.written).toBe(true);
-    expect(result.result?.jsonPath).toContain(".theorem-workbench");
+    expect(result.result?.jsonPath).toContain(".truth-harness");
     expect(result.record.trust).toBe("unverified");
     expect(list.total).toBe(1);
     expect(list.checks[0]?.checkId).toBe(result.record.checkId);
@@ -470,12 +470,12 @@ describe("MCP tool handlers", () => {
   });
 
   it("reports local SMT backend readiness for agents", () => {
-    const result = handleTheoremSmtBackends({
-      z3Command: "theorem-workbench-missing-z3-command",
+    const result = handleTruthHarnessSmtBackends({
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 1000
     });
 
-    expect(result.schemaVersion).toBe("theorem.smt-backends.v0");
+    expect(result.schemaVersion).toBe("truth-harness.smt-backends.v0");
     expect(result.localOnly).toBe(true);
     expect(result.networkAccess).toBe("none");
     expect(result.backends[0]?.backendId).toBe("z3");
@@ -487,22 +487,22 @@ describe("MCP tool handlers", () => {
 
   it("checks SMT-LIB artifacts for agents without minting smt-checked when Z3 is unavailable", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
+    process.env.TRUTH_HARNESS_ROOT = root;
     await writeFile(
       join(root, "constraints.smt2"),
       "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
       "utf8"
     );
 
-    const result = await handleTheoremSmtCheck({
+    const result = await handleTruthHarnessSmtCheck({
       sourcePath: "constraints.smt2",
       queryName: "positive_integer_model",
-      z3Command: "theorem-workbench-missing-z3-command",
+      z3Command: "truth-harness-missing-z3-command",
       failOnUnverified: true
     });
 
     expect(result.error).toBe(true);
-    expect(result.record.schemaVersion).toBe("theorem.smt-check.v0");
+    expect(result.record.schemaVersion).toBe("truth-harness.smt-check.v0");
     expect(result.record.status).toBe("solver-unavailable");
     expect(result.record.trust).toBe("unverified");
     expect(result.record.proofCheckerBacked).toBe(false);
@@ -512,26 +512,26 @@ describe("MCP tool handlers", () => {
 
   it("writes and lists SMT check records for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP SMT Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP SMT Lab" });
     await writeFile(
       join(root, "constraints.smt2"),
       "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
       "utf8"
     );
 
-    const result = await handleTheoremSmtCheck({
+    const result = await handleTruthHarnessSmtCheck({
       sourcePath: "constraints.smt2",
       queryName: "positive_integer_model",
-      z3Command: "theorem-workbench-missing-z3-command",
+      z3Command: "truth-harness-missing-z3-command",
       write: true
     });
-    const list = await handleTheoremSmtList({});
-    const validation = await handleTheoremWorkspaceValidate({});
+    const list = await handleTruthHarnessSmtList({});
+    const validation = await handleTruthHarnessWorkspaceValidate({});
 
     expect(result.error).toBe(false);
     expect(result.written).toBe(true);
-    expect(result.result?.jsonPath).toContain(".theorem-workbench");
+    expect(result.result?.jsonPath).toContain(".truth-harness");
     expect(result.record.trust).toBe("unverified");
     expect(list.total).toBe(1);
     expect(list.checks[0]?.checkId).toBe(result.record.checkId);
@@ -541,23 +541,23 @@ describe("MCP tool handlers", () => {
 
   it("generates SMT-LIB from explicit constraints for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP SMT Solve Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP SMT Solve Lab" });
 
-    const result = await handleTheoremSmtSolve({
+    const result = await handleTruthHarnessSmtSolve({
       queryName: "small_positive_integer",
       integerVariables: ["x"],
       constraints: ["x > 0", "x < 3"],
-      z3Command: "theorem-workbench-missing-z3-command",
+      z3Command: "truth-harness-missing-z3-command",
       failOnUnverified: true
     });
-    const list = await handleTheoremSmtList({});
-    const validation = await handleTheoremWorkspaceValidate({});
+    const list = await handleTruthHarnessSmtList({});
+    const validation = await handleTruthHarnessWorkspaceValidate({});
 
     expect(result.error).toBe(true);
     expect(result.result.problem.problemId).toMatch(/^smt_problem_[a-f0-9]{16}$/);
     expect(result.result.problem.sourceText).toContain("(assert (> x 0))");
-    expect(result.result.sourceRef).toContain(".theorem-workbench/smt/sources/");
+    expect(result.result.sourceRef).toContain(".truth-harness/smt/sources/");
     expect(result.result.check.record.source.path).toBe(result.result.sourceRef);
     expect(result.result.check.record.trust).toBe("unverified");
     expect(list.total).toBe(1);
@@ -566,7 +566,7 @@ describe("MCP tool handlers", () => {
   });
 
   it("runs the launch benchmark suite", async () => {
-    const run = await handleTheoremBenchmarkRun({});
+    const run = await handleTruthHarnessBenchmarkRun({});
 
     expect(run.total).toBe(25);
     expect(run.failed).toBe(0);
@@ -574,8 +574,8 @@ describe("MCP tool handlers", () => {
 
   it("writes benchmark run records for agent replay", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Benchmark Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Benchmark Lab" });
     await writeFile(
       join(root, "tiny-suite.json"),
       `${JSON.stringify(
@@ -618,77 +618,77 @@ describe("MCP tool handlers", () => {
       "utf8"
     );
 
-    const result = await handleTheoremBenchmarkRun({ suitePath: "tiny-suite.json", write: true });
-    const failing = await handleTheoremBenchmarkRun({ suitePath: "failing-suite.json", write: true, failOnFailures: true });
-    const compare = await handleTheoremBenchmarkCompare({
+    const result = await handleTruthHarnessBenchmarkRun({ suitePath: "tiny-suite.json", write: true });
+    const failing = await handleTruthHarnessBenchmarkRun({ suitePath: "failing-suite.json", write: true, failOnFailures: true });
+    const compare = await handleTruthHarnessBenchmarkCompare({
       baselinePath: result.result.jsonPath,
       currentPath: result.result.jsonPath,
       write: true
     });
-    const regressed = await handleTheoremBenchmarkCompare({
+    const regressed = await handleTruthHarnessBenchmarkCompare({
       baselinePath: result.result.jsonPath,
       currentPath: failing.result.jsonPath,
       failOnRegression: true
     });
-    const list = await handleTheoremBenchmarkList({});
-    const validation = await handleTheoremWorkspaceValidate({});
+    const list = await handleTruthHarnessBenchmarkList({});
+    const validation = await handleTruthHarnessWorkspaceValidate({});
 
     expect(result.written).toBe(true);
     expect(result.run.total).toBe(1);
-    expect(result.result.record.schemaVersion).toBe("theorem.benchmark-run.v0");
+    expect(result.result.record.schemaVersion).toBe("truth-harness.benchmark-run.v0");
     expect(result.result.record.verificationBoundary.benchmarkRunIsNotTruth).toBe(true);
-    expect(result.result.markdownPath).toContain(".theorem-workbench");
-    expect(theoremBenchmarkRunOutputFailsGate(result)).toBe(false);
-    expect(theoremBenchmarkRunOutputFailsGate(failing)).toBe(true);
+    expect(result.result.markdownPath).toContain(".truth-harness");
+    expect(truthHarnessBenchmarkRunOutputFailsGate(result)).toBe(false);
+    expect(truthHarnessBenchmarkRunOutputFailsGate(failing)).toBe(true);
     expect(compare.written).toBe(true);
-    expect(compare.result.record.schemaVersion).toBe("theorem.benchmark-comparison.v0");
+    expect(compare.result.record.schemaVersion).toBe("truth-harness.benchmark-comparison.v0");
     expect(compare.result.record.verdict).toBe("unchanged");
-    expect(compare.result.markdownPath).toContain(".theorem-workbench");
-    expect(theoremBenchmarkCompareOutputFailsGate(compare)).toBe(false);
-    expect(theoremBenchmarkCompareOutputFailsGate(regressed)).toBe(true);
+    expect(compare.result.markdownPath).toContain(".truth-harness");
+    expect(truthHarnessBenchmarkCompareOutputFailsGate(compare)).toBe(false);
+    expect(truthHarnessBenchmarkCompareOutputFailsGate(regressed)).toBe(true);
     expect(list.total).toBe(3);
     expect(list.artifacts.map((artifact) => artifact.kind).sort()).toEqual(["comparison", "run", "run"]);
-    expect(list.artifacts[0]?.path).toContain(".theorem-workbench/benchmarks/");
+    expect(list.artifacts[0]?.path).toContain(".truth-harness/benchmarks/");
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.benchmarks).toBe(3);
   });
 
   it("replays receipt JSON", async () => {
-    const receipt = handleTheoremAsk({ problem: "compute 2 + 2" }).receipt;
-    const replay = await handleTheoremReplay({ receiptJson: JSON.stringify(receipt) });
+    const receipt = handleTruthHarnessAsk({ problem: "compute 2 + 2" }).receipt;
+    const replay = await handleTruthHarnessReplay({ receiptJson: JSON.stringify(receipt) });
 
     expect(replay.passed).toBe(true);
     expect(replay.actualRunId).toBe(receipt.runId);
   });
 
   it("replays receipt files under the workspace", async () => {
-    const receipt = handleTheoremAsk({ problem: "compute 3 / 4 + 5 / 8" }).receipt;
+    const receipt = handleTruthHarnessAsk({ problem: "compute 3 / 4 + 5 / 8" }).receipt;
     await mkdir("receipts", { recursive: true });
     await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
 
-    const replay = await handleTheoremReplay({ receiptPath });
+    const replay = await handleTruthHarnessReplay({ receiptPath });
 
     expect(replay.passed).toBe(true);
     expect(JSON.parse(await readFile(receiptPath, "utf8")).runId).toBe(receipt.runId);
   });
 
   it("renders receipts for agent reports", async () => {
-    const receipt = handleTheoremAsk({ problem: "compute 2 + 2" }).receipt;
-    const result = await handleTheoremRenderReceipt({
+    const receipt = handleTruthHarnessAsk({ problem: "compute 2 + 2" }).receipt;
+    const result = await handleTruthHarnessRenderReceipt({
       receiptJson: JSON.stringify(receipt),
       format: "markdown"
     });
 
-    expect(result.rendered).toContain(`# Theorem Receipt ${receipt.runId}`);
+    expect(result.rendered).toContain(`# Truth Harness Receipt ${receipt.runId}`);
     expect(result.rendered).toContain("exact-computed");
   });
 
   it("initializes and checks local workspaces for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
+    process.env.TRUTH_HARNESS_ROOT = root;
 
-    const init = await handleTheoremWorkspaceInit({ name: "MCP Local Lab" });
-    const status = await handleTheoremWorkspaceStatus({});
+    const init = await handleTruthHarnessWorkspaceInit({ name: "MCP Local Lab" });
+    const status = await handleTruthHarnessWorkspaceStatus({});
 
     expect(init.created).toBe(true);
     expect(init.manifest.displayName).toBe("MCP Local Lab");
@@ -699,8 +699,8 @@ describe("MCP tool handlers", () => {
 
   it("repairs old local workspace manifests for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    const init = await handleTheoremWorkspaceInit({ name: "MCP Repair Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    const init = await handleTruthHarnessWorkspaceInit({ name: "MCP Repair Lab" });
     const legacyDirectories = { ...init.manifest.directories } as Partial<typeof init.manifest.directories>;
     delete legacyDirectories["code-runs"];
     await rm(join(root, init.manifest.directories["code-runs"]), { recursive: true, force: true });
@@ -710,33 +710,33 @@ describe("MCP tool handlers", () => {
       "utf8"
     );
 
-    const status = await handleTheoremWorkspaceStatus({});
-    const repair = await handleTheoremWorkspaceRepair({});
-    const repairedStatus = await handleTheoremWorkspaceStatus({});
+    const status = await handleTruthHarnessWorkspaceStatus({});
+    const repair = await handleTruthHarnessWorkspaceRepair({});
+    const repairedStatus = await handleTruthHarnessWorkspaceStatus({});
     const rawManifest = JSON.parse(await readFile(init.manifestPath, "utf8")) as typeof init.manifest;
 
     expect(status.manifestRepair).toEqual({ applied: false, addedDirectories: ["code-runs"] });
-    expect(status.missingDirectories).toEqual([".theorem-workbench/code-runs"]);
+    expect(status.missingDirectories).toEqual([".truth-harness/code-runs"]);
     expect(repair.repaired).toBe(true);
     expect(repair.manifestRepair).toEqual({ applied: true, addedDirectories: ["code-runs"] });
-    expect(repair.createdDirectories).toEqual([".theorem-workbench/code-runs"]);
-    expect(rawManifest.directories["code-runs"]).toBe(".theorem-workbench/code-runs");
+    expect(repair.createdDirectories).toEqual([".truth-harness/code-runs"]);
+    expect(rawManifest.directories["code-runs"]).toBe(".truth-harness/code-runs");
     expect(repairedStatus.manifestRepair).toBeUndefined();
     expect(repairedStatus.missingDirectories).toEqual([]);
   });
 
   it("validates local receipt artifacts for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Validation Lab" });
-    await mkdir(join(root, ".theorem-workbench", "receipts"), { recursive: true });
-    const validReceipt = handleTheoremAsk({ problem: "compute 2 + 2" }).receipt;
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Validation Lab" });
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
+    const validReceipt = handleTruthHarnessAsk({ problem: "compute 2 + 2" }).receipt;
     const legacyReceipt = { ...validReceipt } as Record<string, unknown>;
     delete legacyReceipt.evidenceProfile;
-    await writeFile(join(root, ".theorem-workbench", "receipts", "valid.json"), JSON.stringify(validReceipt, null, 2));
-    await writeFile(join(root, ".theorem-workbench", "receipts", "legacy.json"), JSON.stringify(legacyReceipt, null, 2));
+    await writeFile(join(root, ".truth-harness", "receipts", "valid.json"), JSON.stringify(validReceipt, null, 2));
+    await writeFile(join(root, ".truth-harness", "receipts", "legacy.json"), JSON.stringify(legacyReceipt, null, 2));
 
-    const validation = await handleTheoremWorkspaceValidate({});
+    const validation = await handleTruthHarnessWorkspaceValidate({});
 
     expect(validation.passed).toBe(false);
     expect(validation.summary.checkedFiles).toBe(3);
@@ -745,21 +745,21 @@ describe("MCP tool handlers", () => {
     expect(validation.issues).toContainEqual(
       expect.objectContaining({
         code: "invalid-receipt-schema",
-        path: ".theorem-workbench/receipts/legacy.json"
+        path: ".truth-harness/receipts/legacy.json"
       })
     );
   });
 
   it("reports dangling evidence refs through workspace validation for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Dangling Ref Lab" });
-    const invention = await handleTheoremInventionLog({
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Dangling Ref Lab" });
+    const invention = await handleTruthHarnessInventionLog({
       hypothesis: "A missing expert review should not pass workspace validation.",
       evidenceRefs: [{ kind: "review", ref: "review_missing123456" }]
     });
 
-    const validation = await handleTheoremWorkspaceValidate({});
+    const validation = await handleTruthHarnessWorkspaceValidate({});
 
     expect(validation.passed).toBe(false);
     expect(validation.issues).toContainEqual(
@@ -772,22 +772,22 @@ describe("MCP tool handlers", () => {
 
   it("writes, lists, and verifies workspace snapshots for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Snapshot Lab" });
-    await writeFile(join(root, ".theorem-workbench", "findings", "note.json"), JSON.stringify({
-      schemaVersion: "theorem.finding.v0",
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Snapshot Lab" });
+    await writeFile(join(root, ".truth-harness", "findings", "note.json"), JSON.stringify({
+      schemaVersion: "truth-harness.finding.v0",
       documentId: "doc_snapshot_note"
     }));
 
-    const snapshot = await handleTheoremWorkspaceSnapshot({});
-    const list = await handleTheoremWorkspaceSnapshotList({});
-    const verification = await handleTheoremWorkspaceSnapshotVerify({
+    const snapshot = await handleTruthHarnessWorkspaceSnapshot({});
+    const list = await handleTruthHarnessWorkspaceSnapshotList({});
+    const verification = await handleTruthHarnessWorkspaceSnapshotVerify({
       snapshotRef: snapshot.snapshot.snapshotId
     });
 
-    expect(snapshot.snapshot.schemaVersion).toBe("theorem.workspace-snapshot.v0");
+    expect(snapshot.snapshot.schemaVersion).toBe("truth-harness.workspace-snapshot.v0");
     expect(snapshot.snapshot.entries.some((entry) => entry.path.endsWith("note.json"))).toBe(true);
-    expect(snapshot.snapshot.entries.every((entry) => !entry.path.startsWith(".theorem-workbench/snapshots/"))).toBe(true);
+    expect(snapshot.snapshot.entries.every((entry) => !entry.path.startsWith(".truth-harness/snapshots/"))).toBe(true);
     expect(list.total).toBe(1);
     expect(list.snapshots[0]?.snapshotId).toBe(snapshot.snapshot.snapshotId);
     expect(verification.passed).toBe(true);
@@ -796,11 +796,11 @@ describe("MCP tool handlers", () => {
 
   it("starts and checkpoints local research sessions for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Research Session Lab" });
-    const snapshot = await handleTheoremWorkspaceSnapshot({});
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Research Session Lab" });
+    const snapshot = await handleTruthHarnessWorkspaceSnapshot({});
 
-    const start = await handleTheoremResearchSessionStart({
+    const start = await handleTruthHarnessResearchSessionStart({
       title: "Cancer evidence runbook",
       objective: "Investigate a cancer pathway hypothesis without claiming a cure.",
       domains: ["biomedical"],
@@ -808,16 +808,16 @@ describe("MCP tool handlers", () => {
       snapshotRefs: [snapshot.snapshot.snapshotId],
       tasks: ["Create an evidence audit", "Record required expert review"]
     });
-    const checkpoint = await handleTheoremResearchSessionCheckpoint({
+    const checkpoint = await handleTruthHarnessResearchSessionCheckpoint({
       sessionRef: start.session.sessionId,
       summary: "Initial local runbook created; no clinical conclusion is allowed.",
       snapshotRefs: [snapshot.snapshot.snapshotId],
       decisions: ["Keep the claim phrased as a computational hypothesis."],
       nextChecks: ["Attach simulation and source evidence before audit."]
     });
-    const list = await handleTheoremResearchSessionList({});
+    const list = await handleTruthHarnessResearchSessionList({});
 
-    expect(start.session.schemaVersion).toBe("theorem.research-session.v0");
+    expect(start.session.schemaVersion).toBe("truth-harness.research-session.v0");
     expect(start.session.modelPolicy.hostedModels).toBe("optional-with-disclosure");
     expect(start.session.reviewBoundary.wetLabValidationRequired).toBe(true);
     expect(start.markdown).toContain("Do not describe biomedical hypotheses as cures");
@@ -828,10 +828,10 @@ describe("MCP tool handlers", () => {
 
   it("writes and lists expert review records for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Expert Review Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Expert Review Lab" });
 
-    const write = await handleTheoremExpertReviewLog({
+    const write = await handleTruthHarnessExpertReviewLog({
       subject: "Cancer pathway simulation review",
       question: "Does the local evidence justify a cure claim?",
       kind: "biomedical",
@@ -840,9 +840,9 @@ describe("MCP tool handlers", () => {
       evidenceRefs: [{ kind: "simulation", ref: "sim_0123456789abcdef" }],
       requiredNextChecks: ["Attach wet-lab validation plan before stronger claims."]
     });
-    const list = await handleTheoremExpertReviewList({});
+    const list = await handleTruthHarnessExpertReviewList({});
 
-    expect(write.review.schemaVersion).toBe("theorem.expert-review.v0");
+    expect(write.review.schemaVersion).toBe("truth-harness.expert-review.v0");
     expect(write.review.boundary.notMedicalAdvice).toBe(true);
     expect(write.review.warnings.join("\n")).toContain("Review is not completed");
     expect(write.markdown).toContain("# Expert Review");
@@ -852,16 +852,16 @@ describe("MCP tool handlers", () => {
 
   it("ingests and searches local source material for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Source Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Source Lab" });
     await writeFile(
       join(root, "notes.md"),
       "# Agent Notes\n\nReplayable receipts help agents avoid unsupported math claims.",
       "utf8"
     );
 
-    const ingest = await handleTheoremSourceIngest({ paths: ["notes.md"] });
-    const search = await handleTheoremSourceSearch({ query: "replayable receipts", limit: 1 });
+    const ingest = await handleTruthHarnessSourceIngest({ paths: ["notes.md"] });
+    const search = await handleTruthHarnessSourceSearch({ query: "replayable receipts", limit: 1 });
 
     expect(ingest.totalDocuments).toBe(1);
     expect(search.hits).toHaveLength(1);
@@ -871,16 +871,16 @@ describe("MCP tool handlers", () => {
 
   it("creates source-cited receipts for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Source Citation Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Source Citation Lab" });
     await writeFile(
       join(root, "notes.md"),
       "# Source Notes\n\nLocal receipts and source citations help agents avoid unsupported claims.",
       "utf8"
     );
-    await handleTheoremSourceIngest({ paths: ["notes.md"] });
+    await handleTruthHarnessSourceIngest({ paths: ["notes.md"] });
 
-    const result = await handleTheoremSourceCite({
+    const result = await handleTruthHarnessSourceCite({
       claim: "Local receipts and source citations help agents avoid unsupported claims.",
       query: "source citations unsupported claims",
       strict: true
@@ -893,10 +893,10 @@ describe("MCP tool handlers", () => {
 
   it("writes and lists simulation evidence for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Simulation Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Simulation Lab" });
 
-    const write = await handleTheoremSimulationLog({
+    const write = await handleTruthHarnessSimulationLog({
       title: "Toy pathway simulation",
       question: "Does a toy perturbation lower a simulated pathway score?",
       kind: "molecular",
@@ -910,9 +910,9 @@ describe("MCP tool handlers", () => {
       limitations: ["No wet-lab validation."],
       nextChecks: ["Run sensitivity analysis."]
     });
-    const list = await handleTheoremSimulationList({});
+    const list = await handleTruthHarnessSimulationList({});
 
-    expect(write.entry.schemaVersion).toBe("theorem.simulation.v0");
+    expect(write.entry.schemaVersion).toBe("truth-harness.simulation.v0");
     expect(write.entry.privacy.mode).toBe("local-only");
     expect(write.entry.validationBoundary.simulationIsNotReality).toBe(true);
     expect(write.entry.warnings[0]).toContain("does not establish real-world");
@@ -922,10 +922,10 @@ describe("MCP tool handlers", () => {
 
   it("writes and lists experiment evidence for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Experiment Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Experiment Lab" });
 
-    const write = await handleTheoremExperimentLog({
+    const write = await handleTruthHarnessExperimentLog({
       title: "Toy assay observation",
       question: "Did a toy assay preserve review caveats?",
       kind: "wet-lab",
@@ -941,9 +941,9 @@ describe("MCP tool handlers", () => {
       ethicsApprovalRefs: ["review:non-human-toy-assay"],
       regulatoryReviewRefs: ["safety:local-review"]
     });
-    const list = await handleTheoremExperimentList({});
+    const list = await handleTruthHarnessExperimentList({});
 
-    expect(write.entry.schemaVersion).toBe("theorem.experiment.v0");
+    expect(write.entry.schemaVersion).toBe("truth-harness.experiment.v0");
     expect(write.entry.review.humanExpertReviewRequired).toBe(true);
     expect(write.entry.validationBoundary.notRegulatoryApproval).toBe(true);
     expect(write.entry.warnings[0]).toContain("do not by themselves establish safety");
@@ -953,23 +953,23 @@ describe("MCP tool handlers", () => {
 
   it("seals and verifies private vault files for agents without returning plaintext", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
+    process.env.TRUTH_HARNESS_ROOT = root;
     process.env[vaultKeyEnv] = "mcp vault test passphrase";
-    await handleTheoremWorkspaceInit({ name: "MCP Vault Lab" });
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Vault Lab" });
     await writeFile(join(root, "private-notes.md"), "sensitive local discovery note", "utf8");
 
-    const sealed = await handleTheoremVaultSeal({
+    const sealed = await handleTruthHarnessVaultSeal({
       sourcePath: "private-notes.md",
       label: "Private discovery notes",
       keyEnv: vaultKeyEnv
     });
-    const list = await handleTheoremVaultList({});
-    const verified = await handleTheoremVaultVerify({
+    const list = await handleTruthHarnessVaultList({});
+    const verified = await handleTruthHarnessVaultVerify({
       vaultRef: sealed.entry.vaultId,
       keyEnv: vaultKeyEnv
     });
 
-    expect(sealed.entry.schemaVersion).toBe("theorem.vault.v0");
+    expect(sealed.entry.schemaVersion).toBe("truth-harness.vault.v0");
     expect(sealed.entry.encryption.keyPolicy).toBe("environment-only");
     expect(JSON.stringify(sealed.entry)).not.toContain("sensitive local discovery note");
     expect(JSON.stringify(sealed.entry)).not.toContain("private-notes.md");
@@ -981,9 +981,9 @@ describe("MCP tool handlers", () => {
 
   it("audits claim evidence posture for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Audit Lab" });
-    const simulation = await handleTheoremSimulationLog({
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Audit Lab" });
+    const simulation = await handleTruthHarnessSimulationLog({
       title: "Toy cancer pathway simulation",
       question: "Could a toy perturbation lower a cancer pathway score?",
       kind: "molecular",
@@ -996,18 +996,18 @@ describe("MCP tool handlers", () => {
       nextChecks: ["Expert review."]
     });
 
-    const audit = await handleTheoremEvidenceAudit({
+    const audit = await handleTruthHarnessEvidenceAudit({
       claim: "This simulated candidate cures cancer safely.",
       evidenceRefs: [{ kind: "simulation", ref: simulation.entry.simulationId }],
       writeReport: true
     });
-    const list = await handleTheoremEvidenceAuditList({});
+    const list = await handleTruthHarnessEvidenceAuditList({});
 
     expect(audit.written).toBe(true);
-    expect(audit.written === true ? audit.result.audit.schemaVersion : "").toBe("theorem.evidence-audit.v0");
+    expect(audit.written === true ? audit.result.audit.schemaVersion : "").toBe("truth-harness.evidence-audit.v0");
     expect(audit.written === true ? audit.result.audit.verdict.status : "").toBe("overclaimed");
     expect(audit.written === true ? audit.result.audit.requiredNextChecks.join(" ") : "").toContain("Rewrite the claim");
-    expect(audit.written === true && audit.report === true ? audit.result.markdownPath : "").toContain(".theorem-workbench");
+    expect(audit.written === true && audit.report === true ? audit.result.markdownPath : "").toContain(".truth-harness");
     expect(audit.written === true && audit.report === true ? audit.result.markdown : "").toContain("| Verdict | `overclaimed` |");
     expect(list.total).toBe(1);
     expect(list.audits[0]?.verdict.status).toBe("overclaimed");
@@ -1015,9 +1015,9 @@ describe("MCP tool handlers", () => {
 
   it("writes and lists validation plans for agent discovery gates", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Validation Lab" });
-    const simulation = await handleTheoremSimulationLog({
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Validation Lab" });
+    const simulation = await handleTruthHarnessSimulationLog({
       title: "Toy cancer pathway simulation",
       question: "Could a toy perturbation lower a cancer pathway score?",
       kind: "molecular",
@@ -1030,20 +1030,20 @@ describe("MCP tool handlers", () => {
       nextChecks: ["Expert review."]
     });
 
-    const write = await handleTheoremValidationPlan({
+    const write = await handleTruthHarnessValidationPlan({
       claim: "This simulated candidate cures cancer safely.",
       evidenceRefs: [{ kind: "simulation", ref: simulation.entry.simulationId }],
       gates: [{ kind: "other", description: "Attach independent reproduction notes before public sharing." }],
       write: true
     });
-    const preview = await handleTheoremValidationPlan({
+    const preview = await handleTruthHarnessValidationPlan({
       claim: "This simulated candidate cures cancer safely.",
       evidenceRefs: [{ kind: "simulation", ref: simulation.entry.simulationId }]
     });
-    const list = await handleTheoremValidationPlanList({});
+    const list = await handleTruthHarnessValidationPlanList({});
 
     expect(write.written).toBe(true);
-    expect(write.written === true ? write.result.plan.schemaVersion : "").toBe("theorem.validation-plan.v0");
+    expect(write.written === true ? write.result.plan.schemaVersion : "").toBe("truth-harness.validation-plan.v0");
     expect(write.written === true ? write.result.plan.readiness.status : "").toBe("not-ready");
     expect(write.written === true ? write.result.markdown : "").toContain("Validation Plan");
     expect(preview.written).toBe(false);
@@ -1054,10 +1054,10 @@ describe("MCP tool handlers", () => {
 
   it("writes and lists invention logs for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Invention Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Invention Lab" });
 
-    const write = await handleTheoremInventionLog({
+    const write = await handleTruthHarnessInventionLog({
       title: "Evidence-backed hypothesis",
       problem: "Keep discovery claims honest.",
       hypothesis: "A local source-cited evidence ref can support, but not prove, a discovery hypothesis.",
@@ -1070,7 +1070,7 @@ describe("MCP tool handlers", () => {
       ],
       nextChecks: ["Replay and expert review."]
     });
-    const list = await handleTheoremInventionList({});
+    const list = await handleTruthHarnessInventionList({});
 
     expect(write.entry.validationStage).toBe("computational-hypothesis");
     expect(write.entry.safety.overclaimWarnings[0]).toContain("Do not describe this as a proven discovery");
@@ -1080,28 +1080,28 @@ describe("MCP tool handlers", () => {
 
   it("renders discovery packages for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Discovery Package Lab" });
-    const invention = await handleTheoremInventionLog({
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Discovery Package Lab" });
+    const invention = await handleTruthHarnessInventionLog({
       title: "Local package",
       hypothesis: "A local discovery package should preserve validation caveats.",
       nextChecks: ["Review the evidence refs."]
     });
 
-    const rendered = await handleTheoremDiscoveryPackage({ entryId: invention.entry.entryId });
-    const written = await handleTheoremDiscoveryPackage({ entryId: invention.entry.entryId, write: true });
+    const rendered = await handleTruthHarnessDiscoveryPackage({ entryId: invention.entry.entryId });
+    const written = await handleTruthHarnessDiscoveryPackage({ entryId: invention.entry.entryId, write: true });
 
     expect(rendered.written).toBe(false);
     expect(rendered.written === false ? rendered.package.markdown : "").toContain("# Discovery Package: Local package");
     expect(written.written).toBe(true);
-    expect(written.written === true ? written.result.path : "").toContain(".theorem-workbench");
+    expect(written.written === true ? written.result.path : "").toContain(".truth-harness");
   });
 
   it("creates claim charts for human legal review", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Claim Chart Lab" });
-    const invention = await handleTheoremInventionLog({
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Claim Chart Lab" });
+    const invention = await handleTruthHarnessInventionLog({
       title: "Claim chart hypothesis",
       hypothesis: "A local claim chart can organize evidence without making legal conclusions.",
       evidenceRefs: [
@@ -1114,7 +1114,7 @@ describe("MCP tool handlers", () => {
       priorArtNotes: ["Review closest notes.md reference."]
     });
 
-    const rendered = await handleTheoremClaimChart({
+    const rendered = await handleTruthHarnessClaimChart({
       entryId: invention.entry.entryId,
       elements: [
         {
@@ -1123,7 +1123,7 @@ describe("MCP tool handlers", () => {
         }
       ]
     });
-    const written = await handleTheoremClaimChart({
+    const written = await handleTruthHarnessClaimChart({
       entryId: invention.entry.entryId,
       elements: [
         {
@@ -1133,33 +1133,33 @@ describe("MCP tool handlers", () => {
       ],
       write: true
     });
-    const list = await handleTheoremClaimChartList({});
+    const list = await handleTruthHarnessClaimChartList({});
 
     expect(rendered.written).toBe(false);
     expect(rendered.written === false ? rendered.chart.legal.legalConclusion : "").toBe("not-a-legal-opinion");
     expect(written.written).toBe(true);
-    expect(written.written === true ? written.result.markdownPath : "").toContain(".theorem-workbench");
+    expect(written.written === true ? written.result.markdownPath : "").toContain(".truth-harness");
     expect(list.total).toBe(1);
   });
 
   it("records external model disclosures for agents", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Disclosure Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Disclosure Lab" });
 
-    const write = await handleTheoremExternalDisclosureLog({
+    const write = await handleTruthHarnessExternalDisclosureLog({
       service: "OpenAI",
       model: "frontier-reasoning-model",
       purpose: "Critique a selected proof plan before local verification.",
-      dataClasses: ["selected theorem statement", "selected proof sketch"],
+      dataClasses: ["selected formal statement", "selected proof sketch"],
       contextSummary: "Only a short proof plan is sent; workspace notes and receipts stay local.",
-      selectedContextRefs: ["receipt:.theorem-workbench/receipts/plan.json"],
+      selectedContextRefs: ["receipt:.truth-harness/receipts/plan.json"],
       approvalRef: "prompt:explicit-user-request",
       status: "sent"
     });
-    const list = await handleTheoremExternalDisclosureList({});
+    const list = await handleTruthHarnessExternalDisclosureList({});
 
-    expect(write.entry.schemaVersion).toBe("theorem.disclosure.v0");
+    expect(write.entry.schemaVersion).toBe("truth-harness.disclosure.v0");
     expect(write.entry.privacy.mode).toBe("external-calls");
     expect(write.entry.privacy.externalDisclosures[0]?.service).toBe("OpenAI");
     expect(write.entry.warnings.join("\n")).toContain("selected context");
@@ -1169,61 +1169,61 @@ describe("MCP tool handlers", () => {
 
   it("prepares local model-context packets for agents without sending them", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Model Context Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Model Context Lab" });
 
-    const preview = await handleTheoremModelContextPrepare({
+    const preview = await handleTruthHarnessModelContextPrepare({
       service: "OpenAI",
       model: "frontier-reasoning-model",
       purpose: "Critique a selected proof plan before local verification.",
-      dataClasses: ["selected theorem statement", "selected proof sketch"],
-      selectedContextRefs: ["receipt:.theorem-workbench/receipts/plan.json"],
+      dataClasses: ["selected formal statement", "selected proof sketch"],
+      selectedContextRefs: ["receipt:.truth-harness/receipts/plan.json"],
       sections: [
         {
           title: "Selected proof plan",
           content: "Only critique the attached proof plan; do not infer from missing local notes.",
-          sourceRefs: ["receipt:.theorem-workbench/receipts/plan.json"]
+          sourceRefs: ["receipt:.truth-harness/receipts/plan.json"]
         }
       ],
       redactions: ["Unrelated local notes and vault plaintext are excluded."]
     });
-    const write = await handleTheoremModelContextPrepare({
+    const write = await handleTruthHarnessModelContextPrepare({
       service: "OpenAI",
       model: "frontier-reasoning-model",
       purpose: "Critique a selected proof plan before local verification.",
-      dataClasses: ["selected theorem statement", "selected proof sketch"],
-      selectedContextRefs: ["receipt:.theorem-workbench/receipts/plan.json"],
+      dataClasses: ["selected formal statement", "selected proof sketch"],
+      selectedContextRefs: ["receipt:.truth-harness/receipts/plan.json"],
       sections: [
         {
           title: "Selected proof plan",
           content: "Only critique the attached proof plan; do not infer from missing local notes.",
-          sourceRefs: ["receipt:.theorem-workbench/receipts/plan.json"]
+          sourceRefs: ["receipt:.truth-harness/receipts/plan.json"]
         }
       ],
       redactions: ["Unrelated local notes and vault plaintext are excluded."],
       approvalRef: "prompt:explicit-user-request",
       write: true
     });
-    const list = await handleTheoremModelContextList({});
+    const list = await handleTruthHarnessModelContextList({});
 
     expect(preview.written).toBe(false);
     expect(preview.written === false ? preview.packet.boundary.externalCallNotPerformed : false).toBe(true);
     expect(preview.written === false ? preview.packet.warnings.join("\n") : "").toContain("not approved");
     expect(write.written).toBe(true);
-    expect(write.written === true ? write.result.packet.schemaVersion : "").toBe("theorem.model-context.v0");
+    expect(write.written === true ? write.result.packet.schemaVersion : "").toBe("truth-harness.model-context.v0");
     expect(write.written === true ? write.result.packet.privacy.mode : "").toBe("local-only");
     expect(write.written === true ? write.result.packet.disclosure.status : "").toBe("required-not-created");
-    expect(write.written === true ? write.result.markdownPath : "").toContain(".theorem-workbench");
+    expect(write.written === true ? write.result.markdownPath : "").toContain(".truth-harness");
     expect(list.total).toBe(1);
-    expect(list.packets[0]?.schemaVersion).toBe("theorem.model-context.v0");
+    expect(list.packets[0]?.schemaVersion).toBe("truth-harness.model-context.v0");
   });
 
   it("records local literature evidence without treating citations as truth", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Literature Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Literature Lab" });
 
-    const preview = await handleTheoremLiteratureLog({
+    const preview = await handleTruthHarnessLiteratureLog({
       title: "Toy pathway prior-art paper",
       kind: "paper",
       status: "annotated",
@@ -1234,7 +1234,7 @@ describe("MCP tool handlers", () => {
       limitations: ["No clinical endpoint."],
       relevance: ["Cancer pathway hypothesis triage."]
     });
-    const write = await handleTheoremLiteratureLog({
+    const write = await handleTruthHarnessLiteratureLog({
       title: "Toy pathway prior-art paper",
       kind: "paper",
       status: "annotated",
@@ -1246,25 +1246,25 @@ describe("MCP tool handlers", () => {
       relevance: ["Cancer pathway hypothesis triage."],
       write: true
     });
-    const list = await handleTheoremLiteratureList({});
+    const list = await handleTruthHarnessLiteratureList({});
 
     expect(preview.written).toBe(false);
-    expect(preview.written === false ? preview.record.schemaVersion : "").toBe("theorem.literature.v0");
+    expect(preview.written === false ? preview.record.schemaVersion : "").toBe("truth-harness.literature.v0");
     expect(preview.written === false ? preview.record.reviewBoundary.sourceRetrievalIsNotEntailment : false).toBe(true);
     expect(write.written).toBe(true);
-    expect(write.written === true ? write.result.record.schemaVersion : "").toBe("theorem.literature.v0");
-    expect(write.written === true ? write.result.markdownPath : "").toContain(".theorem-workbench");
+    expect(write.written === true ? write.result.record.schemaVersion : "").toBe("truth-harness.literature.v0");
+    expect(write.written === true ? write.result.markdownPath : "").toContain(".truth-harness");
     expect(write.written === true ? write.result.record.warnings.join("\n") : "").toContain("Citation or retrieval is not entailment");
     expect(list.total).toBe(1);
-    expect(list.records[0]?.schemaVersion).toBe("theorem.literature.v0");
+    expect(list.records[0]?.schemaVersion).toBe("truth-harness.literature.v0");
   });
 
   it("records local notebook run provenance without executing code", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    await handleTheoremWorkspaceInit({ name: "MCP Notebook Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Notebook Lab" });
 
-    const preview = await handleTheoremNotebookRunLog({
+    const preview = await handleTruthHarnessNotebookRunLog({
       purpose: "Run a local notebook that computes a toy pathway score.",
       kind: "notebook",
       status: "completed",
@@ -1280,7 +1280,7 @@ describe("MCP tool handlers", () => {
       limitations: ["Toy model only."],
       metrics: [{ name: "pathway_score_delta", value: "-0.18" }]
     });
-    const write = await handleTheoremNotebookRunLog({
+    const write = await handleTruthHarnessNotebookRunLog({
       purpose: "Run a local notebook that computes a toy pathway score.",
       kind: "notebook",
       status: "completed",
@@ -1297,27 +1297,27 @@ describe("MCP tool handlers", () => {
       metrics: [{ name: "pathway_score_delta", value: "-0.18" }],
       write: true
     });
-    const list = await handleTheoremNotebookRunList({});
+    const list = await handleTruthHarnessNotebookRunList({});
 
     expect(preview.written).toBe(false);
-    expect(preview.written === false ? preview.record.schemaVersion : "").toBe("theorem.notebook-run.v0");
+    expect(preview.written === false ? preview.record.schemaVersion : "").toBe("truth-harness.notebook-run.v0");
     expect(preview.written === false ? preview.record.reproducibilityBoundary.executionNotPerformedByWorkbench : false).toBe(true);
     expect(write.written).toBe(true);
-    expect(write.written === true ? write.result.record.schemaVersion : "").toBe("theorem.notebook-run.v0");
+    expect(write.written === true ? write.result.record.schemaVersion : "").toBe("truth-harness.notebook-run.v0");
     expect(write.written === true ? write.result.record.warnings.join("\n") : "").toContain("did not execute this run");
-    expect(write.written === true ? write.result.markdownPath : "").toContain(".theorem-workbench");
+    expect(write.written === true ? write.result.markdownPath : "").toContain(".truth-harness");
     expect(list.total).toBe(1);
-    expect(list.records[0]?.schemaVersion).toBe("theorem.notebook-run.v0");
+    expect(list.records[0]?.schemaVersion).toBe("truth-harness.notebook-run.v0");
   });
 
   it("runs local code and records policy-gated execution evidence", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    process.env.THEOREM_ALLOW_CODE_RUN = "1";
-    process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN = "1";
-    await handleTheoremWorkspaceInit({ name: "MCP Code Run Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    process.env.TRUTH_HARNESS_ALLOW_CODE_RUN = "1";
+    process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN = "1";
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Code Run Lab" });
 
-    const result = await handleTheoremCodeRun({
+    const result = await handleTruthHarnessCodeRun({
       title: "MCP code execution",
       purpose: "Capture a tiny local code execution for agent evidence.",
       command: process.execPath,
@@ -1330,12 +1330,12 @@ describe("MCP tool handlers", () => {
       },
       failOnNonzero: true
     });
-    const list = await handleTheoremCodeRunList({});
-    const validation = await handleTheoremWorkspaceValidate({});
-    const sandboxStatus = handleTheoremCodeSandboxStatus().status;
+    const list = await handleTruthHarnessCodeRunList({});
+    const validation = await handleTruthHarnessWorkspaceValidate({});
+    const sandboxStatus = handleTruthHarnessCodeSandboxStatus().status;
 
     expect(result.error).toBe(false);
-    expect(result.result.record.schemaVersion).toBe("theorem.code-run.v0");
+    expect(result.result.record.schemaVersion).toBe("truth-harness.code-run.v0");
     expect(result.result.record.command.shell).toBe(false);
     expect(result.result.record.policy.matchedAllowlist).toBe(true);
     expect(result.result.record.policy.detected.categories).toEqual([]);
@@ -1343,7 +1343,7 @@ describe("MCP tool handlers", () => {
     expect(result.result.record.replay.localOnly).toBe(sandboxStatus.canAttestNetworkNone);
     expect(result.result.record.execution.status).toBe("passed");
     expect(result.result.record.stdout.text.trim()).toBe("mcp-code-run");
-    expect(result.result.jsonPath).toContain(".theorem-workbench");
+    expect(result.result.jsonPath).toContain(".truth-harness");
     expect(result.message).toContain(result.result.record.runId);
     expect(list.total).toBe(1);
     expect(list.records[0]?.runId).toBe(result.result.record.runId);
@@ -1352,9 +1352,9 @@ describe("MCP tool handlers", () => {
   });
 
   it("reports code-run sandbox availability to agents", () => {
-    const result = handleTheoremCodeSandboxStatus();
+    const result = handleTruthHarnessCodeSandboxStatus();
 
-    expect(result.status.schemaVersion).toBe("theorem.code-run-sandbox-status.v0");
+    expect(result.status.schemaVersion).toBe("truth-harness.code-run-sandbox-status.v0");
     expect(result.error).toBe(!result.status.available);
     if (result.status.available) {
       expect(result.status.provider).toBe("container");
@@ -1369,14 +1369,14 @@ describe("MCP tool handlers", () => {
 
   it("respects sandbox-required code-run requests through the MCP handler", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    process.env.THEOREM_ALLOW_CODE_RUN = "1";
-    delete process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN;
-    await handleTheoremWorkspaceInit({ name: "MCP Code Sandbox Gate Lab" });
-    const status = handleTheoremCodeSandboxStatus().status;
+    process.env.TRUTH_HARNESS_ROOT = root;
+    process.env.TRUTH_HARNESS_ALLOW_CODE_RUN = "1";
+    delete process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Code Sandbox Gate Lab" });
+    const status = handleTruthHarnessCodeSandboxStatus().status;
 
     if (status.available) {
-      const result = await handleTheoremCodeRun({
+      const result = await handleTruthHarnessCodeRun({
         purpose: "Run only with a measured OS sandbox.",
         command: process.execPath,
         args: ["-e", "console.log('sandbox-required')"],
@@ -1395,7 +1395,7 @@ describe("MCP tool handlers", () => {
     }
 
     await expect(
-      handleTheoremCodeRun({
+      handleTruthHarnessCodeRun({
         purpose: "Attempt to run only with an OS sandbox.",
         command: process.execPath,
         policy: {
@@ -1408,13 +1408,13 @@ describe("MCP tool handlers", () => {
 
   it("blocks risky code-run commands through the MCP handler by default", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    process.env.THEOREM_ALLOW_CODE_RUN = "1";
-    process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN = "1";
-    await handleTheoremWorkspaceInit({ name: "MCP Code Policy Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    process.env.TRUTH_HARNESS_ALLOW_CODE_RUN = "1";
+    process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN = "1";
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Code Policy Lab" });
 
     await expect(
-      handleTheoremCodeRun({
+      handleTruthHarnessCodeRun({
         purpose: "Attempt a blocked network command.",
         command: "curl",
         args: ["--version"],
@@ -1427,13 +1427,13 @@ describe("MCP tool handlers", () => {
 
   it("requires a second opt-in before MCP can request unsandboxed code execution", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    process.env.THEOREM_ALLOW_CODE_RUN = "1";
-    delete process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN;
-    await handleTheoremWorkspaceInit({ name: "MCP Unsandboxed Code Gate Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    process.env.TRUTH_HARNESS_ALLOW_CODE_RUN = "1";
+    delete process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Unsandboxed Code Gate Lab" });
 
     await expect(
-      handleTheoremCodeRun({
+      handleTruthHarnessCodeRun({
         purpose: "Attempt unsandboxed MCP code execution without the server-level escape hatch.",
         command: process.execPath,
         args: ["-e", "console.log('blocked-unsandboxed')"],
@@ -1443,18 +1443,18 @@ describe("MCP tool handlers", () => {
       })
     ).rejects.toThrow("MCP unsandboxed code execution is disabled");
 
-    const list = await handleTheoremCodeRunList({});
+    const list = await handleTruthHarnessCodeRunList({});
     expect(list.total).toBe(0);
   });
 
   it("requires explicit MCP opt-in before code execution is reachable", async () => {
     const root = await tempRoot();
-    process.env.THEOREM_WORKBENCH_ROOT = root;
-    delete process.env.THEOREM_ALLOW_CODE_RUN;
-    await handleTheoremWorkspaceInit({ name: "MCP Code Gate Lab" });
+    process.env.TRUTH_HARNESS_ROOT = root;
+    delete process.env.TRUTH_HARNESS_ALLOW_CODE_RUN;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Code Gate Lab" });
 
     await expect(
-      handleTheoremCodeRun({
+      handleTruthHarnessCodeRun({
         purpose: "Attempt a code run through MCP without process opt-in.",
         command: process.execPath,
         args: ["-e", "console.log('blocked')"],
@@ -1474,45 +1474,45 @@ describe("MCP tool handlers", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-mcp-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-mcp-"));
   tempRoots.push(root);
   return root;
 }
 
 function restoreWorkspaceRoot(): void {
   if (originalWorkspaceRoot === undefined) {
-    delete process.env.THEOREM_WORKBENCH_ROOT;
+    delete process.env.TRUTH_HARNESS_ROOT;
     return;
   }
 
-  process.env.THEOREM_WORKBENCH_ROOT = originalWorkspaceRoot;
+  process.env.TRUTH_HARNESS_ROOT = originalWorkspaceRoot;
 }
 
 function restoreLeanCommand(): void {
   if (originalLeanCommand === undefined) {
-    delete process.env.THEOREM_LEAN;
+    delete process.env.TRUTH_HARNESS_LEAN;
     return;
   }
 
-  process.env.THEOREM_LEAN = originalLeanCommand;
+  process.env.TRUTH_HARNESS_LEAN = originalLeanCommand;
 }
 
 function restoreCodeRunOptIn(): void {
   if (originalCodeRunOptIn === undefined) {
-    delete process.env.THEOREM_ALLOW_CODE_RUN;
+    delete process.env.TRUTH_HARNESS_ALLOW_CODE_RUN;
     return;
   }
 
-  process.env.THEOREM_ALLOW_CODE_RUN = originalCodeRunOptIn;
+  process.env.TRUTH_HARNESS_ALLOW_CODE_RUN = originalCodeRunOptIn;
 }
 
 function restoreUnsandboxedCodeRunOptIn(): void {
   if (originalUnsandboxedCodeRunOptIn === undefined) {
-    delete process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN;
+    delete process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN;
     return;
   }
 
-  process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN = originalUnsandboxedCodeRunOptIn;
+  process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN = originalUnsandboxedCodeRunOptIn;
 }
 
 function restoreVaultKey(): void {

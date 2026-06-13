@@ -12,19 +12,19 @@ Truth Harness means one product idea:
 Working repo/package name: `truth-harness`.
 Display brand: `Truth Harness`.
 Suggested subtitle: `Verified Math for AI Agents`.
-Compatibility namespace: the CLI command, package scope, schemas, MCP tool names, and local store currently retain `theorem`/`.theorem-workbench` names until a migration preserves existing receipts and tests.
+Current namespace: the CLI command, package scope, schemas, MCP tool names, Docker service, and local store use `truth-harness` / `.truth-harness`. The pre-public prototype does not preserve the old naming namespace.
 
-Legacy direct checks performed for the prior `theorem-workbench` name on 2026-06-08:
+Legacy direct checks performed for the prior `truth-harness` name on 2026-06-08:
 
 | Surface | Query | Result |
 | --- | --- | --- |
-| GitHub exact repository search | `theorem-workbench` | 0 exact matches |
-| npm registry | `https://registry.npmjs.org/theorem-workbench` | 404 |
-| PyPI | `https://pypi.org/pypi/theorem-workbench/json` | 404 |
-| crates.io | `https://crates.io/api/v1/crates/theorem-workbench` | 404 |
+| GitHub exact repository search | `truth-harness` | 0 exact matches |
+| npm registry | `https://registry.npmjs.org/truth-harness` | 404 |
+| PyPI | `https://pypi.org/pypi/truth-harness/json` | 404 |
+| crates.io | `https://crates.io/api/v1/crates/truth-harness` | 404 |
 | Collapsed spelling checks | `theoremworkbench` | No exact GitHub user/org or package hits found |
 
-Broader risk: `theorem workbench` has adjacent academic/theorem-prover phrase collisions, including older projects such as Tableau Workbench and SPASS Workbench. The move to `truth-harness` should get fresh GitHub, npm, PyPI, crates.io, domain, and trademark-adjacent checks before public launch. Until then, code keeps the legacy `theorem` compatibility namespace where changing it would break receipts or APIs.
+Broader risk: generic workbench language has adjacent academic and proof-assistant phrase collisions, including older projects such as Tableau Workbench and SPASS Workbench. The move to `truth-harness` should get fresh GitHub, npm, PyPI, crates.io, domain, and trademark-adjacent checks before public launch.
 
 Brand/subtitle options:
 
@@ -97,8 +97,8 @@ Use a TypeScript monorepo first. Add Rust only for isolated performance or sandb
 Recommended layout:
 
 ```text
-theorem-workbench/
-  .theorem-workbench/      # Git-ignored local project store
+truth-harness/
+  .truth-harness/      # Git-ignored local project store
     project.json           # Local-first manifest and privacy policies
     receipts/              # Receipt JSON and rendered reports
     claims/                # Claim ledger records with dependencies, supersession, tags, trust, and review gates
@@ -202,34 +202,34 @@ Initial benchmark suites:
 CLI shape:
 
 ```text
-theorem bench run suites/foundations-100 --engine local --json
-theorem bench run suites/foundations-100 --write
-theorem bench run suites/foundations-100 --fail-on-failures
-theorem bench list
-theorem bench compare runs/baseline.json runs/current.json --write
-theorem bench compare runs/baseline.json runs/current.json --fail-on-regression
-theorem bench report runs/current.json --format markdown
-theorem bench add "check n^2+n is even" --suite foundations-100 --expect exact-computed
-theorem proof backends --json
-theorem proof check docs/examples/trivial.lean --fail-on-unproved --json
-theorem proof check docs/examples/trivial.lean --write
-theorem proof list
-theorem smt backends --json
-theorem smt check docs/examples/constraints.smt2 --write --json
-theorem smt solve --int x --constraint "x > 0" --constraint "x < 3" --json
-theorem smt list
-theorem code sandbox-status --json
-theorem code run "Run a tiny local code check" --command node --allow-executable node --arg -e --arg "console.log(6 * 7)" --json
-theorem code list
+truth-harness bench run suites/foundations-100 --engine local --json
+truth-harness bench run suites/foundations-100 --write
+truth-harness bench run suites/foundations-100 --fail-on-failures
+truth-harness bench list
+truth-harness bench compare runs/baseline.json runs/current.json --write
+truth-harness bench compare runs/baseline.json runs/current.json --fail-on-regression
+truth-harness bench report runs/current.json --format markdown
+truth-harness bench add "check n^2+n is even" --suite foundations-100 --expect exact-computed
+truth-harness proof backends --json
+truth-harness proof check docs/examples/trivial.lean --fail-on-unproved --json
+truth-harness proof check docs/examples/trivial.lean --write
+truth-harness proof list
+truth-harness smt backends --json
+truth-harness smt check docs/examples/constraints.smt2 --write --json
+truth-harness smt solve --int x --constraint "x > 0" --constraint "x < 3" --json
+truth-harness smt list
+truth-harness code sandbox-status --json
+truth-harness code run "Run a tiny local code check" --command node --allow-executable node --arg -e --arg "console.log(6 * 7)" --json
+truth-harness code list
 ```
 
-Current benchmark-run records use `theorem.benchmark-run.v0` and live under `.theorem-workbench/benchmarks/`. They store suite metadata, runner metadata, replay command, per-case receipt ids/hashes/trust labels/backend ids, aggregate trust accuracy, failures, and warnings that benchmarks measure system behavior rather than proving the underlying tasks or downstream claims. Benchmark comparisons use `theorem.benchmark-comparison.v0` in the same directory and flag regressions, improvements, trust-label changes, changed receipt hashes, added/removed cases, and suite drift between recorded runs.
+Current benchmark-run records use `truth-harness.benchmark-run.v0` and live under `.truth-harness/benchmarks/`. They store suite metadata, runner metadata, replay command, per-case receipt ids/hashes/trust labels/backend ids, aggregate trust accuracy, failures, and warnings that benchmarks measure system behavior rather than proving the underlying tasks or downstream claims. Benchmark comparisons use `truth-harness.benchmark-comparison.v0` in the same directory and flag regressions, improvements, trust-label changes, changed receipt hashes, added/removed cases, and suite drift between recorded runs.
 
-Current verifier-route records use `theorem.verifier-route.v0` and live under `.theorem-workbench/routes/` when `theorem verify <claim> --write` or MCP `theorem_verify` with `write: true` is used. They store the prompt, conservative final trust label, nested receipt, engine-manifest summary, used capabilities, blocked/planned verifier gaps, next actions, replay command, JSON path, and Markdown report path. `theorem route list/show` and MCP `theorem_route_list`/`theorem_route_show` expose those records for claim ledger refs, audits, validation plans, snapshots, research sessions, and reports. A route explains verifier selection and missing gates; it is not a proof by itself.
+Current verifier-route records use `truth-harness.verifier-route.v0` and live under `.truth-harness/routes/` when `truth-harness verify <claim> --write` or MCP `truth_harness_verify` with `write: true` is used. They store the prompt, conservative final trust label, nested receipt, engine-manifest summary, used capabilities, blocked/planned verifier gaps, next actions, replay command, JSON path, and Markdown report path. `truth-harness route list/show` and MCP `truth_harness_route_list`/`truth_harness_route_show` expose those records for claim ledger refs, audits, validation plans, snapshots, research sessions, and reports. A route explains verifier selection and missing gates; it is not a proof by itself.
 
-Current proof-check records use `theorem.proof-check.v0` and live under `.theorem-workbench/proofs/` when `theorem proof check <file> --write` or MCP `theorem_proof_check` with `write: true` is used. They store the Lean command, source path, source hash, optional theorem name, stdout/stderr, replay command, proof boundary, JSON path, and Markdown report path. `theorem proof list` and `theorem_proof_list` expose those records for audits, snapshots, research-session evidence refs, and agent follow-up.
+Current proof-check records use `truth-harness.proof-check.v0` and live under `.truth-harness/proofs/` when `truth-harness proof check <file> --write` or MCP `truth_harness_proof_check` with `write: true` is used. They store the Lean command, source path, source hash, optional declaration name, stdout/stderr, replay command, proof boundary, JSON path, and Markdown report path. `truth-harness proof list` and `truth_harness_proof_list` expose those records for audits, snapshots, research-session evidence refs, and agent follow-up.
 
-Current SMT-check records use `theorem.smt-check.v0` and live under `.theorem-workbench/smt/` when `theorem smt check <file> --write`, `theorem smt solve`, MCP `theorem_smt_check` with `write: true`, or MCP `theorem_smt_solve` is used. They store the Z3 command, source path, source hash, optional query name, stdout/stderr, replay command, solver boundary, JSON path, and Markdown report path. `theorem smt solve` and `theorem_smt_solve` generate `.smt2` sources under `.theorem-workbench/smt/sources/` from explicit integer variables and constraints before checking them. When `get-model` is present and Z3 returns `sat`, records also extract simple `define-fun` model bindings into structured JSON while preserving raw stdout. `sat` and `unsat` map to `smt-checked`; missing Z3, execution errors, `unknown`, or unrecognized output stay `unverified`. `theorem smt list` and `theorem_smt_list` expose those records for audits, snapshots, research-session evidence refs, and agent follow-up.
+Current SMT-check records use `truth-harness.smt-check.v0` and live under `.truth-harness/smt/` when `truth-harness smt check <file> --write`, `truth-harness smt solve`, MCP `truth_harness_smt_check` with `write: true`, or MCP `truth_harness_smt_solve` is used. They store the Z3 command, source path, source hash, optional query name, stdout/stderr, replay command, solver boundary, JSON path, and Markdown report path. `truth-harness smt solve` and `truth_harness_smt_solve` generate `.smt2` sources under `.truth-harness/smt/sources/` from explicit integer variables and constraints before checking them. When `get-model` is present and Z3 returns `sat`, records also extract simple `define-fun` model bindings into structured JSON while preserving raw stdout. `sat` and `unsat` map to `smt-checked`; missing Z3, execution errors, `unknown`, or unrecognized output stay `unverified`. `truth-harness smt list` and `truth_harness_smt_list` expose those records for audits, snapshots, research-session evidence refs, and agent follow-up.
 
 This makes Truth Harness useful for:
 
@@ -306,7 +306,7 @@ interface PrivacyMetadata {
 }
 
 interface Receipt {
-  schemaVersion: "theorem.receipt.v0";
+  schemaVersion: "truth-harness.receipt.v0";
   runId: string;
   problem: string;
   trust: TrustLabel;
@@ -331,7 +331,7 @@ Important algorithms:
 
 The local invention log is provenance infrastructure, not an automated patent office or a medical-claims engine.
 
-Each `theorem.invention.v0` entry stores:
+Each `truth-harness.invention.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
@@ -351,7 +351,7 @@ Discovery packages render invention logs into local Markdown reports. They revie
 
 Research sessions are local runbooks for long agentic investigations. They are broader than invention logs: a session can track learning, pure math, code verification, physics modeling, biomedical literature review, simulation pipelines, patent exploration, or any combination of those.
 
-Each `theorem.research-session.v0` entry stores:
+Each `truth-harness.research-session.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
@@ -370,7 +370,7 @@ Research sessions create Markdown alongside JSON so humans can review the curren
 
 Expert reviews are local human-review records. They convert "needs expert review" from a vague warning into a portable artifact with scope, reviewer role, evidence refs, findings, limitations, outcome, and next checks.
 
-Each `theorem.expert-review.v0` entry stores:
+Each `truth-harness.expert-review.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
@@ -389,11 +389,11 @@ Expert reviews can be cited from evidence audits as `review:<reviewId>`. A compl
 
 Claim charts are local patent-review aids, not patentability decisions or legal advice.
 
-Each `theorem.claim-chart.v0` entry stores:
+Each `truth-harness.claim-chart.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
-| Invention ref | Links to a local `theorem.invention.v0` entry. |
+| Invention ref | Links to a local `truth-harness.invention.v0` entry. |
 | Claim elements | User-provided candidate claim elements; agents should not invent these silently. |
 | Support refs | Local receipt, source, simulation, disclosure, notebook, code-run, benchmark, or artifact refs. |
 | Prior-art refs and notes | Human-review notes about closest known work. |
@@ -407,7 +407,7 @@ The claim chart exists to organize evidence for a patent attorney or expert revi
 
 Simulation logs are local computational evidence records, not experimental validation.
 
-Each `theorem.simulation.v0` entry stores:
+Each `truth-harness.simulation.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
@@ -425,7 +425,7 @@ Simulation logs can be cited from invention logs as `simulation:<ref>`. Discover
 
 Experiment logs are local protocol/data/observation records, not broad proof of safety, efficacy, regulatory approval, or clinical truth.
 
-Each `theorem.experiment.v0` entry stores:
+Each `truth-harness.experiment.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
@@ -443,7 +443,7 @@ Experiment logs can be cited from invention logs as `experiment:<ref>`. Discover
 
 Vault envelopes are local encrypted-at-rest artifacts for sensitive notes, datasets, intermediate research files, or invention records that should not be kept as plaintext inside the project store.
 
-Each `theorem.vault.v0` envelope stores:
+Each `truth-harness.vault.v0` envelope stores:
 
 | Field | Purpose |
 | --- | --- |
@@ -453,7 +453,7 @@ Each `theorem.vault.v0` envelope stores:
 | Privacy | Local-only workspace privacy metadata. |
 | Warnings | Reminders that keys must stay out of prompts, manifests, receipts, and source control. |
 
-The encrypted payload stores the original relative source ref, filename, plaintext byte count, plaintext SHA-256, and file bytes. MCP exposes seal/list/verify tools, but `theorem_vault_verify` returns only integrity metadata and not plaintext bytes. CLI `theorem vault open --out <path>` is the explicit local escape hatch for writing decrypted bytes back to disk.
+The encrypted payload stores the original relative source ref, filename, plaintext byte count, plaintext SHA-256, and file bytes. MCP exposes seal/list/verify tools, but `truth_harness_vault_verify` returns only integrity metadata and not plaintext bytes. CLI `truth-harness vault open --out <path>` is the explicit local escape hatch for writing decrypted bytes back to disk.
 
 Vault records help protect private project files at rest. They do not replace OS disk encryption, consent, access control, backups, IRB/regulatory review, or legal confidentiality review.
 
@@ -461,7 +461,7 @@ Vault records help protect private project files at rest. They do not replace OS
 
 Evidence audits are local claim-posture records. They answer: what kind of claim is this, what evidence refs are attached, what is resolved locally, what remains missing, and whether the wording overclaims the evidence.
 
-Each `theorem.evidence-audit.v0` entry stores:
+Each `truth-harness.evidence-audit.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
@@ -481,7 +481,7 @@ Audit reports render the same record as Markdown for human review packets. They 
 
 Validation plans turn an evidence audit into an explicit gate checklist before stronger claims are allowed. They are the local artifact an agent should create when a claim touches discovery, biomedical work, simulations, patents, engineering performance, safety, clinical language, or regulatory posture.
 
-Each `theorem.validation-plan.v0` entry stores:
+Each `truth-harness.validation-plan.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
@@ -499,18 +499,18 @@ Validation plans are designed for Claude/Codex recursion: before an agent writes
 
 Workspace snapshots are local hash manifests for research checkpoints. They answer: which local artifacts existed, what schema/id metadata did they expose, what were their byte counts and SHA-256 hashes, and did any artifacts change, disappear, or appear after the checkpoint.
 
-Each `theorem.workspace-snapshot.v0` entry stores:
+Each `truth-harness.workspace-snapshot.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
 | Snapshot id, project id, timestamp | Stable reference for a local evidence checkpoint. |
-| Workspace dir | Always `.theorem-workbench` for portability. |
+| Workspace dir | Always `.truth-harness` for portability. |
 | Entries | Relative paths, artifact kind, byte count, SHA-256 digest, optional schema version, and optional artifact id. |
 | Summary | Counts by artifact kind and schema version. |
 | Privacy | Local-only workspace privacy metadata. |
 | Warnings | Boundary text explaining that hashes prove file identity, not truth. |
 
-Snapshot verification returns `theorem.workspace-snapshot-verification.v0` with `passed`, `changed`, `missing`, and `addedSinceSnapshot` fields. Snapshot files themselves are excluded from snapshots to avoid self-reference. Vault entries are hashed as encrypted envelopes only; plaintext remains private unless the user explicitly opens a vault entry locally.
+Snapshot verification returns `truth-harness.workspace-snapshot-verification.v0` with `passed`, `changed`, `missing`, and `addedSinceSnapshot` fields. Snapshot files themselves are excluded from snapshots to avoid self-reference. Vault entries are hashed as encrypted envelopes only; plaintext remains private unless the user explicitly opens a vault entry locally.
 
 This gives agents a concrete provenance gate before relying on previous findings. For example, before saying a cancer-pathway or hair-loss simulation package still supports a claim, an agent can verify that the exact local simulation logs, audit reports, source indexes, and vault envelopes have not drifted since the review packet was created.
 
@@ -518,7 +518,7 @@ This gives agents a concrete provenance gate before relying on previous findings
 
 The local corpus is the first RAG substrate. It is intentionally lexical before vector search: simple, inspectable, portable, and local-only.
 
-`theorem.corpus.v0` stores:
+`truth-harness.corpus.v0` stores:
 
 | Field | Purpose |
 | --- | --- |
@@ -529,7 +529,7 @@ The local corpus is the first RAG substrate. It is intentionally lexical before 
 Rules:
 
 1. Ingest only Markdown/text files under the project root.
-2. Never ingest `.theorem-workbench/` when indexing a project directory.
+2. Never ingest `.truth-harness/` when indexing a project directory.
 3. Search returns `source-cited` chunk hits with citation refs, not proof that a claim is true.
 4. Future vector, PDF, PubMed, arXiv, patent, or scientific database adapters must write compatible local artifacts and disclose any external calls.
 
@@ -537,7 +537,7 @@ Rules:
 
 Literature records are structured local evidence metadata for papers, preprints, patents, datasets, database exports, standards, protocols, web pages, books, and notes. They are the bridge between simple local corpus chunks and future scientific database adapters.
 
-Each `theorem.literature.v0` entry stores:
+Each `truth-harness.literature.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
@@ -554,7 +554,7 @@ This gives agents a local artifact to cite before they make biomedical, physics,
 
 Notebook run records are local provenance records for notebooks, scripts, tests, analyses, simulations, and pipelines. They are record-only artifacts: Truth Harness does not execute the command or verify outputs at this layer.
 
-Each `theorem.notebook-run.v0` entry stores:
+Each `truth-harness.notebook-run.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
@@ -567,13 +567,13 @@ Each `theorem.notebook-run.v0` entry stores:
 
 This gives agents a disciplined place to point when a simulation, analysis, benchmark, or discovery package depends on local code.
 
-Code-run records are the actual local execution layer. They are direct process records: Truth Harness launches an executable plus explicit args without shell interpolation, under a workspace-confined cwd and a default-local execution policy. `theorem code sandbox-status` and MCP `theorem_code_sandbox_status` report whether a measured sandbox provider is available. The policy is default-deny for executables: a non-empty explicit allowlist is required before anything runs, and `requireSandbox`/`--require-sandbox` fails closed unless the sandbox status can attest enforced isolation. It also blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden. Execution uses async child processes, streamed capture, timeout kill, output-budget kill, and a per-workspace concurrency queue so one long run does not freeze the MCP server event loop.
+Code-run records are the actual local execution layer. They are direct process records: Truth Harness launches an executable plus explicit args without shell interpolation, under a workspace-confined cwd and a default-local execution policy. `truth-harness code sandbox-status` and MCP `truth_harness_code_sandbox_status` report whether a measured sandbox provider is available. The policy is default-deny for executables: a non-empty explicit allowlist is required before anything runs, and `requireSandbox`/`--require-sandbox` fails closed unless the sandbox status can attest enforced isolation. It also blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden. Execution uses async child processes, streamed capture, timeout kill, output-budget kill, and a per-workspace concurrency queue so one long run does not freeze the MCP server event loop.
 
-The implementation is intentionally honest about its limits. Native host execution does not enforce an OS sandbox, network namespace, or filesystem boundary beyond the workspace cwd, so host code-run records store `privacy.mode: "unsandboxed-local-execution"`, `networkAccess: "unknown"`, and `replay.localOnly: false`. The Docker no-network profile can produce `privacy.mode: "sandboxed-local-execution"` and `networkAccess: "none"` only when the runtime measures the legacy Theorem container marker, a Docker/container runtime marker, loopback-only networking, and no IPv4/IPv6 default route. The record captures stdout, stderr, exit code, duration, output hashes, timeout, policy decision, sandbox measurement notes, and replay notes, then writes `theorem.code-run.v0` JSON plus Markdown under `.theorem-workbench/code-runs/`. Timeouts are capped at 120000 ms and each output stream is capped at 1048576 bytes.
+The implementation is intentionally honest about its limits. Native host execution does not enforce an OS sandbox, network namespace, or filesystem boundary beyond the workspace cwd, so host code-run records store `privacy.mode: "unsandboxed-local-execution"`, `networkAccess: "unknown"`, and `replay.localOnly: false`. The Docker no-network profile can produce `privacy.mode: "sandboxed-local-execution"` and `networkAccess: "none"` only when the runtime measures the Truth Harness container marker, a Docker/container runtime marker, loopback-only networking, and no IPv4/IPv6 default route. The record captures stdout, stderr, exit code, duration, output hashes, timeout, policy decision, sandbox measurement notes, and replay notes, then writes `truth-harness.code-run.v0` JSON plus Markdown under `.truth-harness/code-runs/`. Timeouts are capped at 120000 ms and each output stream is capped at 1048576 bytes.
 
-Agent-facing MCP code execution has an additional gate. `theorem_code_run` is not reachable unless the server process has `THEOREM_ALLOW_CODE_RUN=1`. Even then, unsandboxed direct execution is blocked unless either the caller sets `policy.requireSandbox: true` or the server process also has `THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1`. `policy.requireSandbox: true` fails closed on native hosts and can pass inside the measured Docker no-network provider.
+Agent-facing MCP code execution has an additional gate. `truth_harness_code_run` is not reachable unless the server process has `TRUTH_HARNESS_ALLOW_CODE_RUN=1`. Even then, unsandboxed direct execution is blocked unless either the caller sets `policy.requireSandbox: true` or the server process also has `TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN=1`. `policy.requireSandbox: true` fails closed on native hosts and can pass inside the measured Docker no-network provider.
 
-Each `theorem.code-run.v0` entry stores:
+Each `truth-harness.code-run.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
@@ -609,25 +609,25 @@ Adapter rules:
 3. Environment fingerprints include tool version, OS, command path, package lock/hash, and relevant config.
 4. Network adapters are disabled in offline mode.
 5. Adapters return structured errors, never prose-only failures.
-6. External adapters must start from a `theorem.model-context.v0` packet, write a `theorem.disclosure.v0` record, and append receipt disclosure metadata describing what was sent, why, and whether the user explicitly requested it.
+6. External adapters must start from a `truth-harness.model-context.v0` packet, write a `truth-harness.disclosure.v0` record, and append receipt disclosure metadata describing what was sent, why, and whether the user explicitly requested it.
 
-The first formal-backend probe is `theorem.proof-backends.v0`. It checks local Lean availability with a version command only, records `localOnly: true` and `networkAccess: none`, and sets `statusProbeMintedProof: false`. This report helps agents decide whether a proof-checking workflow is possible on the current machine, but a `proved` receipt still requires a later successful proof-checking run over a concrete proof artifact.
+The first formal-backend probe is `truth-harness.proof-backends.v0`. It checks local Lean availability with a version command only, records `localOnly: true` and `networkAccess: none`, and sets `statusProbeMintedProof: false`. This report helps agents decide whether a proof-checking workflow is possible on the current machine, but a `proved` receipt still requires a later successful proof-checking run over a concrete proof artifact.
 
-The first formal proof-check artifact is `theorem.proof-check.v0`. It records the local Lean command, source path, source SHA-256, optional theorem name, stdout/stderr, replay command, and the proof boundary. `status: accepted` maps to `trust: proved` with `proofCheckerBacked: true`; rejected or unavailable checks stay `unverified` because a failed proof attempt is not a mathematical refutation. Written records live under `.theorem-workbench/proofs/` with paired Markdown reports so agents can cite, snapshot, audit, and revisit concrete proof-check attempts without relying on chat memory.
+The first formal proof-check artifact is `truth-harness.proof-check.v0`. It records the local Lean command, source path, source SHA-256, optional declaration name, stdout/stderr, replay command, and the proof boundary. `status: accepted` maps to `trust: proved` with `proofCheckerBacked: true`; rejected or unavailable checks stay `unverified` because a failed proof attempt is not a mathematical refutation. Written records live under `.truth-harness/proofs/` with paired Markdown reports so agents can cite, snapshot, audit, and revisit concrete proof-check attempts without relying on chat memory.
 
-The first SMT artifact is `theorem.smt-check.v0`. It records the local Z3 command, source path, source SHA-256, optional query name, stdout/stderr, replay command, and the solver boundary. `status: sat` or `status: unsat` maps to `trust: smt-checked` with `proofCheckerBacked: false`; `unknown`, unavailable, or failed checks stay `unverified`. Written records live under `.theorem-workbench/smt/` with paired Markdown reports so agents can cite, snapshot, audit, and revisit concrete constraint checks without treating SMT output as Lean-style proof.
+The first SMT artifact is `truth-harness.smt-check.v0`. It records the local Z3 command, source path, source SHA-256, optional query name, stdout/stderr, replay command, and the solver boundary. `status: sat` or `status: unsat` maps to `trust: smt-checked` with `proofCheckerBacked: false`; `unknown`, unavailable, or failed checks stay `unverified`. Written records live under `.truth-harness/smt/` with paired Markdown reports so agents can cite, snapshot, audit, and revisit concrete constraint checks without treating SMT output as Lean-style proof.
 
 ## Model Context Packets
 
 Model-context packets are the local-first bridge to latest-model collaboration. They let Claude, Codex, humans, or other agents prepare exactly what a hosted model, local model, or external service may see before any call is made.
 
-Each `theorem.model-context.v0` entry stores:
+Each `truth-harness.model-context.v0` entry stores:
 
 | Field | Purpose |
 | --- | --- |
 | Purpose and target | Why the packet exists, plus hosted model, local model, or external service target. |
 | Service/model metadata | The intended provider, endpoint, or model label without requiring a network call. |
-| Selected data classes | A short list of what data types are included, such as theorem statement, proof sketch, benchmark summary, or source excerpt. |
+| Selected data classes | A short list of what data types are included, such as formal statement, proof sketch, benchmark summary, or source excerpt. |
 | Source refs and sections | Local artifact refs plus human-readable included sections. |
 | Redactions and exclusions | What was removed or deliberately kept out, including vault plaintext and unrelated workspace history. |
 | Approval and disclosure status | Who approved the selected context and whether a disclosure record still needs to be written. |
@@ -641,89 +641,89 @@ Current MCP tools:
 
 | Tool | Purpose |
 | --- | --- |
-| `theorem_ask` | Create proof receipts for supported math prompts. |
-| `theorem_verify` | Create a manifest-aware verifier route plus receipt; optionally write local `theorem.verifier-route.v0` JSON and Markdown records. |
-| `theorem_route_list` | List local verifier-route records and reusable route ids/paths. |
-| `theorem_route_show` | Read one verifier route by id or workspace-local JSON path. |
-| `theorem_benchmark_run` | Run benchmark suites against the local receipt engine; optionally write local `theorem.benchmark-run.v0` records. |
-| `theorem_benchmark_compare` | Compare two benchmark-run records; optionally write local `theorem.benchmark-comparison.v0` records. |
-| `theorem_benchmark_list` | List benchmark run/comparison artifacts and reusable local paths. |
-| `theorem_proof_backends` | Probe accepted local proof-checker availability without network access; the status report is not a proof. |
-| `theorem_proof_check` | Check a workspace-local Lean proof artifact, optionally write a local proof-check record, and return `proved` only when Lean accepts it. |
-| `theorem_proof_list` | List local proof-check records and reusable JSON/Markdown paths. |
-| `theorem_smt_backends` | Probe local Z3 availability without network access; the status report is not a solver check. |
-| `theorem_smt_check` | Check a workspace-local SMT-LIB artifact, optionally write a local SMT-check record, and return `smt-checked` only when Z3 returns `sat` or `unsat`. |
-| `theorem_smt_list` | List local SMT-check records and reusable JSON/Markdown paths. |
-| `theorem_smt_solve` | Build workspace-local SMT-LIB from explicit integer constraints, then run the local SMT-check workflow. |
-| `theorem_workspace_init` | Initialize the private local workspace. |
-| `theorem_workspace_status` | Check local workspace health. |
-| `theorem_workspace_repair` | Create missing private directories and persist newly added manifest defaults. |
-| `theorem_workspace_snapshot` | Write a local provenance hash snapshot for workspace artifacts. |
-| `theorem_workspace_snapshot_list` | List local workspace snapshots. |
-| `theorem_workspace_snapshot_verify` | Verify changed, missing, or added artifacts against a snapshot. |
-| `theorem_claim_add` | Write a local claim ledger record with dependencies, supersession, evidence refs, trust label, tags, and finalization gates. |
-| `theorem_claim_list` | List/filter local claim records and return the dependency/supersession graph. |
-| `theorem_claim_show` | Read one local claim record by id or workspace-local JSON path. |
-| `theorem_research_session_start` | Start a local research runbook with budgets, evidence refs, snapshot refs, and review boundaries. |
-| `theorem_research_session_checkpoint` | Append decisions, evidence refs, snapshot refs, and next checks to a research runbook. |
-| `theorem_research_session_list` | List local research sessions and checkpoints. |
-| `theorem_expert_review_log` | Write a local human expert-review record with scope, outcome, limitations, and next checks. |
-| `theorem_expert_review_list` | List local expert-review records. |
-| `theorem_source_ingest` | Ingest Markdown/text files into the local corpus index. |
-| `theorem_source_search` | Retrieve `source-cited` local corpus chunks. |
-| `theorem_source_cite` | Create `source-cited` receipts for claims using local corpus hits. |
-| `theorem_literature_log` | Create or write local literature, prior-art, dataset, and database-export evidence records. |
-| `theorem_literature_list` | List local literature records. |
-| `theorem_notebook_run_log` | Create or write local notebook/script/pipeline provenance records without executing code. |
-| `theorem_notebook_run_list` | List local notebook-run records. |
-| `theorem_code_sandbox_status` | Report whether a measured code-run sandbox is available before requesting execution. |
-| `theorem_code_run` | Execute a local direct command under the default local execution policy and write a code-run evidence record. Disabled unless the MCP server process has `THEOREM_ALLOW_CODE_RUN=1`; unsandboxed MCP execution also requires `THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1`, and each call still requires an explicit executable allowlist. |
-| `theorem_code_list` | List local code-run records. |
-| `theorem_vault_seal` | Encrypt a workspace-local file into the private vault using an environment key. |
-| `theorem_vault_list` | List encrypted local vault envelopes without decrypting plaintext. |
-| `theorem_vault_verify` | Decrypt locally and return integrity metadata only, not plaintext bytes. |
-| `theorem_evidence_audit` | Audit local evidence posture, overclaim risk, and required next checks for a claim; optionally write Markdown reports. |
-| `theorem_evidence_audit_list` | List local evidence audits. |
-| `theorem_validation_plan` | Create or write local validation-gate plans before stronger discovery, biomedical, patent, simulation, or engineering claims. |
-| `theorem_validation_plan_list` | List local validation plans. |
-| `theorem_model_context_prepare` | Prepare a local selected-context packet before hosted model, local model, or external service collaboration. |
-| `theorem_model_context_list` | List local model-context packets. |
-| `theorem_disclosure_log` | Write local audit records for selected context sent to external models/services. |
-| `theorem_disclosure_list` | List local external model/service disclosure records. |
-| `theorem_simulation_log` | Write local simulation evidence records with assumptions, metrics, uncertainty, and caveats. |
-| `theorem_simulation_list` | List local simulation evidence records. |
-| `theorem_experiment_log` | Write local experiment evidence records with protocol/data/analysis refs and review caveats. |
-| `theorem_experiment_list` | List local experiment evidence records. |
-| `theorem_invention_log` | Write local invention/discovery hypothesis logs. |
-| `theorem_invention_list` | List local invention/discovery logs. |
-| `theorem_claim_chart` | Render or write local patent claim charts with evidence refs and legal-review caveats. |
-| `theorem_claim_chart_list` | List local patent claim charts. |
-| `theorem_discovery_package` | Render or write local discovery packages with evidence review and validation caveats. |
-| `theorem_replay` | Replay a previous receipt. |
-| `theorem_render_receipt` | Render receipts as Markdown or HTML. |
+| `truth_harness_ask` | Create proof receipts for supported math prompts. |
+| `truth_harness_verify` | Create a manifest-aware verifier route plus receipt; optionally write local `truth-harness.verifier-route.v0` JSON and Markdown records. |
+| `truth_harness_route_list` | List local verifier-route records and reusable route ids/paths. |
+| `truth_harness_route_show` | Read one verifier route by id or workspace-local JSON path. |
+| `truth_harness_benchmark_run` | Run benchmark suites against the local receipt engine; optionally write local `truth-harness.benchmark-run.v0` records. |
+| `truth_harness_benchmark_compare` | Compare two benchmark-run records; optionally write local `truth-harness.benchmark-comparison.v0` records. |
+| `truth_harness_benchmark_list` | List benchmark run/comparison artifacts and reusable local paths. |
+| `truth_harness_proof_backends` | Probe accepted local proof-checker availability without network access; the status report is not a proof. |
+| `truth_harness_proof_check` | Check a workspace-local Lean proof artifact, optionally write a local proof-check record, and return `proved` only when Lean accepts it. |
+| `truth_harness_proof_list` | List local proof-check records and reusable JSON/Markdown paths. |
+| `truth_harness_smt_backends` | Probe local Z3 availability without network access; the status report is not a solver check. |
+| `truth_harness_smt_check` | Check a workspace-local SMT-LIB artifact, optionally write a local SMT-check record, and return `smt-checked` only when Z3 returns `sat` or `unsat`. |
+| `truth_harness_smt_list` | List local SMT-check records and reusable JSON/Markdown paths. |
+| `truth_harness_smt_solve` | Build workspace-local SMT-LIB from explicit integer constraints, then run the local SMT-check workflow. |
+| `truth_harness_workspace_init` | Initialize the private local workspace. |
+| `truth_harness_workspace_status` | Check local workspace health. |
+| `truth_harness_workspace_repair` | Create missing private directories and persist newly added manifest defaults. |
+| `truth_harness_workspace_snapshot` | Write a local provenance hash snapshot for workspace artifacts. |
+| `truth_harness_workspace_snapshot_list` | List local workspace snapshots. |
+| `truth_harness_workspace_snapshot_verify` | Verify changed, missing, or added artifacts against a snapshot. |
+| `truth_harness_claim_add` | Write a local claim ledger record with dependencies, supersession, evidence refs, trust label, tags, and finalization gates. |
+| `truth_harness_claim_list` | List/filter local claim records and return the dependency/supersession graph. |
+| `truth_harness_claim_show` | Read one local claim record by id or workspace-local JSON path. |
+| `truth_harness_research_session_start` | Start a local research runbook with budgets, evidence refs, snapshot refs, and review boundaries. |
+| `truth_harness_research_session_checkpoint` | Append decisions, evidence refs, snapshot refs, and next checks to a research runbook. |
+| `truth_harness_research_session_list` | List local research sessions and checkpoints. |
+| `truth_harness_expert_review_log` | Write a local human expert-review record with scope, outcome, limitations, and next checks. |
+| `truth_harness_expert_review_list` | List local expert-review records. |
+| `truth_harness_source_ingest` | Ingest Markdown/text files into the local corpus index. |
+| `truth_harness_source_search` | Retrieve `source-cited` local corpus chunks. |
+| `truth_harness_source_cite` | Create `source-cited` receipts for claims using local corpus hits. |
+| `truth_harness_literature_log` | Create or write local literature, prior-art, dataset, and database-export evidence records. |
+| `truth_harness_literature_list` | List local literature records. |
+| `truth_harness_notebook_run_log` | Create or write local notebook/script/pipeline provenance records without executing code. |
+| `truth_harness_notebook_run_list` | List local notebook-run records. |
+| `truth_harness_code_sandbox_status` | Report whether a measured code-run sandbox is available before requesting execution. |
+| `truth_harness_code_run` | Execute a local direct command under the default local execution policy and write a code-run evidence record. Disabled unless the MCP server process has `TRUTH_HARNESS_ALLOW_CODE_RUN=1`; unsandboxed MCP execution also requires `TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN=1`, and each call still requires an explicit executable allowlist. |
+| `truth_harness_code_list` | List local code-run records. |
+| `truth_harness_vault_seal` | Encrypt a workspace-local file into the private vault using an environment key. |
+| `truth_harness_vault_list` | List encrypted local vault envelopes without decrypting plaintext. |
+| `truth_harness_vault_verify` | Decrypt locally and return integrity metadata only, not plaintext bytes. |
+| `truth_harness_evidence_audit` | Audit local evidence posture, overclaim risk, and required next checks for a claim; optionally write Markdown reports. |
+| `truth_harness_evidence_audit_list` | List local evidence audits. |
+| `truth_harness_validation_plan` | Create or write local validation-gate plans before stronger discovery, biomedical, patent, simulation, or engineering claims. |
+| `truth_harness_validation_plan_list` | List local validation plans. |
+| `truth_harness_model_context_prepare` | Prepare a local selected-context packet before hosted model, local model, or external service collaboration. |
+| `truth_harness_model_context_list` | List local model-context packets. |
+| `truth_harness_disclosure_log` | Write local audit records for selected context sent to external models/services. |
+| `truth_harness_disclosure_list` | List local external model/service disclosure records. |
+| `truth_harness_simulation_log` | Write local simulation evidence records with assumptions, metrics, uncertainty, and caveats. |
+| `truth_harness_simulation_list` | List local simulation evidence records. |
+| `truth_harness_experiment_log` | Write local experiment evidence records with protocol/data/analysis refs and review caveats. |
+| `truth_harness_experiment_list` | List local experiment evidence records. |
+| `truth_harness_invention_log` | Write local invention/discovery hypothesis logs. |
+| `truth_harness_invention_list` | List local invention/discovery logs. |
+| `truth_harness_claim_chart` | Render or write local patent claim charts with evidence refs and legal-review caveats. |
+| `truth_harness_claim_chart_list` | List local patent claim charts. |
+| `truth_harness_discovery_package` | Render or write local discovery packages with evidence review and validation caveats. |
+| `truth_harness_replay` | Replay a previous receipt. |
+| `truth_harness_render_receipt` | Render receipts as Markdown or HTML. |
 
 Planned MCP tools:
 
 | Tool | Purpose |
 | --- | --- |
-| `theorem_verify_claim` | Verify one mathematical/factual claim. |
-| `theorem_compute_exact` | CAS-backed symbolic/exact computation. |
-| `theorem_smt_translate` | Higher-level natural-language or domain-structured claim translation into reviewable SMT artifacts. |
-| `theorem_prove_lean` | Compile/check Lean statements or proof attempts. |
-| `theorem_rag_ingest` | Ingest PDFs, papers, patents, scientific databases, or local docs through richer adapters. |
-| `theorem_rag_search` | Retrieve hybrid lexical/vector context with citations. |
-| `theorem_get_artifact` | Return stored proof, plot, notebook, trace, or source chunk. |
-| `theorem_lesson` | Turn a verified solution into an adaptive lesson. |
+| `truth_harness_verify_claim` | Verify one mathematical/factual claim. |
+| `truth_harness_compute_exact` | CAS-backed symbolic/exact computation. |
+| `truth_harness_smt_translate` | Higher-level natural-language or domain-structured claim translation into reviewable SMT artifacts. |
+| `truth_harness_prove_lean` | Compile/check Lean statements or proof attempts. |
+| `truth_harness_rag_ingest` | Ingest PDFs, papers, patents, scientific databases, or local docs through richer adapters. |
+| `truth_harness_rag_search` | Retrieve hybrid lexical/vector context with citations. |
+| `truth_harness_get_artifact` | Return stored proof, plot, notebook, trace, or source chunk. |
+| `truth_harness_lesson` | Turn a verified solution into an adaptive lesson. |
 
 Initial MCP resources:
 
 | Resource | Purpose |
 | --- | --- |
-| `theorem://runs/{runId}` | Run graph and trust summary. |
-| `theorem://benchmarks/{benchmarkRunId}` | Benchmark summary, scores, regressions, and artifacts. |
-| `theorem://artifacts/{artifactId}` | Tool output, proof file, trace, plot, or citation bundle. |
-| `theorem://corpus/{docId}` | Ingested document metadata and chunks. |
-| `theorem://lessons/{lessonId}` | Learning-mode material generated from verified steps. |
+| `truth-harness://runs/{runId}` | Run graph and trust summary. |
+| `truth-harness://benchmarks/{benchmarkRunId}` | Benchmark summary, scores, regressions, and artifacts. |
+| `truth-harness://artifacts/{artifactId}` | Tool output, proof file, trace, plot, or citation bundle. |
+| `truth-harness://corpus/{docId}` | Ingested document metadata and chunks. |
+| `truth-harness://lessons/{lessonId}` | Learning-mode material generated from verified steps. |
 
 Initial MCP prompts:
 
@@ -739,69 +739,69 @@ Initial MCP prompts:
 CLI must cover the whole backend without the UI.
 
 ```text
-theorem ask "integrate x^2 sin x from 0 to pi" --trust exact --explain
-theorem proof backends
-theorem proof check docs/examples/trivial.lean --fail-on-unproved
-theorem proof check docs/examples/trivial.lean --write
-theorem proof list
-theorem smt backends
-theorem smt check docs/examples/constraints.smt2 --write
-theorem smt solve --int x --constraint "x > 0" --constraint "x < 3"
-theorem smt list
-theorem verify "for all n, n^2+n is even" --lean
-theorem compute "factor x^4 - 1" --engine sympy --json
-theorem smt translate "find an integer x with 0 < x < 3" --review
-theorem rag ingest ./papers --collection math
-theorem rag search "Fourier transform convolution theorem" --collection math
-theorem source ingest ./papers
-theorem source search "Fourier transform convolution theorem"
-theorem source cite "The convolution theorem is discussed in the local notes" --query "Fourier transform convolution theorem"
-theorem literature log "Local pathway paper" --kind paper --status annotated --identifier doi:10.0000/example --local-ref papers/pathway.md --claim "Reports a toy pathway marker change" --method "Toy model only" --limitation "No clinical endpoint"
-theorem literature list
-theorem notebook log "Run a local notebook that computes a toy pathway score" --kind notebook --runner jupyter --command "jupyter nbconvert --execute notebooks/pathway.ipynb" --notebook notebooks/pathway.ipynb --code src/pathway.py --input data/pathway.csv --output artifacts/pathway-output.json --runtime python --dependency sympy==1.14.0 --limitation "Toy model only"
-theorem notebook list
-theorem code sandbox-status --json
-theorem code run "Run a tiny local script check" --command node --allow-executable node --arg -e --arg "console.log(6 * 7)" --code inline:node-eval --input prompt:6x7 --output stdout
-theorem code list
-theorem vault seal private/notes.md --label "Private research notes"
-theorem vault list
-theorem vault verify vault_<id>
-theorem vault open vault_<id> --out private/restored-notes.md
-theorem audit claim "This simulated candidate cures cancer safely" --evidence simulation:sim_<id> --evidence vault:vault_<id> --report
-theorem audit list
-theorem validation plan "This simulated candidate cures cancer safely" --evidence simulation:sim_<id> --domain biomedical
-theorem validation list
-theorem workspace snapshot
-theorem workspace verify-snapshot snap_0123456789abcdef
-theorem model-context prepare "Ask a frontier model to critique a selected proof plan" --service OpenAI --model frontier-reasoning-model --data "selected proof sketch" --section "Selected proof plan=Only this proof sketch is included; local corpus stays local." --approval "prompt:explicit-user-request"
-theorem model-context list
-theorem disclosure log "Ask a frontier model to critique a selected proof plan" --service OpenAI --data "selected proof sketch" --context "Only the proof sketch is sent; local corpus stays local."
-theorem disclosure list
-theorem simulation log "Could a toy pathway simulation lower a follicle signaling score?" --kind molecular --engine "local python" --model "toy pathway ODE" --metric "pathway_score_delta=-0.18;note=toy-model-only" --assumption "Toy mechanism only" --uncertainty "No calibrated uncertainty model" --limitation "No wet-lab validation"
-theorem simulation list
-theorem experiment log "Did a toy assay observe a pathway marker change?" --kind wet-lab --stage completed --protocol protocols/toy-assay.md --data data/toy-assay.csv --analysis notebooks/toy-assay.ipynb --observation "Marker changed under toy conditions" --measurement "marker_delta=-0.12;unit=a.u.;note=toy-assay-only" --limitation "No clinical endpoint"
-theorem experiment list
-theorem workspace init --name "Local Discovery Lab"
-theorem workspace status
-theorem workspace repair
-theorem workspace snapshot
-theorem workspace snapshots
-theorem workspace verify-snapshot snap_0123456789abcdef
-theorem research start "Investigate a cancer pathway hypothesis without claiming a cure" --domain biomedical --snapshot snap_0123456789abcdef --task "Attach local source evidence" --task "Run evidence audit before any claim"
-theorem research checkpoint session_0123456789abcdef "Initial runbook created; claim remains a computational hypothesis" --snapshot snap_0123456789abcdef --next-check "Attach simulation, source, and expert-review refs"
-theorem research list
-theorem review log "Cancer pathway evidence packet" --kind biomedical --status requested --reviewer-role "oncology domain expert" --evidence snapshot:snap_0123456789abcdef --next-check "Attach wet-lab validation plan before stronger claims"
-theorem review list
-theorem invention log "Candidate mechanism ..." --stage computational-hypothesis --evidence receipt:.theorem-workbench/receipts/run.json
-theorem invention list
-theorem invention claim-chart --element "Candidate mechanism with local evidence support" --evidence receipt:.theorem-workbench/receipts/run.json --prior-art "Search closest patents and papers" --write
-theorem invention claim-charts
-theorem invention package --write
-theorem replay runs/2026-06-08/example.truthrun.json
-theorem lesson runs/example --level algebra-1
-theorem bench run suites/foundations-100 --profile local
-theorem mcp --transport stdio
-theorem doctor
+truth-harness ask "integrate x^2 sin x from 0 to pi" --trust exact --explain
+truth-harness proof backends
+truth-harness proof check docs/examples/trivial.lean --fail-on-unproved
+truth-harness proof check docs/examples/trivial.lean --write
+truth-harness proof list
+truth-harness smt backends
+truth-harness smt check docs/examples/constraints.smt2 --write
+truth-harness smt solve --int x --constraint "x > 0" --constraint "x < 3"
+truth-harness smt list
+truth-harness verify "for all n, n^2+n is even" --lean
+truth-harness compute "factor x^4 - 1" --engine sympy --json
+truth-harness smt translate "find an integer x with 0 < x < 3" --review
+truth-harness rag ingest ./papers --collection math
+truth-harness rag search "Fourier transform convolution theorem" --collection math
+truth-harness source ingest ./papers
+truth-harness source search "Fourier transform convolution theorem"
+truth-harness source cite "The convolution theorem is discussed in the local notes" --query "Fourier transform convolution theorem"
+truth-harness literature log "Local pathway paper" --kind paper --status annotated --identifier doi:10.0000/example --local-ref papers/pathway.md --claim "Reports a toy pathway marker change" --method "Toy model only" --limitation "No clinical endpoint"
+truth-harness literature list
+truth-harness notebook log "Run a local notebook that computes a toy pathway score" --kind notebook --runner jupyter --command "jupyter nbconvert --execute notebooks/pathway.ipynb" --notebook notebooks/pathway.ipynb --code src/pathway.py --input data/pathway.csv --output artifacts/pathway-output.json --runtime python --dependency sympy==1.14.0 --limitation "Toy model only"
+truth-harness notebook list
+truth-harness code sandbox-status --json
+truth-harness code run "Run a tiny local script check" --command node --allow-executable node --arg -e --arg "console.log(6 * 7)" --code inline:node-eval --input prompt:6x7 --output stdout
+truth-harness code list
+truth-harness vault seal private/notes.md --label "Private research notes"
+truth-harness vault list
+truth-harness vault verify vault_<id>
+truth-harness vault open vault_<id> --out private/restored-notes.md
+truth-harness audit claim "This simulated candidate cures cancer safely" --evidence simulation:sim_<id> --evidence vault:vault_<id> --report
+truth-harness audit list
+truth-harness validation plan "This simulated candidate cures cancer safely" --evidence simulation:sim_<id> --domain biomedical
+truth-harness validation list
+truth-harness workspace snapshot
+truth-harness workspace verify-snapshot snap_0123456789abcdef
+truth-harness model-context prepare "Ask a frontier model to critique a selected proof plan" --service OpenAI --model frontier-reasoning-model --data "selected proof sketch" --section "Selected proof plan=Only this proof sketch is included; local corpus stays local." --approval "prompt:explicit-user-request"
+truth-harness model-context list
+truth-harness disclosure log "Ask a frontier model to critique a selected proof plan" --service OpenAI --data "selected proof sketch" --context "Only the proof sketch is sent; local corpus stays local."
+truth-harness disclosure list
+truth-harness simulation log "Could a toy pathway simulation lower a follicle signaling score?" --kind molecular --engine "local python" --model "toy pathway ODE" --metric "pathway_score_delta=-0.18;note=toy-model-only" --assumption "Toy mechanism only" --uncertainty "No calibrated uncertainty model" --limitation "No wet-lab validation"
+truth-harness simulation list
+truth-harness experiment log "Did a toy assay observe a pathway marker change?" --kind wet-lab --stage completed --protocol protocols/toy-assay.md --data data/toy-assay.csv --analysis notebooks/toy-assay.ipynb --observation "Marker changed under toy conditions" --measurement "marker_delta=-0.12;unit=a.u.;note=toy-assay-only" --limitation "No clinical endpoint"
+truth-harness experiment list
+truth-harness workspace init --name "Local Discovery Lab"
+truth-harness workspace status
+truth-harness workspace repair
+truth-harness workspace snapshot
+truth-harness workspace snapshots
+truth-harness workspace verify-snapshot snap_0123456789abcdef
+truth-harness research start "Investigate a cancer pathway hypothesis without claiming a cure" --domain biomedical --snapshot snap_0123456789abcdef --task "Attach local source evidence" --task "Run evidence audit before any claim"
+truth-harness research checkpoint session_0123456789abcdef "Initial runbook created; claim remains a computational hypothesis" --snapshot snap_0123456789abcdef --next-check "Attach simulation, source, and expert-review refs"
+truth-harness research list
+truth-harness review log "Cancer pathway evidence packet" --kind biomedical --status requested --reviewer-role "oncology domain expert" --evidence snapshot:snap_0123456789abcdef --next-check "Attach wet-lab validation plan before stronger claims"
+truth-harness review list
+truth-harness invention log "Candidate mechanism ..." --stage computational-hypothesis --evidence receipt:.truth-harness/receipts/run.json
+truth-harness invention list
+truth-harness invention claim-chart --element "Candidate mechanism with local evidence support" --evidence receipt:.truth-harness/receipts/run.json --prior-art "Search closest patents and papers" --write
+truth-harness invention claim-charts
+truth-harness invention package --write
+truth-harness replay runs/2026-06-08/example.truthrun.json
+truth-harness lesson runs/example --level algebra-1
+truth-harness bench run suites/foundations-100 --profile local
+truth-harness mcp --transport stdio
+truth-harness doctor
 ```
 
 CLI output modes:
@@ -858,7 +858,7 @@ Budgets:
 | Max branches per node | 5 |
 | Max wall time | 10 minutes local MVP |
 | Max tool calls | 100 per run |
-| Max proof attempts per theorem | 32 MVP, configurable |
+| Max proof attempts per formal claim | 32 MVP, configurable |
 | Max unverified final claims | 0 for strict mode |
 
 ## Test Strategy

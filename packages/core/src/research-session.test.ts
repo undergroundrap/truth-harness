@@ -42,7 +42,7 @@ describe("research sessions", () => {
       now: "2026-06-08T00:20:00.000Z"
     });
 
-    expect(session.schemaVersion).toBe("theorem.research-session.v0");
+    expect(session.schemaVersion).toBe("truth-harness.research-session.v0");
     expect(session.sessionId).toMatch(/^session_[a-f0-9]{16}$/);
     expect(session.privacy.mode).toBe("local-only");
     expect(session.modelPolicy.hostedModels).toBe("optional-with-disclosure");
@@ -59,10 +59,10 @@ describe("research sessions", () => {
     await initLocalWorkspace(root, { now: "2026-06-08T00:00:00.000Z" });
     const write = await writeResearchSession({
       rootPath: root,
-      objective: "Build a proof plan for a parity theorem.",
+      objective: "Build a proof plan for a parity truth-harness.",
       domains: ["math"],
       evidenceRefs: [{ kind: "receipt", ref: "receipts/seed.json", trust: "unverified" }],
-      tasks: ["Formalize the theorem", "Run the local parity checker"],
+      tasks: ["Formalize the claim", "Run the local parity checker"],
       now: "2026-06-08T00:10:00.000Z"
     });
 
@@ -78,8 +78,8 @@ describe("research sessions", () => {
     });
     const list = await listResearchSessions(root);
 
-    expect(write.jsonPath).toContain(".theorem-workbench");
-    expect(write.markdownPath).toContain(".theorem-workbench");
+    expect(write.jsonPath).toContain(".truth-harness");
+    expect(write.markdownPath).toContain(".truth-harness");
     expect(JSON.parse(await readFile(write.jsonPath, "utf8")).sessionId).toBe(write.session.sessionId);
     expect(checkpoint.checkpoint.checkpointId).toMatch(/^chk_[a-f0-9]{16}$/);
     expect(checkpoint.session.evidenceRefs.map((ref) => `${ref.kind}:${ref.ref}`)).toEqual([
@@ -94,7 +94,7 @@ describe("research sessions", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-research-session-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-research-session-"));
   roots.push(root);
   return root;
 }

@@ -1,6 +1,6 @@
 name: truth-harness
 
-x-theorem-security: &theorem-security
+x-truth-harness-security: &truth-harness-security
   security_opt:
     - no-new-privileges:true
   cap_drop:
@@ -8,8 +8,8 @@ x-theorem-security: &theorem-security
   pids_limit: 1024
 
 services:
-  theorem:
-    <<: *theorem-security
+  truth-harness:
+    <<: *truth-harness-security
     build:
       context: .
       target: dev
@@ -19,17 +19,17 @@ services:
     environment:
       CI: "true"
       NPM_CONFIG_UPDATE_NOTIFIER: "false"
-      THEOREM_WORKBENCH_CONTAINER: "1"
-      THEOREM_MAXIMA: "maxima-sage"
-      THEOREM_Z3: "z3"
+      TRUTH_HARNESS_CONTAINER: "1"
+      TRUTH_HARNESS_MAXIMA: "maxima-sage"
+      TRUTH_HARNESS_Z3: "z3"
     volumes:
       - .:/workspace
       - truth_harness_node_modules:/workspace/node_modules
-      - truth_harness_npm_cache:/home/theorem/.npm
+      - truth_harness_npm_cache:/home/truth/.npm
     command: ["npm", "run", "check"]
 
   mcp:
-    <<: *theorem-security
+    <<: *truth-harness-security
     build:
       context: .
       target: dev
@@ -39,18 +39,18 @@ services:
     environment:
       CI: "true"
       NPM_CONFIG_UPDATE_NOTIFIER: "false"
-      THEOREM_WORKBENCH_CONTAINER: "1"
-      THEOREM_MAXIMA: "maxima-sage"
-      THEOREM_Z3: "z3"
+      TRUTH_HARNESS_CONTAINER: "1"
+      TRUTH_HARNESS_MAXIMA: "maxima-sage"
+      TRUTH_HARNESS_Z3: "z3"
     volumes:
       - .:/workspace
       - truth_harness_node_modules:/workspace/node_modules
-      - truth_harness_npm_cache:/home/theorem/.npm
+      - truth_harness_npm_cache:/home/truth/.npm
     command: ["npm", "run", "mcp"]
     stdin_open: true
 
   web:
-    <<: *theorem-security
+    <<: *truth-harness-security
     build:
       context: .
       target: dev
@@ -59,13 +59,13 @@ services:
     environment:
       CI: "true"
       NPM_CONFIG_UPDATE_NOTIFIER: "false"
-      THEOREM_WORKBENCH_CONTAINER: "1"
-      THEOREM_MAXIMA: "maxima-sage"
-      THEOREM_Z3: "z3"
+      TRUTH_HARNESS_CONTAINER: "1"
+      TRUTH_HARNESS_MAXIMA: "maxima-sage"
+      TRUTH_HARNESS_Z3: "z3"
     volumes:
       - .:/workspace
       - truth_harness_node_modules:/workspace/node_modules
-      - truth_harness_npm_cache:/home/theorem/.npm
+      - truth_harness_npm_cache:/home/truth/.npm
     command: ["npm", "run", "web:serve", "--", "--host", "0.0.0.0", "--port", "4180"]
     ports:
       - "127.0.0.1:4180:4180"

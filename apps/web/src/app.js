@@ -5,7 +5,7 @@ const seedReceipts = {
     subtitle: "exact arithmetic trace",
     runId: "run_7e1b03d529609565",
     engine: "local-rational-arithmetic",
-    replay: 'theorem ask "compute 3 / 4 + 5 / 8" --json',
+    replay: 'truth-harness ask "compute 3 / 4 + 5 / 8" --json',
     output: "11/8",
     tags: ["math", "fractions", "exact-arithmetic", "linked-work"],
     dependsOn: ["denominator"],
@@ -66,7 +66,7 @@ const seedReceipts = {
     subtitle: "linked arithmetic lemma",
     runId: "run_common_denominator_sample",
     engine: "local-rational-arithmetic",
-    replay: 'theorem ask "common denominator for 3 / 4 and 5 / 8" --json',
+    replay: 'truth-harness ask "common denominator for 3 / 4 and 5 / 8" --json',
     output: "lcm(4,8)=8; 3/4=6/8",
     tags: ["math", "fractions", "subclaim", "reusable-lemma"],
     dependsOn: [],
@@ -122,7 +122,7 @@ const seedReceipts = {
     subtitle: "counterexample found",
     runId: "run_df379de5f447a5c6",
     engine: "finite-counterexample-search",
-    replay: 'theorem ask "for all integers n, n^2+n+1 is even" --json',
+    replay: 'truth-harness ask "for all integers n, n^2+n+1 is even" --json',
     output: "n=-20, value=381",
     tags: ["math", "number-theory", "counterexample", "universal-claim"],
     dependsOn: [],
@@ -159,7 +159,7 @@ const seedReceipts = {
     subtitle: "dimension checked",
     runId: "run_dimension_sample",
     engine: "local-dimensional-analysis",
-    replay: 'theorem ask "dimension check force = mass * acceleration" --json',
+    replay: 'truth-harness ask "dimension check force = mass * acceleration" --json',
     output: "M L T^-2",
     tags: ["physics", "units", "dimension-analysis", "model-check"],
     dependsOn: [],
@@ -198,7 +198,7 @@ const routeLedgerStore = new Map();
 const casCheckStore = new Map();
 const smtCheckStore = new Map();
 let workspaceReview = {
-  schemaVersion: "theorem.workspace-review.v0",
+  schemaVersion: "truth-harness.workspace-review.v0",
   summary: {
     totalItems: 0,
     criticalItems: 0,
@@ -209,17 +209,17 @@ let workspaceReview = {
   items: []
 };
 let claimLedgerGraph = {
-  schemaVersion: "theorem.claim-graph.v0",
+  schemaVersion: "truth-harness.claim-graph.v0",
   nodes: [],
   edges: [],
   warnings: []
 };
 const recentReceiptKeys = ["rational", "denominator", "parity", "dimension"];
 const ACTIVITY_PAGE_SIZE = 12;
-const NOTES_STORAGE_KEY = "theorem-workbench.session-notes.v0";
-const RESEARCHER_NAME_STORAGE_KEY = "theorem-workbench.researcher-name.v0";
-const SIDEBAR_WIDTH_STORAGE_KEY = "theorem-workbench.sidebar-width.v0";
-const SIDEBAR_COLLAPSED_STORAGE_KEY = "theorem-workbench.sidebar-collapsed.v0";
+const NOTES_STORAGE_KEY = "truth-harness.session-notes.v0";
+const RESEARCHER_NAME_STORAGE_KEY = "truth-harness.researcher-name.v0";
+const SIDEBAR_WIDTH_STORAGE_KEY = "truth-harness.sidebar-width.v0";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "truth-harness.sidebar-collapsed.v0";
 const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 420;
@@ -268,6 +268,8 @@ const workspaceReviewList = document.querySelector("#workspace-review-list");
 const workspaceReviewCount = document.querySelector("#workspace-review-count");
 const mainGraphList = document.querySelector("#main-graph-list");
 const graphDetail = document.querySelector("#graph-detail");
+const branchMap = document.querySelector("#branch-map");
+const branchMapStatus = document.querySelector("#branch-map-status");
 const matrixSummary = document.querySelector("#matrix-summary");
 const matrixCurrentClaim = document.querySelector("#matrix-current-claim");
 const matrixNextCommand = document.querySelector("#matrix-next-command");
@@ -400,7 +402,7 @@ const verificationGateCatalog = [
   {
     id: "receipt",
     label: "Receipt envelope",
-    command: "theorem ask --json",
+    command: "truth-harness ask --json",
     description: "Problem, output, evidence profile, privacy, artifacts, and replay command are captured.",
     applies: () => true,
     status: (receipt) => receipt.runId && receipt.replay ? "passed" : "missing"
@@ -408,7 +410,7 @@ const verificationGateCatalog = [
   {
     id: "exact",
     label: "Exact arithmetic trace",
-    command: "theorem ask \"compute ...\" --json",
+    command: "truth-harness ask \"compute ...\" --json",
     description: "Arithmetic is represented as exact rationals or integers with replayable steps.",
     applies: (receipt) => /arithmetic|counterexample|parity/u.test(receipt.details["Evidence kind"] ?? receipt.engine),
     status: (receipt) => receipt.engine.includes("rational") || receipt.engine.includes("counterexample") ? "passed" : "missing"
@@ -416,7 +418,7 @@ const verificationGateCatalog = [
   {
     id: "counterexample",
     label: "Counterexample search",
-    command: "theorem ask \"for all ...\" --json",
+    command: "truth-harness ask \"for all ...\" --json",
     description: "Universal claims can be refuted with exact witnesses and recorded search bounds.",
     applies: (receipt) => /for all|universal|counterexample|parity/u.test(`${receipt.title} ${receipt.engine} ${receipt.details["Evidence kind"]}`),
     status: (receipt) => receipt.trust === "refuted" || receipt.engine.includes("counterexample") ? "passed" : "missing"
@@ -440,7 +442,7 @@ const verificationGateCatalog = [
   {
     id: "independent-cas",
     label: "Independent CAS / proof escalation",
-    command: "theorem cas backends / theorem proof check / theorem smt check",
+    command: "truth-harness cas backends / truth-harness proof check / truth-harness smt check",
     description: "Same-engine symbolic sanity checks are useful, but stronger claims need a second CAS, SMT result, or proof-checker artifact.",
     applies: (receipt) => state.lane === "math" || /symbolic|cas|polynomial|equation|algebra/u.test(`${receipt.title} ${receipt.engine}`),
     status: (receipt) => ["cross-checked", "smt-checked", "proved"].includes(receipt.trust) || /maxima:passed/u.test(receipt.details["Independent CAS"] ?? "") ? "passed" : "waiting"
@@ -448,7 +450,7 @@ const verificationGateCatalog = [
   {
     id: "smt",
     label: "SMT solver check",
-    command: "theorem smt check --json",
+    command: "truth-harness smt check --json",
     description: "Bounded logic, satisfiability, and equivalence claims should route through SMT when applicable.",
     applies: (receipt) => state.lane === "math" || /all|exists|integer|constraint|satisf/u.test(receipt.title),
     status: (receipt) => receipt.trust === "smt-checked" || /smt|z3/u.test(receipt.engine) ? "passed" : "waiting"
@@ -456,7 +458,7 @@ const verificationGateCatalog = [
   {
     id: "proof",
     label: "Lean proof bridge",
-    command: "theorem proof check --backend lean",
+    command: "truth-harness proof check --backend lean",
     description: "Only accepted proof-checker output may mint a formally proved trust label.",
     applies: (receipt) => state.lane === "math" || /proof|theorem|lemma|forall|for all/u.test(receipt.title),
     status: (receipt) => receipt.details["Proof checker"] === "true" || receipt.trust === "proved" ? "passed" : "waiting"
@@ -472,7 +474,7 @@ const verificationGateCatalog = [
   {
     id: "privacy",
     label: "Privacy and replay audit",
-    command: "theorem replay <receipt.json>",
+    command: "truth-harness replay <receipt.json>",
     description: "Network, model context, command logs, and replay boundaries must match the receipt.",
     applies: () => true,
     status: (receipt) => (receipt.details.Network ?? "").toLowerCase() === "none" ? "passed" : "waiting"
@@ -480,7 +482,7 @@ const verificationGateCatalog = [
   {
     id: "paper",
     label: "Paper-ready packet",
-    command: "theorem render <receipt.json> markdown",
+    command: "truth-harness render <receipt.json> markdown",
     description: "Export evidence, limitations, citations, open gaps, and reviewer-ready reproduction steps.",
     applies: () => true,
     status: () => "waiting"
@@ -491,7 +493,7 @@ const capabilityLedgerRows = [
     category: "Computation",
     compare: "WolframAlpha / CAS",
     status: "building",
-    theorem: "Exact rational arithmetic, traces, counterexamples, units, SymPy adapter, benchmark records.",
+    truthHarness: "Exact rational arithmetic, traces, counterexamples, units, SymPy adapter, benchmark records.",
     gap: "Broader calculus, plotting, optimization, ODEs, assumptions, and multi-engine CAS cross-checks.",
     next: "Add a typed math router that escalates arithmetic -> symbolic -> SMT/proof -> report packet."
   },
@@ -499,7 +501,7 @@ const capabilityLedgerRows = [
     category: "Open Math Engines",
     compare: "SageMath / SymPy",
     status: "adapter-first",
-    theorem: "Uses local adapters and records backend ids, outputs, limits, and replay commands.",
+    truthHarness: "Uses local adapters and records backend ids, outputs, limits, and replay commands.",
     gap: "Sage, Julia, R, and richer numerical libraries are not first-class adapters yet.",
     next: "Define engine capability manifests and golden tests per adapter."
   },
@@ -507,7 +509,7 @@ const capabilityLedgerRows = [
     category: "Formal Trust",
     compare: "Lean / Coq / Isabelle",
     status: "strict-gate",
-    theorem: "Only accepted proof-checker output may mint proved; failed proof attempts stay unverified.",
+    truthHarness: "Only accepted proof-checker output may mint proved; failed proof attempts stay unverified.",
     gap: "Informal-to-formal statement help, proof search history, and mathlib-aware guidance are early.",
     next: "Make Lean proof attempts a visible chain: statement, attempt, error, repair, accepted artifact."
   },
@@ -515,7 +517,7 @@ const capabilityLedgerRows = [
     category: "Notebooks",
     compare: "JupyterLab",
     status: "gap",
-    theorem: "Notebook-run records exist for provenance, but execution is not yet a notebook IDE.",
+    truthHarness: "Notebook-run records exist for provenance, but execution is not yet a notebook IDE.",
     gap: "No cell runtime, rich outputs, plots, or file explorer in the web shell.",
     next: "Add notebook/output receipts before adding a full kernel UI."
   },
@@ -523,7 +525,7 @@ const capabilityLedgerRows = [
     category: "Provenance",
     compare: "DVC / DataLad / MLflow",
     status: "ahead",
-    theorem: "Claim ledger records now have ids, tags, dependencies, supersession links, verification ladders, finalization gates, snapshots, receipts, and replay commands.",
+    truthHarness: "Claim ledger records now have ids, tags, dependencies, supersession links, verification ladders, finalization gates, snapshots, receipts, and replay commands.",
     gap: "No visual diff/rollback UI or large artifact pointer strategy yet.",
     next: "Promote every web result into a claim record, then add graph diff, revert, and bundle export."
   },
@@ -531,7 +533,7 @@ const capabilityLedgerRows = [
     category: "Scientific RAG",
     compare: "PaperQA / literature tools",
     status: "building",
-    theorem: "Local source ingest, cite receipts, literature records, model-context and disclosure packets.",
+    truthHarness: "Local source ingest, cite receipts, literature records, model-context and disclosure packets.",
     gap: "No semantic retrieval, DOI enrichment, contradiction detection, or citation-span verifier yet.",
     next: "Promote every cited sentence to a source receipt with entailment and contradiction checks."
   },
@@ -539,7 +541,7 @@ const capabilityLedgerRows = [
     category: "Agent Harness",
     compare: "Claude / Codex alone",
     status: "ahead",
-    theorem: "MCP/CLI/API routes, activity log, runbooks, receipts, safety center, reports, local evidence graph.",
+    truthHarness: "MCP/CLI/API routes, activity log, runbooks, receipts, safety center, reports, local evidence graph.",
     gap: "Front end is not yet a full mirror for every CLI/MCP route.",
     next: "Every CLI command gets a UI route, and every UI action emits the same artifact contract."
   },
@@ -547,7 +549,7 @@ const capabilityLedgerRows = [
     category: "Research Reports",
     compare: "Lab notebooks / paper drafts",
     status: "building",
-    theorem: "Printable report drafts include identity, trace, evidence graph, activity citations, and boundaries.",
+    truthHarness: "Printable report drafts include identity, trace, evidence graph, activity citations, and boundaries.",
     gap: "No signed finalization, DOI/source bibliography, PDF polish, or peer-review checklist yet.",
     next: "Add finalized report packets with signatures, citations, artifact bundle, and validation checklist."
   }
@@ -595,7 +597,7 @@ const laneProtocols = {
       "Record definitions, assumptions, domain restrictions, and failed proof attempts."
     ],
     reviewBoundary: [
-      "A numeric pattern is not a theorem.",
+      "A numeric pattern is not a truth-harness.",
       "A CAS simplification is not a proof unless the accepted checker backs it.",
       "A bounded search only covers the stated range."
     ],
@@ -1003,6 +1005,7 @@ function render() {
   graphList.innerHTML = evidenceGraphEntries(receipt)
     .map(([kind, summary]) => `<div class="graph-node"><span>${escapeHtml(kind)}</span><strong>${escapeHtml(summary)}</strong></div>`)
     .join("");
+  renderBranchMap(receipt);
   renderMainGraph(receipt);
   renderMathPlot(receipt);
 
@@ -2021,7 +2024,7 @@ function renderWorkspaceReview() {
 
       copyOrDownloadText({
         text: `${command}\n`,
-        filename: `theorem-project-queue-command-${safeFilenameTimestamp()}.txt`,
+        filename: `truth-harness-project-queue-command-${safeFilenameTimestamp()}.txt`,
         type: "text/plain",
         button,
         copiedTitle: "Copied project queue command",
@@ -2288,7 +2291,7 @@ function localApiErrorMessage(payload, fallbackMessage) {
   const message = typeof payload?.error === "string" && payload.error.trim()
     ? payload.error.trim()
     : fallbackMessage;
-  if (payload?.schemaVersion !== "theorem.web-error.v0") {
+  if (payload?.schemaVersion !== "truth-harness.web-error.v0") {
     return message;
   }
 
@@ -2347,7 +2350,7 @@ async function refreshWorkspaceReview({ announce = true } = {}) {
 
 function applyWorkspaceReviewPayload(payload) {
   workspaceReview = payload.review ?? {
-    schemaVersion: "theorem.workspace-review.v0",
+    schemaVersion: "truth-harness.workspace-review.v0",
     summary: {
       totalItems: 0,
       criticalItems: 0,
@@ -2462,7 +2465,7 @@ async function openSavedRoute(routeId) {
     updateLatestActivity(
       "Opening saved verifier route",
       "passed",
-      localApiSuccessMessage(payload, `${payload.route.routeId} loaded from .theorem-workbench/routes.`)
+      localApiSuccessMessage(payload, `${payload.route.routeId} loaded from .truth-harness/routes.`)
     );
     render();
   } catch (error) {
@@ -2643,7 +2646,7 @@ async function copyObligationCommand(button) {
 
   await copyOrDownloadText({
     text: `${command}\n`,
-    filename: `theorem-verifier-command-${safeFilenameTimestamp()}.txt`,
+    filename: `truth-harness-verifier-command-${safeFilenameTimestamp()}.txt`,
     type: "text/plain",
     button,
     copiedTitle: "Copied verifier command",
@@ -2676,7 +2679,7 @@ function relativeArtifactRef(path) {
     return "";
   }
 
-  const marker = ".theorem-workbench";
+  const marker = ".truth-harness";
   const index = path.indexOf(marker);
   return index >= 0 ? path.slice(index) : path;
 }
@@ -2715,7 +2718,7 @@ function applyClaimLedgerPayload(payload) {
   }
 
   claimLedgerGraph = payload.graph ?? {
-    schemaVersion: "theorem.claim-graph.v0",
+    schemaVersion: "truth-harness.claim-graph.v0",
     nodes: [],
     edges: [],
     warnings: []
@@ -2825,7 +2828,7 @@ async function recordCurrentClaim() {
     updateLatestActivity(
       "Recording claim",
       "passed",
-      localApiSuccessMessage(payload, `${payload.claim.claimId} written to .theorem-workbench/claims.`)
+      localApiSuccessMessage(payload, `${payload.claim.claimId} written to .truth-harness/claims.`)
     );
     for (const item of payload.activity ?? []) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
@@ -3195,7 +3198,7 @@ function createRunbookPacket(receipt) {
   const nextAction = openGates[0] ?? rows.find((row) => row.status === "skipped") ?? rows[0];
 
   return {
-    schemaVersion: "theorem.agent-runbook.v0",
+    schemaVersion: "truth-harness.agent-runbook.v0",
     objective: protocol.title,
     lane: protocol.name,
     protocol: protocol.title,
@@ -3394,8 +3397,8 @@ function claimReviewGateModel(receipt) {
       blockers: ["No local claim ledger record is linked to the selected receipt."],
       claimId: receipt.claimId ?? "not recorded",
       nextCommand: receipt.claimId
-        ? `theorem claim show ${receipt.claimId} --json`
-        : `theorem claim add ${quoteCommandArgForUi(receipt.title)} --evidence receipt:<receipt.json> --json`
+        ? `truth-harness claim show ${receipt.claimId} --json`
+        : `truth-harness claim add ${quoteCommandArgForUi(receipt.title)} --evidence receipt:<receipt.json> --json`
     };
   }
 
@@ -3410,7 +3413,7 @@ function claimReviewGateModel(receipt) {
     decision: claimReviewDecisionForClaim(claim, reviewStatus),
     blockers,
     claimId: claim.claimId,
-    nextCommand: `theorem claim review ${claim.claimId} --json`
+    nextCommand: `truth-harness claim review ${claim.claimId} --json`
   };
 }
 
@@ -3655,7 +3658,7 @@ function renderCapabilityLedger() {
       <dl>
         <div>
           <dt>Today</dt>
-          <dd>${escapeHtml(row.theorem)}</dd>
+          <dd>${escapeHtml(row.truthHarness)}</dd>
         </div>
         <div>
           <dt>Gap</dt>
@@ -3954,7 +3957,7 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
   const notes = Array.isArray(guidance.notes) && guidance.notes.length > 0
     ? guidance.notes
     : [
-        "npm run docker:proof runs the theorem service with no external network route and records engine outputs only through normal receipts.",
+        "npm run docker:proof runs the truth-harness service with no external network route and records engine outputs only through normal receipts.",
         "npm run docker:verify builds and tests the verification image; builds may fetch dependencies if the image is not already cached.",
         "Docker status does not prove a claim. Only accepted Lean, Z3, or Maxima artifacts can satisfy their matching obligations."
       ];
@@ -4058,7 +4061,7 @@ function routeObligationVerificationRows(receipt) {
         obligationKind: obligation.kind,
         canRunCas: obligation.status === "open"
           && obligation.kind === "independent-check"
-          && command.startsWith("theorem cas check")
+          && command.startsWith("truth-harness cas check")
           && casResultLooksCheckable(receipt),
         canRunSmt: obligation.status === "open"
           && obligation.kind === "solver-encoding"
@@ -4069,15 +4072,15 @@ function routeObligationVerificationRows(receipt) {
 
 function commandForObligation(obligation, receipt) {
   if (obligation.kind === "independent-check") {
-    return `theorem cas check --operation simplify --expression "${truncateForCommand(casExpressionForReceipt(receipt), 36)}" --result "${truncateForCommand(casResultForReceipt(receipt), 24)}" --write`;
+    return `truth-harness cas check --operation simplify --expression "${truncateForCommand(casExpressionForReceipt(receipt), 36)}" --result "${truncateForCommand(casResultForReceipt(receipt), 24)}" --write`;
   }
 
   if (obligation.kind === "solver-encoding") {
-    return "theorem smt check <constraints.smt2> --write";
+    return "truth-harness smt check <constraints.smt2> --write";
   }
 
   if (obligation.kind === "formal-proof") {
-    return "theorem proof check <proof.lean> --write";
+    return "truth-harness proof check <proof.lean> --write";
   }
 
   return receipt.replay;
@@ -4085,15 +4088,15 @@ function commandForObligation(obligation, receipt) {
 
 function obligationEvidencePath(obligation) {
   if (obligation.kind === "formal-proof") {
-    return "Accepted proof-check record from .theorem-workbench/proofs, or a proof-checker-backed receipt/route labeled proved.";
+    return "Accepted proof-check record from .truth-harness/proofs, or a proof-checker-backed receipt/route labeled proved.";
   }
 
   if (obligation.kind === "solver-encoding") {
-    return "SMT-check record from .theorem-workbench/smt with trust smt-checked, or stronger proof evidence.";
+    return "SMT-check record from .truth-harness/smt with trust smt-checked, or stronger proof evidence.";
   }
 
   if (obligation.kind === "independent-check") {
-    return "Independent CAS-check record from .theorem-workbench/cas with trust cross-checked, or stronger SMT/proof evidence.";
+    return "Independent CAS-check record from .truth-harness/cas with trust cross-checked, or stronger SMT/proof evidence.";
   }
 
   return "Replayable evidence artifact stronger than unverified, with the local artifact path attached to this route.";
@@ -4252,14 +4255,14 @@ function verificationRowActionHtml(row) {
   if (row.canRunCas) {
     return `<div class="matrix-row-actions">
       <button class="text-button compact-button run-cas-obligation" data-route-id="${escapeHtml(row.routeId)}" data-obligation-id="${escapeHtml(row.obligationId)}" type="button">Run CAS + attach</button>
-      <span class="mini-label">writes .theorem-workbench/cas first</span>
+      <span class="mini-label">writes .truth-harness/cas first</span>
     </div>`;
   }
 
   if (row.canRunSmt) {
     return `<div class="matrix-row-actions">
       <button class="text-button compact-button run-smt-obligation" data-route-id="${escapeHtml(row.routeId)}" data-obligation-id="${escapeHtml(row.obligationId)}" type="button">Run Z3 + attach</button>
-      <span class="mini-label">writes .theorem-workbench/smt first</span>
+      <span class="mini-label">writes .truth-harness/smt first</span>
     </div>`;
   }
 
@@ -4287,9 +4290,9 @@ function statusLabel(status) {
 
 function agentRouteCommands(receipt) {
   return {
-    receipt: `theorem ask "${truncateForCommand(receipt.title, 34)}" --json`,
-    replay: `theorem replay ${receipt.runId}.json`,
-    report: `theorem render ${receipt.runId}.json markdown`
+    receipt: `truth-harness ask "${truncateForCommand(receipt.title, 34)}" --json`,
+    replay: `truth-harness replay ${receipt.runId}.json`,
+    report: `truth-harness render ${receipt.runId}.json markdown`
   };
 }
 
@@ -4573,6 +4576,86 @@ function renderGraphDetail(receipt, entry, index) {
   `;
 }
 
+function renderBranchMap(receipt) {
+  if (!branchMap) {
+    return;
+  }
+
+  const currentKey = receiptKeyFor(receipt) ?? state.receiptKey;
+  const upstream = receiptDependencies(receipt).slice(0, 3);
+  const downstream = dependentReceiptKeys(receipt).slice(0, 3);
+  const upstreamSlots = branchSlots(upstream.length);
+  const downstreamSlots = branchSlots(downstream.length);
+  const lineHtml = [
+    ...upstreamSlots.map((slot) => branchCurve(50, slot.y, 150, 50, "upstream")),
+    ...downstreamSlots.map((slot) => branchCurve(150, 50, 250, slot.y, "downstream"))
+  ].join("");
+  const nodeHtml = [
+    ...upstream.map((key, index) => branchNodeHtml(key, "upstream", upstreamSlots[index])),
+    branchNodeHtml(currentKey, "current", { y: 50, className: "current" }, true),
+    ...downstream.map((key, index) => branchNodeHtml(key, "downstream", downstreamSlots[index]))
+  ].join("");
+
+  branchMapStatus.textContent =
+    upstream.length > 0 || downstream.length > 0
+      ? `${upstream.length} in / ${downstream.length} out`
+      : "single receipt";
+  branchMap.innerHTML = `
+    <div class="branch-map-stage">
+      <div class="branch-map-labels" aria-hidden="true">
+        <span>upstream</span>
+        <span>current</span>
+        <span>unlocks</span>
+      </div>
+      <svg class="branch-map-lines" viewBox="0 0 300 100" preserveAspectRatio="none" aria-hidden="true">
+        <line x1="150" y1="12" x2="150" y2="88" class="branch-spine" />
+        ${lineHtml}
+      </svg>
+      ${nodeHtml}
+      ${upstream.length === 0 ? `<span class="branch-empty branch-empty-upstream">no upstream</span>` : ""}
+      ${downstream.length === 0 ? `<span class="branch-empty branch-empty-downstream">no unlocks</span>` : ""}
+    </div>
+  `;
+}
+
+function branchSlots(count) {
+  if (count <= 0) {
+    return [];
+  }
+
+  if (count === 1) {
+    return [{ y: 50, className: "1-0" }];
+  }
+
+  const top = count === 2 ? 34 : 24;
+  const bottom = count === 2 ? 66 : 76;
+  return Array.from({ length: count }, (_value, index) => ({
+    y: top + ((bottom - top) * index) / (count - 1),
+    className: `${count}-${index}`
+  }));
+}
+
+function branchCurve(x1, y1, x2, y2, kind) {
+  const middle = (x1 + x2) / 2;
+  return `<path class="branch-curve branch-${kind}" d="M ${x1} ${y1} C ${middle} ${y1}, ${middle} ${y2}, ${x2} ${y2}" />`;
+}
+
+function branchNodeHtml(key, lane, slot, current = false) {
+  const receipt = receiptStore.get(key);
+  const title = receipt?.title ?? key;
+  const trust = receipt?.trust ?? "unverified";
+  const tag = receipt?.claimId ?? receipt?.runId ?? key;
+  const disabled = current ? "disabled aria-current=\"true\"" : `data-receipt-key="${escapeHtml(key)}"`;
+
+  return `<button class="branch-node branch-node-${lane} branch-slot-${slot.className} ${current ? "active" : ""}" type="button" ${disabled}>
+    <span class="branch-dot ${trustClass(trust)}"></span>
+    <span>
+      <strong>${escapeHtml(title)}</strong>
+      <small>${escapeHtml(tag)}</small>
+    </span>
+  </button>`;
+}
+
 function renderClaimOpenChecksHtml(claim) {
   const checks = claimFinalizationSummary(claim).openChecks;
   if (checks.length === 0) {
@@ -4756,7 +4839,7 @@ async function copyActivityLog() {
 
 function downloadActivityLog() {
   const payload = {
-    schemaVersion: "theorem.web-activity-export.v0",
+    schemaVersion: "truth-harness.web-activity-export.v0",
     exportedAt: new Date().toISOString(),
     eventCount: activityEvents.length,
     events: activityEvents
@@ -5864,6 +5947,21 @@ graphDetail.addEventListener("click", (event) => {
   render();
 });
 
+branchMap.addEventListener("click", (event) => {
+  const button = event.target.closest(".branch-node[data-receipt-key]");
+  if (!button || !receiptStore.has(button.dataset.receiptKey)) {
+    return;
+  }
+
+  setReplayPlaying(false);
+  state.receiptKey = button.dataset.receiptKey;
+  state.level = "middle";
+  state.selectedGraphIndex = 0;
+  state.replayIndex = 0;
+  promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
+  render();
+});
+
 laneButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const nextLane = button.dataset.lane;
@@ -5943,7 +6041,7 @@ document.querySelectorAll(".docker-copy-command").forEach((button) => {
 
     await copyOrDownloadText({
       text: `${command}\n`,
-      filename: `theorem-docker-verifier-command-${safeFilenameTimestamp()}.txt`,
+      filename: `truth-harness-docker-verifier-command-${safeFilenameTimestamp()}.txt`,
       type: "text/plain",
       button,
       copiedTitle: "Copied Docker verifier command",

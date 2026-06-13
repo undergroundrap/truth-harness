@@ -6,12 +6,12 @@ describe("engine manifest", () => {
     const manifest = getEngineManifest({
       now: new Date("2026-06-12T00:00:00.000Z"),
       timeoutMs: 50,
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command"
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command"
     });
 
-    expect(manifest.schemaVersion).toBe("theorem.engine-manifest.v0");
+    expect(manifest.schemaVersion).toBe("truth-harness.engine-manifest.v0");
     expect(manifest.localOnly).toBe(true);
     expect(manifest.networkAccess).toBe("none");
     expect(manifest.nativeCount).toBeGreaterThan(0);

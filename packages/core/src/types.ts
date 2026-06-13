@@ -105,7 +105,7 @@ export interface ReceiptEvidenceProfile {
 }
 
 export interface Receipt {
-  schemaVersion: "theorem.receipt.v0";
+  schemaVersion: "truth-harness.receipt.v0";
   runId: string;
   createdAt: string;
   problem: string;

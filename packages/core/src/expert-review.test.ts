@@ -29,7 +29,7 @@ describe("expert reviews", () => {
       now: "2026-06-08T00:10:00.000Z"
     });
 
-    expect(review.schemaVersion).toBe("theorem.expert-review.v0");
+    expect(review.schemaVersion).toBe("truth-harness.expert-review.v0");
     expect(review.reviewId).toMatch(/^review_[a-f0-9]{16}$/);
     expect(review.privacy.mode).toBe("local-only");
     expect(review.boundary.notMedicalAdvice).toBe(true);
@@ -64,8 +64,8 @@ describe("expert reviews", () => {
     });
     const list = await listExpertReviews(root);
 
-    expect(write.jsonPath).toContain(".theorem-workbench");
-    expect(write.markdownPath).toContain(".theorem-workbench");
+    expect(write.jsonPath).toContain(".truth-harness");
+    expect(write.markdownPath).toContain(".truth-harness");
     expect(JSON.parse(await readFile(write.jsonPath, "utf8")).reviewId).toBe(write.review.reviewId);
     expect(write.markdown).toContain("Claim language needs prior-art narrowing.");
     expect(write.review.warnings.join("\n")).toContain("not a patentability guarantee");
@@ -75,7 +75,7 @@ describe("expert reviews", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-expert-review-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-expert-review-"));
   roots.push(root);
   return root;
 }

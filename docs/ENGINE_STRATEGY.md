@@ -94,7 +94,7 @@ Good native kernels:
 Bad native-kernel candidates right now:
 
 - full CAS
-- full theorem prover
+- full proof assistant
 - full SMT solver
 - full notebook engine
 - full vector database

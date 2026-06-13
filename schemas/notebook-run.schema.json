@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/notebook-run.schema.json",
-  "title": "Theorem Workbench Notebook Run Record",
+  "$id": "https://truth-harness.local/schemas/notebook-run.schema.json",
+  "title": "Truth Harness Notebook Run Record",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -30,7 +30,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.notebook-run.v0"
+      "const": "truth-harness.notebook-run.v0"
     },
     "runRecordId": {
       "type": "string",

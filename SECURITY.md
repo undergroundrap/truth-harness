@@ -1,11 +1,11 @@
 # Security Baseline
 
-Theorem Workbench is local-first, not magic. Treat the app as a verification and provenance layer that helps humans and agents avoid unsupported claims; do not treat it as a sandbox for arbitrary untrusted code unless the runtime measures an actual sandbox boundary.
+Truth Harness is local-first, not magic. Treat the app as a verification and provenance layer that helps humans and agents avoid unsupported claims; do not treat it as a sandbox for arbitrary untrusted code unless the runtime measures an actual sandbox boundary.
 
 ## Safe Default
 
 - Run the web UI on localhost only.
-- Keep MCP `theorem_code_run` disabled unless you explicitly need it.
+- Keep MCP `truth_harness_code_run` disabled unless you explicitly need it.
 - Prefer Docker for agent-facing work, demos, proof gates, and any workflow that may execute code.
 - Prefer `policy.requireSandbox: true` or CLI `--require-sandbox` for agent-triggered execution.
 - Never claim `networkAccess: none` unless the code-run record measured the Docker no-network provider.
@@ -14,13 +14,13 @@ Theorem Workbench is local-first, not magic. Treat the app as a verification and
 
 The local web server sends a restrictive Content Security Policy, denies framing, disables high-risk browser permissions, and rejects non-local Host headers by default. Browser writes to `/api/*` are accepted only from the same origin, which prevents unrelated web pages from driving the local API through the user's browser.
 
-Local API JSON bodies are capped at 16 KiB. Malformed, oversized, rejected, or unknown API requests return no-store `theorem.web-error.v0` JSON envelopes with a local request id, `localOnly: true`, `externalCalls: []`, timestamp, HTTP method, pathname, status, and a clear error string instead of generic server text.
+Local API JSON bodies are capped at 16 KiB. Malformed, oversized, rejected, or unknown API requests return no-store `truth-harness.web-error.v0` JSON envelopes with a local request id, `localOnly: true`, `externalCalls: []`, timestamp, HTTP method, pathname, status, and a clear error string instead of generic server text.
 
-Successful local JSON API responses also include a `web_req_*` request id in the response body and `X-Theorem-Request-Id` header so UI activity and agent logs can cite the exact local operation without echoing request bodies.
+Successful local JSON API responses also include a `web_req_*` request id in the response body and `X-Truth-Harness-Request-Id` header so UI activity and agent logs can cite the exact local operation without echoing request bodies.
 
 The web activity log preserves those request ids in copy/download exports and report citations when an event references a local API request, giving humans and agents a machine-readable audit breadcrumb without including prompt bodies.
 
-Set `THEOREM_WEB_ALLOW_NONLOCAL=1` only for deliberate LAN or remote testing. Do not expose that mode to untrusted networks.
+Set `TRUTH_HARNESS_WEB_ALLOW_NONLOCAL=1` only for deliberate LAN or remote testing. Do not expose that mode to untrusted networks.
 
 The regression suite covers this boundary with a local server test that verifies:
 
@@ -42,7 +42,7 @@ Native host code execution is a degraded mode. It can capture a direct process r
 
 The Docker no-network CLI and MCP services are the current measured sandbox profile. They can attest `networkAccess: none` only when the runtime measures:
 
-- the Theorem container marker,
+- the Truth Harness container marker,
 - a Docker/container runtime marker,
 - loopback-only networking,
 - no IPv4 or IPv6 default route.

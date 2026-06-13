@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/claim-ledger.schema.json",
-  "title": "Theorem Workbench Claim Ledger Record",
+  "$id": "https://truth-harness.local/schemas/claim-ledger.schema.json",
+  "title": "Truth Harness Claim Ledger Record",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -28,7 +28,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.claim.v0"
+      "const": "truth-harness.claim.v0"
     },
     "claimId": {
       "type": "string",

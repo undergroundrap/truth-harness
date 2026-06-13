@@ -15,9 +15,9 @@ Repo state audited: 9 commits, `main` tip `64b4668` ("feat: add bounded numeric 
 
 Truth Harness today is **two different systems sharing one monorepo**:
 
-1. **A small, real, honest math verification kernel.** Exact rational arithmetic over bigints (`packages/core/src/rational.ts`), a recursive-descent expression parser (`packages/core/src/expression.ts`), finite counterexample search plus a Z/2Z modular parity proof kernel (`packages/core/src/parity-proof.ts`), conservative rational interval bounds (`packages/core/src/interval.ts`), SI dimensional analysis (`packages/core/src/dimension.ts`), and a sandbox-lite SymPy subprocess adapter (`packages/core/src/sympy.ts` + `tools/sympy_bridge.py`). All of it emits a `theorem.receipt.v0` evidence-graph receipt (`packages/core/src/receipt.ts`, `types.ts`) with deterministic content-addressed run IDs and a replay check (`replay.ts`).
+1. **A small, real, honest math verification kernel.** Exact rational arithmetic over bigints (`packages/core/src/rational.ts`), a recursive-descent expression parser (`packages/core/src/expression.ts`), finite counterexample search plus a Z/2Z modular parity proof kernel (`packages/core/src/parity-proof.ts`), conservative rational interval bounds (`packages/core/src/interval.ts`), SI dimensional analysis (`packages/core/src/dimension.ts`), and a sandbox-lite SymPy subprocess adapter (`packages/core/src/sympy.ts` + `tools/sympy_bridge.py`). All of it emits a `truth-harness.receipt.v0` evidence-graph receipt (`packages/core/src/receipt.ts`, `types.ts`) with deterministic content-addressed run IDs and a replay check (`replay.ts`).
 
-2. **A large constellation of provenance record-writers.** Roughly 20 modules (`literature-record.ts`, `notebook-run.ts`, `simulation-log.ts`, `experiment-log.ts`, `invention-log.ts`, `claim-chart.ts`, `discovery-package.ts`, `disclosure-log.ts`, `model-context.ts`, `research-session.ts`, `expert-review.ts`, `validation-plan.ts`, `evidence-audit.ts`, `vault.ts`, `workspace-snapshot.ts`, `local-corpus.ts`, `local-workspace.ts`, …) that write JSON records into a git-ignored `.theorem-workbench/` store, exposed through a 3,087-line CLI (`apps/cli/src/index.ts`) and a ~40-tool MCP server (`packages/mcp-server/src/index.ts`, 1,479 lines).
+2. **A large constellation of provenance record-writers.** Roughly 20 modules (`literature-record.ts`, `notebook-run.ts`, `simulation-log.ts`, `experiment-log.ts`, `invention-log.ts`, `claim-chart.ts`, `discovery-package.ts`, `disclosure-log.ts`, `model-context.ts`, `research-session.ts`, `expert-review.ts`, `validation-plan.ts`, `evidence-audit.ts`, `vault.ts`, `workspace-snapshot.ts`, `local-corpus.ts`, `local-workspace.ts`, …) that write JSON records into a git-ignored `.truth-harness/` store, exposed through a 3,087-line CLI (`apps/cli/src/index.ts`) and a ~40-tool MCP server (`packages/mcp-server/src/index.ts`, 1,479 lines).
 
 System (1) computes things and can be wrong or right. System (2) **records what humans and agents claim happened** — it executes nothing, verifies almost nothing, and is honest about that in its docstrings, but the distinction is invisible at the artifact level: both produce similar-looking JSON with `privacy`, `warnings`, and schema-version fields.
 
@@ -57,7 +57,7 @@ But three structural gaps separate it from the mission:
 | Unit | Path | Size | Role |
 | --- | --- | --- | --- |
 | Core library | `packages/core/src/` (30 modules + 28 test files) | ~9k LoC | Verification engines + record writers + workspace/vault/snapshot |
-| CLI | `apps/cli/src/index.ts` | 3,087 LoC, single file | `theorem` command, 20 command groups, ~60 subcommands (commander) |
+| CLI | `apps/cli/src/index.ts` | 3,087 LoC, single file | `truth-harness` command, 20 command groups, ~60 subcommands (commander) |
 | MCP server | `packages/mcp-server/src/index.ts` (1,479) + `tools.ts` (1,232) | ~2.7k LoC | stdio MCP server, ~40 tools, zod v4 input schemas |
 | Benchmarks | `packages/benchmarks/src/index.ts` (147) + 4 JSON suites | small | Runs `createReceipt` over prompt suites, compares expected trust labels |
 | Schemas | `schemas/*.schema.json` (18 files) | — | JSON Schema definitions, **unreferenced by any code** |
@@ -69,14 +69,14 @@ Dependency hygiene is excellent: runtime deps are only `@modelcontextprotocol/sd
 
 ### 2.2 Data / artifact model
 
-Everything lives under a git-ignored `.theorem-workbench/` per-project store with 19 directories defined in `local-workspace.ts` (`receipts`, `artifacts`, `indexes`, `inventions`, `simulations`, `experiments`, `vault`, `audits`, `snapshots`, `sessions`, `reviews`, `validation`, `literature`, `notebook-runs`, `model-contexts`, `disclosures`, `patents`, `benchmarks`, `findings`). A `project.json` manifest pins privacy metadata and policies (`externalCalls: "disabled-by-default"`, `secrets: "environment-only"`).
+Everything lives under a git-ignored `.truth-harness/` per-project store with 19 directories defined in `local-workspace.ts` (`receipts`, `artifacts`, `indexes`, `inventions`, `simulations`, `experiments`, `vault`, `audits`, `snapshots`, `sessions`, `reviews`, `validation`, `literature`, `notebook-runs`, `model-contexts`, `disclosures`, `patents`, `benchmarks`, `findings`). A `project.json` manifest pins privacy metadata and policies (`externalCalls: "disabled-by-default"`, `secrets: "environment-only"`).
 
-Artifact types (all `theorem.<kind>.v0`):
+Artifact types (all `truth-harness.<kind>.v0`):
 
 - **Receipt** (`receipt.ts`): problem → normalized problem → adapter dispatch (parity → dimension → symbolic → interval → arithmetic, first match wins) → evidence graph (`GraphNode`/`EvidenceEdge`), inline artifacts, findings, trust label, replay command, privacy block. Run ID = first 16 hex chars of a stable hash excluding timestamps.
 - **Record artifacts** (literature, notebook-run, simulation, experiment, invention, review, session, validation plan, model-context, disclosure, claim chart): one JSON file per record, `create*` builds the object with normalization + warnings, `write*` persists, `list*` re-reads the whole directory.
-- **Vault** (`vault.ts`): AES-256-GCM with scrypt-derived key from `THEOREM_WORKBENCH_VAULT_KEY`; envelope JSON embeds the base64 ciphertext; payload carries original filename + plaintext sha256, verified on open.
-- **Snapshot** (`workspace-snapshot.ts`): sha256 of every file under `.theorem-workbench/`, with schema/id extraction, plus a `verify-snapshot` diff (changed/missing/added).
+- **Vault** (`vault.ts`): AES-256-GCM with scrypt-derived key from `TRUTH_HARNESS_VAULT_KEY`; envelope JSON embeds the base64 ciphertext; payload carries original filename + plaintext sha256, verified on open.
+- **Snapshot** (`workspace-snapshot.ts`): sha256 of every file under `.truth-harness/`, with schema/id extraction, plus a `verify-snapshot` diff (changed/missing/added).
 - **Corpus index** (`local-corpus.ts`): single `indexes/local-corpus.json` holding all documents and chunks (~1,400-char chunks with per-chunk token counts).
 
 ### 2.3 CLI surface
@@ -85,7 +85,7 @@ Artifact types (all `theorem.<kind>.v0`):
 
 ### 2.4 MCP / agent integration surface
 
-`packages/mcp-server` registers ~40 tools (`theorem_ask`, `theorem_benchmark_run`, `theorem_workspace_*`, `theorem_source_*`, `theorem_literature_*`, `theorem_notebook_*`, `theorem_simulation_*`, `theorem_experiment_*`, `theorem_vault_*`, `theorem_evidence_audit*`, `theorem_validation_plan*`, `theorem_research_session_*`, `theorem_expert_review_*`, `theorem_invention_*`, `theorem_claim_chart*`, `theorem_model_context_*`, `theorem_disclosure_*`, `theorem_replay`, `theorem_render_receipt`, `theorem_discovery_package`). Inputs are zod v4 schemas with good descriptions and `readOnlyHint`/`openWorldHint` annotations. Server instructions explicitly warn agents not to treat unverified output as proved. Workspace root comes from `THEOREM_WORKBENCH_ROOT` / `CLAUDE_PROJECT_DIR` / cwd (`tools.ts:1231`) and all relative paths are guarded against root escape. `.mcp.json` wires the server for Claude. `AGENTS.md` + `docs/AGENT_SETUP.md` define agent behavior rules.
+`packages/mcp-server` registers ~40 tools (`truth_harness_ask`, `truth_harness_benchmark_run`, `truth_harness_workspace_*`, `truth_harness_source_*`, `truth_harness_literature_*`, `truth_harness_notebook_*`, `truth_harness_simulation_*`, `truth_harness_experiment_*`, `truth_harness_vault_*`, `truth_harness_evidence_audit*`, `truth_harness_validation_plan*`, `truth_harness_research_session_*`, `truth_harness_expert_review_*`, `truth_harness_invention_*`, `truth_harness_claim_chart*`, `truth_harness_model_context_*`, `truth_harness_disclosure_*`, `truth_harness_replay`, `truth_harness_render_receipt`, `truth_harness_discovery_package`). Inputs are zod v4 schemas with good descriptions and `readOnlyHint`/`openWorldHint` annotations. Server instructions explicitly warn agents not to treat unverified output as proved. Workspace root comes from `TRUTH_HARNESS_ROOT` / `CLAUDE_PROJECT_DIR` / cwd (`tools.ts:1231`) and all relative paths are guarded against root escape. `.mcp.json` wires the server for Claude. `AGENTS.md` + `docs/AGENT_SETUP.md` define agent behavior rules.
 
 ### 2.5 Schema strategy
 
@@ -105,7 +105,7 @@ Dual and disconnected. TypeScript interfaces + hand-written type-guard validator
 
 ### 2.8 Evidence / provenance model
 
-Evidence is a graph inside each receipt plus loose string refs between record artifacts (`simulation:.theorem-workbench/simulations/x.json`, `snapshot:snap_…`). `evidence-audit.ts` is the only component that *resolves* refs: it loads the target (by path or by id-scan of the directory), grades strength (`none`→`refuting`), classifies the claim by keyword (`:705`), and issues a verdict (`verdictFor`, `:598`) with overclaim warnings (`:939` strong-language regex: `cures?|proves?|guaranteed|safe|effective|validated|solves?|breakthrough|clinically|approved|patentable|novel`). Snapshots provide tamper-evidence over the store. There is no global evidence graph, no cross-artifact integrity (a simulation log's `metrics` are not bound to any actual simulation output file hash), and no signature/identity layer.
+Evidence is a graph inside each receipt plus loose string refs between record artifacts (`simulation:.truth-harness/simulations/x.json`, `snapshot:snap_…`). `evidence-audit.ts` is the only component that *resolves* refs: it loads the target (by path or by id-scan of the directory), grades strength (`none`→`refuting`), classifies the claim by keyword (`:705`), and issues a verdict (`verdictFor`, `:598`) with overclaim warnings (`:939` strong-language regex: `cures?|proves?|guaranteed|safe|effective|validated|solves?|breakthrough|clinically|approved|patentable|novel`). Snapshots provide tamper-evidence over the store. There is no global evidence graph, no cross-artifact integrity (a simulation log's `metrics` are not bound to any actual simulation output file hash), and no signature/identity layer.
 
 ---
 
@@ -113,8 +113,8 @@ Evidence is a graph inside each receipt plus loose string refs between record ar
 
 | Capability | Status | Evidence and gap |
 | --- | --- | --- |
-| Local-first private workflows | **Present** | No network code in any first-party package; `.theorem-workbench/` store (`local-workspace.ts`); privacy metadata on every artifact. Gap: enforced only by convention — no egress test, no boundary (§4 R4). |
-| Optional / auditable hosted model usage | **Partially present** | `model-context.ts` (packets, redaction warnings), `disclosure-log.ts` (audit records), MCP tools `theorem_model_context_prepare` / `theorem_disclosure_log`. Gap: honor system — nothing makes the call, intercepts the call, or detects an unlogged call; the audit trail proves diligence, not behavior. |
+| Local-first private workflows | **Present** | No network code in any first-party package; `.truth-harness/` store (`local-workspace.ts`); privacy metadata on every artifact. Gap: enforced only by convention — no egress test, no boundary (§4 R4). |
+| Optional / auditable hosted model usage | **Partially present** | `model-context.ts` (packets, redaction warnings), `disclosure-log.ts` (audit records), MCP tools `truth_harness_model_context_prepare` / `truth_harness_disclosure_log`. Gap: honor system — nothing makes the call, intercepts the call, or detects an unlogged call; the audit trail proves diligence, not behavior. |
 | Math verification | **Partially present** | Real but narrow: `rational.ts`, `expression.ts`, `interval.ts`, `dimension.ts`, parity kernel, counterexample search (`receipt.ts:~470`, range hardcoded to [-20, 20]). Anything outside five prompt shapes → `unverified` plan node. |
 | Theorem proving integration | **Missing** | Lean/Z3 appear only as `nextAdapters` strings in plan-node payloads (`receipt.ts`) and prior-art tables (`docs/RESEARCH_AND_ARCHITECTURE.md`). No adapter interface, no Lean/SMT code. Meanwhile `proved` is already issued by `parity-proof.ts` — see §4 R1 (**Risky/misleading** in combination). |
 | CAS / symbolic computation | **Partially present** | SymPy subprocess adapter, 5 ops (simplify/factor/expand/diff/integrate), charset-sanitized `parse_expr` (`tools/sympy_bridge.py:24,93`), timeout, version pinned in CI. Gap: results labeled `exact-computed` with no cross-check against a second engine; no Sage/Maxima; no expression round-trip validation (srepr is captured but unused). |
@@ -165,7 +165,7 @@ Ordered by how badly each would damage trust with the target audience (mathemati
 **Change:** (a) Reframe honestly in output: verdicts should say "lexical heuristic screen, not a semantic audit" in the artifact itself, not only in docs. (b) Invert the default: any claim with *no* recognized claim-type and *no* strong evidence should fail closed toward `hypothesis`/`needs-classification` rather than relying on detection of bad words. (c) Make word lists data files with versioned IDs recorded in each audit (`heuristics: lexical-v1`), so audits are reproducible and improvable. (d) Long term: optional local-model classification behind the same audit machinery, clearly labeled.
 
 ### R6 — Self-reported evidence: records are not bound to artifacts
-**Why it matters:** `simulation log --metric "pathway_score_delta=-0.18"` writes whatever the caller types. Nothing ties the record to the simulation code, inputs, or outputs. Snapshots hash files *inside* `.theorem-workbench/` only — the actual notebook, dataset, and outputs (`notebooks/pathway.ipynb`, `data/pathway.csv`) live outside the snapshot perimeter (`workspace-snapshot.ts` walks only `LOCAL_WORKSPACE_DIR`). The provenance chain has no anchor in the bytes that matter.
+**Why it matters:** `simulation log --metric "pathway_score_delta=-0.18"` writes whatever the caller types. Nothing ties the record to the simulation code, inputs, or outputs. Snapshots hash files *inside* `.truth-harness/` only — the actual notebook, dataset, and outputs (`notebooks/pathway.ipynb`, `data/pathway.csv`) live outside the snapshot perimeter (`workspace-snapshot.ts` walks only `LOCAL_WORKSPACE_DIR`). The provenance chain has no anchor in the bytes that matter.
 **Where:** `simulation-log.ts`, `experiment-log.ts`, `notebook-run.ts` (refs are plain strings); `workspace-snapshot.ts` scope.
 **Severity:** High for the "evidence workbench" claim.
 **Change:** When a record references a workspace-relative file, hash it at log time (`refs: [{path, sha256, bytes}]`) and verify on audit; extend snapshots with an opt-in "tracked externals" list; make `evidence-audit` downgrade strength when referenced files are missing or hash-mismatched (today missing refs reduce status, but content drift is invisible).
@@ -186,7 +186,7 @@ Ordered by how badly each would damage trust with the target audience (mathemati
 **Why it matters:** Agent loops are write-heavy (log → audit → plan → checkpoint). Every `list*` reads and parses every JSON in a directory; `evidence-audit` resolves ids by scanning directories; corpus search loads the entire index; record writes are non-atomic `writeFile` (a crash mid-write corrupts the store); concurrent agents race on `local-corpus.json` and session files.
 **Where:** `evidence-audit.ts:560-596` (`readEntryByRef`), every `list*` in core; `local-corpus.ts` ingest read-modify-write.
 **Severity:** Medium today (small stores), high for the mission's "many users / long investigations."
-**Change:** Keep JSON files as the canonical, human-auditable artifacts (this is a feature), but add: write-to-temp + atomic rename everywhere; an optional SQLite index (`.theorem-workbench/indexes/catalog.db`) maintained on write and rebuildable from files; per-store advisory lockfile for multi-process safety. Do not move artifacts themselves into a database.
+**Change:** Keep JSON files as the canonical, human-auditable artifacts (this is a feature), but add: write-to-temp + atomic rename everywhere; an optional SQLite index (`.truth-harness/indexes/catalog.db`) maintained on write and rebuildable from files; per-store advisory lockfile for multi-process safety. Do not move artifacts themselves into a database.
 
 ### R10 — Medical framing in the front door
 **Why it matters:** The README quickstart's most prominent strings are "cures cancer safely," "hair regrowth," "follicle signaling." The disclaimers are diligent, but optics matter: screenshots, HN threads, and skimmers will see a cancer/hair-loss tool wrapped in math branding. The Quickstart is also ~90 sequential commands — unrunnable as a first experience.
@@ -214,22 +214,22 @@ Ordered by how badly each would damage trust with the target audience (mathemati
 Principles: evolve, don't rewrite. Keep human-readable JSON artifacts as ground truth. Make every trust label carry its backend. Make every boundary (schema, privacy, execution) testable.
 
 ### 5.1 Core artifact / event model
-- Keep `theorem.<kind>.v0` JSON artifacts as canonical records (auditable with `cat` — this is a differentiator).
-- Add an **append-only event log** `.theorem-workbench/events.jsonl`: every write appends `{ts, actor, action, artifactRef, sha256}`. Snapshots become checkpoints over the log. This gives ordering, multi-agent attribution, and tamper-evidence between snapshots.
+- Keep `truth-harness.<kind>.v0` JSON artifacts as canonical records (auditable with `cat` — this is a differentiator).
+- Add an **append-only event log** `.truth-harness/events.jsonl`: every write appends `{ts, actor, action, artifactRef, sha256}`. Snapshots become checkpoints over the log. This gives ordering, multi-agent attribution, and tamper-evidence between snapshots.
 - Add `claimHash` / `envFingerprint` split to receipts (R3) and `proofBackend` to every trust label (R1).
 - Introduce `EvidenceRef` as a structured type `{kind, ref, sha256?, bytes?}` shared by all record modules (today each module has its own near-identical ref type).
 
 ### 5.2 Local workspace layout
-Keep `.theorem-workbench/` as-is, adding:
+Keep `.truth-harness/` as-is, adding:
 ```
-.theorem-workbench/
+.truth-harness/
   events.jsonl              # append-only event log
   indexes/catalog.db        # rebuildable SQLite index (ids, kinds, timestamps, hashes)
   indexes/local-corpus/     # sharded corpus (per-document chunk files + manifest)
   cas/<sha256[0:2]>/<sha256> # content-addressed store for large artifacts & vault blobs
   locks/                    # advisory lockfiles
 ```
-A `theorem workspace rebuild-index` command regenerates `catalog.db` from artifacts, so the database is never authoritative.
+A `truth-harness workspace rebuild-index` command regenerates `catalog.db` from artifacts, so the database is never authoritative.
 
 ### 5.3 Receipt / provenance model
 - Receipts gain `engine: {adapter, version, backend}`, `limits: {searchRange?, timeoutMs?}`, `integrity: {claimHash, envFingerprint, selfHash}`.
@@ -238,7 +238,7 @@ A `theorem workspace rebuild-index` command regenerates `catalog.db` from artifa
 
 ### 5.4 Model-context packet system
 - Keep packets as the unit of disclosure. Add: deterministic packet hash; `packet.txt` rendering (exact bytes intended for the model); and when the future gateway sends anything, it must reference a packet hash and write the disclosure atomically pre-send (R4).
-- A `theorem gateway` package is the *only* network-capable package; CI lints that `net/http/undici` imports exist nowhere else.
+- A `truth-harness gateway` package is the *only* network-capable package; CI lints that `net/http/undici` imports exist nowhere else.
 
 ### 5.5 RAG / index architecture
 - Stage 1: keep lexical, but shard the index, add BM25 scoring, and record `retrievalMethod: lexical-bm25-v1` in every `source-cited` receipt.
@@ -259,7 +259,7 @@ interface VerifierAdapter {
 - SymPy results upgrade to `cross-checked` only when a second engine (e.g., random numeric sampling against the simplified form, or a second CAS) agrees; otherwise stay `exact-computed` with backend recorded.
 
 ### 5.7 Notebook / simulation execution architecture
-- New `packages/runner`: executes a declared command in a sandbox (container if available; else rlimit'd subprocess with cwd jail and no network), captures stdout/stderr/exit code, hashes all declared inputs and produced outputs, and writes a `theorem.notebook-run.v1` that *was actually observed*, distinct from today's self-reported `v0` (keep v0 as "attestation", add v1 as "observed").
+- New `packages/runner`: executes a declared command in a sandbox (container if available; else rlimit'd subprocess with cwd jail and no network), captures stdout/stderr/exit code, hashes all declared inputs and produced outputs, and writes a `truth-harness.notebook-run.v1` that *was actually observed*, distinct from today's self-reported `v0` (keep v0 as "attestation", add v1 as "observed").
 - Simulation logs reference an observed run or are flagged `attested-only` in audits.
 
 ### 5.8 Benchmark harness
@@ -276,10 +276,10 @@ interface VerifierAdapter {
 ### 5.11 MCP server design
 - Keep the flat tool list (agents handle it fine), but generate tool registrations from the shared zod schema package to kill triplication.
 - Add MCP protocol tests over real stdio transport (spawn server, list tools, golden-check schemas, invoke happy/error paths).
-- Add a `theorem_capabilities` tool returning the live adapter registry + trust-label semantics, so agents never assume capabilities that aren't installed.
+- Add a `truth_harness_capabilities` tool returning the live adapter registry + trust-label semantics, so agents never assume capabilities that aren't installed.
 
 ### 5.12 CLI-first design
-- Decompose into `apps/cli/src/commands/`; shared option grammars; `--json` everywhere for scripting; exit codes documented and tested; `theorem doctor` extended to verify schema conformance of an existing store.
+- Decompose into `apps/cli/src/commands/`; shared option grammars; `--json` everywhere for scripting; exit codes documented and tested; `truth-harness doctor` extended to verify schema conformance of an existing store.
 
 ### 5.13 Future UI / API
 - Defer any server. The right v1 "UI" is `render` → static HTML evidence-graph viewer (single self-contained file, no network). A local read-only HTTP viewer can come later and must run through the same gateway/egress policy (localhost-only, opt-in).
@@ -288,7 +288,7 @@ interface VerifierAdapter {
 - CAS for large blobs; vault ciphertext to sibling files over threshold (R12); atomic writes + advisory locks (R9); optional whole-store encryption stays out of scope (defer to OS disk encryption, document that).
 
 ### 5.15 Plugin / kernel isolation strategy
-- Adapters are out-of-process by default (the SymPy bridge pattern generalizes well): JSON-over-stdio, ExecutionPolicy enforced by the runner, no adapter ever touches `.theorem-workbench/` directly — they return artifacts; core writes them. This single rule gives plugin isolation almost for free.
+- Adapters are out-of-process by default (the SymPy bridge pattern generalizes well): JSON-over-stdio, ExecutionPolicy enforced by the runner, no adapter ever touches `.truth-harness/` directly — they return artifacts; core writes them. This single rule gives plugin isolation almost for free.
 
 ---
 
@@ -309,7 +309,7 @@ interface VerifierAdapter {
 **Risks reduced:** R3, R5, R6, R9, R11(partially).
 
 ### Stage 2 — Agentic math/science workbench (6–12 weeks)
-**Must-have:** Lean 4 proof-checking adapter (check agent-supplied proofs; formally verify the parity kernel as dogfood); runner package with sandboxed observed notebook runs (v1 records); MCP protocol test suite; `theorem_capabilities`; multi-agent locking.
+**Must-have:** Lean 4 proof-checking adapter (check agent-supplied proofs; formally verify the parity kernel as dogfood); runner package with sandboxed observed notebook runs (v1 records); MCP protocol test suite; `truth_harness_capabilities`; multi-agent locking.
 **Tests:** Lean adapter golden proofs (accept/reject); sandbox escape attempts (network, path traversal, resource bombs) as red-team tests; MCP wire tests.
 **Docs:** `SECURITY.md` threat model; notebook-execution guide; agent calibration guide.
 **Acceptance:** an agent can submit a Lean proof via MCP and earn `proved` with the Lean certificate attached; a notebook run produces hash-bound observed outputs; two agents can work one workspace without corruption.
@@ -405,13 +405,13 @@ Open-source mechanics: the adapter interface is the contribution magnet — "wri
     Goal: spawn built server over real stdio (the in-memory transport test exists but skips process/serialization boundaries); golden `tools/list` snapshot; invoke every tool happy+error; assert strict-mode `isError`. Files: `packages/mcp-server/src/protocol.test.ts`. Why: agents are the primary users; tool-schema drift is currently invisible in review. Tests: itself. Accept: tool schema changes show up as reviewable golden diffs.
 
 14. **Event log (`events.jsonl`).**
-    Goal: append-only event per artifact write `{ts, actor, action, ref, sha256}`; CLI `theorem events list`; snapshots record the event-log offset they cover. Files: new `packages/core/src/event-log.ts`; all writers; snapshot module. Why: ordering + multi-agent attribution + tamper-evidence between snapshots. Tests: append/replay/corruption-detection. Accept: every artifact's history reconstructible from log + snapshots.
+    Goal: append-only event per artifact write `{ts, actor, action, ref, sha256}`; CLI `truth-harness events list`; snapshots record the event-log offset they cover. Files: new `packages/core/src/event-log.ts`; all writers; snapshot module. Why: ordering + multi-agent attribution + tamper-evidence between snapshots. Tests: append/replay/corruption-detection. Accept: every artifact's history reconstructible from log + snapshots.
 
 15. **SQLite catalog index.**
     Goal: optional `indexes/catalog.db` (id, kind, path, createdAt, sha256) maintained on write, `rebuild-index` command; `list*` uses it when present, falls back to scans. Files: new `catalog.ts`; writers; CLI. Why: R9 performance without sacrificing file-canonical model. Tests: rebuild equivalence (db results ≡ scan results). Accept: `list` on 10⁴ artifacts < 100ms.
 
 16. **Sandboxed notebook runner (observed runs v1).**
-    Goal: `packages/runner` executes declared commands under policy (container if available, else rlimit+jail), hashes declared inputs/outputs, writes `theorem.notebook-run.v1` marked `observed`; v0 records remain, audits label them `attested-only`. Files: new package; `notebook-run.ts`; `evidence-audit.ts`; CLI `notebook run`. Why: converts the provenance story from honor system to observation. Tests: red-team (network attempt, path escape, fork bomb → killed and recorded). Accept: an observed run's outputs are hash-verifiable; sandbox escapes fail tests.
+    Goal: `packages/runner` executes declared commands under policy (container if available, else rlimit+jail), hashes declared inputs/outputs, writes `truth-harness.notebook-run.v1` marked `observed`; v0 records remain, audits label them `attested-only`. Files: new package; `notebook-run.ts`; `evidence-audit.ts`; CLI `notebook run`. Why: converts the provenance story from honor system to observation. Tests: red-team (network attempt, path escape, fork bomb → killed and recorded). Accept: an observed run's outputs are hash-verifiable; sandbox escapes fail tests.
 
 17. **README + quickstart rewrite, biomedical content relocation.**
     Goal: 6-command math quickstart; move biomedical walkthrough to `docs/workflows/biomedical-hypothesis.md` framed as guardrail demo; sync `package.json` description to actual capability. Files: `README.md`, `docs/`, `package.json`. Why: R10. Tests: `npm run cli -- check README.md` on any embedded claims. Accept: no medical strings above the fold; quickstart < 2 min.
@@ -423,7 +423,7 @@ Open-source mechanics: the adapter interface is the contribution magnet — "wri
     Goal: `docs/TRUST_LABELS.md` (semantics, backend, anti-claims for each label); `claim-file.ts` strict pass excludes labels with no registered adapter (`cross-checked` until real). Files: docs; `claim-file.ts`; `types.ts` comments. Why: R11. Tests: strict-mode test for unmintable labels. Accept: docs and code agree on which labels are currently earnable.
 
 20. **Agent calibration benchmark harness (design + skeleton).**
-    Goal: `packages/benchmarks` gains `agent` mode: task suite + submission format (via MCP tool `theorem_benchmark_submit`) + grading via workbench verification + calibration scoring (claimed-trust vs earned-trust matrix); seed with 50 tasks. Files: benchmarks package; mcp-server; new suite. Why: makes the "benchmark harness for agents" claim true; the Stage-3 viral artifact. Tests: deterministic grading; self-play test (workbench grades its own `ask` as perfectly calibrated). Accept: a model can be scored end-to-end and the scorecard is a replayable receipt.
+    Goal: `packages/benchmarks` gains `agent` mode: task suite + submission format (via MCP tool `truth_harness_benchmark_submit`) + grading via workbench verification + calibration scoring (claimed-trust vs earned-trust matrix); seed with 50 tasks. Files: benchmarks package; mcp-server; new suite. Why: makes the "benchmark harness for agents" claim true; the Stage-3 viral artifact. Tests: deterministic grading; self-play test (workbench grades its own `ask` as perfectly calibrated). Accept: a model can be scored end-to-end and the scorecard is a replayable receipt.
 
 ---
 

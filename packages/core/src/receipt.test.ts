@@ -101,7 +101,7 @@ describe("createReceipt", () => {
 
   it("creates symbolic receipts when the SymPy adapter is available", () => {
     const receipt = createReceipt("symbolic simplify sin(x)^2 + cos(x)^2", {
-      maximaCommand: "theorem-workbench-missing-maxima-command"
+      maximaCommand: "truth-harness-missing-maxima-command"
     });
 
     if (receipt.trust === "exact-computed") {
@@ -146,7 +146,7 @@ describe("createReceipt", () => {
 
         return {
           status: 0,
-          stdout: "THEOREM_MAXIMA_STATUS:passed:0\n",
+          stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n",
           stderr: ""
         };
       }
@@ -177,7 +177,7 @@ describe("createReceipt", () => {
 
         return {
           status: 0,
-          stdout: "THEOREM_MAXIMA_STATUS:failed:x\n",
+          stdout: "TRUTH_HARNESS_MAXIMA_STATUS:failed:x\n",
           stderr: ""
         };
       }

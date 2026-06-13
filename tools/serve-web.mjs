@@ -18,10 +18,10 @@ const args = new Map(
 );
 const root = resolve(args.get("web-root") ?? "apps/web");
 const projectRoot = resolve(args.get("project-root") ?? ".");
-const coreModulePath = args.get("core-module") ?? process.env.THEOREM_WEB_CORE_MODULE ?? "packages/core/dist/index.js";
+const coreModulePath = args.get("core-module") ?? process.env.TRUTH_HARNESS_WEB_CORE_MODULE ?? "packages/core/dist/index.js";
 const host = args.get("host") ?? "127.0.0.1";
 const port = Number(args.get("port") ?? "4180");
-const allowNonLocalWeb = isTruthyEnv(process.env.THEOREM_WEB_ALLOW_NONLOCAL);
+const allowNonLocalWeb = isTruthyEnv(process.env.TRUTH_HARNESS_WEB_ALLOW_NONLOCAL);
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -32,7 +32,7 @@ const mimeTypes = new Map([
 ]);
 
 const server = createServer(async (request, response) => {
-  response.theoremRequestId = `web_req_${randomUUID()}`;
+  response.truthHarnessRequestId = `web_req_${randomUUID()}`;
   try {
     const requestUrl = new URL(request.url ?? "/", `http://${host}:${port}`);
     if (requestUrl.pathname.startsWith("/api/")) {
@@ -95,23 +95,23 @@ async function handleApiRequest(request, response, requestUrl) {
     const codeRunSandbox = await readCodeRunSandboxStatus();
     const engineManifest = await readEngineManifest();
     const verification = await readVerificationEngineStatus();
-    const mcpCodeRunExposed = isTruthyEnv(process.env.THEOREM_ALLOW_CODE_RUN);
-    const unsandboxedCodeRunAllowed = isTruthyEnv(process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN);
+    const mcpCodeRunExposed = isTruthyEnv(process.env.TRUTH_HARNESS_ALLOW_CODE_RUN);
+    const unsandboxedCodeRunAllowed = isTruthyEnv(process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN);
     const webServer = webServerSafetyStatus();
 
     writeJson(response, 200, {
-      schemaVersion: "theorem.web-status.v0",
+      schemaVersion: "truth-harness.web-status.v0",
       localOnly: true,
       externalCalls: false,
       api: "local-node",
-      engine: "@theorem-workbench/core",
+      engine: "@truth-harness/core",
       safety: {
         status: codeRunSandbox.canAttestNetworkNone ? "sandbox-attested" : "sandbox-unavailable",
         codeRunSandbox,
         mcpCodeRun: {
           exposed: mcpCodeRunExposed,
           unsandboxedAllowed: unsandboxedCodeRunAllowed,
-          requiredForExecution: mcpCodeRunExposed ? "policy.allowedExecutables" : "THEOREM_ALLOW_CODE_RUN=1",
+          requiredForExecution: mcpCodeRunExposed ? "policy.allowedExecutables" : "TRUTH_HARNESS_ALLOW_CODE_RUN=1",
           recommendation: codeRunSandbox.canAttestNetworkNone
             ? "Prefer policy.requireSandbox=true for agent-triggered code runs."
             : "Keep MCP code execution disabled or require a measured sandbox before running untrusted commands."
@@ -148,7 +148,7 @@ async function handleApiRequest(request, response, requestUrl) {
   if (requestUrl.pathname === "/api/claims" && request.method === "GET") {
     const snapshot = await readClaimLedgerSnapshot();
     writeJson(response, 200, {
-      schemaVersion: "theorem.web-claims-response.v0",
+      schemaVersion: "truth-harness.web-claims-response.v0",
       localOnly: true,
       externalCalls: [],
       ...snapshot
@@ -159,7 +159,7 @@ async function handleApiRequest(request, response, requestUrl) {
   if (requestUrl.pathname === "/api/routes" && request.method === "GET") {
     const routes = await readRouteLedgerSnapshot();
     writeJson(response, 200, {
-      schemaVersion: "theorem.web-routes-response.v0",
+      schemaVersion: "truth-harness.web-routes-response.v0",
       localOnly: true,
       externalCalls: [],
       routes
@@ -172,7 +172,7 @@ async function handleApiRequest(request, response, requestUrl) {
     await ensureLocalWorkspace();
     const review = await createWorkspaceReview({ rootPath: projectRoot });
     writeJson(response, 200, {
-      schemaVersion: "theorem.web-workspace-review-response.v0",
+      schemaVersion: "truth-harness.web-workspace-review-response.v0",
       localOnly: true,
       externalCalls: [],
       review
@@ -183,7 +183,7 @@ async function handleApiRequest(request, response, requestUrl) {
   if (requestUrl.pathname === "/api/cas" && request.method === "GET") {
     const checks = await readCasCheckSnapshot();
     writeJson(response, 200, {
-      schemaVersion: "theorem.web-cas-list-response.v0",
+      schemaVersion: "truth-harness.web-cas-list-response.v0",
       localOnly: true,
       externalCalls: [],
       checks
@@ -194,7 +194,7 @@ async function handleApiRequest(request, response, requestUrl) {
   if (requestUrl.pathname === "/api/smt" && request.method === "GET") {
     const checks = await readSmtCheckSnapshot();
     writeJson(response, 200, {
-      schemaVersion: "theorem.web-smt-list-response.v0",
+      schemaVersion: "truth-harness.web-smt-list-response.v0",
       localOnly: true,
       externalCalls: [],
       checks
@@ -222,7 +222,7 @@ async function handleApiRequest(request, response, requestUrl) {
       });
       const checks = await readSmtCheckSnapshot();
       writeJson(response, 200, {
-        schemaVersion: "theorem.web-smt-solve-response.v0",
+        schemaVersion: "truth-harness.web-smt-solve-response.v0",
         localOnly: true,
         externalCalls: [],
         problem: result.problem,
@@ -273,7 +273,7 @@ async function handleApiRequest(request, response, requestUrl) {
       });
       const checks = await readCasCheckSnapshot();
       writeJson(response, 200, {
-        schemaVersion: "theorem.web-cas-check-response.v0",
+        schemaVersion: "truth-harness.web-cas-check-response.v0",
         localOnly: true,
         externalCalls: [],
         record: write.record,
@@ -306,7 +306,7 @@ async function handleApiRequest(request, response, requestUrl) {
       const route = await readVerifierRoute(projectRoot, routeRef);
       const summary = (await listVerifierRoutes(projectRoot)).find((item) => item.routeId === route.routeId);
       writeJson(response, 200, {
-        schemaVersion: "theorem.web-route-response.v0",
+        schemaVersion: "truth-harness.web-route-response.v0",
         localOnly: true,
         externalCalls: [],
         route,
@@ -335,7 +335,7 @@ async function handleApiRequest(request, response, requestUrl) {
       });
       const routes = await readRouteLedgerSnapshot();
       writeJson(response, 200, {
-        schemaVersion: "theorem.web-route-satisfy-response.v0",
+        schemaVersion: "truth-harness.web-route-satisfy-response.v0",
         localOnly: true,
         externalCalls: [],
         route: result.route,
@@ -383,7 +383,7 @@ async function handleApiRequest(request, response, requestUrl) {
       });
       const snapshot = await readClaimLedgerSnapshot();
       writeJson(response, 200, {
-        schemaVersion: "theorem.web-claim-write-response.v0",
+        schemaVersion: "truth-harness.web-claim-write-response.v0",
         localOnly: true,
         externalCalls: [],
         claim: result.claim,
@@ -396,7 +396,7 @@ async function handleApiRequest(request, response, requestUrl) {
           {
             actor: "local-api",
             action: "created-claim-ledger-record",
-            detail: `${result.claim.claimId} written to the local .theorem-workbench claim ledger.`,
+            detail: `${result.claim.claimId} written to the local .truth-harness claim ledger.`,
             at: result.claim.createdAt
           }
         ]
@@ -414,7 +414,7 @@ async function handleApiRequest(request, response, requestUrl) {
       await ensureLocalWorkspace();
       const claim = await readClaimRecord(projectRoot, decodeURIComponent(claimReadMatch[1]));
       writeJson(response, 200, {
-        schemaVersion: "theorem.web-claim-response.v0",
+        schemaVersion: "truth-harness.web-claim-response.v0",
         localOnly: true,
         externalCalls: [],
         claim
@@ -444,7 +444,7 @@ async function handleApiRequest(request, response, requestUrl) {
     const receipt = route.receipt;
     const completedAt = new Date().toISOString();
     writeJson(response, 200, {
-      schemaVersion: "theorem.web-receipt-response.v0",
+      schemaVersion: "truth-harness.web-receipt-response.v0",
       localOnly: true,
       externalCalls: [],
       route,
@@ -463,13 +463,13 @@ async function handleApiRequest(request, response, requestUrl) {
         {
           actor: "local-api",
           action: "created-verifier-route",
-          detail: `The local API selected ${route.usedCapabilities.length} verifier capabilities, recorded ${route.gaps.length} route gaps, and wrote ${route.routeId} to .theorem-workbench/routes.`,
+          detail: `The local API selected ${route.usedCapabilities.length} verifier capabilities, recorded ${route.gaps.length} route gaps, and wrote ${route.routeId} to .truth-harness/routes.`,
           at: completedAt
         },
         {
           actor: "local-api",
           action: "created-receipt",
-          detail: "The local API called @theorem-workbench/core createReceipt without a hosted model or external service.",
+          detail: "The local API called @truth-harness/core createReceipt without a hosted model or external service.",
           at: completedAt
         }
       ]
@@ -675,7 +675,7 @@ function isLocalHostname(hostname) {
 
 function webServerSafetyStatus() {
   return {
-    schemaVersion: "theorem.web-server-safety.v0",
+    schemaVersion: "truth-harness.web-server-safety.v0",
     bindHost: host,
     port,
     localHostGuard: !allowNonLocalWeb,
@@ -701,7 +701,7 @@ function dockerVerifierGuidance(verification) {
   const recommended = totalCount === 0 || readyCount < totalCount;
 
   return {
-    schemaVersion: "theorem.docker-verifier-guidance.v0",
+    schemaVersion: "truth-harness.docker-verifier-guidance.v0",
     localOnly: true,
     externalCalls: false,
     recommended,
@@ -712,7 +712,7 @@ function dockerVerifierGuidance(verification) {
     },
     missingEngines,
     runtimeBoundary: {
-      service: "theorem",
+      service: "truth-harness",
       composeNetworkMode: "none",
       autoRunsDocker: false,
       buildMayDownloadDependencies: true,
@@ -720,7 +720,7 @@ function dockerVerifierGuidance(verification) {
     },
     notes: [
       "The web UI never runs Docker automatically; it only exposes copyable commands.",
-      "npm run docker:proof runs the theorem compose service with no external network route after the dev image exists.",
+      "npm run docker:proof runs the truth-harness compose service with no external network route after the dev image exists.",
       "npm run docker:verify builds and tests the verification image; image builds may download dependencies.",
       "Docker status does not prove a claim. Trust labels still require concrete Lean, Z3, Maxima, or other accepted evidence artifacts."
     ]
@@ -733,7 +733,7 @@ async function readCodeRunSandboxStatus() {
     return getCodeRunSandboxStatus();
   } catch (error) {
     return {
-      schemaVersion: "theorem.code-run-sandbox-status.v0",
+      schemaVersion: "truth-harness.code-run-sandbox-status.v0",
       platform: process.platform,
       available: false,
       provider: "none",
@@ -757,7 +757,7 @@ async function readEngineManifest() {
     return getEngineManifest({ timeoutMs: 1500 });
   } catch (error) {
     return {
-      schemaVersion: "theorem.engine-manifest.v0",
+      schemaVersion: "truth-harness.engine-manifest.v0",
       createdAt: new Date().toISOString(),
       localOnly: true,
       networkAccess: "none",
@@ -797,19 +797,19 @@ async function readVerificationEngineStatus() {
     const engines = [
       engineProbeRow({
         lane: "Symbolic CAS",
-        command: "theorem cas backends",
+        command: "truth-harness cas backends",
         trustBoundary: "Can support `cross-checked` only after a concrete independent Maxima agreement run.",
         probe: cas.backends[0]
       }),
       engineProbeRow({
         lane: "Formal proof",
-        command: "theorem proof backends",
+        command: "truth-harness proof backends",
         trustBoundary: "Can support `proved` only after Lean accepts a concrete proof artifact.",
         probe: proof.backends[0]
       }),
       engineProbeRow({
         lane: "SMT solver",
-        command: "theorem smt backends",
+        command: "truth-harness smt backends",
         trustBoundary: "Can support `smt-checked` only after Z3 returns sat or unsat for a concrete SMT-LIB artifact.",
         probe: smt.backends[0]
       })
@@ -817,7 +817,7 @@ async function readVerificationEngineStatus() {
     const readyCount = engines.filter((engine) => engine.status === "available").length;
 
     return {
-      schemaVersion: "theorem.verification-readiness.v0",
+      schemaVersion: "truth-harness.verification-readiness.v0",
       createdAt: new Date().toISOString(),
       localOnly: true,
       networkAccess: "none",
@@ -844,7 +844,7 @@ async function readVerificationEngineStatus() {
     };
   } catch (error) {
     return {
-      schemaVersion: "theorem.verification-readiness.v0",
+      schemaVersion: "truth-harness.verification-readiness.v0",
       createdAt: new Date().toISOString(),
       localOnly: true,
       networkAccess: "none",
@@ -936,7 +936,7 @@ function readJsonBody(request) {
 }
 
 function writeJson(response, status, payload) {
-  const requestId = payload?.requestId ?? response.theoremRequestId ?? `web_req_${randomUUID()}`;
+  const requestId = payload?.requestId ?? response.truthHarnessRequestId ?? `web_req_${randomUUID()}`;
   const responsePayload = payload && typeof payload === "object" && !Array.isArray(payload)
     ? {
       requestId,
@@ -947,7 +947,7 @@ function writeJson(response, status, payload) {
     ...webSecurityHeaders(),
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
-    "X-Theorem-Request-Id": requestId
+    "X-Truth-Harness-Request-Id": requestId
   };
 
   response.writeHead(status, headers);
@@ -957,7 +957,7 @@ function writeJson(response, status, payload) {
 function writeApiError(response, status, error, request) {
   const requestId = `web_err_${randomUUID()}`;
   writeJson(response, status, {
-    schemaVersion: "theorem.web-error.v0",
+    schemaVersion: "truth-harness.web-error.v0",
     requestId,
     createdAt: new Date().toISOString(),
     localOnly: true,

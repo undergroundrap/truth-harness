@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/disclosure-log.schema.json",
-  "title": "Theorem Workbench External Disclosure Log Entry",
+  "$id": "https://truth-harness.local/schemas/disclosure-log.schema.json",
+  "title": "Truth Harness External Disclosure Log Entry",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -22,7 +22,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.disclosure.v0"
+      "const": "truth-harness.disclosure.v0"
     },
     "disclosureId": {
       "type": "string",

@@ -52,7 +52,7 @@ export interface LiteratureIdentifier {
 }
 
 export interface LiteratureRecord {
-  schemaVersion: "theorem.literature.v0";
+  schemaVersion: "truth-harness.literature.v0";
   recordId: string;
   projectId: string;
   createdAt: string;
@@ -167,7 +167,7 @@ export async function createLiteratureRecord(input: CreateLiteratureRecordInput)
   const recordId = `lit_${stableHash(recordWithoutId).slice(0, 16)}`;
   const reviewBoundary = reviewBoundaryFor({ kind, status: recordStatus, title, summary, keyClaims, relevance, nextChecks });
   const record: LiteratureRecord = {
-    schemaVersion: "theorem.literature.v0",
+    schemaVersion: "truth-harness.literature.v0",
     recordId,
     ...recordWithoutId,
     updatedAt: createdAt,
@@ -235,7 +235,7 @@ export async function listLiteratureRecords(rootPath: string): Promise<Literatur
   );
 
   return records
-    .filter((record) => record.schemaVersion === "theorem.literature.v0")
+    .filter((record) => record.schemaVersion === "truth-harness.literature.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
@@ -397,7 +397,7 @@ function warningsFor(input: {
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing literature records.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing literature records.");
   }
 
   if (status.missingDirectories.length > 0) {

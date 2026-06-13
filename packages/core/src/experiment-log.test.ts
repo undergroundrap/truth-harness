@@ -21,7 +21,7 @@ describe("experiment logs", () => {
         rootPath: root,
         question: "Did the bench test observe the expected signal?"
       })
-    ).rejects.toThrow("No Theorem workspace found");
+    ).rejects.toThrow("No Truth Harness workspace found");
   });
 
   it("writes local wet-lab experiment provenance with safety and review boundaries", async () => {
@@ -51,8 +51,8 @@ describe("experiment logs", () => {
     });
     const entries = await listExperimentLogEntries(root);
 
-    expect(result.path).toContain(join(".theorem-workbench", "experiments"));
-    expect(result.entry.schemaVersion).toBe("theorem.experiment.v0");
+    expect(result.path).toContain(join(".truth-harness", "experiments"));
+    expect(result.entry.schemaVersion).toBe("truth-harness.experiment.v0");
     expect(result.entry.experimentId).toMatch(/^exp_[a-f0-9]{16}$/);
     expect(result.entry.review.humanExpertReviewRequired).toBe(true);
     expect(result.entry.review.safetyReviewRequired).toBe(true);
@@ -86,7 +86,7 @@ describe("experiment logs", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-experiment-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-experiment-"));
   roots.push(root);
   return root;
 }

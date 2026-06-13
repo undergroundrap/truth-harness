@@ -38,7 +38,7 @@ describe("CAS backend status", () => {
     });
 
     expect(calls).toEqual([{ command: "maxima-test", args: ["--version"], timeoutMs: 3000 }]);
-    expect(report.schemaVersion).toBe("theorem.cas-backends.v0");
+    expect(report.schemaVersion).toBe("truth-harness.cas-backends.v0");
     expect(report.localOnly).toBe(true);
     expect(report.networkAccess).toBe("none");
     expect(report.casBackendsAvailable).toBe(1);
@@ -136,7 +136,7 @@ describe("Maxima symbolic cross-check", () => {
 
       return {
         status: 0,
-        stdout: "THEOREM_MAXIMA_STATUS:passed:0\n",
+        stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n",
         stderr: ""
       };
     };
@@ -158,7 +158,7 @@ describe("Maxima symbolic cross-check", () => {
     expect(calls[1]?.slice(0, 2)).toEqual(["--very-quiet", "--batch-string"]);
     expect(calls[1]?.[2]).toContain("fullratsimp(trigsimp");
     expect(calls[1]?.[2]).toContain("sin(x)^2 + cos(x)^2");
-    expect(record.schemaVersion).toBe("theorem.symbolic-cas-check.v0");
+    expect(record.schemaVersion).toBe("truth-harness.symbolic-cas-check.v0");
     expect(record.status).toBe("passed");
     expect(record.trust).toBe("cross-checked");
     expect(record.proofCheckerBacked).toBe(false);
@@ -182,8 +182,8 @@ describe("Maxima symbolic cross-check", () => {
       return {
         status: 0,
         stdout: [
-          'printf(true,"THEOREM_MAXIMA_STATUS:~a:~a~%",status,residual)',
-          "THEOREM_MAXIMA_STATUS:passed:0"
+          'printf(true,"TRUTH_HARNESS_MAXIMA_STATUS:~a:~a~%",status,residual)',
+          "TRUTH_HARNESS_MAXIMA_STATUS:passed:0"
         ].join("\n"),
         stderr: ""
       };
@@ -220,7 +220,7 @@ describe("Maxima symbolic cross-check", () => {
 
       return {
         status: 0,
-        stdout: "THEOREM_MAXIMA_STATUS:passed:0\n",
+        stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n",
         stderr: ""
       };
     };
@@ -240,11 +240,11 @@ describe("Maxima symbolic cross-check", () => {
     const list = await listSymbolicCasChecks(root);
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
-    expect(result.record.schemaVersion).toBe("theorem.cas-check.v0");
+    expect(result.record.schemaVersion).toBe("truth-harness.cas-check.v0");
     expect(result.record.trust).toBe("cross-checked");
-    expect(result.record.replay).toContain("theorem cas check");
+    expect(result.record.replay).toContain("truth-harness cas check");
     expect(result.record.replay).toContain("--write");
-    expect(result.jsonPath).toContain(join(".theorem-workbench", "cas"));
+    expect(result.jsonPath).toContain(join(".truth-harness", "cas"));
     expect(result.markdown).toContain(`# CAS Check ${result.record.checkId}`);
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
@@ -252,7 +252,7 @@ describe("Maxima symbolic cross-check", () => {
       status: "passed",
       trust: "cross-checked"
     });
-    expect(list[0]?.path).toContain(".theorem-workbench/cas/2026-06-12-cas_");
+    expect(list[0]?.path).toContain(".truth-harness/cas/2026-06-12-cas_");
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.cas).toBe(1);
   });
@@ -269,7 +269,7 @@ describe("Maxima symbolic cross-check", () => {
 
       return {
         status: 0,
-        stdout: "THEOREM_MAXIMA_STATUS:failed:x\n",
+        stdout: "TRUTH_HARNESS_MAXIMA_STATUS:failed:x\n",
         stderr: ""
       };
     };
@@ -318,7 +318,7 @@ describe("Maxima symbolic cross-check", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-cas-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-cas-"));
   roots.push(root);
   return root;
 }

@@ -19,7 +19,7 @@ export interface ModelContextSection {
 }
 
 export interface ModelContextPacket {
-  schemaVersion: "theorem.model-context.v0";
+  schemaVersion: "truth-harness.model-context.v0";
   packetId: string;
   projectId: string;
   createdAt: string;
@@ -162,7 +162,7 @@ export async function createModelContext(input: CreateModelContextInput): Promis
   };
   const packetId = `ctx_${stableHash(packetWithoutId).slice(0, 16)}`;
   const packetWithoutMarkdown = {
-    schemaVersion: "theorem.model-context.v0" as const,
+    schemaVersion: "truth-harness.model-context.v0" as const,
     packetId,
     ...packetWithoutId
   };
@@ -215,7 +215,7 @@ export async function listModelContexts(rootPath: string): Promise<ModelContextP
   );
 
   return packets
-    .filter((packet) => packet.schemaVersion === "theorem.model-context.v0")
+    .filter((packet) => packet.schemaVersion === "truth-harness.model-context.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
@@ -288,7 +288,7 @@ export function renderModelContextMarkdown(packet: Omit<ModelContextPacket, "mar
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing model context packets.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing model context packets.");
   }
 
   if (status.missingDirectories.length > 0) {

@@ -12,13 +12,13 @@ Audience: Codex, for implementation planning.
 
 The repo grew a lot and got more honest in the process — `proof-backend.ts` now refuses to mint `proved` without Lean accepting a concrete artifact, `workspace-validation.ts` actually consumes the JSON Schemas it ships (the dead-schema problem from audit #1 is largely fixed), and `receipt-validation.ts` gives precise JSON-path errors with fail-toward-missing behavior. Those are real improvements.
 
-But the same commit added **live, agent-reachable code execution** (`theorem_code_run` over MCP) guarded by a **default-allow denylist that does not constrain interpreters** — and that single design choice makes the project's headline guarantee (local-first, `networkAccess: none`) false, and worse, *machine-attested-false*, the moment an agent uses the tool. This is the finding to fix before anything else, including before the next demo.
+But the same commit added **live, agent-reachable code execution** (`truth_harness_code_run` over MCP) guarded by a **default-allow denylist that does not constrain interpreters** — and that single design choice makes the project's headline guarantee (local-first, `networkAccess: none`) false, and worse, *machine-attested-false*, the moment an agent uses the tool. This is the finding to fix before anything else, including before the next demo.
 
 ---
 
 ## Findings, ordered by severity
 
-### 🔴 C1 — `theorem_code_run` is arbitrary code execution; its policy is bypassable by design and voids the privacy guarantee
+### 🔴 C1 — `truth_harness_code_run` is arbitrary code execution; its policy is bypassable by design and voids the privacy guarantee
 
 **What the code does.** `evaluateCodeRunPolicy` (`packages/core/src/code-run.ts:592`) is a *denylist*: it blocks five hardcoded sets — shell launchers (`code-run.ts:175`: cmd, powershell, bash, sh, zsh…), network commands (`:176`: curl, wget, ssh…), destructive (`:177`: rm, format…), package mutations (`:178` + arg sniffing), git mutations (`detectGitMutation`). Everything else is allowed. The allowlist is opt-in: when `allowedExecutables` is empty, `matchedAllowlist = true` (`:725`). The tool is exposed over MCP with `readOnlyHint: false` (`packages/mcp-server/src/index.ts:802`) and over the CLI (`apps/cli/src/index.ts:732`). Execution is `spawnSync` with the **full inherited environment** (`code-run.ts:179` `inheritedEnvironment: true`).
 
@@ -32,13 +32,13 @@ But the same commit added **live, agent-reachable code execution** (`theorem_cod
 
 There is no OS sandbox — no network namespace, no seccomp, no container, no `bwrap`. The `cwd` is jailed to the workspace (`resolveWorkspacePath`, `:735`), but that only sets the child's working directory; a spawned interpreter can read `~/.ssh/id_rsa` or write outside the workspace via absolute paths.
 
-**Why this is critical, not just a sandbox gap.** The written record stamps `privacy: { mode: "local-only", networkAccess: "none", dataResidency: "local-workspace" }`, copied from the manifest (`local-workspace.ts:224-226`) onto every code-run record. So a run that opened a socket via `python` is *recorded as having no network access*. The product's entire thesis is "receipts you can trust about provenance and privacy." Here the receipt asserts a falsehood the system cannot back. A skeptical reviewer (or a security-minded HN reader) who runs `theorem_code_run python -c "import urllib.request; urllib.request.urlopen('http://...')"` and then reads the resulting `networkAccess: none` record has a one-line takedown.
+**Why this is critical, not just a sandbox gap.** The written record stamps `privacy: { mode: "local-only", networkAccess: "none", dataResidency: "local-workspace" }`, copied from the manifest (`local-workspace.ts:224-226`) onto every code-run record. So a run that opened a socket via `python` is *recorded as having no network access*. The product's entire thesis is "receipts you can trust about provenance and privacy." Here the receipt asserts a falsehood the system cannot back. A skeptical reviewer (or a security-minded HN reader) who runs `truth_harness_code_run python -c "import urllib.request; urllib.request.urlopen('http://...')"` and then reads the resulting `networkAccess: none` record has a one-line takedown.
 
 **Fixes (do all four):**
 1. **Default-deny.** Empty `allowedExecutables` must mean *block*, not allow (`code-run.ts:725`). No execution without an explicit, recorded allowlist.
 2. **Real isolation, not name lists.** Interpreter bypass is unsolvable by enumeration. Require an OS sandbox for any code-run: network-denied namespace + filesystem scope (Linux: `bwrap`/user namespaces or a container; document macOS/Windows degraded modes). Put it behind one `runSandboxed()` utility (this is audit #1's R8, now acute).
 3. **Privacy must be measured, not asserted.** Never copy the manifest's `networkAccess: none` onto an executed-command record. The field must reflect the sandbox: `none` only when a network-denied sandbox was enforced; otherwise `unknown` and `mode: "external-capable"`. (See H1.)
-4. **Gate the tool.** Require an explicit opt-in (e.g. `THEOREM_ALLOW_CODE_RUN=1` plus a per-call allowlist) so `theorem_code_run` is not silently reachable by any agent that connects to the MCP server.
+4. **Gate the tool.** Require an explicit opt-in (e.g. `TRUTH_HARNESS_ALLOW_CODE_RUN=1` plus a per-call allowlist) so `truth_harness_code_run` is not silently reachable by any agent that connects to the MCP server.
 
 ---
 
@@ -84,7 +84,7 @@ Real progress: `workspace-validation.ts` loads `schemas/*.json` (`:605`), valida
 
 ### 🟡 M4 — `failOnNonzero` / strict semantics need protocol tests
 
-The MCP code-run schema exposes `failOnNonzero` (`index.ts`); ensure the in-memory server test exercises the error path and that strict modes (`theorem_ask` strict, proof-check rejected) return `isError` consistently. The single large server test should be split per-tool with golden `tools/list` snapshots so schema drift is reviewable.
+The MCP code-run schema exposes `failOnNonzero` (`index.ts`); ensure the in-memory server test exercises the error path and that strict modes (`truth_harness_ask` strict, proof-check rejected) return `isError` consistently. The single large server test should be split per-tool with golden `tools/list` snapshots so schema drift is reviewable.
 
 ---
 
@@ -120,7 +120,7 @@ Mostly disciplined — the code-run record's own boundary text ("does not prove 
 
 ## Recommended next 5–10 implementation tasks
 
-1. **Lock down `theorem_code_run` (C1).** Default-deny allowlist; opt-in env gate; reject execution when no sandbox is available or mark the record `sandbox: none` + `networkAccess: unknown`. Files: `code-run.ts` (`evaluateCodeRunPolicy`, record builder, privacy), `mcp-server/src/index.ts:802`, `apps/cli/src/index.ts:732`. Tests: default-deny, gate-off blocks, bypass corpus (`python -c socket`, `env curl`, `npx`). Accept: no code path executes a network/destructive action while recording `networkAccess: none`.
+1. **Lock down `truth_harness_code_run` (C1).** Default-deny allowlist; opt-in env gate; reject execution when no sandbox is available or mark the record `sandbox: none` + `networkAccess: unknown`. Files: `code-run.ts` (`evaluateCodeRunPolicy`, record builder, privacy), `mcp-server/src/index.ts:802`, `apps/cli/src/index.ts:732`. Tests: default-deny, gate-off blocks, bypass corpus (`python -c socket`, `env curl`, `npx`). Accept: no code path executes a network/destructive action while recording `networkAccess: none`.
 2. **Real sandbox (`runSandboxed`).** Network-denied + filesystem-scoped execution; degraded modes documented and recorded. Files: new `packages/core/src/sandbox.ts`, `code-run.ts`, `SECURITY.md`. Tests: red-team escapes blocked and recorded.
 3. **Privacy as measurement + egress CI gate (H1).** Socket-deny harness over full suite; `PrivacyMetadata` derived from enforced conditions; import lint. Accept: adding egress fails CI.
 4. **Async execution + resource budgets (H2).** Replace `spawnSync` in code-run with async `spawn`; per-workspace concurrency + aggregate caps. Accept: a long code-run does not block other MCP calls.

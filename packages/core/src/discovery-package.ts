@@ -22,7 +22,7 @@ export interface DiscoveryEvidenceReview {
 }
 
 export interface DiscoveryPackage {
-  schemaVersion: "theorem.discovery-package.v0";
+  schemaVersion: "truth-harness.discovery-package.v0";
   packageId: string;
   createdAt: string;
   projectId: string;
@@ -61,7 +61,7 @@ export async function createDiscoveryPackage(input: DiscoveryPackageInput): Prom
   };
   const packageId = `pkg_${stableHash({ entryId: entry.entryId, createdAt, evidenceReviews, validation }).slice(0, 16)}`;
   const basePackage = {
-    schemaVersion: "theorem.discovery-package.v0" as const,
+    schemaVersion: "truth-harness.discovery-package.v0" as const,
     packageId,
     createdAt,
     projectId: entry.projectId,
@@ -184,7 +184,7 @@ export function renderDiscoveryPackageMarkdown(
 async function findInventionEntry(rootPath: string, entryId: string | undefined): Promise<InventionLogEntry> {
   const entries = await listInventionLogEntries(rootPath);
   if (entries.length === 0) {
-    throw new Error("No invention logs found. Run `theorem invention log` before creating a discovery package.");
+    throw new Error("No invention logs found. Run `truth-harness invention log` before creating a discovery package.");
   }
 
   if (!entryId) {
@@ -310,11 +310,11 @@ function warningsForReceipt(receipt: Receipt): string[] {
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before creating discovery packages.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before creating discovery packages.");
   }
 
   if (status.missingDirectories.length > 0) {
-    throw new Error(`Theorem workspace is missing directories: ${status.missingDirectories.join(", ")}`);
+    throw new Error(`Truth Harness workspace is missing directories: ${status.missingDirectories.join(", ")}`);
   }
 
   return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };

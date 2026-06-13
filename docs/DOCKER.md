@@ -27,13 +27,13 @@ docker compose build
 Run the normal verification gate with no runtime network:
 
 ```bash
-docker compose run --rm theorem npm run check
+docker compose run --rm truth-harness npm run check
 ```
 
 Run the public launch proof suite plus the engine-backed CAS and SMT gates with no runtime network:
 
 ```bash
-docker compose run --rm theorem npm run proof:launch:engines
+docker compose run --rm truth-harness npm run proof:launch:engines
 ```
 
 The engine-backed gate runs the standard launch suite first, then requires Maxima to independently agree that `sin(x)^2 + cos(x)^2` simplifies to `1`, and checks `docs/examples/constraints.smt2` with `--fail-on-unverified`. If Maxima is missing or disagrees, or if Z3 is missing, returns `unknown`, or fails to produce a concrete `sat`/`unsat` result, the command exits non-zero instead of printing a comforting but unsupported success.
@@ -41,13 +41,13 @@ The engine-backed gate runs the standard launch suite first, then requires Maxim
 Run CLI commands:
 
 ```bash
-docker compose run --rm theorem npm run cli -- workspace init --name "Local Math Lab"
-docker compose run --rm theorem npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
-docker compose run --rm theorem npm run cli -- cas backends
-docker compose run --rm theorem npm run cli -- cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write
-docker compose run --rm theorem npm run cli -- smt backends
-docker compose run --rm theorem npm run cli -- proof backends
-docker compose run --rm theorem npm run cli -- code sandbox-status --json
+docker compose run --rm truth-harness npm run cli -- workspace init --name "Local Math Lab"
+docker compose run --rm truth-harness npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
+docker compose run --rm truth-harness npm run cli -- cas backends
+docker compose run --rm truth-harness npm run cli -- cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write
+docker compose run --rm truth-harness npm run cli -- smt backends
+docker compose run --rm truth-harness npm run cli -- proof backends
+docker compose run --rm truth-harness npm run cli -- code sandbox-status --json
 ```
 
 Run the local web workbench:
@@ -56,9 +56,9 @@ Run the local web workbench:
 docker compose up web
 ```
 
-Then open `http://127.0.0.1:4180`. The web service publishes only to localhost. The browser calls localhost `/api/receipt` and `/api/claims` endpoints backed by `@theorem-workbench/core`; it does not call a hosted model or external service. The web server also rejects non-local Host headers by default and accepts browser API writes only from the same origin.
+Then open `http://127.0.0.1:4180`. The web service publishes only to localhost. The browser calls localhost `/api/receipt` and `/api/claims` endpoints backed by `@truth-harness/core`; it does not call a hosted model or external service. The web server also rejects non-local Host headers by default and accepts browser API writes only from the same origin.
 
-The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima and Z3 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; set `THEOREM_LEAN` or build a derived image once that project layout is chosen.
+The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima and Z3 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; set `TRUTH_HARNESS_LEAN` or build a derived image once that project layout is chosen.
 
 ## Web UI Safe Verifier Path
 
@@ -69,7 +69,7 @@ npm run docker:proof
 npm run docker:verify
 ```
 
-Use `npm run docker:proof` for the day-to-day no-runtime-network engine suite after the dev image exists. Use `npm run docker:verify` before demos or review checkpoints when you want the full image build and verification target. Image builds may download dependencies; verifier runs inside the `theorem` compose service use the no-network runtime boundary described below.
+Use `npm run docker:proof` for the day-to-day no-runtime-network engine suite after the dev image exists. Use `npm run docker:verify` before demos or review checkpoints when you want the full image build and verification target. Image builds may download dependencies; verifier runs inside the `truth-harness` compose service use the no-network runtime boundary described below.
 
 The UI card is guidance, not evidence. Claims still need concrete receipts: `cross-checked` requires an accepted independent CAS record, `smt-checked` requires a concrete Z3 solver record, and `proved` requires an accepted proof-checker record.
 
@@ -81,23 +81,23 @@ Run the MCP server over stdio:
 docker compose run --rm -i mcp
 ```
 
-By default, MCP `theorem_code_run` is still disabled. To expose it to an agent, the MCP process must have `THEOREM_ALLOW_CODE_RUN=1`. Unsandboxed direct execution needs the additional `THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1` escape hatch; otherwise agents should set `policy.requireSandbox: true`. In the CLI/MCP Docker no-network services, `policy.requireSandbox: true` can pass only when `theorem_code_sandbox_status` measures the legacy Theorem container marker, a container runtime marker, loopback-only networking, and no default route.
+By default, MCP `truth_harness_code_run` is still disabled. To expose it to an agent, the MCP process must have `TRUTH_HARNESS_ALLOW_CODE_RUN=1`. Unsandboxed direct execution needs the additional `TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN=1` escape hatch; otherwise agents should set `policy.requireSandbox: true`. In the CLI/MCP Docker no-network services, `policy.requireSandbox: true` can pass only when `truth_harness_code_sandbox_status` measures the Truth Harness container marker, a container runtime marker, loopback-only networking, and no default route.
 
 ## What Is Isolated
 
-- The dev image runs as an unprivileged `theorem` user.
+- The dev image runs as an unprivileged `truth` user.
 - CLI and MCP compose services use `network_mode: "none"` so normal CLI, MCP, test, and proof runs cannot reach the network from inside the container.
 - Compose drops Linux capabilities, sets `no-new-privileges:true`, and caps process count for each service.
-- `theorem code sandbox-status --json` can record the CLI/MCP no-network services as a measured `container` provider when the runtime has only loopback networking and no default route.
-- The web compose service publishes `127.0.0.1:4180` for the browser and is not a code sandbox. Its local API currently creates receipts and claim-ledger records through `@theorem-workbench/core` without hosted model calls.
-- Node dependencies live in the `theorem_node_modules` Docker volume.
-- npm cache lives in the `theorem_npm_cache` Docker volume.
+- `truth-harness code sandbox-status --json` can record the CLI/MCP no-network services as a measured `container` provider when the runtime has only loopback networking and no default route.
+- The web compose service publishes `127.0.0.1:4180` for the browser and is not a code sandbox. Its local API currently creates receipts and claim-ledger records through `@truth-harness/core` without hosted model calls.
+- Node dependencies live in the `truth_harness_node_modules` Docker volume.
+- npm cache lives in the `truth_harness_npm_cache` Docker volume.
 - Python, `sympy==1.14.0`, Maxima through `maxima-sage`, and Z3 are installed inside the image.
-- `THEOREM_MAXIMA=maxima-sage` and `THEOREM_Z3=z3` are set for compose services so local CAS and SMT probes use the containerized solvers.
+- `TRUTH_HARNESS_MAXIMA=maxima-sage` and `TRUTH_HARNESS_Z3=z3` are set for compose services so local CAS and SMT probes use the containerized solvers.
 
 ## What Is Not Isolated
 
-- The compose dev services bind-mount the repository at `/workspace`, so commands can read and write project files, generated `dist/` outputs, receipts, and the local `.theorem-workbench/` store.
+- The compose dev services bind-mount the repository at `/workspace`, so commands can read and write project files, generated `dist/` outputs, receipts, and the local `.truth-harness/` store.
 - The measured Docker provider attests the current container network namespace, not mathematical truth, code correctness, medical/scientific validity, or safety.
 - Loopback remains available inside the container. The measurement means no non-loopback interface/default route was observed.
 - Docker does not make AI-generated code safe. Keep executable allowlists narrow, prefer `--require-sandbox` for risky workflows, and review any command before running it.

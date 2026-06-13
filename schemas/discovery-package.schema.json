@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/discovery-package.schema.json",
-  "title": "Theorem Workbench Discovery Package",
+  "$id": "https://truth-harness.local/schemas/discovery-package.schema.json",
+  "title": "Truth Harness Discovery Package",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -17,7 +17,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.discovery-package.v0"
+      "const": "truth-harness.discovery-package.v0"
     },
     "packageId": {
       "type": "string",

@@ -3,94 +3,94 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
 import {
-  handleTheoremAsk,
-  handleTheoremBenchmarkCompare,
-  handleTheoremBenchmarkList,
-  handleTheoremBenchmarkRun,
-  handleTheoremCasBackends,
-  handleTheoremCasCheck,
-  handleTheoremCasList,
-  theoremBenchmarkCompareOutputFailsGate,
-  theoremBenchmarkRunOutputFailsGate,
-  handleTheoremClaimAdd,
-  handleTheoremClaimChart,
-  handleTheoremClaimChartList,
-  handleTheoremClaimList,
-  handleTheoremClaimReview,
-  handleTheoremClaimShow,
-  handleTheoremCodeRun,
-  handleTheoremCodeRunList,
-  handleTheoremCodeSandboxStatus,
-  handleTheoremDiscoveryPackage,
-  handleTheoremEngineManifest,
-  handleTheoremEvidenceAudit,
-  handleTheoremEvidenceAuditList,
-  handleTheoremExpertReviewList,
-  handleTheoremExpertReviewLog,
-  handleTheoremExperimentList,
-  handleTheoremExperimentLog,
-  handleTheoremExternalDisclosureList,
-  handleTheoremExternalDisclosureLog,
-  handleTheoremInventionList,
-  handleTheoremInventionLog,
-  handleTheoremLiteratureList,
-  handleTheoremLiteratureLog,
-  handleTheoremModelContextList,
-  handleTheoremModelContextPrepare,
-  handleTheoremNotebookRunList,
-  handleTheoremNotebookRunLog,
-  handleTheoremProofBackends,
-  handleTheoremProofCheck,
-  handleTheoremProofList,
-  handleTheoremRenderReceipt,
-  handleTheoremReplay,
-  handleTheoremResearchSessionCheckpoint,
-  handleTheoremResearchSessionList,
-  handleTheoremResearchSessionStart,
-  handleTheoremRouteList,
-  handleTheoremRouteShow,
-  handleTheoremRouteSatisfy,
-  handleTheoremSimulationList,
-  handleTheoremSimulationLog,
-  handleTheoremSmtBackends,
-  handleTheoremSmtCheck,
-  handleTheoremSmtList,
-  handleTheoremSmtSolve,
-  handleTheoremSourceCite,
-  handleTheoremSourceIngest,
-  handleTheoremSourceSearch,
-  handleTheoremValidationPlan,
-  handleTheoremValidationPlanList,
-  handleTheoremVaultList,
-  handleTheoremVaultSeal,
-  handleTheoremVaultVerify,
-  handleTheoremVerify,
-  handleTheoremWorkspaceInit,
-  handleTheoremWorkspaceRepair,
-  handleTheoremWorkspaceSnapshot,
-  handleTheoremWorkspaceSnapshotList,
-  handleTheoremWorkspaceSnapshotVerify,
-  handleTheoremWorkspaceStatus,
-  handleTheoremWorkspaceValidate,
+  handleTruthHarnessAsk,
+  handleTruthHarnessBenchmarkCompare,
+  handleTruthHarnessBenchmarkList,
+  handleTruthHarnessBenchmarkRun,
+  handleTruthHarnessCasBackends,
+  handleTruthHarnessCasCheck,
+  handleTruthHarnessCasList,
+  truthHarnessBenchmarkCompareOutputFailsGate,
+  truthHarnessBenchmarkRunOutputFailsGate,
+  handleTruthHarnessClaimAdd,
+  handleTruthHarnessClaimChart,
+  handleTruthHarnessClaimChartList,
+  handleTruthHarnessClaimList,
+  handleTruthHarnessClaimReview,
+  handleTruthHarnessClaimShow,
+  handleTruthHarnessCodeRun,
+  handleTruthHarnessCodeRunList,
+  handleTruthHarnessCodeSandboxStatus,
+  handleTruthHarnessDiscoveryPackage,
+  handleTruthHarnessEngineManifest,
+  handleTruthHarnessEvidenceAudit,
+  handleTruthHarnessEvidenceAuditList,
+  handleTruthHarnessExpertReviewList,
+  handleTruthHarnessExpertReviewLog,
+  handleTruthHarnessExperimentList,
+  handleTruthHarnessExperimentLog,
+  handleTruthHarnessExternalDisclosureList,
+  handleTruthHarnessExternalDisclosureLog,
+  handleTruthHarnessInventionList,
+  handleTruthHarnessInventionLog,
+  handleTruthHarnessLiteratureList,
+  handleTruthHarnessLiteratureLog,
+  handleTruthHarnessModelContextList,
+  handleTruthHarnessModelContextPrepare,
+  handleTruthHarnessNotebookRunList,
+  handleTruthHarnessNotebookRunLog,
+  handleTruthHarnessProofBackends,
+  handleTruthHarnessProofCheck,
+  handleTruthHarnessProofList,
+  handleTruthHarnessRenderReceipt,
+  handleTruthHarnessReplay,
+  handleTruthHarnessResearchSessionCheckpoint,
+  handleTruthHarnessResearchSessionList,
+  handleTruthHarnessResearchSessionStart,
+  handleTruthHarnessRouteList,
+  handleTruthHarnessRouteShow,
+  handleTruthHarnessRouteSatisfy,
+  handleTruthHarnessSimulationList,
+  handleTruthHarnessSimulationLog,
+  handleTruthHarnessSmtBackends,
+  handleTruthHarnessSmtCheck,
+  handleTruthHarnessSmtList,
+  handleTruthHarnessSmtSolve,
+  handleTruthHarnessSourceCite,
+  handleTruthHarnessSourceIngest,
+  handleTruthHarnessSourceSearch,
+  handleTruthHarnessValidationPlan,
+  handleTruthHarnessValidationPlanList,
+  handleTruthHarnessVaultList,
+  handleTruthHarnessVaultSeal,
+  handleTruthHarnessVaultVerify,
+  handleTruthHarnessVerify,
+  handleTruthHarnessWorkspaceInit,
+  handleTruthHarnessWorkspaceRepair,
+  handleTruthHarnessWorkspaceSnapshot,
+  handleTruthHarnessWorkspaceSnapshotList,
+  handleTruthHarnessWorkspaceSnapshotVerify,
+  handleTruthHarnessWorkspaceStatus,
+  handleTruthHarnessWorkspaceValidate,
   toolJson
 } from "./tools.js";
 
-export function createTheoremMcpServer(): McpServer {
+export function createTruthHarnessMcpServer(): McpServer {
   const server = new McpServer(
     {
-      name: "theorem-workbench",
+      name: "truth-harness",
       version: "0.0.0"
     },
     {
       instructions:
-        "Use Theorem Workbench to create replayable proof receipts, search local sources, and maintain local discovery logs. Do not treat unverified outputs, retrieved chunks, or computational hypotheses as proved."
+        "Use Truth Harness to create replayable proof receipts, search local sources, and maintain local discovery logs. Do not treat unverified outputs, retrieved chunks, or computational hypotheses as proved."
     }
   );
 
   server.registerTool(
-    "theorem_ask",
+    "truth_harness_ask",
     {
-      title: "Create Theorem Receipt",
+      title: "Create Truth Harness Receipt",
       description:
         "Create a proof receipt for a math prompt with trust labels, evidence graph nodes, artifacts, and replay command.",
       inputSchema: {
@@ -106,13 +106,13 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ problem, strict }) => {
-      const result = handleTheoremAsk({ problem, strict });
+      const result = handleTruthHarnessAsk({ problem, strict });
       return toolJson(result, { isError: result.error });
     }
   );
 
   server.registerTool(
-    "theorem_verify",
+    "truth_harness_verify",
     {
       title: "Route and Verify Math Claim",
       description:
@@ -126,7 +126,7 @@ export function createTheoremMcpServer(): McpServer {
         write: z
           .boolean()
           .optional()
-          .describe("When true, write JSON and Markdown into .theorem-workbench/routes."),
+          .describe("When true, write JSON and Markdown into .truth-harness/routes."),
         strict: z
           .boolean()
           .optional()
@@ -157,33 +157,33 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async (input) => {
-      const result = await handleTheoremVerify(input);
+      const result = await handleTruthHarnessVerify(input);
       return toolJson(result, { isError: result.error });
     }
   );
 
   server.registerTool(
-    "theorem_route_list",
+    "truth_harness_route_list",
     {
       title: "List Verifier Routes",
       description:
-        "List local theorem.verifier-route.v0 artifacts with route ids, trust labels, receipt ids, gaps, and paths agents can cite later.",
+        "List local truth-harness.verifier-route.v0 artifacts with route ids, trust labels, receipt ids, gaps, and paths agents can cite later.",
       inputSchema: {
         workspacePath: z
           .string()
           .optional()
-          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root.")
+          .describe("Workspace root containing .truth-harness. Defaults to the MCP workspace root.")
       },
       annotations: {
         readOnlyHint: true,
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremRouteList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessRouteList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_route_show",
+    "truth_harness_route_show",
     {
       title: "Show Verifier Route",
       description:
@@ -192,7 +192,7 @@ export function createTheoremMcpServer(): McpServer {
         workspacePath: z
           .string()
           .optional()
-          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root."),
+          .describe("Workspace root containing .truth-harness. Defaults to the MCP workspace root."),
         routeRef: z.string().min(1).describe("Route id such as route_<hash> or workspace-local JSON path.")
       },
       annotations: {
@@ -200,11 +200,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath, routeRef }) => toolJson(await handleTheoremRouteShow({ workspacePath, routeRef }))
+    async ({ workspacePath, routeRef }) => toolJson(await handleTruthHarnessRouteShow({ workspacePath, routeRef }))
   );
 
   server.registerTool(
-    "theorem_route_satisfy",
+    "truth_harness_route_satisfy",
     {
       title: "Satisfy Verifier Route Obligation",
       description:
@@ -213,7 +213,7 @@ export function createTheoremMcpServer(): McpServer {
         workspacePath: z
           .string()
           .optional()
-          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root."),
+          .describe("Workspace root containing .truth-harness. Defaults to the MCP workspace root."),
         routeRef: z.string().min(1).describe("Route id such as route_<hash> or workspace-local JSON path."),
         obligationId: z.string().regex(/^obl_[a-f0-9]{16}$/u).describe("Proof obligation id to satisfy."),
         evidenceRef: z
@@ -222,7 +222,7 @@ export function createTheoremMcpServer(): McpServer {
             ref: z.string().min(1),
             summary: z.string().optional()
           })
-          .describe("Local evidence artifact ref, such as { kind: 'proof', ref: '.theorem-workbench/proofs/check.json' }.")
+          .describe("Local evidence artifact ref, such as { kind: 'proof', ref: '.truth-harness/proofs/check.json' }.")
       },
       annotations: {
         readOnlyHint: false,
@@ -230,7 +230,7 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ workspacePath, routeRef, obligationId, evidenceRef }) =>
-      toolJson(await handleTheoremRouteSatisfy({ workspacePath, routeRef, obligationId, evidenceRef }))
+      toolJson(await handleTruthHarnessRouteSatisfy({ workspacePath, routeRef, obligationId, evidenceRef }))
   );
 
   const claimTrustSchema = z.enum([
@@ -296,7 +296,7 @@ export function createTheoremMcpServer(): McpServer {
   });
 
   server.registerTool(
-    "theorem_claim_add",
+    "truth_harness_claim_add",
     {
       title: "Add Claim Ledger Record",
       description:
@@ -326,11 +326,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremClaimAdd(input))
+    async (input) => toolJson(await handleTruthHarnessClaimAdd(input))
   );
 
   server.registerTool(
-    "theorem_claim_list",
+    "truth_harness_claim_list",
     {
       title: "List Claim Ledger",
       description:
@@ -350,11 +350,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremClaimList(input))
+    async (input) => toolJson(await handleTruthHarnessClaimList(input))
   );
 
   server.registerTool(
-    "theorem_claim_show",
+    "truth_harness_claim_show",
     {
       title: "Show Claim Ledger Record",
       description:
@@ -371,11 +371,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremClaimShow(input))
+    async (input) => toolJson(await handleTruthHarnessClaimShow(input))
   );
 
   server.registerTool(
-    "theorem_claim_review",
+    "truth_harness_claim_review",
     {
       title: "Review Claim Readiness",
       description:
@@ -392,13 +392,13 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremClaimReview(input))
+    async (input) => toolJson(await handleTruthHarnessClaimReview(input))
   );
 
   server.registerTool(
-    "theorem_benchmark_run",
+    "truth_harness_benchmark_run",
     {
-      title: "Run Theorem Benchmark",
+      title: "Run Truth Harness Benchmark",
       description:
         "Run a benchmark suite JSON file and return trust accuracy plus per-task receipt summaries.",
       inputSchema: {
@@ -413,7 +413,7 @@ export function createTheoremMcpServer(): McpServer {
         write: z
           .boolean()
           .optional()
-          .describe("When true, write JSON and Markdown into .theorem-workbench/benchmarks. Defaults to false."),
+          .describe("When true, write JSON and Markdown into .truth-harness/benchmarks. Defaults to false."),
         failOnFailures: z
           .boolean()
           .optional()
@@ -425,19 +425,19 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ suitePath, workspacePath, write, failOnFailures }) => {
-      const result = await handleTheoremBenchmarkRun({ suitePath, workspacePath, write, failOnFailures });
+      const result = await handleTruthHarnessBenchmarkRun({ suitePath, workspacePath, write, failOnFailures });
       return toolJson(result, {
-        isError: failOnFailures === true && theoremBenchmarkRunOutputFailsGate(result)
+        isError: failOnFailures === true && truthHarnessBenchmarkRunOutputFailsGate(result)
       });
     }
   );
 
   server.registerTool(
-    "theorem_benchmark_compare",
+    "truth_harness_benchmark_compare",
     {
-      title: "Compare Theorem Benchmarks",
+      title: "Compare Truth Harness Benchmarks",
       description:
-        "Compare two theorem.benchmark-run.v0 records and return regressions, improvements, trust-label changes, and suite drift.",
+        "Compare two truth-harness.benchmark-run.v0 records and return regressions, improvements, trust-label changes, and suite drift.",
       inputSchema: {
         baselinePath: z.string().describe("Baseline benchmark-run JSON path under the current workspace."),
         currentPath: z.string().describe("Current benchmark-run JSON path under the current workspace."),
@@ -448,7 +448,7 @@ export function createTheoremMcpServer(): McpServer {
         write: z
           .boolean()
           .optional()
-          .describe("When true, write JSON and Markdown into .theorem-workbench/benchmarks. Defaults to false."),
+          .describe("When true, write JSON and Markdown into .truth-harness/benchmarks. Defaults to false."),
         failOnRegression: z
           .boolean()
           .optional()
@@ -460,7 +460,7 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ baselinePath, currentPath, workspacePath, write, failOnRegression }) => {
-      const result = await handleTheoremBenchmarkCompare({
+      const result = await handleTruthHarnessBenchmarkCompare({
         baselinePath,
         currentPath,
         workspacePath,
@@ -468,33 +468,33 @@ export function createTheoremMcpServer(): McpServer {
         failOnRegression
       });
       return toolJson(result, {
-        isError: failOnRegression === true && theoremBenchmarkCompareOutputFailsGate(result)
+        isError: failOnRegression === true && truthHarnessBenchmarkCompareOutputFailsGate(result)
       });
     }
   );
 
   server.registerTool(
-    "theorem_benchmark_list",
+    "truth_harness_benchmark_list",
     {
-      title: "List Theorem Benchmarks",
+      title: "List Truth Harness Benchmarks",
       description:
         "List local benchmark run and comparison artifacts with paths agents can reuse for comparisons and evidence refs.",
       inputSchema: {
         workspacePath: z
           .string()
           .optional()
-          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root.")
+          .describe("Workspace root containing .truth-harness. Defaults to the MCP workspace root.")
       },
       annotations: {
         readOnlyHint: true,
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremBenchmarkList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessBenchmarkList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_cas_backends",
+    "truth_harness_cas_backends",
     {
       title: "Probe CAS Backends",
       description:
@@ -503,7 +503,7 @@ export function createTheoremMcpServer(): McpServer {
         maximaCommand: z
           .string()
           .optional()
-          .describe("Maxima executable path or command. Defaults to THEOREM_MAXIMA or maxima."),
+          .describe("Maxima executable path or command. Defaults to TRUTH_HARNESS_MAXIMA or maxima."),
         timeoutMs: z
           .number()
           .int()
@@ -517,15 +517,15 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ maximaCommand, timeoutMs }) => toolJson(handleTheoremCasBackends({ maximaCommand, timeoutMs }))
+    async ({ maximaCommand, timeoutMs }) => toolJson(handleTruthHarnessCasBackends({ maximaCommand, timeoutMs }))
   );
 
   server.registerTool(
-    "theorem_cas_check",
+    "truth_harness_cas_check",
     {
       title: "Check Symbolic CAS Result",
       description:
-        "Run a local Maxima symbolic equality check for a concrete expression/result pair and optionally write a theorem.cas-check.v0 record. A passing CAS check can support `cross-checked`, never `proved`.",
+        "Run a local Maxima symbolic equality check for a concrete expression/result pair and optionally write a truth-harness.cas-check.v0 record. A passing CAS check can support `cross-checked`, never `proved`.",
       inputSchema: {
         operation: z
           .enum(["simplify", "factor", "expand", "differentiate", "integrate"])
@@ -540,7 +540,7 @@ export function createTheoremMcpServer(): McpServer {
         maximaCommand: z
           .string()
           .optional()
-          .describe("Maxima executable path or command. Defaults to THEOREM_MAXIMA or maxima."),
+          .describe("Maxima executable path or command. Defaults to TRUTH_HARNESS_MAXIMA or maxima."),
         timeoutMs: z
           .number()
           .int()
@@ -551,7 +551,7 @@ export function createTheoremMcpServer(): McpServer {
         write: z
           .boolean()
           .optional()
-          .describe("When true, write JSON and Markdown into .theorem-workbench/cas. Defaults to false."),
+          .describe("When true, write JSON and Markdown into .truth-harness/cas. Defaults to false."),
         failOnUnverified: z
           .boolean()
           .optional()
@@ -563,37 +563,37 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async (input) => {
-      const result = await handleTheoremCasCheck(input);
+      const result = await handleTruthHarnessCasCheck(input);
       return toolJson(result, { isError: result.error });
     }
   );
 
   server.registerTool(
-    "theorem_cas_list",
+    "truth_harness_cas_list",
     {
       title: "List CAS Checks",
       description:
-        "List local theorem.cas-check.v0 artifacts with paths agents can reuse for route obligations, claim ledger evidence refs, audits, and validation plans.",
+        "List local truth-harness.cas-check.v0 artifacts with paths agents can reuse for route obligations, claim ledger evidence refs, audits, and validation plans.",
       inputSchema: {
         workspacePath: z
           .string()
           .optional()
-          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root.")
+          .describe("Workspace root containing .truth-harness. Defaults to the MCP workspace root.")
       },
       annotations: {
         readOnlyHint: true,
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremCasList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessCasList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_engine_manifest",
+    "truth_harness_engine_manifest",
     {
       title: "Engine Capability Manifest",
       description:
-        "Return the local Theorem engine manifest: native kernels, external adapters, safety boundaries, planned engines, and which trust labels each can mint after concrete evidence runs.",
+        "Return the local Truth Harness engine manifest: native kernels, external adapters, safety boundaries, planned engines, and which trust labels each can mint after concrete evidence runs.",
       inputSchema: {
         maximaCommand: z
           .string()
@@ -620,11 +620,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(handleTheoremEngineManifest(input))
+    async (input) => toolJson(handleTruthHarnessEngineManifest(input))
   );
 
   server.registerTool(
-    "theorem_proof_backends",
+    "truth_harness_proof_backends",
     {
       title: "Probe Proof Backends",
       description:
@@ -643,11 +643,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ timeoutMs }) => toolJson(handleTheoremProofBackends({ timeoutMs }))
+    async ({ timeoutMs }) => toolJson(handleTruthHarnessProofBackends({ timeoutMs }))
   );
 
   server.registerTool(
-    "theorem_proof_check",
+    "truth_harness_proof_check",
     {
       title: "Check Lean Proof Artifact",
       description:
@@ -658,7 +658,7 @@ export function createTheoremMcpServer(): McpServer {
           .string()
           .optional()
           .describe("Workspace root for writing proof-check records. Defaults to the MCP workspace root."),
-        theoremName: z.string().optional().describe("Optional theorem or declaration name represented by the source file."),
+        declarationName: z.string().optional().describe("Optional formal declaration name represented by the source file."),
         timeoutMs: z
           .number()
           .int()
@@ -669,7 +669,7 @@ export function createTheoremMcpServer(): McpServer {
         write: z
           .boolean()
           .optional()
-          .describe("When true, write JSON and Markdown into .theorem-workbench/proofs. Defaults to false."),
+          .describe("When true, write JSON and Markdown into .truth-harness/proofs. Defaults to false."),
         failOnUnproved: z
           .boolean()
           .optional()
@@ -680,11 +680,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ sourcePath, workspacePath, theoremName, timeoutMs, write, failOnUnproved }) => {
-      const result = await handleTheoremProofCheck({
+    async ({ sourcePath, workspacePath, declarationName, timeoutMs, write, failOnUnproved }) => {
+      const result = await handleTruthHarnessProofCheck({
         sourcePath,
         workspacePath,
-        theoremName,
+        declarationName,
         timeoutMs,
         write,
         failOnUnproved
@@ -694,27 +694,27 @@ export function createTheoremMcpServer(): McpServer {
   );
 
   server.registerTool(
-    "theorem_proof_list",
+    "truth_harness_proof_list",
     {
       title: "List Lean Proof Checks",
       description:
-        "List local theorem.proof-check.v0 artifacts with paths agents can reuse for evidence refs, audits, and validation plans.",
+        "List local truth-harness.proof-check.v0 artifacts with paths agents can reuse for evidence refs, audits, and validation plans.",
       inputSchema: {
         workspacePath: z
           .string()
           .optional()
-          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root.")
+          .describe("Workspace root containing .truth-harness. Defaults to the MCP workspace root.")
       },
       annotations: {
         readOnlyHint: true,
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremProofList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessProofList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_smt_backends",
+    "truth_harness_smt_backends",
     {
       title: "Probe SMT Solver Backends",
       description:
@@ -723,7 +723,7 @@ export function createTheoremMcpServer(): McpServer {
         z3Command: z
           .string()
           .optional()
-          .describe("Z3 executable path or command. Defaults to THEOREM_Z3 or z3."),
+          .describe("Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3."),
         timeoutMs: z
           .number()
           .int()
@@ -737,15 +737,15 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ z3Command, timeoutMs }) => toolJson(handleTheoremSmtBackends({ z3Command, timeoutMs }))
+    async ({ z3Command, timeoutMs }) => toolJson(handleTruthHarnessSmtBackends({ z3Command, timeoutMs }))
   );
 
   server.registerTool(
-    "theorem_smt_check",
+    "truth_harness_smt_check",
     {
       title: "Check SMT-LIB Artifact",
       description:
-        "Run Z3 on a workspace-local SMT-LIB artifact and optionally write a local theorem.smt-check.v0 record.",
+        "Run Z3 on a workspace-local SMT-LIB artifact and optionally write a local truth-harness.smt-check.v0 record.",
       inputSchema: {
         sourcePath: z.string().min(1).describe("Workspace-local SMT-LIB source file to check."),
         workspacePath: z
@@ -756,7 +756,7 @@ export function createTheoremMcpServer(): McpServer {
         z3Command: z
           .string()
           .optional()
-          .describe("Z3 executable path or command. Defaults to THEOREM_Z3 or z3."),
+          .describe("Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3."),
         timeoutMs: z
           .number()
           .int()
@@ -767,7 +767,7 @@ export function createTheoremMcpServer(): McpServer {
         write: z
           .boolean()
           .optional()
-          .describe("When true, write JSON and Markdown into .theorem-workbench/smt. Defaults to false."),
+          .describe("When true, write JSON and Markdown into .truth-harness/smt. Defaults to false."),
         failOnUnverified: z
           .boolean()
           .optional()
@@ -779,7 +779,7 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ sourcePath, workspacePath, queryName, z3Command, timeoutMs, write, failOnUnverified }) => {
-      const result = await handleTheoremSmtCheck({
+      const result = await handleTruthHarnessSmtCheck({
         sourcePath,
         workspacePath,
         queryName,
@@ -793,27 +793,27 @@ export function createTheoremMcpServer(): McpServer {
   );
 
   server.registerTool(
-    "theorem_smt_list",
+    "truth_harness_smt_list",
     {
       title: "List SMT Checks",
       description:
-        "List local theorem.smt-check.v0 artifacts with paths agents can reuse for evidence refs, audits, and validation plans.",
+        "List local truth-harness.smt-check.v0 artifacts with paths agents can reuse for evidence refs, audits, and validation plans.",
       inputSchema: {
         workspacePath: z
           .string()
           .optional()
-          .describe("Workspace root containing .theorem-workbench. Defaults to the MCP workspace root.")
+          .describe("Workspace root containing .truth-harness. Defaults to the MCP workspace root.")
       },
       annotations: {
         readOnlyHint: true,
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremSmtList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessSmtList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_smt_solve",
+    "truth_harness_smt_solve",
     {
       title: "Generate And Check SMT Problem",
       description:
@@ -836,7 +836,7 @@ export function createTheoremMcpServer(): McpServer {
         z3Command: z
           .string()
           .optional()
-          .describe("Z3 executable path or command. Defaults to THEOREM_Z3 or z3."),
+          .describe("Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3."),
         timeoutMs: z
           .number()
           .int()
@@ -855,7 +855,7 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ workspacePath, queryName, integerVariables, constraints, includeModel, z3Command, timeoutMs, failOnUnverified }) => {
-      const result = await handleTheoremSmtSolve({
+      const result = await handleTruthHarnessSmtSolve({
         workspacePath,
         queryName,
         integerVariables,
@@ -870,11 +870,11 @@ export function createTheoremMcpServer(): McpServer {
   );
 
   server.registerTool(
-    "theorem_workspace_init",
+    "truth_harness_workspace_init",
     {
       title: "Initialize Local Workspace",
       description:
-        "Initialize a private .theorem-workbench project store under the current workspace or a workspace-local subdirectory.",
+        "Initialize a private .truth-harness project store under the current workspace or a workspace-local subdirectory.",
       inputSchema: {
         workspacePath: z
           .string()
@@ -887,15 +887,15 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath, name }) => toolJson(await handleTheoremWorkspaceInit({ workspacePath, name }))
+    async ({ workspacePath, name }) => toolJson(await handleTruthHarnessWorkspaceInit({ workspacePath, name }))
   );
 
   server.registerTool(
-    "theorem_workspace_status",
+    "truth_harness_workspace_status",
     {
       title: "Check Local Workspace",
       description:
-        "Check whether a private Theorem Workbench local project store exists and whether required directories are present.",
+        "Check whether a private Truth Harness local project store exists and whether required directories are present.",
       inputSchema: {
         workspacePath: z
           .string()
@@ -907,11 +907,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremWorkspaceStatus({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceStatus({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_workspace_repair",
+    "truth_harness_workspace_repair",
     {
       title: "Repair Local Workspace",
       description:
@@ -927,11 +927,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremWorkspaceRepair({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceRepair({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_workspace_validate",
+    "truth_harness_workspace_validate",
     {
       title: "Validate Workspace Evidence",
       description:
@@ -947,15 +947,15 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremWorkspaceValidate({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceValidate({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_workspace_snapshot",
+    "truth_harness_workspace_snapshot",
     {
       title: "Write Workspace Snapshot",
       description:
-        "Write a portable local provenance snapshot of .theorem-workbench artifacts with SHA-256 hashes for drift detection.",
+        "Write a portable local provenance snapshot of .truth-harness artifacts with SHA-256 hashes for drift detection.",
       inputSchema: {
         workspacePath: z
           .string()
@@ -967,11 +967,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremWorkspaceSnapshot({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceSnapshot({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_workspace_snapshot_list",
+    "truth_harness_workspace_snapshot_list",
     {
       title: "List Workspace Snapshots",
       description:
@@ -987,11 +987,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremWorkspaceSnapshotList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceSnapshotList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_workspace_snapshot_verify",
+    "truth_harness_workspace_snapshot_verify",
     {
       title: "Verify Workspace Snapshot",
       description:
@@ -1009,11 +1009,11 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ workspacePath, snapshotRef }) =>
-      toolJson(await handleTheoremWorkspaceSnapshotVerify({ workspacePath, snapshotRef }))
+      toolJson(await handleTruthHarnessWorkspaceSnapshotVerify({ workspacePath, snapshotRef }))
   );
 
   server.registerTool(
-    "theorem_source_ingest",
+    "truth_harness_source_ingest",
     {
       title: "Ingest Local Sources",
       description:
@@ -1030,11 +1030,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ paths, workspacePath }) => toolJson(await handleTheoremSourceIngest({ paths, workspacePath }))
+    async ({ paths, workspacePath }) => toolJson(await handleTruthHarnessSourceIngest({ paths, workspacePath }))
   );
 
   server.registerTool(
-    "theorem_source_search",
+    "truth_harness_source_search",
     {
       title: "Search Local Sources",
       description:
@@ -1053,11 +1053,11 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ query, workspacePath, limit }) =>
-      toolJson(await handleTheoremSourceSearch({ query, workspacePath, limit }))
+      toolJson(await handleTruthHarnessSourceSearch({ query, workspacePath, limit }))
   );
 
   server.registerTool(
-    "theorem_source_cite",
+    "truth_harness_source_cite",
     {
       title: "Create Source-Cited Receipt",
       description:
@@ -1081,7 +1081,7 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ claim, query, workspacePath, limit, strict }) => {
-      const result = await handleTheoremSourceCite({ claim, query, workspacePath, limit, strict });
+      const result = await handleTruthHarnessSourceCite({ claim, query, workspacePath, limit, strict });
       return toolJson(result, { isError: result.error });
     }
   );
@@ -1092,7 +1092,7 @@ export function createTheoremMcpServer(): McpServer {
   });
 
   server.registerTool(
-    "theorem_literature_log",
+    "truth_harness_literature_log",
     {
       title: "Log Literature Record",
       description:
@@ -1132,11 +1132,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremLiteratureLog(input))
+    async (input) => toolJson(await handleTruthHarnessLiteratureLog(input))
   );
 
   server.registerTool(
-    "theorem_literature_list",
+    "truth_harness_literature_list",
     {
       title: "List Literature Records",
       description: "List private local literature, prior-art, dataset, and database-export evidence records from the workspace.",
@@ -1151,7 +1151,7 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremLiteratureList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessLiteratureList({ workspacePath }))
   );
 
   const notebookRunValueSchema = z.object({
@@ -1162,7 +1162,7 @@ export function createTheoremMcpServer(): McpServer {
   });
 
   server.registerTool(
-    "theorem_notebook_run_log",
+    "truth_harness_notebook_run_log",
     {
       title: "Log Notebook Run",
       description:
@@ -1203,11 +1203,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremNotebookRunLog(input))
+    async (input) => toolJson(await handleTruthHarnessNotebookRunLog(input))
   );
 
   server.registerTool(
-    "theorem_notebook_run_list",
+    "truth_harness_notebook_run_list",
     {
       title: "List Notebook Runs",
       description: "List private local notebook, script, and pipeline run records from the workspace.",
@@ -1222,15 +1222,15 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremNotebookRunList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessNotebookRunList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_code_sandbox_status",
+    "truth_harness_code_sandbox_status",
     {
       title: "Check Code Sandbox",
       description:
-        "Report whether Theorem Workbench has a measured code-run sandbox available. A missing sandbox means code-run records must use networkAccess unknown.",
+        "Report whether Truth Harness has a measured code-run sandbox available. A missing sandbox means code-run records must use networkAccess unknown.",
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
@@ -1238,17 +1238,17 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async () => {
-      const result = handleTheoremCodeSandboxStatus();
+      const result = handleTruthHarnessCodeSandboxStatus();
       return toolJson(result, { isError: result.error });
     }
   );
 
   server.registerTool(
-    "theorem_code_run",
+    "truth_harness_code_run",
     {
       title: "Run Local Code",
       description:
-        "Execute a local command directly without shell interpolation under the default local execution policy, capture stdout/stderr/exit status, and write a private theorem.code-run.v0 evidence record. Disabled unless the MCP server process has THEOREM_ALLOW_CODE_RUN=1. Unsandboxed direct execution is also disabled unless policy.requireSandbox=true or the process has THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1.",
+        "Execute a local command directly without shell interpolation under the default local execution policy, capture stdout/stderr/exit status, and write a private truth-harness.code-run.v0 evidence record. Disabled unless the MCP server process has TRUTH_HARNESS_ALLOW_CODE_RUN=1. Unsandboxed direct execution is also disabled unless policy.requireSandbox=true or the process has TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN=1.",
       inputSchema: {
         workspacePath: z
           .string()
@@ -1304,7 +1304,7 @@ export function createTheoremMcpServer(): McpServer {
               .describe("Allow git mutation/network commands such as push, pull, reset, clean, or checkout.")
           })
           .optional()
-          .describe("Default-local execution policy controls. Risky categories are blocked unless explicitly allowed. Unsandboxed MCP execution also requires THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1."),
+          .describe("Default-local execution policy controls. Risky categories are blocked unless explicitly allowed. Unsandboxed MCP execution also requires TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN=1."),
         failOnNonzero: z.boolean().optional().describe("When true, mark the tool call as an error unless the command exits 0.")
       },
       annotations: {
@@ -1313,13 +1313,13 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async (input) => {
-      const result = await handleTheoremCodeRun(input);
+      const result = await handleTruthHarnessCodeRun(input);
       return toolJson(result, { isError: result.error });
     }
   );
 
   server.registerTool(
-    "theorem_code_list",
+    "truth_harness_code_list",
     {
       title: "List Code Runs",
       description: "List private local direct code execution records from the workspace.",
@@ -1334,7 +1334,7 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremCodeRunList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessCodeRunList({ workspacePath }))
   );
 
   const simulationScalarSchema = z.object({
@@ -1345,7 +1345,7 @@ export function createTheoremMcpServer(): McpServer {
   });
 
   server.registerTool(
-    "theorem_simulation_log",
+    "truth_harness_simulation_log",
     {
       title: "Write Simulation Log",
       description:
@@ -1384,11 +1384,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremSimulationLog(input))
+    async (input) => toolJson(await handleTruthHarnessSimulationLog(input))
   );
 
   server.registerTool(
-    "theorem_simulation_list",
+    "truth_harness_simulation_list",
     {
       title: "List Simulation Logs",
       description: "List private local simulation evidence records from the workspace.",
@@ -1403,7 +1403,7 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremSimulationList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessSimulationList({ workspacePath }))
   );
 
   const experimentMeasurementSchema = z.object({
@@ -1414,7 +1414,7 @@ export function createTheoremMcpServer(): McpServer {
   });
 
   server.registerTool(
-    "theorem_experiment_log",
+    "truth_harness_experiment_log",
     {
       title: "Write Experiment Log",
       description:
@@ -1457,11 +1457,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremExperimentLog(input))
+    async (input) => toolJson(await handleTruthHarnessExperimentLog(input))
   );
 
   server.registerTool(
-    "theorem_experiment_list",
+    "truth_harness_experiment_list",
     {
       title: "List Experiment Logs",
       description: "List private local experiment evidence records from the workspace.",
@@ -1476,11 +1476,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremExperimentList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessExperimentList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_vault_seal",
+    "truth_harness_vault_seal",
     {
       title: "Seal Vault File",
       description:
@@ -1496,18 +1496,18 @@ export function createTheoremMcpServer(): McpServer {
           .string()
           .regex(/^[A-Z_][A-Z0-9_]*$/)
           .optional()
-          .describe("Environment variable containing the vault key. Defaults to THEOREM_WORKBENCH_VAULT_KEY.")
+          .describe("Environment variable containing the vault key. Defaults to TRUTH_HARNESS_VAULT_KEY.")
       },
       annotations: {
         readOnlyHint: false,
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremVaultSeal(input))
+    async (input) => toolJson(await handleTruthHarnessVaultSeal(input))
   );
 
   server.registerTool(
-    "theorem_vault_list",
+    "truth_harness_vault_list",
     {
       title: "List Vault Entries",
       description: "List encrypted local vault envelopes from the workspace without decrypting plaintext.",
@@ -1522,11 +1522,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremVaultList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessVaultList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_vault_verify",
+    "truth_harness_vault_verify",
     {
       title: "Verify Vault Entry",
       description:
@@ -1541,14 +1541,14 @@ export function createTheoremMcpServer(): McpServer {
           .string()
           .regex(/^[A-Z_][A-Z0-9_]*$/)
           .optional()
-          .describe("Environment variable containing the vault key. Defaults to the entry keyRef or THEOREM_WORKBENCH_VAULT_KEY.")
+          .describe("Environment variable containing the vault key. Defaults to the entry keyRef or TRUTH_HARNESS_VAULT_KEY.")
       },
       annotations: {
         readOnlyHint: true,
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremVaultVerify(input))
+    async (input) => toolJson(await handleTruthHarnessVaultVerify(input))
   );
 
   const evidenceRefSchema = z.object({
@@ -1589,7 +1589,7 @@ export function createTheoremMcpServer(): McpServer {
   });
 
   server.registerTool(
-    "theorem_evidence_audit",
+    "truth_harness_evidence_audit",
     {
       title: "Audit Claim Evidence",
       description:
@@ -1611,11 +1611,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremEvidenceAudit(input))
+    async (input) => toolJson(await handleTruthHarnessEvidenceAudit(input))
   );
 
   server.registerTool(
-    "theorem_evidence_audit_list",
+    "truth_harness_evidence_audit_list",
     {
       title: "List Evidence Audits",
       description: "List local evidence audit records from the workspace.",
@@ -1630,7 +1630,7 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremEvidenceAuditList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessEvidenceAuditList({ workspacePath }))
   );
 
   const validationEvidenceRefSchema = z.object({
@@ -1715,7 +1715,7 @@ export function createTheoremMcpServer(): McpServer {
   });
 
   server.registerTool(
-    "theorem_validation_plan",
+    "truth_harness_validation_plan",
     {
       title: "Create Validation Plan",
       description:
@@ -1758,11 +1758,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremValidationPlan(input))
+    async (input) => toolJson(await handleTruthHarnessValidationPlan(input))
   );
 
   server.registerTool(
-    "theorem_validation_plan_list",
+    "truth_harness_validation_plan_list",
     {
       title: "List Validation Plans",
       description: "List private local validation plans from the workspace.",
@@ -1777,7 +1777,7 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremValidationPlanList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessValidationPlanList({ workspacePath }))
   );
 
   const researchEvidenceRefSchema = z.object({
@@ -1824,7 +1824,7 @@ export function createTheoremMcpServer(): McpServer {
   });
 
   server.registerTool(
-    "theorem_research_session_start",
+    "truth_harness_research_session_start",
     {
       title: "Start Research Session",
       description:
@@ -1855,11 +1855,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremResearchSessionStart(input))
+    async (input) => toolJson(await handleTruthHarnessResearchSessionStart(input))
   );
 
   server.registerTool(
-    "theorem_research_session_checkpoint",
+    "truth_harness_research_session_checkpoint",
     {
       title: "Checkpoint Research Session",
       description:
@@ -1881,11 +1881,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremResearchSessionCheckpoint(input))
+    async (input) => toolJson(await handleTruthHarnessResearchSessionCheckpoint(input))
   );
 
   server.registerTool(
-    "theorem_research_session_list",
+    "truth_harness_research_session_list",
     {
       title: "List Research Sessions",
       description: "List private local research sessions and checkpoints from the workspace.",
@@ -1900,7 +1900,7 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremResearchSessionList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessResearchSessionList({ workspacePath }))
   );
 
   const expertReviewEvidenceRefSchema = z.object({
@@ -1948,7 +1948,7 @@ export function createTheoremMcpServer(): McpServer {
   });
 
   server.registerTool(
-    "theorem_expert_review_log",
+    "truth_harness_expert_review_log",
     {
       title: "Log Expert Review",
       description:
@@ -2009,11 +2009,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremExpertReviewLog(input))
+    async (input) => toolJson(await handleTruthHarnessExpertReviewLog(input))
   );
 
   server.registerTool(
-    "theorem_expert_review_list",
+    "truth_harness_expert_review_list",
     {
       title: "List Expert Reviews",
       description: "List private local expert-review records from the workspace.",
@@ -2028,11 +2028,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremExpertReviewList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessExpertReviewList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_invention_log",
+    "truth_harness_invention_log",
     {
       title: "Write Invention Log",
       description:
@@ -2109,11 +2109,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremInventionLog(input))
+    async (input) => toolJson(await handleTruthHarnessInventionLog(input))
   );
 
   server.registerTool(
-    "theorem_invention_list",
+    "truth_harness_invention_list",
     {
       title: "List Invention Logs",
       description: "List private local invention/discovery hypothesis logs from the workspace.",
@@ -2128,11 +2128,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremInventionList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessInventionList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_discovery_package",
+    "truth_harness_discovery_package",
     {
       title: "Create Discovery Package",
       description:
@@ -2146,7 +2146,7 @@ export function createTheoremMcpServer(): McpServer {
         write: z
           .boolean()
           .optional()
-          .describe("When true, write Markdown into .theorem-workbench/findings. Defaults to false.")
+          .describe("When true, write Markdown into .truth-harness/findings. Defaults to false.")
       },
       annotations: {
         readOnlyHint: false,
@@ -2154,7 +2154,7 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ workspacePath, entryId, write }) =>
-      toolJson(await handleTheoremDiscoveryPackage({ workspacePath, entryId, write }))
+      toolJson(await handleTruthHarnessDiscoveryPackage({ workspacePath, entryId, write }))
   );
 
   const claimChartEvidenceRefSchema = z.object({
@@ -2177,7 +2177,7 @@ export function createTheoremMcpServer(): McpServer {
   });
 
   server.registerTool(
-    "theorem_claim_chart",
+    "truth_harness_claim_chart",
     {
       title: "Create Claim Chart",
       description:
@@ -2213,18 +2213,18 @@ export function createTheoremMcpServer(): McpServer {
         write: z
           .boolean()
           .optional()
-          .describe("When true, write JSON and Markdown into .theorem-workbench/patents. Defaults to false.")
+          .describe("When true, write JSON and Markdown into .truth-harness/patents. Defaults to false.")
       },
       annotations: {
         readOnlyHint: false,
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremClaimChart(input))
+    async (input) => toolJson(await handleTruthHarnessClaimChart(input))
   );
 
   server.registerTool(
-    "theorem_claim_chart_list",
+    "truth_harness_claim_chart_list",
     {
       title: "List Claim Charts",
       description: "List private local patent claim charts from the workspace.",
@@ -2239,7 +2239,7 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremClaimChartList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessClaimChartList({ workspacePath }))
   );
 
   const modelContextSectionSchema = z.object({
@@ -2249,7 +2249,7 @@ export function createTheoremMcpServer(): McpServer {
   });
 
   server.registerTool(
-    "theorem_model_context_prepare",
+    "truth_harness_model_context_prepare",
     {
       title: "Prepare Model Context",
       description:
@@ -2282,11 +2282,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremModelContextPrepare(input))
+    async (input) => toolJson(await handleTruthHarnessModelContextPrepare(input))
   );
 
   server.registerTool(
-    "theorem_model_context_list",
+    "truth_harness_model_context_list",
     {
       title: "List Model Context Packets",
       description: "List private local model-context packets from the workspace.",
@@ -2301,11 +2301,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremModelContextList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessModelContextList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_disclosure_log",
+    "truth_harness_disclosure_log",
     {
       title: "Log External Disclosure",
       description:
@@ -2339,11 +2339,11 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(await handleTheoremExternalDisclosureLog(input))
+    async (input) => toolJson(await handleTruthHarnessExternalDisclosureLog(input))
   );
 
   server.registerTool(
-    "theorem_disclosure_list",
+    "truth_harness_disclosure_list",
     {
       title: "List External Disclosures",
       description: "List private local external model/service disclosure audit records from the workspace.",
@@ -2358,13 +2358,13 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTheoremExternalDisclosureList({ workspacePath }))
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessExternalDisclosureList({ workspacePath }))
   );
 
   server.registerTool(
-    "theorem_replay",
+    "truth_harness_replay",
     {
-      title: "Replay Theorem Receipt",
+      title: "Replay Truth Harness Receipt",
       description:
         "Replay a saved receipt by JSON string or workspace-local path and report trust-critical differences.",
       inputSchema: {
@@ -2376,13 +2376,13 @@ export function createTheoremMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ receiptJson, receiptPath }) => toolJson(await handleTheoremReplay({ receiptJson, receiptPath }))
+    async ({ receiptJson, receiptPath }) => toolJson(await handleTruthHarnessReplay({ receiptJson, receiptPath }))
   );
 
   server.registerTool(
-    "theorem_render_receipt",
+    "truth_harness_render_receipt",
     {
-      title: "Render Theorem Receipt",
+      title: "Render Truth Harness Receipt",
       description:
         "Render a saved receipt JSON string or workspace-local receipt path as Markdown or HTML for reports, issues, docs, and review.",
       inputSchema: {
@@ -2396,14 +2396,14 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async ({ receiptJson, receiptPath, format }) =>
-      toolJson(await handleTheoremRenderReceipt({ receiptJson, receiptPath, format }))
+      toolJson(await handleTruthHarnessRenderReceipt({ receiptJson, receiptPath, format }))
   );
 
   return server;
 }
 
 export async function startStdioServer(): Promise<void> {
-  const server = createTheoremMcpServer();
+  const server = createTruthHarnessMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

@@ -3,7 +3,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 
-export const LOCAL_WORKSPACE_DIR = ".theorem-workbench";
+export const LOCAL_WORKSPACE_DIR = ".truth-harness";
 export const LOCAL_WORKSPACE_MANIFEST = "project.json";
 
 export type LocalWorkspaceDirectory =
@@ -34,7 +34,7 @@ export type LocalWorkspaceDirectory =
   | "routes";
 
 export interface LocalWorkspaceManifest {
-  schemaVersion: "theorem.workspace.v0";
+  schemaVersion: "truth-harness.workspace.v0";
   projectId: string;
   displayName: string;
   createdAt: string;
@@ -50,31 +50,31 @@ export interface LocalWorkspaceManifest {
 }
 
 const DEFAULT_WORKSPACE_DIRECTORIES: Record<LocalWorkspaceDirectory, string> = {
-  receipts: ".theorem-workbench/receipts",
-  claims: ".theorem-workbench/claims",
-  artifacts: ".theorem-workbench/artifacts",
-  indexes: ".theorem-workbench/indexes",
-  findings: ".theorem-workbench/findings",
-  inventions: ".theorem-workbench/inventions",
-  cas: ".theorem-workbench/cas",
-  proofs: ".theorem-workbench/proofs",
-  smt: ".theorem-workbench/smt",
-  benchmarks: ".theorem-workbench/benchmarks",
-  disclosures: ".theorem-workbench/disclosures",
-  simulations: ".theorem-workbench/simulations",
-  patents: ".theorem-workbench/patents",
-  experiments: ".theorem-workbench/experiments",
-  vault: ".theorem-workbench/vault",
-  audits: ".theorem-workbench/audits",
-  snapshots: ".theorem-workbench/snapshots",
-  sessions: ".theorem-workbench/sessions",
-  reviews: ".theorem-workbench/reviews",
-  validation: ".theorem-workbench/validation",
-  literature: ".theorem-workbench/literature",
-  "notebook-runs": ".theorem-workbench/notebook-runs",
-  "code-runs": ".theorem-workbench/code-runs",
-  "model-contexts": ".theorem-workbench/model-contexts",
-  routes: ".theorem-workbench/routes"
+  receipts: ".truth-harness/receipts",
+  claims: ".truth-harness/claims",
+  artifacts: ".truth-harness/artifacts",
+  indexes: ".truth-harness/indexes",
+  findings: ".truth-harness/findings",
+  inventions: ".truth-harness/inventions",
+  cas: ".truth-harness/cas",
+  proofs: ".truth-harness/proofs",
+  smt: ".truth-harness/smt",
+  benchmarks: ".truth-harness/benchmarks",
+  disclosures: ".truth-harness/disclosures",
+  simulations: ".truth-harness/simulations",
+  patents: ".truth-harness/patents",
+  experiments: ".truth-harness/experiments",
+  vault: ".truth-harness/vault",
+  audits: ".truth-harness/audits",
+  snapshots: ".truth-harness/snapshots",
+  sessions: ".truth-harness/sessions",
+  reviews: ".truth-harness/reviews",
+  validation: ".truth-harness/validation",
+  literature: ".truth-harness/literature",
+  "notebook-runs": ".truth-harness/notebook-runs",
+  "code-runs": ".truth-harness/code-runs",
+  "model-contexts": ".truth-harness/model-contexts",
+  routes: ".truth-harness/routes"
 };
 
 export interface LocalWorkspaceInitResult {
@@ -188,7 +188,7 @@ export async function repairLocalWorkspace(
   const existing = await tryReadManifest(manifestPath);
 
   if (!existing) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before repairing workspace storage.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before repairing workspace storage.");
   }
 
   const missingDirectoriesBefore = await missingWorkspaceDirectories(root, existing.manifest);
@@ -215,13 +215,13 @@ export async function repairLocalWorkspace(
 export function createLocalWorkspaceManifest(
   rootPath: string,
   createdAt: string,
-  displayName = "Theorem Workbench Project"
+  displayName = "Truth Harness Project"
 ): LocalWorkspaceManifest {
   const root = resolve(rootPath);
   const directories = { ...DEFAULT_WORKSPACE_DIRECTORIES };
 
   return {
-    schemaVersion: "theorem.workspace.v0",
+    schemaVersion: "truth-harness.workspace.v0",
     projectId: `tw_${stableHash({ root, createdAt }).slice(0, 16)}`,
     displayName,
     createdAt,
@@ -352,7 +352,7 @@ function workspaceDirectoryNames(): LocalWorkspaceDirectory[] {
 }
 
 function validateWorkspaceManifest(manifest: LocalWorkspaceManifest, root: string): void {
-  if (manifest.schemaVersion !== "theorem.workspace.v0") {
+  if (manifest.schemaVersion !== "truth-harness.workspace.v0") {
     throw new Error(`Unsupported workspace manifest schema: ${JSON.stringify(manifest.schemaVersion)}`);
   }
 

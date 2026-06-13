@@ -30,15 +30,15 @@ describe("evidence audits", () => {
         rootPath: root,
         claim: "This claim has no workspace."
       })
-    ).rejects.toThrow("Run `theorem workspace init`");
+    ).rejects.toThrow("Run `truth-harness workspace init`");
   });
 
   it("recognizes narrow verified math receipts without broadening the claim", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Audit Lab", now: "2026-06-08T00:00:00.000Z" });
-    await mkdir(join(root, ".theorem-workbench", "receipts"), { recursive: true });
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
     const receipt = createReceipt("for all integers n, n^2+n is even");
-    const receiptPath = join(".theorem-workbench", "receipts", "parity-check.json");
+    const receiptPath = join(".truth-harness", "receipts", "parity-check.json");
     await writeFile(join(root, receiptPath), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
 
     const audit = await createEvidenceAudit({
@@ -47,7 +47,7 @@ describe("evidence audits", () => {
       evidenceRefs: [{ kind: "receipt", ref: receiptPath }]
     });
 
-    expect(audit.schemaVersion).toBe("theorem.evidence-audit.v0");
+    expect(audit.schemaVersion).toBe("truth-harness.evidence-audit.v0");
     expect(audit.auditId).toMatch(/^audit_[a-f0-9]{16}$/);
     expect(audit.claimTypes).toContain("math");
     expect(audit.verdict.status).toBe("verified-narrow");
@@ -99,15 +99,15 @@ describe("evidence audits", () => {
     });
     const list = await listEvidenceAudits(root);
 
-    expect(written.path).toContain(join(".theorem-workbench", "audits"));
+    expect(written.path).toContain(join(".truth-harness", "audits"));
     expect(written.audit.claimTypes).toContain("biomedical");
     expect(written.audit.claimTypes).toContain("simulation");
     expect(written.audit.verdict.status).toBe("overclaimed");
     expect(written.audit.reviews[0]?.strength).toBe("computational");
     expect(written.audit.overclaimWarnings.join(" ")).toContain("Biomedical claims require expert review");
     expect(written.audit.requiredNextChecks.join(" ")).toContain("Rewrite the claim");
-    expect(report.jsonPath).toContain(join(".theorem-workbench", "audits"));
-    expect(report.markdownPath).toContain(join(".theorem-workbench", "audits"));
+    expect(report.jsonPath).toContain(join(".truth-harness", "audits"));
+    expect(report.markdownPath).toContain(join(".truth-harness", "audits"));
     expect(report.markdown).toContain("# Evidence Audit:");
     expect(report.markdown).toContain("| Verdict | `overclaimed` |");
     expect(report.markdown).toContain("This audit classifies local evidence posture.");
@@ -122,7 +122,7 @@ describe("evidence audits", () => {
     const audit = await createEvidenceAudit({
       rootPath: root,
       claim: "A missing receipt proves this claim.",
-      evidenceRefs: [{ kind: "receipt", ref: ".theorem-workbench/receipts/missing.json" }]
+      evidenceRefs: [{ kind: "receipt", ref: ".truth-harness/receipts/missing.json" }]
     });
 
     expect(audit.verdict.status).toBe("overclaimed");
@@ -134,10 +134,10 @@ describe("evidence audits", () => {
   it("rejects invalid receipt refs before they can support an audit", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);
-    await mkdir(join(root, ".theorem-workbench", "receipts"), { recursive: true });
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
     const legacyReceipt = { ...createReceipt("for all integers n, n^2+n is even") } as Record<string, unknown>;
     delete legacyReceipt.evidenceProfile;
-    const receiptPath = join(".theorem-workbench", "receipts", "legacy-receipt.json");
+    const receiptPath = join(".truth-harness", "receipts", "legacy-receipt.json");
     await writeFile(join(root, receiptPath), `${JSON.stringify(legacyReceipt, null, 2)}\n`, "utf8");
 
     const audit = await createEvidenceAudit({
@@ -190,7 +190,7 @@ describe("evidence audits", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-audit-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-audit-"));
   roots.push(root);
   return root;
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/code-run.schema.json",
-  "title": "Theorem Workbench Code Run Record",
+  "$id": "https://truth-harness.local/schemas/code-run.schema.json",
+  "title": "Truth Harness Code Run Record",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -24,7 +24,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.code-run.v0"
+      "const": "truth-harness.code-run.v0"
     },
     "runId": {
       "type": "string",

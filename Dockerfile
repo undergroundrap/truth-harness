@@ -6,31 +6,31 @@ ENV CI=true \
     NPM_CONFIG_UPDATE_NOTIFIER=false \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
-    THEOREM_WORKBENCH_CONTAINER=1 \
-    THEOREM_MAXIMA=maxima-sage \
-    THEOREM_Z3=z3 \
-    PATH="/opt/theorem-python/bin:${PATH}"
+    TRUTH_HARNESS_CONTAINER=1 \
+    TRUTH_HARNESS_MAXIMA=maxima-sage \
+    TRUTH_HARNESS_Z3=z3 \
+    PATH="/opt/truth-harness-python/bin:${PATH}"
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates maxima-sage maxima-sage-share python3 python3-pip python3-venv tini z3 \
-  && python3 -m venv /opt/theorem-python \
-  && /opt/theorem-python/bin/python -m pip install sympy==1.14.0 \
-  && useradd --create-home --uid 10001 theorem \
+  && python3 -m venv /opt/truth-harness-python \
+  && /opt/truth-harness-python/bin/python -m pip install sympy==1.14.0 \
+  && useradd --create-home --uid 10001 truth \
   && mkdir -p /workspace \
-  && chown -R theorem:theorem /workspace /home/theorem \
+  && chown -R truth:truth /workspace /home/truth \
   && rm -rf /var/lib/apt/lists/*
 
-USER theorem
+USER truth
 WORKDIR /workspace
 
-COPY --chown=theorem:theorem package.json package-lock.json ./
-COPY --chown=theorem:theorem apps/cli/package.json apps/cli/package.json
-COPY --chown=theorem:theorem packages/benchmarks/package.json packages/benchmarks/package.json
-COPY --chown=theorem:theorem packages/core/package.json packages/core/package.json
-COPY --chown=theorem:theorem packages/mcp-server/package.json packages/mcp-server/package.json
+COPY --chown=truth:truth package.json package-lock.json ./
+COPY --chown=truth:truth apps/cli/package.json apps/cli/package.json
+COPY --chown=truth:truth packages/benchmarks/package.json packages/benchmarks/package.json
+COPY --chown=truth:truth packages/core/package.json packages/core/package.json
+COPY --chown=truth:truth packages/mcp-server/package.json packages/mcp-server/package.json
 RUN npm ci
 
-COPY --chown=theorem:theorem . .
+COPY --chown=truth:truth . .
 RUN npm run build
 
 FROM base AS dev

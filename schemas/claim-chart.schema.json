@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/claim-chart.schema.json",
-  "title": "Theorem Workbench Claim Chart",
+  "$id": "https://truth-harness.local/schemas/claim-chart.schema.json",
+  "title": "Truth Harness Claim Chart",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -23,7 +23,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.claim-chart.v0"
+      "const": "truth-harness.claim-chart.v0"
     },
     "chartId": {
       "type": "string",

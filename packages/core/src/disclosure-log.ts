@@ -9,7 +9,7 @@ export const EXTERNAL_DISCLOSURE_STATUSES = ["planned", "sent", "received", "can
 export type ExternalDisclosureStatus = (typeof EXTERNAL_DISCLOSURE_STATUSES)[number];
 
 export interface ExternalDisclosureLogEntry {
-  schemaVersion: "theorem.disclosure.v0";
+  schemaVersion: "truth-harness.disclosure.v0";
   disclosureId: string;
   projectId: string;
   createdAt: string;
@@ -90,7 +90,7 @@ export async function createExternalDisclosureLogEntry(
   };
   const disclosureId = `dis_${stableHash(entryWithoutId).slice(0, 16)}`;
   const entry: ExternalDisclosureLogEntry = {
-    schemaVersion: "theorem.disclosure.v0",
+    schemaVersion: "truth-harness.disclosure.v0",
     disclosureId,
     ...entryWithoutId,
     updatedAt: createdAt,
@@ -147,14 +147,14 @@ export async function listExternalDisclosureLogEntries(rootPath: string): Promis
   );
 
   return entries
-    .filter((entry) => entry.schemaVersion === "theorem.disclosure.v0")
+    .filter((entry) => entry.schemaVersion === "truth-harness.disclosure.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing disclosure logs.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing disclosure logs.");
   }
 
   if (status.missingDirectories.length > 0) {

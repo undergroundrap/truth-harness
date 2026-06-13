@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/vault.schema.json",
-  "title": "Theorem Workbench Vault Envelope",
+  "$id": "https://truth-harness.local/schemas/vault.schema.json",
+  "title": "Truth Harness Vault Envelope",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -21,7 +21,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.vault.v0"
+      "const": "truth-harness.vault.v0"
     },
     "vaultId": {
       "type": "string",

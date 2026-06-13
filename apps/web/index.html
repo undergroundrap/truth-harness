@@ -264,7 +264,7 @@
                       <span class="mini-label">Next verifier</span>
                       <strong id="runbook-stop-rule">Run the smallest relevant verifier.</strong>
                     </div>
-                    <code id="runbook-next-command">theorem ask --json</code>
+                    <code id="runbook-next-command">truth-harness ask --json</code>
                   </section>
                   <div class="runbook-grid" aria-label="Lane work plan">
                     <section class="runbook-card runbook-card-wide">
@@ -295,15 +295,15 @@
                       </div>
                       <div class="route-pill">
                         <span>Receipt</span>
-                        <code id="route-receipt">theorem ask --json</code>
+                        <code id="route-receipt">truth-harness ask --json</code>
                       </div>
                       <div class="route-pill">
                         <span>Replay</span>
-                        <code id="route-replay">theorem replay</code>
+                        <code id="route-replay">truth-harness replay</code>
                       </div>
                       <div class="route-pill">
                         <span>Report</span>
-                        <code id="route-report">theorem render</code>
+                        <code id="route-report">truth-harness render</code>
                       </div>
                     </section>
                   </details>
@@ -322,7 +322,7 @@
                   </div>
                   <div>
                     <span class="mini-label">Next agent action</span>
-                    <code id="matrix-next-command">theorem bench run</code>
+                    <code id="matrix-next-command">truth-harness bench run</code>
                   </div>
                 </div>
                 <section class="claim-gate-card" id="claim-review-gate" aria-label="Claim review gate">
@@ -343,7 +343,7 @@
                     </section>
                     <section>
                       <h4>Agent Gate</h4>
-                      <code id="claim-review-command">theorem claim review &lt;claim_id&gt; --json</code>
+                      <code id="claim-review-command">truth-harness claim review &lt;claim_id&gt; --json</code>
                     </section>
                   </div>
                 </section>
@@ -464,6 +464,14 @@
           </section>
 
           <aside class="inspector" aria-label="Receipt inspector">
+            <section class="inspector-section branch-map-section">
+              <div class="panel-heading">
+                <h3>Branch Map</h3>
+                <span class="mini-label" id="branch-map-status">claim tree</span>
+              </div>
+              <div class="branch-map" id="branch-map" aria-label="Receipt dependency branch map"></div>
+            </section>
+
             <section class="inspector-section">
               <div class="panel-heading">
                 <h3>Receipt</h3>
@@ -578,11 +586,11 @@
             <section class="inspector-section">
               <h3>Project Store</h3>
               <dl class="key-values">
-                <div><dt>Root</dt><dd>.theorem-workbench</dd></div>
-                <div><dt>Receipts</dt><dd>.theorem-workbench/receipts</dd></div>
-                <div><dt>Sessions</dt><dd>.theorem-workbench/sessions</dd></div>
-                <div><dt>Snapshots</dt><dd>.theorem-workbench/snapshots</dd></div>
-                <div><dt>Indexes</dt><dd>.theorem-workbench/indexes</dd></div>
+                <div><dt>Root</dt><dd>.truth-harness</dd></div>
+                <div><dt>Receipts</dt><dd>.truth-harness/receipts</dd></div>
+                <div><dt>Sessions</dt><dd>.truth-harness/sessions</dd></div>
+                <div><dt>Snapshots</dt><dd>.truth-harness/snapshots</dd></div>
+                <div><dt>Indexes</dt><dd>.truth-harness/indexes</dd></div>
               </dl>
             </section>
 
@@ -593,7 +601,7 @@
 
             <section class="inspector-section">
               <h3>Replay</h3>
-              <code class="replay-command">theorem ask "compute 3 / 4 + 5 / 8" --json</code>
+              <code class="replay-command">truth-harness ask "compute 3 / 4 + 5 / 8" --json</code>
             </section>
 
             <section class="inspector-section">

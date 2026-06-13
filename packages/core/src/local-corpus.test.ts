@@ -18,7 +18,7 @@ describe("local corpus", () => {
     await writeFile(join(root, "notes.md"), "# Notes\n\nA proof receipt is replayable.", "utf8");
 
     await expect(ingestLocalCorpus({ rootPath: root, paths: ["notes.md"] })).rejects.toThrow(
-      "No Theorem workspace found"
+      "No Truth Harness workspace found"
     );
   });
 
@@ -114,7 +114,7 @@ describe("local corpus", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-corpus-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-corpus-"));
   roots.push(root);
   return root;
 }

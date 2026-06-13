@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { checkClaimFile, parseClaimBlocks, trustSatisfiesExpectation } from "./claim-file.js";
 
 describe("claim file checks", () => {
-  it("parses theorem-workbench markdown blocks", () => {
+  it("parses truth-harness markdown blocks", () => {
     const blocks = parseClaimBlocks(
       [
         "# Claims",
         "",
-        "```theorem-workbench",
+        "```truth-harness",
         "expect: exact-computed",
         "compute 3 / 4 + 5 / 8",
         "```"
@@ -28,7 +28,7 @@ describe("claim file checks", () => {
   it("passes explicit expected trust labels", () => {
     const result = checkClaimFile(
       [
-        "```theorem-workbench",
+        "```truth-harness",
         "expect: refuted",
         "for all integers n, n^2+n+1 is even",
         "```"
@@ -48,7 +48,7 @@ describe("claim file checks", () => {
 
   it("rejects unverified claims in strict mode without an explicit expectation", () => {
     const result = checkClaimFile(
-      ["```theorem-workbench", "for all integers n, 2*(n/1) is even", "```"].join("\n"),
+      ["```truth-harness", "for all integers n, 2*(n/1) is even", "```"].join("\n"),
       "claims.md"
     );
 

@@ -3,7 +3,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { parseBenchmarkSuite, runBenchmarkSuite, type BenchmarkRun } from "@theorem-workbench/benchmarks";
+import { parseBenchmarkSuite, runBenchmarkSuite, type BenchmarkRun } from "@truth-harness/benchmarks";
 import {
   benchmarkComparisonFailsGate,
   benchmarkRunFailsGate,
@@ -223,12 +223,12 @@ import {
   type WorkspaceValidation,
   type WorkspaceReview,
   type SympyOperation
-} from "@theorem-workbench/core";
+} from "@truth-harness/core";
 
 const program = new Command();
 
 program
-  .name("theorem")
+  .name("truth-harness")
   .description("Verified math for AI agents: proof receipts, exact computation, refutation, and benchmarks.")
   .version("0.0.0");
 
@@ -271,7 +271,7 @@ program
   .argument("<problem...>", "Math prompt or claim to route through local verifiers")
   .option("--json", "Print the full verifier route JSON")
   .option("--out <path>", "Write the full verifier route JSON to a file")
-  .option("--write", "Write JSON and Markdown into .theorem-workbench/routes")
+  .option("--write", "Write JSON and Markdown into .truth-harness/routes")
   .option("--workspace <path>", "Project root path for writing route artifacts", ".")
   .option("--strict", "Exit non-zero if the final receipt trust is unverified")
   .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 1500)
@@ -369,7 +369,7 @@ route
   .description("Attach accepted local evidence to a verifier-route proof obligation.")
   .argument("<route>", "Route id or workspace-local JSON path")
   .argument("<obligation>", "Proof obligation id such as obl_<hash>")
-  .requiredOption("--evidence <ref>", "Local evidence ref, such as proof:.theorem-workbench/proofs/check.json")
+  .requiredOption("--evidence <ref>", "Local evidence ref, such as proof:.truth-harness/proofs/check.json")
   .option("--workspace <path>", "Project root path", ".")
   .option("--summary <text>", "Human scope note to store beside the evidence ref")
   .option("--json", "Print the full satisfaction result JSON")
@@ -545,7 +545,7 @@ bench
   .argument("<suite>", "Path to a benchmark suite JSON file")
   .option("--json", "Print the full benchmark run JSON")
   .option("--out <path>", "Write the benchmark run JSON to a file")
-  .option("--write", "Write JSON and Markdown into .theorem-workbench/benchmarks")
+  .option("--write", "Write JSON and Markdown into .truth-harness/benchmarks")
   .option("--workspace <path>", "Project root path", ".")
   .option("--fail-on-failures", "Exit non-zero when any benchmark task fails")
   .action(async (suitePath: string, options: { json?: boolean; out?: string; write?: boolean; workspace: string; failOnFailures?: boolean }) => {
@@ -558,9 +558,9 @@ bench
           run,
           suiteDescription: suite.description,
           suitePath,
-          runnerName: "theorem-cli",
+          runnerName: "truth-harness-cli",
           runnerAdapter: "local-receipt-engine",
-          command: `theorem bench run ${quoteCommandArg(suitePath)}`,
+          command: `truth-harness bench run ${quoteCommandArg(suitePath)}`,
           workingDirectory: process.cwd()
         })
       : undefined;
@@ -585,12 +585,12 @@ bench
 
 bench
   .command("compare")
-  .description("Compare two theorem.benchmark-run.v0 records and flag regressions.")
+  .description("Compare two truth-harness.benchmark-run.v0 records and flag regressions.")
   .argument("<baseline>", "Baseline benchmark-run JSON path")
   .argument("<current>", "Current benchmark-run JSON path")
   .option("--json", "Print the full benchmark comparison JSON")
   .option("--out <path>", "Write the benchmark comparison JSON to a file")
-  .option("--write", "Write JSON and Markdown into .theorem-workbench/benchmarks")
+  .option("--write", "Write JSON and Markdown into .truth-harness/benchmarks")
   .option("--workspace <path>", "Project root path", ".")
   .option("--fail-on-regression", "Exit non-zero when the comparison is regressed or incomparable")
   .action(
@@ -704,7 +704,7 @@ program
 
 program
   .command("check")
-  .description("Check theorem-workbench fenced claim blocks in Markdown files.")
+  .description("Check truth-harness fenced claim blocks in Markdown files.")
   .argument("<files...>", "Markdown files to check")
   .option("--json", "Print the full claim check JSON")
   .action(async (files: string[], options: { json?: boolean }) => {
@@ -1372,7 +1372,7 @@ vault
   .argument("<path>", "Workspace-local file path to encrypt")
   .option("--workspace <path>", "Project root path", ".")
   .option("--label <label>", "Safe public label for the vault entry")
-  .option("--key-env <name>", "Environment variable containing the vault key", "THEOREM_WORKBENCH_VAULT_KEY")
+  .option("--key-env <name>", "Environment variable containing the vault key", "TRUTH_HARNESS_VAULT_KEY")
   .option("--json", "Print the full vault envelope JSON")
   .action(
     async (
@@ -1421,7 +1421,7 @@ vault
   .description("Decrypt a vault entry locally and report integrity metadata without printing plaintext.")
   .argument("<vault>", "Vault id or workspace-local vault envelope path")
   .option("--workspace <path>", "Project root path", ".")
-  .option("--key-env <name>", "Environment variable containing the vault key", "THEOREM_WORKBENCH_VAULT_KEY")
+  .option("--key-env <name>", "Environment variable containing the vault key", "TRUTH_HARNESS_VAULT_KEY")
   .option("--json", "Print the full verification summary JSON")
   .action(
     async (
@@ -1453,7 +1453,7 @@ vault
   .argument("<vault>", "Vault id or workspace-local vault envelope path")
   .requiredOption("--out <path>", "Output file for decrypted plaintext bytes")
   .option("--workspace <path>", "Project root path", ".")
-  .option("--key-env <name>", "Environment variable containing the vault key", "THEOREM_WORKBENCH_VAULT_KEY")
+  .option("--key-env <name>", "Environment variable containing the vault key", "TRUTH_HARNESS_VAULT_KEY")
   .option("--json", "Print the open summary JSON")
   .action(
     async (
@@ -1919,7 +1919,7 @@ invention
   .description("Render a local discovery package report for an invention log.")
   .argument("[entryId]", "Invention log entry id. Defaults to the newest entry.")
   .option("--workspace <path>", "Project root path", ".")
-  .option("--write", "Write Markdown into .theorem-workbench/findings")
+  .option("--write", "Write Markdown into .truth-harness/findings")
   .option("--json", "Print the full discovery package JSON")
   .action(
     async (
@@ -1964,7 +1964,7 @@ invention
   .option("--prior-art <note>", "Prior-art note; repeatable", collectRepeated, [])
   .option("--novelty-question <question>", "Novelty question; repeatable", collectRepeated, [])
   .option("--reduction <ref>", "Reduction-to-practice or constructive example ref; repeatable", collectRepeated, [])
-  .option("--write", "Write JSON and Markdown into .theorem-workbench/patents")
+  .option("--write", "Write JSON and Markdown into .truth-harness/patents")
   .option("--json", "Print the full claim chart JSON")
   .action(
     async (
@@ -2219,7 +2219,7 @@ const workspace = program
 
 workspace
   .command("init")
-  .description("Initialize .theorem-workbench local project storage.")
+  .description("Initialize .truth-harness local project storage.")
   .argument("[path]", "Project root path", ".")
   .option("--name <name>", "Human display name for the local workspace")
   .option("--json", "Print the full workspace init JSON")
@@ -2387,7 +2387,7 @@ cas
   .command("backends")
   .description("Probe local CAS backends without checking or upgrading a claim.")
   .option("--json", "Print the full CAS backend status JSON")
-  .option("--maxima-command <path>", "Maxima executable path or command. Defaults to THEOREM_MAXIMA or maxima.")
+  .option("--maxima-command <path>", "Maxima executable path or command. Defaults to TRUTH_HARNESS_MAXIMA or maxima.")
   .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 3000)
   .action((options: { json?: boolean; maximaCommand?: string; timeoutMs: number }) => {
     const status = getCasBackendStatus({
@@ -2412,9 +2412,9 @@ cas
   .option("--variable <name>", "Symbolic variable for differentiation/integration", "x")
   .option("--json", "Print the full CAS check JSON")
   .option("--out <path>", "Write the full CAS check JSON to a file")
-  .option("--write", "Write JSON and Markdown into .theorem-workbench/cas")
+  .option("--write", "Write JSON and Markdown into .truth-harness/cas")
   .option("--workspace <path>", "Project root path", ".")
-  .option("--maxima-command <path>", "Maxima executable path or command. Defaults to THEOREM_MAXIMA or maxima.")
+  .option("--maxima-command <path>", "Maxima executable path or command. Defaults to TRUTH_HARNESS_MAXIMA or maxima.")
   .option("--timeout-ms <ms>", "Backend probe and check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--fail-on-unverified", "Exit non-zero unless the independent CAS check passes")
   .action(
@@ -2495,7 +2495,7 @@ proof
   .command("backends")
   .description("Probe local proof-checker backends without network access.")
   .option("--json", "Print the full proof backend status JSON")
-  .option("--lean-command <path>", "Lean executable path or command. Defaults to THEOREM_LEAN or lean.")
+  .option("--lean-command <path>", "Lean executable path or command. Defaults to TRUTH_HARNESS_LEAN or lean.")
   .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 3000)
   .action((options: { json?: boolean; leanCommand?: string; timeoutMs: number }) => {
     const status = getProofBackendStatus({
@@ -2517,10 +2517,10 @@ proof
   .argument("<source>", "Lean source file to check")
   .option("--json", "Print the full proof-check JSON")
   .option("--out <path>", "Write the full proof-check JSON to a file")
-  .option("--write", "Write JSON and Markdown into .theorem-workbench/proofs")
+  .option("--write", "Write JSON and Markdown into .truth-harness/proofs")
   .option("--workspace <path>", "Project root path", ".")
-  .option("--theorem <name>", "Optional theorem or declaration name represented by the source")
-  .option("--lean-command <path>", "Lean executable path or command. Defaults to THEOREM_LEAN or lean.")
+  .option("--declaration <name>", "Optional formal declaration name represented by the source")
+  .option("--lean-command <path>", "Lean executable path or command. Defaults to TRUTH_HARNESS_LEAN or lean.")
   .option("--timeout-ms <ms>", "Backend probe and proof-check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--fail-on-unproved", "Exit non-zero unless Lean accepts the proof artifact")
   .action(
@@ -2531,7 +2531,7 @@ proof
         out?: string;
         write?: boolean;
         workspace: string;
-        theorem?: string;
+        declaration?: string;
         leanCommand?: string;
         timeoutMs: number;
         failOnUnproved?: boolean;
@@ -2541,7 +2541,7 @@ proof
         ? await writeLeanProofCheckRecord({
             rootPath: options.workspace,
             sourcePath,
-            theoremName: options.theorem,
+            declarationName: options.declaration,
             leanCommand: options.leanCommand,
             timeoutMs: options.timeoutMs
           })
@@ -2552,10 +2552,10 @@ proof
           sourcePath: resolve(sourcePath),
           sourceRef: sourcePath,
           sourceText: await readFile(resolve(sourcePath), "utf8"),
-          theoremName: options.theorem,
+          declarationName: options.declaration,
           leanCommand: options.leanCommand,
           timeoutMs: options.timeoutMs,
-          replayCommand: `theorem proof check ${quoteCommandArg(sourcePath)} --json`
+          replayCommand: `truth-harness proof check ${quoteCommandArg(sourcePath)} --json`
         });
 
       if (options.out) {
@@ -2599,7 +2599,7 @@ smt
   .command("backends")
   .description("Probe local SMT solver backends without checking a claim.")
   .option("--json", "Print the full SMT backend status JSON")
-  .option("--z3-command <path>", "Z3 executable path or command. Defaults to THEOREM_Z3 or z3.")
+  .option("--z3-command <path>", "Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3.")
   .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 3000)
   .action((options: { json?: boolean; z3Command?: string; timeoutMs: number }) => {
     const status = getSmtBackendStatus({
@@ -2621,10 +2621,10 @@ smt
   .argument("<source>", "SMT-LIB source file to check")
   .option("--json", "Print the full SMT check JSON")
   .option("--out <path>", "Write the full SMT check JSON to a file")
-  .option("--write", "Write JSON and Markdown into .theorem-workbench/smt")
+  .option("--write", "Write JSON and Markdown into .truth-harness/smt")
   .option("--workspace <path>", "Project root path", ".")
   .option("--query <name>", "Optional query or constraint-set name represented by the source")
-  .option("--z3-command <path>", "Z3 executable path or command. Defaults to THEOREM_Z3 or z3.")
+  .option("--z3-command <path>", "Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3.")
   .option("--timeout-ms <ms>", "Backend probe and SMT check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--fail-on-unverified", "Exit non-zero unless the solver returns sat or unsat")
   .action(
@@ -2659,7 +2659,7 @@ smt
           queryName: options.query,
           z3Command: options.z3Command,
           timeoutMs: options.timeoutMs,
-          replayCommand: `theorem smt check ${quoteCommandArg(sourcePath)} --json`
+          replayCommand: `truth-harness smt check ${quoteCommandArg(sourcePath)} --json`
         });
 
       if (options.out) {
@@ -2690,7 +2690,7 @@ smt
   .option("--int <name>", "Declare an integer variable. Repeat for multiple variables.", collectRepeated, [])
   .option("--constraint <expr>", "Add a constraint such as \"x + y >= 3\". Repeat for multiple constraints.", collectRepeated, [])
   .option("--model", "Append get-model after check-sat for satisfiable constraints")
-  .option("--z3-command <path>", "Z3 executable path or command. Defaults to THEOREM_Z3 or z3.")
+  .option("--z3-command <path>", "Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3.")
   .option("--timeout-ms <ms>", "Backend probe and SMT check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--fail-on-unverified", "Exit non-zero unless the solver returns sat or unsat")
   .action(
@@ -2834,7 +2834,7 @@ function parseAskArgs(tokens: string[]): { problem: string; json: boolean; out?:
 
   const problem = problemTokens.join(" ").trim();
   if (!problem) {
-    throw new Error("Missing problem. Example: theorem ask \"compute 2 + 2\"");
+    throw new Error("Missing problem. Example: truth-harness ask \"compute 2 + 2\"");
   }
 
   return { problem, json, out };
@@ -2865,7 +2865,7 @@ function parseSympyOperation(value: string): SympyOperation {
 }
 
 function printEngineManifest(manifest: EngineManifest): void {
-  console.log("Theorem engine manifest");
+  console.log("Truth Harness engine manifest");
   console.log(`Status: ${manifest.status}`);
   console.log(`Ready: ${manifest.readyCount}/${manifest.totalCount}`);
   console.log(
@@ -2936,7 +2936,7 @@ function printEngineCapabilityGroup(
 }
 
 function printCasBackendStatus(status: CasBackendStatusReport): void {
-  console.log("Theorem CAS backends");
+  console.log("Truth Harness CAS backends");
   console.log(`Local-only: ${String(status.localOnly)} (network: ${status.networkAccess})`);
   console.log(`Independent CAS backends available: ${status.casBackendsAvailable}`);
 
@@ -3004,7 +3004,7 @@ function printSymbolicCasCheck(
 }
 
 function printSymbolicCasCheckList(checks: SymbolicCasCheckSummary[]): void {
-  console.log(`Theorem CAS checks: ${checks.length}`);
+  console.log(`Truth Harness CAS checks: ${checks.length}`);
 
   for (const check of checks) {
     console.log("");
@@ -3019,7 +3019,7 @@ function printSymbolicCasCheckList(checks: SymbolicCasCheckSummary[]): void {
 }
 
 function printProofBackendStatus(status: ProofBackendStatusReport): void {
-  console.log("Theorem proof backends");
+  console.log("Truth Harness proof backends");
   console.log(`Local-only: ${String(status.localOnly)} (network: ${status.networkAccess})`);
   console.log(`Accepted proof checkers available: ${status.proofCheckersAvailable}`);
 
@@ -3059,8 +3059,8 @@ function printLeanProofCheck(
   console.log(`Trust: ${record.trust}`);
   console.log(`Backend: ${record.backend.displayName}${record.backend.version ? ` (${record.backend.version})` : ""}`);
   console.log(`Source: ${record.source.path}`);
-  if (record.source.theoremName) {
-    console.log(`Theorem: ${record.source.theoremName}`);
+  if (record.source.declarationName) {
+    console.log(`Declaration: ${record.source.declarationName}`);
   }
   console.log(`Proof-checker backed: ${String(record.proofCheckerBacked)}`);
   console.log(`Replay: ${record.replay}`);
@@ -3094,14 +3094,14 @@ function printLeanProofCheck(
 }
 
 function printLeanProofCheckList(checks: LeanProofCheckSummary[]): void {
-  console.log(`Theorem proof checks: ${checks.length}`);
+  console.log(`Truth Harness proof checks: ${checks.length}`);
 
   for (const check of checks) {
     console.log("");
     console.log(`${check.checkId} ${check.createdAt}`);
     console.log(`  Source: ${check.sourcePath}`);
-    if (check.theoremName) {
-      console.log(`  Theorem: ${check.theoremName}`);
+    if (check.declarationName) {
+      console.log(`  Declaration: ${check.declarationName}`);
     }
     console.log(`  Status: ${check.status}`);
     console.log(`  Trust: ${check.trust}`);
@@ -3111,7 +3111,7 @@ function printLeanProofCheckList(checks: LeanProofCheckSummary[]): void {
 }
 
 function printSmtBackendStatus(status: SmtBackendStatusReport): void {
-  console.log("Theorem SMT backends");
+  console.log("Truth Harness SMT backends");
   console.log(`SMT solvers available: ${status.smtSolversAvailable}`);
   console.log("");
 
@@ -3183,7 +3183,7 @@ function printSmtCheck(record: SmtCheckRecord, outPath?: string, workspaceWrite?
 }
 
 function printSmtCheckList(checks: SmtCheckSummary[]): void {
-  console.log(`Theorem SMT checks: ${checks.length}`);
+  console.log(`Truth Harness SMT checks: ${checks.length}`);
 
   for (const check of checks) {
     console.log("");
@@ -3268,7 +3268,7 @@ function formatSmtBackendStatus(status: SmtBackendStatusReport["backends"][numbe
 }
 
 function printReceipt(receipt: Receipt, outPath?: string): void {
-  console.log(`Theorem receipt ${receipt.runId}`);
+  console.log(`Truth Harness receipt ${receipt.runId}`);
   console.log(`Trust: ${receipt.trust}`);
   console.log(`Privacy: ${receipt.privacy.mode} (network: ${receipt.privacy.networkAccess})`);
   console.log(`Summary: ${receipt.summary}`);
@@ -3296,7 +3296,7 @@ function printReceipt(receipt: Receipt, outPath?: string): void {
 
 function printVerifierRoute(route: VerifierRoute, outPath?: string, workspaceWrite?: VerifierRouteWriteResult): void {
   const readiness = verifierRouteReadiness(route);
-  console.log(`Theorem verifier route ${route.routeId}`);
+  console.log(`Truth Harness verifier route ${route.routeId}`);
   console.log(`Status: ${route.status}`);
   console.log(`Final trust: ${route.finalTrust}`);
   console.log(`Readiness: ${readiness.readyForNarrowClaim ? "ready" : "not-ready"} (${readiness.strongestTrust})`);
@@ -3372,7 +3372,7 @@ function printVerifierRoute(route: VerifierRoute, outPath?: string, workspaceWri
 }
 
 function printVerifierRouteList(routes: VerifierRouteSummary[]): void {
-  console.log(`Theorem verifier routes: ${routes.length}`);
+  console.log(`Truth Harness verifier routes: ${routes.length}`);
 
   for (const route of routes) {
     console.log("");
@@ -3458,7 +3458,7 @@ function printVerifierRouteSatisfaction(result: SatisfyVerifierRouteObligationRe
   console.log("");
   console.log("Claim ledger follow-up:");
   console.log(
-    `  theorem claim add ${quoteCommandArg(result.route.problem)} --evidence route:${result.route.routeId} --evidence ${result.evidence.kind}:${result.evidence.ref}`
+    `  truth-harness claim add ${quoteCommandArg(result.route.problem)} --evidence route:${result.route.routeId} --evidence ${result.evidence.kind}:${result.evidence.ref}`
   );
 }
 
@@ -3532,7 +3532,7 @@ function printBenchmarkComparison(
 }
 
 function printBenchmarkArtifactList(artifacts: BenchmarkArtifactSummary[]): void {
-  console.log(`Theorem benchmark artifacts: ${artifacts.length}`);
+  console.log(`Truth Harness benchmark artifacts: ${artifacts.length}`);
 
   for (const artifact of artifacts) {
     console.log("");
@@ -3577,7 +3577,7 @@ function printClaimFileChecks(results: ClaimFileCheck[]): void {
   const passed = results.reduce((sum, result) => sum + result.passed, 0);
   const failed = results.reduce((sum, result) => sum + result.failed, 0);
 
-  console.log(`Theorem claim check: ${passed}/${total} passed`);
+  console.log(`Truth Harness claim check: ${passed}/${total} passed`);
   if (failed > 0) {
     console.log(`Failed: ${failed}`);
   }
@@ -3598,7 +3598,7 @@ function printClaimFileChecks(results: ClaimFileCheck[]): void {
 
 function printWorkspaceInit(result: LocalWorkspaceInitResult): void {
   const repaired = result.manifestRepair?.applied ? " and repaired manifest defaults" : "";
-  console.log(result.created ? "Initialized Theorem workspace" : `Theorem workspace already exists${repaired}`);
+  console.log(result.created ? "Initialized Truth Harness workspace" : `Truth Harness workspace already exists${repaired}`);
   console.log(`Root: ${result.root}`);
   console.log(`Manifest: ${result.manifestPath}`);
   console.log(`Privacy: ${result.manifest.privacy.mode} (network: ${result.manifest.privacy.networkAccess})`);
@@ -3612,13 +3612,13 @@ function printWorkspaceInit(result: LocalWorkspaceInitResult): void {
 }
 
 function printWorkspaceStatus(status: LocalWorkspaceStatus): void {
-  console.log("Theorem workspace status");
+  console.log("Truth Harness workspace status");
   console.log(`Root: ${status.root}`);
   console.log(`Manifest: ${status.manifestPath}`);
 
   if (!status.exists) {
     console.log("Status: missing");
-    console.log("Next: theorem workspace init");
+    console.log("Next: truth-harness workspace init");
     return;
   }
 
@@ -3642,7 +3642,7 @@ function printWorkspaceStatus(status: LocalWorkspaceStatus): void {
 
   if (status.manifestRepair || status.missingDirectories.length > 0) {
     console.log("");
-    console.log("Next: theorem workspace repair");
+    console.log("Next: truth-harness workspace repair");
   }
 }
 
@@ -3651,7 +3651,7 @@ function workspaceStatusHasProblems(status: LocalWorkspaceStatus): boolean {
 }
 
 function printWorkspaceRepair(result: LocalWorkspaceRepairResult): void {
-  console.log(result.repaired ? "Repaired Theorem workspace" : "Theorem workspace already healthy");
+  console.log(result.repaired ? "Repaired Truth Harness workspace" : "Truth Harness workspace already healthy");
   console.log(`Root: ${result.root}`);
   console.log(`Manifest: ${result.manifestPath}`);
   console.log(`Privacy: ${result.manifest.privacy.mode} (network: ${result.manifest.privacy.networkAccess})`);
@@ -3687,7 +3687,7 @@ function printManifestRepair(repair: LocalWorkspaceInitResult["manifestRepair"])
 }
 
 function printWorkspaceValidation(validation: WorkspaceValidation): void {
-  console.log("Theorem workspace validation");
+  console.log("Truth Harness workspace validation");
   console.log(`Status: ${validation.passed ? "passed" : "failed"}`);
   console.log(`Project: ${validation.projectId}`);
   console.log(`Checked: ${validation.summary.checkedFiles}`);
@@ -3717,7 +3717,7 @@ function printWorkspaceValidation(validation: WorkspaceValidation): void {
 }
 
 function printWorkspaceReview(review: WorkspaceReview): void {
-  console.log("Theorem workspace review");
+  console.log("Truth Harness workspace review");
   console.log(`Project: ${review.projectId}`);
   console.log(`Routes: ${review.summary.routes}`);
   console.log(`Claims: ${review.summary.claims}`);
@@ -3767,7 +3767,7 @@ function printWorkspaceSnapshotWrite(result: WorkspaceSnapshotWriteResult): void
 }
 
 function printWorkspaceSnapshotList(snapshots: WorkspaceSnapshotSummary[]): void {
-  console.log(`Theorem workspace snapshots: ${snapshots.length}`);
+  console.log(`Truth Harness workspace snapshots: ${snapshots.length}`);
 
   for (const snapshot of snapshots) {
     console.log("");
@@ -3875,7 +3875,7 @@ function printLiteratureRecordWrite(result: LiteratureRecordWriteResult): void {
 }
 
 function printLiteratureRecordList(records: LiteratureRecord[]): void {
-  console.log(`Theorem literature records: ${records.length}`);
+  console.log(`Truth Harness literature records: ${records.length}`);
 
   for (const record of records) {
     console.log("");
@@ -3921,7 +3921,7 @@ function printNotebookRunWrite(result: NotebookRunWriteResult): void {
 }
 
 function printNotebookRunList(records: NotebookRunRecord[]): void {
-  console.log(`Theorem notebook run records: ${records.length}`);
+  console.log(`Truth Harness notebook run records: ${records.length}`);
 
   for (const record of records) {
     console.log("");
@@ -3962,7 +3962,7 @@ function printCodeRunWrite(result: CodeRunWriteResult): void {
 }
 
 function printCodeRunList(records: CodeRunSummary[]): void {
-  console.log(`Theorem code runs: ${records.length}`);
+  console.log(`Truth Harness code runs: ${records.length}`);
 
   for (const record of records) {
     console.log("");
@@ -4004,7 +4004,7 @@ function printClaimLedgerList(
   claims: ClaimLedgerRecord[],
   graph: ReturnType<typeof createClaimLedgerGraph>
 ): void {
-  console.log(`Theorem claim ledger: ${claims.length} claims, ${graph.edges.length} links`);
+  console.log(`Truth Harness claim ledger: ${claims.length} claims, ${graph.edges.length} links`);
 
   for (const claim of claims) {
     console.log("");
@@ -4139,7 +4139,7 @@ function printSimulationLogWrite(result: SimulationLogWriteResult): void {
 }
 
 function printSimulationLogList(entries: SimulationLogEntry[]): void {
-  console.log(`Theorem simulation logs: ${entries.length}`);
+  console.log(`Truth Harness simulation logs: ${entries.length}`);
 
   for (const entry of entries) {
     console.log("");
@@ -4182,7 +4182,7 @@ function printExperimentLogWrite(result: ExperimentLogWriteResult): void {
 }
 
 function printExperimentLogList(entries: ExperimentLogEntry[]): void {
-  console.log(`Theorem experiment logs: ${entries.length}`);
+  console.log(`Truth Harness experiment logs: ${entries.length}`);
 
   for (const entry of entries) {
     console.log("");
@@ -4213,7 +4213,7 @@ function printVaultSeal(result: VaultSealResult): void {
 }
 
 function printVaultList(entries: VaultEnvelopeSummary[]): void {
-  console.log(`Theorem vault entries: ${entries.length}`);
+  console.log(`Truth Harness vault entries: ${entries.length}`);
 
   for (const entry of entries) {
     console.log("");
@@ -4294,7 +4294,7 @@ function printEvidenceAuditReportWrite(result: EvidenceAuditReportWriteResult): 
 }
 
 function printEvidenceAuditList(audits: EvidenceAudit[]): void {
-  console.log(`Theorem evidence audits: ${audits.length}`);
+  console.log(`Truth Harness evidence audits: ${audits.length}`);
 
   for (const audit of audits) {
     console.log("");
@@ -4346,7 +4346,7 @@ function printValidationPlanWrite(result: ValidationPlanWriteResult): void {
 }
 
 function printValidationPlanList(plans: ValidationPlan[]): void {
-  console.log(`Theorem validation plans: ${plans.length}`);
+  console.log(`Truth Harness validation plans: ${plans.length}`);
 
   for (const plan of plans) {
     console.log("");
@@ -4407,7 +4407,7 @@ function printResearchCheckpointWrite(result: ResearchSessionCheckpointWriteResu
 }
 
 function printResearchSessionList(sessions: ResearchSession[]): void {
-  console.log(`Theorem research sessions: ${sessions.length}`);
+  console.log(`Truth Harness research sessions: ${sessions.length}`);
 
   for (const session of sessions) {
     console.log("");
@@ -4442,7 +4442,7 @@ function printExpertReviewWrite(result: ExpertReviewWriteResult): void {
 }
 
 function printExpertReviewList(reviews: ExpertReviewRecord[]): void {
-  console.log(`Theorem expert reviews: ${reviews.length}`);
+  console.log(`Truth Harness expert reviews: ${reviews.length}`);
 
   for (const review of reviews) {
     console.log("");
@@ -4474,7 +4474,7 @@ function printInventionLogWrite(entry: InventionLogEntry, path: string): void {
 }
 
 function printInventionLogList(entries: InventionLogEntry[]): void {
-  console.log(`Theorem invention logs: ${entries.length}`);
+  console.log(`Truth Harness invention logs: ${entries.length}`);
 
   for (const entry of entries) {
     console.log("");
@@ -4514,7 +4514,7 @@ function printClaimChartWrite(result: ClaimChartWriteResult): void {
 }
 
 function printClaimChartList(charts: ClaimChart[]): void {
-  console.log(`Theorem claim charts: ${charts.length}`);
+  console.log(`Truth Harness claim charts: ${charts.length}`);
 
   for (const chart of charts) {
     console.log("");
@@ -4555,7 +4555,7 @@ function printModelContextWrite(result: ModelContextWriteResult): void {
 }
 
 function printModelContextList(packets: ModelContextPacket[]): void {
-  console.log(`Theorem model-context packets: ${packets.length}`);
+  console.log(`Truth Harness model-context packets: ${packets.length}`);
 
   for (const packet of packets) {
     console.log("");
@@ -4591,7 +4591,7 @@ function printExternalDisclosureWrite(result: ExternalDisclosureWriteResult): vo
 }
 
 function printExternalDisclosureList(entries: ExternalDisclosureLogEntry[]): void {
-  console.log(`Theorem external disclosures: ${entries.length}`);
+  console.log(`Truth Harness external disclosures: ${entries.length}`);
 
   for (const entry of entries) {
     console.log("");

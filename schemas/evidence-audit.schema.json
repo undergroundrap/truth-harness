@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/evidence-audit.schema.json",
-  "title": "Theorem Workbench Evidence Audit",
+  "$id": "https://truth-harness.local/schemas/evidence-audit.schema.json",
+  "title": "Truth Harness Evidence Audit",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -22,7 +22,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.evidence-audit.v0"
+      "const": "truth-harness.evidence-audit.v0"
     },
     "auditId": {
       "type": "string",

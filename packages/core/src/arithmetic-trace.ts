@@ -22,7 +22,7 @@ export interface ArithmeticTeachingView {
 }
 
 export interface ArithmeticTrace {
-  schemaVersion: "theorem.arithmetic-trace.v0";
+  schemaVersion: "truth-harness.arithmetic-trace.v0";
   adapter: "local-rational-arithmetic";
   expression: string;
   result: string;
@@ -59,7 +59,7 @@ export function createArithmeticTrace(
   const result = traceExpression(expression, env, state);
 
   return {
-    schemaVersion: "theorem.arithmetic-trace.v0",
+    schemaVersion: "truth-harness.arithmetic-trace.v0",
     adapter: "local-rational-arithmetic",
     expression: expressionSource,
     result: result.value.toString(),

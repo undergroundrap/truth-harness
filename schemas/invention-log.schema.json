@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/invention-log.schema.json",
-  "title": "Theorem Workbench Invention Log Entry",
+  "$id": "https://truth-harness.local/schemas/invention-log.schema.json",
+  "title": "Truth Harness Invention Log Entry",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -24,7 +24,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.invention.v0"
+      "const": "truth-harness.invention.v0"
     },
     "entryId": {
       "type": "string",

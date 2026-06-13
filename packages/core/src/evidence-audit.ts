@@ -63,7 +63,7 @@ export interface EvidenceAuditReview {
 }
 
 export interface EvidenceAudit {
-  schemaVersion: "theorem.evidence-audit.v0";
+  schemaVersion: "truth-harness.evidence-audit.v0";
   auditId: string;
   projectId: string;
   createdAt: string;
@@ -141,7 +141,7 @@ export async function createEvidenceAudit(input: CreateEvidenceAuditInput): Prom
   const auditId = `audit_${stableHash(auditWithoutId).slice(0, 16)}`;
 
   return {
-    schemaVersion: "theorem.evidence-audit.v0",
+    schemaVersion: "truth-harness.evidence-audit.v0",
     auditId,
     ...auditWithoutId
   };
@@ -202,7 +202,7 @@ export async function listEvidenceAudits(rootPath: string): Promise<EvidenceAudi
   );
 
   return audits
-    .filter((audit) => audit.schemaVersion === "theorem.evidence-audit.v0")
+    .filter((audit) => audit.schemaVersion === "truth-harness.evidence-audit.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
@@ -951,7 +951,7 @@ function invalidReceiptReview(ref: InventionEvidenceRef, error: ReceiptValidatio
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before creating evidence audits.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before creating evidence audits.");
   }
 
   if (status.missingDirectories.length > 0) {

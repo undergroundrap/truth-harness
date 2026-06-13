@@ -21,7 +21,7 @@ describe("notebook run records", () => {
         rootPath: root,
         purpose: "Run a local analysis notebook."
       })
-    ).rejects.toThrow("No Theorem workspace found");
+    ).rejects.toThrow("No Truth Harness workspace found");
   });
 
   it("writes local notebook run records with reproducibility boundaries", async () => {
@@ -57,9 +57,9 @@ describe("notebook run records", () => {
     });
     const records = await listNotebookRuns(root);
 
-    expect(result.jsonPath).toContain(join(".theorem-workbench", "notebook-runs"));
-    expect(result.markdownPath).toContain(join(".theorem-workbench", "notebook-runs"));
-    expect(result.record.schemaVersion).toBe("theorem.notebook-run.v0");
+    expect(result.jsonPath).toContain(join(".truth-harness", "notebook-runs"));
+    expect(result.markdownPath).toContain(join(".truth-harness", "notebook-runs"));
+    expect(result.record.schemaVersion).toBe("truth-harness.notebook-run.v0");
     expect(result.record.runRecordId).toMatch(/^nb_[a-f0-9]{16}$/);
     expect(result.record.privacy.mode).toBe("local-only");
     expect(result.record.reproducibilityBoundary.executionNotPerformedByWorkbench).toBe(true);
@@ -91,7 +91,7 @@ describe("notebook run records", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-notebook-run-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-notebook-run-"));
   roots.push(root);
   return root;
 }

@@ -8,7 +8,7 @@ describe("receipt renderers", () => {
     const receipt = createReceipt("compute 2 + 2");
     const markdown = renderReceiptMarkdown(receipt);
 
-    expect(markdown).toContain(`# Theorem Receipt ${receipt.runId}`);
+    expect(markdown).toContain(`# Truth Harness Receipt ${receipt.runId}`);
     expect(markdown).toContain("| Trust | `exact-computed` |");
     expect(markdown).toContain("| Evidence Kind | `exact-arithmetic` |");
     expect(markdown).toContain("| Proof Checker Backed | `false` |");

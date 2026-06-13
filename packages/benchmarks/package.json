@@ -1,8 +1,8 @@
 {
-  "name": "@theorem-workbench/benchmarks",
+  "name": "@truth-harness/benchmarks",
   "version": "0.0.0",
   "type": "module",
-  "description": "Benchmark suites and scoring for Theorem Workbench proof receipts.",
+  "description": "Benchmark suites and scoring for Truth Harness proof receipts.",
   "license": "SEE LICENSE IN LICENSE",
   "exports": {
     ".": {
@@ -15,6 +15,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@theorem-workbench/core": "0.0.0"
+    "@truth-harness/core": "0.0.0"
   }
 }

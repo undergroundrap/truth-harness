@@ -22,7 +22,7 @@ describe("model context packets", () => {
         service: "OpenAI",
         purpose: "Ask a frontier model to critique a selected proof plan."
       })
-    ).rejects.toThrow("No Theorem workspace found");
+    ).rejects.toThrow("No Truth Harness workspace found");
   });
 
   it("writes local-only preflight packets without performing external calls", async () => {
@@ -34,13 +34,13 @@ describe("model context packets", () => {
       service: "OpenAI",
       model: "frontier-reasoning-model",
       purpose: "Ask a frontier model to critique a selected proof plan.",
-      dataClasses: ["selected theorem statement", "selected proof sketch"],
-      selectedContextRefs: ["receipt:.theorem-workbench/receipts/proof-plan.json"],
+      dataClasses: ["selected formal statement", "selected proof sketch"],
+      selectedContextRefs: ["receipt:.truth-harness/receipts/proof-plan.json"],
       sections: [
         {
           title: "Selected proof plan",
           content: "The claim is n^2+n is even for all integers n. Please critique only this proof sketch.",
-          sourceRefs: ["receipt:.theorem-workbench/receipts/proof-plan.json"]
+          sourceRefs: ["receipt:.truth-harness/receipts/proof-plan.json"]
         }
       ],
       redactions: ["Workspace notes, vault plaintext, and unrelated receipts are excluded."],
@@ -51,8 +51,8 @@ describe("model context packets", () => {
     });
     const packets = await listModelContexts(root);
 
-    expect(result.jsonPath).toContain(join(".theorem-workbench", "model-contexts"));
-    expect(result.packet.schemaVersion).toBe("theorem.model-context.v0");
+    expect(result.jsonPath).toContain(join(".truth-harness", "model-contexts"));
+    expect(result.packet.schemaVersion).toBe("truth-harness.model-context.v0");
     expect(result.packet.packetId).toMatch(/^ctx_[a-f0-9]{16}$/);
     expect(result.packet.privacy.mode).toBe("local-only");
     expect(result.packet.boundary.externalCallNotPerformed).toBe(true);
@@ -108,7 +108,7 @@ describe("model context packets", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-model-context-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-model-context-"));
   roots.push(root);
   return root;
 }

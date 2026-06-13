@@ -23,7 +23,7 @@ export interface WorkspaceSnapshotEntry {
 }
 
 export interface WorkspaceSnapshot {
-  schemaVersion: "theorem.workspace-snapshot.v0";
+  schemaVersion: "truth-harness.workspace-snapshot.v0";
   snapshotId: string;
   projectId: string;
   createdAt: string;
@@ -45,7 +45,7 @@ export interface WorkspaceSnapshotWriteResult {
 }
 
 export interface WorkspaceSnapshotSummary {
-  schemaVersion: "theorem.workspace-snapshot.v0";
+  schemaVersion: "truth-harness.workspace-snapshot.v0";
   snapshotId: string;
   projectId: string;
   createdAt: string;
@@ -70,7 +70,7 @@ export interface WorkspaceSnapshotVerificationEntry {
 }
 
 export interface WorkspaceSnapshotVerification {
-  schemaVersion: "theorem.workspace-snapshot-verification.v0";
+  schemaVersion: "truth-harness.workspace-snapshot-verification.v0";
   snapshotId: string;
   projectId: string;
   verifiedAt: string;
@@ -93,8 +93,8 @@ export interface VerifyWorkspaceSnapshotInput {
   now?: string;
 }
 
-const SNAPSHOT_SCHEMA_VERSION = "theorem.workspace-snapshot.v0" as const;
-const SNAPSHOT_VERIFY_SCHEMA_VERSION = "theorem.workspace-snapshot-verification.v0" as const;
+const SNAPSHOT_SCHEMA_VERSION = "truth-harness.workspace-snapshot.v0" as const;
+const SNAPSHOT_VERIFY_SCHEMA_VERSION = "truth-harness.workspace-snapshot-verification.v0" as const;
 const JSON_ID_KEYS = [
   "runId",
   "auditId",
@@ -453,7 +453,7 @@ function toActualVerificationEntry(entry: WorkspaceSnapshotEntry): WorkspaceSnap
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before creating workspace snapshots.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before creating workspace snapshots.");
   }
 
   if (status.missingDirectories.length > 0) {

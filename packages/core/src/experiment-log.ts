@@ -38,7 +38,7 @@ export interface ExperimentMeasurement {
 }
 
 export interface ExperimentLogEntry {
-  schemaVersion: "theorem.experiment.v0";
+  schemaVersion: "truth-harness.experiment.v0";
   experimentId: string;
   projectId: string;
   createdAt: string;
@@ -161,7 +161,7 @@ export async function createExperimentLogEntry(input: CreateExperimentLogInput):
   };
   const experimentId = `exp_${stableHash(entryWithoutId).slice(0, 16)}`;
   const entry: ExperimentLogEntry = {
-    schemaVersion: "theorem.experiment.v0",
+    schemaVersion: "truth-harness.experiment.v0",
     experimentId,
     ...entryWithoutId,
     updatedAt: createdAt,
@@ -201,14 +201,14 @@ export async function listExperimentLogEntries(rootPath: string): Promise<Experi
   );
 
   return entries
-    .filter((entry) => entry.schemaVersion === "theorem.experiment.v0")
+    .filter((entry) => entry.schemaVersion === "truth-harness.experiment.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing experiment logs.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing experiment logs.");
   }
 
   if (status.missingDirectories.length > 0) {

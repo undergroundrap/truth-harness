@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/verifier-route.schema.json",
-  "title": "Theorem Workbench Verifier Route",
+  "$id": "https://truth-harness.local/schemas/verifier-route.schema.json",
+  "title": "Truth Harness Verifier Route",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -27,7 +27,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.verifier-route.v0"
+      "const": "truth-harness.verifier-route.v0"
     },
     "routeId": {
       "type": "string",
@@ -65,7 +65,7 @@
       "required": ["schemaVersion", "runId", "trust", "evidenceProfile", "replay"],
       "properties": {
         "schemaVersion": {
-          "const": "theorem.receipt.v0"
+          "const": "truth-harness.receipt.v0"
         },
         "runId": {
           "type": "string",
@@ -115,7 +115,7 @@
       ],
       "properties": {
         "schemaVersion": {
-          "const": "theorem.engine-manifest.v0"
+          "const": "truth-harness.engine-manifest.v0"
         },
         "status": {
           "enum": ["ready", "partial", "missing"]

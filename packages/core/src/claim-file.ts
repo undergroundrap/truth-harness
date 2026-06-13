@@ -143,7 +143,7 @@ function parseClaimBlock(
 
   const problem = problemLines.join(" ").trim();
   if (!problem) {
-    throw new Error(`${filePath}:${startLine} has an empty theorem-workbench block`);
+    throw new Error(`${filePath}:${startLine} has an empty truth-harness block`);
   }
 
   return {
@@ -173,7 +173,7 @@ function failMessage(block: ClaimBlock, receipt: Receipt): string {
 }
 
 function isFenceStart(line: string): boolean {
-  return /^```(?:theorem-workbench|theorem)\s*$/.test(line.trim());
+  return /^```truth-harness\s*$/.test(line.trim());
 }
 
 function isFenceEnd(line: string): boolean {

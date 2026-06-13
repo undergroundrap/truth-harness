@@ -1,4 +1,4 @@
-import { createReceipt, type Receipt, type TrustLabel } from "@theorem-workbench/core";
+import { createReceipt, type Receipt, type TrustLabel } from "@truth-harness/core";
 
 export interface BenchmarkTask {
   id: string;

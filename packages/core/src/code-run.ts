@@ -98,7 +98,7 @@ export interface CodeRunPrivacyMetadata {
 }
 
 export interface CodeRunRecord {
-  schemaVersion: "theorem.code-run.v0";
+  schemaVersion: "truth-harness.code-run.v0";
   runId: string;
   projectId: string;
   createdAt: string;
@@ -308,7 +308,7 @@ export async function executeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRu
   };
 
   return {
-    schemaVersion: "theorem.code-run.v0",
+    schemaVersion: "truth-harness.code-run.v0",
     runId: `code_run_${stableHash(recordWithoutId).slice(0, 16)}`,
     ...recordWithoutId
   };
@@ -409,7 +409,7 @@ export function renderCodeRunMarkdown(record: CodeRunRecord): string {
     "",
     "## Boundary",
     "",
-    "This record proves only that Theorem Workbench launched a local direct command without shell interpolation and captured its process result under the recorded execution policy. It does not prove code correctness, scientific validity, safety, regulatory approval, or patentability."
+    "This record proves only that Truth Harness launched a local direct command without shell interpolation and captured its process result under the recorded execution policy. It does not prove code correctness, scientific validity, safety, regulatory approval, or patentability."
   );
 
   return `${lines.join("\n")}\n`;
@@ -719,7 +719,7 @@ function replayNotesFor(input: {
   timedOut: boolean;
   sandboxMeasurement: CodeRunSandboxMeasurement;
 }): string[] {
-  const notes = ["The command executable was launched directly by Theorem Workbench without shell interpolation."];
+  const notes = ["The command executable was launched directly by Truth Harness without shell interpolation."];
 
   if (!input.sandboxMeasurement.canAttestNetworkNone) {
     notes.push("No OS sandbox or network-deny boundary was enforced for this run, so local-only replay is not guaranteed.");
@@ -979,7 +979,7 @@ async function requireLocalWorkspace(
 ): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing code run records.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing code run records.");
   }
 
   if (status.missingDirectories.length > 0) {
@@ -1009,7 +1009,7 @@ function summarizeCodeRun(root: string, path: string, raw: string): CodeRunSumma
     return undefined;
   }
 
-  if (!isRecord(parsed) || parsed.schemaVersion !== "theorem.code-run.v0") {
+  if (!isRecord(parsed) || parsed.schemaVersion !== "truth-harness.code-run.v0") {
     return undefined;
   }
 

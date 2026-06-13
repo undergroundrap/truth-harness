@@ -1,6 +1,6 @@
 # Contributing
 
-Theorem Workbench is early, but the contribution standard should already be serious.
+Truth Harness is early, but the contribution standard should already be serious.
 
 ## Principles
 

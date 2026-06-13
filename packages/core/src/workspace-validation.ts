@@ -51,7 +51,7 @@ export interface WorkspaceValidationArtifact {
 }
 
 export interface WorkspaceValidation {
-  schemaVersion: "theorem.workspace-validation.v0";
+  schemaVersion: "truth-harness.workspace-validation.v0";
   projectId: string;
   checkedAt: string;
   passed: boolean;
@@ -100,48 +100,48 @@ interface WorkspaceReference {
 const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidationRule>> = {
   receipts: {
     kind: "receipts",
-    schemaVersion: "theorem.receipt.v0",
+    schemaVersion: "truth-harness.receipt.v0",
     schemaFile: "receipt.schema.json",
     idKey: "runId",
     required: true
   },
   claims: {
     kind: "claims",
-    schemaVersion: "theorem.claim.v0",
+    schemaVersion: "truth-harness.claim.v0",
     schemaFile: "claim-ledger.schema.json",
     idKey: "claimId",
     required: true
   },
   indexes: {
     kind: "indexes",
-    schemaVersion: "theorem.corpus.v0",
+    schemaVersion: "truth-harness.corpus.v0",
     schemaFile: "local-corpus.schema.json",
     idKey: "projectId"
   },
   inventions: {
     kind: "inventions",
-    schemaVersion: "theorem.invention.v0",
+    schemaVersion: "truth-harness.invention.v0",
     schemaFile: "invention-log.schema.json",
     idKey: "entryId",
     required: true
   },
   cas: {
     kind: "cas",
-    schemaVersion: "theorem.cas-check.v0",
+    schemaVersion: "truth-harness.cas-check.v0",
     schemaFile: "cas-check.schema.json",
     idKey: "checkId",
     required: true
   },
   proofs: {
     kind: "proofs",
-    schemaVersion: "theorem.proof-check.v0",
+    schemaVersion: "truth-harness.proof-check.v0",
     schemaFile: "proof-check.schema.json",
     idKey: "checkId",
     required: true
   },
   smt: {
     kind: "smt",
-    schemaVersion: "theorem.smt-check.v0",
+    schemaVersion: "truth-harness.smt-check.v0",
     schemaFile: "smt-check.schema.json",
     idKey: "checkId",
     required: true
@@ -150,12 +150,12 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
     kind: "benchmarks",
     variants: [
       {
-        schemaVersion: "theorem.benchmark-run.v0",
+        schemaVersion: "truth-harness.benchmark-run.v0",
         schemaFile: "benchmark-run.schema.json",
         idKey: "benchmarkRunId"
       },
       {
-        schemaVersion: "theorem.benchmark-comparison.v0",
+        schemaVersion: "truth-harness.benchmark-comparison.v0",
         schemaFile: "benchmark-comparison.schema.json",
         idKey: "comparisonId"
       }
@@ -164,104 +164,104 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
   },
   disclosures: {
     kind: "disclosures",
-    schemaVersion: "theorem.disclosure.v0",
+    schemaVersion: "truth-harness.disclosure.v0",
     schemaFile: "disclosure-log.schema.json",
     idKey: "disclosureId",
     required: true
   },
   simulations: {
     kind: "simulations",
-    schemaVersion: "theorem.simulation.v0",
+    schemaVersion: "truth-harness.simulation.v0",
     schemaFile: "simulation-log.schema.json",
     idKey: "simulationId",
     required: true
   },
   patents: {
     kind: "patents",
-    schemaVersion: "theorem.claim-chart.v0",
+    schemaVersion: "truth-harness.claim-chart.v0",
     schemaFile: "claim-chart.schema.json",
     idKey: "chartId",
     required: true
   },
   experiments: {
     kind: "experiments",
-    schemaVersion: "theorem.experiment.v0",
+    schemaVersion: "truth-harness.experiment.v0",
     schemaFile: "experiment-log.schema.json",
     idKey: "experimentId",
     required: true
   },
   vault: {
     kind: "vault",
-    schemaVersion: "theorem.vault.v0",
+    schemaVersion: "truth-harness.vault.v0",
     schemaFile: "vault.schema.json",
     idKey: "vaultId",
     required: true
   },
   audits: {
     kind: "audits",
-    schemaVersion: "theorem.evidence-audit.v0",
+    schemaVersion: "truth-harness.evidence-audit.v0",
     schemaFile: "evidence-audit.schema.json",
     idKey: "auditId",
     required: true
   },
   snapshots: {
     kind: "snapshots",
-    schemaVersion: "theorem.workspace-snapshot.v0",
+    schemaVersion: "truth-harness.workspace-snapshot.v0",
     schemaFile: "workspace-snapshot.schema.json",
     idKey: "snapshotId"
   },
   sessions: {
     kind: "sessions",
-    schemaVersion: "theorem.research-session.v0",
+    schemaVersion: "truth-harness.research-session.v0",
     schemaFile: "research-session.schema.json",
     idKey: "sessionId",
     required: true
   },
   reviews: {
     kind: "reviews",
-    schemaVersion: "theorem.expert-review.v0",
+    schemaVersion: "truth-harness.expert-review.v0",
     schemaFile: "expert-review.schema.json",
     idKey: "reviewId",
     required: true
   },
   validation: {
     kind: "validation",
-    schemaVersion: "theorem.validation-plan.v0",
+    schemaVersion: "truth-harness.validation-plan.v0",
     schemaFile: "validation-plan.schema.json",
     idKey: "planId",
     required: true
   },
   literature: {
     kind: "literature",
-    schemaVersion: "theorem.literature.v0",
+    schemaVersion: "truth-harness.literature.v0",
     schemaFile: "literature-record.schema.json",
     idKey: "recordId",
     required: true
   },
   "notebook-runs": {
     kind: "notebook-runs",
-    schemaVersion: "theorem.notebook-run.v0",
+    schemaVersion: "truth-harness.notebook-run.v0",
     schemaFile: "notebook-run.schema.json",
     idKey: "runRecordId",
     required: true
   },
   "code-runs": {
     kind: "code-runs",
-    schemaVersion: "theorem.code-run.v0",
+    schemaVersion: "truth-harness.code-run.v0",
     schemaFile: "code-run.schema.json",
     idKey: "runId",
     required: true
   },
   "model-contexts": {
     kind: "model-contexts",
-    schemaVersion: "theorem.model-context.v0",
+    schemaVersion: "truth-harness.model-context.v0",
     schemaFile: "model-context.schema.json",
     idKey: "packetId",
     required: true
   },
   routes: {
     kind: "routes",
-    schemaVersion: "theorem.verifier-route.v0",
+    schemaVersion: "truth-harness.verifier-route.v0",
     schemaFile: "verifier-route.schema.json",
     idKey: "routeId",
     required: true
@@ -301,7 +301,7 @@ export async function validateWorkspaceArtifacts(input: ValidateWorkspaceArtifac
   const warnings = issues.filter((issue) => issue.severity === "warning").length;
 
   return {
-    schemaVersion: "theorem.workspace-validation.v0",
+    schemaVersion: "truth-harness.workspace-validation.v0",
     projectId: status.manifest.projectId,
     checkedAt,
     passed: errors === 0,
@@ -334,7 +334,7 @@ function workspaceRepairWarnings(
   }
 
   return [
-    `Workspace manifest is missing newer default directories (${repair.addedDirectories.join(", ")}). Run \`theorem workspace repair\` to persist the manifest update before relying on validation.`
+    `Workspace manifest is missing newer default directories (${repair.addedDirectories.join(", ")}). Run \`truth-harness workspace repair\` to persist the manifest update before relying on validation.`
   ];
 }
 
@@ -371,7 +371,7 @@ async function validateWorkspaceManifestFile(
     kind: "manifest",
     valid: !artifactIssues.some((issue) => issue.severity === "error"),
     schemaVersion: status.manifest.schemaVersion,
-    expectedSchemaVersion: "theorem.workspace.v0",
+    expectedSchemaVersion: "truth-harness.workspace.v0",
     artifactId: status.manifest.projectId,
     issueCodes: artifactIssues.map((issue) => issue.code)
   };
@@ -1101,7 +1101,7 @@ async function requireLocalWorkspace(
 ): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before validating workspace artifacts.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before validating workspace artifacts.");
   }
 
   return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };

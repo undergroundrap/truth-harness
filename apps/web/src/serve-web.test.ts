@@ -32,7 +32,7 @@ afterEach(async () => {
 
 describe("local web route ledger API", () => {
   it("persists verifier routes and reads them through local-only API endpoints", async () => {
-    tempProjectRoot = await mkdtemp(join(tmpdir(), "theorem-web-api-"));
+    tempProjectRoot = await mkdtemp(join(tmpdir(), "truth-harness-web-api-"));
     const port = await getFreePort();
     runningServer = await startWebServer(port, tempProjectRoot);
     const baseUrl = `http://127.0.0.1:${port}`;
@@ -52,7 +52,7 @@ describe("local web route ledger API", () => {
       apiErrorFormat: "json"
     });
     expect(statusPayload.dockerVerifier).toMatchObject({
-      schemaVersion: "theorem.docker-verifier-guidance.v0",
+      schemaVersion: "truth-harness.docker-verifier-guidance.v0",
       localOnly: true,
       externalCalls: false,
       commands: {
@@ -60,7 +60,7 @@ describe("local web route ledger API", () => {
         verify: "npm run docker:verify"
       },
       runtimeBoundary: {
-        service: "theorem",
+        service: "truth-harness",
         composeNetworkMode: "none",
         autoRunsDocker: false,
         buildMayDownloadDependencies: true,
@@ -89,7 +89,7 @@ describe("local web route ledger API", () => {
         sourceCapabilityId: "accepted-proof-checker"
       })
     );
-    expect(receiptPayload.routePaths.json).toContain(".theorem-workbench");
+    expect(receiptPayload.routePaths.json).toContain(".truth-harness");
     expect(existsSync(receiptPayload.routePaths.json)).toBe(true);
     expect(existsSync(receiptPayload.routePaths.markdown)).toBe(true);
 
@@ -126,7 +126,7 @@ describe("local web route ledger API", () => {
     expect(reviewPayload.localOnly).toBe(true);
     expect(reviewPayload.externalCalls).toEqual([]);
     expect(reviewPayload.review).toMatchObject({
-      schemaVersion: "theorem.workspace-review.v0",
+      schemaVersion: "truth-harness.workspace-review.v0",
       localOnly: true,
       networkAccess: "none"
     });
@@ -136,7 +136,7 @@ describe("local web route ledger API", () => {
       expect.objectContaining({
         kind: "route-ready-claim",
         routeId: receiptPayload.route.routeId,
-        command: expect.stringContaining("theorem claim add")
+        command: expect.stringContaining("truth-harness claim add")
       })
     );
 
@@ -167,7 +167,7 @@ describe("local web route ledger API", () => {
     expectLocalApiSuccess(casResponse, casPayload);
     expect(casPayload.localOnly).toBe(true);
     expect(casPayload.externalCalls).toEqual([]);
-    expect(casPayload.record.schemaVersion).toBe("theorem.cas-check.v0");
+    expect(casPayload.record.schemaVersion).toBe("truth-harness.cas-check.v0");
     expect(casPayload.record.checkId).toMatch(/^cas_[a-f0-9]{16}$/u);
     expect(casPayload.record.networkAccess).toBe("none");
     expect(["cross-checked", "unverified"]).toContain(casPayload.record.trust);
@@ -183,7 +183,7 @@ describe("local web route ledger API", () => {
     expect(casListPayload.checks).toContainEqual(
       expect.objectContaining({
         checkId: casPayload.record.checkId,
-        path: expect.stringContaining(".theorem-workbench")
+        path: expect.stringContaining(".truth-harness")
       })
     );
 
@@ -205,8 +205,8 @@ describe("local web route ledger API", () => {
     expect(smtPayload.localOnly).toBe(true);
     expect(smtPayload.externalCalls).toEqual([]);
     expect(smtPayload.problem.problemId).toMatch(/^smt_problem_[a-f0-9]{16}$/u);
-    expect(smtPayload.sourceRef).toContain(".theorem-workbench/smt/sources/");
-    expect(smtPayload.record.schemaVersion).toBe("theorem.smt-check.v0");
+    expect(smtPayload.sourceRef).toContain(".truth-harness/smt/sources/");
+    expect(smtPayload.record.schemaVersion).toBe("truth-harness.smt-check.v0");
     expect(smtPayload.record.checkId).toMatch(/^smt_[a-f0-9]{16}$/u);
     expect(smtPayload.record.networkAccess).toBe("none");
     expect(["smt-checked", "unverified"]).toContain(smtPayload.record.trust);
@@ -223,7 +223,7 @@ describe("local web route ledger API", () => {
     expect(smtListPayload.checks).toContainEqual(
       expect.objectContaining({
         checkId: smtPayload.record.checkId,
-        path: expect.stringContaining(".theorem-workbench")
+        path: expect.stringContaining(".truth-harness")
       })
     );
 
@@ -274,13 +274,13 @@ describe("local web route ledger API", () => {
     if (!formalObligation) {
       throw new Error("Expected a formal-proof obligation for the arithmetic route.");
     }
-    const proofRef = join(".theorem-workbench", "proofs", "web-manual-proof.json");
-    await mkdir(join(tempProjectRoot, ".theorem-workbench", "proofs"), { recursive: true });
+    const proofRef = join(".truth-harness", "proofs", "web-manual-proof.json");
+    await mkdir(join(tempProjectRoot, ".truth-harness", "proofs"), { recursive: true });
     await writeFile(
       join(tempProjectRoot, proofRef),
       `${JSON.stringify(
         {
-          schemaVersion: "theorem.proof-check.v0",
+          schemaVersion: "truth-harness.proof-check.v0",
           checkId: "proof_abcdef0123456789",
           createdAt: "2026-06-12T00:00:00.000Z",
           backend: {
@@ -303,7 +303,7 @@ describe("local web route ledger API", () => {
           proofCheckerBacked: true,
           localOnly: true,
           networkAccess: "none",
-          replay: "theorem proof check web-proof.lean --write --json",
+          replay: "truth-harness proof check web-proof.lean --write --json",
           limitations: ["Test fixture for web route-satisfaction contract only."],
           warnings: []
         },
@@ -397,7 +397,7 @@ describe("local web route ledger API", () => {
 
 describe("local web safety guard", () => {
   it("sets browser safety headers and rejects non-local or cross-origin API writes", async () => {
-    tempProjectRoot = await mkdtemp(join(tmpdir(), "theorem-web-safety-"));
+    tempProjectRoot = await mkdtemp(join(tmpdir(), "truth-harness-web-safety-"));
     const port = await getFreePort();
     runningServer = await startWebServer(port, tempProjectRoot);
     const baseUrl = `http://127.0.0.1:${port}`;
@@ -610,9 +610,9 @@ function expectLocalApiError(
   expect(response.headers["cache-control"]).toBe("no-store");
   const payload = JSON.parse(response.body);
   expect(payload.requestId).toMatch(/^web_err_[0-9a-f-]{36}$/u);
-  expect(response.headers["x-theorem-request-id"]).toBe(payload.requestId);
+  expect(response.headers["x-truth-harness-request-id"]).toBe(payload.requestId);
   expect(payload).toMatchObject({
-    schemaVersion: "theorem.web-error.v0",
+    schemaVersion: "truth-harness.web-error.v0",
     requestId: payload.requestId,
     localOnly: true,
     externalCalls: [],
@@ -630,7 +630,7 @@ function expectLocalApiSuccess(
   payload: { requestId?: unknown }
 ): void {
   expect(payload.requestId).toMatch(/^web_req_[0-9a-f-]{36}$/u);
-  expect(response.headers.get("x-theorem-request-id")).toBe(payload.requestId);
+  expect(response.headers.get("x-truth-harness-request-id")).toBe(payload.requestId);
 }
 
 async function waitForServerReady(

@@ -26,13 +26,13 @@ describe("verifier route", () => {
   it("routes exact arithmetic through the native rational kernel without pretending proof", () => {
     const route = createVerifierRoute("compute 3 / 4 + 5 / 8", {
       now: new Date("2026-06-12T00:00:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
 
-    expect(route.schemaVersion).toBe("theorem.verifier-route.v0");
+    expect(route.schemaVersion).toBe("truth-harness.verifier-route.v0");
     expect(route.localOnly).toBe(true);
     expect(route.networkAccess).toBe("none");
     expect(route.status).toBe("verified");
@@ -73,8 +73,8 @@ describe("verifier route", () => {
     const route = createVerifierRoute("symbolic simplify sin(x)^2 + cos(x)^2", {
       now: new Date("2026-06-12T00:00:00.000Z"),
       maximaCommand: "maxima-test",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50,
       casRunner: (_command, args) => {
         if (args[0] === "--version") {
@@ -87,7 +87,7 @@ describe("verifier route", () => {
 
         return {
           status: 0,
-          stdout: "THEOREM_MAXIMA_STATUS:passed:0\n",
+          stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n",
           stderr: ""
         };
       }
@@ -112,9 +112,9 @@ describe("verifier route", () => {
   it("keeps unsupported prompts unverified and points to stronger route gaps", () => {
     const route = createVerifierRoute("prove the Riemann hypothesis", {
       now: new Date("2026-06-12T00:00:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
 
@@ -171,21 +171,21 @@ describe("verifier route", () => {
       rootPath: root,
       problem: "compute 3 / 4 + 5 / 8",
       now: new Date("2026-06-12T00:00:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const routes = await listVerifierRoutes(root);
     const readBack = await readVerifierRoute(root, result.route.routeId);
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
-    expect(result.jsonPath).toContain(join(".theorem-workbench", "routes"));
+    expect(result.jsonPath).toContain(join(".truth-harness", "routes"));
     expect(result.markdown).toContain(`# Verifier Route ${result.route.routeId}`);
     expect(result.markdown).toContain("## Readiness");
     expect(result.markdown).toContain("Ready for narrow claim: `true`");
     expect(result.markdown).toContain("## Proof Obligations");
-    expect(result.route.replay).toBe("theorem verify \"compute 3 / 4 + 5 / 8\" --json");
+    expect(result.route.replay).toBe("truth-harness verify \"compute 3 / 4 + 5 / 8\" --json");
     expect(routes).toHaveLength(1);
     expect(routes[0]).toMatchObject({
       routeId: result.route.routeId,
@@ -236,9 +236,9 @@ describe("verifier route", () => {
       rootPath: root,
       problem: "prove the Riemann hypothesis",
       now: new Date("2026-06-12T00:00:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
@@ -249,7 +249,7 @@ describe("verifier route", () => {
     const proofWrite = await writeLeanProofCheckRecord({
       rootPath: root,
       sourcePath: "trivial.lean",
-      theoremName: "trivial_true",
+      declarationName: "trivial_true",
       now: new Date("2026-06-12T00:01:00.000Z"),
       runner
     });
@@ -308,7 +308,7 @@ describe("verifier route", () => {
 
       return {
         status: 0,
-        stdout: "THEOREM_MAXIMA_STATUS:passed:0\n",
+        stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n",
         stderr: ""
       };
     };
@@ -317,9 +317,9 @@ describe("verifier route", () => {
       rootPath: root,
       problem: "prove the Riemann hypothesis",
       now: new Date("2026-06-12T00:00:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "independent-check");
@@ -362,7 +362,7 @@ describe("verifier route", () => {
     expect(satisfied.evidence).toMatchObject({
       kind: "cas",
       trust: "cross-checked",
-      schemaVersion: "theorem.cas-check.v0"
+      schemaVersion: "truth-harness.cas-check.v0"
     });
     expect(readBack.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
       status: "satisfied",
@@ -380,18 +380,18 @@ describe("verifier route", () => {
       rootPath: root,
       problem: "prove the Riemann hypothesis",
       now: new Date("2026-06-12T00:00:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "independent-check");
-    const casRef = join(".theorem-workbench", "cas", "forged-cas.json");
-    await mkdir(join(root, ".theorem-workbench", "cas"), { recursive: true });
+    const casRef = join(".truth-harness", "cas", "forged-cas.json");
+    await mkdir(join(root, ".truth-harness", "cas"), { recursive: true });
     await writeFile(
       join(root, casRef),
       `${JSON.stringify({
-        schemaVersion: "theorem.cas-check.v0",
+        schemaVersion: "truth-harness.cas-check.v0",
         checkId: "cas_0123456789abcdef",
         status: "passed",
         trust: "cross-checked",
@@ -420,18 +420,18 @@ describe("verifier route", () => {
       rootPath: root,
       problem: "solve integer constraints x > 0 and x < 3",
       now: new Date("2026-06-12T00:00:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "solver-encoding");
-    const smtRef = join(".theorem-workbench", "smt", "forged-smt.json");
-    await mkdir(join(root, ".theorem-workbench", "smt"), { recursive: true });
+    const smtRef = join(".truth-harness", "smt", "forged-smt.json");
+    await mkdir(join(root, ".truth-harness", "smt"), { recursive: true });
     await writeFile(
       join(root, smtRef),
       `${JSON.stringify({
-        schemaVersion: "theorem.smt-check.v0",
+        schemaVersion: "truth-harness.smt-check.v0",
         checkId: "smt_0123456789abcdef",
         status: "sat",
         trust: "smt-checked",
@@ -460,18 +460,18 @@ describe("verifier route", () => {
       rootPath: root,
       problem: "compute 3 / 4 + 5 / 8",
       now: new Date("2026-06-12T00:00:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const routeWrite = await writeVerifierRoute({
       rootPath: root,
       problem: "prove the Riemann hypothesis",
       now: new Date("2026-06-12T00:01:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
@@ -497,13 +497,13 @@ describe("verifier route", () => {
       rootPath: root,
       problem: "prove the Riemann hypothesis",
       now: new Date("2026-06-12T00:00:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
-    const forgedRouteRef = join(".theorem-workbench", "routes", "forged-proved-route.json");
+    const forgedRouteRef = join(".truth-harness", "routes", "forged-proved-route.json");
     const forgedReceipt = {
       ...routeWrite.route.receipt,
       trust: "proved" as const,
@@ -527,7 +527,7 @@ describe("verifier route", () => {
       finalTrust: "proved" as const,
       receipt: forgedReceipt
     };
-    await mkdir(join(root, ".theorem-workbench", "routes"), { recursive: true });
+    await mkdir(join(root, ".truth-harness", "routes"), { recursive: true });
     await writeFile(join(root, forgedRouteRef), `${JSON.stringify(forgedRoute, null, 2)}\n`, "utf8");
 
     await expect(
@@ -550,18 +550,18 @@ describe("verifier route", () => {
       rootPath: root,
       problem: "prove the Riemann hypothesis",
       now: new Date("2026-06-12T00:00:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
-    const proofRef = join(".theorem-workbench", "proofs", "forged-proof.json");
-    await mkdir(join(root, ".theorem-workbench", "proofs"), { recursive: true });
+    const proofRef = join(".truth-harness", "proofs", "forged-proof.json");
+    await mkdir(join(root, ".truth-harness", "proofs"), { recursive: true });
     await writeFile(
       join(root, proofRef),
       `${JSON.stringify({
-        schemaVersion: "theorem.proof-check.v0",
+        schemaVersion: "truth-harness.proof-check.v0",
         checkId: "proof_0123456789abcdef",
         backend: { acceptedProofChecker: true },
         status: "accepted",
@@ -584,7 +584,7 @@ describe("verifier route", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-"));
   roots.push(root);
   return root;
 }

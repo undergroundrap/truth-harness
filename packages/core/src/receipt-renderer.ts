@@ -15,7 +15,7 @@ export function renderReceipt(receipt: Receipt, format: ReceiptRenderFormat): st
 export function renderReceiptMarkdown(receipt: Receipt): string {
   assertReceipt(receipt);
   const lines: string[] = [
-    `# Theorem Receipt ${receipt.runId}`,
+    `# Truth Harness Receipt ${receipt.runId}`,
     "",
     "| Field | Value |",
     "| --- | --- |",
@@ -110,7 +110,7 @@ export function renderReceiptHtml(receipt: Receipt): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Theorem Receipt ${escapeHtml(receipt.runId)}</title>
+  <title>Truth Harness Receipt ${escapeHtml(receipt.runId)}</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -228,7 +228,7 @@ export function renderReceiptHtml(receipt: Receipt): string {
 </head>
 <body>
   <main>
-    <h1>Theorem Receipt <code>${escapeHtml(receipt.runId)}</code></h1>
+    <h1>Truth Harness Receipt <code>${escapeHtml(receipt.runId)}</code></h1>
     <div class="summary">
       <p><span class="trust ${escapeHtml(receipt.trust)}">${escapeHtml(receipt.trust)}</span></p>
       <p>${escapeHtml(receipt.summary)}</p>

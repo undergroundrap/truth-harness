@@ -1,5 +1,5 @@
 {
-  "name": "@theorem-workbench/core",
+  "name": "@truth-harness/core",
   "version": "0.0.0",
   "type": "module",
   "description": "Core evidence graph, trust labels, exact arithmetic, and proof-receipt generation.",

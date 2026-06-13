@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/receipt.schema.json",
-  "title": "Theorem Workbench Receipt",
+  "$id": "https://truth-harness.local/schemas/receipt.schema.json",
+  "title": "Truth Harness Receipt",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -20,7 +20,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.receipt.v0"
+      "const": "truth-harness.receipt.v0"
     },
     "runId": {
       "type": "string",

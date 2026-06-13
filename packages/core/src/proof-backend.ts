@@ -59,7 +59,7 @@ export interface ProofBackendProbe {
 }
 
 export interface ProofBackendStatusReport {
-  schemaVersion: "theorem.proof-backends.v0";
+  schemaVersion: "truth-harness.proof-backends.v0";
   createdAt: string;
   localOnly: true;
   networkAccess: "none";
@@ -87,7 +87,7 @@ export interface LeanProofCheckInput {
   sourcePath: string;
   sourceText: string;
   sourceRef?: string;
-  theoremName?: string;
+  declarationName?: string;
   leanCommand?: string;
   timeoutMs?: number;
   now?: Date;
@@ -96,7 +96,7 @@ export interface LeanProofCheckInput {
 }
 
 export interface LeanProofCheckRecord {
-  schemaVersion: "theorem.proof-check.v0";
+  schemaVersion: "truth-harness.proof-check.v0";
   checkId: string;
   createdAt: string;
   backend: {
@@ -114,7 +114,7 @@ export interface LeanProofCheckRecord {
     path: string;
     sha256: string;
     byteLength: number;
-    theoremName?: string;
+    declarationName?: string;
   };
   status: LeanProofCheckStatus;
   trust: TrustLabel;
@@ -132,7 +132,7 @@ export interface LeanProofCheckRecord {
 export interface WriteLeanProofCheckInput {
   rootPath: string;
   sourcePath: string;
-  theoremName?: string;
+  declarationName?: string;
   leanCommand?: string;
   timeoutMs?: number;
   now?: Date;
@@ -151,7 +151,7 @@ export interface LeanProofCheckSummary {
   checkId: string;
   createdAt: string;
   sourcePath: string;
-  theoremName?: string;
+  declarationName?: string;
   status: LeanProofCheckStatus;
   trust: TrustLabel;
   proofCheckerBacked: boolean;
@@ -165,7 +165,7 @@ const DEFAULT_TIMEOUT_MS = 3000;
 export function getProofBackendStatus(options: ProofBackendStatusOptions = {}): ProofBackendStatusReport {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const runner = options.runner ?? runCommand;
-  const leanCommand = options.leanCommand?.trim() || process.env.THEOREM_LEAN?.trim() || "lean";
+  const leanCommand = options.leanCommand?.trim() || process.env.TRUTH_HARNESS_LEAN?.trim() || "lean";
   const lean = probeLeanBackend({
     command: leanCommand,
     timeoutMs,
@@ -174,7 +174,7 @@ export function getProofBackendStatus(options: ProofBackendStatusOptions = {}): 
   const proofCheckersAvailable = lean.status === "available" ? 1 : 0;
 
   return {
-    schemaVersion: "theorem.proof-backends.v0",
+    schemaVersion: "truth-harness.proof-backends.v0",
     createdAt: (options.now ?? new Date()).toISOString(),
     localOnly: true,
     networkAccess: "none",
@@ -189,10 +189,10 @@ export function getProofBackendStatus(options: ProofBackendStatusOptions = {}): 
     warnings:
       proofCheckersAvailable > 0
         ? [
-            "A detected proof checker can check proof artifacts, but this status report does not prove any theorem or mint `proved` receipts."
+            "A detected proof checker can check proof artifacts, but this status report does not prove any claim or mint `proved` receipts."
           ]
         : [
-            "No accepted local proof checker was detected. Theorem Workbench must not label results `proved` on this machine until a proof-checking adapter succeeds."
+            "No accepted local proof checker was detected. Truth Harness must not label results `proved` on this machine until a proof-checking adapter succeeds."
           ]
   };
 }
@@ -200,13 +200,13 @@ export function getProofBackendStatus(options: ProofBackendStatusOptions = {}): 
 export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofCheckRecord {
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const runner = input.runner ?? runCommand;
-  const leanCommand = input.leanCommand?.trim() || process.env.THEOREM_LEAN?.trim() || "lean";
+  const leanCommand = input.leanCommand?.trim() || process.env.TRUTH_HARNESS_LEAN?.trim() || "lean";
   const createdAt = (input.now ?? new Date()).toISOString();
   const sourcePath = input.sourcePath;
   const sourceRef = input.sourceRef ?? sourcePath;
   const sourceSha256 = sha256(input.sourceText);
   const sourceByteLength = Buffer.byteLength(input.sourceText, "utf8");
-  const theoremName = normalizeOptional(input.theoremName);
+  const declarationName = normalizeOptional(input.declarationName);
   const backendProbe = probeLeanBackend({
     command: leanCommand,
     timeoutMs,
@@ -214,7 +214,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
   });
   const proofArgs = [sourcePath];
   const base = {
-    schemaVersion: "theorem.proof-check.v0" as const,
+    schemaVersion: "truth-harness.proof-check.v0" as const,
     createdAt,
     backend: {
       id: "lean" as const,
@@ -230,11 +230,11 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       path: sourceRef,
       sha256: sourceSha256,
       byteLength: sourceByteLength,
-      ...(theoremName ? { theoremName } : {})
+      ...(declarationName ? { declarationName } : {})
     },
     localOnly: true as const,
     networkAccess: "none" as const,
-    replay: input.replayCommand ?? `theorem proof check ${quoteCommandArg(sourceRef)} --json`
+    replay: input.replayCommand ?? `truth-harness proof check ${quoteCommandArg(sourceRef)} --json`
   };
 
   if (backendProbe.status !== "available") {
@@ -346,10 +346,10 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
     stderr,
     limitations: [
       "Lean did not accept the proof artifact.",
-      "A rejected, incomplete, or malformed proof attempt does not refute the theorem; it leaves the claim unverified."
+      "A rejected, incomplete, or malformed proof attempt does not refute the claim; it leaves the claim unverified."
     ],
     warnings: [
-      "Lean rejected this proof artifact, so Theorem Workbench must not label the claim `proved`."
+      "Lean rejected this proof artifact, so Truth Harness must not label the claim `proved`."
     ]
   });
 }
@@ -363,12 +363,12 @@ export async function writeLeanProofCheckRecord(input: WriteLeanProofCheckInput)
     sourcePath: resolvedSourcePath,
     sourceRef,
     sourceText,
-    theoremName: input.theoremName,
+    declarationName: input.declarationName,
     leanCommand: input.leanCommand,
     timeoutMs: input.timeoutMs,
     now: input.now,
     runner: input.runner,
-    replayCommand: `theorem proof check ${quoteCommandArg(sourceRef)} --write --json`
+    replayCommand: `truth-harness proof check ${quoteCommandArg(sourceRef)} --write --json`
   });
   const proofsDir = resolve(status.root, status.manifest.directories.proofs);
   await mkdir(proofsDir, { recursive: true });
@@ -421,8 +421,8 @@ export async function listLeanProofChecks(rootPath: string): Promise<LeanProofCh
 export function parseLeanProofCheckRecord(raw: string, sourcePath = "proof-check record"): LeanProofCheckRecord {
   const parsed = parseJsonObject(raw, sourcePath, "Proof-check");
   const issues: string[] = [];
-  if (parsed.schemaVersion !== "theorem.proof-check.v0") {
-    issues.push(`$.schemaVersion must equal "theorem.proof-check.v0"`);
+  if (parsed.schemaVersion !== "truth-harness.proof-check.v0") {
+    issues.push(`$.schemaVersion must equal "truth-harness.proof-check.v0"`);
   }
   expectPattern(parsed, "checkId", /^proof_[a-f0-9]{16}$/u, "$.checkId", issues);
   expectDateTime(parsed, "createdAt", "$.createdAt", issues);
@@ -485,8 +485,8 @@ export function renderLeanProofCheckMarkdown(record: LeanProofCheckRecord): stri
     `- Bytes: ${record.source.byteLength}`
   ];
 
-  if (record.source.theoremName) {
-    lines.push(`- Theorem/declaration: \`${record.source.theoremName}\``);
+  if (record.source.declarationName) {
+    lines.push(`- Declaration: \`${record.source.declarationName}\``);
   }
 
   lines.push(
@@ -696,7 +696,7 @@ async function requireLocalWorkspace(
 ): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing proof-check records.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing proof-check records.");
   }
 
   return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
@@ -730,7 +730,7 @@ function summarizeLeanProofCheck(
     checkId: record.checkId,
     createdAt: record.createdAt,
     sourcePath: record.source.path,
-    theoremName: record.source.theoremName,
+    declarationName: record.source.declarationName,
     status: record.status,
     trust: record.trust,
     proofCheckerBacked: record.proofCheckerBacked,

@@ -26,7 +26,7 @@ export interface LocalCorpusChunk {
 }
 
 export interface LocalCorpusIndex {
-  schemaVersion: "theorem.corpus.v0";
+  schemaVersion: "truth-harness.corpus.v0";
   projectId: string;
   createdAt: string;
   updatedAt: string;
@@ -199,11 +199,11 @@ export async function searchLocalCorpus(input: LocalCorpusSearchInput): Promise<
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before using the local corpus.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before using the local corpus.");
   }
 
   if (status.missingDirectories.length > 0) {
-    throw new Error(`Theorem workspace is missing directories: ${status.missingDirectories.join(", ")}`);
+    throw new Error(`Truth Harness workspace is missing directories: ${status.missingDirectories.join(", ")}`);
   }
 
   return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
@@ -216,7 +216,7 @@ async function readLocalCorpusIndex(
   const indexPath = localCorpusIndexPath(status);
   try {
     const parsed = JSON.parse(await readFile(indexPath, "utf8")) as LocalCorpusIndex;
-    if (parsed.schemaVersion !== "theorem.corpus.v0") {
+    if (parsed.schemaVersion !== "truth-harness.corpus.v0") {
       throw new Error(`Unsupported local corpus schema: ${JSON.stringify(parsed.schemaVersion)}`);
     }
 
@@ -228,7 +228,7 @@ async function readLocalCorpusIndex(
     }
 
     return {
-      schemaVersion: "theorem.corpus.v0",
+      schemaVersion: "truth-harness.corpus.v0",
       projectId: status.manifest.projectId,
       createdAt: now,
       updatedAt: now,

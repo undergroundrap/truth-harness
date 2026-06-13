@@ -1,19 +1,19 @@
 {
-  "name": "@theorem-workbench/cli",
+  "name": "@truth-harness/cli",
   "version": "0.0.0",
   "type": "module",
   "description": "Human and agent CLI for Truth Harness.",
   "license": "SEE LICENSE IN LICENSE",
   "bin": {
-    "theorem": "./dist/index.js"
+    "truth-harness": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc -b",
     "test": "vitest run"
   },
   "dependencies": {
-    "@theorem-workbench/benchmarks": "0.0.0",
-    "@theorem-workbench/core": "0.0.0",
+    "@truth-harness/benchmarks": "0.0.0",
+    "@truth-harness/core": "0.0.0",
     "commander": "^14.0.0"
   }
 }

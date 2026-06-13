@@ -60,7 +60,7 @@ export interface CasBackendProbe {
 }
 
 export interface CasBackendStatusReport {
-  schemaVersion: "theorem.cas-backends.v0";
+  schemaVersion: "truth-harness.cas-backends.v0";
   createdAt: string;
   localOnly: true;
   networkAccess: "none";
@@ -96,7 +96,7 @@ export interface SymbolicCasCheckRecordInput extends SymbolicCasCheckInput {
 }
 
 export interface SymbolicCasCheckResult {
-  schemaVersion: "theorem.symbolic-cas-check.v0";
+  schemaVersion: "truth-harness.symbolic-cas-check.v0";
   checkId: string;
   createdAt: string;
   backend: {
@@ -128,7 +128,7 @@ export interface SymbolicCasCheckResult {
 }
 
 export type SymbolicCasCheckRecord = Omit<SymbolicCasCheckResult, "schemaVersion"> & {
-  schemaVersion: "theorem.cas-check.v0";
+  schemaVersion: "truth-harness.cas-check.v0";
   replay: string;
 };
 
@@ -159,7 +159,7 @@ export interface SymbolicCasCheckSummary {
 }
 
 const DEFAULT_TIMEOUT_MS = 3000;
-const MAXIMA_MARKER = "THEOREM_MAXIMA_STATUS:";
+const MAXIMA_MARKER = "TRUTH_HARNESS_MAXIMA_STATUS:";
 
 export function getCasBackendStatus(options: CasBackendStatusOptions = {}): CasBackendStatusReport {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -173,7 +173,7 @@ export function getCasBackendStatus(options: CasBackendStatusOptions = {}): CasB
   const casBackendsAvailable = maxima.status === "available" ? 1 : 0;
 
   return {
-    schemaVersion: "theorem.cas-backends.v0",
+    schemaVersion: "truth-harness.cas-backends.v0",
     createdAt: (options.now ?? new Date()).toISOString(),
     localOnly: true,
     networkAccess: "none",
@@ -191,7 +191,7 @@ export function getCasBackendStatus(options: CasBackendStatusOptions = {}): CasB
             "A detected CAS can cross-check symbolic equalities, but this status report does not prove, refute, or cross-check any claim."
           ]
         : [
-            "No independent local CAS backend was detected. Theorem Workbench must not label symbolic results `cross-checked` until an independent CAS run agrees on a concrete result."
+            "No independent local CAS backend was detected. Truth Harness must not label symbolic results `cross-checked` until an independent CAS run agrees on a concrete result."
           ]
   };
 }
@@ -207,7 +207,7 @@ export function checkSymbolicWithMaximaSync(input: SymbolicCasCheckInput): Symbo
     runner
   });
   const base = {
-    schemaVersion: "theorem.symbolic-cas-check.v0" as const,
+    schemaVersion: "truth-harness.symbolic-cas-check.v0" as const,
     checkId: `cas_${hashCasCheck(input.prompt, input.result).slice(0, 16)}`,
     createdAt,
     backend: {
@@ -240,7 +240,7 @@ export function checkSymbolicWithMaximaSync(input: SymbolicCasCheckInput): Symbo
         "Independent CAS cross-check did not run because Maxima was unavailable.",
         "Unavailable CAS status must not upgrade a symbolic result to `cross-checked`."
       ],
-      warnings: ["Install Maxima or configure THEOREM_MAXIMA to enable independent local CAS cross-checks."]
+      warnings: ["Install Maxima or configure TRUTH_HARNESS_MAXIMA to enable independent local CAS cross-checks."]
     };
   }
 
@@ -298,7 +298,7 @@ export function checkSymbolicWithMaximaSync(input: SymbolicCasCheckInput): Symbo
       trust: "unverified",
       stdout,
       stderr,
-      error: marker ? undefined : "Maxima did not emit a recognizable Theorem check marker.",
+      error: marker ? undefined : "Maxima did not emit a recognizable Truth Harness check marker.",
       limitations: [
         "The independent CAS run did not produce a parseable agreement result.",
         "Unparseable CAS output must not upgrade a symbolic result to `cross-checked`."
@@ -319,7 +319,7 @@ export function checkSymbolicWithMaximaSync(input: SymbolicCasCheckInput): Symbo
       marker.status === "passed"
         ? [
             "Cross-checked means SymPy and Maxima agreed on a normalized symbolic equality.",
-            "CAS agreement is not a proof-checker-backed proof of an arbitrary informal theorem."
+            "CAS agreement is not a proof-checker-backed proof of an arbitrary informal truth-harness."
           ]
         : [
             "Maxima did not agree with the SymPy result under the generated equality check.",
@@ -338,7 +338,7 @@ export function createSymbolicCasCheckRecord(input: SymbolicCasCheckRecordInput)
 
   return {
     ...check,
-    schemaVersion: "theorem.cas-check.v0",
+    schemaVersion: "truth-harness.cas-check.v0",
     replay
   };
 }
@@ -407,8 +407,8 @@ export async function listSymbolicCasChecks(rootPath: string): Promise<SymbolicC
 export function parseSymbolicCasCheckRecord(raw: string, sourcePath = "CAS check record"): SymbolicCasCheckRecord {
   const parsed = parseJsonObject(raw, sourcePath, "CAS check");
   const issues: string[] = [];
-  if (parsed.schemaVersion !== "theorem.cas-check.v0") {
-    issues.push(`$.schemaVersion must equal "theorem.cas-check.v0"`);
+  if (parsed.schemaVersion !== "truth-harness.cas-check.v0") {
+    issues.push(`$.schemaVersion must equal "truth-harness.cas-check.v0"`);
   }
   expectPattern(parsed, "checkId", /^cas_[a-f0-9]{16}$/u, "$.checkId", issues);
   expectDateTime(parsed, "createdAt", "$.createdAt", issues);
@@ -521,7 +521,7 @@ export function renderSymbolicCasCheckMarkdown(record: SymbolicCasCheckRecord): 
     "",
     "## Boundary",
     "",
-    "A Maxima CAS agreement supports a narrow `cross-checked` symbolic equality. It is not a proof-checker-backed proof of an arbitrary informal theorem, scientific claim, medical claim, safety claim, regulatory claim, or patent claim."
+    "A Maxima CAS agreement supports a narrow `cross-checked` symbolic equality. It is not a proof-checker-backed proof of an arbitrary formal math claim, scientific claim, medical claim, safety claim, regulatory claim, or patent claim."
   );
 
   return `${lines.join("\n")}\n`;
@@ -644,7 +644,7 @@ function parseMaximaMarker(stdout: string): { status: "passed" | "failed"; resid
 }
 
 function resolveMaximaCommand(command: string | undefined): string {
-  return command?.trim() || process.env.THEOREM_MAXIMA?.trim() || "maxima";
+  return command?.trim() || process.env.TRUTH_HARNESS_MAXIMA?.trim() || "maxima";
 }
 
 function runCommand(command: string, args: string[], timeoutMs: number): CasBackendCommandResult {
@@ -698,7 +698,7 @@ function quoteCommandArg(value: string): string {
 
 function casCheckReplayCommand(input: SymbolicCasCheckInput, write: boolean): string {
   return [
-    "theorem cas check",
+    "truth-harness cas check",
     `--operation ${quoteCommandArg(input.prompt.operation)}`,
     `--expression ${quoteCommandArg(input.prompt.expression)}`,
     `--result ${quoteCommandArg(input.result)}`,
@@ -715,7 +715,7 @@ async function requireLocalWorkspace(
 ): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing CAS check records.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing CAS check records.");
   }
 
   return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };

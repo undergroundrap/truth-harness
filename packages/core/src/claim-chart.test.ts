@@ -22,7 +22,7 @@ describe("claim charts", () => {
         rootPath: root,
         elements: [{ text: "A local evidence-backed claim element." }]
       })
-    ).rejects.toThrow("No Theorem workspace found");
+    ).rejects.toThrow("No Truth Harness workspace found");
   });
 
   it("writes local claim-chart JSON and Markdown for human legal review", async () => {
@@ -59,19 +59,19 @@ describe("claim charts", () => {
           notes: ["Drafting aid only."]
         }
       ],
-      reductionToPracticeRefs: ["simulation:.theorem-workbench/simulations/pathway.json"],
+      reductionToPracticeRefs: ["simulation:.truth-harness/simulations/pathway.json"],
       now: "2026-06-08T02:00:00.000Z"
     });
     const charts = await listClaimCharts(root);
 
-    expect(result.chart.schemaVersion).toBe("theorem.claim-chart.v0");
+    expect(result.chart.schemaVersion).toBe("truth-harness.claim-chart.v0");
     expect(result.chart.chartId).toMatch(/^chart_[a-f0-9]{16}$/);
     expect(result.chart.legal.legalConclusion).toBe("not-a-legal-opinion");
     expect(result.chart.legal.patentabilityConclusion).toBe("not-determined");
     expect(result.chart.legal.provisionalDraftReady).toBe(false);
     expect(result.chart.elements[0]?.status).toBe("evidence-referenced");
-    expect(result.jsonPath).toContain(join(".theorem-workbench", "patents"));
-    expect(result.markdownPath).toContain(join(".theorem-workbench", "patents"));
+    expect(result.jsonPath).toContain(join(".truth-harness", "patents"));
+    expect(result.markdownPath).toContain(join(".truth-harness", "patents"));
     expect(await readFile(result.markdownPath, "utf8")).toContain("## Claim Elements");
     expect(charts).toHaveLength(1);
     expect(charts[0]?.chartId).toBe(result.chart.chartId);
@@ -103,7 +103,7 @@ describe("claim charts", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-claim-chart-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-claim-chart-"));
   roots.push(root);
   return root;
 }

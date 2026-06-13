@@ -93,7 +93,7 @@ export function validateReceipt(value: unknown): ReceiptValidationIssue[] {
     return [{ path: "$", message: "must be an object" }];
   }
 
-  expectLiteral(value, "schemaVersion", "theorem.receipt.v0", "$.schemaVersion", issues);
+  expectLiteral(value, "schemaVersion", "truth-harness.receipt.v0", "$.schemaVersion", issues);
   expectPattern(value, "runId", /^run_[a-f0-9]{16}$/, "$.runId", issues);
   expectString(value, "createdAt", "$.createdAt", issues);
   expectString(value, "problem", "$.problem", issues);

@@ -36,7 +36,7 @@ describe("createSourceCitationReceipt", () => {
     expect(receipt.evidenceProfile.kind).toBe("source-citation");
     expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-corpus-lexical-search");
     expect(receipt.evidenceProfile.limitations.join(" ")).toContain("Retrieval is not proof");
-    expect(receipt.replay).toContain("theorem source cite");
+    expect(receipt.replay).toContain("truth-harness source cite");
     expect(receipt.artifacts.some((artifact) => artifact.kind === "local-corpus-search-result")).toBe(true);
     expect(receipt.graph.nodes.some((node) => node.kind === "source" && node.trust === "source-cited")).toBe(true);
     expect(receipt.findings[0]?.message).toContain("does not prove entailment");
@@ -71,7 +71,7 @@ describe("createSourceCitationReceipt", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-source-receipt-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-source-receipt-"));
   roots.push(root);
   return root;
 }

@@ -37,7 +37,7 @@ describe("validation plans", () => {
       evidenceRefs: [{ kind: "simulation", ref: simulation.entry.simulationId }]
     });
 
-    expect(plan.schemaVersion).toBe("theorem.validation-plan.v0");
+    expect(plan.schemaVersion).toBe("truth-harness.validation-plan.v0");
     expect(plan.domains).toContain("biomedical");
     expect(plan.audit.verdict.status).toBe("overclaimed");
     expect(plan.readiness.status).toBe("not-ready");
@@ -107,7 +107,7 @@ describe("validation plans", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-validation-plan-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-validation-plan-"));
   tempRoots.push(root);
   return root;
 }

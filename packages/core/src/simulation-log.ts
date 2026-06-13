@@ -33,7 +33,7 @@ export interface SimulationScalar {
 }
 
 export interface SimulationLogEntry {
-  schemaVersion: "theorem.simulation.v0";
+  schemaVersion: "truth-harness.simulation.v0";
   simulationId: string;
   projectId: string;
   createdAt: string;
@@ -138,7 +138,7 @@ export async function createSimulationLogEntry(input: CreateSimulationLogInput):
   const simulationId = `sim_${stableHash(entryWithoutId).slice(0, 16)}`;
   const validationBoundary = validationBoundaryFor({ stage, kind, nextChecks });
   const entry: SimulationLogEntry = {
-    schemaVersion: "theorem.simulation.v0",
+    schemaVersion: "truth-harness.simulation.v0",
     simulationId,
     ...entryWithoutId,
     updatedAt: createdAt,
@@ -178,14 +178,14 @@ export async function listSimulationLogEntries(rootPath: string): Promise<Simula
   );
 
   return entries
-    .filter((entry) => entry.schemaVersion === "theorem.simulation.v0")
+    .filter((entry) => entry.schemaVersion === "truth-harness.simulation.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing simulation logs.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing simulation logs.");
   }
 
   if (status.missingDirectories.length > 0) {

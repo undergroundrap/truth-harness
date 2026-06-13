@@ -18,16 +18,16 @@ describe("discovery packages", () => {
   it("renders a local invention package with resolved receipt evidence", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-08T00:00:00.000Z" });
-    await mkdir(join(root, ".theorem-workbench", "receipts"), { recursive: true });
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
     const receipt = createReceipt("for all integers n, n^2+n is even");
-    await writeFile(join(root, ".theorem-workbench", "receipts", "parity-check.json"), JSON.stringify(receipt, null, 2));
+    await writeFile(join(root, ".truth-harness", "receipts", "parity-check.json"), JSON.stringify(receipt, null, 2));
     const invention = await createInventionLogEntry({
       rootPath: root,
       title: "Parity check packaging",
       problem: "Package a verified math result without overclaiming discovery.",
       hypothesis: "A local exact-check receipt can support a narrow mathematical claim.",
-      evidenceRefs: [{ kind: "receipt", ref: ".theorem-workbench/receipts/parity-check.json" }],
-      nextChecks: ["Have a human review the theorem statement."],
+      evidenceRefs: [{ kind: "receipt", ref: ".truth-harness/receipts/parity-check.json" }],
+      nextChecks: ["Have a human review the formal statement."],
       now: "2026-06-08T01:00:00.000Z"
     });
 
@@ -37,7 +37,7 @@ describe("discovery packages", () => {
       now: "2026-06-08T02:00:00.000Z"
     });
 
-    expect(pkg.schemaVersion).toBe("theorem.discovery-package.v0");
+    expect(pkg.schemaVersion).toBe("truth-harness.discovery-package.v0");
     expect(pkg.evidenceReviews[0]?.status).toBe("resolved");
     expect(pkg.evidenceReviews[0]?.trust).toBe("exact-computed");
     expect(pkg.validation.resolvedReceiptCount).toBe(1);
@@ -48,17 +48,17 @@ describe("discovery packages", () => {
   it("warns for source-cited receipt evidence because retrieval is not proof", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-08T00:00:00.000Z" });
-    await mkdir(join(root, ".theorem-workbench", "receipts"), { recursive: true });
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
     const receipt = {
       ...createReceipt("compute 2 + 2"),
       trust: "source-cited" as const,
       summary: "Source-cited: local note mentions the claim."
     };
-    await writeFile(join(root, ".theorem-workbench", "receipts", "source.json"), JSON.stringify(receipt, null, 2));
+    await writeFile(join(root, ".truth-harness", "receipts", "source.json"), JSON.stringify(receipt, null, 2));
     const invention = await createInventionLogEntry({
       rootPath: root,
       hypothesis: "A source-cited receipt should be treated as evidence, not proof.",
-      evidenceRefs: [{ kind: "receipt", ref: ".theorem-workbench/receipts/source.json" }],
+      evidenceRefs: [{ kind: "receipt", ref: ".truth-harness/receipts/source.json" }],
       now: "2026-06-08T01:00:00.000Z"
     });
 
@@ -74,7 +74,7 @@ describe("discovery packages", () => {
     const invention = await createInventionLogEntry({
       rootPath: root,
       hypothesis: "Missing evidence should be visible.",
-      evidenceRefs: [{ kind: "receipt", ref: ".theorem-workbench/receipts/missing.json" }],
+      evidenceRefs: [{ kind: "receipt", ref: ".truth-harness/receipts/missing.json" }],
       now: "2026-06-08T01:00:00.000Z"
     });
 
@@ -88,14 +88,14 @@ describe("discovery packages", () => {
   it("marks invalid receipt evidence as unresolved instead of trusting stale JSON", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-08T00:00:00.000Z" });
-    await mkdir(join(root, ".theorem-workbench", "receipts"), { recursive: true });
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
     const legacyReceipt = { ...createReceipt("for all integers n, n^2+n is even") } as Record<string, unknown>;
     delete legacyReceipt.evidenceProfile;
-    await writeFile(join(root, ".theorem-workbench", "receipts", "legacy.json"), JSON.stringify(legacyReceipt, null, 2));
+    await writeFile(join(root, ".truth-harness", "receipts", "legacy.json"), JSON.stringify(legacyReceipt, null, 2));
     const invention = await createInventionLogEntry({
       rootPath: root,
       hypothesis: "Invalid receipt evidence should not count as a resolved discovery input.",
-      evidenceRefs: [{ kind: "receipt", ref: ".theorem-workbench/receipts/legacy.json" }],
+      evidenceRefs: [{ kind: "receipt", ref: ".truth-harness/receipts/legacy.json" }],
       now: "2026-06-08T01:00:00.000Z"
     });
 
@@ -120,7 +120,7 @@ describe("discovery packages", () => {
       evidenceRefs: [
         {
           kind: "disclosure",
-          ref: ".theorem-workbench/disclosures/2026-06-08-dis_abc123.json",
+          ref: ".truth-harness/disclosures/2026-06-08-dis_abc123.json",
           summary: "Frontier model critique request."
         }
       ],
@@ -143,7 +143,7 @@ describe("discovery packages", () => {
       evidenceRefs: [
         {
           kind: "simulation",
-          ref: ".theorem-workbench/simulations/2026-06-08-sim_abc123.json",
+          ref: ".truth-harness/simulations/2026-06-08-sim_abc123.json",
           summary: "Toy simulation output."
         }
       ],
@@ -166,7 +166,7 @@ describe("discovery packages", () => {
       evidenceRefs: [
         {
           kind: "experiment",
-          ref: ".theorem-workbench/experiments/2026-06-08-exp_abc123.json",
+          ref: ".truth-harness/experiments/2026-06-08-exp_abc123.json",
           summary: "Toy bench observation."
         }
       ],
@@ -192,13 +192,13 @@ describe("discovery packages", () => {
 
     const result = await writeDiscoveryPackage({ rootPath: root, now: "2026-06-08T02:00:00.000Z" });
 
-    expect(result.path.replace(/\\/g, "/")).toContain(".theorem-workbench/findings/");
+    expect(result.path.replace(/\\/g, "/")).toContain(".truth-harness/findings/");
     expect(await readFile(result.path, "utf8")).toContain("# Discovery Package: Local report");
   });
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-discovery-package-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-discovery-package-"));
   roots.push(root);
   return root;
 }

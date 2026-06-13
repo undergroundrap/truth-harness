@@ -35,7 +35,7 @@ describe("benchmark run records", () => {
         rootPath: root,
         run: benchmarkRun(receipt)
       })
-    ).rejects.toThrow("No Theorem workspace found");
+    ).rejects.toThrow("No Truth Harness workspace found");
   });
 
   it("writes local benchmark run records with replay and validation boundaries", async () => {
@@ -53,16 +53,16 @@ describe("benchmark run records", () => {
       suitePath: "packages/benchmarks/suites/tiny.json",
       runnerName: "vitest",
       runnerAdapter: "local-receipt-engine",
-      command: "theorem bench run packages/benchmarks/suites/tiny.json",
+      command: "truth-harness bench run packages/benchmarks/suites/tiny.json",
       workingDirectory: root,
       now: "2026-06-10T01:00:00.000Z"
     });
     const records = await listBenchmarkRunRecords(root);
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
-    expect(result.jsonPath).toContain(join(".theorem-workbench", "benchmarks"));
-    expect(result.markdownPath).toContain(join(".theorem-workbench", "benchmarks"));
-    expect(result.record.schemaVersion).toBe("theorem.benchmark-run.v0");
+    expect(result.jsonPath).toContain(join(".truth-harness", "benchmarks"));
+    expect(result.markdownPath).toContain(join(".truth-harness", "benchmarks"));
+    expect(result.record.schemaVersion).toBe("truth-harness.benchmark-run.v0");
     expect(result.record.benchmarkRunId).toMatch(/^bench_[a-f0-9]{16}$/);
     expect(result.record.privacy.mode).toBe("local-only");
     expect(result.record.verificationBoundary.executionPerformedByWorkbench).toBe(true);
@@ -74,8 +74,8 @@ describe("benchmark run records", () => {
     expect(parseBenchmarkRunRecordJson(JSON.stringify(result.record), "roundtrip").benchmarkRunId).toBe(
       result.record.benchmarkRunId
     );
-    expect(() => parseBenchmarkRunRecordJson(JSON.stringify({ schemaVersion: "theorem.legacy.v0" }), "legacy")).toThrow(
-      "theorem.benchmark-run.v0"
+    expect(() => parseBenchmarkRunRecordJson(JSON.stringify({ schemaVersion: "truth-harness.legacy.v0" }), "legacy")).toThrow(
+      "truth-harness.benchmark-run.v0"
     );
     expect(records).toHaveLength(1);
     expect(records[0]?.benchmarkRunId).toBe(result.record.benchmarkRunId);
@@ -94,7 +94,7 @@ describe("benchmark run records", () => {
       rootPath: root,
       run: benchmarkRun(receipt),
       suitePath: "packages/benchmarks/suites/tiny.json",
-      command: "theorem bench run packages/benchmarks/suites/tiny.json",
+      command: "truth-harness bench run packages/benchmarks/suites/tiny.json",
       now: "2026-06-10T01:00:00.000Z"
     });
     const current = await writeBenchmarkRunRecord({
@@ -105,7 +105,7 @@ describe("benchmark run records", () => {
         failures: ["Expected trust refuted, received exact-computed"]
       }),
       suitePath: "packages/benchmarks/suites/tiny.json",
-      command: "theorem bench run packages/benchmarks/suites/tiny.json",
+      command: "truth-harness bench run packages/benchmarks/suites/tiny.json",
       now: "2026-06-10T01:05:00.000Z"
     });
 
@@ -129,7 +129,7 @@ describe("benchmark run records", () => {
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
     expect(preview.verdict).toBe("regressed");
-    expect(written.record.schemaVersion).toBe("theorem.benchmark-comparison.v0");
+    expect(written.record.schemaVersion).toBe("truth-harness.benchmark-comparison.v0");
     expect(written.record.verdict).toBe("regressed");
     expect(benchmarkComparisonFailsGate(written.record)).toBe(true);
     expect(written.record.summary.regressions).toBe(1);
@@ -139,7 +139,7 @@ describe("benchmark run records", () => {
     expect(written.markdown).toContain("## Case Changes");
     expect(artifacts).toHaveLength(3);
     expect(artifacts.map((artifact) => artifact.kind).sort()).toEqual(["comparison", "run", "run"]);
-    expect(artifacts.find((artifact) => artifact.kind === "comparison")?.path).toContain(".theorem-workbench/benchmarks/");
+    expect(artifacts.find((artifact) => artifact.kind === "comparison")?.path).toContain(".truth-harness/benchmarks/");
     expect(comparisons).toHaveLength(1);
     expect(comparisons[0]?.comparisonId).toBe(written.record.comparisonId);
     expect(validation.passed).toBe(true);
@@ -200,7 +200,7 @@ function benchmarkRun(
 }
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-benchmark-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-benchmark-"));
   roots.push(root);
   return root;
 }

@@ -50,7 +50,7 @@ export interface BenchmarkRunCaseRecord {
 }
 
 export interface BenchmarkRunRecord {
-  schemaVersion: "theorem.benchmark-run.v0";
+  schemaVersion: "truth-harness.benchmark-run.v0";
   benchmarkRunId: string;
   projectId: string;
   createdAt: string;
@@ -150,7 +150,7 @@ export interface BenchmarkComparisonCase {
 }
 
 export interface BenchmarkComparisonRecord {
-  schemaVersion: "theorem.benchmark-comparison.v0";
+  schemaVersion: "truth-harness.benchmark-comparison.v0";
   comparisonId: string;
   projectId: string;
   createdAt: string;
@@ -222,7 +222,7 @@ export type BenchmarkArtifactSummaryKind = "run" | "comparison";
 export interface BenchmarkArtifactSummary {
   kind: BenchmarkArtifactSummaryKind;
   path: string;
-  schemaVersion: "theorem.benchmark-run.v0" | "theorem.benchmark-comparison.v0";
+  schemaVersion: "truth-harness.benchmark-run.v0" | "truth-harness.benchmark-comparison.v0";
   artifactId: string;
   createdAt: string;
   suiteId: string;
@@ -270,7 +270,7 @@ export async function createBenchmarkRunRecord(input: CreateBenchmarkRunRecordIn
       path: suitePath
     },
     runner: {
-      name: normalizeOptionalText(input.runnerName) ?? "theorem-benchmark-runner",
+      name: normalizeOptionalText(input.runnerName) ?? "truth-harness-benchmark-runner",
       adapter: normalizeOptionalText(input.runnerAdapter) ?? "local-receipt-engine",
       version: normalizeOptionalText(input.runnerVersion)
     },
@@ -300,7 +300,7 @@ export async function createBenchmarkRunRecord(input: CreateBenchmarkRunRecordIn
   };
   const benchmarkRunId = `bench_${stableHash(recordWithoutId).slice(0, 16)}`;
   const record: BenchmarkRunRecord = {
-    schemaVersion: "theorem.benchmark-run.v0",
+    schemaVersion: "truth-harness.benchmark-run.v0",
     benchmarkRunId,
     ...recordWithoutId,
     updatedAt: createdAt,
@@ -343,8 +343,8 @@ export function parseBenchmarkRunRecordJson(raw: string, source = "benchmark run
     throw new Error(`${source} must be a JSON object.`);
   }
 
-  if (parsed.schemaVersion !== "theorem.benchmark-run.v0") {
-    throw new Error(`${source} must have schemaVersion "theorem.benchmark-run.v0".`);
+  if (parsed.schemaVersion !== "truth-harness.benchmark-run.v0") {
+    throw new Error(`${source} must have schemaVersion "truth-harness.benchmark-run.v0".`);
   }
 
   if (typeof parsed.benchmarkRunId !== "string" || !isRecord(parsed.suite) || !isRecord(parsed.totals) || !Array.isArray(parsed.cases)) {
@@ -385,7 +385,7 @@ export function createBenchmarkComparisonRecord(input: CreateBenchmarkComparison
   const comparisonId = `bcmp_${stableHash(comparisonWithoutId).slice(0, 16)}`;
 
   return {
-    schemaVersion: "theorem.benchmark-comparison.v0",
+    schemaVersion: "truth-harness.benchmark-comparison.v0",
     comparisonId,
     ...comparisonWithoutId
   };
@@ -440,7 +440,7 @@ export async function listBenchmarkComparisonRecords(rootPath: string): Promise<
   );
 
   return records
-    .filter((record) => record.schemaVersion === "theorem.benchmark-comparison.v0")
+    .filter((record) => record.schemaVersion === "truth-harness.benchmark-comparison.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
@@ -467,7 +467,7 @@ export async function listBenchmarkRunRecords(rootPath: string): Promise<Benchma
   );
 
   return records
-    .filter((record) => record.schemaVersion === "theorem.benchmark-run.v0")
+    .filter((record) => record.schemaVersion === "truth-harness.benchmark-run.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
@@ -969,11 +969,11 @@ function summarizeBenchmarkArtifact(
     return undefined;
   }
 
-  if (parsed.schemaVersion === "theorem.benchmark-run.v0") {
+  if (parsed.schemaVersion === "truth-harness.benchmark-run.v0") {
     return summarizeBenchmarkRunArtifact(root, path, parsed as unknown as BenchmarkRunRecord);
   }
 
-  if (parsed.schemaVersion === "theorem.benchmark-comparison.v0") {
+  if (parsed.schemaVersion === "truth-harness.benchmark-comparison.v0") {
     return summarizeBenchmarkComparisonArtifact(root, path, parsed as unknown as BenchmarkComparisonRecord);
   }
 
@@ -988,7 +988,7 @@ function summarizeBenchmarkRunArtifact(
   return {
     kind: "run",
     path: toPortablePath(relative(root, path)),
-    schemaVersion: "theorem.benchmark-run.v0",
+    schemaVersion: "truth-harness.benchmark-run.v0",
     artifactId: record.benchmarkRunId,
     createdAt: record.createdAt,
     suiteId: record.suite.suiteId,
@@ -1009,7 +1009,7 @@ function summarizeBenchmarkComparisonArtifact(
   return {
     kind: "comparison",
     path: toPortablePath(relative(root, path)),
-    schemaVersion: "theorem.benchmark-comparison.v0",
+    schemaVersion: "truth-harness.benchmark-comparison.v0",
     artifactId: record.comparisonId,
     createdAt: record.createdAt,
     suiteId: record.current.suiteId,
@@ -1038,7 +1038,7 @@ async function requireLocalWorkspace(
 ): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing benchmark run records.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing benchmark run records.");
   }
 
   return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };

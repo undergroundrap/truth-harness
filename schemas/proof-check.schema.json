@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/proof-check.schema.json",
-  "title": "Theorem Workbench Proof Check Record",
+  "$id": "https://truth-harness.local/schemas/proof-check.schema.json",
+  "title": "Truth Harness Proof Check Record",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -20,7 +20,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.proof-check.v0"
+      "const": "truth-harness.proof-check.v0"
     },
     "checkId": {
       "type": "string",
@@ -81,7 +81,7 @@
           "type": "integer",
           "minimum": 0
         },
-        "theoremName": {
+        "declarationName": {
           "type": "string"
         }
       },

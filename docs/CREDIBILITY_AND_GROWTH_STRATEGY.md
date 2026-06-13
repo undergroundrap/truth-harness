@@ -88,7 +88,7 @@ For physics, add these requirements before claiming physics competence:
 The viral version should spread because it is useful and legible, not because it overpromises.
 
 1. Paste any AI math answer and get a proof receipt.
-2. Shareable theorem cards: claim, trust label, replay command, evidence graph, and counterexample if false.
+2. Shareable claim cards: claim, trust label, replay command, evidence graph, and counterexample if false.
 3. "AI math hallucination audit" posts that test popular models on tricky but fair problems.
 4. A public `false-claims-100` benchmark where models lose points for confident nonsense.
 5. A GitHub Action that checks Markdown, notebooks, or docs for replayable math claims.
@@ -105,7 +105,7 @@ That is concrete, memorable, and defensible.
 
 Demo 1: Hallucination receipt
 
-- Input: a plausible but false theorem.
+- Input: a plausible but false truth-harness.
 - Output: `refuted`, with a counterexample and replay command.
 - Why it matters: shows we are not just beautifying answers.
 
@@ -168,7 +168,7 @@ High-value wedges:
 
 - Education: verified step-by-step math learning from arithmetic to proof.
 - Engineering: unit-safe calculations, formula checks, and technical documentation audits.
-- Research: theorem search, failed-hypothesis tracking, proof attempt replay, literature-grounded notes.
+- Research: formal-library search, failed-hypothesis tracking, proof attempt replay, literature-grounded notes.
 - AI evaluation: benchmarking agents on proof, refutation, exactness, and citation grounding.
 - Scientific software: reproducible calculation receipts attached to docs, notebooks, and papers.
 

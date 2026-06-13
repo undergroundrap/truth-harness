@@ -544,7 +544,7 @@ function independentCasFinding(status: string): Finding {
   if (status === "solver-unavailable") {
     return {
       level: "info",
-      message: "Independent CAS cross-check unavailable: install Maxima or set THEOREM_MAXIMA to enable a second-engine symbolic check."
+      message: "Independent CAS cross-check unavailable: install Maxima or set TRUTH_HARNESS_MAXIMA to enable a second-engine symbolic check."
     };
   }
 
@@ -917,7 +917,7 @@ function completeUniversalParityReceipt(args: {
       kind: "tool_run",
       payload: {
         adapter: proofResult.adapter,
-        theorem: proofResult.theorem,
+        claim: proofResult.claim,
         modulus: proofResult.modulus,
         residues: proofResult.residues
       },
@@ -985,7 +985,7 @@ function completeUniversalParityReceipt(args: {
     level: "warning",
     message: proofResult
       ? `Finite search found no counterexample, but the local parity checker could not certify the claim: ${proofResult.reason}`
-      : "Finite search found no counterexample, but Theorem Workbench did not produce proof-checker-backed evidence."
+      : "Finite search found no counterexample, but Truth Harness did not produce proof-checker-backed evidence."
   });
 
   return buildReceipt({
@@ -1151,14 +1151,14 @@ function buildReceipt(args: {
   }).slice(0, 16);
 
   return {
-    schemaVersion: "theorem.receipt.v0",
+    schemaVersion: "truth-harness.receipt.v0",
     runId: `run_${runHash}`,
     createdAt: args.createdAt,
     problem: args.problem,
     normalizedProblem: args.normalizedProblem,
     trust: args.trust,
     summary: args.summary,
-    replay: `theorem ask ${JSON.stringify(args.problem)} --json`,
+    replay: `truth-harness ask ${JSON.stringify(args.problem)} --json`,
     privacy,
     evidenceProfile: args.evidenceProfile,
     graph: {

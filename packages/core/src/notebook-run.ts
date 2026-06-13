@@ -18,7 +18,7 @@ export interface NotebookRunValue {
 }
 
 export interface NotebookRunRecord {
-  schemaVersion: "theorem.notebook-run.v0";
+  schemaVersion: "truth-harness.notebook-run.v0";
   runRecordId: string;
   projectId: string;
   createdAt: string;
@@ -162,7 +162,7 @@ export async function createNotebookRun(input: CreateNotebookRunInput): Promise<
     nextChecks
   });
   const record: NotebookRunRecord = {
-    schemaVersion: "theorem.notebook-run.v0",
+    schemaVersion: "truth-harness.notebook-run.v0",
     runRecordId,
     ...recordWithoutId,
     updatedAt: createdAt,
@@ -229,7 +229,7 @@ export async function listNotebookRuns(rootPath: string): Promise<NotebookRunRec
   );
 
   return records
-    .filter((record) => record.schemaVersion === "theorem.notebook-run.v0")
+    .filter((record) => record.schemaVersion === "truth-harness.notebook-run.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
@@ -335,7 +335,7 @@ function replayNotesFor(command: string | undefined): string[] {
     return ["No replay command was recorded; this run is not directly replayable yet."];
   }
 
-  return ["Replay command is recorded for human or agent execution; Theorem Workbench has not executed it."];
+  return ["Replay command is recorded for human or agent execution; Truth Harness has not executed it."];
 }
 
 function warningsFor(input: {
@@ -352,7 +352,7 @@ function warningsFor(input: {
 }): string[] {
   const warnings = [
     "Notebook run records are provenance artifacts; they do not prove code correctness, scientific validity, safety, regulatory approval, or patentability.",
-    "Theorem Workbench did not execute this run; replay and output verification remain required."
+    "Truth Harness did not execute this run; replay and output verification remain required."
   ];
 
   if (input.status === "failed") {
@@ -397,7 +397,7 @@ function warningsFor(input: {
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing notebook run records.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing notebook run records.");
   }
 
   if (status.missingDirectories.length > 0) {

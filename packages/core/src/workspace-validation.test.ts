@@ -44,7 +44,7 @@ describe("workspace artifact validation", () => {
       now: "2026-06-10T01:00:00.000Z"
     });
 
-    expect(validation.schemaVersion).toBe("theorem.workspace-validation.v0");
+    expect(validation.schemaVersion).toBe("truth-harness.workspace-validation.v0");
     expect(validation.passed).toBe(true);
     expect(validation.summary.checkedFiles).toBe(2);
     expect(validation.summary.validFiles).toBe(2);
@@ -54,13 +54,13 @@ describe("workspace artifact validation", () => {
       expect.objectContaining({
         kind: "manifest",
         valid: true,
-        path: ".theorem-workbench/project.json"
+        path: ".truth-harness/project.json"
       })
     );
     expect(validation.artifacts).toContainEqual(expect.objectContaining({
       kind: "receipts",
       valid: true,
-      path: ".theorem-workbench/receipts/valid.json",
+      path: ".truth-harness/receipts/valid.json",
       trust: "exact-computed"
     }));
   });
@@ -79,7 +79,7 @@ describe("workspace artifact validation", () => {
     expect(validation.issues[0]).toMatchObject({
       severity: "error",
       code: "invalid-receipt-schema",
-      path: ".theorem-workbench/receipts/legacy.json"
+      path: ".truth-harness/receipts/legacy.json"
     });
     expect(validation.issues[0]?.message).toContain("$.evidenceProfile");
     expect(validation.artifacts.find((artifact) => artifact.path.endsWith("legacy.json"))?.valid).toBe(false);
@@ -99,7 +99,7 @@ describe("workspace artifact validation", () => {
       expect.objectContaining({
         severity: "error",
         code: "proved-without-proof-checker",
-        path: ".theorem-workbench/receipts/forged-proved.json"
+        path: ".truth-harness/receipts/forged-proved.json"
       })
     );
     expect(validation.artifacts.find((artifact) => artifact.path.endsWith("forged-proved.json"))?.issueCodes).toContain(
@@ -142,14 +142,14 @@ describe("workspace artifact validation", () => {
     expect(validation.summary.byKind.manifest).toBe(1);
     expect(validation.artifacts.find((artifact) => artifact.kind === "manifest")).toMatchObject({
       valid: false,
-      path: ".theorem-workbench/project.json",
+      path: ".truth-harness/project.json",
       issueCodes: expect.arrayContaining(["invalid-artifact-schema"])
     });
     expect(validation.issues).toContainEqual(
       expect.objectContaining({
         severity: "error",
         code: "invalid-artifact-schema",
-        path: ".theorem-workbench/project.json",
+        path: ".truth-harness/project.json",
         message: expect.stringContaining("$.privacy.mode must equal \"local-only\"")
       })
     );
@@ -157,7 +157,7 @@ describe("workspace artifact validation", () => {
       expect.objectContaining({
         severity: "error",
         code: "invalid-artifact-schema",
-        path: ".theorem-workbench/project.json",
+        path: ".truth-harness/project.json",
         message: expect.stringContaining("$.privacy.localFirst must equal true")
       })
     );
@@ -165,7 +165,7 @@ describe("workspace artifact validation", () => {
       expect.objectContaining({
         severity: "error",
         code: "invalid-artifact-schema",
-        path: ".theorem-workbench/project.json",
+        path: ".truth-harness/project.json",
         message: expect.stringContaining("$.privacy.networkAccess must equal \"none\"")
       })
     );
@@ -185,12 +185,12 @@ describe("workspace artifact validation", () => {
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
     expect(validation.passed).toBe(false);
-    expect(validation.warnings[0]).toContain("theorem workspace repair");
+    expect(validation.warnings[0]).toContain("truth-harness workspace repair");
     expect(validation.warnings[0]).toContain("code-runs");
     expect(validation.issues).toContainEqual(
       expect.objectContaining({
         code: "invalid-artifact-schema",
-        path: ".theorem-workbench/project.json"
+        path: ".truth-harness/project.json"
       })
     );
   });
@@ -225,7 +225,7 @@ describe("workspace artifact validation", () => {
       expect.objectContaining({
         kind: "simulations",
         valid: true,
-        schemaVersion: "theorem.simulation.v0",
+        schemaVersion: "truth-harness.simulation.v0",
         artifactId: simulation.entry.simulationId
       })
     );
@@ -233,14 +233,14 @@ describe("workspace artifact validation", () => {
       expect.objectContaining({
         severity: "error",
         code: "missing-schema-version",
-        path: ".theorem-workbench/notebook-runs/bad-run.json"
+        path: ".truth-harness/notebook-runs/bad-run.json"
       })
     );
     expect(validation.issues).toContainEqual(
       expect.objectContaining({
         severity: "error",
         code: "missing-artifact-id",
-        path: ".theorem-workbench/notebook-runs/bad-run.json"
+        path: ".truth-harness/notebook-runs/bad-run.json"
       })
     );
   });
@@ -273,9 +273,9 @@ describe("workspace artifact validation", () => {
       rootPath: root,
       problem: "compute 3 / 4 + 5 / 8",
       now: new Date("2026-06-10T00:06:00.000Z"),
-      maximaCommand: "theorem-workbench-missing-maxima-command",
-      leanCommand: "theorem-workbench-missing-lean-command",
-      z3Command: "theorem-workbench-missing-z3-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const simulation = await createSimulationLogEntry({
@@ -385,7 +385,7 @@ describe("workspace artifact validation", () => {
       suitePath: "packages/benchmarks/suites/golden-regression.json",
       runnerName: "vitest",
       runnerAdapter: "local-receipt-engine",
-      command: "theorem bench run packages/benchmarks/suites/golden-regression.json",
+      command: "truth-harness bench run packages/benchmarks/suites/golden-regression.json",
       workingDirectory: root,
       now: "2026-06-10T00:27:00.000Z"
     });
@@ -430,7 +430,7 @@ describe("workspace artifact validation", () => {
 
       return {
         status: 0,
-        stdout: "THEOREM_MAXIMA_STATUS:passed:0\n",
+        stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n",
         stderr: ""
       };
     };
@@ -558,21 +558,21 @@ describe("workspace artifact validation", () => {
       tasks: ["Validate generated artifacts."],
       now: "2026-06-10T01:00:00.000Z"
     });
-    const previousVaultKey = process.env.THEOREM_WORKBENCH_TEST_VAULT_KEY;
-    process.env.THEOREM_WORKBENCH_TEST_VAULT_KEY = "local-test-secret-123";
+    const previousVaultKey = process.env.TRUTH_HARNESS_TEST_VAULT_KEY;
+    process.env.TRUTH_HARNESS_TEST_VAULT_KEY = "local-test-secret-123";
     try {
       await sealVaultFile({
         rootPath: root,
         sourcePath: "private-note.txt",
         label: "Golden private note",
-        keyEnv: "THEOREM_WORKBENCH_TEST_VAULT_KEY",
+        keyEnv: "TRUTH_HARNESS_TEST_VAULT_KEY",
         now: "2026-06-10T01:05:00.000Z"
       });
     } finally {
       if (previousVaultKey === undefined) {
-        delete process.env.THEOREM_WORKBENCH_TEST_VAULT_KEY;
+        delete process.env.TRUTH_HARNESS_TEST_VAULT_KEY;
       } else {
-        process.env.THEOREM_WORKBENCH_TEST_VAULT_KEY = previousVaultKey;
+        process.env.TRUTH_HARNESS_TEST_VAULT_KEY = previousVaultKey;
       }
     }
     const snapshot = await writeWorkspaceSnapshot({
@@ -624,7 +624,7 @@ describe("workspace artifact validation", () => {
     const root = await tempRoot();
     const workspace = await initLocalWorkspace(root);
     await writeWorkspaceJson(root, "simulations", "bad-simulation.json", {
-      schemaVersion: "theorem.simulation.v0",
+      schemaVersion: "truth-harness.simulation.v0",
       simulationId: "sim_1234567890abcdef",
       projectId: workspace.manifest.projectId,
       createdAt: "2026-06-10T00:00:00.000Z",
@@ -643,7 +643,7 @@ describe("workspace artifact validation", () => {
       expect.objectContaining({
         severity: "error",
         code: "invalid-artifact-schema",
-        path: ".theorem-workbench/simulations/bad-simulation.json",
+        path: ".truth-harness/simulations/bad-simulation.json",
         message: expect.stringContaining("$.title is required")
       })
     );
@@ -651,7 +651,7 @@ describe("workspace artifact validation", () => {
       expect.objectContaining({
         severity: "error",
         code: "invalid-artifact-schema",
-        path: ".theorem-workbench/simulations/bad-simulation.json",
+        path: ".truth-harness/simulations/bad-simulation.json",
         message: expect.stringContaining("$.updatedAt must be a valid date-time string")
       })
     );
@@ -659,7 +659,7 @@ describe("workspace artifact validation", () => {
       expect.objectContaining({
         severity: "error",
         code: "invalid-artifact-schema",
-        path: ".theorem-workbench/simulations/bad-simulation.json",
+        path: ".truth-harness/simulations/bad-simulation.json",
         message: expect.stringContaining("$.validationBoundary.simulationIsNotReality must equal true")
       })
     );
@@ -743,7 +743,7 @@ describe("workspace artifact validation", () => {
       expect.objectContaining({
         kind: "model-contexts",
         valid: true,
-        schemaVersion: "theorem.model-context.v0"
+        schemaVersion: "truth-harness.model-context.v0"
       })
     );
   });
@@ -882,13 +882,13 @@ async function writeReceipt(root: string, name: string, value: unknown): Promise
 }
 
 async function writeWorkspaceJson(root: string, directory: string, name: string, value: unknown): Promise<void> {
-  const targetDir = join(root, ".theorem-workbench", directory);
+  const targetDir = join(root, ".truth-harness", directory);
   await mkdir(targetDir, { recursive: true });
   await writeFile(join(targetDir, name), `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-validation-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-validation-"));
   roots.push(root);
   return root;
 }

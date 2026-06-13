@@ -71,7 +71,7 @@ export interface ResearchSessionCheckpoint {
 }
 
 export interface ResearchSession {
-  schemaVersion: "theorem.research-session.v0";
+  schemaVersion: "truth-harness.research-session.v0";
   sessionId: string;
   projectId: string;
   createdAt: string;
@@ -190,7 +190,7 @@ export async function createResearchSession(input: CreateResearchSessionInput): 
   };
   const sessionId = `session_${stableHash(sessionWithoutId).slice(0, 16)}`;
   const session: Omit<ResearchSession, "markdown"> = {
-    schemaVersion: "theorem.research-session.v0",
+    schemaVersion: "truth-harness.research-session.v0",
     sessionId,
     ...sessionWithoutId,
     updatedAt: createdAt,
@@ -282,7 +282,7 @@ export async function listResearchSessions(rootPath: string): Promise<ResearchSe
   );
 
   return sessions
-    .filter((session) => session.schemaVersion === "theorem.research-session.v0")
+    .filter((session) => session.schemaVersion === "truth-harness.research-session.v0")
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
@@ -446,7 +446,7 @@ async function readResearchSessionRef(
     for (const file of files.filter((candidate) => candidate.endsWith(".json"))) {
       const path = join(sessionsDir, file);
       const session = JSON.parse(await readFile(path, "utf8")) as ResearchSession;
-      if (session.schemaVersion === "theorem.research-session.v0" && session.sessionId === ref) {
+      if (session.schemaVersion === "truth-harness.research-session.v0" && session.sessionId === ref) {
         return { session, path };
       }
     }
@@ -593,7 +593,7 @@ function mergeStrings(left: string[], right: string[]): string[] {
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing research sessions.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing research sessions.");
   }
 
   if (status.missingDirectories.length > 0) {

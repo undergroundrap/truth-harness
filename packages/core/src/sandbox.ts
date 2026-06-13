@@ -17,7 +17,7 @@ export interface CodeRunSandboxMeasurement {
 }
 
 export interface CodeRunSandboxStatus extends CodeRunSandboxMeasurement {
-  schemaVersion: "theorem.code-run-sandbox-status.v0";
+  schemaVersion: "truth-harness.code-run-sandbox-status.v0";
   platform: NodeJS.Platform;
   reason: string;
 }
@@ -49,17 +49,17 @@ export function detectCodeRunSandboxStatus(probe: CodeRunSandboxProbe): CodeRunS
     });
   }
 
-  const hasWorkbenchContainerMarker = isTruthyEnv(probe.env.THEOREM_WORKBENCH_CONTAINER);
+  const hasWorkbenchContainerMarker = isTruthyEnv(probe.env.TRUTH_HARNESS_CONTAINER);
   const hasRuntimeMarker = hasContainerRuntimeMarker(probe);
   const network = measureLinuxNetworkNamespace(probe);
 
   if (!hasWorkbenchContainerMarker) {
     return unavailableStatus({
       platform: probe.platform,
-      reason: "The Theorem Workbench container marker is not present.",
+      reason: "The Truth Harness container marker is not present.",
       notes: [
         ...defaultUnavailableNotes(),
-        "Set THEOREM_WORKBENCH_CONTAINER=1 only inside the Theorem Workbench container image; the marker is not trusted by itself."
+        "Set TRUTH_HARNESS_CONTAINER=1 only inside the Truth Harness container image; the marker is not trusted by itself."
       ]
     });
   }
@@ -70,7 +70,7 @@ export function detectCodeRunSandboxStatus(probe: CodeRunSandboxProbe): CodeRunS
       reason: "No Docker/container runtime marker was measured for this process.",
       notes: [
         ...defaultUnavailableNotes(),
-        "The Theorem Workbench container marker was present, but no runtime marker such as /.dockerenv or a container cgroup was measured."
+        "The Truth Harness container marker was present, but no runtime marker such as /.dockerenv or a container cgroup was measured."
       ]
     });
   }
@@ -88,7 +88,7 @@ export function detectCodeRunSandboxStatus(probe: CodeRunSandboxProbe): CodeRunS
   }
 
   return {
-    schemaVersion: "theorem.code-run-sandbox-status.v0",
+    schemaVersion: "truth-harness.code-run-sandbox-status.v0",
     platform: probe.platform,
     available: true,
     provider: "container",
@@ -96,9 +96,9 @@ export function detectCodeRunSandboxStatus(probe: CodeRunSandboxProbe): CodeRunS
     networkIsolation: "enforced",
     filesystemIsolation: "working-directory-only",
     canAttestNetworkNone: true,
-    reason: "Measured Theorem Workbench container runtime with a loopback-only network namespace and no default route.",
+    reason: "Measured Truth Harness container runtime with a loopback-only network namespace and no default route.",
     notes: [
-      "The code-run process is executing inside the Theorem Workbench container image.",
+      "The code-run process is executing inside the Truth Harness container image.",
       "The measured Linux network namespace exposes only loopback and no IPv4 or IPv6 default route, matching Docker network_mode none.",
       "Loopback inside the container can still be used by processes in that container; this measurement attests no non-loopback network interface/default route, not scientific correctness.",
       "The repository is still bind-mounted at /workspace, so commands can read and write workspace files."
@@ -124,7 +124,7 @@ function unavailableStatus(input: {
   notes: string[];
 }): CodeRunSandboxStatus {
   return {
-    schemaVersion: "theorem.code-run-sandbox-status.v0",
+    schemaVersion: "truth-harness.code-run-sandbox-status.v0",
     platform: input.platform,
     available: false,
     provider: "none",

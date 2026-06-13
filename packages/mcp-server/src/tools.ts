@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { parseBenchmarkSuite, runBenchmarkSuite, type BenchmarkRun } from "@theorem-workbench/benchmarks";
+import { parseBenchmarkSuite, runBenchmarkSuite, type BenchmarkRun } from "@truth-harness/benchmarks";
 import {
   benchmarkComparisonFailsGate,
   benchmarkRunFailsGate,
@@ -197,20 +197,20 @@ import {
   type TrustLabel,
   type WorkspaceValidation,
   type SympyOperation
-} from "@theorem-workbench/core";
+} from "@truth-harness/core";
 
-export interface TheoremAskInput {
+export interface TruthHarnessAskInput {
   problem: string;
   strict?: boolean;
 }
 
-export interface TheoremAskOutput {
+export interface TruthHarnessAskOutput {
   error: boolean;
   receipt: Receipt;
   message: string;
 }
 
-export interface TheoremVerifyInput {
+export interface TruthHarnessVerifyInput {
   problem: string;
   workspacePath?: string;
   write?: boolean;
@@ -221,7 +221,7 @@ export interface TheoremVerifyInput {
   z3Command?: string;
 }
 
-export interface TheoremVerifyOutput {
+export interface TruthHarnessVerifyOutput {
   error: boolean;
   written: boolean;
   route: VerifierRoute;
@@ -229,30 +229,30 @@ export interface TheoremVerifyOutput {
   message: string;
 }
 
-export interface TheoremRouteListInput {
+export interface TruthHarnessRouteListInput {
   workspacePath?: string;
 }
 
-export interface TheoremRouteShowInput {
+export interface TruthHarnessRouteShowInput {
   workspacePath?: string;
   routeRef: string;
 }
 
-export interface TheoremRouteSatisfyInput {
+export interface TruthHarnessRouteSatisfyInput {
   workspacePath?: string;
   routeRef: string;
   obligationId: string;
   evidenceRef: VerifierRouteEvidenceRef;
 }
 
-export interface TheoremEngineManifestInput {
+export interface TruthHarnessEngineManifestInput {
   timeoutMs?: number;
   maximaCommand?: string;
   leanCommand?: string;
   z3Command?: string;
 }
 
-export interface TheoremClaimAddInput {
+export interface TruthHarnessClaimAddInput {
   workspacePath?: string;
   title?: string;
   statement: string;
@@ -268,7 +268,7 @@ export interface TheoremClaimAddInput {
   nextChecks?: string[];
 }
 
-export interface TheoremClaimListInput {
+export interface TruthHarnessClaimListInput {
   workspacePath?: string;
   domain?: ClaimLedgerDomain;
   status?: ClaimLedgerStatus;
@@ -276,30 +276,30 @@ export interface TheoremClaimListInput {
   tag?: string;
 }
 
-export interface TheoremClaimListOutput {
+export interface TruthHarnessClaimListOutput {
   total: number;
   claims: ClaimLedgerRecord[];
   graph: ReturnType<typeof createClaimLedgerGraph>;
 }
 
-export interface TheoremClaimShowInput {
+export interface TruthHarnessClaimShowInput {
   workspacePath?: string;
   claimRef: string;
 }
 
-export interface TheoremClaimReviewInput {
+export interface TruthHarnessClaimReviewInput {
   workspacePath?: string;
   claimRef: string;
 }
 
-export interface TheoremBenchmarkRunInput {
+export interface TruthHarnessBenchmarkRunInput {
   suitePath?: string;
   workspacePath?: string;
   write?: boolean;
   failOnFailures?: boolean;
 }
 
-export interface TheoremBenchmarkCompareInput {
+export interface TruthHarnessBenchmarkCompareInput {
   baselinePath: string;
   currentPath: string;
   workspacePath?: string;
@@ -307,16 +307,16 @@ export interface TheoremBenchmarkCompareInput {
   failOnRegression?: boolean;
 }
 
-export interface TheoremBenchmarkListInput {
+export interface TruthHarnessBenchmarkListInput {
   workspacePath?: string;
 }
 
-export interface TheoremCasBackendsInput {
+export interface TruthHarnessCasBackendsInput {
   timeoutMs?: number;
   maximaCommand?: string;
 }
 
-export interface TheoremCasCheckInput {
+export interface TruthHarnessCasCheckInput {
   operation: SympyOperation;
   expression: string;
   result: string;
@@ -328,7 +328,7 @@ export interface TheoremCasCheckInput {
   failOnUnverified?: boolean;
 }
 
-export interface TheoremCasCheckOutput {
+export interface TruthHarnessCasCheckOutput {
   error: boolean;
   written: boolean;
   record: SymbolicCasCheckRecord;
@@ -336,24 +336,24 @@ export interface TheoremCasCheckOutput {
   message: string;
 }
 
-export interface TheoremCasListInput {
+export interface TruthHarnessCasListInput {
   workspacePath?: string;
 }
 
-export interface TheoremProofBackendsInput {
+export interface TruthHarnessProofBackendsInput {
   timeoutMs?: number;
 }
 
-export interface TheoremProofCheckInput {
+export interface TruthHarnessProofCheckInput {
   sourcePath: string;
   workspacePath?: string;
-  theoremName?: string;
+  declarationName?: string;
   timeoutMs?: number;
   write?: boolean;
   failOnUnproved?: boolean;
 }
 
-export interface TheoremProofCheckOutput {
+export interface TruthHarnessProofCheckOutput {
   error: boolean;
   written: boolean;
   record: LeanProofCheckRecord;
@@ -361,16 +361,16 @@ export interface TheoremProofCheckOutput {
   message: string;
 }
 
-export interface TheoremProofListInput {
+export interface TruthHarnessProofListInput {
   workspacePath?: string;
 }
 
-export interface TheoremSmtBackendsInput {
+export interface TruthHarnessSmtBackendsInput {
   timeoutMs?: number;
   z3Command?: string;
 }
 
-export interface TheoremSmtCheckInput {
+export interface TruthHarnessSmtCheckInput {
   sourcePath: string;
   workspacePath?: string;
   queryName?: string;
@@ -380,7 +380,7 @@ export interface TheoremSmtCheckInput {
   failOnUnverified?: boolean;
 }
 
-export interface TheoremSmtCheckOutput {
+export interface TruthHarnessSmtCheckOutput {
   error: boolean;
   written: boolean;
   record: SmtCheckRecord;
@@ -388,11 +388,11 @@ export interface TheoremSmtCheckOutput {
   message: string;
 }
 
-export interface TheoremSmtListInput {
+export interface TruthHarnessSmtListInput {
   workspacePath?: string;
 }
 
-export interface TheoremSmtSolveInput {
+export interface TruthHarnessSmtSolveInput {
   workspacePath?: string;
   queryName?: string;
   integerVariables: string[];
@@ -403,62 +403,62 @@ export interface TheoremSmtSolveInput {
   failOnUnverified?: boolean;
 }
 
-export interface TheoremSmtSolveOutput {
+export interface TruthHarnessSmtSolveOutput {
   error: boolean;
   result: SmtProblemSolveResult;
   message: string;
 }
 
-export interface TheoremBenchmarkRunWriteOutput {
+export interface TruthHarnessBenchmarkRunWriteOutput {
   run: BenchmarkRun;
   written: true;
   result: BenchmarkRunWriteResult;
 }
 
-export type TheoremBenchmarkRunOutput = BenchmarkRun | TheoremBenchmarkRunWriteOutput;
+export type TruthHarnessBenchmarkRunOutput = BenchmarkRun | TruthHarnessBenchmarkRunWriteOutput;
 
-export interface TheoremBenchmarkCompareWriteOutput {
+export interface TruthHarnessBenchmarkCompareWriteOutput {
   comparison: BenchmarkComparisonRecord;
   written: true;
   result: BenchmarkComparisonWriteResult;
 }
 
-export type TheoremBenchmarkCompareOutput = BenchmarkComparisonRecord | TheoremBenchmarkCompareWriteOutput;
+export type TruthHarnessBenchmarkCompareOutput = BenchmarkComparisonRecord | TruthHarnessBenchmarkCompareWriteOutput;
 
-export function theoremBenchmarkRunOutputFailsGate(output: TheoremBenchmarkRunOutput): boolean {
+export function truthHarnessBenchmarkRunOutputFailsGate(output: TruthHarnessBenchmarkRunOutput): boolean {
   return benchmarkRunFailsGate("run" in output ? output.run : output);
 }
 
-export function theoremBenchmarkCompareOutputFailsGate(output: TheoremBenchmarkCompareOutput): boolean {
+export function truthHarnessBenchmarkCompareOutputFailsGate(output: TruthHarnessBenchmarkCompareOutput): boolean {
   return benchmarkComparisonFailsGate("comparison" in output ? output.comparison : output);
 }
 
-export interface TheoremWorkspaceInput {
+export interface TruthHarnessWorkspaceInput {
   workspacePath?: string;
   name?: string;
 }
 
-export interface TheoremWorkspaceSnapshotInput {
+export interface TruthHarnessWorkspaceSnapshotInput {
   workspacePath?: string;
 }
 
-export interface TheoremWorkspaceSnapshotVerifyInput {
+export interface TruthHarnessWorkspaceSnapshotVerifyInput {
   workspacePath?: string;
   snapshotRef: string;
 }
 
-export interface TheoremSourceIngestInput {
+export interface TruthHarnessSourceIngestInput {
   paths: string[];
   workspacePath?: string;
 }
 
-export interface TheoremSourceSearchInput {
+export interface TruthHarnessSourceSearchInput {
   query: string;
   workspacePath?: string;
   limit?: number;
 }
 
-export interface TheoremSourceCiteInput {
+export interface TruthHarnessSourceCiteInput {
   claim: string;
   query?: string;
   workspacePath?: string;
@@ -466,13 +466,13 @@ export interface TheoremSourceCiteInput {
   strict?: boolean;
 }
 
-export interface TheoremSourceCiteOutput {
+export interface TruthHarnessSourceCiteOutput {
   error: boolean;
   receipt: Receipt;
   message: string;
 }
 
-export interface TheoremLiteratureLogInput {
+export interface TruthHarnessLiteratureLogInput {
   workspacePath?: string;
   title: string;
   kind?: LiteratureRecordKind;
@@ -494,7 +494,7 @@ export interface TheoremLiteratureLogInput {
   write?: boolean;
 }
 
-export type TheoremLiteratureLogOutput =
+export type TruthHarnessLiteratureLogOutput =
   | {
       written: false;
       record: LiteratureRecord;
@@ -504,11 +504,11 @@ export type TheoremLiteratureLogOutput =
       result: LiteratureRecordWriteResult;
     };
 
-export interface TheoremLiteratureListInput {
+export interface TruthHarnessLiteratureListInput {
   workspacePath?: string;
 }
 
-export interface TheoremNotebookRunLogInput {
+export interface TruthHarnessNotebookRunLogInput {
   workspacePath?: string;
   title?: string;
   purpose: string;
@@ -537,7 +537,7 @@ export interface TheoremNotebookRunLogInput {
   write?: boolean;
 }
 
-export type TheoremNotebookRunLogOutput =
+export type TruthHarnessNotebookRunLogOutput =
   | {
       written: false;
       record: NotebookRunRecord;
@@ -547,11 +547,11 @@ export type TheoremNotebookRunLogOutput =
       result: NotebookRunWriteResult;
     };
 
-export interface TheoremNotebookRunListInput {
+export interface TruthHarnessNotebookRunListInput {
   workspacePath?: string;
 }
 
-export interface TheoremCodeRunInput {
+export interface TruthHarnessCodeRunInput {
   workspacePath?: string;
   title?: string;
   purpose: string;
@@ -568,23 +568,23 @@ export interface TheoremCodeRunInput {
   failOnNonzero?: boolean;
 }
 
-export interface TheoremCodeRunOutput {
+export interface TruthHarnessCodeRunOutput {
   error: boolean;
   result: CodeRunWriteResult;
   message: string;
 }
 
-export interface TheoremCodeSandboxStatusOutput {
+export interface TruthHarnessCodeSandboxStatusOutput {
   error: boolean;
   status: CodeRunSandboxStatus;
   message: string;
 }
 
-export interface TheoremCodeRunListInput {
+export interface TruthHarnessCodeRunListInput {
   workspacePath?: string;
 }
 
-export interface TheoremSimulationLogInput {
+export interface TruthHarnessSimulationLogInput {
   workspacePath?: string;
   title?: string;
   question: string;
@@ -605,11 +605,11 @@ export interface TheoremSimulationLogInput {
   nextChecks?: string[];
 }
 
-export interface TheoremSimulationListInput {
+export interface TruthHarnessSimulationListInput {
   workspacePath?: string;
 }
 
-export interface TheoremExperimentLogInput {
+export interface TruthHarnessExperimentLogInput {
   workspacePath?: string;
   title?: string;
   question: string;
@@ -631,28 +631,28 @@ export interface TheoremExperimentLogInput {
   regulatoryReviewRefs?: string[];
 }
 
-export interface TheoremExperimentListInput {
+export interface TruthHarnessExperimentListInput {
   workspacePath?: string;
 }
 
-export interface TheoremVaultSealInput {
+export interface TruthHarnessVaultSealInput {
   workspacePath?: string;
   sourcePath: string;
   label?: string;
   keyEnv?: string;
 }
 
-export interface TheoremVaultListInput {
+export interface TruthHarnessVaultListInput {
   workspacePath?: string;
 }
 
-export interface TheoremVaultVerifyInput {
+export interface TruthHarnessVaultVerifyInput {
   workspacePath?: string;
   vaultRef: string;
   keyEnv?: string;
 }
 
-export interface TheoremEvidenceAuditInput {
+export interface TruthHarnessEvidenceAuditInput {
   workspacePath?: string;
   claim: string;
   title?: string;
@@ -662,7 +662,7 @@ export interface TheoremEvidenceAuditInput {
   includeMarkdown?: boolean;
 }
 
-export type TheoremEvidenceAuditOutput =
+export type TruthHarnessEvidenceAuditOutput =
   | {
       written: false;
       audit: EvidenceAudit;
@@ -679,11 +679,11 @@ export type TheoremEvidenceAuditOutput =
       result: EvidenceAuditReportWriteResult;
     };
 
-export interface TheoremEvidenceAuditListInput {
+export interface TruthHarnessEvidenceAuditListInput {
   workspacePath?: string;
 }
 
-export interface TheoremValidationPlanInput {
+export interface TruthHarnessValidationPlanInput {
   workspacePath?: string;
   title?: string;
   objective?: string;
@@ -694,7 +694,7 @@ export interface TheoremValidationPlanInput {
   write?: boolean;
 }
 
-export type TheoremValidationPlanOutput =
+export type TruthHarnessValidationPlanOutput =
   | {
       written: false;
       plan: ValidationPlan;
@@ -704,11 +704,11 @@ export type TheoremValidationPlanOutput =
       result: ValidationPlanWriteResult;
     };
 
-export interface TheoremValidationPlanListInput {
+export interface TruthHarnessValidationPlanListInput {
   workspacePath?: string;
 }
 
-export interface TheoremResearchSessionStartInput {
+export interface TruthHarnessResearchSessionStartInput {
   workspacePath?: string;
   title?: string;
   objective: string;
@@ -724,7 +724,7 @@ export interface TheoremResearchSessionStartInput {
   maxWallMinutes?: number;
 }
 
-export interface TheoremResearchSessionCheckpointInput {
+export interface TruthHarnessResearchSessionCheckpointInput {
   workspacePath?: string;
   sessionRef: string;
   summary: string;
@@ -734,11 +734,11 @@ export interface TheoremResearchSessionCheckpointInput {
   nextChecks?: string[];
 }
 
-export interface TheoremResearchSessionListInput {
+export interface TruthHarnessResearchSessionListInput {
   workspacePath?: string;
 }
 
-export interface TheoremExpertReviewLogInput {
+export interface TruthHarnessExpertReviewLogInput {
   workspacePath?: string;
   title?: string;
   subject: string;
@@ -758,11 +758,11 @@ export interface TheoremExpertReviewLogInput {
   outcomeSummary?: string;
 }
 
-export interface TheoremExpertReviewListInput {
+export interface TruthHarnessExpertReviewListInput {
   workspacePath?: string;
 }
 
-export interface TheoremInventionLogInput {
+export interface TruthHarnessInventionLogInput {
   hypothesis: string;
   workspacePath?: string;
   title?: string;
@@ -775,17 +775,17 @@ export interface TheoremInventionLogInput {
   nextChecks?: string[];
 }
 
-export interface TheoremInventionListInput {
+export interface TruthHarnessInventionListInput {
   workspacePath?: string;
 }
 
-export interface TheoremDiscoveryPackageInput {
+export interface TruthHarnessDiscoveryPackageInput {
   workspacePath?: string;
   entryId?: string;
   write?: boolean;
 }
 
-export type TheoremDiscoveryPackageOutput =
+export type TruthHarnessDiscoveryPackageOutput =
   | {
       written: false;
       package: DiscoveryPackage;
@@ -795,7 +795,7 @@ export type TheoremDiscoveryPackageOutput =
       result: DiscoveryPackageWriteResult;
     };
 
-export interface TheoremClaimChartInput {
+export interface TruthHarnessClaimChartInput {
   workspacePath?: string;
   entryId?: string;
   title?: string;
@@ -807,7 +807,7 @@ export interface TheoremClaimChartInput {
   write?: boolean;
 }
 
-export type TheoremClaimChartOutput =
+export type TruthHarnessClaimChartOutput =
   | {
       written: false;
       chart: ClaimChart;
@@ -817,11 +817,11 @@ export type TheoremClaimChartOutput =
       result: ClaimChartWriteResult;
     };
 
-export interface TheoremClaimChartListInput {
+export interface TruthHarnessClaimChartListInput {
   workspacePath?: string;
 }
 
-export interface TheoremModelContextPrepareInput {
+export interface TruthHarnessModelContextPrepareInput {
   workspacePath?: string;
   title?: string;
   purpose: string;
@@ -842,7 +842,7 @@ export interface TheoremModelContextPrepareInput {
   write?: boolean;
 }
 
-export type TheoremModelContextPrepareOutput =
+export type TruthHarnessModelContextPrepareOutput =
   | {
       written: false;
       packet: ModelContextPacket;
@@ -852,11 +852,11 @@ export type TheoremModelContextPrepareOutput =
       result: ModelContextWriteResult;
     };
 
-export interface TheoremModelContextListInput {
+export interface TruthHarnessModelContextListInput {
   workspacePath?: string;
 }
 
-export interface TheoremExternalDisclosureLogInput {
+export interface TruthHarnessExternalDisclosureLogInput {
   workspacePath?: string;
   service: string;
   model?: string;
@@ -872,29 +872,29 @@ export interface TheoremExternalDisclosureLogInput {
   outputRefs?: string[];
 }
 
-export interface TheoremExternalDisclosureListInput {
+export interface TruthHarnessExternalDisclosureListInput {
   workspacePath?: string;
 }
 
-export interface TheoremReplayInput {
+export interface TruthHarnessReplayInput {
   receiptJson?: string;
   receiptPath?: string;
 }
 
-export interface TheoremRenderReceiptInput {
+export interface TruthHarnessRenderReceiptInput {
   receiptJson?: string;
   receiptPath?: string;
   format?: ReceiptRenderFormat;
 }
 
-export interface TheoremRenderReceiptOutput {
+export interface TruthHarnessRenderReceiptOutput {
   runId: string;
   trust: Receipt["trust"];
   format: ReceiptRenderFormat;
   rendered: string;
 }
 
-export function handleTheoremAsk(input: TheoremAskInput): TheoremAskOutput {
+export function handleTruthHarnessAsk(input: TruthHarnessAskInput): TruthHarnessAskOutput {
   const receipt = createReceipt(input.problem);
   const strictFailure = input.strict === true && receipt.trust === "unverified";
 
@@ -907,7 +907,7 @@ export function handleTheoremAsk(input: TheoremAskInput): TheoremAskOutput {
   };
 }
 
-export async function handleTheoremVerify(input: TheoremVerifyInput): Promise<TheoremVerifyOutput> {
+export async function handleTruthHarnessVerify(input: TruthHarnessVerifyInput): Promise<TruthHarnessVerifyOutput> {
   const write = input.write === true
     ? await writeVerifierRoute({
         rootPath: resolveWorkspaceRoot(input.workspacePath),
@@ -939,7 +939,7 @@ export async function handleTheoremVerify(input: TheoremVerifyInput): Promise<Th
   };
 }
 
-export async function handleTheoremRouteList(input: TheoremRouteListInput): Promise<{
+export async function handleTruthHarnessRouteList(input: TruthHarnessRouteListInput): Promise<{
   total: number;
   routes: VerifierRouteSummary[];
 }> {
@@ -950,12 +950,12 @@ export async function handleTheoremRouteList(input: TheoremRouteListInput): Prom
   };
 }
 
-export async function handleTheoremRouteShow(input: TheoremRouteShowInput): Promise<VerifierRoute> {
+export async function handleTruthHarnessRouteShow(input: TruthHarnessRouteShowInput): Promise<VerifierRoute> {
   return readVerifierRoute(resolveWorkspaceRoot(input.workspacePath), input.routeRef);
 }
 
-export async function handleTheoremRouteSatisfy(
-  input: TheoremRouteSatisfyInput
+export async function handleTruthHarnessRouteSatisfy(
+  input: TruthHarnessRouteSatisfyInput
 ): Promise<SatisfyVerifierRouteObligationResult> {
   return satisfyVerifierRouteObligation({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
@@ -965,7 +965,7 @@ export async function handleTheoremRouteSatisfy(
   });
 }
 
-export function handleTheoremEngineManifest(input: TheoremEngineManifestInput = {}): EngineManifest {
+export function handleTruthHarnessEngineManifest(input: TruthHarnessEngineManifestInput = {}): EngineManifest {
   return getEngineManifest({
     timeoutMs: input.timeoutMs,
     maximaCommand: input.maximaCommand,
@@ -974,7 +974,7 @@ export function handleTheoremEngineManifest(input: TheoremEngineManifestInput = 
   });
 }
 
-export async function handleTheoremClaimAdd(input: TheoremClaimAddInput): Promise<ClaimLedgerWriteResult> {
+export async function handleTruthHarnessClaimAdd(input: TruthHarnessClaimAddInput): Promise<ClaimLedgerWriteResult> {
   return writeClaimLedgerRecord({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -992,7 +992,7 @@ export async function handleTheoremClaimAdd(input: TheoremClaimAddInput): Promis
   });
 }
 
-export async function handleTheoremClaimList(input: TheoremClaimListInput): Promise<TheoremClaimListOutput> {
+export async function handleTruthHarnessClaimList(input: TruthHarnessClaimListInput): Promise<TruthHarnessClaimListOutput> {
   const tag = input.tag?.replace(/^#/u, "").toLowerCase();
   const claims = (await listClaimRecords(resolveWorkspaceRoot(input.workspacePath))).filter((claim) => {
     if (input.domain && claim.domain !== input.domain) return false;
@@ -1009,25 +1009,25 @@ export async function handleTheoremClaimList(input: TheoremClaimListInput): Prom
   };
 }
 
-export async function handleTheoremClaimShow(input: TheoremClaimShowInput): Promise<ClaimLedgerRecord> {
+export async function handleTruthHarnessClaimShow(input: TruthHarnessClaimShowInput): Promise<ClaimLedgerRecord> {
   return readClaimRecord(resolveWorkspaceRoot(input.workspacePath), input.claimRef);
 }
 
-export async function handleTheoremClaimReview(input: TheoremClaimReviewInput) {
+export async function handleTruthHarnessClaimReview(input: TruthHarnessClaimReviewInput) {
   return createClaimReviewPacket({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     claimRef: input.claimRef
   });
 }
 
-export async function handleTheoremBenchmarkRun(
-  input: TheoremBenchmarkRunInput & { write: true }
-): Promise<TheoremBenchmarkRunWriteOutput>;
-export async function handleTheoremBenchmarkRun(
-  input: TheoremBenchmarkRunInput & { write?: false | undefined }
+export async function handleTruthHarnessBenchmarkRun(
+  input: TruthHarnessBenchmarkRunInput & { write: true }
+): Promise<TruthHarnessBenchmarkRunWriteOutput>;
+export async function handleTruthHarnessBenchmarkRun(
+  input: TruthHarnessBenchmarkRunInput & { write?: false | undefined }
 ): Promise<BenchmarkRun>;
-export async function handleTheoremBenchmarkRun(input: TheoremBenchmarkRunInput): Promise<TheoremBenchmarkRunOutput>;
-export async function handleTheoremBenchmarkRun(input: TheoremBenchmarkRunInput): Promise<TheoremBenchmarkRunOutput> {
+export async function handleTruthHarnessBenchmarkRun(input: TruthHarnessBenchmarkRunInput): Promise<TruthHarnessBenchmarkRunOutput>;
+export async function handleTruthHarnessBenchmarkRun(input: TruthHarnessBenchmarkRunInput): Promise<TruthHarnessBenchmarkRunOutput> {
   const suitePath = input.suitePath ?? "packages/benchmarks/suites/foundations-seed.json";
   const resolvedSuitePath = resolveWorkspacePath(suitePath);
   const suite = parseBenchmarkSuite(JSON.parse(await readFile(resolvedSuitePath, "utf8")) as unknown);
@@ -1045,22 +1045,22 @@ export async function handleTheoremBenchmarkRun(input: TheoremBenchmarkRunInput)
       run,
       suiteDescription: suite.description,
       suitePath,
-      runnerName: "theorem-mcp",
+      runnerName: "truth-harness-mcp",
       runnerAdapter: "local-receipt-engine",
-      command: `theorem bench run ${quoteCommandArg(suitePath)}`,
+      command: `truth-harness bench run ${quoteCommandArg(suitePath)}`,
       workingDirectory: getWorkspaceRoot()
     })
   };
 }
 
-export async function handleTheoremBenchmarkCompare(
-  input: TheoremBenchmarkCompareInput & { write: true }
-): Promise<TheoremBenchmarkCompareWriteOutput>;
-export async function handleTheoremBenchmarkCompare(
-  input: TheoremBenchmarkCompareInput & { write?: false | undefined }
+export async function handleTruthHarnessBenchmarkCompare(
+  input: TruthHarnessBenchmarkCompareInput & { write: true }
+): Promise<TruthHarnessBenchmarkCompareWriteOutput>;
+export async function handleTruthHarnessBenchmarkCompare(
+  input: TruthHarnessBenchmarkCompareInput & { write?: false | undefined }
 ): Promise<BenchmarkComparisonRecord>;
-export async function handleTheoremBenchmarkCompare(input: TheoremBenchmarkCompareInput): Promise<TheoremBenchmarkCompareOutput>;
-export async function handleTheoremBenchmarkCompare(input: TheoremBenchmarkCompareInput): Promise<TheoremBenchmarkCompareOutput> {
+export async function handleTruthHarnessBenchmarkCompare(input: TruthHarnessBenchmarkCompareInput): Promise<TruthHarnessBenchmarkCompareOutput>;
+export async function handleTruthHarnessBenchmarkCompare(input: TruthHarnessBenchmarkCompareInput): Promise<TruthHarnessBenchmarkCompareOutput> {
   const baseline = parseBenchmarkRunRecordJson(
     await readFile(resolveWorkspacePath(input.baselinePath), "utf8"),
     input.baselinePath
@@ -1090,7 +1090,7 @@ export async function handleTheoremBenchmarkCompare(input: TheoremBenchmarkCompa
   };
 }
 
-export async function handleTheoremBenchmarkList(input: TheoremBenchmarkListInput): Promise<{
+export async function handleTruthHarnessBenchmarkList(input: TruthHarnessBenchmarkListInput): Promise<{
   total: number;
   artifacts: BenchmarkArtifactSummary[];
 }> {
@@ -1101,14 +1101,14 @@ export async function handleTheoremBenchmarkList(input: TheoremBenchmarkListInpu
   };
 }
 
-export function handleTheoremCasBackends(input: TheoremCasBackendsInput): CasBackendStatusReport {
+export function handleTruthHarnessCasBackends(input: TruthHarnessCasBackendsInput): CasBackendStatusReport {
   return getCasBackendStatus({
     maximaCommand: input.maximaCommand,
     timeoutMs: input.timeoutMs
   });
 }
 
-export async function handleTheoremCasCheck(input: TheoremCasCheckInput): Promise<TheoremCasCheckOutput> {
+export async function handleTruthHarnessCasCheck(input: TruthHarnessCasCheckInput): Promise<TruthHarnessCasCheckOutput> {
   const prompt = {
     operation: input.operation,
     expression: input.expression,
@@ -1144,7 +1144,7 @@ export async function handleTheoremCasCheck(input: TheoremCasCheckInput): Promis
   };
 }
 
-export async function handleTheoremCasList(input: TheoremCasListInput): Promise<{
+export async function handleTruthHarnessCasList(input: TruthHarnessCasListInput): Promise<{
   total: number;
   checks: SymbolicCasCheckSummary[];
 }> {
@@ -1155,19 +1155,19 @@ export async function handleTheoremCasList(input: TheoremCasListInput): Promise<
   };
 }
 
-export function handleTheoremProofBackends(input: TheoremProofBackendsInput): ProofBackendStatusReport {
+export function handleTruthHarnessProofBackends(input: TruthHarnessProofBackendsInput): ProofBackendStatusReport {
   return getProofBackendStatus({
     timeoutMs: input.timeoutMs
   });
 }
 
-export async function handleTheoremProofCheck(input: TheoremProofCheckInput): Promise<TheoremProofCheckOutput> {
+export async function handleTruthHarnessProofCheck(input: TruthHarnessProofCheckInput): Promise<TruthHarnessProofCheckOutput> {
   const workspaceRoot = resolveWorkspaceRoot(input.workspacePath);
   const write = input.write === true
     ? await writeLeanProofCheckRecord({
         rootPath: workspaceRoot,
         sourcePath: input.sourcePath,
-        theoremName: input.theoremName,
+        declarationName: input.declarationName,
         timeoutMs: input.timeoutMs
       })
     : undefined;
@@ -1178,9 +1178,9 @@ export async function handleTheoremProofCheck(input: TheoremProofCheckInput): Pr
       sourcePath: resolvedSourcePath,
       sourceRef: input.sourcePath,
       sourceText: await readFile(resolvedSourcePath, "utf8"),
-      theoremName: input.theoremName,
+      declarationName: input.declarationName,
       timeoutMs: input.timeoutMs,
-      replayCommand: `theorem proof check ${quoteCommandArg(input.sourcePath)} --json`
+      replayCommand: `truth-harness proof check ${quoteCommandArg(input.sourcePath)} --json`
     });
   const error = input.failOnUnproved === true && record.trust !== "proved";
 
@@ -1195,7 +1195,7 @@ export async function handleTheoremProofCheck(input: TheoremProofCheckInput): Pr
   };
 }
 
-export async function handleTheoremProofList(input: TheoremProofListInput): Promise<{
+export async function handleTruthHarnessProofList(input: TruthHarnessProofListInput): Promise<{
   total: number;
   checks: LeanProofCheckSummary[];
 }> {
@@ -1206,14 +1206,14 @@ export async function handleTheoremProofList(input: TheoremProofListInput): Prom
   };
 }
 
-export function handleTheoremSmtBackends(input: TheoremSmtBackendsInput): SmtBackendStatusReport {
+export function handleTruthHarnessSmtBackends(input: TruthHarnessSmtBackendsInput): SmtBackendStatusReport {
   return getSmtBackendStatus({
     z3Command: input.z3Command,
     timeoutMs: input.timeoutMs
   });
 }
 
-export async function handleTheoremSmtCheck(input: TheoremSmtCheckInput): Promise<TheoremSmtCheckOutput> {
+export async function handleTruthHarnessSmtCheck(input: TruthHarnessSmtCheckInput): Promise<TruthHarnessSmtCheckOutput> {
   const workspaceRoot = resolveWorkspaceRoot(input.workspacePath);
   const write = input.write === true
     ? await writeSmtCheckRecord({
@@ -1234,7 +1234,7 @@ export async function handleTheoremSmtCheck(input: TheoremSmtCheckInput): Promis
       queryName: input.queryName,
       z3Command: input.z3Command,
       timeoutMs: input.timeoutMs,
-      replayCommand: `theorem smt check ${quoteCommandArg(input.sourcePath)} --json`
+      replayCommand: `truth-harness smt check ${quoteCommandArg(input.sourcePath)} --json`
     });
   const error = input.failOnUnverified === true && record.trust !== "smt-checked";
 
@@ -1249,7 +1249,7 @@ export async function handleTheoremSmtCheck(input: TheoremSmtCheckInput): Promis
   };
 }
 
-export async function handleTheoremSmtList(input: TheoremSmtListInput): Promise<{
+export async function handleTruthHarnessSmtList(input: TruthHarnessSmtListInput): Promise<{
   total: number;
   checks: SmtCheckSummary[];
 }> {
@@ -1260,7 +1260,7 @@ export async function handleTheoremSmtList(input: TheoremSmtListInput): Promise<
   };
 }
 
-export async function handleTheoremSmtSolve(input: TheoremSmtSolveInput): Promise<TheoremSmtSolveOutput> {
+export async function handleTruthHarnessSmtSolve(input: TruthHarnessSmtSolveInput): Promise<TruthHarnessSmtSolveOutput> {
   const result = await solveSmtProblem({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     queryName: input.queryName,
@@ -1281,33 +1281,33 @@ export async function handleTheoremSmtSolve(input: TheoremSmtSolveInput): Promis
   };
 }
 
-export async function handleTheoremWorkspaceInit(input: TheoremWorkspaceInput): Promise<LocalWorkspaceInitResult> {
+export async function handleTruthHarnessWorkspaceInit(input: TruthHarnessWorkspaceInput): Promise<LocalWorkspaceInitResult> {
   return initLocalWorkspace(resolveWorkspaceRoot(input.workspacePath), { displayName: input.name });
 }
 
-export async function handleTheoremWorkspaceStatus(input: TheoremWorkspaceInput): Promise<LocalWorkspaceStatus> {
+export async function handleTruthHarnessWorkspaceStatus(input: TruthHarnessWorkspaceInput): Promise<LocalWorkspaceStatus> {
   return getLocalWorkspaceStatus(resolveWorkspaceRoot(input.workspacePath));
 }
 
-export async function handleTheoremWorkspaceRepair(input: TheoremWorkspaceInput): Promise<LocalWorkspaceRepairResult> {
+export async function handleTruthHarnessWorkspaceRepair(input: TruthHarnessWorkspaceInput): Promise<LocalWorkspaceRepairResult> {
   return repairLocalWorkspace(resolveWorkspaceRoot(input.workspacePath));
 }
 
-export async function handleTheoremWorkspaceValidate(input: TheoremWorkspaceSnapshotInput): Promise<WorkspaceValidation> {
+export async function handleTruthHarnessWorkspaceValidate(input: TruthHarnessWorkspaceSnapshotInput): Promise<WorkspaceValidation> {
   return validateWorkspaceArtifacts({
     rootPath: resolveWorkspaceRoot(input.workspacePath)
   });
 }
 
-export async function handleTheoremWorkspaceSnapshot(
-  input: TheoremWorkspaceSnapshotInput
+export async function handleTruthHarnessWorkspaceSnapshot(
+  input: TruthHarnessWorkspaceSnapshotInput
 ): Promise<WorkspaceSnapshotWriteResult> {
   return writeWorkspaceSnapshot({
     rootPath: resolveWorkspaceRoot(input.workspacePath)
   });
 }
 
-export async function handleTheoremWorkspaceSnapshotList(input: TheoremWorkspaceSnapshotInput): Promise<{
+export async function handleTruthHarnessWorkspaceSnapshotList(input: TruthHarnessWorkspaceSnapshotInput): Promise<{
   total: number;
   snapshots: WorkspaceSnapshotSummary[];
 }> {
@@ -1318,8 +1318,8 @@ export async function handleTheoremWorkspaceSnapshotList(input: TheoremWorkspace
   };
 }
 
-export async function handleTheoremWorkspaceSnapshotVerify(
-  input: TheoremWorkspaceSnapshotVerifyInput
+export async function handleTruthHarnessWorkspaceSnapshotVerify(
+  input: TruthHarnessWorkspaceSnapshotVerifyInput
 ): Promise<WorkspaceSnapshotVerification> {
   return verifyWorkspaceSnapshot({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
@@ -1327,14 +1327,14 @@ export async function handleTheoremWorkspaceSnapshotVerify(
   });
 }
 
-export async function handleTheoremSourceIngest(input: TheoremSourceIngestInput): Promise<LocalCorpusIngestResult> {
+export async function handleTruthHarnessSourceIngest(input: TruthHarnessSourceIngestInput): Promise<LocalCorpusIngestResult> {
   return ingestLocalCorpus({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     paths: input.paths
   });
 }
 
-export async function handleTheoremSourceSearch(input: TheoremSourceSearchInput): Promise<LocalCorpusSearchResult> {
+export async function handleTruthHarnessSourceSearch(input: TruthHarnessSourceSearchInput): Promise<LocalCorpusSearchResult> {
   return searchLocalCorpus({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     query: input.query,
@@ -1342,7 +1342,7 @@ export async function handleTheoremSourceSearch(input: TheoremSourceSearchInput)
   });
 }
 
-export async function handleTheoremSourceCite(input: TheoremSourceCiteInput): Promise<TheoremSourceCiteOutput> {
+export async function handleTruthHarnessSourceCite(input: TruthHarnessSourceCiteInput): Promise<TruthHarnessSourceCiteOutput> {
   const receipt = await createSourceCitationReceipt({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     claim: input.claim,
@@ -1360,7 +1360,7 @@ export async function handleTheoremSourceCite(input: TheoremSourceCiteInput): Pr
   };
 }
 
-export async function handleTheoremLiteratureLog(input: TheoremLiteratureLogInput): Promise<TheoremLiteratureLogOutput> {
+export async function handleTruthHarnessLiteratureLog(input: TruthHarnessLiteratureLogInput): Promise<TruthHarnessLiteratureLogOutput> {
   const literatureInput = {
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -1395,7 +1395,7 @@ export async function handleTheoremLiteratureLog(input: TheoremLiteratureLogInpu
   };
 }
 
-export async function handleTheoremLiteratureList(input: TheoremLiteratureListInput): Promise<{
+export async function handleTruthHarnessLiteratureList(input: TruthHarnessLiteratureListInput): Promise<{
   total: number;
   records: LiteratureRecord[];
 }> {
@@ -1406,7 +1406,7 @@ export async function handleTheoremLiteratureList(input: TheoremLiteratureListIn
   };
 }
 
-export async function handleTheoremNotebookRunLog(input: TheoremNotebookRunLogInput): Promise<TheoremNotebookRunLogOutput> {
+export async function handleTruthHarnessNotebookRunLog(input: TruthHarnessNotebookRunLogInput): Promise<TruthHarnessNotebookRunLogOutput> {
   const notebookRunInput = {
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -1448,7 +1448,7 @@ export async function handleTheoremNotebookRunLog(input: TheoremNotebookRunLogIn
   };
 }
 
-export async function handleTheoremNotebookRunList(input: TheoremNotebookRunListInput): Promise<{
+export async function handleTruthHarnessNotebookRunList(input: TruthHarnessNotebookRunListInput): Promise<{
   total: number;
   records: NotebookRunRecord[];
 }> {
@@ -1459,7 +1459,7 @@ export async function handleTheoremNotebookRunList(input: TheoremNotebookRunList
   };
 }
 
-export async function handleTheoremCodeRun(input: TheoremCodeRunInput): Promise<TheoremCodeRunOutput> {
+export async function handleTruthHarnessCodeRun(input: TruthHarnessCodeRunInput): Promise<TruthHarnessCodeRunOutput> {
   assertMcpCodeRunAllowed(input.policy);
   const result = await writeCodeRun({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
@@ -1487,7 +1487,7 @@ export async function handleTheoremCodeRun(input: TheoremCodeRunInput): Promise<
   };
 }
 
-export function handleTheoremCodeSandboxStatus(): TheoremCodeSandboxStatusOutput {
+export function handleTruthHarnessCodeSandboxStatus(): TruthHarnessCodeSandboxStatusOutput {
   const status = getCodeRunSandboxStatus();
   return {
     error: !status.available,
@@ -1499,16 +1499,16 @@ export function handleTheoremCodeSandboxStatus(): TheoremCodeSandboxStatusOutput
 }
 
 function assertMcpCodeRunAllowed(policy: CodeRunPolicyInput | undefined): void {
-  if (!isTruthyEnv(process.env.THEOREM_ALLOW_CODE_RUN)) {
-    throw new Error("MCP code execution is disabled. Set THEOREM_ALLOW_CODE_RUN=1 and provide an explicit policy.allowedExecutables list to enable theorem_code_run.");
+  if (!isTruthyEnv(process.env.TRUTH_HARNESS_ALLOW_CODE_RUN)) {
+    throw new Error("MCP code execution is disabled. Set TRUTH_HARNESS_ALLOW_CODE_RUN=1 and provide an explicit policy.allowedExecutables list to enable truth_harness_code_run.");
   }
 
-  if (policy?.requireSandbox === true || isTruthyEnv(process.env.THEOREM_ALLOW_UNSANDBOXED_CODE_RUN)) {
+  if (policy?.requireSandbox === true || isTruthyEnv(process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN)) {
     return;
   }
 
   throw new Error(
-    "MCP unsandboxed code execution is disabled. Set policy.requireSandbox=true to require a measured sandbox, or set THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1 to permit direct local execution with networkAccess unknown."
+    "MCP unsandboxed code execution is disabled. Set policy.requireSandbox=true to require a measured sandbox, or set TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN=1 to permit direct local execution with networkAccess unknown."
   );
 }
 
@@ -1516,7 +1516,7 @@ function isTruthyEnv(value: string | undefined): boolean {
   return value === "1" || value?.toLowerCase() === "true" || value?.toLowerCase() === "yes";
 }
 
-export async function handleTheoremCodeRunList(input: TheoremCodeRunListInput): Promise<{
+export async function handleTruthHarnessCodeRunList(input: TruthHarnessCodeRunListInput): Promise<{
   total: number;
   records: CodeRunSummary[];
 }> {
@@ -1527,7 +1527,7 @@ export async function handleTheoremCodeRunList(input: TheoremCodeRunListInput): 
   };
 }
 
-export async function handleTheoremSimulationLog(input: TheoremSimulationLogInput): Promise<SimulationLogWriteResult> {
+export async function handleTruthHarnessSimulationLog(input: TruthHarnessSimulationLogInput): Promise<SimulationLogWriteResult> {
   return createSimulationLogEntry({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -1550,7 +1550,7 @@ export async function handleTheoremSimulationLog(input: TheoremSimulationLogInpu
   });
 }
 
-export async function handleTheoremSimulationList(input: TheoremSimulationListInput): Promise<{
+export async function handleTruthHarnessSimulationList(input: TruthHarnessSimulationListInput): Promise<{
   total: number;
   entries: SimulationLogEntry[];
 }> {
@@ -1561,7 +1561,7 @@ export async function handleTheoremSimulationList(input: TheoremSimulationListIn
   };
 }
 
-export async function handleTheoremExperimentLog(input: TheoremExperimentLogInput): Promise<ExperimentLogWriteResult> {
+export async function handleTruthHarnessExperimentLog(input: TruthHarnessExperimentLogInput): Promise<ExperimentLogWriteResult> {
   return createExperimentLogEntry({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -1585,7 +1585,7 @@ export async function handleTheoremExperimentLog(input: TheoremExperimentLogInpu
   });
 }
 
-export async function handleTheoremExperimentList(input: TheoremExperimentListInput): Promise<{
+export async function handleTruthHarnessExperimentList(input: TruthHarnessExperimentListInput): Promise<{
   total: number;
   entries: ExperimentLogEntry[];
 }> {
@@ -1596,7 +1596,7 @@ export async function handleTheoremExperimentList(input: TheoremExperimentListIn
   };
 }
 
-export async function handleTheoremVaultSeal(input: TheoremVaultSealInput): Promise<VaultSealResult> {
+export async function handleTruthHarnessVaultSeal(input: TruthHarnessVaultSealInput): Promise<VaultSealResult> {
   return sealVaultFile({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     sourcePath: input.sourcePath,
@@ -1605,7 +1605,7 @@ export async function handleTheoremVaultSeal(input: TheoremVaultSealInput): Prom
   });
 }
 
-export async function handleTheoremVaultList(input: TheoremVaultListInput): Promise<{
+export async function handleTruthHarnessVaultList(input: TruthHarnessVaultListInput): Promise<{
   total: number;
   entries: VaultEnvelopeSummary[];
 }> {
@@ -1616,7 +1616,7 @@ export async function handleTheoremVaultList(input: TheoremVaultListInput): Prom
   };
 }
 
-export async function handleTheoremVaultVerify(input: TheoremVaultVerifyInput): Promise<VaultVerifyResult> {
+export async function handleTruthHarnessVaultVerify(input: TruthHarnessVaultVerifyInput): Promise<VaultVerifyResult> {
   return verifyVaultEntry({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     vaultRef: input.vaultRef,
@@ -1624,7 +1624,7 @@ export async function handleTheoremVaultVerify(input: TheoremVaultVerifyInput): 
   });
 }
 
-export async function handleTheoremEvidenceAudit(input: TheoremEvidenceAuditInput): Promise<TheoremEvidenceAuditOutput> {
+export async function handleTruthHarnessEvidenceAudit(input: TruthHarnessEvidenceAuditInput): Promise<TruthHarnessEvidenceAuditOutput> {
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
   const auditInput = {
     rootPath,
@@ -1657,7 +1657,7 @@ export async function handleTheoremEvidenceAudit(input: TheoremEvidenceAuditInpu
   };
 }
 
-export async function handleTheoremEvidenceAuditList(input: TheoremEvidenceAuditListInput): Promise<{
+export async function handleTruthHarnessEvidenceAuditList(input: TruthHarnessEvidenceAuditListInput): Promise<{
   total: number;
   audits: EvidenceAudit[];
 }> {
@@ -1668,7 +1668,7 @@ export async function handleTheoremEvidenceAuditList(input: TheoremEvidenceAudit
   };
 }
 
-export async function handleTheoremValidationPlan(input: TheoremValidationPlanInput): Promise<TheoremValidationPlanOutput> {
+export async function handleTruthHarnessValidationPlan(input: TruthHarnessValidationPlanInput): Promise<TruthHarnessValidationPlanOutput> {
   const planInput = {
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -1692,7 +1692,7 @@ export async function handleTheoremValidationPlan(input: TheoremValidationPlanIn
   };
 }
 
-export async function handleTheoremValidationPlanList(input: TheoremValidationPlanListInput): Promise<{
+export async function handleTruthHarnessValidationPlanList(input: TruthHarnessValidationPlanListInput): Promise<{
   total: number;
   plans: ValidationPlan[];
 }> {
@@ -1703,8 +1703,8 @@ export async function handleTheoremValidationPlanList(input: TheoremValidationPl
   };
 }
 
-export async function handleTheoremResearchSessionStart(
-  input: TheoremResearchSessionStartInput
+export async function handleTruthHarnessResearchSessionStart(
+  input: TruthHarnessResearchSessionStartInput
 ): Promise<ResearchSessionWriteResult> {
   return writeResearchSession({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
@@ -1723,8 +1723,8 @@ export async function handleTheoremResearchSessionStart(
   });
 }
 
-export async function handleTheoremResearchSessionCheckpoint(
-  input: TheoremResearchSessionCheckpointInput
+export async function handleTruthHarnessResearchSessionCheckpoint(
+  input: TruthHarnessResearchSessionCheckpointInput
 ): Promise<ResearchSessionCheckpointWriteResult> {
   return addResearchSessionCheckpoint({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
@@ -1737,7 +1737,7 @@ export async function handleTheoremResearchSessionCheckpoint(
   });
 }
 
-export async function handleTheoremResearchSessionList(input: TheoremResearchSessionListInput): Promise<{
+export async function handleTruthHarnessResearchSessionList(input: TruthHarnessResearchSessionListInput): Promise<{
   total: number;
   sessions: ResearchSession[];
 }> {
@@ -1748,7 +1748,7 @@ export async function handleTheoremResearchSessionList(input: TheoremResearchSes
   };
 }
 
-export async function handleTheoremExpertReviewLog(input: TheoremExpertReviewLogInput): Promise<ExpertReviewWriteResult> {
+export async function handleTruthHarnessExpertReviewLog(input: TruthHarnessExpertReviewLogInput): Promise<ExpertReviewWriteResult> {
   return writeExpertReview({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -1770,7 +1770,7 @@ export async function handleTheoremExpertReviewLog(input: TheoremExpertReviewLog
   });
 }
 
-export async function handleTheoremExpertReviewList(input: TheoremExpertReviewListInput): Promise<{
+export async function handleTruthHarnessExpertReviewList(input: TruthHarnessExpertReviewListInput): Promise<{
   total: number;
   reviews: ExpertReviewRecord[];
 }> {
@@ -1781,7 +1781,7 @@ export async function handleTheoremExpertReviewList(input: TheoremExpertReviewLi
   };
 }
 
-export async function handleTheoremInventionLog(input: TheoremInventionLogInput): Promise<InventionLogWriteResult> {
+export async function handleTruthHarnessInventionLog(input: TruthHarnessInventionLogInput): Promise<InventionLogWriteResult> {
   return createInventionLogEntry({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -1796,7 +1796,7 @@ export async function handleTheoremInventionLog(input: TheoremInventionLogInput)
   });
 }
 
-export async function handleTheoremInventionList(input: TheoremInventionListInput): Promise<{
+export async function handleTruthHarnessInventionList(input: TruthHarnessInventionListInput): Promise<{
   total: number;
   entries: InventionLogEntry[];
 }> {
@@ -1807,9 +1807,9 @@ export async function handleTheoremInventionList(input: TheoremInventionListInpu
   };
 }
 
-export async function handleTheoremDiscoveryPackage(
-  input: TheoremDiscoveryPackageInput
-): Promise<TheoremDiscoveryPackageOutput> {
+export async function handleTruthHarnessDiscoveryPackage(
+  input: TruthHarnessDiscoveryPackageInput
+): Promise<TruthHarnessDiscoveryPackageOutput> {
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
   if (input.write) {
     return {
@@ -1824,7 +1824,7 @@ export async function handleTheoremDiscoveryPackage(
   };
 }
 
-export async function handleTheoremClaimChart(input: TheoremClaimChartInput): Promise<TheoremClaimChartOutput> {
+export async function handleTruthHarnessClaimChart(input: TruthHarnessClaimChartInput): Promise<TruthHarnessClaimChartOutput> {
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
   const chartInput = {
     rootPath,
@@ -1850,7 +1850,7 @@ export async function handleTheoremClaimChart(input: TheoremClaimChartInput): Pr
   };
 }
 
-export async function handleTheoremClaimChartList(input: TheoremClaimChartListInput): Promise<{
+export async function handleTruthHarnessClaimChartList(input: TruthHarnessClaimChartListInput): Promise<{
   total: number;
   charts: ClaimChart[];
 }> {
@@ -1861,9 +1861,9 @@ export async function handleTheoremClaimChartList(input: TheoremClaimChartListIn
   };
 }
 
-export async function handleTheoremModelContextPrepare(
-  input: TheoremModelContextPrepareInput
-): Promise<TheoremModelContextPrepareOutput> {
+export async function handleTruthHarnessModelContextPrepare(
+  input: TruthHarnessModelContextPrepareInput
+): Promise<TruthHarnessModelContextPrepareOutput> {
   const modelContextInput = {
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -1897,7 +1897,7 @@ export async function handleTheoremModelContextPrepare(
   };
 }
 
-export async function handleTheoremModelContextList(input: TheoremModelContextListInput): Promise<{
+export async function handleTruthHarnessModelContextList(input: TruthHarnessModelContextListInput): Promise<{
   total: number;
   packets: ModelContextPacket[];
 }> {
@@ -1908,8 +1908,8 @@ export async function handleTheoremModelContextList(input: TheoremModelContextLi
   };
 }
 
-export async function handleTheoremExternalDisclosureLog(
-  input: TheoremExternalDisclosureLogInput
+export async function handleTruthHarnessExternalDisclosureLog(
+  input: TruthHarnessExternalDisclosureLogInput
 ): Promise<ExternalDisclosureWriteResult> {
   return createExternalDisclosureLogEntry({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
@@ -1928,7 +1928,7 @@ export async function handleTheoremExternalDisclosureLog(
   });
 }
 
-export async function handleTheoremExternalDisclosureList(input: TheoremExternalDisclosureListInput): Promise<{
+export async function handleTruthHarnessExternalDisclosureList(input: TruthHarnessExternalDisclosureListInput): Promise<{
   total: number;
   entries: ExternalDisclosureLogEntry[];
 }> {
@@ -1939,11 +1939,11 @@ export async function handleTheoremExternalDisclosureList(input: TheoremExternal
   };
 }
 
-export async function handleTheoremReplay(input: TheoremReplayInput): Promise<ReplayResult> {
+export async function handleTruthHarnessReplay(input: TruthHarnessReplayInput): Promise<ReplayResult> {
   return replayReceipt(await readReceiptInput(input));
 }
 
-export async function handleTheoremRenderReceipt(input: TheoremRenderReceiptInput): Promise<TheoremRenderReceiptOutput> {
+export async function handleTruthHarnessRenderReceipt(input: TruthHarnessRenderReceiptInput): Promise<TruthHarnessRenderReceiptOutput> {
   const format = input.format ?? "markdown";
   const receipt = await readReceiptInput(input);
 
@@ -1967,7 +1967,7 @@ export function toolJson(value: unknown, options: { isError?: boolean } = {}) {
   };
 }
 
-async function readReceiptInput(input: TheoremReplayInput): Promise<Receipt> {
+async function readReceiptInput(input: TruthHarnessReplayInput): Promise<Receipt> {
   if (input.receiptJson && input.receiptPath) {
     throw new Error("Provide receiptJson or receiptPath, not both.");
   }
@@ -2010,5 +2010,5 @@ function quoteCommandArg(value: string): string {
 }
 
 function getWorkspaceRoot(): string {
-  return resolve(process.env.THEOREM_WORKBENCH_ROOT ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd());
+  return resolve(process.env.TRUTH_HARNESS_ROOT ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd());
 }

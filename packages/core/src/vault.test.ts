@@ -6,7 +6,7 @@ import { initLocalWorkspace } from "./local-workspace.js";
 import { listVaultEntries, openVaultEntry, sealVaultFile, verifyVaultEntry } from "./vault.js";
 
 const roots: string[] = [];
-const keyEnv = "THEOREM_WORKBENCH_TEST_VAULT_KEY";
+const keyEnv = "TRUTH_HARNESS_TEST_VAULT_KEY";
 const originalKey = process.env[keyEnv];
 
 afterEach(async () => {
@@ -27,7 +27,7 @@ describe("local encrypted vault", () => {
         sourcePath: "private-notes.md",
         keyEnv
       })
-    ).rejects.toThrow("Run `theorem workspace init`");
+    ).rejects.toThrow("Run `truth-harness workspace init`");
   });
 
   it("seals, lists, verifies, and opens local files without public plaintext metadata", async () => {
@@ -55,8 +55,8 @@ describe("local encrypted vault", () => {
       keyEnv
     });
 
-    expect(sealed.path).toContain(join(".theorem-workbench", "vault"));
-    expect(sealed.entry.schemaVersion).toBe("theorem.vault.v0");
+    expect(sealed.path).toContain(join(".truth-harness", "vault"));
+    expect(sealed.entry.schemaVersion).toBe("truth-harness.vault.v0");
     expect(sealed.entry.vaultId).toMatch(/^vault_[a-f0-9]{16}$/);
     expect(sealed.entry.label).toBe("Private pathway notes");
     expect(sealed.entry.ciphertextBase64).not.toContain("hair loss");
@@ -110,7 +110,7 @@ describe("local encrypted vault", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-vault-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-vault-"));
   roots.push(root);
   return root;
 }

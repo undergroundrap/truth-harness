@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/experiment-log.schema.json",
-  "title": "Theorem Workbench Experiment Log Entry",
+  "$id": "https://truth-harness.local/schemas/experiment-log.schema.json",
+  "title": "Truth Harness Experiment Log Entry",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -29,7 +29,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.experiment.v0"
+      "const": "truth-harness.experiment.v0"
     },
     "experimentId": {
       "type": "string",

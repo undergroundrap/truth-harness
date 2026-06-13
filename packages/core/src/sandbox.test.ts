@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { detectCodeRunSandboxStatus, type CodeRunSandboxProbe } from "./sandbox.js";
 
 describe("code-run sandbox detection", () => {
-  it("does not trust the Theorem container marker by itself", () => {
+  it("does not trust the Truth Harness container marker by itself", () => {
     const status = detectCodeRunSandboxStatus(
       probe({
-        env: { THEOREM_WORKBENCH_CONTAINER: "1" },
+        env: { TRUTH_HARNESS_CONTAINER: "1" },
         exists: {},
         files: {
           "/proc/1/cgroup": "0::/\n"
@@ -25,7 +25,7 @@ describe("code-run sandbox detection", () => {
   it("does not accept a container with a non-loopback network interface", () => {
     const status = detectCodeRunSandboxStatus(
       probe({
-        env: { THEOREM_WORKBENCH_CONTAINER: "1" },
+        env: { TRUTH_HARNESS_CONTAINER: "1" },
         exists: { "/.dockerenv": true },
         files: {
           "/proc/net/route": "Iface\tDestination\tGateway\tFlags\neth0\t00000000\t010011AC\t0003\n"
@@ -42,10 +42,10 @@ describe("code-run sandbox detection", () => {
     expect(status.notes.join(" ")).toContain("IPv4=true");
   });
 
-  it("accepts a Theorem container with loopback-only networking and no default route", () => {
+  it("accepts a Truth Harness container with loopback-only networking and no default route", () => {
     const status = detectCodeRunSandboxStatus(
       probe({
-        env: { THEOREM_WORKBENCH_CONTAINER: "1" },
+        env: { TRUTH_HARNESS_CONTAINER: "1" },
         exists: { "/.dockerenv": true },
         files: {
           "/proc/net/route": "Iface\tDestination\tGateway\tFlags\n",

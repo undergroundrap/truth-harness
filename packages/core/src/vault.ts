@@ -13,7 +13,7 @@ import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus 
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 
-const DEFAULT_VAULT_KEY_ENV = "THEOREM_WORKBENCH_VAULT_KEY";
+const DEFAULT_VAULT_KEY_ENV = "TRUTH_HARNESS_VAULT_KEY";
 const SCRYPT_KEY_LENGTH = 32;
 const SCRYPT_COST = 16384;
 const SCRYPT_BLOCK_SIZE = 8;
@@ -43,7 +43,7 @@ export interface VaultEncryptionMetadata {
 }
 
 export interface VaultEnvelope {
-  schemaVersion: "theorem.vault.v0";
+  schemaVersion: "truth-harness.vault.v0";
   vaultId: string;
   projectId: string;
   createdAt: string;
@@ -60,7 +60,7 @@ export interface VaultEnvelope {
 }
 
 export interface VaultEnvelopeSummary {
-  schemaVersion: "theorem.vault.v0";
+  schemaVersion: "truth-harness.vault.v0";
   vaultId: string;
   projectId: string;
   createdAt: string;
@@ -76,7 +76,7 @@ export interface VaultEnvelopeSummary {
 }
 
 interface VaultPayload {
-  schemaVersion: "theorem.vault-payload.v0";
+  schemaVersion: "truth-harness.vault-payload.v0";
   sealedAt: string;
   sourceRef: string;
   originalFileName: string;
@@ -86,7 +86,7 @@ interface VaultPayload {
 }
 
 export interface VaultPayloadSummary {
-  schemaVersion: "theorem.vault-payload.v0";
+  schemaVersion: "truth-harness.vault-payload.v0";
   sealedAt: string;
   sourceRef: string;
   originalFileName: string;
@@ -133,7 +133,7 @@ export async function sealVaultFile(input: SealVaultFileInput): Promise<VaultSea
   const bytes = await readFile(sourcePath);
   const label = normalizeOptionalText(input.label) ?? basename(sourcePath);
   const payload: VaultPayload = {
-    schemaVersion: "theorem.vault-payload.v0",
+    schemaVersion: "truth-harness.vault-payload.v0",
     sealedAt: createdAt,
     sourceRef: toPortablePath(relative(status.root, sourcePath)),
     originalFileName: basename(sourcePath),
@@ -177,7 +177,7 @@ export async function sealVaultFile(input: SealVaultFileInput): Promise<VaultSea
   };
   const vaultId = `vault_${stableHash(entryWithoutId).slice(0, 16)}`;
   const entry: VaultEnvelope = {
-    schemaVersion: "theorem.vault.v0",
+    schemaVersion: "truth-harness.vault.v0",
     vaultId,
     ...entryWithoutId,
     privacy: manifest.privacy,
@@ -215,7 +215,7 @@ export async function listVaultEntries(rootPath: string): Promise<VaultEnvelopeS
   );
 
   return entries
-    .filter((entry) => entry.schemaVersion === "theorem.vault.v0")
+    .filter((entry) => entry.schemaVersion === "truth-harness.vault.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
     .map(summarizeEnvelope);
 }
@@ -305,7 +305,7 @@ async function readVaultEnvelopeRef(
     for (const file of files.filter((file) => file.endsWith(".json"))) {
       const path = join(vaultDir, file);
       const entry = JSON.parse(await readFile(path, "utf8")) as VaultEnvelope;
-      if (entry.schemaVersion === "theorem.vault.v0" && entry.vaultId === ref) {
+      if (entry.schemaVersion === "truth-harness.vault.v0" && entry.vaultId === ref) {
         return { entry, path };
       }
     }
@@ -323,7 +323,7 @@ async function readVaultEnvelopeRef(
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before using the vault.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before using the vault.");
   }
 
   if (status.missingDirectories.length > 0) {
@@ -357,7 +357,7 @@ function requireVaultPassphrase(keyEnv: string): string {
 }
 
 function validateVaultEnvelope(entry: VaultEnvelope): void {
-  if (entry.schemaVersion !== "theorem.vault.v0") {
+  if (entry.schemaVersion !== "truth-harness.vault.v0") {
     throw new Error(`Unsupported vault schema: ${JSON.stringify(entry.schemaVersion)}`);
   }
 
@@ -371,7 +371,7 @@ function validateVaultEnvelope(entry: VaultEnvelope): void {
 }
 
 function validateVaultPayload(payload: VaultPayload): void {
-  if (payload.schemaVersion !== "theorem.vault-payload.v0") {
+  if (payload.schemaVersion !== "truth-harness.vault-payload.v0") {
     throw new Error(`Unsupported vault payload schema: ${JSON.stringify(payload.schemaVersion)}`);
   }
 }

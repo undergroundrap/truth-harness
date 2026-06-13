@@ -42,7 +42,7 @@ export interface InventionEvidenceRef {
 }
 
 export interface InventionLogEntry {
-  schemaVersion: "theorem.invention.v0";
+  schemaVersion: "truth-harness.invention.v0";
   entryId: string;
   projectId: string;
   createdAt: string;
@@ -122,7 +122,7 @@ export async function createInventionLogEntry(input: CreateInventionLogInput): P
   };
   const entryId = `inv_${stableHash(entryWithoutId).slice(0, 16)}`;
   const entry: InventionLogEntry = {
-    schemaVersion: "theorem.invention.v0",
+    schemaVersion: "truth-harness.invention.v0",
     entryId,
     ...entryWithoutId,
     updatedAt: createdAt,
@@ -170,14 +170,14 @@ export async function listInventionLogEntries(rootPath: string): Promise<Inventi
   );
 
   return entries
-    .filter((entry) => entry.schemaVersion === "theorem.invention.v0")
+    .filter((entry) => entry.schemaVersion === "truth-harness.invention.v0")
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before writing invention logs.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing invention logs.");
   }
 
   if (status.missingDirectories.length > 0) {

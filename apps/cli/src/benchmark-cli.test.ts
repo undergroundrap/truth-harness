@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createReceipt } from "@theorem-workbench/core";
+import { createReceipt } from "@truth-harness/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { program } from "./index.js";
 
@@ -18,7 +18,7 @@ describe("benchmark CLI", () => {
       "cas",
       "backends",
       "--maxima-command",
-      "theorem-workbench-missing-maxima-command",
+      "truth-harness-missing-maxima-command",
       "--json"
     ]);
     const json = JSON.parse(result.stdout) as {
@@ -52,7 +52,7 @@ describe("benchmark CLI", () => {
       "--variable",
       "x",
       "--maxima-command",
-      "theorem-workbench-missing-maxima-command",
+      "truth-harness-missing-maxima-command",
       "--timeout-ms",
       "50",
       "--json",
@@ -67,7 +67,7 @@ describe("benchmark CLI", () => {
     };
 
     expect(result.exitCode).toBe(1);
-    expect(json.schemaVersion).toBe("theorem.cas-check.v0");
+    expect(json.schemaVersion).toBe("truth-harness.cas-check.v0");
     expect(json.status).toBe("solver-unavailable");
     expect(json.trust).toBe("unverified");
     expect(json.proofCheckerBacked).toBe(false);
@@ -90,7 +90,7 @@ describe("benchmark CLI", () => {
       root,
       "--write",
       "--maxima-command",
-      "theorem-workbench-missing-maxima-command",
+      "truth-harness-missing-maxima-command",
       "--timeout-ms",
       "50",
       "--json"
@@ -106,14 +106,14 @@ describe("benchmark CLI", () => {
 
     expect(write.exitCode).toBe(0);
     expect(writeJson.record.trust).toBe("unverified");
-    expect(writeJson.result.jsonPath).toContain(".theorem-workbench");
-    expect(writeJson.result.markdownPath).toContain(".theorem-workbench");
+    expect(writeJson.result.jsonPath).toContain(".truth-harness");
+    expect(writeJson.result.markdownPath).toContain(".truth-harness");
     expect(list.total).toBe(1);
     expect(list.checks[0]).toMatchObject({
       checkId: writeJson.record.checkId,
       trust: "unverified"
     });
-    expect(list.checks[0]?.path).toContain(".theorem-workbench/cas/");
+    expect(list.checks[0]?.path).toContain(".truth-harness/cas/");
   });
 
   it("prints an engine manifest for humans and agents", async () => {
@@ -123,11 +123,11 @@ describe("benchmark CLI", () => {
       "--timeout-ms",
       "50",
       "--maxima-command",
-      "theorem-workbench-missing-maxima-command",
+      "truth-harness-missing-maxima-command",
       "--lean-command",
-      "theorem-workbench-missing-lean-command",
+      "truth-harness-missing-lean-command",
       "--z3-command",
-      "theorem-workbench-missing-z3-command"
+      "truth-harness-missing-z3-command"
     ]);
     const json = JSON.parse(result.stdout) as {
       schemaVersion: string;
@@ -139,7 +139,7 @@ describe("benchmark CLI", () => {
     };
 
     expect(result.exitCode).toBe(0);
-    expect(json.schemaVersion).toBe("theorem.engine-manifest.v0");
+    expect(json.schemaVersion).toBe("truth-harness.engine-manifest.v0");
     expect(json.nativeCount).toBeGreaterThan(0);
     expect(json.adapterCount).toBeGreaterThan(0);
     expect(json.plannedCount).toBeGreaterThan(0);
@@ -163,11 +163,11 @@ describe("benchmark CLI", () => {
       "--timeout-ms",
       "50",
       "--maxima-command",
-      "theorem-workbench-missing-maxima-command",
+      "truth-harness-missing-maxima-command",
       "--lean-command",
-      "theorem-workbench-missing-lean-command",
+      "truth-harness-missing-lean-command",
       "--z3-command",
-      "theorem-workbench-missing-z3-command"
+      "truth-harness-missing-z3-command"
     ]);
     const json = JSON.parse(result.stdout) as {
       schemaVersion: string;
@@ -180,7 +180,7 @@ describe("benchmark CLI", () => {
     };
 
     expect(result.exitCode).toBe(0);
-    expect(json.schemaVersion).toBe("theorem.verifier-route.v0");
+    expect(json.schemaVersion).toBe("truth-harness.verifier-route.v0");
     expect(json.finalTrust).toBe("exact-computed");
     expect(json.receipt.trust).toBe("exact-computed");
     expect(json.usedCapabilities).toContainEqual(
@@ -211,11 +211,11 @@ describe("benchmark CLI", () => {
       "--timeout-ms",
       "50",
       "--maxima-command",
-      "theorem-workbench-missing-maxima-command",
+      "truth-harness-missing-maxima-command",
       "--lean-command",
-      "theorem-workbench-missing-lean-command",
+      "truth-harness-missing-lean-command",
       "--z3-command",
-      "theorem-workbench-missing-z3-command"
+      "truth-harness-missing-z3-command"
     ]);
 
     expect(result.exitCode).toBe(0);
@@ -238,11 +238,11 @@ describe("benchmark CLI", () => {
       "--timeout-ms",
       "50",
       "--maxima-command",
-      "theorem-workbench-missing-maxima-command",
+      "truth-harness-missing-maxima-command",
       "--lean-command",
-      "theorem-workbench-missing-lean-command",
+      "truth-harness-missing-lean-command",
       "--z3-command",
-      "theorem-workbench-missing-z3-command"
+      "truth-harness-missing-z3-command"
     ]);
     const written = JSON.parse(write.stdout) as {
       written: true;
@@ -273,8 +273,8 @@ describe("benchmark CLI", () => {
     expect(write.exitCode).toBe(0);
     expect(written.written).toBe(true);
     expect(written.route.finalTrust).toBe("exact-computed");
-    expect(written.result.jsonPath).toContain(".theorem-workbench");
-    expect(written.result.markdownPath).toContain(".theorem-workbench");
+    expect(written.result.jsonPath).toContain(".truth-harness");
+    expect(written.result.markdownPath).toContain(".truth-harness");
     expect(listed.total).toBe(1);
     expect(listed.routes[0]).toMatchObject({
       routeId: written.route.routeId,
@@ -289,7 +289,7 @@ describe("benchmark CLI", () => {
       blockingObligations: 0
     });
     expect(shown.routeId).toBe(written.route.routeId);
-    expect(shown.replay).toContain("theorem verify");
+    expect(shown.replay).toContain("truth-harness verify");
     expect(humanList.stdout).toContain("Proof obligations: 1 total / 1 not-required");
     expect(humanList.stdout).toContain("Readiness: ready (exact-computed)");
   });
@@ -310,11 +310,11 @@ describe("benchmark CLI", () => {
       "--timeout-ms",
       "50",
       "--maxima-command",
-      "theorem-workbench-missing-maxima-command",
+      "truth-harness-missing-maxima-command",
       "--lean-command",
-      "theorem-workbench-missing-lean-command",
+      "truth-harness-missing-lean-command",
       "--z3-command",
-      "theorem-workbench-missing-z3-command"
+      "truth-harness-missing-z3-command"
     ]);
     const written = JSON.parse(write.stdout) as {
       route: {
@@ -322,13 +322,13 @@ describe("benchmark CLI", () => {
         proofObligations: Array<{ obligationId: string; kind: string; status: string }>;
       };
     };
-    const proofRef = join(".theorem-workbench", "proofs", "manual-proof.json");
-    await mkdir(join(root, ".theorem-workbench", "proofs"), { recursive: true });
+    const proofRef = join(".truth-harness", "proofs", "manual-proof.json");
+    await mkdir(join(root, ".truth-harness", "proofs"), { recursive: true });
     await writeFile(
       join(root, proofRef),
       `${JSON.stringify(
         {
-          schemaVersion: "theorem.proof-check.v0",
+          schemaVersion: "truth-harness.proof-check.v0",
           checkId: "proof_0123456789abcdef",
           createdAt: "2026-06-12T00:00:00.000Z",
           backend: {
@@ -351,7 +351,7 @@ describe("benchmark CLI", () => {
           proofCheckerBacked: true,
           localOnly: true,
           networkAccess: "none",
-          replay: "theorem proof check manual-proof.lean --write --json",
+          replay: "truth-harness proof check manual-proof.lean --write --json",
           limitations: ["Test fixture for CLI route-satisfaction contract only."],
           warnings: []
         },
@@ -400,7 +400,7 @@ describe("benchmark CLI", () => {
     });
     expect(result.evidence).toMatchObject({
       trust: "proved",
-      schemaVersion: "theorem.proof-check.v0"
+      schemaVersion: "truth-harness.proof-check.v0"
     });
     expect(shown.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
       status: "satisfied"
@@ -424,7 +424,7 @@ describe("benchmark CLI", () => {
       "proof",
       "backends",
       "--lean-command",
-      "theorem-workbench-missing-lean-command",
+      "truth-harness-missing-lean-command",
       "--json"
     ]);
     const json = JSON.parse(result.stdout) as {
@@ -454,7 +454,7 @@ describe("benchmark CLI", () => {
       "check",
       proofPath,
       "--lean-command",
-      "theorem-workbench-missing-lean-command",
+      "truth-harness-missing-lean-command",
       "--json",
       "--fail-on-unproved"
     ]);
@@ -468,7 +468,7 @@ describe("benchmark CLI", () => {
     };
 
     expect(result.exitCode).toBe(1);
-    expect(json.schemaVersion).toBe("theorem.proof-check.v0");
+    expect(json.schemaVersion).toBe("truth-harness.proof-check.v0");
     expect(json.status).toBe("backend-unavailable");
     expect(json.trust).toBe("unverified");
     expect(json.proofCheckerBacked).toBe(false);
@@ -490,7 +490,7 @@ describe("benchmark CLI", () => {
       root,
       "--write",
       "--lean-command",
-      "theorem-workbench-missing-lean-command",
+      "truth-harness-missing-lean-command",
       "--json"
     ]);
     const writeJson = JSON.parse(write.stdout) as {
@@ -504,18 +504,18 @@ describe("benchmark CLI", () => {
 
     expect(write.exitCode).toBe(0);
     expect(writeJson.record.trust).toBe("unverified");
-    expect(writeJson.result.jsonPath).toContain(".theorem-workbench");
-    expect(writeJson.result.markdownPath).toContain(".theorem-workbench");
+    expect(writeJson.result.jsonPath).toContain(".truth-harness");
+    expect(writeJson.result.markdownPath).toContain(".truth-harness");
     expect(list.total).toBe(1);
     expect(list.checks[0]).toMatchObject({
       checkId: writeJson.record.checkId,
       trust: "unverified"
     });
-    expect(list.checks[0]?.path).toContain(".theorem-workbench/proofs/");
+    expect(list.checks[0]?.path).toContain(".truth-harness/proofs/");
   });
 
   it("reports SMT backend status without requiring Z3 to be installed", async () => {
-    const result = await runCli(["smt", "backends", "--z3-command", "theorem-workbench-missing-z3-command", "--json"]);
+    const result = await runCli(["smt", "backends", "--z3-command", "truth-harness-missing-z3-command", "--json"]);
     const json = JSON.parse(result.stdout) as {
       smtSolversAvailable: number;
       backends: Array<{ backendId: string; status: string; canCheckSmt: boolean; statusProbeMintedCheck: boolean }>;
@@ -544,7 +544,7 @@ describe("benchmark CLI", () => {
       "check",
       smtPath,
       "--z3-command",
-      "theorem-workbench-missing-z3-command",
+      "truth-harness-missing-z3-command",
       "--json",
       "--fail-on-unverified"
     ]);
@@ -558,7 +558,7 @@ describe("benchmark CLI", () => {
     };
 
     expect(result.exitCode).toBe(1);
-    expect(json.schemaVersion).toBe("theorem.smt-check.v0");
+    expect(json.schemaVersion).toBe("truth-harness.smt-check.v0");
     expect(json.status).toBe("solver-unavailable");
     expect(json.trust).toBe("unverified");
     expect(json.proofCheckerBacked).toBe(false);
@@ -580,7 +580,7 @@ describe("benchmark CLI", () => {
       root,
       "--write",
       "--z3-command",
-      "theorem-workbench-missing-z3-command",
+      "truth-harness-missing-z3-command",
       "--json"
     ]);
     const writeJson = JSON.parse(write.stdout) as {
@@ -594,14 +594,14 @@ describe("benchmark CLI", () => {
 
     expect(write.exitCode).toBe(0);
     expect(writeJson.record.trust).toBe("unverified");
-    expect(writeJson.result.jsonPath).toContain(".theorem-workbench");
-    expect(writeJson.result.markdownPath).toContain(".theorem-workbench");
+    expect(writeJson.result.jsonPath).toContain(".truth-harness");
+    expect(writeJson.result.markdownPath).toContain(".truth-harness");
     expect(list.total).toBe(1);
     expect(list.checks[0]).toMatchObject({
       checkId: writeJson.record.checkId,
       trust: "unverified"
     });
-    expect(list.checks[0]?.path).toContain(".theorem-workbench/smt/");
+    expect(list.checks[0]?.path).toContain(".truth-harness/smt/");
   });
 
   it("generates workspace-local SMT-LIB from explicit constraints and checks it", async () => {
@@ -622,7 +622,7 @@ describe("benchmark CLI", () => {
       "--constraint",
       "x < 3",
       "--z3-command",
-      "theorem-workbench-missing-z3-command",
+      "truth-harness-missing-z3-command",
       "--json",
       "--fail-on-unverified"
     ]);
@@ -636,10 +636,10 @@ describe("benchmark CLI", () => {
     expect(result.exitCode).toBe(1);
     expect(json.problem.problemId).toMatch(/^smt_problem_[a-f0-9]{16}$/);
     expect(json.problem.sourceText).toContain("(assert (> x 0))");
-    expect(json.sourceRef).toContain(".theorem-workbench/smt/sources/");
+    expect(json.sourceRef).toContain(".truth-harness/smt/sources/");
     expect(json.check.record.source.path).toBe(json.sourceRef);
     expect(json.check.record.trust).toBe("unverified");
-    expect(json.check.jsonPath).toContain(".theorem-workbench");
+    expect(json.check.jsonPath).toContain(".truth-harness");
     expect(list.total).toBe(1);
   });
 
@@ -697,7 +697,7 @@ describe("benchmark CLI", () => {
     });
     expect(json.record.execution).toMatchObject({ status: "passed", exitCode: 0 });
     expect(json.record.stdout.text.trim()).toBe("cli-code-run");
-    expect(json.jsonPath).toContain(".theorem-workbench");
+    expect(json.jsonPath).toContain(".truth-harness");
     expect(list.total).toBe(1);
     expect(list.records[0]).toMatchObject({
       runId: json.record.runId,
@@ -714,7 +714,7 @@ describe("benchmark CLI", () => {
       canAttestNetworkNone: boolean;
     };
 
-    expect(json.schemaVersion).toBe("theorem.code-run-sandbox-status.v0");
+    expect(json.schemaVersion).toBe("truth-harness.code-run-sandbox-status.v0");
     expect(result.exitCode).toBe(json.available ? 0 : 1);
     if (json.available) {
       expect(json.provider).toBe("container");
@@ -754,12 +754,12 @@ describe("benchmark CLI", () => {
 
     expect(statusResult.exitCode).toBe(1);
     expect(status.manifestRepair).toEqual({ applied: false, addedDirectories: ["code-runs"] });
-    expect(status.missingDirectories).toEqual([".theorem-workbench/code-runs"]);
+    expect(status.missingDirectories).toEqual([".truth-harness/code-runs"]);
     expect(repair.repaired).toBe(true);
     expect(repair.manifestRepair).toEqual({ applied: true, addedDirectories: ["code-runs"] });
-    expect(repair.createdDirectories).toEqual([".theorem-workbench/code-runs"]);
+    expect(repair.createdDirectories).toEqual([".truth-harness/code-runs"]);
     expect(repair.missingDirectoriesAfter).toEqual([]);
-    expect(rawManifest.directories["code-runs"]).toBe(".theorem-workbench/code-runs");
+    expect(rawManifest.directories["code-runs"]).toBe(".truth-harness/code-runs");
   });
 
   it("writes, lists, compares, and gates benchmark artifacts", async () => {
@@ -829,14 +829,14 @@ describe("benchmark CLI", () => {
     expect(comparison.exitCode).toBe(1);
     expect(comparisonJson.comparison.verdict).toBe("regressed");
     expect(comparisonJson.comparison.summary.regressions).toBe(1);
-    expect(comparisonJson.result.jsonPath).toContain(".theorem-workbench");
+    expect(comparisonJson.result.jsonPath).toContain(".truth-harness");
     expect(listAfterCompare.total).toBe(3);
   });
 
   it("writes, lists, and shows claim ledger records", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);
-    const receiptsDir = join(root, ".theorem-workbench", "receipts");
+    const receiptsDir = join(root, ".truth-harness", "receipts");
     await mkdir(receiptsDir, { recursive: true });
     await writeFile(
       join(receiptsDir, "base-fraction.json"),
@@ -862,7 +862,7 @@ describe("benchmark CLI", () => {
       "--tag",
       "fractions",
       "--evidence",
-      "receipt:.theorem-workbench/receipts/base-fraction.json",
+      "receipt:.truth-harness/receipts/base-fraction.json",
       "--json"
     ]);
     const baseJson = JSON.parse(base.stdout) as { claim: { claimId: string; trust: string } };
@@ -881,7 +881,7 @@ describe("benchmark CLI", () => {
       "--evidence",
       `claim:${baseJson.claim.claimId}`,
       "--evidence",
-      "receipt:.theorem-workbench/receipts/fraction-sum.json",
+      "receipt:.truth-harness/receipts/fraction-sum.json",
       "--json"
     ]);
     const derivedJson = JSON.parse(derived.stdout) as {
@@ -934,7 +934,7 @@ async function runCli(args: string[]): Promise<{ exitCode: number; stdout: strin
 
   try {
     process.exitCode = undefined;
-    await program.parseAsync(["node", "theorem", ...args], { from: "node" });
+    await program.parseAsync(["node", "truth-harness", ...args], { from: "node" });
     return {
       exitCode: Number(process.exitCode ?? 0),
       stdout: stdout.join("\n"),
@@ -952,7 +952,7 @@ async function writeSuite(path: string, suite: unknown): Promise<void> {
 }
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-cli-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-cli-"));
   roots.push(root);
   return root;
 }

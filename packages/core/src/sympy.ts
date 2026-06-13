@@ -265,7 +265,7 @@ function isLaunchFailure(failure: SympyFailure): boolean {
 }
 
 function pythonCandidates(): string[] {
-  const configured = process.env.THEOREM_PYTHON?.trim();
+  const configured = process.env.TRUTH_HARNESS_PYTHON?.trim();
   const candidates = configured
     ? [configured]
     : process.platform === "win32"

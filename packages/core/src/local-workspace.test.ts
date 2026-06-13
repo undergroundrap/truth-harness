@@ -21,7 +21,7 @@ describe("local workspace", () => {
   it("creates a local-only portable manifest", () => {
     const manifest = createLocalWorkspaceManifest("example-project", "2026-06-08T00:00:00.000Z", "Example");
 
-    expect(manifest.schemaVersion).toBe("theorem.workspace.v0");
+    expect(manifest.schemaVersion).toBe("truth-harness.workspace.v0");
     expect(manifest.displayName).toBe("Example");
     expect(manifest.privacy).toEqual({
       mode: "local-only",
@@ -31,24 +31,24 @@ describe("local workspace", () => {
       externalDisclosures: []
     });
     expect(Object.values(manifest.directories).every((directory) => directory.startsWith(LOCAL_WORKSPACE_DIR))).toBe(true);
-    expect(manifest.directories.cas).toBe(".theorem-workbench/cas");
-    expect(manifest.directories.proofs).toBe(".theorem-workbench/proofs");
-    expect(manifest.directories.smt).toBe(".theorem-workbench/smt");
-    expect(manifest.directories.disclosures).toBe(".theorem-workbench/disclosures");
-    expect(manifest.directories.simulations).toBe(".theorem-workbench/simulations");
-    expect(manifest.directories.patents).toBe(".theorem-workbench/patents");
-    expect(manifest.directories.experiments).toBe(".theorem-workbench/experiments");
-    expect(manifest.directories.vault).toBe(".theorem-workbench/vault");
-    expect(manifest.directories.audits).toBe(".theorem-workbench/audits");
-    expect(manifest.directories.snapshots).toBe(".theorem-workbench/snapshots");
-    expect(manifest.directories.sessions).toBe(".theorem-workbench/sessions");
-    expect(manifest.directories.reviews).toBe(".theorem-workbench/reviews");
-    expect(manifest.directories.validation).toBe(".theorem-workbench/validation");
-    expect(manifest.directories.literature).toBe(".theorem-workbench/literature");
-    expect(manifest.directories["notebook-runs"]).toBe(".theorem-workbench/notebook-runs");
-    expect(manifest.directories["code-runs"]).toBe(".theorem-workbench/code-runs");
-    expect(manifest.directories["model-contexts"]).toBe(".theorem-workbench/model-contexts");
-    expect(manifest.directories.routes).toBe(".theorem-workbench/routes");
+    expect(manifest.directories.cas).toBe(".truth-harness/cas");
+    expect(manifest.directories.proofs).toBe(".truth-harness/proofs");
+    expect(manifest.directories.smt).toBe(".truth-harness/smt");
+    expect(manifest.directories.disclosures).toBe(".truth-harness/disclosures");
+    expect(manifest.directories.simulations).toBe(".truth-harness/simulations");
+    expect(manifest.directories.patents).toBe(".truth-harness/patents");
+    expect(manifest.directories.experiments).toBe(".truth-harness/experiments");
+    expect(manifest.directories.vault).toBe(".truth-harness/vault");
+    expect(manifest.directories.audits).toBe(".truth-harness/audits");
+    expect(manifest.directories.snapshots).toBe(".truth-harness/snapshots");
+    expect(manifest.directories.sessions).toBe(".truth-harness/sessions");
+    expect(manifest.directories.reviews).toBe(".truth-harness/reviews");
+    expect(manifest.directories.validation).toBe(".truth-harness/validation");
+    expect(manifest.directories.literature).toBe(".truth-harness/literature");
+    expect(manifest.directories["notebook-runs"]).toBe(".truth-harness/notebook-runs");
+    expect(manifest.directories["code-runs"]).toBe(".truth-harness/code-runs");
+    expect(manifest.directories["model-contexts"]).toBe(".truth-harness/model-contexts");
+    expect(manifest.directories.routes).toBe(".truth-harness/routes");
     expect(manifest.policies.externalCalls).toBe("disabled-by-default");
     expect(manifest.policies.disclosure).toBe("required-for-external-calls");
   });
@@ -104,12 +104,12 @@ describe("local workspace", () => {
     const status = await getLocalWorkspaceStatus(root);
 
     expect(status.exists).toBe(true);
-    expect(status.manifest?.directories.routes).toBe(".theorem-workbench/routes");
+    expect(status.manifest?.directories.routes).toBe(".truth-harness/routes");
     expect(status.manifestRepair).toEqual({
       applied: false,
       addedDirectories: ["routes"]
     });
-    expect(status.missingDirectories).toEqual([".theorem-workbench/routes"]);
+    expect(status.missingDirectories).toEqual([".truth-harness/routes"]);
     expect(JSON.parse(await readFile(initialized.manifestPath, "utf8")).directories.routes).toBeUndefined();
 
     const repaired = await repairLocalWorkspace(root, { now: "2026-06-09T00:00:00.000Z" });
@@ -122,9 +122,9 @@ describe("local workspace", () => {
       applied: true,
       addedDirectories: ["routes"]
     });
-    expect(repaired.createdDirectories).toEqual([".theorem-workbench/routes"]);
+    expect(repaired.createdDirectories).toEqual([".truth-harness/routes"]);
     expect(repaired.missingDirectoriesAfter).toEqual([]);
-    expect(rawManifest.directories.routes).toBe(".theorem-workbench/routes");
+    expect(rawManifest.directories.routes).toBe(".truth-harness/routes");
     expect(repairedStatus.manifestRepair).toBeUndefined();
     expect(repairedStatus.missingDirectories).toEqual([]);
   });
@@ -146,7 +146,7 @@ describe("local workspace", () => {
 });
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "theorem-workbench-"));
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-"));
   roots.push(root);
   return root;
 }

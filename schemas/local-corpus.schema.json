@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/local-corpus.schema.json",
-  "title": "Theorem Workbench Local Corpus Index",
+  "$id": "https://truth-harness.local/schemas/local-corpus.schema.json",
+  "title": "Truth Harness Local Corpus Index",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -14,7 +14,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.corpus.v0"
+      "const": "truth-harness.corpus.v0"
     },
     "projectId": {
       "type": "string",

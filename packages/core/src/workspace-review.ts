@@ -33,7 +33,7 @@ export interface WorkspaceReviewItem {
 }
 
 export interface WorkspaceReview {
-  schemaVersion: "theorem.workspace-review.v0";
+  schemaVersion: "truth-harness.workspace-review.v0";
   projectId: string;
   createdAt: string;
   workspacePath: string;
@@ -76,7 +76,7 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
     ...claims.flatMap((claim) => claimReviewItems(status.root, claim))
   ]);
   const reviewWithoutMarkdown = {
-    schemaVersion: "theorem.workspace-review.v0" as const,
+    schemaVersion: "truth-harness.workspace-review.v0" as const,
     projectId: status.manifest.projectId,
     createdAt,
     workspacePath: status.root,
@@ -103,7 +103,7 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
 
 export function renderWorkspaceReviewMarkdown(review: Omit<WorkspaceReview, "markdown">): string {
   const lines = [
-    "# Theorem Workspace Review",
+    "# Truth Harness Workspace Review",
     "",
     "| Field | Value |",
     "| --- | --- |",
@@ -143,7 +143,7 @@ async function requireLocalWorkspace(
 ): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
-    throw new Error("No Theorem workspace found. Run `theorem workspace init` before reviewing workspace work.");
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before reviewing workspace work.");
   }
 
   return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
@@ -169,7 +169,7 @@ function routeReviewItems(
       priority: "low",
       title: "Record a narrow claim from a ready route",
       summary: `Verifier route ${route.routeId} is ready only as a narrow ${readiness.strongestTrust} claim, but no claim ledger record cites it yet.`,
-      command: `theorem claim add ${quoteCommandArg(route.problem)} --workspace ${quoteCommandArg(workspacePath)} --evidence ${quoteCommandArg(`route:${route.routeId}`)} --trust ${quoteCommandArg(readiness.strongestTrust)} --json`,
+      command: `truth-harness claim add ${quoteCommandArg(route.problem)} --workspace ${quoteCommandArg(workspacePath)} --evidence ${quoteCommandArg(`route:${route.routeId}`)} --trust ${quoteCommandArg(readiness.strongestTrust)} --json`,
       routeId: route.routeId,
       trust: readiness.strongestTrust,
       createdAt: route.createdAt,
@@ -194,7 +194,7 @@ function routeObligationItem(workspacePath: string, route: VerifierRoute, obliga
     priority: priorityForRouteObligation(obligation),
     title: obligation.title,
     summary: `${route.problem} - ${obligation.requiredBefore}`,
-    command: obligation.command ?? `theorem route show ${quoteCommandArg(route.routeId)} --workspace ${quoteCommandArg(workspacePath)} --json`,
+    command: obligation.command ?? `truth-harness route show ${quoteCommandArg(route.routeId)} --workspace ${quoteCommandArg(workspacePath)} --json`,
     routeId: route.routeId,
     obligationId: obligation.obligationId,
     trust: route.finalTrust,
@@ -223,7 +223,7 @@ function claimReviewItems(workspacePath: string, claim: ClaimLedgerRecord): Work
       priority: priorityForClaim(claim),
       title: `Review blocked claim: ${claim.title}`,
       summary: openChecks[0] ?? claim.finalization.summary,
-      command: `theorem claim review ${quoteCommandArg(claim.claimId)} --workspace ${quoteCommandArg(workspacePath)} --json`,
+      command: `truth-harness claim review ${quoteCommandArg(claim.claimId)} --workspace ${quoteCommandArg(workspacePath)} --json`,
       claimId: claim.claimId,
       domain: claim.domain,
       trust: claim.trust,

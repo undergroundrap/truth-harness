@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://theorem-workbench.local/schemas/research-session.schema.json",
-  "title": "Theorem Workbench Research Session",
+  "$id": "https://truth-harness.local/schemas/research-session.schema.json",
+  "title": "Truth Harness Research Session",
   "type": "object",
   "required": [
     "schemaVersion",
@@ -27,7 +27,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": "theorem.research-session.v0"
+      "const": "truth-harness.research-session.v0"
     },
     "sessionId": {
       "type": "string",
