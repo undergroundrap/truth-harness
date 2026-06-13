@@ -15,6 +15,7 @@ import {
   handleTheoremClaimChart,
   handleTheoremClaimChartList,
   handleTheoremClaimList,
+  handleTheoremClaimReview,
   handleTheoremClaimShow,
   handleTheoremCodeRun,
   handleTheoremCodeRunList,
@@ -388,6 +389,7 @@ describe("MCP tool handlers", () => {
     });
     const list = await handleTheoremClaimList({ domain: "math" });
     const shown = await handleTheoremClaimShow({ claimRef: derived.claim.claimId });
+    const review = await handleTheoremClaimReview({ claimRef: derived.claim.claimId });
     const validation = await handleTheoremWorkspaceValidate({});
 
     expect(base.claim.claimId).toMatch(/^claim_[a-f0-9]{16}$/);
@@ -400,6 +402,10 @@ describe("MCP tool handlers", () => {
       kind: "depends-on"
     });
     expect(shown.claimId).toBe(derived.claim.claimId);
+    expect(review.claimId).toBe(derived.claim.claimId);
+    expect(review.reviewStatus).toBe("ready");
+    expect(review.commands.reviewJson).toContain("theorem claim review");
+    expect(review.markdown).toContain("## Agent Next Actions");
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.claims).toBe(2);
   });

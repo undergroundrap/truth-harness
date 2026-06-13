@@ -894,6 +894,10 @@ describe("benchmark CLI", () => {
     const shown = JSON.parse(
       (await runCli(["claim", "show", derivedJson.claim.claimId, "--workspace", root, "--json"])).stdout
     ) as { claimId: string; dependsOn: string[] };
+    const review = JSON.parse(
+      (await runCli(["claim", "review", derivedJson.claim.claimId, "--workspace", root, "--json"])).stdout
+    ) as { claimId: string; reviewStatus: string; nextActions: unknown[]; markdown: string };
+    const reviewText = await runCli(["claim", "review", derivedJson.claim.claimId, "--workspace", root]);
 
     expect(base.exitCode).toBe(0);
     expect(baseJson.claim.trust).toBe("exact-computed");
@@ -907,6 +911,13 @@ describe("benchmark CLI", () => {
       kind: "depends-on"
     });
     expect(shown.claimId).toBe(derivedJson.claim.claimId);
+    expect(review.claimId).toBe(derivedJson.claim.claimId);
+    expect(review.reviewStatus).toBe("ready");
+    expect(review.nextActions).toEqual([]);
+    expect(review.markdown).toContain("## Agent Next Actions");
+    expect(reviewText.exitCode).toBe(0);
+    expect(reviewText.stdout).toContain("Claim review");
+    expect(reviewText.stdout).toContain("Status: ready");
   });
 });
 

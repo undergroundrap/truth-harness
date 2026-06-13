@@ -13,6 +13,7 @@ import {
   createBenchmarkComparisonRecord,
   createClaimChart,
   createClaimLedgerGraph,
+  createClaimReviewPacket,
   createDiscoveryPackage,
   createEvidenceAudit,
   createExperimentLogEntry,
@@ -124,6 +125,7 @@ import {
   type ClaimLedgerDomain,
   type ClaimLedgerEvidenceRef,
   type ClaimLedgerRecord,
+  type ClaimReviewPacket,
   type ClaimLedgerStatus,
   type ClaimLedgerWriteResult,
   type CasBackendStatusReport,
@@ -511,6 +513,26 @@ claim
     }
 
     printClaimLedgerRecord(record);
+  });
+
+claim
+  .command("review")
+  .description("Create an actionable claim review packet with blockers, next actions, and local commands.")
+  .argument("<claim>", "Claim id or workspace-local claim JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--json", "Print the full claim review packet JSON")
+  .action(async (claimRef: string, options: { workspace: string; json?: boolean }) => {
+    const packet = await createClaimReviewPacket({ rootPath: options.workspace, claimRef });
+
+    if (options.json) {
+      printJson(packet);
+      return;
+    }
+
+    printClaimReviewPacket(packet);
+    if (packet.reviewStatus !== "ready") {
+      process.exitCode = 1;
+    }
   });
 
 const bench = program.command("bench").description("Run and compare verification benchmark suites.");
@@ -3968,6 +3990,62 @@ function printClaimLedgerRecord(claim: ClaimLedgerRecord): void {
     console.log("Open checks:");
     for (const check of claim.finalization.openChecks) {
       console.log(`  ${check}`);
+    }
+  }
+}
+
+function printClaimReviewPacket(packet: ClaimReviewPacket): void {
+  console.log(`Claim review ${packet.claimId}`);
+  console.log(`Status: ${packet.reviewStatus}`);
+  console.log(`Trust: ${packet.trust}`);
+  console.log(`Ready for narrow claim: ${String(packet.readyForNarrowClaim)}`);
+  console.log(`Decision: ${packet.decision}`);
+  console.log("");
+  console.log(packet.title);
+  console.log(packet.statement);
+
+  console.log("");
+  console.log("Blocking checks:");
+  if (packet.blockingChecks.length === 0) {
+    console.log("  none");
+  } else {
+    for (const check of packet.blockingChecks) {
+      console.log(`  ${check}`);
+    }
+  }
+
+  console.log("");
+  console.log("Verification ladder:");
+  for (const step of packet.verification) {
+    console.log(`  ${step.stage}: ${step.status} - ${step.summary}`);
+  }
+
+  console.log("");
+  console.log("Next actions:");
+  if (packet.nextActions.length === 0) {
+    console.log("  none");
+  } else {
+    for (const action of packet.nextActions) {
+      console.log(`  ${action.label}: ${action.reason}`);
+      if (action.command) {
+        console.log(`    Command: ${action.command}`);
+      }
+      if (action.commandTemplate) {
+        console.log(`    Template: ${action.commandTemplate}`);
+      }
+    }
+  }
+
+  console.log("");
+  console.log("Commands:");
+  console.log(`  Show JSON: ${packet.commands.showJson}`);
+  console.log(`  Review JSON: ${packet.commands.reviewJson}`);
+
+  if (packet.warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const warning of packet.warnings) {
+      console.log(`  ${warning}`);
     }
   }
 }

@@ -84,6 +84,7 @@ describe("Theorem MCP server", () => {
         "theorem_claim_chart",
         "theorem_claim_chart_list",
         "theorem_claim_list",
+        "theorem_claim_review",
         "theorem_claim_show",
         "theorem_code_list",
         "theorem_code_run",

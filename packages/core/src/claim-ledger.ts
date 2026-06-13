@@ -157,6 +157,48 @@ export interface ClaimLedgerGraph {
   warnings: string[];
 }
 
+export type ClaimReviewStatus = "ready" | "blocked" | "refuted" | "inactive";
+
+export interface ClaimReviewAction {
+  kind: "run-verifier-route" | "cite-sources" | "attach-proof" | "request-human-review" | "clear-finalization-check" | "record-successor";
+  label: string;
+  reason: string;
+  command?: string;
+  commandTemplate?: string;
+}
+
+export interface ClaimReviewPacket {
+  schemaVersion: "theorem.claim-review.v0";
+  claimId: string;
+  title: string;
+  statement: string;
+  domain: ClaimLedgerDomain;
+  claimStatus: ClaimLedgerStatus;
+  reviewStatus: ClaimReviewStatus;
+  trust: TrustLabel;
+  readyForNarrowClaim: boolean;
+  strongestTrust: TrustLabel;
+  decision: string;
+  workspacePath: string;
+  claimPath: string;
+  lineage: {
+    dependsOn: string[];
+    supersedes: string[];
+    dependents: string[];
+  };
+  finalization: ClaimLedgerRecord["finalization"];
+  blockingChecks: string[];
+  verification: ClaimVerificationStep[];
+  evidenceRefs: ClaimLedgerEvidenceRef[];
+  nextActions: ClaimReviewAction[];
+  commands: {
+    showJson: string;
+    reviewJson: string;
+  };
+  warnings: string[];
+  markdown: string;
+}
+
 export function isClaimLedgerDomain(value: string): value is ClaimLedgerDomain {
   return (CLAIM_LEDGER_DOMAINS as readonly string[]).includes(value);
 }
@@ -319,6 +361,55 @@ export async function readClaimRecord(rootPath: string, claimRef: string): Promi
   return (await readClaimRecordRef(status, claimRef)).claim;
 }
 
+export async function createClaimReviewPacket(input: {
+  rootPath: string;
+  claimRef: string;
+}): Promise<ClaimReviewPacket> {
+  const status = await requireLocalWorkspace(input.rootPath);
+  const { claim, path } = await readClaimRecordRef(status, input.claimRef);
+  const allClaims = await listClaimRecords(status.root);
+  const dependents = allClaims
+    .filter((candidate) => candidate.dependsOn.includes(claim.claimId))
+    .map((candidate) => candidate.claimId)
+    .sort();
+  const reviewStatus = reviewStatusForClaim(claim);
+  const packetWithoutMarkdown = {
+    schemaVersion: "theorem.claim-review.v0" as const,
+    claimId: claim.claimId,
+    title: claim.title,
+    statement: claim.statement,
+    domain: claim.domain,
+    claimStatus: claim.status,
+    reviewStatus,
+    trust: claim.trust,
+    readyForNarrowClaim: claim.finalization.readyForNarrowClaim,
+    strongestTrust: claim.finalization.strongestTrust,
+    decision: reviewDecisionForClaim(claim, reviewStatus),
+    workspacePath: status.root,
+    claimPath: path,
+    lineage: {
+      dependsOn: claim.dependsOn,
+      supersedes: claim.supersedes,
+      dependents
+    },
+    finalization: claim.finalization,
+    blockingChecks: blockingChecksForClaim(claim),
+    verification: claim.verification,
+    evidenceRefs: claim.evidenceRefs,
+    nextActions: claimReviewActions(claim, reviewStatus, status.root),
+    commands: {
+      showJson: `theorem claim show ${quoteCommandArg(claim.claimId)} --workspace ${quoteCommandArg(status.root)} --json`,
+      reviewJson: `theorem claim review ${quoteCommandArg(claim.claimId)} --workspace ${quoteCommandArg(status.root)} --json`
+    },
+    warnings: claim.warnings
+  };
+
+  return {
+    ...packetWithoutMarkdown,
+    markdown: renderClaimReviewPacketMarkdown(packetWithoutMarkdown)
+  };
+}
+
 export function renderClaimLedgerMarkdown(claim: Omit<ClaimLedgerRecord, "markdown">): string {
   const lines = [
     `# Claim: ${escapeMarkdownText(claim.title)}`,
@@ -398,6 +489,117 @@ export function renderClaimLedgerMarkdown(claim: Omit<ClaimLedgerRecord, "markdo
     "## Boundary",
     "",
     "This claim record is a local provenance and review artifact. It does not turn AI output, retrieval, simulation, or informal reasoning into truth by itself."
+  );
+
+  return `${lines.join("\n")}\n`;
+}
+
+export function renderClaimReviewPacketMarkdown(packet: Omit<ClaimReviewPacket, "markdown">): string {
+  const lines = [
+    `# Claim Review: ${escapeMarkdownText(packet.title)}`,
+    "",
+    "| Field | Value |",
+    "| --- | --- |",
+    `| Claim | \`${packet.claimId}\` |`,
+    `| Review status | \`${packet.reviewStatus}\` |`,
+    `| Trust | \`${packet.trust}\` |`,
+    `| Ready for narrow claim | \`${String(packet.readyForNarrowClaim)}\` |`,
+    `| Strongest trust | \`${packet.strongestTrust}\` |`,
+    `| Domain | \`${packet.domain}\` |`,
+    `| Claim status | \`${packet.claimStatus}\` |`,
+    "",
+    "## Decision",
+    "",
+    escapeMarkdownText(packet.decision),
+    "",
+    "## Statement",
+    "",
+    escapeMarkdownText(packet.statement),
+    "",
+    "## Blocking Checks",
+    ""
+  ];
+
+  if (packet.blockingChecks.length === 0) {
+    lines.push("- No blocking checks remain for the current narrow claim.", "");
+  } else {
+    for (const check of packet.blockingChecks) {
+      lines.push(`- ${escapeMarkdownText(check)}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("## Verification Ladder", "", "| Stage | Status | Summary | Evidence |", "| --- | --- | --- | --- |");
+  for (const step of packet.verification) {
+    lines.push(
+      `| \`${step.stage}\` | \`${step.status}\` | ${escapeMarkdownTable(step.summary)} | ${escapeMarkdownTable(formatEvidenceRefs(step.evidenceRefs))} |`
+    );
+  }
+
+  lines.push("", "## Evidence Refs", "", "| Kind | Trust | Reference | Summary |", "| --- | --- | --- | --- |");
+  if (packet.evidenceRefs.length === 0) {
+    lines.push("|  |  |  | No local evidence refs attached. |");
+  } else {
+    for (const ref of packet.evidenceRefs) {
+      lines.push(
+        [
+          `\`${ref.kind}\``,
+          ref.trust ? `\`${ref.trust}\`` : "",
+          escapeMarkdownTable(ref.ref),
+          escapeMarkdownTable(ref.summary ?? "")
+        ]
+          .join(" | ")
+          .replace(/^/, "| ")
+          .replace(/$/, " |")
+      );
+    }
+  }
+
+  lines.push("", "## Agent Next Actions", "");
+  if (packet.nextActions.length === 0) {
+    lines.push("- No next action required before citing the current narrow claim.", "");
+  } else {
+    for (const action of packet.nextActions) {
+      lines.push(`- ${escapeMarkdownText(action.label)}: ${escapeMarkdownText(action.reason)}`);
+      if (action.command) {
+        lines.push(`  - Command: \`${action.command}\``);
+      }
+      if (action.commandTemplate) {
+        lines.push(`  - Template: \`${action.commandTemplate}\``);
+      }
+    }
+    lines.push("");
+  }
+
+  lines.push(
+    "## Commands",
+    "",
+    `- Show JSON: \`${packet.commands.showJson}\``,
+    `- Review JSON: \`${packet.commands.reviewJson}\``,
+    "",
+    "## Lineage",
+    "",
+    `- Depends on: ${packet.lineage.dependsOn.map((id) => `\`${id}\``).join(", ") || "none"}`,
+    `- Supersedes: ${packet.lineage.supersedes.map((id) => `\`${id}\``).join(", ") || "none"}`,
+    `- Dependents: ${packet.lineage.dependents.map((id) => `\`${id}\``).join(", ") || "none"}`,
+    "",
+    "## Warnings",
+    ""
+  );
+
+  if (packet.warnings.length === 0) {
+    lines.push("- No warnings recorded.");
+  } else {
+    for (const warning of packet.warnings) {
+      lines.push(`- ${escapeMarkdownText(warning)}`);
+    }
+  }
+
+  lines.push(
+    "",
+    "## Boundary",
+    "",
+    "This review packet is a local decision aid. It does not upgrade trust, satisfy proof obligations, or make unsupported scientific, medical, finance, safety, legal, or patent claims true."
   );
 
   return `${lines.join("\n")}\n`;
@@ -522,6 +724,115 @@ function finalizationFor(
       ? "This can be shared only as a narrow claim matching the attached evidence and trust label."
       : "This claim is not final. Keep it scoped, attach more evidence, or explicitly label it as unresolved/refuted."
   };
+}
+
+function reviewStatusForClaim(claim: ClaimLedgerRecord): ClaimReviewStatus {
+  if (claim.status !== "active") {
+    return "inactive";
+  }
+
+  if (claim.trust === "refuted") {
+    return "refuted";
+  }
+
+  return claim.finalization.readyForNarrowClaim ? "ready" : "blocked";
+}
+
+function reviewDecisionForClaim(claim: ClaimLedgerRecord, status: ClaimReviewStatus): string {
+  switch (status) {
+    case "ready":
+      return `Ready only as a narrow ${claim.trust} claim matching the attached evidence, limitations, and lineage.`;
+    case "refuted":
+      return "Do not present this claim as true. Cite it only as a refuted result under the recorded assumptions.";
+    case "inactive":
+      return `Do not cite this claim as current because its lifecycle status is ${claim.status}. Use an active successor or record one first.`;
+    case "blocked":
+      return "Not ready for a final claim. Keep it as work-in-progress, attach stronger evidence, or explicitly label it unverified.";
+  }
+}
+
+function blockingChecksForClaim(claim: ClaimLedgerRecord): string[] {
+  const checks = [...claim.finalization.openChecks];
+  for (const step of claim.verification) {
+    if (step.status === "waiting" || step.status === "blocked") {
+      checks.push(`${step.stage}: ${step.summary}`);
+    }
+  }
+
+  return [...new Set(checks)];
+}
+
+function claimReviewActions(claim: ClaimLedgerRecord, status: ClaimReviewStatus, workspacePath: string): ClaimReviewAction[] {
+  const actions: ClaimReviewAction[] = [];
+  const statementArg = quoteCommandArg(claim.statement);
+  const workspaceArg = quoteCommandArg(workspacePath);
+
+  if (status === "ready") {
+    return actions;
+  }
+
+  if (status === "refuted" || status === "inactive") {
+    actions.push({
+      kind: "record-successor",
+      label: "Record a successor claim before downstream use",
+      reason: status === "refuted"
+        ? "Downstream work should depend on a corrected/refuted claim, not the false statement."
+        : "Inactive claims should not be used as current evidence without an active successor.",
+      commandTemplate: `theorem claim add ${statementArg} --workspace ${workspaceArg} --supersedes ${quoteCommandArg(claim.claimId)} --evidence <new-evidence-ref> --json`
+    });
+  }
+
+  const waitingStages = new Set(
+    claim.verification
+      .filter((step) => step.status === "waiting" || step.status === "blocked")
+      .map((step) => step.stage)
+  );
+
+  if (waitingStages.has("exact-or-computed") || waitingStages.has("independent-check")) {
+    actions.push({
+      kind: "run-verifier-route",
+      label: "Run a manifest-aware verifier route",
+      reason: "The claim still needs replayable local verifier evidence before it can be narrowed.",
+      command: `theorem verify ${statementArg} --write --workspace ${workspaceArg} --json`
+    });
+  }
+
+  if (waitingStages.has("source-or-citation")) {
+    actions.push({
+      kind: "cite-sources",
+      label: "Create a local source-citation receipt",
+      reason: "Factual or literature-backed claims need cited local source evidence and entailment review.",
+      command: `theorem source cite ${statementArg} --workspace ${workspaceArg} --json`
+    });
+  }
+
+  if (waitingStages.has("formal-proof")) {
+    actions.push({
+      kind: "attach-proof",
+      label: "Attach accepted proof-checker evidence",
+      reason: "Only an accepted proof-check backend can satisfy a formal proof claim.",
+      commandTemplate: `theorem proof check <proof-file.lean> --write --workspace ${workspaceArg} --json`
+    });
+  }
+
+  if (waitingStages.has("human-review")) {
+    actions.push({
+      kind: "request-human-review",
+      label: "Record scoped human expert review",
+      reason: "Broad or sensitive claims need qualified review before stronger presentation.",
+      commandTemplate: `theorem review log ${statementArg} --workspace ${workspaceArg} --reviewer-role <domain-expert-role> --json`
+    });
+  }
+
+  for (const check of claim.finalization.openChecks.slice(0, 8)) {
+    actions.push({
+      kind: "clear-finalization-check",
+      label: "Clear finalization check",
+      reason: check
+    });
+  }
+
+  return actions;
 }
 
 function strongestTrustFromTrusts(values: TrustLabel[]): TrustLabel {
@@ -891,6 +1202,10 @@ function shouldResolveEvidenceKind(kind: ClaimLedgerEvidenceRef["kind"]): boolea
 
 function formatEvidenceRefs(refs: ClaimLedgerEvidenceRef[]): string {
   return refs.map((ref) => `${ref.kind}:${ref.ref}`).join("; ");
+}
+
+function quoteCommandArg(value: string): string {
+  return /^[A-Za-z0-9_./\\:-]+$/u.test(value) ? value : JSON.stringify(value);
 }
 
 function isClaimId(value: string): boolean {

@@ -8,6 +8,7 @@ import {
   checkLeanProofArtifact,
   checkSmtLibArtifact,
   createClaimLedgerGraph,
+  createClaimReviewPacket,
   createClaimChart,
   createBenchmarkComparisonRecord,
   createDiscoveryPackage,
@@ -282,6 +283,11 @@ export interface TheoremClaimListOutput {
 }
 
 export interface TheoremClaimShowInput {
+  workspacePath?: string;
+  claimRef: string;
+}
+
+export interface TheoremClaimReviewInput {
   workspacePath?: string;
   claimRef: string;
 }
@@ -1005,6 +1011,13 @@ export async function handleTheoremClaimList(input: TheoremClaimListInput): Prom
 
 export async function handleTheoremClaimShow(input: TheoremClaimShowInput): Promise<ClaimLedgerRecord> {
   return readClaimRecord(resolveWorkspaceRoot(input.workspacePath), input.claimRef);
+}
+
+export async function handleTheoremClaimReview(input: TheoremClaimReviewInput) {
+  return createClaimReviewPacket({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    claimRef: input.claimRef
+  });
 }
 
 export async function handleTheoremBenchmarkRun(

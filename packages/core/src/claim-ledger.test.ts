@@ -9,6 +9,7 @@ import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { writeVerifierRoute } from "./verifier-route.js";
 import {
   createClaimLedgerGraph,
+  createClaimReviewPacket,
   listClaimRecords,
   readClaimRecord,
   writeClaimLedgerRecord
@@ -181,6 +182,15 @@ describe("claim ledger", () => {
     expect(written.claim.finalization.readyForNarrowClaim).toBe(false);
     expect(written.claim.finalization.openChecks.some((check) => check.includes(routeWarning))).toBe(true);
     expect(written.claim.warnings.some((warning) => warning.includes(routeWarning))).toBe(true);
+
+    const review = await createClaimReviewPacket({ rootPath: root, claimRef: written.claim.claimId });
+
+    expect(review.reviewStatus).toBe("blocked");
+    expect(review.readyForNarrowClaim).toBe(false);
+    expect(review.blockingChecks.some((check) => check.includes(routeWarning))).toBe(true);
+    expect(review.nextActions.some((action) => action.kind === "run-verifier-route")).toBe(true);
+    expect(review.commands.reviewJson).toContain("theorem claim review");
+    expect(review.markdown).toContain("## Agent Next Actions");
   });
 
   it("derives cross-checked claim trust from linked CAS evidence", async () => {

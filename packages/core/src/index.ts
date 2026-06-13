@@ -44,11 +44,13 @@ export {
   CLAIM_VERIFICATION_STAGES,
   createClaimLedgerGraph,
   createClaimLedgerRecord,
+  createClaimReviewPacket,
   isClaimLedgerDomain,
   isClaimLedgerStatus,
   listClaimRecords,
   readClaimRecord,
   renderClaimLedgerMarkdown,
+  renderClaimReviewPacketMarkdown,
   writeClaimLedgerRecord
 } from "./claim-ledger.js";
 export {
@@ -313,6 +315,9 @@ export type {
   ClaimLedgerRecord,
   ClaimLedgerStatus,
   ClaimLedgerWriteResult,
+  ClaimReviewAction,
+  ClaimReviewPacket,
+  ClaimReviewStatus,
   ClaimVerificationStage,
   ClaimVerificationStageStatus,
   ClaimVerificationStep,

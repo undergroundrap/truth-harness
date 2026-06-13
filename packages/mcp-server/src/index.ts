@@ -16,6 +16,7 @@ import {
   handleTheoremClaimChart,
   handleTheoremClaimChartList,
   handleTheoremClaimList,
+  handleTheoremClaimReview,
   handleTheoremClaimShow,
   handleTheoremCodeRun,
   handleTheoremCodeRunList,
@@ -371,6 +372,27 @@ export function createTheoremMcpServer(): McpServer {
       }
     },
     async (input) => toolJson(await handleTheoremClaimShow(input))
+  );
+
+  server.registerTool(
+    "theorem_claim_review",
+    {
+      title: "Review Claim Readiness",
+      description:
+        "Return an actionable read-only claim review packet with readiness, blockers, evidence refs, next actions, and local commands for agents.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        claimRef: z.string().min(1).describe("Claim id or workspace-local claim JSON path.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTheoremClaimReview(input))
   );
 
   server.registerTool(
