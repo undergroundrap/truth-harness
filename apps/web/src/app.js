@@ -971,6 +971,7 @@ function render() {
 
   receiptDetails.innerHTML = [
     ...Object.entries(receipt.details),
+    ...claimReceiptDetailRows(receipt),
     ["Claim ledger", receipt.claimId ?? "not recorded"]
   ]
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
@@ -1572,7 +1573,7 @@ function renderClaimLedger() {
       .map((claim) => {
         const linkedKey = receiptKeyForClaimId(claim.claimId);
         const tagText = claim.tags?.slice(0, 3).map((tag) => `#${tag}`).join(" ") || "untagged";
-        const ready = claim.finalization?.readyForNarrowClaim ? "ready" : `${claim.finalization?.openChecks?.length ?? 0} open checks`;
+        const finalization = claimFinalizationSummary(claim);
         const dependencyText = claim.dependsOn?.length
           ? `${claim.dependsOn.length} upstream`
           : "root claim";
@@ -1582,7 +1583,8 @@ function renderClaimLedger() {
           <span class="trust-dot ${trustClass(claim.trust)}"></span>
           <span>
             <strong>${escapeHtml(claim.title)}</strong>
-            <small>${escapeHtml(claim.domain)} - ${escapeHtml(claim.trust)} - ${escapeHtml(ready)}</small>
+            <small>${escapeHtml(claim.domain)} - ${escapeHtml(claim.trust)} - ${escapeHtml(finalization.label)}</small>
+            ${finalization.primaryCheck ? `<small class="ledger-blocker">${escapeHtml(finalization.primaryCheck)}</small>` : ""}
             <small>${escapeHtml(claim.claimId)} - ${escapeHtml(lineageText)}</small>
             <small>${escapeHtml(tagText)}</small>
           </span>
@@ -1596,6 +1598,7 @@ function matchesClaimLedgerSearch(claim, query) {
     return true;
   }
 
+  const finalization = claimFinalizationSummary(claim);
   return [
     claim.claimId,
     claim.title,
@@ -1612,12 +1615,46 @@ function matchesClaimLedgerSearch(claim, query) {
     ...(claim.evidenceRefs ?? []).flatMap((ref) => [ref.kind, ref.ref, ref.trust, ref.summary]),
     ...(claim.finalization?.openChecks ?? []),
     claim.finalization?.summary,
+    finalization.label,
+    finalization.primaryCheck,
     ...(claim.warnings ?? [])
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
     .includes(query);
+}
+
+function claimReceiptDetailRows(receipt) {
+  const claim = receipt.claimId ? claimLedgerStore.get(receipt.claimId) : undefined;
+  if (!claim) {
+    return [];
+  }
+
+  const finalization = claimFinalizationSummary(claim);
+  return [
+    ["Claim trust", claim.trust],
+    ["Claim readiness", finalization.label],
+    ["Claim open checks", String(finalization.openChecks.length)]
+  ];
+}
+
+function claimFinalizationSummary(claim) {
+  const openChecks = Array.isArray(claim?.finalization?.openChecks)
+    ? claim.finalization.openChecks
+    : [];
+  const ready = Boolean(claim?.finalization?.readyForNarrowClaim);
+  const label = ready
+    ? "ready"
+    : `${openChecks.length} open check${openChecks.length === 1 ? "" : "s"}`;
+
+  return {
+    ready,
+    label,
+    openChecks,
+    primaryCheck: openChecks[0] ?? "",
+    summary: claim?.finalization?.summary ?? ""
+  };
 }
 
 function renderRouteHistory() {
@@ -2554,11 +2591,11 @@ function claimEvidenceRefs(receipt) {
   ];
 
   if (receipt.verifierRoute?.routeId) {
+    const readiness = routeReadiness(receipt.verifierRoute);
     refs.push({
       kind: "route",
       ref: receipt.verifierRoute.routeId,
-      trust: receipt.verifierRoute.finalTrust ?? receipt.trust,
-      summary: `Verifier route ${receipt.verifierRoute.routeId} recorded ${receipt.verifierRoute.status} with ${receipt.verifierRoute.gaps?.length ?? 0} gap(s).`
+      summary: `${readiness.ready ? "Ready" : "Not ready"} verifier route ${receipt.verifierRoute.routeId}: ${readiness.summary}`
     });
   }
 
@@ -3977,15 +4014,23 @@ function renderGraphDetail(receipt, entry, index) {
   const compareHtml = currentClaim && previousClaim
     ? renderRevisionCompare(currentClaim, previousClaim)
     : "";
+  const finalization = claim ? claimFinalizationSummary(claim) : undefined;
+  const openChecksHtml = claim ? renderClaimOpenChecksHtml(claim) : "";
+  const evidenceRefsHtml = claim ? renderClaimEvidenceRefsHtml(claim) : "";
   const claimHtml = claim
     ? `<dl class="graph-detail-facts">
         <div><dt>Claim ID</dt><dd><code>${escapeHtml(claim.claimId)}</code></dd></div>
         <div><dt>Trust</dt><dd>${escapeHtml(claim.trust)}</dd></div>
+        <div><dt>Readiness</dt><dd>${escapeHtml(finalization.label)}</dd></div>
+        <div><dt>Open checks</dt><dd>${escapeHtml(String(finalization.openChecks.length))}</dd></div>
         <div><dt>Status</dt><dd>${escapeHtml(claim.status)}</dd></div>
         <div><dt>Domain</dt><dd>${escapeHtml(claim.domain)}</dd></div>
         <div><dt>Updated</dt><dd>${escapeHtml(formatActivityTime(claim.updatedAt))}</dd></div>
         <div><dt>Links</dt><dd>${escapeHtml((claim.dependsOn?.length ?? 0) + " upstream / " + (claim.supersedes?.length ?? 0) + " revisions")}</dd></div>
       </dl>
+      <p class="claim-finalization-summary">${escapeHtml(finalization.summary || "No finalization summary recorded.")}</p>
+      ${openChecksHtml}
+      ${evidenceRefsHtml}
       <div class="graph-detail-tags">${renderTagPills(claim.tags ?? []) || `<span class="mini-label">No tags</span>`}</div>
       ${linkedReceiptKey ? `<button class="text-button compact-button graph-open-receipt" data-claim-id="${escapeHtml(claim.claimId)}" type="button">Open receipt</button>` : ""}`
     : `<p>${escapeHtml(summary)}</p>`;
@@ -3997,6 +4042,34 @@ function renderGraphDetail(receipt, entry, index) {
     ${claimHtml}
     ${compareHtml}
   `;
+}
+
+function renderClaimOpenChecksHtml(claim) {
+  const checks = claimFinalizationSummary(claim).openChecks;
+  if (checks.length === 0) {
+    return `<section class="claim-review-panel"><h5>Finalization Checks</h5><p>No open finalization checks.</p></section>`;
+  }
+
+  return `<section class="claim-review-panel">
+    <h5>Open Finalization Checks</h5>
+    <ul>${checks.slice(0, 5).map((check) => `<li>${escapeHtml(check)}</li>`).join("")}</ul>
+  </section>`;
+}
+
+function renderClaimEvidenceRefsHtml(claim) {
+  const refs = Array.isArray(claim?.evidenceRefs) ? claim.evidenceRefs : [];
+  if (refs.length === 0) {
+    return `<section class="claim-review-panel"><h5>Evidence Refs</h5><p>No local evidence refs attached.</p></section>`;
+  }
+
+  return `<section class="claim-review-panel">
+    <h5>Evidence Refs</h5>
+    <ul>${refs.slice(0, 6).map((ref) => {
+      const trust = ref.trust ? ` (${ref.trust})` : "";
+      const summary = ref.summary ? ` - ${ref.summary}` : "";
+      return `<li><code>${escapeHtml(ref.kind)}:${escapeHtml(ref.ref)}</code>${escapeHtml(trust)}${summary ? `<span>${escapeHtml(summary)}</span>` : ""}</li>`;
+    }).join("")}</ul>
+  </section>`;
 }
 
 function renderRevisionCompare(currentClaim, previousClaim) {
@@ -4611,6 +4684,8 @@ function renderReport(receipt) {
   const tags = receiptTags(receipt);
   const dependencies = receiptDependencies(receipt);
   const dependents = dependentReceiptKeys(receipt);
+  const claim = receipt.claimId ? claimLedgerStore.get(receipt.claimId) : undefined;
+  const claimFinalization = claim ? claimFinalizationSummary(claim) : undefined;
   const graphItems = evidenceGraphEntries(receipt)
     .map(([kind, summary]) => `<li><strong>${escapeHtml(kind)}</strong>: ${escapeHtml(summary)}</li>`)
     .join("");
@@ -4644,6 +4719,23 @@ function renderReport(receipt) {
   const obligationItems = verifierRouteObligationItems(receipt)
     .map((item) => `<li>${item}</li>`)
     .join("");
+  const claimFinalizationRows = claimFinalization
+    ? [
+      ["Claim readiness", claimFinalization.label],
+      ["Claim trust", claim.trust],
+      ["Claim open checks", String(claimFinalization.openChecks.length)],
+      ["Claim finalization", claimFinalization.summary || "No finalization summary recorded."]
+    ]
+    : [
+      ["Claim readiness", "not recorded"],
+      ["Claim finalization", "Record the receipt into the claim ledger before using this as a citable claim."]
+    ];
+  const claimFinalizationHtml = claimFinalizationRows
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
+    .join("");
+  const claimOpenCheckItems = claimFinalization?.openChecks?.length
+    ? claimFinalization.openChecks.slice(0, 8).map((check) => `<li>${escapeHtml(check)}</li>`).join("")
+    : "<li>No open claim finalization checks recorded.</li>";
 
   reportPreview.innerHTML = `
     <header>
@@ -4680,6 +4772,9 @@ function renderReport(receipt) {
     <ol>${obligationItems}</ol>
     <h3>Ledger Metadata</h3>
     <div class="report-tags">${tagItems}</div>
+    <dl class="report-facts">${claimFinalizationHtml}</dl>
+    <h3>Claim Finalization Checks</h3>
+    <ul>${claimOpenCheckItems}</ul>
     <dl class="report-facts">
       <div><dt>Derived by</dt><dd>${escapeHtml(receipt.derivedBy ?? "No derivation note recorded.")}</dd></div>
       <div><dt>Upstream claims</dt><dd><ul>${upstreamItems}</ul></dd></div>
@@ -4739,6 +4834,29 @@ function generateReportMarkdown(receipt) {
   const tags = receiptTags(receipt);
   const dependencies = receiptDependencies(receipt);
   const dependents = dependentReceiptKeys(receipt);
+  const claim = receipt.claimId ? claimLedgerStore.get(receipt.claimId) : undefined;
+  const claimFinalization = claim ? claimFinalizationSummary(claim) : undefined;
+  const claimFinalizationMarkdown = claimFinalization
+    ? [
+      `- Claim readiness: ${claimFinalization.label}`,
+      `- Claim trust: ${claim.trust}`,
+      `- Claim open checks: ${claimFinalization.openChecks.length}`,
+      `- Claim finalization: ${claimFinalization.summary || "No finalization summary recorded."}`,
+      "",
+      "Claim finalization checks:",
+      "",
+      ...(claimFinalization.openChecks.length > 0
+        ? claimFinalization.openChecks.map((check) => `- ${check}`)
+        : ["- No open claim finalization checks recorded."])
+    ]
+    : [
+      "- Claim readiness: not recorded",
+      "- Claim finalization: Record the receipt into the claim ledger before using this as a citable claim.",
+      "",
+      "Claim finalization checks:",
+      "",
+      "- No claim ledger record loaded."
+    ];
   const lines = [
     `# ${receipt.title}`,
     "",
@@ -4789,6 +4907,8 @@ function generateReportMarkdown(receipt) {
     "## Ledger Metadata",
     "",
     `- Tags: ${tags.length > 0 ? tags.map((tag) => `#${tag}`).join(", ") : "none"}`,
+    ...claimFinalizationMarkdown,
+    "",
     `- Derived by: ${receipt.derivedBy ?? "No derivation note recorded."}`,
     "- Upstream claims:",
     ...(dependencies.length > 0 ? dependencies.map((key) => `  - ${linkedClaimLabel(key)}`) : ["  - none"]),

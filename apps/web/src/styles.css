@@ -1240,6 +1240,10 @@ h4 {
   margin-top: 3px;
 }
 
+.ledger-record .ledger-blocker {
+  color: #f0c86d;
+}
+
 .route-record code {
   color: #ded6c8;
   font-size: 11px;
@@ -1544,6 +1548,13 @@ dd {
   margin-bottom: 10px;
 }
 
+.graph-detail .claim-finalization-summary {
+  margin: 8px 0 0;
+  color: #d8d2c6;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .graph-detail-facts {
   display: grid;
   gap: 8px;
@@ -1558,6 +1569,48 @@ dd {
 
 .graph-detail-tags {
   margin: 10px 0;
+}
+
+.claim-review-panel {
+  margin-top: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0f0f0f;
+  padding: 10px;
+}
+
+.claim-review-panel h5 {
+  margin: 0 0 7px;
+  color: #f1eadc;
+  font-size: 12px;
+}
+
+.claim-review-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.claim-review-panel ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  color: #d8d2c6;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.claim-review-panel code {
+  color: #ded6c8;
+  font-size: 11px;
+}
+
+.claim-review-panel li span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
 }
 
 .revision-panel {
