@@ -93,7 +93,7 @@ The viral version should spread because it is useful and legible, not because it
 4. A public `false-claims-100` benchmark where models lose points for confident nonsense.
 5. A GitHub Action that checks Markdown, notebooks, or docs for replayable math claims.
 6. A Claude/Codex MCP demo where the agent asks Truth Harness to verify its own subclaims.
-7. A verified lesson mode where professors can export a teaching packet and students can inspect each step, replay command, trust label, and limitation behind it.
+7. A verified lesson mode where professors can export a teaching packet from the UI or CLI and students can inspect each step, replay command, trust label, and limitation behind it.
 
 The first launch headline should be something like:
 

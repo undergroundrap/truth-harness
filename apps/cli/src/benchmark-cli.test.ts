@@ -154,6 +154,38 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.provedRequiresAcceptedProofCheckerRun).toBe(true);
   });
 
+  it("renders teaching packets from saved receipts", async () => {
+    const root = await tempRoot();
+    const receipt = createReceipt("compute 3 / 4 + 5 / 8");
+    const receiptPath = join(root, "fraction-receipt.json");
+    const outPath = join(root, "fraction-teaching.md");
+    await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+
+    const human = await runCli(["teach", receiptPath, "--audience", "college"]);
+    const write = await runCli(["teach", receiptPath, "--audience", "high", "--out", outPath]);
+    const json = JSON.parse((await runCli(["teach", receiptPath, "--json"])).stdout) as {
+      packet: { schemaVersion: string; receiptRunId: string; audience: string; trust: string };
+      markdown: string;
+    };
+    const writtenMarkdown = await readFile(outPath, "utf8");
+
+    expect(human.exitCode).toBe(0);
+    expect(human.stdout).toContain("# Teaching Packet:");
+    expect(human.stdout).toContain("| Audience | `college` |");
+    expect(human.stdout).toContain("| Trust | `exact-computed` |");
+    expect(human.stdout).toContain("## Teaching Boundary");
+    expect(write.exitCode).toBe(0);
+    expect(write.stdout).toContain("Wrote teaching packet:");
+    expect(writtenMarkdown).toContain("| Audience | `high` |");
+    expect(json.packet).toMatchObject({
+      schemaVersion: "truth-harness.teaching-packet.v0",
+      receiptRunId: receipt.runId,
+      audience: "college",
+      trust: "exact-computed"
+    });
+    expect(json.markdown).toContain("## Assessment Rubric");
+  });
+
   it("prints a verifier route with receipt trust and manifest gaps", async () => {
     const result = await runCli([
       "verify",

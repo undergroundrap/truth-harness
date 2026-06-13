@@ -24,6 +24,7 @@ import {
   createReceipt,
   createSimulationLogEntry,
   createSourceCitationReceipt,
+  createTeachingPacket,
   createVerifierRoute,
   createSymbolicCasCheckRecord,
   getCasBackendStatus,
@@ -54,6 +55,7 @@ import {
   isResearchSessionDomain,
   isResearchTaskStatus,
   isSimulationKind,
+  isTeachingAudience,
   isSimulationStage,
   isValidationGateKind,
   isValidationPlanDomain,
@@ -87,6 +89,7 @@ import {
   readWorkspaceReview,
   readVerifierRoute,
   renderReceipt,
+  renderTeachingPacketMarkdown,
   repairLocalWorkspace,
   replayReceipt,
   searchLocalCorpus,
@@ -211,6 +214,7 @@ import {
   type SmtCheckSummary,
   type SmtCheckWriteResult,
   type SmtProblemSolveResult,
+  type TeachingAudience,
   type VerifierRoute,
   type VerifierRouteEvidenceRef,
   type VerifierRouteSummary,
@@ -713,6 +717,40 @@ program
       console.log(rendered);
     }
   );
+
+program
+  .command("teach")
+  .description("Render a professor-friendly teaching packet from a saved receipt JSON file.")
+  .argument("<receipt>", "Path to a receipt JSON file")
+  .option("--audience <audience>", "middle, high, college, or expert", "college")
+  .option("--json", "Print the teaching packet JSON plus Markdown")
+  .option("--out <path>", "Write rendered output to a file")
+  .action(async (receiptPath: string, options: { audience: string; json?: boolean; out?: string }) => {
+    const receipt = parseReceiptJson(await readFile(resolve(receiptPath), "utf8"), receiptPath);
+    const audience = parseTeachingAudience(options.audience);
+    const packet = createTeachingPacket(receipt, { audience });
+    const markdown = renderTeachingPacketMarkdown(packet);
+
+    if (options.json) {
+      const payload = { packet, markdown };
+      if (options.out) {
+        await writeJson(options.out, payload);
+        console.log(`Wrote teaching packet JSON: ${resolve(options.out)}`);
+        return;
+      }
+
+      printJson(payload);
+      return;
+    }
+
+    if (options.out) {
+      await writeText(options.out, markdown);
+      console.log(`Wrote teaching packet: ${resolve(options.out)}`);
+      return;
+    }
+
+    console.log(markdown);
+  });
 
 program
   .command("check")
@@ -2981,6 +3019,14 @@ function parseRenderFormat(format: string): ReceiptRenderFormat {
   }
 
   throw new Error(`Unsupported receipt render format ${JSON.stringify(format)}. Use markdown or html.`);
+}
+
+function parseTeachingAudience(value: string): TeachingAudience {
+  if (isTeachingAudience(value)) {
+    return value;
+  }
+
+  throw new Error(`Unsupported teaching audience ${JSON.stringify(value)}. Use middle, high, college, or expert.`);
 }
 
 function parseSympyOperation(value: string): SympyOperation {

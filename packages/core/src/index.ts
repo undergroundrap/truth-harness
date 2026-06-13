@@ -254,6 +254,11 @@ export { summarizeSympyCheckStatus } from "./sympy-check.js";
 export { createReceipt } from "./receipt.js";
 export { createSourceCitationReceipt } from "./source-receipt.js";
 export { renderReceipt, renderReceiptHtml, renderReceiptMarkdown } from "./receipt-renderer.js";
+export {
+  createTeachingPacket,
+  isTeachingAudience,
+  renderTeachingPacketMarkdown
+} from "./teaching-packet.js";
 export { assertReceipt, parseReceiptJson, ReceiptValidationError, validateReceipt } from "./receipt-validation.js";
 export { validateJsonSchema } from "./json-schema-validation.js";
 export { checkClaimBlock, checkClaimFile, parseClaimBlocks } from "./claim-file.js";
@@ -610,6 +615,12 @@ export type { SympyCheckAggregateStatus } from "./sympy-check.js";
 export type { SymbolicPrompt, SympyCheck, SympyFailure, SympyOperation, SympyResult, SympySuccess } from "./sympy.js";
 export type { CreateReceiptOptions } from "./receipt.js";
 export type { ReceiptRenderFormat } from "./receipt-renderer.js";
+export type {
+  CreateTeachingPacketOptions,
+  TeachingAudience,
+  TeachingPacket,
+  TeachingPacketRubricRow
+} from "./teaching-packet.js";
 export type { ClaimBlock, ClaimCheck, ClaimFileCheck } from "./claim-file.js";
 export type {
   LocalWorkspaceDirectory,
