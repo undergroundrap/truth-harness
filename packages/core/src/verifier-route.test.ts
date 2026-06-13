@@ -454,6 +454,59 @@ describe("verifier route", () => {
     ).rejects.toThrow("formal-proof obligations require `proved` evidence");
   });
 
+  it("refuses route evidence as a substitute for the proof artifact itself", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-12T00:00:00.000Z"
+    });
+    const routeWrite = await writeVerifierRoute({
+      rootPath: root,
+      problem: "prove the Riemann hypothesis",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+    const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
+    const forgedRouteRef = join(".theorem-workbench", "routes", "forged-proved-route.json");
+    const forgedReceipt = {
+      ...routeWrite.route.receipt,
+      trust: "proved" as const,
+      evidenceProfile: {
+        ...routeWrite.route.receipt.evidenceProfile,
+        proofCheckerBacked: true,
+        backends: [
+          {
+            ...routeWrite.route.receipt.evidenceProfile.backends[0],
+            id: "lean",
+            role: "proof-checker" as const,
+            acceptedProofChecker: true
+          }
+        ]
+      }
+    };
+    const forgedRoute = {
+      ...routeWrite.route,
+      routeId: "route_0123456789abcdef",
+      status: "verified" as const,
+      finalTrust: "proved" as const,
+      receipt: forgedReceipt
+    };
+    await mkdir(join(root, ".theorem-workbench", "routes"), { recursive: true });
+    await writeFile(join(root, forgedRouteRef), `${JSON.stringify(forgedRoute, null, 2)}\n`, "utf8");
+
+    await expect(
+      satisfyVerifierRouteObligation({
+        rootPath: root,
+        routeRef: routeWrite.route.routeId,
+        obligationId: obligation?.obligationId ?? "",
+        evidenceRef: { kind: "route", ref: forgedRouteRef },
+        now: new Date("2026-06-12T00:01:00.000Z")
+      })
+    ).rejects.toThrow("formal-proof obligations require a proof-check record or proof-backed receipt");
+  });
+
   it("refuses malformed proof-check JSON even when it claims proved", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {

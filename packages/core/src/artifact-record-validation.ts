@@ -137,6 +137,21 @@ export function expectStringArray(
   return entry;
 }
 
+export function expectArray(
+  value: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: string[]
+): unknown[] | undefined {
+  const entry = value[key];
+  if (!Array.isArray(entry)) {
+    issues.push(`${path} must be an array`);
+    return undefined;
+  }
+
+  return entry;
+}
+
 export function expectOneOf<const T extends string>(
   value: Record<string, unknown>,
   key: string,

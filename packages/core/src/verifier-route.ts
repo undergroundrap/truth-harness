@@ -1,5 +1,17 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import {
+  expectArray,
+  expectConst,
+  expectDateTime,
+  expectNonEmptyString,
+  expectOneOf,
+  expectPattern,
+  expectRecord,
+  formatValidationError,
+  isRecord,
+  parseJsonObject
+} from "./artifact-record-validation.js";
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
@@ -1013,16 +1025,7 @@ function evidenceSatisfiesObligation(
       return { satisfied: true, reason: "Proof-checker-backed receipt supplies `proved` evidence for this obligation." };
     }
 
-    if (
-      evidence.kind === "route" &&
-      evidence.schemaVersion === "theorem.verifier-route.v0" &&
-      evidence.proofCheckerBacked === true &&
-      evidence.acceptedProofChecker === true
-    ) {
-      return { satisfied: true, reason: "Verifier route with `proved` final trust supplies accepted-proof evidence." };
-    }
-
-    return { satisfied: false, reason: "formal-proof obligations require a proof-check record, proof-backed receipt, or proved route." };
+    return { satisfied: false, reason: "formal-proof obligations require a proof-check record or proof-backed receipt." };
   }
 
   if (obligation.kind === "solver-encoding") {
@@ -1112,17 +1115,55 @@ function isTrustLabel(value: string): value is TrustLabel {
 }
 
 function parseVerifierRouteJson(raw: string, sourcePath: string): VerifierRoute {
-  const parsed = JSON.parse(raw) as unknown;
-  if (!isRecord(parsed)) {
-    throw new Error(`Verifier route JSON must be an object: ${sourcePath}.`);
-  }
-
+  const parsed = parseJsonObject(raw, sourcePath, "Verifier route");
+  const issues: string[] = [];
   if (parsed.schemaVersion !== "theorem.verifier-route.v0") {
-    throw new Error(`Unsupported verifier route schema in ${sourcePath}: ${JSON.stringify(parsed.schemaVersion)}.`);
+    issues.push(`$.schemaVersion must equal "theorem.verifier-route.v0"`);
+  }
+  expectPattern(parsed, "routeId", /^route_[a-f0-9]{16}$/u, "$.routeId", issues);
+  expectDateTime(parsed, "createdAt", "$.createdAt", issues);
+  expectConst(parsed, "localOnly", true, "$.localOnly", issues);
+  expectConst(parsed, "networkAccess", "none", "$.networkAccess", issues);
+  expectNonEmptyString(parsed, "problem", "$.problem", issues);
+  expectNonEmptyString(parsed, "normalizedProblem", "$.normalizedProblem", issues);
+  expectOneOf(parsed, "status", ["verified", "refuted", "unverified"], "$.status", issues);
+  const finalTrust = expectOneOf(
+    parsed,
+    "finalTrust",
+    ["proved", "exact-computed", "bounded-numeric", "dimension-checked", "smt-checked", "source-cited", "cross-checked", "unverified", "refuted"],
+    "$.finalTrust",
+    issues
+  );
+  expectNonEmptyString(parsed, "evidenceKind", "$.evidenceKind", issues);
+  expectNonEmptyString(parsed, "replay", "$.replay", issues);
+  expectRecord(parsed, "manifest", "$.manifest", issues);
+  expectArray(parsed, "usedCapabilities", "$.usedCapabilities", issues);
+  expectArray(parsed, "blockedCapabilities", "$.blockedCapabilities", issues);
+  expectArray(parsed, "plannedCapabilities", "$.plannedCapabilities", issues);
+  expectArray(parsed, "gaps", "$.gaps", issues);
+  expectArray(parsed, "nextActions", "$.nextActions", issues);
+  expectRecord(parsed, "trustBoundary", "$.trustBoundary", issues);
+  expectArray(parsed, "warnings", "$.warnings", issues);
+  if (parsed.proofObligations !== undefined) {
+    expectArray(parsed, "proofObligations", "$.proofObligations", issues);
   }
 
-  if (typeof parsed.routeId !== "string") {
-    throw new Error(`Verifier route is missing routeId: ${sourcePath}.`);
+  const receiptValue = expectRecord(parsed, "receipt", "$.receipt", issues);
+  let receipt: Receipt | undefined;
+  if (receiptValue) {
+    try {
+      receipt = parseReceiptJson(JSON.stringify(receiptValue), `${sourcePath}#receipt`);
+    } catch (error) {
+      issues.push(`$.receipt ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  if (receipt && finalTrust && receipt.trust !== finalTrust) {
+    issues.push(`$.finalTrust must match $.receipt.trust ${JSON.stringify(receipt.trust)}`);
+  }
+
+  if (issues.length > 0) {
+    throw formatValidationError("verifier route", sourcePath, issues);
   }
 
   return parsed as unknown as VerifierRoute;
@@ -1156,8 +1197,4 @@ function resolveWorkspacePath(root: string, path: string): string {
 
 function toPortablePath(path: string): string {
   return path.split(sep).join("/");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
