@@ -1435,13 +1435,16 @@ async function copyCurrentPlotData() {
     return;
   }
 
-  await copyTextToClipboard(formatPlotDataCsv(plot));
-  const originalText = copyPlotDataButton.textContent;
-  copyPlotDataButton.textContent = "Copied";
-  setTimeout(() => {
-    copyPlotDataButton.textContent = originalText;
-  }, 1100);
-  addActivity("human", "Copied plot data", `${receipt.runId} ${plot.kind} rows copied as CSV.`, "passed");
+  await copyOrDownloadText({
+    text: formatPlotDataCsv(plot),
+    filename: `${receipt.runId}-plot-data.csv`,
+    type: "text/csv",
+    button: copyPlotDataButton,
+    copiedTitle: "Copied plot data",
+    copiedDetail: `${receipt.runId} ${plot.kind} rows copied as CSV.`,
+    fallbackTitle: "Downloaded plot data",
+    fallbackDetail: `${receipt.runId} ${plot.kind} rows were saved as CSV instead.`
+  });
 }
 
 function downloadCurrentPlotData() {
@@ -3821,13 +3824,16 @@ function formatActivityExport(events) {
 
 async function copyActivityLog() {
   const text = formatActivityExport(activityEvents);
-  await copyTextToClipboard(text);
-  const originalText = copyActivityButton.textContent;
-  copyActivityButton.textContent = "Copied";
-  addActivity("human", "Copied activity log", `${activityEvents.length} events copied to clipboard.`, "passed");
-  setTimeout(() => {
-    copyActivityButton.textContent = originalText;
-  }, 1200);
+  await copyOrDownloadText({
+    text,
+    filename: `theorem-workbench-activity-${safeFilenameTimestamp()}.txt`,
+    type: "text/plain",
+    button: copyActivityButton,
+    copiedTitle: "Copied activity log",
+    copiedDetail: `${activityEvents.length} events copied to clipboard.`,
+    fallbackTitle: "Downloaded activity log",
+    fallbackDetail: `${activityEvents.length} events were saved as plain text instead.`
+  });
 }
 
 function downloadActivityLog() {
@@ -3858,13 +3864,16 @@ async function copyRunbookPacket() {
   }
 
   const packet = formatRunbookPacket(createRunbookPacket(receipt));
-  await copyTextToClipboard(packet);
-  const originalText = copyRunbookButton.textContent;
-  copyRunbookButton.textContent = "Copied";
-  addActivity("human", "Copied agent runbook", `${receipt.runId} runbook copied for agent handoff.`, "passed");
-  setTimeout(() => {
-    copyRunbookButton.textContent = originalText;
-  }, 1200);
+  await copyOrDownloadText({
+    text: packet,
+    filename: `${receipt.runId}-agent-runbook.md`,
+    type: "text/markdown",
+    button: copyRunbookButton,
+    copiedTitle: "Copied agent runbook",
+    copiedDetail: `${receipt.runId} runbook copied for agent handoff.`,
+    fallbackTitle: "Downloaded agent runbook",
+    fallbackDetail: `${receipt.runId} recursive runbook was saved as Markdown instead.`
+  });
 }
 
 function downloadRunbookPacket() {
@@ -3883,13 +3892,16 @@ async function copyRouteLedgerPacket() {
     return;
   }
 
-  await copyTextToClipboard(formatRouteLedgerPacket(receipt));
-  const originalText = copyRouteLedgerButton.textContent;
-  copyRouteLedgerButton.textContent = "Copied";
-  addActivity("human", "Copied verifier route", `${receipt.verifierRoute.routeId} route packet copied.`, "passed");
-  setTimeout(() => {
-    copyRouteLedgerButton.textContent = originalText;
-  }, 1200);
+  await copyOrDownloadText({
+    text: formatRouteLedgerPacket(receipt),
+    filename: `${receipt.verifierRoute.routeId}-route.md`,
+    type: "text/markdown",
+    button: copyRouteLedgerButton,
+    copiedTitle: "Copied verifier route",
+    copiedDetail: `${receipt.verifierRoute.routeId} route packet copied.`,
+    fallbackTitle: "Downloaded verifier route",
+    fallbackDetail: `${receipt.verifierRoute.routeId} route packet was saved as Markdown instead.`
+  });
 }
 
 function downloadRouteLedgerPacket() {
@@ -4547,6 +4559,43 @@ function downloadTextFile(filename, text, type) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+async function copyOrDownloadText(options) {
+  try {
+    await copyTextToClipboard(options.text);
+    flashButtonText(options.button, "Copied");
+    addActivity("human", options.copiedTitle, options.copiedDetail, "passed");
+  } catch (error) {
+    downloadTextFile(options.filename, options.text, options.type);
+    flashButtonText(options.button, "Downloaded");
+    addActivity(
+      "web-ui",
+      options.fallbackTitle,
+      `Clipboard copy was blocked (${clipboardErrorMessage(error)}), so ${options.fallbackDetail}`,
+      "waiting"
+    );
+  }
+}
+
+function flashButtonText(button, nextText, duration = 1200) {
+  if (!button) {
+    return;
+  }
+
+  const originalText = button.textContent;
+  button.textContent = nextText;
+  setTimeout(() => {
+    button.textContent = originalText;
+  }, duration);
+}
+
+function clipboardErrorMessage(error) {
+  return error instanceof Error ? error.message : "clipboard write failed";
+}
+
+function safeFilenameTimestamp(date = new Date()) {
+  return date.toISOString().replace(/[.:]/gu, "-");
+}
+
 async function copyTextToClipboard(text) {
   if (globalThis.navigator?.clipboard?.writeText) {
     try {
@@ -5036,23 +5085,16 @@ copyReportButton.addEventListener("click", () => {
   }
 
   const markdown = generateReportMarkdown(receipt);
-  copyTextToClipboard(markdown)
-    .then(() => {
-      addActivity("human", "Copied report draft", `${receipt.runId} report copied as Markdown.`, "passed");
-      copyReportButton.textContent = "Copied";
-      setTimeout(() => {
-        copyReportButton.textContent = "Copy";
-      }, 1200);
-    })
-    .catch((error) => {
-      downloadTextFile(`${receipt.runId}-report.md`, markdown, "text/markdown");
-      addActivity(
-        "web-ui",
-        "Downloaded report draft",
-        `Clipboard copy was blocked (${error instanceof Error ? error.message : "clipboard write failed"}), so ${receipt.runId} report was saved as Markdown instead.`,
-        "waiting"
-      );
-    });
+  copyOrDownloadText({
+    text: markdown,
+    filename: `${receipt.runId}-report.md`,
+    type: "text/markdown",
+    button: copyReportButton,
+    copiedTitle: "Copied report draft",
+    copiedDetail: `${receipt.runId} report copied as Markdown.`,
+    fallbackTitle: "Downloaded report draft",
+    fallbackDetail: `${receipt.runId} report was saved as Markdown instead.`
+  });
 });
 
 downloadReportButton.addEventListener("click", () => {
