@@ -1,6 +1,6 @@
 import { createServer, request as httpRequest } from "node:http";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -249,6 +249,59 @@ describe("local web route ledger API", () => {
     if (!formalObligation) {
       throw new Error("Expected a formal-proof obligation for the arithmetic route.");
     }
+    const proofRef = join(".theorem-workbench", "proofs", "web-manual-proof.json");
+    await mkdir(join(tempProjectRoot, ".theorem-workbench", "proofs"), { recursive: true });
+    await writeFile(
+      join(tempProjectRoot, proofRef),
+      `${JSON.stringify(
+        {
+          schemaVersion: "theorem.proof-check.v0",
+          checkId: "proof_web_manual_0001",
+          createdAt: "2026-06-12T00:00:00.000Z",
+          backend: { acceptedProofChecker: true },
+          status: "accepted",
+          trust: "proved",
+          proofCheckerBacked: true
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    const proofSatisfaction = await fetch(`${baseUrl}/api/routes/${routePayload.route.routeId}/obligations/${formalObligation.obligationId}/satisfy`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        evidenceRef: {
+          kind: "proof",
+          ref: proofRef
+        }
+      })
+    });
+    expect(proofSatisfaction.status).toBe(200);
+    const proofSatisfactionPayload = await proofSatisfaction.json();
+    expectLocalApiSuccess(proofSatisfaction, proofSatisfactionPayload);
+    expect(proofSatisfactionPayload.obligation.status).toBe("satisfied");
+    expect(proofSatisfactionPayload.route.proofObligations.find((obligation: { obligationId: string }) =>
+      obligation.obligationId === formalObligation.obligationId
+    )).toMatchObject({
+      status: "satisfied"
+    });
+    const proofSatisfactionSummary = proofSatisfactionPayload.routes.find((route: { routeId: string }) =>
+      route.routeId === routePayload.route.routeId
+    );
+    expect(proofSatisfactionSummary).toMatchObject({
+      proofObligations: proofSatisfactionPayload.route.proofObligations.length,
+      openProofObligations: proofSatisfactionPayload.route.proofObligations.filter((obligation: { status: string }) => obligation.status === "open").length,
+      satisfiedProofObligations: proofSatisfactionPayload.route.proofObligations.filter((obligation: { status: string }) =>
+        obligation.status === "satisfied"
+      ).length,
+      criticalOpenProofObligations: proofSatisfactionPayload.route.proofObligations.filter((obligation: { status: string; severity: string }) =>
+        obligation.status === "open" && obligation.severity === "critical"
+      ).length
+    });
     const rejectedSatisfaction = await fetch(`${baseUrl}/api/routes/${routePayload.route.routeId}/obligations/${formalObligation.obligationId}/satisfy`, {
       method: "POST",
       headers: {
