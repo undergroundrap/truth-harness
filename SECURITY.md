@@ -16,6 +16,19 @@ The local web server sends a restrictive Content Security Policy, denies framing
 
 Set `THEOREM_WEB_ALLOW_NONLOCAL=1` only for deliberate LAN or remote testing. Do not expose that mode to untrusted networks.
 
+The regression suite covers this boundary with a local server test that verifies:
+
+- static web responses include the restrictive browser security headers,
+- non-local API `Host` headers are rejected,
+- cross-origin browser writes are rejected,
+- same-origin browser writes still work.
+
+Run the focused guard test with:
+
+```bash
+npm test -- apps/web/src/serve-web.test.ts
+```
+
 ## Code Execution Boundary
 
 Native host code execution is a degraded mode. It can capture a direct process run with allowlists, timeouts, output caps, and receipt metadata, but it cannot enforce a network namespace or filesystem sandbox. Native code-run records must use `networkAccess: unknown`.
