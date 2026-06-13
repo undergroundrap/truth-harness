@@ -68,6 +68,8 @@ import {
   handleTruthHarnessWorkspaceInit,
   handleTruthHarnessWorkspaceRepair,
   handleTruthHarnessWorkspaceReview,
+  handleTruthHarnessWorkspaceReviewList,
+  handleTruthHarnessWorkspaceReviewShow,
   handleTruthHarnessWorkspaceSnapshot,
   handleTruthHarnessWorkspaceSnapshotList,
   handleTruthHarnessWorkspaceSnapshotVerify,
@@ -988,6 +990,47 @@ export function createTruthHarnessMcpServer(): McpServer {
     },
     async ({ workspacePath, maxRoutes, maxClaims, write }) =>
       toolJson(await handleTruthHarnessWorkspaceReview({ workspacePath, maxRoutes, maxClaims, write }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_review_list",
+    {
+      title: "List Workspace Review Handoffs",
+      description:
+        "List persisted truth-harness.workspace-review.v0 handoff packets from .truth-harness/findings so agents can resume exact local work queues.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceReviewList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_review_show",
+    {
+      title: "Show Workspace Review Handoff",
+      description:
+        "Read a persisted workspace review handoff by review id or workspace-local JSON path, including queue items, commands, warnings, and Markdown.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        reviewRef: z.string().min(1).describe("Review id such as wrev_<hash> or workspace-local JSON path.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, reviewRef }) => toolJson(await handleTruthHarnessWorkspaceReviewShow({ workspacePath, reviewRef }))
   );
 
   server.registerTool(

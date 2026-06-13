@@ -1,5 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { join, relative, resolve, sep } from "node:path";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { listClaimRecords, type ClaimLedgerRecord } from "./claim-ledger.js";
 import {
@@ -74,6 +74,25 @@ export interface WorkspaceReviewWriteResult {
   markdown: string;
 }
 
+export interface WorkspaceReviewSummary {
+  schemaVersion: "truth-harness.workspace-review.v0";
+  reviewId: string;
+  projectId: string;
+  createdAt: string;
+  path: string;
+  localOnly: true;
+  networkAccess: "none";
+  totalItems: number;
+  criticalItems: number;
+  highItems: number;
+  mediumItems: number;
+  lowItems: number;
+  privacy: PrivacyMetadata;
+  warnings: string[];
+}
+
+const WORKSPACE_REVIEW_SCHEMA_VERSION = "truth-harness.workspace-review.v0" as const;
+
 export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): Promise<WorkspaceReview> {
   const status = await requireLocalWorkspace(input.rootPath);
   const createdAt = input.now ?? new Date().toISOString();
@@ -86,7 +105,7 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
     ...claims.flatMap((claim) => claimReviewItems(status.root, claim))
   ]);
   const reviewWithoutMarkdown = {
-    schemaVersion: "truth-harness.workspace-review.v0" as const,
+    schemaVersion: WORKSPACE_REVIEW_SCHEMA_VERSION,
     projectId: status.manifest.projectId,
     createdAt,
     workspacePath: status.root,
@@ -138,6 +157,81 @@ export async function writeWorkspaceReview(input: CreateWorkspaceReviewInput): P
   };
 }
 
+export async function listWorkspaceReviews(rootPath: string): Promise<WorkspaceReviewSummary[]> {
+  const status = await requireLocalWorkspace(rootPath);
+  const findingsDir = resolve(status.root, status.manifest.directories.findings);
+
+  let files: string[];
+  try {
+    files = await readdir(findingsDir);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const summaries = await Promise.all(
+    files
+      .filter((file) => file.endsWith(".json"))
+      .map(async (file) => {
+        const path = join(findingsDir, file);
+        const review = tryParseWorkspaceReviewJson(await readFile(path, "utf8"));
+        return review ? summarizeWorkspaceReview(review, toPortablePath(relative(status.root, path))) : undefined;
+      })
+  );
+
+  return summaries
+    .filter((summary): summary is WorkspaceReviewSummary => summary !== undefined)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export async function readWorkspaceReview(rootPath: string, reviewRef: string): Promise<WorkspaceReview> {
+  const status = await requireLocalWorkspace(rootPath);
+  const ref = requireText(reviewRef, "Workspace review ref is required.");
+
+  if (isWorkspaceReviewId(ref)) {
+    const findingsDir = resolve(status.root, status.manifest.directories.findings);
+    let files: string[];
+    try {
+      files = await readdir(findingsDir);
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code === "ENOENT") {
+        throw new Error(`Workspace review not found: ${ref}`);
+      }
+
+      throw error;
+    }
+
+    for (const file of files.filter((candidate) => candidate.endsWith(".json"))) {
+      const path = join(findingsDir, file);
+      const review = tryParseWorkspaceReviewJson(await readFile(path, "utf8"));
+      if (review?.reviewId === ref) {
+        return review;
+      }
+    }
+
+    throw new Error(`Workspace review not found: ${ref}`);
+  }
+
+  return parseWorkspaceReviewJson(await readFile(resolveUnderRoot(status.root, ref), "utf8"));
+}
+
+export function parseWorkspaceReviewJson(raw: string): WorkspaceReview {
+  const review = JSON.parse(raw) as WorkspaceReview;
+  if (review.schemaVersion !== WORKSPACE_REVIEW_SCHEMA_VERSION) {
+    throw new Error(`Unsupported workspace review schema: ${JSON.stringify(review.schemaVersion)}`);
+  }
+  if (!isWorkspaceReviewId(review.reviewId)) {
+    throw new Error(`Invalid workspace review id: ${JSON.stringify(review.reviewId)}`);
+  }
+
+  return review;
+}
+
 export function renderWorkspaceReviewMarkdown(review: Omit<WorkspaceReview, "markdown">): string {
   const lines = [
     "# Truth Harness Workspace Review",
@@ -176,6 +270,33 @@ export function renderWorkspaceReviewMarkdown(review: Omit<WorkspaceReview, "mar
   return `${lines.join("\n")}\n`;
 }
 
+function tryParseWorkspaceReviewJson(raw: string): WorkspaceReview | undefined {
+  try {
+    return parseWorkspaceReviewJson(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+function summarizeWorkspaceReview(review: WorkspaceReview, path: string): WorkspaceReviewSummary {
+  return {
+    schemaVersion: review.schemaVersion,
+    reviewId: review.reviewId,
+    projectId: review.projectId,
+    createdAt: review.createdAt,
+    path,
+    localOnly: review.localOnly,
+    networkAccess: review.networkAccess,
+    totalItems: review.summary.totalItems,
+    criticalItems: review.summary.criticalItems,
+    highItems: review.summary.highItems,
+    mediumItems: review.summary.mediumItems,
+    lowItems: review.summary.lowItems,
+    privacy: review.privacy,
+    warnings: review.warnings
+  };
+}
+
 async function requireLocalWorkspace(
   rootPath: string
 ): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
@@ -185,6 +306,34 @@ async function requireLocalWorkspace(
   }
 
   return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
+}
+
+function resolveUnderRoot(root: string, path: string): string {
+  const target = resolve(root, path);
+  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
+
+  if (target !== root && !target.startsWith(rootWithSep)) {
+    throw new Error(`Workspace review path escapes workspace root: ${JSON.stringify(path)}`);
+  }
+
+  return target;
+}
+
+function requireText(value: string | undefined, message: string): string {
+  const normalized = value?.trim();
+  if (!normalized) {
+    throw new Error(message);
+  }
+
+  return normalized;
+}
+
+function isWorkspaceReviewId(value: string): boolean {
+  return /^wrev_[a-f0-9]{16}$/u.test(value);
+}
+
+function toPortablePath(value: string): string {
+  return value.split(sep).join("/");
 }
 
 function routeReviewItems(

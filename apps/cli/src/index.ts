@@ -75,12 +75,14 @@ import {
   listSmtChecks,
   listValidationPlans,
   listVerifierRoutes,
+  listWorkspaceReviews,
   listWorkspaceSnapshots,
   listVaultEntries,
   openVaultEntry,
   parseReceiptJson,
   parseBenchmarkRunRecordJson,
   readClaimRecord,
+  readWorkspaceReview,
   readVerifierRoute,
   renderReceipt,
   repairLocalWorkspace,
@@ -223,6 +225,7 @@ import {
   type TrustLabel,
   type WorkspaceValidation,
   type WorkspaceReview,
+  type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
   type SympyOperation
 } from "@truth-harness/core";
@@ -2340,6 +2343,39 @@ workspace
   );
 
 workspace
+  .command("reviews")
+  .description("List persisted workspace review handoff packets.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full workspace review list JSON")
+  .action(async (path: string, options: { json?: boolean }) => {
+    const reviews = await listWorkspaceReviews(path);
+
+    if (options.json) {
+      printJson({ total: reviews.length, reviews });
+      return;
+    }
+
+    printWorkspaceReviewList(reviews);
+  });
+
+workspace
+  .command("show-review")
+  .description("Show a persisted workspace review by review id or workspace-local JSON path.")
+  .argument("<review>", "Review id such as wrev_<hash> or workspace-local JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--json", "Print the full workspace review JSON")
+  .action(async (reviewRef: string, options: { workspace: string; json?: boolean }) => {
+    const review = await readWorkspaceReview(options.workspace, reviewRef);
+
+    if (options.json) {
+      printJson(review);
+      return;
+    }
+
+    printWorkspaceReview(review);
+  });
+
+workspace
   .command("snapshot")
   .description("Write a portable provenance snapshot of local workspace artifacts.")
   .argument("[path]", "Project root path", ".")
@@ -3769,6 +3805,19 @@ function printWorkspaceReview(review: WorkspaceReview, writeResult?: WorkspaceRe
     console.log("");
     console.log(`JSON: ${writeResult.jsonPath}`);
     console.log(`Markdown: ${writeResult.markdownPath}`);
+  }
+}
+
+function printWorkspaceReviewList(reviews: WorkspaceReviewSummary[]): void {
+  console.log(`Truth Harness workspace reviews: ${reviews.length}`);
+
+  for (const review of reviews) {
+    console.log("");
+    console.log(`${review.reviewId} ${review.createdAt}`);
+    console.log(`  Path: ${review.path}`);
+    console.log(`  Queue items: ${review.totalItems}`);
+    console.log(`  Critical/high/medium/low: ${review.criticalItems}/${review.highItems}/${review.mediumItems}/${review.lowItems}`);
+    console.log(`  Privacy: ${review.privacy.mode} (network: ${review.networkAccess})`);
   }
 }
 

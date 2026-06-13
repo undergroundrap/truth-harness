@@ -67,6 +67,8 @@ import {
   handleTruthHarnessWorkspaceInit,
   handleTruthHarnessWorkspaceRepair,
   handleTruthHarnessWorkspaceReview,
+  handleTruthHarnessWorkspaceReviewList,
+  handleTruthHarnessWorkspaceReviewShow,
   handleTruthHarnessWorkspaceSnapshot,
   handleTruthHarnessWorkspaceSnapshotList,
   handleTruthHarnessWorkspaceSnapshotVerify,
@@ -789,17 +791,29 @@ describe("MCP tool handlers", () => {
       maxClaims: 0,
       write: true
     });
+    const list = await handleTruthHarnessWorkspaceReviewList({});
     const snapshot = await handleTruthHarnessWorkspaceSnapshot({});
 
     if (!("written" in review)) {
       throw new Error("Expected workspace review write result.");
     }
 
+    const shown = await handleTruthHarnessWorkspaceReviewShow({
+      reviewRef: review.review.reviewId
+    });
+
     expect(route.written).toBe(true);
     expect(review.written).toBe(true);
     expect(review.review.reviewId).toMatch(/^wrev_[a-f0-9]{16}$/u);
     expect(review.review.items).toContainEqual(expect.objectContaining({ routeId: route.route.routeId }));
     expect(review.result.jsonPath.replace(/\\/g, "/")).toContain(".truth-harness/findings/");
+    expect(list.total).toBe(1);
+    expect(list.reviews[0]).toMatchObject({
+      reviewId: review.review.reviewId,
+      path: expect.stringContaining(`${review.review.reviewId}-workspace-review.json`)
+    });
+    expect(shown.reviewId).toBe(review.review.reviewId);
+    expect(shown.markdown).toContain("## Ordered Work Queue");
     expect(await readFile(review.result.markdownPath, "utf8")).toContain(route.route.routeId.replace(/_/g, "\\_"));
     expect(snapshot.snapshot.entries).toContainEqual(
       expect.objectContaining({

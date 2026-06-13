@@ -136,6 +136,8 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_workspace_init",
         "truth_harness_workspace_repair",
         "truth_harness_workspace_review",
+        "truth_harness_workspace_review_list",
+        "truth_harness_workspace_review_show",
         "truth_harness_workspace_snapshot",
         "truth_harness_workspace_snapshot_list",
         "truth_harness_workspace_snapshot_verify",
@@ -327,15 +329,33 @@ describe("Truth Harness MCP server", () => {
         name: "truth_harness_workspace_review",
         arguments: {
           maxRoutes: 1,
-          maxClaims: 20
+          maxClaims: 20,
+          write: true
         }
       });
       const workspaceReviewText = firstText(workspaceReview.content);
+      const workspaceReviewJson = JSON.parse(workspaceReviewText) as {
+        review: { reviewId: string };
+      };
       expect(workspaceReview.isError).not.toBe(true);
       expect(workspaceReviewText).toContain("\"schemaVersion\": \"truth-harness.workspace-review.v0\"");
       expect(workspaceReviewText).toContain("\"networkAccess\": \"none\"");
       expect(workspaceReviewText).toContain(routeWriteJson.route.routeId);
       expect(workspaceReviewText).toContain("Workspace review is a local planning queue");
+
+      const workspaceReviewList = await client.callTool({
+        name: "truth_harness_workspace_review_list",
+        arguments: {}
+      });
+      expect(firstText(workspaceReviewList.content)).toContain(workspaceReviewJson.review.reviewId);
+
+      const workspaceReviewShow = await client.callTool({
+        name: "truth_harness_workspace_review_show",
+        arguments: {
+          reviewRef: workspaceReviewJson.review.reviewId
+        }
+      });
+      expect(firstText(workspaceReviewShow.content)).toContain("\"markdown\": \"# Truth Harness Workspace Review");
 
       const proofCheckWrite = await client.callTool({
         name: "truth_harness_proof_check",

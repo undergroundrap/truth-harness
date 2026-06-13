@@ -196,6 +196,9 @@ export {
 export { validateWorkspaceArtifacts } from "./workspace-validation.js";
 export {
   createWorkspaceReview,
+  listWorkspaceReviews,
+  parseWorkspaceReviewJson,
+  readWorkspaceReview,
   renderWorkspaceReviewMarkdown,
   writeWorkspaceReview
 } from "./workspace-review.js";
@@ -479,6 +482,7 @@ export type {
   WorkspaceReviewItem,
   WorkspaceReviewItemKind,
   WorkspaceReviewPriority,
+  WorkspaceReviewSummary,
   WorkspaceReviewWriteResult
 } from "./workspace-review.js";
 export type {

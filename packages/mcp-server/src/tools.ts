@@ -56,12 +56,14 @@ import {
   listSmtChecks,
   listValidationPlans,
   listVerifierRoutes,
+  listWorkspaceReviews,
   listWorkspaceSnapshots,
   listVaultEntries,
   parseReceiptJson,
   parseBenchmarkRunRecordJson,
   repairLocalWorkspace,
   readClaimRecord,
+  readWorkspaceReview,
   readVerifierRoute,
   renderEvidenceAuditMarkdown,
   sealVaultFile,
@@ -199,6 +201,7 @@ import {
   type TrustLabel,
   type WorkspaceValidation,
   type WorkspaceReview,
+  type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
   type SympyOperation
 } from "@truth-harness/core";
@@ -451,6 +454,15 @@ export interface TruthHarnessWorkspaceReviewInput {
   maxRoutes?: number;
   maxClaims?: number;
   write?: boolean;
+}
+
+export interface TruthHarnessWorkspaceReviewListInput {
+  workspacePath?: string;
+}
+
+export interface TruthHarnessWorkspaceReviewShowInput {
+  workspacePath?: string;
+  reviewRef: string;
 }
 
 export interface TruthHarnessWorkspaceReviewWriteOutput {
@@ -1337,6 +1349,23 @@ export async function handleTruthHarnessWorkspaceReview(
   }
 
   return createWorkspaceReview(reviewInput);
+}
+
+export async function handleTruthHarnessWorkspaceReviewList(input: TruthHarnessWorkspaceReviewListInput): Promise<{
+  total: number;
+  reviews: WorkspaceReviewSummary[];
+}> {
+  const reviews = await listWorkspaceReviews(resolveWorkspaceRoot(input.workspacePath));
+  return {
+    total: reviews.length,
+    reviews
+  };
+}
+
+export async function handleTruthHarnessWorkspaceReviewShow(
+  input: TruthHarnessWorkspaceReviewShowInput
+): Promise<WorkspaceReview> {
+  return readWorkspaceReview(resolveWorkspaceRoot(input.workspacePath), input.reviewRef);
 }
 
 export async function handleTruthHarnessWorkspaceSnapshot(

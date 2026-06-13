@@ -809,6 +809,14 @@ describe("benchmark CLI", () => {
       review: { reviewId: string };
       result: { jsonPath: string; markdownPath: string };
     };
+    const reviewList = JSON.parse((await runCli(["workspace", "reviews", root, "--json"])).stdout) as {
+      total: number;
+      reviews: Array<{ reviewId: string; path: string; totalItems: number }>;
+    };
+    const reviewShow = JSON.parse(
+      (await runCli(["workspace", "show-review", written.review.reviewId, "--workspace", root, "--json"])).stdout
+    ) as { reviewId: string; summary: { routes: number } };
+    const reviewListText = await runCli(["workspace", "reviews", root]);
     const reviewText = await runCli(["workspace", "review", root, "--max-routes", "1", "--max-claims", "0", "--write"]);
 
     expect(reviewResult.exitCode).toBe(0);
@@ -825,6 +833,15 @@ describe("benchmark CLI", () => {
     expect(written.result.jsonPath.replace(/\\/g, "/")).toContain(".truth-harness/findings/");
     expect(written.result.markdownPath.replace(/\\/g, "/")).toContain(".truth-harness/findings/");
     expect(await readFile(written.result.markdownPath, "utf8")).toContain("## Ordered Work Queue");
+    expect(reviewList.total).toBe(1);
+    expect(reviewList.reviews[0]).toMatchObject({
+      reviewId: written.review.reviewId,
+      path: expect.stringContaining(`${written.review.reviewId}-workspace-review.json`)
+    });
+    expect(reviewShow.reviewId).toBe(written.review.reviewId);
+    expect(reviewShow.summary.routes).toBe(1);
+    expect(reviewListText.stdout).toContain("Truth Harness workspace reviews: 1");
+    expect(reviewListText.stdout).toContain(written.review.reviewId);
     expect(reviewText.stdout).toContain("Truth Harness workspace review");
     expect(reviewText.stdout).toContain("Queue items:");
     expect(reviewText.stdout).toContain("Markdown:");

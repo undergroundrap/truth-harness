@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
-import { createWorkspaceReview, writeWorkspaceReview } from "./workspace-review.js";
+import { createWorkspaceReview, listWorkspaceReviews, readWorkspaceReview, writeWorkspaceReview } from "./workspace-review.js";
 import { writeVerifierRoute } from "./verifier-route.js";
 
 const roots: string[] = [];
@@ -192,6 +192,9 @@ describe("workspace review", () => {
       maxRoutes: 1,
       now: "2026-06-13T00:02:00.000Z"
     });
+    const reviews = await listWorkspaceReviews(root);
+    const shownById = await readWorkspaceReview(root, result.review.reviewId);
+    const shownByPath = await readWorkspaceReview(root, result.jsonPath);
     const stored = JSON.parse(await readFile(result.jsonPath, "utf8")) as { schemaVersion: string; reviewId: string };
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
@@ -200,6 +203,15 @@ describe("workspace review", () => {
     expect(result.markdownPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
     expect(stored.schemaVersion).toBe("truth-harness.workspace-review.v0");
     expect(stored.reviewId).toBe(result.review.reviewId);
+    expect(reviews).toContainEqual(
+      expect.objectContaining({
+        reviewId: result.review.reviewId,
+        path: expect.stringContaining(`${result.review.reviewId}-workspace-review.json`),
+        totalItems: result.review.summary.totalItems
+      })
+    );
+    expect(shownById.reviewId).toBe(result.review.reviewId);
+    expect(shownByPath.reviewId).toBe(result.review.reviewId);
     expect(result.markdown).toContain(`| Review | \`${result.review.reviewId}\` |`);
     expect(validation.passed).toBe(true);
   });
