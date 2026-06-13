@@ -3599,6 +3599,12 @@ textarea:focus-visible {
   color: #f3ead8;
 }
 
+.report-preview h4,
+.report-preview h5 {
+  color: #f3ead8;
+  margin: 0;
+}
+
 .report-preview ol,
 .report-preview ul {
   margin: 0;
@@ -3617,6 +3623,8 @@ textarea:focus-visible {
 
 .report-preview code {
   color: #f4e7c7;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .replay-frame {
@@ -3726,6 +3734,16 @@ textarea:focus-visible {
   border-radius: 7px;
   background: #151515;
   padding: 8px;
+  min-width: 0;
+}
+
+.report-facts dd,
+.report-facts dt,
+.report-table td,
+.report-table th {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .report-facts ul {
@@ -3764,6 +3782,45 @@ textarea:focus-visible {
 .report-table td {
   color: #d8d2c8;
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+}
+
+.teaching-packet {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(125, 211, 168, 0.28);
+  border-radius: 8px;
+  background: rgba(125, 211, 168, 0.05);
+  padding: 12px;
+  min-width: 0;
+}
+
+.teaching-packet-header {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.teaching-packet-header p,
+.teaching-packet li {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.teaching-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.teaching-grid section {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #121212;
+  padding: 10px;
+  min-width: 0;
 }
 
 .mini-label {

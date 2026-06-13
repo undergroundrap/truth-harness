@@ -365,6 +365,8 @@ const notesStatus = document.querySelector("#notes-status");
 const reportPreview = document.querySelector("#report-preview");
 const copyReportButton = document.querySelector("#copy-report");
 const downloadReportButton = document.querySelector("#download-report");
+const copyTeachingPacketButton = document.querySelector("#copy-teaching-packet");
+const downloadTeachingPacketButton = document.querySelector("#download-teaching-packet");
 const printReportButton = document.querySelector("#print-report");
 const routeLane = document.querySelector("#route-lane");
 const routeProtocol = document.querySelector("#route-protocol");
@@ -6920,6 +6922,178 @@ function verificationEnvironmentMarkdown() {
   ];
 }
 
+function createTeachingPacket(receipt) {
+  const levelLabel = visualLevelLabel(state.level);
+  const trace = receipt.traces[state.level] ?? receipt.traces.middle ?? [];
+  const tags = receiptTags(receipt);
+  const text = `${receipt.title} ${receipt.output} ${receipt.math?.input ?? ""} ${receipt.math?.output ?? ""} ${tags.join(" ")}`.toLowerCase();
+  const fractionLike = text.includes("fraction") || text.includes("/") || text.includes("\\frac");
+  const proofBacked = receipt.details?.["Proof checker"] === "true" || receipt.trust === "proved";
+  const route = receipt.verifierRoute;
+  const routeReadinessText = route ? routeReadiness(route).summary : "No saved verifier route is attached to this seed receipt.";
+
+  const learningGoals = [
+    `Explain the verified result ${receipt.output} from the receipt trace without skipping evidence steps.`,
+    `Identify which engine produced the result (${receipt.engine}) and what trust label was assigned (${receipt.trust}).`,
+    "Separate the computed result from stronger claims that would require proof, independent checks, or expert review.",
+    ...(fractionLike
+      ? ["Use common denominators or equivalent fractions to reason about the result before checking the receipt."]
+      : ["Translate the problem into smaller claims that can each be checked or replayed."])
+  ];
+
+  const prerequisites = fractionLike
+    ? [
+      "Fraction notation and numerator/denominator roles.",
+      "Equivalent fractions and common denominators.",
+      "Adding rational numbers exactly instead of relying on decimal approximations."
+    ]
+    : [
+      "Reading the problem statement as a precise claim.",
+      "Following a step-by-step computational trace.",
+      "Knowing the difference between a calculation, a proof, a simulation, and a source citation."
+    ];
+
+  const classroomPrompts = trace.slice(0, 6).map((step, index) =>
+    `Step ${index + 1}: ${step} Ask students which rule or prior fact justifies this step, then compare their answer to the receipt.`
+  );
+
+  const misconceptionChecks = [
+    ...(fractionLike
+      ? [
+        "Students may add denominators directly. Ask them to explain why denominator alignment is required.",
+        "Students may treat 11/8 as wrong because it is greater than 1. Ask them to place both inputs and the result on the number line."
+      ]
+      : [
+        "Students may accept the final answer because software printed it. Ask them to point to the verifier, replay command, and limitations.",
+        "Students may confuse a bounded check or simulation with a general proof. Ask what would be needed for a stronger trust label."
+      ]),
+    proofBacked
+      ? "Even with a proof checker, students should cite the exact proof artifact and accepted backend."
+      : "This receipt is not labeled proved. Students should not present it as a formal theorem without an accepted proof-checker artifact."
+  ];
+
+  const activity = [
+    "Start with a quiet solve: students write their own answer and one sentence of justification.",
+    "Reveal the receipt trace one step at a time and have students mark each step as definition, rewrite, computation, or assumption.",
+    "Ask students to find the strongest claim the receipt supports and one claim it does not support.",
+    "Have students write a new subclaim that could be saved as a reusable receipt for a harder problem."
+  ];
+
+  const assessmentRubric = [
+    ["Trace fidelity", "Student explanation follows the recorded steps and does not invent unsupported operations."],
+    ["Evidence awareness", "Student names the engine, replay command, trust label, and limitations."],
+    ["Conceptual transfer", "Student can create or identify a reusable subclaim for a related problem."],
+    ["Overclaim prevention", "Student states what extra proof, source, simulation, or review would be needed for a stronger claim."]
+  ];
+
+  return {
+    title: `Teaching Packet: ${receipt.title}`,
+    audience: levelLabel,
+    verifiedClaim: `${receipt.title} -> ${receipt.output}`,
+    trust: receipt.trust,
+    engine: receipt.engine,
+    replay: receipt.replay,
+    routeReadiness: routeReadinessText,
+    learningGoals,
+    prerequisites,
+    classroomPrompts: classroomPrompts.length > 0 ? classroomPrompts : ["Ask students to restate the claim, identify the verifier, and list what evidence would be needed next."],
+    misconceptionChecks,
+    activity,
+    assessmentRubric,
+    boundary: [
+      "This packet teaches from a local evidence receipt. It is not a substitute for instructor judgment.",
+      "AI explanations, visualizations, and report text do not upgrade trust labels.",
+      "Students should cite the receipt, replay command, and limitations when using the result."
+    ]
+  };
+}
+
+function renderTeachingPacketHtml(packet) {
+  return `<section class="teaching-packet">
+    <div class="teaching-packet-header">
+      <span class="mini-label">professor packet</span>
+      <h4>${escapeHtml(packet.title)}</h4>
+      <p>Audience: ${escapeHtml(packet.audience)}. Verified claim: <code>${escapeHtml(packet.verifiedClaim)}</code></p>
+    </div>
+    <dl class="report-facts">
+      <div><dt>Trust</dt><dd>${escapeHtml(packet.trust)}</dd></div>
+      <div><dt>Engine</dt><dd>${escapeHtml(packet.engine)}</dd></div>
+      <div><dt>Route</dt><dd>${escapeHtml(packet.routeReadiness)}</dd></div>
+      <div><dt>Replay</dt><dd><code>${escapeHtml(packet.replay)}</code></dd></div>
+    </dl>
+    <div class="teaching-grid">
+      <section>
+        <h5>Learning Goals</h5>
+        <ul>${packet.learningGoals.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </section>
+      <section>
+        <h5>Prerequisites</h5>
+        <ul>${packet.prerequisites.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </section>
+      <section>
+        <h5>Misconception Checks</h5>
+        <ul>${packet.misconceptionChecks.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </section>
+      <section>
+        <h5>Classroom Activity</h5>
+        <ol>${packet.activity.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
+      </section>
+    </div>
+    <h5>Step Prompts</h5>
+    <ol>${packet.classroomPrompts.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>
+    <h5>Assessment Rubric</h5>
+    <table class="report-table">
+      <thead><tr><th>Criterion</th><th>Evidence of understanding</th></tr></thead>
+      <tbody>${packet.assessmentRubric.map(([criterion, evidence]) => `<tr><td>${escapeHtml(criterion)}</td><td>${escapeHtml(evidence)}</td></tr>`).join("")}</tbody>
+    </table>
+    <h5>Teaching Boundary</h5>
+    <ul>${packet.boundary.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+  </section>`;
+}
+
+function teachingPacketMarkdown(packet) {
+  return [
+    `# ${packet.title}`,
+    "",
+    `- Audience: ${packet.audience}`,
+    `- Verified claim: ${packet.verifiedClaim}`,
+    `- Trust: ${packet.trust}`,
+    `- Engine: ${packet.engine}`,
+    `- Replay: \`${packet.replay}\``,
+    `- Route readiness: ${packet.routeReadiness}`,
+    "",
+    "## Learning Goals",
+    "",
+    ...packet.learningGoals.map((item) => `- ${item}`),
+    "",
+    "## Prerequisites",
+    "",
+    ...packet.prerequisites.map((item) => `- ${item}`),
+    "",
+    "## Step Prompts",
+    "",
+    ...packet.classroomPrompts.map((item, index) => `${index + 1}. ${item}`),
+    "",
+    "## Misconception Checks",
+    "",
+    ...packet.misconceptionChecks.map((item) => `- ${item}`),
+    "",
+    "## Classroom Activity",
+    "",
+    ...packet.activity.map((item, index) => `${index + 1}. ${item}`),
+    "",
+    "## Assessment Rubric",
+    "",
+    "| Criterion | Evidence of understanding |",
+    "| --- | --- |",
+    ...packet.assessmentRubric.map(([criterion, evidence]) => `| ${criterion} | ${evidence} |`),
+    "",
+    "## Teaching Boundary",
+    "",
+    ...packet.boundary.map((item) => `- ${item}`)
+  ].join("\n");
+}
+
 function renderReport(receipt) {
   if (!receipt) {
     return;
@@ -6934,6 +7108,7 @@ function renderReport(receipt) {
     .join("");
   const notes = researchNotes.value.trim();
   const plot = createPlotModel(receipt);
+  const teachingPacket = createTeachingPacket(receipt);
   const mathInput = receipt.math?.input;
   const mathOutput = receipt.math?.output;
   const tags = receiptTags(receipt);
@@ -7000,6 +7175,8 @@ function renderReport(receipt) {
       <p>Workbench: Truth Harness by Ocean Bennett. License: AGPL-3.0 with visible attribution requirement.</p>
     </header>
     <div class="report-math">${renderMathInline(mathInput ?? receipt.title)} <span>&rarr;</span> ${renderMathInline(mathOutput ?? receipt.output)}</div>
+    <h3>Teaching Packet</h3>
+    ${renderTeachingPacketHtml(teachingPacket)}
     <h3>Visual Evidence</h3>
     <dl class="report-facts">
       <div><dt>Kind</dt><dd>${escapeHtml(plot.kind)}</dd></div>
@@ -7084,6 +7261,7 @@ function generateReportMarkdown(receipt) {
   const matrix = verificationRows(receipt);
   const notes = researchNotes.value.trim() || "No local notes added yet.";
   const plot = createPlotModel(receipt);
+  const teachingPacket = createTeachingPacket(receipt);
   const mathInput = receipt.math?.input ?? receipt.title;
   const mathOutput = receipt.math?.output ?? receipt.output;
   const tags = receiptTags(receipt);
@@ -7129,6 +7307,10 @@ function generateReportMarkdown(receipt) {
     "",
     `- Input TeX: \`${mathInput}\``,
     `- Output TeX: \`${mathOutput}\``,
+    "",
+    "## Teaching Packet",
+    "",
+    teachingPacketMarkdown(teachingPacket),
     "",
     "## Visual Evidence",
     "",
@@ -7990,6 +8172,35 @@ downloadReportButton.addEventListener("click", () => {
 
   downloadTextFile(`${receipt.runId}-report.md`, generateReportMarkdown(receipt), "text/markdown");
   addActivity("human", "Downloaded report draft", `${receipt.runId} report saved as Markdown.`, "passed");
+});
+
+copyTeachingPacketButton.addEventListener("click", () => {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt) {
+    return;
+  }
+
+  const markdown = teachingPacketMarkdown(createTeachingPacket(receipt));
+  copyOrDownloadText({
+    text: `${markdown}\n`,
+    filename: `${receipt.runId}-teaching-packet.md`,
+    type: "text/markdown",
+    button: copyTeachingPacketButton,
+    copiedTitle: "Copied teaching packet",
+    copiedDetail: `${receipt.runId} teaching packet copied as Markdown.`,
+    fallbackTitle: "Downloaded teaching packet",
+    fallbackDetail: `${receipt.runId} teaching packet was saved as Markdown instead.`
+  });
+});
+
+downloadTeachingPacketButton.addEventListener("click", () => {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt) {
+    return;
+  }
+
+  downloadTextFile(`${receipt.runId}-teaching-packet.md`, `${teachingPacketMarkdown(createTeachingPacket(receipt))}\n`, "text/markdown");
+  addActivity("human", "Downloaded teaching packet", `${receipt.runId} teaching packet saved as Markdown.`, "passed");
 });
 
 printReportButton.addEventListener("click", () => {
