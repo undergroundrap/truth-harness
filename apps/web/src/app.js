@@ -1692,10 +1692,7 @@ async function refreshRouteLedger({ announce = true } = {}) {
       method: "GET",
       cache: "no-store"
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error ?? "Local route ledger API failed.");
-    }
+    const payload = await readLocalApiJson(response, "Local route ledger API failed.");
 
     applyRouteLedgerPayload(payload);
     if (announce) {
@@ -1707,6 +1704,38 @@ async function refreshRouteLedger({ announce = true } = {}) {
     routeHistoryList.innerHTML = `<div class="activity-empty">Route ledger unavailable from the local API.</div>`;
     addActivity("local-api", "Route ledger unavailable", error instanceof Error ? error.message : "Unknown route ledger failure.", "waiting");
   }
+}
+
+async function readLocalApiJson(response, fallbackMessage) {
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = {};
+  }
+
+  if (!response.ok) {
+    throw new Error(localApiErrorMessage(payload, fallbackMessage));
+  }
+
+  return payload;
+}
+
+function localApiErrorMessage(payload, fallbackMessage) {
+  const message = typeof payload?.error === "string" && payload.error.trim()
+    ? payload.error.trim()
+    : fallbackMessage;
+  if (payload?.schemaVersion !== "theorem.web-error.v0") {
+    return message;
+  }
+
+  const detailParts = [
+    typeof payload.requestId === "string" ? `request ${payload.requestId}` : undefined,
+    typeof payload.method === "string" && typeof payload.path === "string" ? `${payload.method} ${payload.path}` : undefined,
+    Number.isFinite(payload.status) ? `status ${payload.status}` : undefined
+  ].filter(Boolean);
+
+  return detailParts.length > 0 ? `${message} (${detailParts.join("; ")}).` : message;
 }
 
 function applyRouteLedgerPayload(payload) {
@@ -1724,10 +1753,7 @@ async function refreshCasChecks({ announce = true } = {}) {
       method: "GET",
       cache: "no-store"
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error ?? "Local CAS ledger API failed.");
-    }
+    const payload = await readLocalApiJson(response, "Local CAS ledger API failed.");
 
     applyCasCheckPayload(payload);
     if (announce) {
@@ -1760,10 +1786,7 @@ async function refreshSmtChecks({ announce = true } = {}) {
       method: "GET",
       cache: "no-store"
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error ?? "Local SMT ledger API failed.");
-    }
+    const payload = await readLocalApiJson(response, "Local SMT ledger API failed.");
 
     applySmtCheckPayload(payload);
     if (announce) {
@@ -1802,10 +1825,7 @@ async function openSavedRoute(routeId) {
       method: "GET",
       cache: "no-store"
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error ?? "Local verifier route read failed.");
-    }
+    const payload = await readLocalApiJson(response, "Local verifier route read failed.");
 
     const viewModel = receiptToViewModel(payload.route.receipt, payload.route, payload.routePaths);
     const key = payload.route.receipt.runId;
@@ -1853,10 +1873,7 @@ async function runCasForObligation(button) {
         variable: "x"
       })
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error ?? "Local CAS check failed.");
-    }
+    const payload = await readLocalApiJson(response, "Local CAS check failed.");
 
     applyCasCheckPayload(payload);
     for (const item of payload.activity ?? []) {
@@ -1924,10 +1941,7 @@ async function runSmtForObligation(button) {
       },
       body: JSON.stringify(draft)
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error ?? "Local SMT check failed.");
-    }
+    const payload = await readLocalApiJson(response, "Local SMT check failed.");
 
     applySmtCheckPayload(payload);
     for (const item of payload.activity ?? []) {
@@ -1981,10 +1995,7 @@ async function attachEvidenceToRoute(input) {
         evidenceRef: input.evidenceRef
       })
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error ?? "Route obligation satisfaction failed.");
-    }
+    const payload = await readLocalApiJson(response, "Route obligation satisfaction failed.");
 
     applyRouteLedgerPayload(payload);
     syncRouteIntoReceipts(payload.route, payload.routePaths);
@@ -2047,10 +2058,7 @@ async function refreshClaimLedger({ announce = true } = {}) {
       method: "GET",
       cache: "no-store"
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error ?? "Local claim ledger API failed.");
-    }
+    const payload = await readLocalApiJson(response, "Local claim ledger API failed.");
 
     applyClaimLedgerPayload(payload);
     if (announce) {
@@ -2176,10 +2184,7 @@ async function recordCurrentClaim() {
       },
       body: JSON.stringify(createClaimLedgerPayload(receipt))
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error ?? "Local claim ledger write failed.");
-    }
+    const payload = await readLocalApiJson(response, "Local claim ledger write failed.");
 
     applyClaimLedgerPayload(payload);
     receipt.claimId = payload.claim.claimId;
@@ -2264,10 +2269,7 @@ async function writeReceiptClaim(receipt, { dependsOn = undefined, supersedes = 
       supersedes
     }))
   });
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload.error ?? "Local claim ledger write failed.");
-  }
+  const payload = await readLocalApiJson(response, "Local claim ledger write failed.");
 
   applyClaimLedgerPayload(payload);
   receipt.claimId = payload.claim.claimId;
@@ -2919,10 +2921,7 @@ async function refreshSafetyStatus() {
       },
       cache: "no-store"
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error ?? "Local status API failed.");
-    }
+    const payload = await readLocalApiJson(response, "Local status API failed.");
 
     state.safetyStatus = payload;
     renderSafetyStatus();
@@ -5145,10 +5144,7 @@ composer.addEventListener("submit", async (event) => {
       },
       body: JSON.stringify({ problem: problemForApi })
     });
-    const payload = await response.json();
-    if (!response.ok) {
-      throw new Error(payload.error ?? "Local receipt API failed.");
-    }
+    const payload = await readLocalApiJson(response, "Local receipt API failed.");
     updateLatestActivity("Calling local API", "passed", "POST /api/receipt completed");
 
     const viewModel = receiptToViewModel(payload.receipt, payload.route, payload.routePaths);
