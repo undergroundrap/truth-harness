@@ -3338,17 +3338,52 @@ function printVerifierRouteList(routes: VerifierRouteSummary[]): void {
   }
 }
 
-function routeObligationSummary(route: VerifierRouteSummary): string {
-  if (route.proofObligations === 0) {
+function routeObligationSummary(route: VerifierRouteSummary | VerifierRoute): string {
+  let obligationCounts: {
+    proofObligations: number;
+    openProofObligations: number;
+    criticalOpenProofObligations: number;
+    satisfiedProofObligations: number;
+    notRequiredProofObligations: number;
+  };
+
+  if (Array.isArray(route.proofObligations)) {
+    obligationCounts = {
+      proofObligations: route.proofObligations.length,
+      openProofObligations: route.proofObligations.filter((obligation) => obligation.status === "open").length,
+      criticalOpenProofObligations: route.proofObligations.filter(
+        (obligation) => obligation.status === "open" && obligation.severity === "critical"
+      ).length,
+      satisfiedProofObligations: route.proofObligations.filter((obligation) => obligation.status === "satisfied").length,
+      notRequiredProofObligations: route.proofObligations.filter((obligation) => obligation.status === "not-required").length
+    };
+  } else {
+    const summary = route as VerifierRouteSummary;
+    obligationCounts = {
+      proofObligations: summary.proofObligations,
+      openProofObligations: summary.openProofObligations,
+      criticalOpenProofObligations: summary.criticalOpenProofObligations,
+      satisfiedProofObligations: summary.satisfiedProofObligations,
+      notRequiredProofObligations: summary.notRequiredProofObligations
+    };
+  }
+
+  if (obligationCounts.proofObligations === 0) {
     return "none";
   }
 
   const parts = [
-    `${route.proofObligations} total`,
-    route.openProofObligations > 0 ? `${route.openProofObligations} open` : undefined,
-    route.criticalOpenProofObligations > 0 ? `${route.criticalOpenProofObligations} critical-open` : undefined,
-    route.satisfiedProofObligations > 0 ? `${route.satisfiedProofObligations} satisfied` : undefined,
-    route.notRequiredProofObligations > 0 ? `${route.notRequiredProofObligations} not-required` : undefined
+    `${obligationCounts.proofObligations} total`,
+    obligationCounts.openProofObligations > 0 ? `${obligationCounts.openProofObligations} open` : undefined,
+    obligationCounts.criticalOpenProofObligations > 0
+      ? `${obligationCounts.criticalOpenProofObligations} critical-open`
+      : undefined,
+    obligationCounts.satisfiedProofObligations > 0
+      ? `${obligationCounts.satisfiedProofObligations} satisfied`
+      : undefined,
+    obligationCounts.notRequiredProofObligations > 0
+      ? `${obligationCounts.notRequiredProofObligations} not-required`
+      : undefined
   ].filter(Boolean);
 
   return parts.join(" / ");
@@ -3362,6 +3397,7 @@ function printVerifierRouteSatisfaction(result: SatisfyVerifierRouteObligationRe
   console.log(`Evidence: ${result.evidence.kind}:${result.evidence.ref}`);
   console.log(`Evidence trust: ${result.evidence.trust ?? "unknown"}`);
   console.log(`Evidence schema: ${result.evidence.schemaVersion ?? "unknown"}`);
+  console.log(`Proof obligations: ${routeObligationSummary(result.route)}`);
   console.log("");
   console.log(`Wrote verifier route JSON: ${result.jsonPath}`);
   console.log(`Wrote verifier route Markdown: ${result.markdownPath}`);

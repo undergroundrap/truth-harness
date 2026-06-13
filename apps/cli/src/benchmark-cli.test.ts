@@ -347,6 +347,7 @@ describe("benchmark CLI", () => {
       "--json"
     ]);
     const result = JSON.parse(satisfy.stdout) as {
+      route: { proofObligations: Array<{ status: string; severity: string }> };
       obligation: { status: string; satisfiedBy: Array<{ kind: string; ref: string; trust: string }> };
       evidence: { trust: string; schemaVersion: string };
     };
@@ -378,6 +379,16 @@ describe("benchmark CLI", () => {
     expect(shown.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
       status: "satisfied"
     });
+    const openObligations = result.route.proofObligations.filter((candidate) => candidate.status === "open").length;
+    const criticalOpenObligations = result.route.proofObligations.filter(
+      (candidate) => candidate.status === "open" && candidate.severity === "critical"
+    ).length;
+    const satisfiedObligations = result.route.proofObligations.filter(
+      (candidate) => candidate.status === "satisfied"
+    ).length;
+    expect(human.stdout).toContain(
+      `Proof obligations: ${result.route.proofObligations.length} total / ${openObligations} open / ${criticalOpenObligations} critical-open / ${satisfiedObligations} satisfied`
+    );
     expect(human.stdout).toContain("Claim ledger follow-up:");
   });
 
