@@ -7,7 +7,7 @@ import { parseReceiptJson } from "./receipt-validation.js";
 import { parseSmtCheckRecord } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
-import { readVerifierRoute } from "./verifier-route.js";
+import { readVerifierRoute, verifierRouteReadiness } from "./verifier-route.js";
 
 export const CLAIM_LEDGER_DOMAINS = [
   "math",
@@ -222,6 +222,7 @@ export async function createClaimLedgerRecord(input: CreateClaimLedgerRecordInpu
   const evidenceTrust = strongestTrustFromTrusts(resolvedEvidence.supportingTrusts);
   const trust = effectiveClaimTrust(requestedTrust, evidenceTrust);
   const trustBoundaryChecks = trustBoundaryOpenChecks(requestedTrust, trust);
+  const finalizationChecks = [...nextChecks, ...trustBoundaryChecks, ...resolvedEvidence.finalizationChecks];
   const statusValue = input.status ?? "active";
   const recordWithoutId = {
     projectId: status.manifest.projectId,
@@ -247,12 +248,12 @@ export async function createClaimLedgerRecord(input: CreateClaimLedgerRecordInpu
     ...recordWithoutId,
     updatedAt: createdAt,
     verification: verificationFor(trust, evidenceRefs, nextChecks),
-    finalization: finalizationFor(trust, statusValue, [...nextChecks, ...trustBoundaryChecks]),
+    finalization: finalizationFor(trust, statusValue, finalizationChecks),
     warnings: warningsFor({
       statement,
       trust,
       status: statusValue,
-      nextChecks,
+      nextChecks: [...nextChecks, ...resolvedEvidence.finalizationChecks],
       domain,
       requestedTrust,
       evidenceTrust,
@@ -552,9 +553,15 @@ async function resolveEvidenceRefs(input: {
   root: string;
   evidenceRefs: ClaimLedgerEvidenceRef[];
   knownClaimsById: Map<string, ClaimLedgerRecord>;
-}): Promise<{ evidenceRefs: ClaimLedgerEvidenceRef[]; warnings: string[]; supportingTrusts: TrustLabel[] }> {
+}): Promise<{
+  evidenceRefs: ClaimLedgerEvidenceRef[];
+  warnings: string[];
+  supportingTrusts: TrustLabel[];
+  finalizationChecks: string[];
+}> {
   const warnings: string[] = [];
   const supportingTrusts: TrustLabel[] = [];
+  const finalizationChecks: string[] = [];
   const evidenceRefs = await Promise.all(
     input.evidenceRefs.map(async (ref) => {
       const inferred = await inferEvidenceRefTrust({
@@ -575,12 +582,16 @@ async function resolveEvidenceRefs(input: {
         return ref;
       }
 
+      warnings.push(...(inferred.warnings ?? []));
+      finalizationChecks.push(...(inferred.finalizationChecks ?? []));
       if (ref.trust && ref.trust !== inferred.trust) {
         warnings.push(
           `Evidence ref ${ref.kind}:${ref.ref} declared trust ${ref.trust}, but the local artifact reports ${inferred.trust}; using the artifact trust.`
         );
       }
-      supportingTrusts.push(inferred.trust);
+      if (inferred.supportsFinalization !== false || inferred.trust === "refuted") {
+        supportingTrusts.push(inferred.trust);
+      }
 
       return {
         ...ref,
@@ -590,14 +601,22 @@ async function resolveEvidenceRefs(input: {
     })
   );
 
-  return { evidenceRefs, warnings, supportingTrusts };
+  return { evidenceRefs, warnings, supportingTrusts, finalizationChecks };
+}
+
+interface EvidenceTrustResolution {
+  trust: TrustLabel;
+  summary?: string;
+  supportsFinalization?: boolean;
+  warnings?: string[];
+  finalizationChecks?: string[];
 }
 
 async function inferEvidenceRefTrust(input: {
   root: string;
   ref: ClaimLedgerEvidenceRef;
   knownClaimsById: Map<string, ClaimLedgerRecord>;
-}): Promise<{ trust: TrustLabel; summary?: string } | undefined> {
+}): Promise<EvidenceTrustResolution | undefined> {
   if (input.ref.kind === "claim") {
     const claim = input.knownClaimsById.get(input.ref.ref);
     return claim ? { trust: claim.trust, summary: claim.title } : undefined;
@@ -606,7 +625,29 @@ async function inferEvidenceRefTrust(input: {
   if (input.ref.kind === "route") {
     try {
       const route = await readVerifierRoute(input.root, input.ref.ref);
-      return { trust: route.finalTrust, summary: `Verifier route ${route.routeId} ended with ${route.finalTrust}.` };
+      const readiness = verifierRouteReadiness(route);
+      if (route.status === "refuted" || readiness.strongestTrust === "refuted") {
+        return {
+          trust: "refuted",
+          summary: `Verifier route ${route.routeId} is refuted under the recorded assumptions.`
+        };
+      }
+
+      if (!readiness.readyForNarrowClaim) {
+        const summary = `Verifier route ${route.routeId} is not ready for a narrow claim: ${readiness.summary}`;
+        return {
+          trust: "unverified",
+          summary,
+          supportsFinalization: false,
+          warnings: [summary],
+          finalizationChecks: [summary]
+        };
+      }
+
+      return {
+        trust: readiness.strongestTrust,
+        summary: `Verifier route ${route.routeId} is ready for a narrow ${readiness.strongestTrust} claim.`
+      };
     } catch {
       return undefined;
     }

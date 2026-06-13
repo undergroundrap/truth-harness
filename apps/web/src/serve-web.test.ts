@@ -367,9 +367,10 @@ describe("local web route ledger API", () => {
     expect(routeRef).toMatchObject({
       kind: "route",
       ref: receiptPayload.route.routeId,
-      trust: "exact-computed"
+      trust: "proved"
     });
-    expect(routeRef.summary).toContain(receiptPayload.route.routeId);
+    expect(routeRef.summary).toContain("is ready for a narrow proved claim");
+    expect(claimPayload.claim.finalization.readyForNarrowClaim).toBe(true);
   }, 30_000);
 });
 

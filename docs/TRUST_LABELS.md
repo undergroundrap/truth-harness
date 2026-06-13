@@ -28,6 +28,8 @@ The local modular parity checker emits `exact-computed`, not `proved`. It can at
 
 Route obligations and claim-ledger evidence promotion parse proof-check, CAS-check, and SMT-check records strictly before trusting them. A hand-written or malformed JSON file that merely says `trust: proved`, `trust: cross-checked`, or `trust: smt-checked` is unresolved evidence, not proof, independent verification, or solver evidence.
 
+Verifier routes are work orders, not proof objects. Claim-ledger promotion only treats a `route:` evidence ref as finalization-supporting evidence when the route readiness gate says it is ready for a narrow claim. If a route still has open obligations, the claim keeps the route attached as `unverified` evidence and copies the route readiness blocker into the claim finalization boundary.
+
 `theorem smt backends` and the MCP `theorem_smt_backends` tool report local Z3 availability without network access. A successful Z3 version probe means this machine may be able to check SMT-LIB artifacts; it does not check any constraint file and never mints `smt-checked` by itself.
 
 `theorem smt check <file>` and the MCP `theorem_smt_check` tool run a concrete local SMT-LIB source file through Z3 when the backend is available. Use `--write` or MCP `write: true` to store a local `theorem.smt-check.v0` JSON record plus Markdown report under `.theorem-workbench/smt/`; `theorem smt list` and `theorem_smt_list` expose those paths for audits and agent follow-up. Only `status: sat` or `status: unsat` produces `trust: smt-checked`. Missing Z3, execution errors, `unknown`, and unrecognized solver output remain `unverified`.

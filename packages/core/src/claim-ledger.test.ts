@@ -6,6 +6,7 @@ import { writeSymbolicCasCheckRecord, type CasBackendCommandRunner } from "./cas
 import { initLocalWorkspace } from "./local-workspace.js";
 import { createReceipt } from "./receipt.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
+import { writeVerifierRoute } from "./verifier-route.js";
 import {
   createClaimLedgerGraph,
   listClaimRecords,
@@ -115,6 +116,71 @@ describe("claim ledger", () => {
       summary: "Exact result: 11/8."
     });
     expect(written.claim.finalization.readyForNarrowClaim).toBe(true);
+  });
+
+  it("derives claim trust from ready verifier-route evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "compute 3 / 4 + 5 / 8",
+      now: new Date("2026-06-12T00:05:00.000Z"),
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    const written = await writeClaimLedgerRecord({
+      rootPath: root,
+      statement: "3 / 4 + 5 / 8 equals 11 / 8.",
+      trust: "exact-computed",
+      evidenceRefs: [{ kind: "route", ref: route.route.routeId }],
+      now: "2026-06-12T00:10:00.000Z"
+    });
+
+    expect(written.claim.trust).toBe("exact-computed");
+    expect(written.claim.evidenceRefs[0]).toMatchObject({
+      kind: "route",
+      ref: route.route.routeId,
+      trust: "exact-computed"
+    });
+    expect(written.claim.evidenceRefs[0].summary).toContain("is ready for a narrow exact-computed claim");
+    expect(written.claim.finalization.readyForNarrowClaim).toBe(true);
+  });
+
+  it("does not finalize claims from not-ready verifier-route evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "prove the Riemann hypothesis",
+      now: new Date("2026-06-12T00:05:00.000Z"),
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    const written = await writeClaimLedgerRecord({
+      rootPath: root,
+      statement: "The Riemann hypothesis is proved.",
+      trust: "proved",
+      evidenceRefs: [{ kind: "route", ref: route.route.routeId }],
+      now: "2026-06-12T00:10:00.000Z"
+    });
+    const routeWarning = `Verifier route ${route.route.routeId} is not ready for a narrow claim`;
+
+    expect(written.claim.trust).toBe("unverified");
+    expect(written.claim.evidenceRefs[0]).toMatchObject({
+      kind: "route",
+      ref: route.route.routeId,
+      trust: "unverified"
+    });
+    expect(written.claim.evidenceRefs[0].summary).toContain(routeWarning);
+    expect(written.claim.finalization.readyForNarrowClaim).toBe(false);
+    expect(written.claim.finalization.openChecks.some((check) => check.includes(routeWarning))).toBe(true);
+    expect(written.claim.warnings.some((warning) => warning.includes(routeWarning))).toBe(true);
   });
 
   it("derives cross-checked claim trust from linked CAS evidence", async () => {
