@@ -4584,74 +4584,118 @@ function renderBranchMap(receipt) {
   const currentKey = receiptKeyFor(receipt) ?? state.receiptKey;
   const upstream = receiptDependencies(receipt).slice(0, 3);
   const downstream = dependentReceiptKeys(receipt).slice(0, 3);
-  const upstreamSlots = branchSlots(upstream.length);
-  const downstreamSlots = branchSlots(downstream.length);
-  const lineHtml = [
-    ...upstreamSlots.map((slot) => branchCurve(50, slot.y, 150, 50, "upstream")),
-    ...downstreamSlots.map((slot) => branchCurve(150, 50, 250, slot.y, "downstream"))
-  ].join("");
-  const nodeHtml = [
-    ...upstream.map((key, index) => branchNodeHtml(key, "upstream", upstreamSlots[index])),
-    branchNodeHtml(currentKey, "current", { y: 50, className: "current" }, true),
-    ...downstream.map((key, index) => branchNodeHtml(key, "downstream", downstreamSlots[index]))
-  ].join("");
+  const currentLane = upstream.length > 0 ? Math.min(upstream.length, 3) : 0;
+  const rows = [
+    ...upstream.map((key, index) => ({
+      key,
+      lane: Math.min(index, 3),
+      role: "parent"
+    })),
+    {
+      key: currentKey,
+      lane: currentLane,
+      role: "head",
+      current: true
+    },
+    ...downstream.map((key, index) => ({
+      key,
+      lane: branchChildLane(currentLane, index),
+      role: index === 0 ? "child" : "branch"
+    }))
+  ].slice(0, 7);
+  const currentRowIndex = rows.findIndex((row) => row.current);
+  const laneSet = new Set(rows.map((row) => row.lane));
+  const railHtml = [...laneSet]
+    .sort((a, b) => a - b)
+    .map((lane) => `<line class="git-rail git-rail-${lane}" x1="${branchLaneX(lane)}" y1="18" x2="${branchLaneX(lane)}" y2="${branchRowY(rows.length - 1)}" />`)
+    .join("");
+  const edgeHtml = rows
+    .flatMap((row, index) => {
+      if (row.current) {
+        return [];
+      }
+      if (index < currentRowIndex) {
+        return [branchEdgePath(row.lane, index, currentLane, currentRowIndex, "parent")];
+      }
+      return [branchEdgePath(currentLane, currentRowIndex, row.lane, index, "child")];
+    })
+    .join("");
+  const nodeHtml = rows
+    .map((row, index) => branchNodeHtml(row, index))
+    .join("");
 
   branchMapStatus.textContent =
     upstream.length > 0 || downstream.length > 0
-      ? `${upstream.length} in / ${downstream.length} out`
+      ? `${upstream.length} parent / ${downstream.length} child`
       : "single receipt";
   branchMap.innerHTML = `
-    <div class="branch-map-stage">
-      <div class="branch-map-labels" aria-hidden="true">
-        <span>upstream</span>
-        <span>current</span>
-        <span>unlocks</span>
-      </div>
-      <svg class="branch-map-lines" viewBox="0 0 300 100" preserveAspectRatio="none" aria-hidden="true">
-        <line x1="150" y1="12" x2="150" y2="88" class="branch-spine" />
-        ${lineHtml}
+    <div class="branch-map-stage git-branch-stage">
+      <div class="git-branch-canvas branch-rows-${Math.max(rows.length, 1)}">
+      <svg class="git-branch-lines" viewBox="0 0 84 ${branchCanvasHeight(rows.length)}" preserveAspectRatio="none" aria-hidden="true">
+        ${railHtml}
+        ${edgeHtml}
       </svg>
       ${nodeHtml}
-      ${upstream.length === 0 ? `<span class="branch-empty branch-empty-upstream">no upstream</span>` : ""}
-      ${downstream.length === 0 ? `<span class="branch-empty branch-empty-downstream">no unlocks</span>` : ""}
+      </div>
     </div>
   `;
 }
 
-function branchSlots(count) {
-  if (count <= 0) {
-    return [];
+function branchChildLane(currentLane, index) {
+  if (index === 0) {
+    return currentLane;
   }
-
-  if (count === 1) {
-    return [{ y: 50, className: "1-0" }];
+  if (index === 1) {
+    return Math.min(currentLane + 1, 3);
   }
-
-  const top = count === 2 ? 34 : 24;
-  const bottom = count === 2 ? 66 : 76;
-  return Array.from({ length: count }, (_value, index) => ({
-    y: top + ((bottom - top) * index) / (count - 1),
-    className: `${count}-${index}`
-  }));
+  return Math.max(currentLane - 1, 0);
 }
 
-function branchCurve(x1, y1, x2, y2, kind) {
-  const middle = (x1 + x2) / 2;
-  return `<path class="branch-curve branch-${kind}" d="M ${x1} ${y1} C ${middle} ${y1}, ${middle} ${y2}, ${x2} ${y2}" />`;
+function branchCanvasHeight(rowCount) {
+  return 22 + Math.max(rowCount, 1) * 48;
 }
 
-function branchNodeHtml(key, lane, slot, current = false) {
+function branchRowY(rowIndex) {
+  return 32 + rowIndex * 48;
+}
+
+function branchLaneX(lane) {
+  return 16 + lane * 16;
+}
+
+function branchEdgePath(fromLane, fromRow, toLane, toRow, kind) {
+  const x1 = branchLaneX(fromLane);
+  const y1 = branchRowY(fromRow);
+  const x2 = branchLaneX(toLane);
+  const y2 = branchRowY(toRow);
+  if (x1 === x2) {
+    return `<path class="git-edge git-edge-${kind}" d="M ${x1} ${y1} L ${x2} ${y2}" />`;
+  }
+
+  const midY = y1 + (y2 - y1) * 0.5;
+  return `<path class="git-edge git-edge-${kind}" d="M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}" />`;
+}
+
+function branchNodeHtml(row, index) {
+  const { key, lane, role, current = false } = row;
   const receipt = receiptStore.get(key);
   const title = receipt?.title ?? key;
   const trust = receipt?.trust ?? "unverified";
   const tag = receipt?.claimId ?? receipt?.runId ?? key;
-  const disabled = current ? "disabled aria-current=\"true\"" : `data-receipt-key="${escapeHtml(key)}"`;
+  const shortTag = String(tag).replace(/^claim_/u, "cl_").replace(/^run_/u, "run_").slice(0, 18);
+  const actionAttrs = current
+    ? "disabled aria-current=\"true\""
+    : `data-receipt-key="${escapeHtml(key)}"`;
 
-  return `<button class="branch-node branch-node-${lane} branch-slot-${slot.className} ${current ? "active" : ""}" type="button" ${disabled}>
-    <span class="branch-dot ${trustClass(trust)}"></span>
-    <span>
-      <strong>${escapeHtml(title)}</strong>
-      <small>${escapeHtml(tag)}</small>
+  return `<button class="branch-node git-branch-row git-row-${index} git-lane-${lane} ${current ? "active" : ""}" type="button" ${actionAttrs}>
+    <span class="git-dot ${trustClass(trust)}" aria-hidden="true"></span>
+    <span class="git-branch-copy">
+      <span class="git-branch-title">${escapeHtml(title)}</span>
+      <span class="git-branch-meta">
+        <span>${escapeHtml(role.toUpperCase())}</span>
+        <code>${escapeHtml(shortTag)}</code>
+        <span>${escapeHtml(trust)}</span>
+      </span>
     </span>
   </button>`;
 }

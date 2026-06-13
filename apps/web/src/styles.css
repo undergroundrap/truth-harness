@@ -1450,194 +1450,251 @@ h4 {
   background: #121212;
 }
 
-.branch-map-stage {
+.git-branch-stage {
   position: relative;
-  height: 180px;
+  max-height: 286px;
   min-width: 0;
-  overflow: hidden;
+  overflow: auto;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: #0f0f0f;
+  scrollbar-gutter: stable;
 }
 
-.branch-map-labels {
+.git-branch-canvas {
+  position: relative;
+  min-width: 0;
+}
+
+.branch-rows-1 {
+  height: 70px;
+}
+
+.branch-rows-2 {
+  height: 118px;
+}
+
+.branch-rows-3 {
+  height: 166px;
+}
+
+.branch-rows-4 {
+  height: 214px;
+}
+
+.branch-rows-5 {
+  height: 262px;
+}
+
+.branch-rows-6 {
+  height: 310px;
+}
+
+.branch-rows-7 {
+  height: 358px;
+}
+
+.git-branch-lines {
   position: absolute;
-  inset: 8px 10px auto;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  color: var(--faint);
-  font-size: 10px;
-  letter-spacing: 0;
-  text-transform: uppercase;
+  inset: 0 auto 0 8px;
+  z-index: 1;
+  width: 84px;
+  height: 100%;
+  pointer-events: none;
 }
 
-.branch-map-labels span:nth-child(2) {
-  text-align: center;
-}
-
-.branch-map-labels span:nth-child(3) {
-  text-align: right;
-}
-
-.branch-map-lines {
-  position: absolute;
-  inset: 28px 8px 12px;
-  width: calc(100% - 16px);
-  height: calc(100% - 40px);
-}
-
-.branch-spine,
-.branch-curve {
+.git-rail,
+.git-edge {
   fill: none;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
 
-.branch-spine {
-  stroke: rgba(183, 169, 138, 0.16);
+.git-rail {
+  stroke: rgba(120, 117, 111, 0.18);
   stroke-width: 1;
 }
 
-.branch-curve {
-  stroke: rgba(183, 169, 138, 0.32);
-  stroke-width: 1.4;
+.git-rail-0 {
+  stroke: rgba(113, 168, 255, 0.24);
 }
 
-.branch-downstream {
-  stroke: rgba(125, 211, 168, 0.36);
+.git-rail-1 {
+  stroke: rgba(181, 126, 220, 0.24);
 }
 
-.branch-node {
+.git-rail-2 {
+  stroke: rgba(125, 211, 168, 0.24);
+}
+
+.git-rail-3 {
+  stroke: rgba(230, 195, 106, 0.24);
+}
+
+.git-edge {
+  stroke: rgba(183, 169, 138, 0.54);
+  stroke-width: 1.8;
+}
+
+.git-edge-child {
+  stroke: rgba(125, 211, 168, 0.52);
+}
+
+.git-branch-row {
   position: absolute;
+  left: 0;
+  right: 0;
   z-index: 3;
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr);
+  grid-template-columns: 76px minmax(0, 1fr);
   align-items: center;
-  gap: 7px;
-  width: 30%;
-  min-height: 44px;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  background: #151515;
+  min-height: 42px;
+  border: 0;
+  background: transparent;
   color: var(--text);
   cursor: pointer;
-  padding: 7px 8px;
+  padding: 0 8px 0 0;
   text-align: left;
-  transform: translateY(-50%);
 }
 
-.branch-slot-1-0,
-.branch-slot-current {
-  top: 50%;
+.git-row-0 {
+  top: 11px;
 }
 
-.branch-slot-2-0 {
-  top: 34%;
+.git-row-1 {
+  top: 59px;
 }
 
-.branch-slot-2-1 {
-  top: 66%;
+.git-row-2 {
+  top: 107px;
 }
 
-.branch-slot-3-0 {
-  top: 24%;
+.git-row-3 {
+  top: 155px;
 }
 
-.branch-slot-3-1 {
-  top: 50%;
+.git-row-4 {
+  top: 203px;
 }
 
-.branch-slot-3-2 {
-  top: 76%;
+.git-row-5 {
+  top: 251px;
 }
 
-.branch-node:hover {
-  border-color: rgba(183, 169, 138, 0.38);
-  background: #1b1b1b;
+.git-row-6 {
+  top: 299px;
 }
 
-.branch-node:disabled {
+.git-dot {
+  position: absolute;
+  top: 21px;
+  z-index: 4;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #0f0f0f;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgba(183, 169, 138, 0.45);
+}
+
+.git-lane-0 .git-dot {
+  left: 24px;
+}
+
+.git-lane-1 .git-dot {
+  left: 40px;
+}
+
+.git-lane-2 .git-dot {
+  left: 56px;
+}
+
+.git-lane-3 .git-dot {
+  left: 72px;
+}
+
+.git-branch-copy {
+  grid-column: 2;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  padding: 6px 8px;
+}
+
+.git-branch-row:hover .git-branch-copy {
+  border-color: rgba(183, 169, 138, 0.24);
+  background: #171717;
+}
+
+.git-branch-row:disabled {
   cursor: default;
 }
 
-.branch-node.active {
-  border-color: rgba(125, 211, 168, 0.45);
+.git-branch-row.active .git-branch-copy {
+  border-color: rgba(125, 211, 168, 0.4);
   background: #171b18;
 }
 
-.branch-node-upstream {
-  left: 8px;
-}
-
-.branch-node-current {
-  left: 50%;
-  width: 34%;
-  transform: translate(-50%, -50%);
-}
-
-.branch-node-downstream {
-  right: 8px;
-}
-
-.branch-node strong,
-.branch-node small {
+.git-branch-title {
   display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #f0eadf;
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-branch-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.git-branch-meta span,
+.git-branch-meta code {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.branch-node strong {
-  color: #f0eadf;
-  font-size: 11px;
-  font-weight: 700;
+.git-branch-meta span:first-child {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 750;
 }
 
-.branch-node small {
-  color: var(--muted);
-  font-size: 10px;
-  margin-top: 2px;
+.git-branch-meta code {
+  max-width: 72px;
+  color: #d6cebd;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
 }
 
-.branch-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--accent);
-  box-shadow: 0 0 0 3px rgba(125, 211, 168, 0.1);
+.git-dot.refuted {
+  background: var(--refuted);
+  box-shadow: 0 0 0 1px rgba(242, 139, 130, 0.48);
 }
 
-.branch-dot.refuted {
-  background: var(--danger);
-  box-shadow: 0 0 0 3px rgba(242, 139, 130, 0.1);
+.git-dot.waiting {
+  background: var(--warn);
+  box-shadow: 0 0 0 1px rgba(230, 195, 106, 0.48);
 }
 
-.branch-dot.waiting {
-  background: var(--warning);
-  box-shadow: 0 0 0 3px rgba(230, 195, 106, 0.1);
-}
-
-.branch-dot.checked {
+.git-dot.checked {
   background: #82b7f4;
-  box-shadow: 0 0 0 3px rgba(130, 183, 244, 0.1);
-}
-
-.branch-empty {
-  position: absolute;
-  bottom: 12px;
-  z-index: 2;
-  color: var(--faint);
-  font-size: 10px;
-}
-
-.branch-empty-upstream {
-  left: 12px;
-}
-
-.branch-empty-downstream {
-  right: 12px;
+  box-shadow: 0 0 0 1px rgba(130, 183, 244, 0.48);
 }
 
 .safety-section {
@@ -1689,7 +1746,7 @@ h4 {
 }
 
 .engine-notes li::marker {
-  color: var(--warning);
+  color: var(--warn);
 }
 
 dt {
