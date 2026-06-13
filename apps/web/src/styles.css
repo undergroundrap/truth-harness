@@ -874,7 +874,8 @@ body[data-surface="plot"] .inspector {
 
 body[data-surface="plot"] .work-surface,
 body[data-surface="graph"] .work-surface {
-  height: clamp(700px, calc(100vh - 116px), 1180px);
+  height: clamp(1040px, 128vh, 1540px);
+  min-height: 960px;
 }
 
 body.visual-focus-active[data-surface="plot"] .session-grid {
@@ -1033,8 +1034,8 @@ body.visual-focus-active[data-surface="plot"] .work-surface {
   container-type: inline-size;
   display: flex;
   flex-direction: column;
-  height: clamp(620px, 76vh, 980px);
-  min-height: 560px;
+  height: clamp(860px, 104vh, 1280px);
+  min-height: 760px;
   overflow: hidden;
   padding: 16px;
 }
@@ -4371,8 +4372,8 @@ textarea:focus-visible {
   }
 
   .work-surface {
-    height: clamp(620px, 78vh, 860px);
-    min-height: 520px;
+    height: clamp(760px, 110vh, 980px);
+    min-height: 680px;
   }
 
   .graph-canvas,

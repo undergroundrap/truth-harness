@@ -2094,18 +2094,18 @@ function createResearchMindMapVisualModel(receipt, basePlot) {
   const openGateLabels = rows.filter((row) => ["missing", "waiting"].includes(row.status)).slice(0, 2).map((row) => row.label);
   const passedGateCount = rows.filter((row) => row.status === "passed").length;
   const tags = receiptTags(receipt).slice(0, 4).map((tag) => `#${tag}`);
-  const width = 1240;
-  const height = 640;
-  const center = { x: 470, y: 274, width: 300, height: 100 };
+  const width = 1360;
+  const height = 900;
+  const center = { x: 520, y: 390, width: 320, height: 110 };
   const nodes = [
-    { id: "project-thread", label: "Project thread", detail: "Truth Harness workspace", x: 76, y: 118, width: 270, height: 90, tone: "accent", maxLines: 2 },
+    { id: "project-thread", label: "Project thread", detail: "Truth Harness workspace", x: 88, y: 156, width: 320, height: 104, tone: "accent", maxLines: 2 },
     { id: "current-claim", label: "Current claim", detail: receipt.title, x: center.x, y: center.y, width: center.width, height: center.height, tone: receipt.trust === "refuted" ? "danger" : "good", maxLines: 3 },
-    { id: "parent-receipts", label: "Parent receipts", detail: dependencyLabels.length > 0 ? dependencyLabels.join("; ") : "none linked yet", x: 76, y: 274, width: 312, height: 104, tone: dependencyLabels.length > 0 ? "muted" : "warn", maxLines: 3 },
-    { id: "child-receipts", label: "Child receipts", detail: dependentLabels.length > 0 ? dependentLabels.join("; ") : "future branches can attach here", x: 76, y: 456, width: 312, height: 96, tone: dependentLabels.length > 0 ? "muted" : "warn", maxLines: 3 },
-    { id: "verified-gates", label: "Verified gates", detail: `${passedGateCount} gates satisfied`, x: 880, y: 120, width: 280, height: 88, tone: "good", maxLines: 2 },
-    { id: "open-obligations", label: "Open obligations", detail: openGateLabels.length > 0 ? openGateLabels.join("; ") : "no open gates shown", x: 880, y: 274, width: 300, height: 104, tone: openGateLabels.length > 0 ? "warn" : "good", maxLines: 3 },
-    { id: "tags", label: "Tags", detail: tags.length > 0 ? tags.join(" ") : "untagged", x: 880, y: 456, width: 280, height: 96, tone: "muted", maxLines: 3 },
-    { id: "report-packet", label: "Report packet", detail: "receipts, limits, replay, visuals", x: 472, y: 490, width: 296, height: 90, tone: "accent", maxLines: 3 }
+    { id: "parent-receipts", label: "Parent receipts", detail: dependencyLabels.length > 0 ? dependencyLabels.join("; ") : "none linked yet", x: 88, y: 386, width: 340, height: 116, tone: dependencyLabels.length > 0 ? "muted" : "warn", maxLines: 3 },
+    { id: "child-receipts", label: "Child receipts", detail: dependentLabels.length > 0 ? dependentLabels.join("; ") : "future branches can attach here", x: 88, y: 648, width: 340, height: 112, tone: dependentLabels.length > 0 ? "muted" : "warn", maxLines: 3 },
+    { id: "verified-gates", label: "Verified gates", detail: `${passedGateCount} gates satisfied`, x: 980, y: 158, width: 300, height: 104, tone: "good", maxLines: 2 },
+    { id: "open-obligations", label: "Open obligations", detail: openGateLabels.length > 0 ? openGateLabels.join("; ") : "no open gates shown", x: 970, y: 386, width: 330, height: 116, tone: openGateLabels.length > 0 ? "warn" : "good", maxLines: 3 },
+    { id: "tags", label: "Tags", detail: tags.length > 0 ? tags.join(" ") : "untagged", x: 980, y: 648, width: 300, height: 112, tone: "muted", maxLines: 3 },
+    { id: "report-packet", label: "Report packet", detail: "receipts, limits, replay, visuals", x: 520, y: 704, width: 320, height: 108, tone: "accent", maxLines: 3 }
   ];
   const centerPoint = [center.x + center.width / 2, center.y + center.height / 2];
   const linkedNodes = nodes
