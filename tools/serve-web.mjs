@@ -184,6 +184,19 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/workspace-graph" && request.method === "GET") {
+    const { createWorkspaceGraph } = await loadCoreModule();
+    await ensureLocalWorkspace();
+    const graph = await createWorkspaceGraph({ rootPath: projectRoot });
+    writeJson(response, 200, {
+      schemaVersion: "truth-harness.web-workspace-graph-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      graph
+    });
+    return;
+  }
+
   if (requestUrl.pathname === "/api/research-map" && request.method === "GET") {
     await ensureLocalWorkspace();
     const map = await readResearchMapRecord();

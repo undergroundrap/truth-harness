@@ -214,6 +214,23 @@ let claimLedgerGraph = {
   edges: [],
   warnings: []
 };
+let workspaceGraph = {
+  schemaVersion: "truth-harness.workspace-graph.v0",
+  nodes: [],
+  edges: [],
+  summary: {
+    nodes: 0,
+    edges: 0,
+    missingRefs: 0
+  },
+  validation: {
+    passed: true,
+    errors: 0,
+    warnings: 0,
+    issues: []
+  },
+  warnings: []
+};
 let researchMap = {
   schemaVersion: "truth-harness.research-map.v0",
   mapId: "research_map_local",
@@ -993,6 +1010,7 @@ void refreshClaimLedger();
 void refreshRouteLedger();
 void refreshResearchMap();
 void refreshWorkspaceReview();
+void refreshWorkspaceGraph();
 void refreshCasChecks();
 void refreshSmtChecks();
 
@@ -1042,7 +1060,7 @@ function render() {
     .join("");
   renderRouteLedger(receipt);
 
-  graphList.innerHTML = evidenceGraphEntries(receipt)
+  graphList.innerHTML = graphInspectorEntries(receipt)
     .map(([kind, summary]) => `<div class="graph-node"><span>${escapeHtml(kind)}</span><strong>${escapeHtml(summary)}</strong></div>`)
     .join("");
   renderBranchMap(receipt);
@@ -3600,6 +3618,49 @@ function applyWorkspaceReviewPayload(payload) {
   };
 }
 
+async function refreshWorkspaceGraph({ announce = true } = {}) {
+  try {
+    const response = await fetch("/api/workspace-graph", {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local workspace graph API failed.");
+    applyWorkspaceGraphPayload(payload);
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded workspace graph",
+        localApiSuccessMessage(payload, `${workspaceGraph.summary?.nodes ?? 0} nodes / ${workspaceGraph.summary?.edges ?? 0} edges mapped.`),
+        "passed"
+      );
+    }
+    render();
+  } catch (error) {
+    applyWorkspaceGraphPayload({});
+    addActivity("local-api", "Workspace graph unavailable", error instanceof Error ? error.message : "Unknown workspace graph failure.", "waiting");
+  }
+}
+
+function applyWorkspaceGraphPayload(payload) {
+  workspaceGraph = payload.graph ?? {
+    schemaVersion: "truth-harness.workspace-graph.v0",
+    nodes: [],
+    edges: [],
+    summary: {
+      nodes: 0,
+      edges: 0,
+      missingRefs: 0
+    },
+    validation: {
+      passed: true,
+      errors: 0,
+      warnings: 0,
+      issues: []
+    },
+    warnings: []
+  };
+}
+
 async function refreshCasChecks({ announce = true } = {}) {
   try {
     const response = await fetch("/api/cas", {
@@ -3870,6 +3931,7 @@ async function attachEvidenceToRoute(input) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }
     await refreshWorkspaceReview({ announce: false });
+    await refreshWorkspaceGraph({ announce: false });
     render();
   } catch (error) {
     addActivity("local-api", `${label} attach rejected`, error instanceof Error ? error.message : "Unknown route satisfaction failure.", "refuted");
@@ -4120,6 +4182,7 @@ async function recordCurrentClaim() {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }
     await refreshWorkspaceReview({ announce: false });
+    await refreshWorkspaceGraph({ announce: false });
   } catch (error) {
     updateLatestActivity("Recording claim", "refuted", error instanceof Error ? error.message : "Unknown claim ledger failure.");
   } finally {
@@ -4143,6 +4206,7 @@ async function recordCurrentChain() {
       visited: new Set()
     });
     await refreshWorkspaceReview({ announce: false });
+    await refreshWorkspaceGraph({ announce: false });
     updateLatestActivity("Recording claim chain", "passed", `${claimId} is now linked to recorded upstream claims.`);
   } catch (error) {
     updateLatestActivity("Recording claim chain", "refuted", error instanceof Error ? error.message : "Unknown claim chain failure.");
@@ -5796,6 +5860,27 @@ function evidenceGraphEntries(receipt) {
   return [...upstream, ...ledgerEntries, ...receipt.graph, ...downstream, ...tags];
 }
 
+function graphInspectorEntries(receipt) {
+  const nodeCount = workspaceGraph.summary?.nodes ?? 0;
+  if (nodeCount <= 0) {
+    return evidenceGraphEntries(receipt);
+  }
+
+  const edgeCount = workspaceGraph.summary?.edges ?? 0;
+  const missingRefs = workspaceGraph.summary?.missingRefs ?? 0;
+  const validation = workspaceGraph.validation ?? {};
+  const validationSummary = validation.passed
+    ? "validated local workspace graph"
+    : `${validation.errors ?? 0} errors / ${validation.warnings ?? 0} warnings`;
+
+  return [
+    ["workspace_graph", `${nodeCount} nodes / ${edgeCount} edges`],
+    ["validation", validationSummary],
+    ["missing_refs", `${missingRefs} unresolved reference${missingRefs === 1 ? "" : "s"}`],
+    ...evidenceGraphEntries(receipt).slice(0, 4)
+  ];
+}
+
 function claimLedgerGraphEntries(receipt) {
   if (!receipt.claimId) {
     return [["ledger_status", "Not recorded in the local claim ledger yet."]];
@@ -5824,18 +5909,91 @@ function claimLedgerLabel(claimId) {
   return claim ? `${claim.title} (${claim.claimId})` : claimId;
 }
 
+function graphDisplayEntries(receipt) {
+  const nodes = Array.isArray(workspaceGraph.nodes) ? workspaceGraph.nodes : [];
+  if (nodes.length === 0) {
+    return evidenceGraphEntries(receipt).map(([kind, summary]) => ({
+      kind,
+      summary,
+      source: "receipt"
+    }));
+  }
+
+  const currentIds = new Set([
+    receipt.runId,
+    receipt.claimId,
+    receipt.verifierRoute?.routeId
+  ].filter(Boolean));
+
+  const workspaceEntries = [...nodes]
+    .sort((left, right) =>
+      graphNodeRank(left, currentIds) - graphNodeRank(right, currentIds) ||
+      String(left.label ?? left.artifactId ?? left.path ?? left.nodeId).localeCompare(String(right.label ?? right.artifactId ?? right.path ?? right.nodeId))
+    )
+    .slice(0, 40)
+    .map((node) => ({
+      kind: graphNodeKindLabel(node),
+      summary: node.label ?? node.artifactId ?? node.path ?? node.nodeId,
+      source: "workspace",
+      node
+    }));
+
+  return [
+    {
+      kind: "workspace graph",
+      summary: `${workspaceGraph.summary?.nodes ?? nodes.length} nodes / ${workspaceGraph.summary?.edges ?? 0} edges / ${workspaceGraph.summary?.missingRefs ?? 0} missing refs`,
+      source: "workspace",
+      workspaceSummary: true
+    },
+    ...workspaceEntries
+  ];
+}
+
+function graphNodeRank(node, currentIds) {
+  if (currentIds.has(node.artifactId)) {
+    return 0;
+  }
+  if (node.valid !== false && node.kind === "claims") {
+    return 1;
+  }
+  if (node.valid !== false && node.kind === "routes") {
+    return 2;
+  }
+  if (node.valid !== false && node.kind === "sessions") {
+    return 3;
+  }
+  if (node.valid !== false) {
+    return 4;
+  }
+  if (node.missing) {
+    return 7;
+  }
+  return 8;
+}
+
+function graphNodeKindLabel(node) {
+  const label = String(node.kind ?? "artifact").replaceAll("-", " ");
+  if (node.missing) {
+    return `missing ${label}`;
+  }
+  if (node.valid === false) {
+    return `${label} needs review`;
+  }
+  return label;
+}
+
 function renderMainGraph(receipt) {
-  const entries = evidenceGraphEntries(receipt);
+  const entries = graphDisplayEntries(receipt);
   if (state.selectedGraphIndex >= entries.length) {
     state.selectedGraphIndex = 0;
   }
 
   mainGraphList.innerHTML = entries
-    .map(([kind, summary], index) => `<button class="canvas-node ${index === state.selectedGraphIndex ? "active" : ""}" data-graph-index="${index}" type="button">
+    .map((entry, index) => `<button class="canvas-node ${entry.node?.missing ? "warning-node" : ""} ${entry.node?.valid === false ? "invalid-node" : ""} ${index === state.selectedGraphIndex ? "active" : ""}" data-graph-index="${index}" type="button">
       <span class="canvas-index">${index + 1}</span>
       <div>
-        <strong>${escapeHtml(kind)}</strong>
-        <p>${escapeHtml(summary)}</p>
+        <strong>${escapeHtml(entry.kind)}</strong>
+        <p>${escapeHtml(entry.summary)}</p>
       </div>
     </button>`)
     .join("");
@@ -5847,7 +6005,18 @@ function renderGraphDetail(receipt, entry, index) {
     return;
   }
 
-  const [kind, summary] = entry;
+  if (entry.workspaceSummary) {
+    renderWorkspaceGraphSummaryDetail(index);
+    return;
+  }
+
+  if (entry.node) {
+    renderWorkspaceGraphNodeDetail(entry, index);
+    return;
+  }
+
+  const kind = Array.isArray(entry) ? entry[0] : entry.kind;
+  const summary = Array.isArray(entry) ? entry[1] : entry.summary;
   const claimId = claimIdFromGraphSummary(summary);
   const claim = claimId ? claimLedgerStore.get(claimId) : undefined;
   const linkedReceiptKey = claimId ? receiptKeyForClaimId(claimId) : undefined;
@@ -5884,6 +6053,75 @@ function renderGraphDetail(receipt, entry, index) {
     ${claimHtml}
     ${compareHtml}
   `;
+}
+
+function renderWorkspaceGraphNodeDetail(entry, index) {
+  const node = entry.node;
+  const edges = workspaceGraphNodeEdges(node.nodeId);
+  const issueText = node.issueCodes?.length ? node.issueCodes.join(", ") : "none";
+  const edgeHtml = edges.length
+    ? `<ul class="graph-edge-list">
+        ${edges.slice(0, 8).map((edge) => `<li>
+          <span>${escapeHtml(edge.from === node.nodeId ? "out" : "in")}</span>
+          <strong>${escapeHtml(edge.kind)}</strong>
+          <code>${escapeHtml(edge.ref)}</code>
+          <small>${escapeHtml(edge.resolved ? "resolved" : "missing")}</small>
+        </li>`).join("")}
+      </ul>`
+    : `<p>No recorded workspace edges for this node yet.</p>`;
+
+  graphDetail.innerHTML = `
+    <span class="mini-label">workspace node ${index + 1}</span>
+    <h4>${escapeHtml(entry.kind)}</h4>
+    <p>${escapeHtml(entry.summary)}</p>
+    <dl class="graph-detail-facts">
+      <div><dt>Artifact ID</dt><dd><code>${escapeHtml(node.artifactId ?? "not recorded")}</code></dd></div>
+      <div><dt>Path</dt><dd><code>${escapeHtml(node.path ?? "missing reference")}</code></dd></div>
+      <div><dt>Valid</dt><dd>${escapeHtml(node.valid === false ? "needs review" : "yes")}</dd></div>
+      <div><dt>Trust</dt><dd>${escapeHtml(node.trust ?? "not a trust-bearing artifact")}</dd></div>
+      <div><dt>Schema</dt><dd>${escapeHtml(node.schemaVersion ?? "not recorded")}</dd></div>
+      <div><dt>Edges</dt><dd>${escapeHtml(String(edges.length))}</dd></div>
+      <div><dt>Issues</dt><dd>${escapeHtml(issueText)}</dd></div>
+    </dl>
+    <h5>Evidence Connections</h5>
+    ${edgeHtml}
+  `;
+}
+
+function renderWorkspaceGraphSummaryDetail(index) {
+  const summary = workspaceGraph.summary ?? {};
+  const validation = workspaceGraph.validation ?? {};
+  const warningHtml = (workspaceGraph.warnings ?? []).length
+    ? `<ul class="graph-edge-list">
+        ${(workspaceGraph.warnings ?? []).slice(0, 3).map((warning) => `<li>
+          <span>note</span>
+          <strong>boundary</strong>
+          <code>${escapeHtml(warning)}</code>
+          <small>local</small>
+        </li>`).join("")}
+      </ul>`
+    : `<p>No workspace graph warnings recorded.</p>`;
+
+  graphDetail.innerHTML = `
+    <span class="mini-label">workspace node ${index + 1}</span>
+    <h4>Workspace Evidence Graph</h4>
+    <p>Local map of receipts, claims, routes, sessions, snapshots, model packets, checks, and unresolved references.</p>
+    <dl class="graph-detail-facts">
+      <div><dt>Artifacts</dt><dd>${escapeHtml(String(summary.artifacts ?? 0))}</dd></div>
+      <div><dt>Valid</dt><dd>${escapeHtml(String(summary.validArtifacts ?? 0))}</dd></div>
+      <div><dt>Needs review</dt><dd>${escapeHtml(String(summary.invalidArtifacts ?? 0))}</dd></div>
+      <div><dt>Edges</dt><dd>${escapeHtml(String(summary.edges ?? 0))}</dd></div>
+      <div><dt>Missing refs</dt><dd>${escapeHtml(String(summary.missingRefs ?? 0))}</dd></div>
+      <div><dt>Validation</dt><dd>${escapeHtml(validation.passed ? "passed" : `${validation.errors ?? 0} errors / ${validation.warnings ?? 0} warnings`)}</dd></div>
+      <div><dt>Network</dt><dd>${escapeHtml(workspaceGraph.networkAccess ?? "none")}</dd></div>
+    </dl>
+    <h5>Trust Boundary</h5>
+    ${warningHtml}
+  `;
+}
+
+function workspaceGraphNodeEdges(nodeId) {
+  return (workspaceGraph.edges ?? []).filter((edge) => edge.from === nodeId || edge.to === nodeId);
 }
 
 function renderBranchMap(receipt) {
@@ -7743,6 +7981,7 @@ composer.addEventListener("submit", async (event) => {
     }
     await refreshRouteLedger({ announce: false });
     await refreshWorkspaceReview({ announce: false });
+    await refreshWorkspaceGraph({ announce: false });
     addActivity("web-ui", "Rendered receipt", `${payload.receipt.runId} displayed with trace and evidence graph.`, "passed");
   } catch (error) {
     updateLatestActivity("Calling local API", "refuted", "POST /api/receipt failed");

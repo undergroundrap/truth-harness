@@ -141,6 +141,29 @@ describe("local web route ledger API", () => {
       })
     );
 
+    const graphResponse = await fetch(`${baseUrl}/api/workspace-graph`);
+    expect(graphResponse.status).toBe(200);
+    const graphPayload = await graphResponse.json();
+    expectLocalApiSuccess(graphResponse, graphPayload);
+    expect(graphPayload.localOnly).toBe(true);
+    expect(graphPayload.externalCalls).toEqual([]);
+    expect(graphPayload.graph).toMatchObject({
+      schemaVersion: "truth-harness.workspace-graph.v0",
+      localOnly: true,
+      networkAccess: "none"
+    });
+    expect(graphPayload.graph.summary.nodes).toBeGreaterThan(0);
+    expect(graphPayload.graph.summary.artifacts).toBeGreaterThan(0);
+    expect(graphPayload.graph.nodes).toContainEqual(
+      expect.objectContaining({
+        kind: "routes",
+        artifactId: receiptPayload.route.routeId,
+        valid: true
+      })
+    );
+    expect(Array.isArray(graphPayload.graph.edges)).toBe(true);
+    expect(typeof graphPayload.graph.validation.passed).toBe("boolean");
+
     const mapResponse = await fetch(`${baseUrl}/api/research-map`, {
       method: "POST",
       headers: {

@@ -2492,6 +2492,14 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   background: #181818;
 }
 
+.canvas-node.warning-node {
+  border-color: rgba(221, 184, 89, 0.4);
+}
+
+.canvas-node.invalid-node {
+  border-color: rgba(255, 142, 134, 0.42);
+}
+
 .canvas-node.active::after {
   position: absolute;
   inset: 8px 8px auto auto;
@@ -2577,6 +2585,39 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 
 .graph-detail-tags {
   margin: 10px 0;
+}
+
+.graph-edge-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.graph-edge-list li {
+  display: grid;
+  grid-template-columns: 34px minmax(72px, 0.9fr) minmax(0, 1.4fr) 64px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0c0c0c;
+  padding: 8px;
+  min-width: 0;
+}
+
+.graph-edge-list span,
+.graph-edge-list small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.graph-edge-list code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .claim-review-panel {
