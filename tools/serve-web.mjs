@@ -1,11 +1,12 @@
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const MAX_JSON_BODY_BYTES = 16 * 1024;
+const MAX_RESEARCH_MAP_SNAPSHOTS = 100;
 let coreModulePromise;
 const args = new Map(
   process.argv.slice(2).flatMap((arg, index, values) => {
@@ -135,6 +136,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "activity-log",
         "agent-runbook",
         "research-session",
+        "research-map",
         "validation-plan",
         "engine-manifest",
         "verification-readiness",
@@ -179,6 +181,51 @@ async function handleApiRequest(request, response, requestUrl) {
       externalCalls: [],
       review
     });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/research-map" && request.method === "GET") {
+    await ensureLocalWorkspace();
+    const map = await readResearchMapRecord();
+    writeJson(response, 200, {
+      schemaVersion: "truth-harness.web-research-map-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      map,
+      paths: {
+        json: researchMapPath()
+      }
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/research-map" && request.method === "POST") {
+    const input = await readJsonBody(request);
+    try {
+      await ensureLocalWorkspace();
+      const snapshot = normalizeResearchMapSnapshot(input.snapshot ?? input);
+      const map = await appendResearchMapSnapshot(snapshot);
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-research-map-write-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        map,
+        snapshot,
+        paths: {
+          json: researchMapPath()
+        },
+        activity: [
+          {
+            actor: "local-api",
+            action: "saved-research-map",
+            detail: `${snapshot.snapshotId} saved ${snapshot.nodes.length} nodes and ${snapshot.edges.length} edges to .truth-harness/artifacts/research-map.json.`,
+            at: snapshot.createdAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Research map save failed.", request);
+    }
     return;
   }
 
@@ -520,6 +567,173 @@ async function readSmtCheckSnapshot() {
     ...check,
     paths: artifactPathsFor(check.path)
   }));
+}
+
+function researchMapPath() {
+  return resolve(projectRoot, ".truth-harness", "artifacts", "research-map.json");
+}
+
+async function readResearchMapRecord() {
+  const fallbackTime = new Date().toISOString();
+  try {
+    const raw = await readFile(researchMapPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed?.schemaVersion === "truth-harness.research-map.v0" && Array.isArray(parsed.snapshots)) {
+      return {
+        ...parsed,
+        localOnly: true,
+        networkAccess: "none",
+        snapshots: parsed.snapshots.slice(-MAX_RESEARCH_MAP_SNAPSHOTS)
+      };
+    }
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  return {
+    schemaVersion: "truth-harness.research-map.v0",
+    mapId: "research_map_local",
+    createdAt: fallbackTime,
+    updatedAt: fallbackTime,
+    localOnly: true,
+    networkAccess: "none",
+    snapshotCount: 0,
+    snapshots: [],
+    warnings: []
+  };
+}
+
+async function appendResearchMapSnapshot(snapshot) {
+  const existing = await readResearchMapRecord();
+  const snapshots = [...(existing.snapshots ?? []), snapshot].slice(-MAX_RESEARCH_MAP_SNAPSHOTS);
+  const map = {
+    schemaVersion: "truth-harness.research-map.v0",
+    mapId: existing.mapId ?? "research_map_local",
+    createdAt: existing.createdAt ?? snapshot.createdAt,
+    updatedAt: snapshot.createdAt,
+    localOnly: true,
+    networkAccess: "none",
+    snapshotCount: snapshots.length,
+    snapshots,
+    warnings: [
+      "Research maps are navigation and provenance artifacts. They do not prove or validate a claim by themselves."
+    ]
+  };
+  const path = researchMapPath();
+  await mkdir(resolve(projectRoot, ".truth-harness", "artifacts"), { recursive: true });
+  await writeFile(path, `${JSON.stringify(map, null, 2)}\n`, "utf8");
+  return map;
+}
+
+function normalizeResearchMapSnapshot(value) {
+  if (!value || typeof value !== "object") {
+    throw new Error("snapshot is required");
+  }
+
+  const createdAt = new Date().toISOString();
+  const nodes = mapNodeList(value.nodes);
+  const edges = mapEdgeList(value.edges, nodes);
+  return {
+    schemaVersion: "truth-harness.research-map-snapshot.v0",
+    snapshotId: `map_${randomUUID().replaceAll("-", "").slice(0, 16)}`,
+    createdAt,
+    visualMode: boundedText(value.visualMode, "visual", 64),
+    kind: boundedText(value.kind, "visual", 80),
+    title: boundedText(value.title, "Untitled research map", 160),
+    caption: boundedText(value.caption, "", 360),
+    receiptRef: researchMapReceiptRef(value.receiptRef),
+    facts: tupleRows(value.facts, 24, 2, 120),
+    dataColumns: stringList(value.dataColumns).slice(0, 16).map((item) => boundedText(item, "column", 60)),
+    dataRows: tupleRows(value.dataRows, 120, 16, 180),
+    nodes,
+    edges,
+    tags: stringList(value.tags).slice(0, 24).map((item) => boundedText(item, "tag", 48)),
+    privacy: {
+      localOnly: true,
+      networkAccess: "none",
+      externalCalls: []
+    },
+    warnings: nodes.length === 0
+      ? ["No map nodes were provided; this snapshot is data-only."]
+      : []
+  };
+}
+
+function researchMapReceiptRef(value) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    runId: boundedText(source.runId, "", 96),
+    claimId: boundedText(source.claimId, "", 96),
+    routeId: boundedText(source.routeId, "", 96),
+    title: boundedText(source.title, "", 160),
+    trust: boundedText(source.trust, "unverified", 48)
+  };
+}
+
+function mapNodeList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(0, 100)
+    .filter((item) => item && typeof item === "object")
+    .map((item, index) => ({
+      id: safeMapId(item.id, `node_${index + 1}`),
+      label: boundedText(item.label, `Node ${index + 1}`, 96),
+      detail: boundedText(item.detail, "", 280),
+      kind: boundedText(item.kind, "concept", 48),
+      sourceRef: boundedText(item.sourceRef, "", 180),
+      tone: boundedText(item.tone, "muted", 32)
+    }));
+}
+
+function mapEdgeList(value, nodes) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const ids = new Set(nodes.map((node) => node.id));
+  return value
+    .slice(0, 160)
+    .filter((item) => item && typeof item === "object")
+    .map((item, index) => ({
+      id: safeMapId(item.id, `edge_${index + 1}`),
+      from: safeMapId(item.from, ""),
+      to: safeMapId(item.to, ""),
+      kind: boundedText(item.kind, "linked-to", 48),
+      label: boundedText(item.label, "", 120)
+    }))
+    .filter((edge) => ids.has(edge.from) && ids.has(edge.to));
+}
+
+function tupleRows(value, maxRows, maxColumns, maxLength) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.slice(0, maxRows).map((row) => {
+    const cells = Array.isArray(row) ? row : [row];
+    return cells.slice(0, maxColumns).map((cell) => boundedText(cell, "", maxLength));
+  });
+}
+
+function safeMapId(value, fallback) {
+  const text = boundedText(value, fallback, 96)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+  return text || fallback;
+}
+
+function boundedText(value, fallback, maxLength) {
+  const text = typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+    ? String(value).replace(/\s+/gu, " ").trim()
+    : "";
+  const resolved = text || fallback;
+  return resolved.length > maxLength ? `${resolved.slice(0, Math.max(0, maxLength - 3))}...` : resolved;
 }
 
 function routePathsFor(routePathOrId) {

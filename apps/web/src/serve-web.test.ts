@@ -44,6 +44,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.localOnly).toBe(true);
     expect(statusPayload.externalCalls).toBe(false);
     expect(statusPayload.capabilities).toContain("docker-verifier-guidance");
+    expect(statusPayload.capabilities).toContain("research-map");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
       sameOriginWritesOnly: true,
@@ -139,6 +140,68 @@ describe("local web route ledger API", () => {
         command: expect.stringContaining("truth-harness claim add")
       })
     );
+
+    const mapResponse = await fetch(`${baseUrl}/api/research-map`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        snapshot: {
+          visualMode: "mind-map",
+          kind: "mind map",
+          title: "Exact fraction research map",
+          caption: "Local map snapshot generated from the current receipt.",
+          receiptRef: {
+            runId: receiptPayload.receipt.runId,
+            routeId: receiptPayload.route.routeId,
+            title: receiptPayload.receipt.title,
+            trust: receiptPayload.receipt.trust
+          },
+          facts: [["Trust", receiptPayload.receipt.trust]],
+          dataColumns: ["node", "value", "source"],
+          dataRows: [["current-claim", receiptPayload.receipt.title, "receipt.title"]],
+          nodes: [
+            { id: "current-claim", label: "Current claim", detail: receiptPayload.receipt.title, kind: "claim", tone: "good" },
+            { id: "route", label: "Verifier route", detail: receiptPayload.route.routeId, kind: "route", tone: "accent" }
+          ],
+          edges: [
+            { from: "current-claim", to: "route", kind: "has-route" }
+          ],
+          tags: ["math", "fractions"]
+        }
+      })
+    });
+    expect(mapResponse.status).toBe(200);
+    const mapPayload = await mapResponse.json();
+    expectLocalApiSuccess(mapResponse, mapPayload);
+    expect(mapPayload.localOnly).toBe(true);
+    expect(mapPayload.externalCalls).toEqual([]);
+    expect(mapPayload.snapshot).toMatchObject({
+      schemaVersion: "truth-harness.research-map-snapshot.v0",
+      visualMode: "mind-map",
+      kind: "mind map"
+    });
+    expect(mapPayload.snapshot.snapshotId).toMatch(/^map_[a-f0-9]{16}$/u);
+    expect(mapPayload.snapshot.nodes).toHaveLength(2);
+    expect(mapPayload.snapshot.edges).toHaveLength(1);
+    expect(mapPayload.map).toMatchObject({
+      schemaVersion: "truth-harness.research-map.v0",
+      localOnly: true,
+      networkAccess: "none",
+      snapshotCount: 1
+    });
+    expect(mapPayload.paths.json).toContain(".truth-harness");
+    expect(existsSync(mapPayload.paths.json)).toBe(true);
+
+    const mapReadResponse = await fetch(`${baseUrl}/api/research-map`);
+    expect(mapReadResponse.status).toBe(200);
+    const mapReadPayload = await mapReadResponse.json();
+    expectLocalApiSuccess(mapReadResponse, mapReadPayload);
+    expect(mapReadPayload.localOnly).toBe(true);
+    expect(mapReadPayload.externalCalls).toEqual([]);
+    expect(mapReadPayload.map.snapshots).toHaveLength(1);
+    expect(mapReadPayload.map.snapshots[0].snapshotId).toBe(mapPayload.snapshot.snapshotId);
 
     const routeResponse = await fetch(`${baseUrl}/api/routes/${receiptPayload.route.routeId}`);
     expect(routeResponse.status).toBe(200);

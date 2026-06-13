@@ -374,6 +374,8 @@ const plotTitle = document.querySelector("#plot-title");
 const plotCaption = document.querySelector("#plot-caption");
 const plotFacts = document.querySelector("#plot-facts");
 const plotData = document.querySelector("#plot-data");
+const researchMapStatus = document.querySelector("#research-map-status");
+const saveResearchMapButton = document.querySelector("#save-research-map");
 const copyPlotDataButton = document.querySelector("#copy-plot-data");
 const downloadPlotDataButton = document.querySelector("#download-plot-data");
 const downloadPlotSvgButton = document.querySelector("#download-plot-svg");
@@ -1268,6 +1270,9 @@ function renderMathPlot(receipt) {
   if (plotKind) {
     plotKind.textContent = plot.kind;
   }
+  if (researchMapStatus) {
+    researchMapStatus.textContent = `${plot.kind} can be saved locally`;
+  }
   plotTitle.textContent = plot.title;
   plotCaption.textContent = plot.caption;
   plotCanvas.innerHTML = plot.svg;
@@ -1508,8 +1513,9 @@ function createEquationMapVisualModel(receipt, basePlot) {
       denominator
     }));
     const modules = [
-      { label: "Problem", detail: receipt.math?.input ?? receipt.title, x: 42, y: 158, width: 190, height: 82, tone: "accent" },
+      { id: "problem", label: "Problem", detail: receipt.math?.input ?? receipt.title, x: 42, y: 158, width: 190, height: 82, tone: "accent" },
       ...inputFractions.slice(0, 2).map((fraction, index) => ({
+        id: `term-${index + 1}`,
         label: `Term ${index + 1}`,
         detail: fractionLabel(fraction),
         x: 284,
@@ -1518,9 +1524,9 @@ function createEquationMapVisualModel(receipt, basePlot) {
         height: 74,
         tone: "muted"
       })),
-      { label: "Shared module", detail: `common denominator ${denominator}`, x: 510, y: 158, width: 210, height: 82, tone: "warn" },
-      { label: "Rewrite", detail: rewritten.map((item) => `${fractionLabel(item.original)}=${item.numerator}/${item.denominator}`).join("; "), x: 770, y: 158, width: 190, height: 82, tone: "muted" },
-      { label: "Verified result", detail: fractionLabel(outputFraction), x: 436, y: 326, width: 220, height: 76, tone: "good" }
+      { id: "common-denominator", label: "Shared module", detail: `common denominator ${denominator}`, x: 510, y: 158, width: 210, height: 82, tone: "warn" },
+      { id: "rewrite", label: "Rewrite", detail: rewritten.map((item) => `${fractionLabel(item.original)}=${item.numerator}/${item.denominator}`).join("; "), x: 770, y: 158, width: 190, height: 82, tone: "muted" },
+      { id: "verified-result", label: "Verified result", detail: fractionLabel(outputFraction), x: 436, y: 326, width: 220, height: 76, tone: "good" }
     ];
     const edges = [
       [232, 198, 284, 107],
@@ -1556,14 +1562,24 @@ function createEquationMapVisualModel(receipt, basePlot) {
         ["common-denominator", String(denominator), "local lcm"],
         ["rewrite", rewritten.map((item) => `${fractionLabel(item.original)}=${item.numerator}/${item.denominator}`).join("; "), "derived module"],
         ["verified-result", fractionLabel(outputFraction), "receipt.output"]
+      ],
+      mapNodes: modules.map((node) => visualNodeForSnapshot(node, "equation-module")),
+      mapEdges: [
+        { from: "problem", to: "term-1", kind: "decomposes-to", label: "left term" },
+        { from: "problem", to: "term-2", kind: "decomposes-to", label: "right term" },
+        { from: "term-1", to: "common-denominator", kind: "feeds" },
+        { from: "term-2", to: "common-denominator", kind: "feeds" },
+        { from: "common-denominator", to: "rewrite", kind: "enables" },
+        { from: "rewrite", to: "verified-result", kind: "produces" }
       ]
     };
   }
 
   const graphEntries = evidenceGraphEntries(receipt).slice(0, 5);
   const nodes = [
-    { label: "Claim", detail: receipt.title, x: 58, y: 156, width: 230, height: 86, tone: "accent" },
+    { id: "claim", label: "Claim", detail: receipt.title, x: 58, y: 156, width: 230, height: 86, tone: "accent" },
     ...graphEntries.map(([kind, summary], index) => ({
+      id: safeMapNodeId(kind, index),
       label: kind,
       detail: summary,
       x: 372 + (index % 3) * 210,
@@ -1593,7 +1609,9 @@ function createEquationMapVisualModel(receipt, basePlot) {
       ["Trust", receipt.trust]
     ],
     dataColumns: ["module", "value", "source"],
-    dataRows: nodes.map((node) => [node.label, node.detail, "receipt graph"])
+    dataRows: nodes.map((node) => [node.label, node.detail, "receipt graph"]),
+    mapNodes: nodes.map((node) => visualNodeForSnapshot(node, "claim-module")),
+    mapEdges: nodes.slice(1).map((node) => ({ from: "claim", to: node.id, kind: "has-evidence" }))
   };
 }
 
@@ -1774,6 +1792,25 @@ function visualModeLabel(mode) {
   }[mode] ?? String(mode ?? "visual mode");
 }
 
+function visualNodeForSnapshot(node, kind) {
+  return {
+    id: node.id ?? safeMapNodeId(node.label, 0),
+    label: String(node.label ?? "Node"),
+    detail: String(node.detail ?? ""),
+    kind,
+    sourceRef: String(node.sourceRef ?? ""),
+    tone: String(node.tone ?? "muted")
+  };
+}
+
+function safeMapNodeId(value, index) {
+  const text = String(value ?? `node-${index}`)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+  return text || `node-${index}`;
+}
+
 function visualStatusColor(status) {
   if (status === "passed") {
     return "#7dd3a8";
@@ -1914,19 +1951,19 @@ function createResearchMindMapVisualModel(receipt, basePlot) {
   const height = 520;
   const center = { x: 466, y: 214, width: 250, height: 92 };
   const nodes = [
-    { label: "Project thread", detail: "Truth Harness workspace", x: 76, y: 70, width: 230, height: 76, tone: "accent" },
-    { label: "Current claim", detail: receipt.title, x: center.x, y: center.y, width: center.width, height: center.height, tone: receipt.trust === "refuted" ? "danger" : "good" },
-    { label: "Parent receipts", detail: dependencyLabels.length > 0 ? dependencyLabels.join("; ") : "none linked yet", x: 76, y: 224, width: 260, height: 84, tone: dependencyLabels.length > 0 ? "muted" : "warn" },
-    { label: "Child receipts", detail: dependentLabels.length > 0 ? dependentLabels.join("; ") : "future branches can attach here", x: 76, y: 374, width: 260, height: 84, tone: dependentLabels.length > 0 ? "muted" : "warn" },
-    { label: "Verified gates", detail: `${passedGateCount} gates satisfied`, x: 848, y: 72, width: 230, height: 74, tone: "good" },
-    { label: "Open obligations", detail: openGateLabels.length > 0 ? openGateLabels.join("; ") : "no open gates shown", x: 854, y: 220, width: 240, height: 86, tone: openGateLabels.length > 0 ? "warn" : "good" },
-    { label: "Tags", detail: tags.length > 0 ? tags.join(" ") : "untagged", x: 864, y: 374, width: 220, height: 74, tone: "muted" },
-    { label: "Report packet", detail: "receipts, limits, replay, visuals", x: 455, y: 408, width: 270, height: 74, tone: "accent" }
+    { id: "project-thread", label: "Project thread", detail: "Truth Harness workspace", x: 76, y: 70, width: 230, height: 76, tone: "accent" },
+    { id: "current-claim", label: "Current claim", detail: receipt.title, x: center.x, y: center.y, width: center.width, height: center.height, tone: receipt.trust === "refuted" ? "danger" : "good" },
+    { id: "parent-receipts", label: "Parent receipts", detail: dependencyLabels.length > 0 ? dependencyLabels.join("; ") : "none linked yet", x: 76, y: 224, width: 260, height: 84, tone: dependencyLabels.length > 0 ? "muted" : "warn" },
+    { id: "child-receipts", label: "Child receipts", detail: dependentLabels.length > 0 ? dependentLabels.join("; ") : "future branches can attach here", x: 76, y: 374, width: 260, height: 84, tone: dependentLabels.length > 0 ? "muted" : "warn" },
+    { id: "verified-gates", label: "Verified gates", detail: `${passedGateCount} gates satisfied`, x: 848, y: 72, width: 230, height: 74, tone: "good" },
+    { id: "open-obligations", label: "Open obligations", detail: openGateLabels.length > 0 ? openGateLabels.join("; ") : "no open gates shown", x: 854, y: 220, width: 240, height: 86, tone: openGateLabels.length > 0 ? "warn" : "good" },
+    { id: "tags", label: "Tags", detail: tags.length > 0 ? tags.join(" ") : "untagged", x: 864, y: 374, width: 220, height: 74, tone: "muted" },
+    { id: "report-packet", label: "Report packet", detail: "receipts, limits, replay, visuals", x: 455, y: 408, width: 270, height: 74, tone: "accent" }
   ];
   const centerPoint = [center.x + center.width / 2, center.y + center.height / 2];
-  const edges = nodes
+  const linkedNodes = nodes
     .filter((node) => node.label !== "Current claim")
-    .map((node) => [centerPoint[0], centerPoint[1], node.x + node.width / 2, node.y + node.height / 2]);
+  const edges = linkedNodes.map((node) => [centerPoint[0], centerPoint[1], node.x + node.width / 2, node.y + node.height / 2]);
   const edgeSvg = edges.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#343230" stroke-width="2" />`).join("");
 
   return {
@@ -1956,7 +1993,13 @@ function createResearchMindMapVisualModel(receipt, basePlot) {
       ["open-obligations", openGateLabels.join("; ") || "none", "verification rows"],
       ["tags", tags.join(" ") || "untagged", "receipt.tags"],
       ["report-packet", "receipts, limits, replay, visuals", "export surface"]
-    ]
+    ],
+    mapNodes: nodes.map((node) => visualNodeForSnapshot(node, "research-map-node")),
+    mapEdges: linkedNodes.map((node) => ({
+      from: "current-claim",
+      to: node.id,
+      kind: node.id.includes("receipt") ? "claim-link" : "context-link"
+    }))
   };
 }
 
@@ -2264,6 +2307,125 @@ function downloadCurrentPlotSvg() {
 
   downloadTextFile(`${receipt.runId}-plot.svg`, plot.svg, "image/svg+xml");
   addActivity("human", "Downloaded visual SVG", `${receipt.runId} ${plot.kind} visualization saved as SVG.`, "passed");
+}
+
+async function saveCurrentResearchMap() {
+  const receipt = receiptStore.get(state.receiptKey);
+  const plot = currentPlotModel();
+  if (!receipt || !plot) {
+    return;
+  }
+
+  const snapshot = createResearchMapSnapshot(receipt, plot);
+  const previousText = saveResearchMapButton?.textContent;
+  if (saveResearchMapButton) {
+    saveResearchMapButton.disabled = true;
+    saveResearchMapButton.textContent = "Saving";
+  }
+  if (researchMapStatus) {
+    researchMapStatus.textContent = "saving local map";
+  }
+  addActivity("web-ui", "Saving research map", `${plot.kind} snapshot is being written to the local artifact store.`, "waiting");
+  let saved = false;
+
+  try {
+    const response = await fetch("/api/research-map", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ snapshot })
+    });
+    const payload = await readLocalApiJson(response, "Local research map API failed.");
+    const savedSnapshot = payload.snapshot ?? snapshot;
+    updateLatestActivity(
+      "Saving research map",
+      "passed",
+      localApiSuccessMessage(payload, `${savedSnapshot.snapshotId ?? "map snapshot"} saved to ${payload.paths?.json ?? ".truth-harness/artifacts/research-map.json"}`)
+    );
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, "passed", item.at);
+    }
+    if (researchMapStatus) {
+      const snapshotCount = payload.map?.snapshotCount ?? 1;
+      researchMapStatus.textContent = `${snapshotCount} saved map snapshot${snapshotCount === 1 ? "" : "s"}`;
+    }
+    saved = true;
+  } catch (error) {
+    updateLatestActivity("Saving research map", "refuted", error instanceof Error ? error.message : "Unknown research map failure.");
+    if (researchMapStatus) {
+      researchMapStatus.textContent = "map save failed";
+    }
+  } finally {
+    if (saveResearchMapButton) {
+      saveResearchMapButton.disabled = false;
+      saveResearchMapButton.textContent = previousText ?? "Save map";
+      if (saved) {
+        flashButtonText(saveResearchMapButton, "Saved");
+      }
+    }
+  }
+}
+
+function createResearchMapSnapshot(receipt, plot) {
+  const nodes = Array.isArray(plot.mapNodes) && plot.mapNodes.length > 0
+    ? plot.mapNodes
+    : visualRowsAsMapNodes(plot);
+  const edges = Array.isArray(plot.mapEdges) && plot.mapEdges.length > 0
+    ? plot.mapEdges
+    : visualRowsAsMapEdges(nodes);
+
+  return {
+    schemaVersion: "truth-harness.research-map-snapshot.v0",
+    visualMode: state.visualMode,
+    kind: plot.kind,
+    title: plot.title,
+    caption: plot.caption,
+    receiptRef: {
+      runId: receipt.runId,
+      claimId: receipt.claimId,
+      routeId: receipt.verifierRoute?.routeId,
+      title: receipt.title,
+      trust: receipt.trust
+    },
+    facts: plot.facts ?? [],
+    dataColumns: plot.dataColumns ?? [],
+    dataRows: plot.dataRows ?? [],
+    nodes,
+    edges,
+    tags: receiptTags(receipt),
+    localOnly: true,
+    networkAccess: "none"
+  };
+}
+
+function visualRowsAsMapNodes(plot) {
+  const rows = plot.dataRows ?? [];
+  return rows.slice(0, 80).map((row, index) => {
+    const label = String(row[0] ?? `${plot.kind} ${index + 1}`);
+    const detail = row.slice(1, 4).filter(Boolean).join(" | ");
+    return {
+      id: safeMapNodeId(label, index + 1),
+      label,
+      detail,
+      kind: `${plot.kind}-data-row`,
+      sourceRef: String(row[row.length - 1] ?? plot.kind),
+      tone: index === 0 ? "accent" : "muted"
+    };
+  });
+}
+
+function visualRowsAsMapEdges(nodes) {
+  const [rootNode, ...childNodes] = nodes;
+  if (!rootNode) {
+    return [];
+  }
+
+  return childNodes.map((node) => ({
+    from: rootNode.id,
+    to: node.id,
+    kind: "visual-row-link"
+  }));
 }
 
 function parseFractionsFromText(text) {
@@ -6721,6 +6883,12 @@ copyRouteLedgerButton.addEventListener("click", () => {
 });
 
 downloadRouteLedgerButton.addEventListener("click", downloadRouteLedgerPacket);
+
+saveResearchMapButton.addEventListener("click", () => {
+  saveCurrentResearchMap().catch((error) => {
+    addActivity("web-ui", "Research map save failed", error instanceof Error ? error.message : "Unknown research map failure.", "refuted");
+  });
+});
 
 copyPlotDataButton.addEventListener("click", () => {
   copyCurrentPlotData().catch((error) => {
