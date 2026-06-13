@@ -148,6 +148,10 @@ export interface VerifierRouteSummary {
   gaps: number;
   criticalGaps: number;
   proofObligations: number;
+  openProofObligations: number;
+  satisfiedProofObligations: number;
+  notRequiredProofObligations: number;
+  criticalOpenProofObligations: number;
   nextActions: string[];
 }
 
@@ -812,6 +816,7 @@ function summarizeVerifierRoute(root: string, path: string, raw: string): Verifi
   } catch {
     return undefined;
   }
+  const proofObligations = route.proofObligations ?? [];
 
   return {
     path: toPortablePath(relative(root, path)),
@@ -825,7 +830,13 @@ function summarizeVerifierRoute(root: string, path: string, raw: string): Verifi
     usedCapabilities: route.usedCapabilities.map((step) => step.capabilityId),
     gaps: route.gaps.length,
     criticalGaps: route.gaps.filter((gap) => gap.severity === "critical").length,
-    proofObligations: route.proofObligations?.length ?? 0,
+    proofObligations: proofObligations.length,
+    openProofObligations: proofObligations.filter((obligation) => obligation.status === "open").length,
+    satisfiedProofObligations: proofObligations.filter((obligation) => obligation.status === "satisfied").length,
+    notRequiredProofObligations: proofObligations.filter((obligation) => obligation.status === "not-required").length,
+    criticalOpenProofObligations: proofObligations.filter((obligation) =>
+      obligation.status === "open" && obligation.severity === "critical"
+    ).length,
     nextActions: route.nextActions
   };
 }

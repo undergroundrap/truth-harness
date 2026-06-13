@@ -105,7 +105,13 @@ describe("local web route ledger API", () => {
       finalTrust: "exact-computed",
       status: "verified",
       evidenceKind: "exact-arithmetic",
-      proofObligations: receiptPayload.route.proofObligations.length
+      proofObligations: receiptPayload.route.proofObligations.length,
+      openProofObligations: receiptPayload.route.proofObligations.filter((obligation: { status: string }) => obligation.status === "open").length,
+      satisfiedProofObligations: 0,
+      notRequiredProofObligations: receiptPayload.route.proofObligations.filter((obligation: { status: string }) => obligation.status === "not-required").length,
+      criticalOpenProofObligations: receiptPayload.route.proofObligations.filter((obligation: { status: string; severity: string }) =>
+        obligation.status === "open" && obligation.severity === "critical"
+      ).length
     });
     expect(listPayload.routes[0].routePaths.json).toBe(receiptPayload.routePaths.json);
 

@@ -1630,9 +1630,7 @@ function renderRouteHistory() {
         const gapText = route.gaps === 0
           ? "no gaps"
           : `${route.gaps} gap${route.gaps === 1 ? "" : "s"}${route.criticalGaps ? ` / ${route.criticalGaps} critical` : ""}`;
-        const obligationText = route.proofObligations === 1
-          ? "1 obligation"
-          : `${route.proofObligations ?? 0} obligations`;
+        const obligationText = routeObligationSummaryText(route);
         const capabilities = route.usedCapabilities?.slice(0, 3).join(", ") || "no capabilities recorded";
         const created = formatRouteDate(route.createdAt);
         return `<button class="route-record ${active ? "active" : ""}" data-route-id="${escapeHtml(route.routeId)}" type="button">
@@ -1655,6 +1653,42 @@ function renderRouteHistory() {
   });
 }
 
+function routeObligationSummaryText(route) {
+  const total = routeCount(route.proofObligations);
+  const open = routeCount(route.openProofObligations);
+  const satisfied = routeCount(route.satisfiedProofObligations);
+  const notRequired = routeCount(route.notRequiredProofObligations);
+  const criticalOpen = routeCount(route.criticalOpenProofObligations);
+
+  if (total === 0) {
+    return "no obligations";
+  }
+
+  if (open > 0) {
+    return [
+      `${open} open`,
+      criticalOpen > 0 ? `${criticalOpen} critical` : undefined,
+      satisfied > 0 ? `${satisfied} satisfied` : undefined,
+      `${total} total`
+    ].filter(Boolean).join(" / ");
+  }
+
+  if (satisfied > 0) {
+    return [`${satisfied}/${total} satisfied`, notRequired > 0 ? `${notRequired} not required` : undefined].filter(Boolean).join(" / ");
+  }
+
+  if (notRequired === total) {
+    return total === 1 ? "1 not required" : `${total} not required`;
+  }
+
+  return `${total} obligations / none open`;
+}
+
+function routeCount(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
 function matchesRouteHistorySearch(route, query) {
   if (!query) {
     return true;
@@ -1672,7 +1706,12 @@ function matchesRouteHistorySearch(route, query) {
     ...(route.nextActions ?? []),
     route.routePaths?.json,
     route.routePaths?.markdown,
-    String(route.proofObligations ?? "")
+    String(route.proofObligations ?? ""),
+    String(route.openProofObligations ?? ""),
+    String(route.satisfiedProofObligations ?? ""),
+    String(route.notRequiredProofObligations ?? ""),
+    String(route.criticalOpenProofObligations ?? ""),
+    routeObligationSummaryText(route)
   ]
     .filter(Boolean)
     .join(" ")

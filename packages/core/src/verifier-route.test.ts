@@ -173,7 +173,13 @@ describe("verifier route", () => {
       evidenceKind: "exact-arithmetic",
       receiptRunId: result.route.receipt.runId,
       usedCapabilities: ["local-rational-arithmetic"],
-      proofObligations: result.route.proofObligations.length
+      proofObligations: result.route.proofObligations.length,
+      openProofObligations: result.route.proofObligations.filter((obligation) => obligation.status === "open").length,
+      satisfiedProofObligations: 0,
+      notRequiredProofObligations: result.route.proofObligations.filter((obligation) => obligation.status === "not-required").length,
+      criticalOpenProofObligations: result.route.proofObligations.filter((obligation) =>
+        obligation.status === "open" && obligation.severity === "critical"
+      ).length
     });
     expect(readBack.routeId).toBe(result.route.routeId);
     expect(validation.passed).toBe(true);
