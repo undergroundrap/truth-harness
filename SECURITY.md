@@ -14,7 +14,7 @@ Theorem Workbench is local-first, not magic. Treat the app as a verification and
 
 The local web server sends a restrictive Content Security Policy, denies framing, disables high-risk browser permissions, and rejects non-local Host headers by default. Browser writes to `/api/*` are accepted only from the same origin, which prevents unrelated web pages from driving the local API through the user's browser.
 
-Local API JSON bodies are capped at 16 KiB. Malformed, oversized, rejected, or unknown API requests return no-store `theorem.web-error.v0` JSON envelopes with `localOnly: true`, `externalCalls: []`, the HTTP status, and a clear error string instead of generic server text.
+Local API JSON bodies are capped at 16 KiB. Malformed, oversized, rejected, or unknown API requests return no-store `theorem.web-error.v0` JSON envelopes with `localOnly: true`, `externalCalls: []`, timestamp, HTTP method, pathname, status, and a clear error string instead of generic server text.
 
 Set `THEOREM_WEB_ALLOW_NONLOCAL=1` only for deliberate LAN or remote testing. Do not expose that mode to untrusted networks.
 
