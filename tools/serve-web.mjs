@@ -50,6 +50,13 @@ const server = createServer(async (request, response) => {
     if (status >= 500) {
       console.error(error);
     }
+    if (request.url?.startsWith("/api/")) {
+      writeJson(response, status, {
+        error: error instanceof HttpError ? error.message : "internal server error"
+      });
+      return;
+    }
+
     setWebSecurityHeaders(response);
     response.writeHead(status, { "Content-Type": "text/plain; charset=utf-8" });
     response.end(status === 404 ? "Not found" : "Server error");
@@ -900,24 +907,31 @@ function readJsonBody(request) {
   return new Promise((resolveBody, rejectBody) => {
     const chunks = [];
     let byteLength = 0;
+    let bodyTooLarge = false;
 
     request.on("data", (chunk) => {
       byteLength += chunk.length;
       if (byteLength > MAX_JSON_BODY_BYTES) {
-        rejectBody(new HttpError(413));
-        request.destroy();
+        bodyTooLarge = true;
         return;
       }
 
-      chunks.push(chunk);
+      if (!bodyTooLarge) {
+        chunks.push(chunk);
+      }
     });
 
     request.on("end", () => {
+      if (bodyTooLarge) {
+        rejectBody(new HttpError(413, "JSON body too large"));
+        return;
+      }
+
       try {
         const raw = Buffer.concat(chunks).toString("utf8");
         resolveBody(raw ? JSON.parse(raw) : {});
       } catch {
-        rejectBody(new HttpError(400));
+        rejectBody(new HttpError(400, "invalid JSON body"));
       }
     });
 
@@ -952,8 +966,8 @@ function webSecurityHeaders() {
 }
 
 class HttpError extends Error {
-  constructor(status) {
-    super(`HTTP ${status}`);
+  constructor(status, message = `HTTP ${status}`) {
+    super(message);
     this.status = status;
   }
 }

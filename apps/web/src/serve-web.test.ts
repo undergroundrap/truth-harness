@@ -314,6 +314,40 @@ describe("local web safety guard", () => {
       error: "cross-origin API write rejected"
     });
 
+    const invalidJson = await requestText({
+      port,
+      method: "POST",
+      path: "/api/receipt",
+      headers: {
+        Host: `127.0.0.1:${port}`,
+        Origin: `http://127.0.0.1:${port}`,
+        "Content-Type": "application/json"
+      },
+      body: "{"
+    });
+    expect(invalidJson.statusCode).toBe(400);
+    expect(invalidJson.headers["cache-control"]).toBe("no-store");
+    expect(JSON.parse(invalidJson.body)).toMatchObject({
+      error: "invalid JSON body"
+    });
+
+    const oversizedJson = await requestText({
+      port,
+      method: "POST",
+      path: "/api/receipt",
+      headers: {
+        Host: `127.0.0.1:${port}`,
+        Origin: `http://127.0.0.1:${port}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ problem: "x".repeat(17_000) })
+    });
+    expect(oversizedJson.statusCode).toBe(413);
+    expect(oversizedJson.headers["cache-control"]).toBe("no-store");
+    expect(JSON.parse(oversizedJson.body)).toMatchObject({
+      error: "JSON body too large"
+    });
+
     const sameOriginWrite = await requestText({
       port,
       method: "POST",

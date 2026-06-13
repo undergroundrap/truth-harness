@@ -14,6 +14,8 @@ Theorem Workbench is local-first, not magic. Treat the app as a verification and
 
 The local web server sends a restrictive Content Security Policy, denies framing, disables high-risk browser permissions, and rejects non-local Host headers by default. Browser writes to `/api/*` are accepted only from the same origin, which prevents unrelated web pages from driving the local API through the user's browser.
 
+Local API JSON bodies are capped at 16 KiB. Malformed or oversized JSON returns explicit no-store JSON errors instead of generic server text.
+
 Set `THEOREM_WEB_ALLOW_NONLOCAL=1` only for deliberate LAN or remote testing. Do not expose that mode to untrusted networks.
 
 The regression suite covers this boundary with a local server test that verifies:
@@ -21,6 +23,7 @@ The regression suite covers this boundary with a local server test that verifies
 - static web responses include the restrictive browser security headers,
 - non-local API `Host` headers are rejected,
 - cross-origin browser writes are rejected,
+- malformed and oversized API JSON bodies fail closed with explicit JSON errors,
 - same-origin browser writes still work.
 
 Run the focused guard test with:
