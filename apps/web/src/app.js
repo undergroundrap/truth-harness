@@ -1403,12 +1403,25 @@ function applyVisualZoomToCanvas(options = {}) {
 
 function setVisualZoom(nextZoom, options = {}) {
   const previousZoom = state.visualZoom;
+  const canvasRect = plotCanvas.getBoundingClientRect();
+  const anchor = options.anchor
+    ? {
+        x: Math.max(0, Math.min(plotCanvas.clientWidth, options.anchor.clientX - canvasRect.left)),
+        y: Math.max(0, Math.min(plotCanvas.clientHeight, options.anchor.clientY - canvasRect.top))
+      }
+    : undefined;
   const previousScroll = {
     left: plotCanvas.scrollLeft,
     top: plotCanvas.scrollTop,
     width: Math.max(1, plotCanvas.scrollWidth),
     height: Math.max(1, plotCanvas.scrollHeight)
   };
+  const anchorRatio = anchor
+    ? {
+        x: (previousScroll.left + anchor.x) / previousScroll.width,
+        y: (previousScroll.top + anchor.y) / previousScroll.height
+      }
+    : undefined;
   state.visualZoom = clampVisualZoom(nextZoom);
   applyVisualZoomToCanvas();
 
@@ -1417,10 +1430,12 @@ function setVisualZoom(nextZoom, options = {}) {
     return;
   }
 
-  const leftRatio = (previousScroll.left + plotCanvas.clientWidth / 2) / previousScroll.width;
-  const topRatio = (previousScroll.top + plotCanvas.clientHeight / 2) / previousScroll.height;
-  plotCanvas.scrollLeft = Math.max(0, leftRatio * plotCanvas.scrollWidth - plotCanvas.clientWidth / 2);
-  plotCanvas.scrollTop = Math.max(0, topRatio * plotCanvas.scrollHeight - plotCanvas.clientHeight / 2);
+  const leftRatio = anchorRatio?.x ?? (previousScroll.left + plotCanvas.clientWidth / 2) / previousScroll.width;
+  const topRatio = anchorRatio?.y ?? (previousScroll.top + plotCanvas.clientHeight / 2) / previousScroll.height;
+  const targetX = anchor?.x ?? plotCanvas.clientWidth / 2;
+  const targetY = anchor?.y ?? plotCanvas.clientHeight / 2;
+  plotCanvas.scrollLeft = Math.max(0, leftRatio * plotCanvas.scrollWidth - targetX);
+  plotCanvas.scrollTop = Math.max(0, topRatio * plotCanvas.scrollHeight - targetY);
 
   if (Math.abs(previousZoom - state.visualZoom) > 0.001 && options.activity) {
     addActivity("human", "Adjusted visual zoom", `Visual canvas zoom set to ${visualZoomPercent()}.`, "passed");
@@ -2165,76 +2180,76 @@ function createResearchMindMapVisualModel(receipt, basePlot) {
 }
 
 function createConceptMapVisualModel(receipt, basePlot) {
-  const width = 920;
-  const height = 440;
+  const width = 1120;
+  const height = 760;
   const nodes = [
     {
       id: "problem",
       label: "Problem",
       detail: receipt.title,
-      x: 340,
-      y: 30,
-      width: 240,
-      height: 78,
+      x: 440,
+      y: 170,
+      width: 260,
+      height: 96,
       tone: "accent"
     },
     {
       id: "verifier",
       label: "Verifier",
       detail: receipt.engine,
-      x: 72,
-      y: 172,
-      width: 220,
-      height: 86,
+      x: 78,
+      y: 344,
+      width: 270,
+      height: 104,
       tone: "muted"
     },
     {
       id: "output",
       label: "Output",
       detail: receipt.output,
-      x: 350,
-      y: 176,
-      width: 220,
-      height: 82,
+      x: 430,
+      y: 354,
+      width: 280,
+      height: 98,
       tone: "good"
     },
     {
       id: "trust-label",
       label: "Trust label",
       detail: receipt.trust,
-      x: 628,
-      y: 172,
-      width: 220,
-      height: 86,
+      x: 792,
+      y: 344,
+      width: 270,
+      height: 104,
       tone: receipt.trust === "refuted" ? "danger" : "good"
     },
     {
       id: "evidence-path",
       label: "Evidence path",
       detail: `${receipt.graph.length} receipt steps, ${receiptTags(receipt).length} tags`,
-      x: 184,
-      y: 326,
-      width: 238,
-      height: 80,
+      x: 248,
+      y: 594,
+      width: 280,
+      height: 96,
       tone: "muted"
     },
     {
       id: "boundary",
       label: "Boundary",
       detail: receipt.limitations[0] ?? basePlot.caption,
-      x: 498,
-      y: 326,
-      width: 238,
-      height: 80,
+      x: 612,
+      y: 594,
+      width: 300,
+      height: 96,
       tone: "warn"
     }
   ];
   const edges = [
-    [460, 108, 182, 172],
-    [460, 108, 460, 176],
-    [460, 108, 738, 172],
-    [460, 258, 303, 326],
-    [460, 258, 617, 326]
+    [570, 266, 213, 344],
+    [570, 266, 570, 354],
+    [570, 266, 927, 344],
+    [570, 452, 388, 594],
+    [570, 452, 762, 594]
   ];
   const lineSvg = edges.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#343230" stroke-width="2" />`).join("");
   return {
@@ -8298,13 +8313,15 @@ refreshResearchMapButton.addEventListener("click", () => {
 plotCanvas.addEventListener(
   "wheel",
   (event) => {
-    if (!event.ctrlKey && !event.metaKey && !event.altKey) {
-      return;
-    }
-
     event.preventDefault();
     const direction = event.deltaY > 0 ? -1 : 1;
-    setVisualZoom(state.visualZoom + direction * VISUAL_ZOOM_STEP);
+    setVisualZoom(state.visualZoom + direction * VISUAL_ZOOM_STEP, {
+      activity: true,
+      anchor: {
+        clientX: event.clientX,
+        clientY: event.clientY
+      }
+    });
   },
   { passive: false }
 );
