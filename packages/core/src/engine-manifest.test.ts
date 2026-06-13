@@ -7,6 +7,7 @@ describe("engine manifest", () => {
       now: new Date("2026-06-12T00:00:00.000Z"),
       timeoutMs: 50,
       maximaCommand: "truth-harness-missing-maxima-command",
+      sageCommand: "truth-harness-missing-sage-command",
       leanCommand: "truth-harness-missing-lean-command",
       z3Command: "truth-harness-missing-z3-command"
     });
@@ -42,8 +43,9 @@ describe("engine manifest", () => {
     expect(manifest.capabilities).toContainEqual(
       expect.objectContaining({
         id: "sage-cas",
-        kind: "planned-adapter",
-        status: "planned",
+        kind: "adapter",
+        status: "missing",
+        strongestTrust: "provenance-only",
         canMintTrust: false
       })
     );

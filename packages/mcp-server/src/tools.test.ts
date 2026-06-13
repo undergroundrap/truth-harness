@@ -269,6 +269,7 @@ describe("MCP tool handlers", () => {
   it("reports local CAS backend readiness for agents", () => {
     const result = handleTruthHarnessCasBackends({
       maximaCommand: "truth-harness-missing-maxima-command",
+      sageCommand: "truth-harness-missing-sage-command",
       timeoutMs: 1000
     });
 
@@ -278,6 +279,9 @@ describe("MCP tool handlers", () => {
     expect(result.backends[0]?.backendId).toBe("maxima");
     expect(result.backends[0]?.role).toBe("cas");
     expect(result.backends[0]?.statusProbeMintedCheck).toBe(false);
+    expect(result.backends[1]?.backendId).toBe("sage");
+    expect(result.backends[1]?.adapter).toBe("local-sagemath-status-probe");
+    expect(result.backends[1]?.canCheckSymbolic).toBe(false);
     expect(result.trustBoundary.statusProbeIsNotCheck).toBe(true);
     expect(result.trustBoundary.crossCheckedRequiresIndependentRun).toBe(true);
   });
@@ -332,6 +336,7 @@ describe("MCP tool handlers", () => {
   it("reports the local engine capability manifest for agents", () => {
     const result = handleTruthHarnessEngineManifest({
       maximaCommand: "truth-harness-missing-maxima-command",
+      sageCommand: "truth-harness-missing-sage-command",
       leanCommand: "truth-harness-missing-lean-command",
       z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
@@ -351,6 +356,14 @@ describe("MCP tool handlers", () => {
     expect(result.capabilities).toContainEqual(
       expect.objectContaining({
         id: "z3-smt-solver",
+        kind: "adapter",
+        status: "missing",
+        canMintTrust: false
+      })
+    );
+    expect(result.capabilities).toContainEqual(
+      expect.objectContaining({
+        id: "sage-cas",
         kind: "adapter",
         status: "missing",
         canMintTrust: false

@@ -299,6 +299,7 @@ export async function writeVerifierRoute(input: WriteVerifierRouteInput): Promis
   const route = createVerifierRoute(input.problem, {
     timeoutMs: input.timeoutMs,
     maximaCommand: input.maximaCommand,
+    sageCommand: input.sageCommand,
     leanCommand: input.leanCommand,
     z3Command: input.z3Command,
     now: input.now,

@@ -30,6 +30,7 @@ export interface EngineCapability {
 export interface EngineManifestOptions {
   timeoutMs?: number;
   maximaCommand?: string;
+  sageCommand?: string;
   leanCommand?: string;
   z3Command?: string;
   now?: Date;
@@ -64,6 +65,7 @@ export function getEngineManifest(options: EngineManifestOptions = {}): EngineMa
   const cas = getCasBackendStatus({
     timeoutMs,
     maximaCommand: options.maximaCommand,
+    sageCommand: options.sageCommand,
     now: options.now
   } satisfies CasBackendStatusOptions);
   const proof = getProofBackendStatus({
@@ -81,7 +83,8 @@ export function getEngineManifest(options: EngineManifestOptions = {}): EngineMa
     ...nativeCapabilities(),
     ...workspaceCapabilities(),
     codeRunSandboxCapability(sandbox),
-    casCapability(cas.backends[0]),
+    maximaCapability(cas.backends.find((backend) => backend.backendId === "maxima")),
+    sageCapability(cas.backends.find((backend) => backend.backendId === "sage")),
     proofCapability(proof.backends[0]),
     smtCapability(smt.backends[0]),
     ...plannedCapabilities()
@@ -310,7 +313,7 @@ function codeRunSandboxCapability(status: CodeRunSandboxStatus): EngineCapabilit
   };
 }
 
-function casCapability(probe: ReturnType<typeof getCasBackendStatus>["backends"][number] | undefined): EngineCapability {
+function maximaCapability(probe: ReturnType<typeof getCasBackendStatus>["backends"][number] | undefined): EngineCapability {
   return {
     id: "maxima-cas",
     displayName: "Maxima independent CAS",
@@ -329,6 +332,31 @@ function casCapability(probe: ReturnType<typeof getCasBackendStatus>["backends"]
     trustBoundary: "Can support cross-checked only after a concrete independent Maxima agreement run.",
     limitations: probe?.limitations ?? ["Maxima has not been probed."],
     nextStep: probe?.status === "available" ? "Run a concrete symbolic agreement check." : "Install/configure Maxima or use Docker-derived CAS image when ready."
+  };
+}
+
+function sageCapability(probe: ReturnType<typeof getCasBackendStatus>["backends"][number] | undefined): EngineCapability {
+  return {
+    id: "sage-cas",
+    displayName: "SageMath CAS breadth adapter",
+    kind: "adapter",
+    lane: "math",
+    status: adapterStatus(probe?.status),
+    role: "cas-breadth",
+    command: "truth-harness cas backends",
+    executable: probe?.command,
+    version: probe?.version,
+    localOnly: true,
+    networkAccess: "none",
+    strongestTrust: "provenance-only",
+    canMintTrust: false,
+    statusProbeMintedEvidence: false,
+    trustBoundary: "Current SageMath integration is an availability probe only; Sage output cannot mint trust until constrained check records exist.",
+    limitations: probe?.limitations ?? ["SageMath has not been probed."],
+    nextStep:
+      probe?.status === "available"
+        ? "Implement constrained SageMath check records for specific operations before routing claims through Sage."
+        : "Install/configure SageMath or use a pinned Docker image before enabling Sage-backed checks."
   };
 }
 
@@ -378,7 +406,6 @@ function smtCapability(probe: ReturnType<typeof getSmtBackendStatus>["backends"]
 
 function plannedCapabilities(): EngineCapability[] {
   return [
-    plannedCapability("sage-cas", "SageMath CAS", "math", "CAS breadth and independent symbolic/numeric checks."),
     plannedCapability("cvc5-smt-solver", "cvc5 SMT solver", "math", "Second SMT solver for cross-solver confidence and regressions."),
     plannedCapability("lean-lsp-router", "Lean LSP proof workflow", "math", "Goals, diagnostics, formal library search, and interactive proof repair."),
     plannedCapability("local-vector-rag", "Local vector/PDF RAG", "sources", "Source ingestion, citation spans, contradiction checks, and reusable indexes."),

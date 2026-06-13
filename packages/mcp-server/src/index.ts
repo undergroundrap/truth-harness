@@ -141,6 +141,10 @@ export function createTruthHarnessMcpServer(): McpServer {
           .string()
           .optional()
           .describe("Maxima executable path or command for this route."),
+        sageCommand: z
+          .string()
+          .optional()
+          .describe("SageMath executable path or command for this route."),
         leanCommand: z
           .string()
           .optional()
@@ -510,6 +514,10 @@ export function createTruthHarnessMcpServer(): McpServer {
           .string()
           .optional()
           .describe("Maxima executable path or command. Defaults to TRUTH_HARNESS_MAXIMA or maxima."),
+        sageCommand: z
+          .string()
+          .optional()
+          .describe("SageMath executable path or command. Defaults to TRUTH_HARNESS_SAGE or sage."),
         timeoutMs: z
           .number()
           .int()
@@ -523,7 +531,7 @@ export function createTruthHarnessMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ maximaCommand, timeoutMs }) => toolJson(handleTruthHarnessCasBackends({ maximaCommand, timeoutMs }))
+    async ({ maximaCommand, sageCommand, timeoutMs }) => toolJson(handleTruthHarnessCasBackends({ maximaCommand, sageCommand, timeoutMs }))
   );
 
   server.registerTool(
@@ -605,6 +613,10 @@ export function createTruthHarnessMcpServer(): McpServer {
           .string()
           .optional()
           .describe("Maxima executable path or command for this manifest probe."),
+        sageCommand: z
+          .string()
+          .optional()
+          .describe("SageMath executable path or command for this manifest probe."),
         leanCommand: z
           .string()
           .optional()

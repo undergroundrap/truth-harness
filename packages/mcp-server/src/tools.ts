@@ -230,6 +230,7 @@ export interface TruthHarnessVerifyInput {
   strict?: boolean;
   timeoutMs?: number;
   maximaCommand?: string;
+  sageCommand?: string;
   leanCommand?: string;
   z3Command?: string;
 }
@@ -261,6 +262,7 @@ export interface TruthHarnessRouteSatisfyInput {
 export interface TruthHarnessEngineManifestInput {
   timeoutMs?: number;
   maximaCommand?: string;
+  sageCommand?: string;
   leanCommand?: string;
   z3Command?: string;
 }
@@ -327,6 +329,7 @@ export interface TruthHarnessBenchmarkListInput {
 export interface TruthHarnessCasBackendsInput {
   timeoutMs?: number;
   maximaCommand?: string;
+  sageCommand?: string;
 }
 
 export interface TruthHarnessCasCheckInput {
@@ -970,6 +973,7 @@ export async function handleTruthHarnessVerify(input: TruthHarnessVerifyInput): 
         problem: input.problem,
         timeoutMs: input.timeoutMs,
         maximaCommand: input.maximaCommand,
+        sageCommand: input.sageCommand,
         leanCommand: input.leanCommand,
         z3Command: input.z3Command
       })
@@ -979,6 +983,7 @@ export async function handleTruthHarnessVerify(input: TruthHarnessVerifyInput): 
     createVerifierRoute(input.problem, {
       timeoutMs: input.timeoutMs,
       maximaCommand: input.maximaCommand,
+      sageCommand: input.sageCommand,
       leanCommand: input.leanCommand,
       z3Command: input.z3Command
     });
@@ -1025,6 +1030,7 @@ export function handleTruthHarnessEngineManifest(input: TruthHarnessEngineManife
   return getEngineManifest({
     timeoutMs: input.timeoutMs,
     maximaCommand: input.maximaCommand,
+    sageCommand: input.sageCommand,
     leanCommand: input.leanCommand,
     z3Command: input.z3Command
   });
@@ -1160,6 +1166,7 @@ export async function handleTruthHarnessBenchmarkList(input: TruthHarnessBenchma
 export function handleTruthHarnessCasBackends(input: TruthHarnessCasBackendsInput): CasBackendStatusReport {
   return getCasBackendStatus({
     maximaCommand: input.maximaCommand,
+    sageCommand: input.sageCommand,
     timeoutMs: input.timeoutMs
   });
 }

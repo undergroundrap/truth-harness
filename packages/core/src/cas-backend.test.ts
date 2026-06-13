@@ -24,6 +24,18 @@ describe("CAS backend status", () => {
     const calls: Array<{ command: string; args: string[]; timeoutMs: number }> = [];
     const runner: CasBackendCommandRunner = (command, args, timeoutMs) => {
       calls.push({ command, args, timeoutMs });
+      if (command === "sage-missing-test") {
+        return {
+          status: null,
+          stdout: "",
+          stderr: "",
+          error: {
+            name: "Error",
+            message: "spawn sage ENOENT"
+          }
+        };
+      }
+
       return {
         status: 0,
         stdout: "Maxima 5.47.0\n",
@@ -33,11 +45,15 @@ describe("CAS backend status", () => {
 
     const report = getCasBackendStatus({
       maximaCommand: "maxima-test",
+      sageCommand: "sage-missing-test",
       now: new Date("2026-06-12T00:00:00.000Z"),
       runner
     });
 
-    expect(calls).toEqual([{ command: "maxima-test", args: ["--version"], timeoutMs: 3000 }]);
+    expect(calls).toEqual([
+      { command: "maxima-test", args: ["--version"], timeoutMs: 3000 },
+      { command: "sage-missing-test", args: ["--version"], timeoutMs: 3000 }
+    ]);
     expect(report.schemaVersion).toBe("truth-harness.cas-backends.v0");
     expect(report.localOnly).toBe(true);
     expect(report.networkAccess).toBe("none");
@@ -54,6 +70,53 @@ describe("CAS backend status", () => {
       statusProbeMintedCheck: false,
       version: "Maxima 5.47.0"
     });
+    expect(report.backends[1]).toMatchObject({
+      backendId: "sage",
+      adapter: "local-sagemath-status-probe",
+      status: "missing",
+      canCheckSymbolic: false,
+      statusProbeMintedCheck: false
+    });
+  });
+
+  it("reports SageMath availability as status-only until constrained checks exist", () => {
+    const runner: CasBackendCommandRunner = (command) => {
+      if (command === "sage-test") {
+        return {
+          status: 0,
+          stdout: "SageMath version 10.6, Release Date: 2025-03-31\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: null,
+        stdout: "",
+        stderr: "",
+        error: {
+          name: "Error",
+          message: "spawn maxima ENOENT"
+        }
+      };
+    };
+
+    const report = getCasBackendStatus({
+      maximaCommand: "maxima-missing-test",
+      sageCommand: "sage-test",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      runner
+    });
+
+    expect(report.casBackendsAvailable).toBe(1);
+    expect(report.backends[1]).toMatchObject({
+      backendId: "sage",
+      displayName: "SageMath CAS",
+      status: "available",
+      version: "SageMath version 10.6, Release Date: 2025-03-31",
+      canCheckSymbolic: false,
+      statusProbeMintedCheck: false
+    });
+    expect(report.warnings.join(" ")).toContain("status-only and cannot mint trust");
   });
 
   it("skips Lisp loader chatter when reporting Maxima-Sage availability", () => {
@@ -68,6 +131,7 @@ describe("CAS backend status", () => {
 
     const report = getCasBackendStatus({
       maximaCommand: "maxima-sage",
+      sageCommand: "sage-missing-test",
       now: new Date("2026-06-12T00:00:00.000Z"),
       runner
     });

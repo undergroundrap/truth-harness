@@ -164,6 +164,7 @@ describe("Truth Harness MCP server", () => {
         arguments: {
           problem: "compute 3 / 4 + 5 / 8",
           maximaCommand: "truth-harness-missing-maxima-command",
+          sageCommand: "truth-harness-missing-sage-command",
           leanCommand: "truth-harness-missing-lean-command",
           z3Command: "truth-harness-missing-z3-command",
           timeoutMs: 50
@@ -179,6 +180,7 @@ describe("Truth Harness MCP server", () => {
         name: "truth_harness_cas_backends",
         arguments: {
           maximaCommand: "truth-harness-missing-maxima-command",
+          sageCommand: "truth-harness-missing-sage-command",
           timeoutMs: 1000
         }
       });
@@ -209,6 +211,7 @@ describe("Truth Harness MCP server", () => {
         name: "truth_harness_engine_manifest",
         arguments: {
           maximaCommand: "truth-harness-missing-maxima-command",
+          sageCommand: "truth-harness-missing-sage-command",
           leanCommand: "truth-harness-missing-lean-command",
           z3Command: "truth-harness-missing-z3-command",
           timeoutMs: 50

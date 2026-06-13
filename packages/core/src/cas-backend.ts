@@ -17,7 +17,7 @@ import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-work
 import type { SymbolicPrompt } from "./sympy.js";
 import type { TrustLabel } from "./types.js";
 
-export type CasBackendId = "maxima";
+export type CasBackendId = "maxima" | "sage";
 export type CasBackendStatus = "available" | "missing" | "error";
 export type SymbolicCasCheckStatus = "passed" | "failed" | "solver-unavailable" | "error";
 
@@ -77,6 +77,7 @@ export interface CasBackendStatusReport {
 
 export interface CasBackendStatusOptions {
   maximaCommand?: string;
+  sageCommand?: string;
   timeoutMs?: number;
   now?: Date;
   runner?: CasBackendCommandRunner;
@@ -165,12 +166,19 @@ export function getCasBackendStatus(options: CasBackendStatusOptions = {}): CasB
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const runner = options.runner ?? runCommand;
   const maximaCommand = resolveMaximaCommand(options.maximaCommand);
+  const sageCommand = resolveSageCommand(options.sageCommand);
   const maxima = probeMaximaBackend({
     command: maximaCommand,
     timeoutMs,
     runner
   });
-  const casBackendsAvailable = maxima.status === "available" ? 1 : 0;
+  const sage = probeSageBackend({
+    command: sageCommand,
+    timeoutMs,
+    runner
+  });
+  const backends = [maxima, sage];
+  const casBackendsAvailable = backends.filter((backend) => backend.status === "available").length;
 
   return {
     schemaVersion: "truth-harness.cas-backends.v0",
@@ -178,21 +186,14 @@ export function getCasBackendStatus(options: CasBackendStatusOptions = {}): CasB
     localOnly: true,
     networkAccess: "none",
     casBackendsAvailable,
-    backends: [maxima],
+    backends,
     trustBoundary: {
       statusProbeIsNotCheck: true,
       crossCheckedRequiresIndependentRun: true,
       casOutputIsNotProofCheckerProof: true,
       provedRequiresAcceptedProofChecker: true
     },
-    warnings:
-      casBackendsAvailable > 0
-        ? [
-            "A detected CAS can cross-check symbolic equalities, but this status report does not prove, refute, or cross-check any claim."
-          ]
-        : [
-            "No independent local CAS backend was detected. Truth Harness must not label symbolic results `cross-checked` until an independent CAS run agrees on a concrete result."
-          ]
+    warnings: casBackendStatusWarnings(backends)
   };
 }
 
@@ -570,6 +571,71 @@ function probeMaximaBackend(args: {
   };
 }
 
+function probeSageBackend(args: {
+  command: string;
+  timeoutMs: number;
+  runner: CasBackendCommandRunner;
+}): CasBackendProbe {
+  const versionArgs = ["--version"];
+  const result = args.runner(args.command, versionArgs, args.timeoutMs);
+  const combinedOutput = `${result.stdout}\n${result.stderr}`;
+  const version = firstSageVersionLine(combinedOutput) ?? firstNonEmptyLine(combinedOutput);
+  const launchFailure = result.error ? isLaunchFailure(result.error) : false;
+  const errorText = result.error?.message
+    ?? (result.signal ? `SageMath exited by signal ${result.signal}.` : undefined)
+    ?? (result.status !== 0 ? `SageMath exited with status ${String(result.status)}.` : undefined);
+  const status: CasBackendStatus = result.status === 0 && version
+    ? "available"
+    : launchFailure
+      ? "missing"
+      : "error";
+
+  return {
+    backendId: "sage",
+    displayName: "SageMath CAS",
+    adapter: "local-sagemath-status-probe",
+    role: "cas",
+    acceptedProofChecker: false,
+    status,
+    localOnly: true,
+    networkAccess: "none",
+    command: args.command,
+    args: versionArgs,
+    ...(version ? { version } : {}),
+    exitCode: result.status,
+    stdout: trimOptional(result.stdout),
+    stderr: trimOptional(result.stderr),
+    error: errorText,
+    canCheckSymbolic: false,
+    statusProbeMintedCheck: false,
+    limitations: [
+      "This SageMath adapter is currently a local availability probe only; it does not run arbitrary Sage code or mint trust.",
+      "Future SageMath checks must use constrained scripts, recorded inputs/outputs, timeouts, replay commands, and conservative trust labels.",
+      "SageMath output is CAS evidence, not proof-checker-backed proof."
+    ]
+  };
+}
+
+function casBackendStatusWarnings(backends: CasBackendProbe[]): string[] {
+  if (backends.some((backend) => backend.backendId === "maxima" && backend.canCheckSymbolic)) {
+    return [
+      "Detected a Maxima CAS backend that can run concrete symbolic agreement checks, but this status report does not prove, refute, or cross-check any claim.",
+      "Detected CAS availability must not upgrade trust labels without a concrete recorded check."
+    ];
+  }
+
+  if (backends.some((backend) => backend.backendId === "sage" && backend.status === "available")) {
+    return [
+      "Detected SageMath locally, but the current Sage adapter is status-only and cannot mint trust.",
+      "Truth Harness must not label SageMath output `cross-checked` until a constrained Sage check record is implemented and replayable."
+    ];
+  }
+
+  return [
+    "No independent local CAS backend was detected. Truth Harness must not label symbolic results `cross-checked` until an independent CAS run agrees on a concrete result."
+  ];
+}
+
 function buildMaximaCheckScript(prompt: SymbolicPrompt, result: string): string {
   const expression = toMaximaExpression(prompt.expression);
   const resultExpression = toMaximaExpression(result);
@@ -645,6 +711,10 @@ function parseMaximaMarker(stdout: string): { status: "passed" | "failed"; resid
 
 function resolveMaximaCommand(command: string | undefined): string {
   return command?.trim() || process.env.TRUTH_HARNESS_MAXIMA?.trim() || "maxima";
+}
+
+function resolveSageCommand(command: string | undefined): string {
+  return command?.trim() || process.env.TRUTH_HARNESS_SAGE?.trim() || "sage";
 }
 
 function runCommand(command: string, args: string[], timeoutMs: number): CasBackendCommandResult {
@@ -734,6 +804,13 @@ function firstMaximaVersionLine(text: string): string | undefined {
     .split(/\r?\n/u)
     .map((line) => line.trim())
     .find((line) => /^Maxima\s+\d+(?:\.\d+)*/u.test(line));
+}
+
+function firstSageVersionLine(text: string): string | undefined {
+  return text
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find((line) => /^(?:SageMath|Sage)\s+(?:version\s+)?\d+(?:\.\d+)*/iu.test(line));
 }
 
 function trimOptional(text: string): string | undefined {

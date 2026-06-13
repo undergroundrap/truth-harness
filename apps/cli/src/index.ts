@@ -292,6 +292,7 @@ program
   .option("--strict", "Exit non-zero if the final receipt trust is unverified")
   .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 1500)
   .option("--maxima-command <command>", "Override Maxima executable for this route")
+  .option("--sage-command <command>", "Override SageMath executable for this route")
   .option("--lean-command <command>", "Override Lean executable for this route")
   .option("--z3-command <command>", "Override Z3 executable for this route")
   .action(
@@ -305,6 +306,7 @@ program
         strict?: boolean;
         timeoutMs: number;
         maximaCommand?: string;
+        sageCommand?: string;
         leanCommand?: string;
         z3Command?: string;
       }
@@ -316,6 +318,7 @@ program
             problem,
             timeoutMs: options.timeoutMs,
             maximaCommand: options.maximaCommand,
+            sageCommand: options.sageCommand,
             leanCommand: options.leanCommand,
             z3Command: options.z3Command
           })
@@ -325,6 +328,7 @@ program
         createVerifierRoute(problem, {
           timeoutMs: options.timeoutMs,
           maximaCommand: options.maximaCommand,
+          sageCommand: options.sageCommand,
           leanCommand: options.leanCommand,
           z3Command: options.z3Command
         });
@@ -2561,10 +2565,12 @@ cas
   .description("Probe local CAS backends without checking or upgrading a claim.")
   .option("--json", "Print the full CAS backend status JSON")
   .option("--maxima-command <path>", "Maxima executable path or command. Defaults to TRUTH_HARNESS_MAXIMA or maxima.")
+  .option("--sage-command <path>", "SageMath executable path or command. Defaults to TRUTH_HARNESS_SAGE or sage.")
   .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 3000)
-  .action((options: { json?: boolean; maximaCommand?: string; timeoutMs: number }) => {
+  .action((options: { json?: boolean; maximaCommand?: string; sageCommand?: string; timeoutMs: number }) => {
     const status = getCasBackendStatus({
       maximaCommand: options.maximaCommand,
+      sageCommand: options.sageCommand,
       timeoutMs: options.timeoutMs
     });
 
@@ -2925,6 +2931,7 @@ program
   .option("--json", "Print the full engine manifest JSON")
   .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 1500)
   .option("--maxima-command <command>", "Override Maxima executable for this probe")
+  .option("--sage-command <command>", "Override SageMath executable for this probe")
   .option("--lean-command <command>", "Override Lean executable for this probe")
   .option("--z3-command <command>", "Override Z3 executable for this probe")
   .action(
@@ -2932,12 +2939,14 @@ program
       json?: boolean;
       timeoutMs: number;
       maximaCommand?: string;
+      sageCommand?: string;
       leanCommand?: string;
       z3Command?: string;
     }) => {
       const manifest = getEngineManifest({
         timeoutMs: options.timeoutMs,
         maximaCommand: options.maximaCommand,
+        sageCommand: options.sageCommand,
         leanCommand: options.leanCommand,
         z3Command: options.z3Command
       });
