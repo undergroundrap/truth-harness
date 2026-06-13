@@ -1664,7 +1664,7 @@ function createEquationMapVisualModel(receipt, basePlot) {
   const inputFractions = uniqueFractionsByLabel(parseFractionsFromText(`${receipt.title} ${receipt.math?.input ?? ""}`)).slice(0, 4);
   const outputFraction = parseFraction(receipt.output) ?? parseFractionsFromText(receipt.math?.output ?? "").at(-1);
   const width = 1080;
-  const height = 430;
+  const height = 680;
 
   if (inputFractions.length >= 2 && outputFraction) {
     const denominator = lcmMany(inputFractions.map((fraction) => fraction.denominator).filter(Boolean));
@@ -1673,30 +1673,30 @@ function createEquationMapVisualModel(receipt, basePlot) {
       numerator: fraction.numerator * (denominator / fraction.denominator),
       denominator
     }));
-  const modules = [
-      { id: "problem", label: "Problem", detail: receipt.title, x: 42, y: 158, width: 190, height: 82, tone: "accent" },
+    const modules = [
+      { id: "problem", label: "Problem", detail: receipt.title, x: 42, y: 292, width: 190, height: 92, tone: "accent" },
       ...inputFractions.slice(0, 2).map((fraction, index) => ({
         id: `term-${index + 1}`,
         label: `Term ${index + 1}`,
         detail: fractionLabel(fraction),
         x: 284,
-        y: index === 0 ? 70 : 246,
+        y: index === 0 ? 182 : 406,
         width: 170,
-        height: 74,
+        height: 86,
         tone: "muted"
       })),
-      { id: "common-denominator", label: "Shared module", detail: `common denominator ${denominator}`, x: 510, y: 158, width: 210, height: 82, tone: "warn" },
-      { id: "rewrite", label: "Rewrite", detail: rewritten.map((item) => `${fractionLabel(item.original)}=${item.numerator}/${item.denominator}`).join("; "), x: 770, y: 158, width: 190, height: 82, tone: "muted" },
-      { id: "verified-result", label: "Verified result", detail: fractionLabel(outputFraction), x: 436, y: 326, width: 220, height: 76, tone: "good" }
+      { id: "common-denominator", label: "Shared module", detail: `common denominator ${denominator}`, x: 510, y: 292, width: 220, height: 92, tone: "warn" },
+      { id: "rewrite", label: "Rewrite", detail: rewritten.map((item) => `${fractionLabel(item.original)}=${item.numerator}/${item.denominator}`).join("; "), x: 780, y: 292, width: 210, height: 92, tone: "muted" },
+      { id: "verified-result", label: "Verified result", detail: fractionLabel(outputFraction), x: 436, y: 540, width: 230, height: 86, tone: "good" }
     ];
     const edges = [
-      [232, 198, 284, 107],
-      [232, 198, 284, 283],
-      [454, 107, 510, 198],
-      [454, 283, 510, 198],
-      [720, 198, 770, 198],
-      [865, 240, 546, 326],
-      [612, 240, 546, 326]
+      [232, 338, 284, 225],
+      [232, 338, 284, 449],
+      [454, 225, 510, 338],
+      [454, 449, 510, 338],
+      [730, 338, 780, 338],
+      [885, 384, 551, 540],
+      [620, 384, 551, 540]
     ];
 
     return {
@@ -1706,7 +1706,7 @@ function createEquationMapVisualModel(receipt, basePlot) {
       svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Modular equation map">
         <rect width="${width}" height="${height}" rx="16" fill="#101010" />
         <text x="42" y="44" fill="#f2f2ee" font-size="22" font-weight="750">${escapeXml(receipt.title)}</text>
-        <text x="42" y="70" fill="#aaa59d" font-size="13">modules can be linked to receipts, project threads, and reusable lemmas</text>
+        <text x="42" y="76" fill="#aaa59d" font-size="13">modules can be linked to receipts, project threads, and reusable lemmas</text>
         ${edges.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#343230" stroke-width="2" />`).join("")}
         ${modules.map((node) => conceptNodeSvg(node, { interactive: true, active: isActiveVisualMapNode(node, modules) })).join("")}
       </svg>`,
