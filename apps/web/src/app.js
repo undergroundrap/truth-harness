@@ -272,6 +272,7 @@ const state = {
   visualDetailCollapsed: true,
   visualFocus: false,
   visualZoom: 1,
+  visualFitPending: true,
   sidebarCollapsed: false,
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE,
@@ -1076,6 +1077,7 @@ function render() {
     .join("");
   renderBranchMap(receipt);
   renderMainGraph(receipt);
+  renderSurface();
   renderMathPlot(receipt);
 
   traceList.innerHTML = (receipt.traces[state.level] ?? receipt.traces.middle)
@@ -1091,7 +1093,6 @@ function render() {
   renderRouteHistory();
   renderWorkspaceReview();
   renderActivityLog();
-  renderSurface();
   renderLane();
   renderProjectStart();
   renderProtocol();
@@ -1329,7 +1330,12 @@ function renderMathPlot(receipt) {
   plotCanvas.innerHTML = plot.svg;
   plotCanvas.dataset.visualMode = state.visualMode;
   plotCanvas.dataset.savedMapSnapshot = selectedMapSnapshot?.snapshotId ?? "";
-  applyVisualZoomToCanvas();
+  if (state.surface === "plot" && state.visualFitPending) {
+    fitVisualToCanvas({ activity: false });
+    state.visualFitPending = false;
+  } else {
+    applyVisualZoomToCanvas();
+  }
   plotFacts.innerHTML = plot.facts
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join("");
@@ -1350,6 +1356,10 @@ function visualZoomPercent() {
 
 function clampVisualZoom(value) {
   return Math.min(VISUAL_ZOOM_MAX, Math.max(VISUAL_ZOOM_MIN, Number(value) || 1));
+}
+
+function requestVisualFit() {
+  state.visualFitPending = true;
 }
 
 function applyVisualZoomToCanvas(options = {}) {
@@ -1416,7 +1426,7 @@ function setVisualZoom(nextZoom, options = {}) {
   }
 }
 
-function fitVisualToCanvas() {
+function fitVisualToCanvas(options = {}) {
   const svg = plotCanvas.querySelector("svg");
   if (!svg) {
     return;
@@ -1424,8 +1434,11 @@ function fitVisualToCanvas() {
 
   const viewBox = svg.getAttribute("viewBox")?.split(/\s+/u).map(Number) ?? [];
   const baseWidth = Number.isFinite(viewBox[2]) && viewBox[2] > 0 ? viewBox[2] : 980;
-  const targetWidth = Math.max(360, plotCanvas.clientWidth - 30);
-  setVisualZoom(targetWidth / baseWidth, { center: true, activity: true });
+  const baseHeight = Number.isFinite(viewBox[3]) && viewBox[3] > 0 ? viewBox[3] : 520;
+  const targetWidth = Math.max(360, plotCanvas.clientWidth - 44);
+  const targetHeight = Math.max(320, plotCanvas.clientHeight - 44);
+  const nextZoom = Math.min(targetWidth / baseWidth, targetHeight / baseHeight);
+  setVisualZoom(nextZoom, { center: true, activity: options.activity ?? true });
 }
 
 function centerVisualCanvas() {
@@ -1659,8 +1672,8 @@ function createEquationMapVisualModel(receipt, basePlot) {
       numerator: fraction.numerator * (denominator / fraction.denominator),
       denominator
     }));
-    const modules = [
-      { id: "problem", label: "Problem", detail: receipt.math?.input ?? receipt.title, x: 42, y: 158, width: 190, height: 82, tone: "accent" },
+  const modules = [
+      { id: "problem", label: "Problem", detail: receipt.title, x: 42, y: 158, width: 190, height: 82, tone: "accent" },
       ...inputFractions.slice(0, 2).map((fraction, index) => ({
         id: `term-${index + 1}`,
         label: `Term ${index + 1}`,
@@ -2384,12 +2397,18 @@ function svgTextBlock(value, x, y, options = {}) {
     fontSize = 13,
     fontWeight = 650
   } = options;
-  const words = String(value ?? "").replace(/\s+/gu, " ").trim().split(" ").filter(Boolean);
+  const safeMaxChars = Math.max(4, Math.floor(maxChars));
+  const words = String(value ?? "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .flatMap((word) => splitSvgTextWord(word, safeMaxChars));
   const lines = [];
   let current = "";
   words.forEach((word) => {
     const next = current ? `${current} ${word}` : word;
-    if (next.length > maxChars && current) {
+    if (next.length > safeMaxChars && current) {
       lines.push(current);
       current = word;
       return;
@@ -2401,12 +2420,24 @@ function svgTextBlock(value, x, y, options = {}) {
   }
   const visibleLines = lines.slice(0, maxLines);
   if (lines.length > maxLines && visibleLines.length > 0) {
-    visibleLines[visibleLines.length - 1] = `${visibleLines[visibleLines.length - 1].slice(0, Math.max(0, maxChars - 3))}...`;
+    visibleLines[visibleLines.length - 1] = `${visibleLines[visibleLines.length - 1].slice(0, Math.max(0, safeMaxChars - 3))}...`;
   }
 
   return `<text fill="${fill}" font-size="${fontSize}" font-weight="${fontWeight}">
     ${visibleLines.map((line, index) => `<tspan x="${x}" y="${y + index * lineHeight}">${escapeXml(line)}</tspan>`).join("")}
   </text>`;
+}
+
+function splitSvgTextWord(word, maxChars) {
+  if (word.length <= maxChars) {
+    return [word];
+  }
+
+  const chunks = [];
+  for (let index = 0; index < word.length; index += maxChars) {
+    chunks.push(word.slice(index, index + maxChars));
+  }
+  return chunks;
 }
 
 function renderPlotDataTable(plot) {
@@ -2954,6 +2985,7 @@ async function saveResearchMapThought(form) {
     applyResearchMapPayload(payload);
     state.selectedResearchMapSnapshotId = payload.snapshot?.snapshotId;
     state.selectedResearchMapNodeId = createdNodeId;
+    requestVisualFit();
     updateLatestActivity(
       "Saving linked thought",
       "passed",
@@ -3034,6 +3066,7 @@ function openResearchMapNodeReceipt(receiptKey) {
   state.selectedGraphIndex = 0;
   state.selectedResearchMapSnapshotId = undefined;
   state.selectedResearchMapNodeId = undefined;
+  requestVisualFit();
   state.replayIndex = 0;
   promptInput.value = receipt.title;
   promoteRecentReceiptKey(receiptKey);
@@ -7907,13 +7940,14 @@ claimList.addEventListener("click", (event) => {
     return;
   }
 
-  setReplayPlaying(false);
-  state.receiptKey = button.dataset.receipt;
-  state.level = "middle";
-  state.selectedGraphIndex = 0;
-  state.selectedResearchMapSnapshotId = undefined;
-  state.selectedResearchMapNodeId = undefined;
-  state.replayIndex = 0;
+    setReplayPlaying(false);
+    state.receiptKey = button.dataset.receipt;
+    state.level = "middle";
+    state.selectedGraphIndex = 0;
+    state.selectedResearchMapSnapshotId = undefined;
+    state.selectedResearchMapNodeId = undefined;
+    requestVisualFit();
+    state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
   document.querySelector("#surface-checks").scrollTop = 0;
@@ -7937,6 +7971,7 @@ claimLedgerList.addEventListener("click", (event) => {
   state.selectedGraphIndex = 0;
   state.selectedResearchMapSnapshotId = undefined;
   state.selectedResearchMapNodeId = undefined;
+  requestVisualFit();
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
@@ -7984,6 +8019,7 @@ graphDetail.addEventListener("click", (event) => {
   state.selectedGraphIndex = 0;
   state.selectedResearchMapSnapshotId = undefined;
   state.selectedResearchMapNodeId = undefined;
+  requestVisualFit();
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
@@ -8001,6 +8037,7 @@ branchMap.addEventListener("click", (event) => {
   state.selectedGraphIndex = 0;
   state.selectedResearchMapSnapshotId = undefined;
   state.selectedResearchMapNodeId = undefined;
+  requestVisualFit();
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
@@ -8142,6 +8179,9 @@ surfaceTabs.forEach((button) => {
     }
 
     state.surface = nextSurface;
+    if (nextSurface === "plot") {
+      requestVisualFit();
+    }
     render();
     resetActiveSurfaceScroll();
   });
@@ -8161,7 +8201,7 @@ visualModeButtons.forEach((button) => {
 
     state.selectedResearchMapSnapshotId = undefined;
     state.selectedResearchMapNodeId = undefined;
-    state.visualZoom = 1;
+    requestVisualFit();
     state.visualMode = nextMode;
     state.surface = "plot";
     render();
@@ -8188,6 +8228,7 @@ visualZoomFitButton.addEventListener("click", () => {
 toggleVisualFocusButton.addEventListener("click", () => {
   state.visualFocus = !state.visualFocus;
   state.surface = "plot";
+  requestVisualFit();
   addActivity(
     "human",
     state.visualFocus ? "Entered visual focus" : "Exited visual focus",
@@ -8203,6 +8244,7 @@ toggleVisualFocusButton.addEventListener("click", () => {
 toggleVisualDetailButton.addEventListener("click", () => {
   state.visualDetailCollapsed = !state.visualDetailCollapsed;
   state.surface = "plot";
+  requestVisualFit();
   addActivity(
     "human",
     state.visualDetailCollapsed ? "Collapsed visual detail" : "Expanded visual detail",
@@ -8372,6 +8414,7 @@ researchMapList.addEventListener("click", (event) => {
   state.selectedResearchMapSnapshotId = button.dataset.mapSnapshotId;
   state.selectedResearchMapNodeId = undefined;
   state.surface = "plot";
+  requestVisualFit();
   addActivity("human", "Opened saved research map", `${button.dataset.mapSnapshotId} loaded from local map history.`, "passed");
   render();
   resetActiveSurfaceScroll();
@@ -8506,6 +8549,7 @@ composer.addEventListener("submit", async (event) => {
     state.level = "middle";
     state.selectedResearchMapSnapshotId = undefined;
     state.selectedResearchMapNodeId = undefined;
+    requestVisualFit();
     state.replayIndex = 0;
     for (const item of payload.activity ?? []) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);

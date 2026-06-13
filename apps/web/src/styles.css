@@ -872,6 +872,10 @@ body[data-surface="plot"] .inspector {
   display: none;
 }
 
+body[data-surface="plot"] .task-dock {
+  display: none;
+}
+
 body[data-surface="plot"] .work-surface,
 body[data-surface="graph"] .work-surface {
   height: clamp(1040px, 128vh, 1540px);
@@ -1973,6 +1977,22 @@ dd {
 .plot-heading > div:first-child {
   display: grid;
   gap: 4px;
+}
+
+.plot-heading {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.plot-heading .activity-actions {
+  flex: 1 1 520px;
+  justify-content: flex-end;
+  min-width: min(100%, 520px);
+  overflow: visible;
+}
+
+.plot-heading .compact-button {
+  flex: 0 0 auto;
 }
 
 .visual-mode-bar {
