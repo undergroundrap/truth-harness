@@ -149,6 +149,18 @@ describe("MCP tool handlers", () => {
     const shown = await handleTheoremRouteShow({
       routeRef: result.route.routeId
     });
+    const openProofObligations = result.route.proofObligations.filter(
+      (candidate) => candidate.status === "open"
+    ).length;
+    const satisfiedProofObligations = result.route.proofObligations.filter(
+      (candidate) => candidate.status === "satisfied"
+    ).length;
+    const notRequiredProofObligations = result.route.proofObligations.filter(
+      (candidate) => candidate.status === "not-required"
+    ).length;
+    const criticalOpenProofObligations = result.route.proofObligations.filter(
+      (candidate) => candidate.status === "open" && candidate.severity === "critical"
+    ).length;
 
     expect(result.error).toBe(false);
     expect(result.written).toBe(true);
@@ -156,7 +168,12 @@ describe("MCP tool handlers", () => {
     expect(list.total).toBe(1);
     expect(list.routes[0]).toMatchObject({
       routeId: result.route.routeId,
-      finalTrust: "exact-computed"
+      finalTrust: "exact-computed",
+      proofObligations: result.route.proofObligations.length,
+      openProofObligations,
+      satisfiedProofObligations,
+      notRequiredProofObligations,
+      criticalOpenProofObligations
     });
     expect(shown.routeId).toBe(result.route.routeId);
   });
@@ -202,6 +219,7 @@ describe("MCP tool handlers", () => {
     const shown = await handleTheoremRouteShow({
       routeRef: result.route.routeId
     });
+    const list = await handleTheoremRouteList({});
 
     expect(satisfied.obligation.status).toBe("satisfied");
     expect(satisfied.evidence).toMatchObject({
@@ -212,6 +230,13 @@ describe("MCP tool handlers", () => {
     });
     expect(shown.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
       status: "satisfied"
+    });
+    expect(list.routes[0]).toMatchObject({
+      routeId: result.route.routeId,
+      proofObligations: result.route.proofObligations.length,
+      openProofObligations: result.route.proofObligations.length - 1,
+      satisfiedProofObligations: 1,
+      criticalOpenProofObligations: result.route.proofObligations.length - 1
     });
   });
 
