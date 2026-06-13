@@ -1115,12 +1115,22 @@ function verifierRouteObligationMarkdown(receipt) {
     `  - Severity: ${obligation.severity}`,
     `  - Statement: ${obligation.statement}`,
     `  - Required before: ${obligation.requiredBefore}`,
-    ...(obligation.command ? [`  - Command: \`${obligation.command}\``] : []),
+    ...routeObligationWorkOrderMarkdown(obligation, receipt),
     ...(obligation.satisfiedAt ? [`  - Satisfied at: ${obligation.satisfiedAt}`] : []),
     ...(obligation.satisfactionSummary ? [`  - Satisfaction: ${obligation.satisfactionSummary}`] : []),
     ...routeObligationEvidenceMarkdown(obligation),
     ...((obligation.acceptanceCriteria ?? []).map((criterion) => `  - Accept: ${criterion}`))
   ]);
+}
+
+function routeObligationWorkOrderMarkdown(obligation, receipt) {
+  const command = obligation.command ?? commandForObligation(obligation, receipt);
+  return [
+    `  - Command: \`${command}\``,
+    `  - Close with: ${obligationEvidencePath(obligation)}`,
+    `  - Accept when: ${obligationAcceptanceSummary(obligation)}`,
+    `  - Attached: ${routeObligationAttachedEvidenceSummary(obligation)}`
+  ];
 }
 
 function routeObligationEvidenceHtml(obligation) {
@@ -4087,6 +4097,8 @@ function formatRouteLedgerPacket(receipt) {
   const obligations = Array.isArray(route.proofObligations) && route.proofObligations.length > 0
     ? route.proofObligations.flatMap((obligation) => [
       `- ${obligation.obligationId}: ${obligation.title} (${obligation.status}) - ${obligation.requiredBefore}`,
+      ...routeObligationWorkOrderMarkdown(obligation, receipt),
+      ...(obligation.satisfiedAt ? [`  - Satisfied at: ${obligation.satisfiedAt}`] : []),
       ...(obligation.satisfactionSummary ? [`  - Satisfaction: ${obligation.satisfactionSummary}`] : []),
       ...routeObligationEvidenceMarkdown(obligation)
     ])
