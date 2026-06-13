@@ -81,7 +81,7 @@ function Wait-WebStatus {
     }
   }
 
-  throw "Theorem Workbench web server did not become ready at $Url."
+  throw "Truth Harness web server did not become ready at $Url."
 }
 
 Stop-PortListener -TargetPort $Port
@@ -96,4 +96,4 @@ Start-Process -WindowStyle Hidden -FilePath "npm.cmd" -ArgumentList $arguments -
 
 $statusUrl = "http://${HostName}:${Port}/api/status"
 Wait-WebStatus -Url $statusUrl
-Write-Host "Theorem Workbench web ready: http://${HostName}:${Port}/"
+Write-Host "Truth Harness web ready: http://${HostName}:${Port}/"

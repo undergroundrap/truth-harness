@@ -1,23 +1,23 @@
-# Theorem Workbench Parity Ledger
+# Truth Harness Parity Ledger
 
 Date: 2026-06-12
 
-This ledger turns "make it better than existing tools" into product gates. Theorem Workbench should not claim superiority by vibe. It should earn it by matching the best tools where they are already excellent, then adding the local-first evidence layer they do not share.
+This ledger turns "make it better than existing tools" into product gates. Truth Harness should not claim superiority by vibe. It should earn it by matching the best tools where they are already excellent, then adding the local-first evidence layer they do not share.
 
-The current differentiator is the claim ledger: specialized tools compute, prove, retrieve, execute, or track artifacts, but Theorem turns the human claim into a first-class local record with dependencies, supersession, tags, trust labels, evidence refs, open checks, and report output.
+The current differentiator is the claim ledger: specialized tools compute, prove, retrieve, execute, or track artifacts, but Truth Harness turns the human claim into a first-class local record with dependencies, supersession, tags, trust labels, evidence refs, open checks, and report output.
 
 ## Naming Decision
 
-Use **Theorem Workbench** as the public product name.
+Use **Truth Harness** as the public product name.
 
-- **Keep:** Theorem Workbench is clear, serious, search-descriptive, and honest about being a working environment rather than an oracle.
+- **Keep:** Truth Harness is broader than math without weakening the verification promise: it can cover math, code, science, sources, simulations, and research provenance.
 - **Avoid:** Do not brand the public product as only "Theorem." It is too generic, competes with theorem-prover terminology, and is weaker for search and trademark distinctiveness.
-- **Shorthand:** `theorem` is fine as the CLI command and internal shorthand.
-- **Positioning:** "Theorem Workbench" should mean a local-first research IDE for verifiable claims, not a chatbot or black-box answer engine.
+- **Shorthand:** `theorem` remains the CLI command and internal compatibility shorthand until a deliberate migration is implemented.
+- **Positioning:** "Truth Harness" should mean a local-first research IDE for verifiable claims, not a chatbot or black-box answer engine.
 
 ## Parity Targets
 
-| Area | Existing leader | Parity bar | Theorem Workbench edge | Next engineering gate |
+| Area | Existing leader | Parity bar | Truth Harness edge | Next engineering gate |
 | --- | --- | --- | --- | --- |
 | Computed answers | WolframAlpha / Mathematica | Natural math input, interpreted input, exact/symbolic/numeric answers, plots, assumptions, step summaries. | Receipts, trust labels, replay commands, local privacy, agent logs, explicit uncertainty. | Typed math router: exact arithmetic, symbolic, SMT, proof, units, benchmark, report. |
 | Open math | SageMath / SymPy | Broad algebra, calculus, number theory, combinatorics, numerical methods, plotting, package ecosystem. | Adapter-first architecture with evidence profiles instead of pretending one engine is truth. | Engine manifests, version capture, capability probes, golden tests, and fallback explanations. |
@@ -30,7 +30,7 @@ Use **Theorem Workbench** as the public product name.
 
 ## Launch Rule
 
-Theorem Workbench can say it is "stronger" only in the narrow claim it can demonstrate:
+Truth Harness can say it is "stronger" only in the narrow claim it can demonstrate:
 
 > It is stronger than using AI chat alone for serious math or research because it forces claims through replayable local evidence, trust labels, model-context disclosure, validation gaps, and exportable review packets.
 

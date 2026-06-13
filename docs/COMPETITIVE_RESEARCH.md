@@ -1,10 +1,10 @@
-# Theorem Workbench Competitive Research
+# Truth Harness Competitive Research
 
 Date: 2026-06-12
 
 ## Summary
 
-Theorem Workbench should not try to be a prettier WolframAlpha or another chat app. The serious opportunity is a local-first verification workbench that lets humans and agents route claims through reproducible engines, receipts, citations, proof checks, simulations, and replayable reports.
+Truth Harness should not try to be a prettier WolframAlpha or another chat app. The serious opportunity is a local-first verification workbench that lets humans and agents route claims through reproducible engines, receipts, citations, proof checks, simulations, and replayable reports.
 
 The market already has excellent pieces:
 
@@ -20,7 +20,7 @@ No obvious product combines all of these into a local-first, agent-operable, rec
 
 ## Landscape
 
-| Tool class | What exists | What to borrow | What Theorem Workbench must add |
+| Tool class | What exists | What to borrow | What Truth Harness must add |
 | --- | --- | --- | --- |
 | Computational answer engines | WolframAlpha frames itself as a system for making knowledge computable and answering free-form queries with built-in data, algorithms, and methods. | Natural input, clear interpreted-input display, step/result summaries, broad domain coverage. | Local-first projects, open receipts, agent trace logs, proof/simulation provenance, and no black-box truth claims. |
 | Open math systems | SageMath is GPL software that combines many open-source math packages behind a Python-based interface. SymPy is a Python symbolic math library that can be embedded in apps. | Use engines through adapters: exact arithmetic, symbolic algebra, plots, number theory, optimization, units, differential equations. | A trust layer that records which engine ran, what input was used, what version/config ran, and whether a result is proof, computation, heuristic, or conjecture. |
@@ -33,7 +33,7 @@ No obvious product combines all of these into a local-first, agent-operable, rec
 
 ## Product Thesis
 
-Theorem Workbench is the verification IDE for AI-assisted research.
+Truth Harness is the verification IDE for AI-assisted research.
 
 The app should feel like Codex for serious research, but the primary unit is not a chat message. The primary unit is a claim with receipts:
 
@@ -52,9 +52,9 @@ The app should feel like Codex for serious research, but the primary unit is not
 
 This turns Claude, Codex, local models, and future frontier systems into workers inside a reproducible research harness instead of opaque answer machines.
 
-The unique layer is the claim ledger. Theorem should not claim that its first-party engines are better than specialized CAS, proof assistants, notebooks, or RAG systems. The claim is stronger and more defensible: Theorem coordinates those engines into local claim records with dependencies, supersession, trust labels, verifier ladders, and reportable evidence trails that agents can query through CLI/MCP.
+The unique layer is the claim ledger. Truth Harness should not claim that its first-party engines are better than specialized CAS, proof assistants, notebooks, or RAG systems. The claim is stronger and more defensible: Truth Harness coordinates those engines into local claim records with dependencies, supersession, trust labels, verifier ladders, and reportable evidence trails that agents can query through CLI/MCP.
 
-See [PARITY_LEDGER.md](PARITY_LEDGER.md) for the current scored parity targets, launch rule, and naming decision. The short version: keep **Theorem Workbench** as the public name, use `theorem` as the CLI shorthand, and do not claim the product beats specialized tools until the matching parity gate is implemented and benchmarked.
+See [PARITY_LEDGER.md](PARITY_LEDGER.md) for the current scored parity targets, launch rule, and naming decision. The short version: keep **Truth Harness** as the public name, use `theorem` as the CLI shorthand, and do not claim the product beats specialized tools until the matching parity gate is implemented and benchmarked.
 
 ## Differentiators
 

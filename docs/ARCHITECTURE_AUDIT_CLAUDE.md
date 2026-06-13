@@ -1,4 +1,4 @@
-# Theorem Workbench — Architecture Audit (Claude)
+# Truth Harness — Architecture Audit (Claude)
 
 Date: 2026-06-10
 Auditor: Claude (deep repo inspection; every file reference below was verified against the working tree)
@@ -13,7 +13,7 @@ Repo state audited: 9 commits, `main` tip `64b4668` ("feat: add bounded numeric 
 
 ### What the repo currently is
 
-Theorem Workbench today is **two different systems sharing one monorepo**:
+Truth Harness today is **two different systems sharing one monorepo**:
 
 1. **A small, real, honest math verification kernel.** Exact rational arithmetic over bigints (`packages/core/src/rational.ts`), a recursive-descent expression parser (`packages/core/src/expression.ts`), finite counterexample search plus a Z/2Z modular parity proof kernel (`packages/core/src/parity-proof.ts`), conservative rational interval bounds (`packages/core/src/interval.ts`), SI dimensional analysis (`packages/core/src/dimension.ts`), and a sandbox-lite SymPy subprocess adapter (`packages/core/src/sympy.ts` + `tools/sympy_bridge.py`). All of it emits a `theorem.receipt.v0` evidence-graph receipt (`packages/core/src/receipt.ts`, `types.ts`) with deterministic content-addressed run IDs and a replay check (`replay.ts`).
 

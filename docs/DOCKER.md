@@ -1,8 +1,8 @@
 # Docker-First Workflow
 
-Theorem Workbench should be run from Docker by default when you are testing agent-facing code, proof gates, symbolic adapters, or MCP workflows. Docker keeps Node, Python, SymPy, Maxima, Z3, and npm dependencies out of the host environment and makes the public credibility path easier to replay.
+Truth Harness should be run from Docker by default when you are testing agent-facing code, proof gates, symbolic adapters, or MCP workflows. Docker keeps Node, Python, SymPy, Maxima, Z3, and npm dependencies out of the host environment and makes the public credibility path easier to replay.
 
-Docker is still not magic security. The Docker daemon is powerful, and a dev container with the repository bind-mounted can change files in that repository. Treat Docker as the baseline isolation layer, then use Theorem Workbench receipts, measured sandbox status, and replayable evidence for stronger claims.
+Docker is still not magic security. The Docker daemon is powerful, and a dev container with the repository bind-mounted can change files in that repository. Treat Docker as the baseline isolation layer, then use Truth Harness receipts, measured sandbox status, and replayable evidence for stronger claims.
 
 ## Highest-Safety Verification
 
@@ -11,7 +11,7 @@ Start Docker Desktop first and make sure the Linux engine is running.
 This builds a verification image from the committed source without bind-mounting the repo into the running checks. It runs the TypeScript build, test suite, launch proof gate, a concrete Maxima CAS agreement check, and a concrete Z3 SMT-LIB check inside the image build.
 
 ```bash
-docker build --target verify -t theorem-workbench:verify .
+docker build --target verify -t truth-harness:verify .
 ```
 
 Use this before demos or before asking another agent to trust the local tree. It still downloads npm and Python dependencies during the image build.
@@ -81,7 +81,7 @@ Run the MCP server over stdio:
 docker compose run --rm -i mcp
 ```
 
-By default, MCP `theorem_code_run` is still disabled. To expose it to an agent, the MCP process must have `THEOREM_ALLOW_CODE_RUN=1`. Unsandboxed direct execution needs the additional `THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1` escape hatch; otherwise agents should set `policy.requireSandbox: true`. In the CLI/MCP Docker no-network services, `policy.requireSandbox: true` can pass only when `theorem_code_sandbox_status` measures the Theorem container marker, a container runtime marker, loopback-only networking, and no default route.
+By default, MCP `theorem_code_run` is still disabled. To expose it to an agent, the MCP process must have `THEOREM_ALLOW_CODE_RUN=1`. Unsandboxed direct execution needs the additional `THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1` escape hatch; otherwise agents should set `policy.requireSandbox: true`. In the CLI/MCP Docker no-network services, `policy.requireSandbox: true` can pass only when `theorem_code_sandbox_status` measures the legacy Theorem container marker, a container runtime marker, loopback-only networking, and no default route.
 
 ## What Is Isolated
 

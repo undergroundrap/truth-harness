@@ -2,7 +2,7 @@
 
 Date: 2026-06-10
 
-Theorem Workbench trust labels describe what local evidence currently supports. They are not confidence vibes, model opinions, or marketing claims.
+Truth Harness trust labels describe what local evidence currently supports. They are not confidence vibes, model opinions, or marketing claims.
 
 ## Labels
 
@@ -36,17 +36,17 @@ Verifier routes are work orders, not proof objects. Claim-ledger promotion only 
 
 `theorem smt solve --int x --constraint "x > 0"` and the MCP `theorem_smt_solve` tool generate SMT-LIB from explicit structured integer constraints and store the generated `.smt2` file locally before checking it. This is not broad natural-language translation; humans and agents must review the generated SMT-LIB and its assumptions.
 
-When a satisfiable SMT check includes `(get-model)`, Theorem Workbench may parse Z3 `define-fun` bindings into structured JSON. Parsed model bindings are a convenience for review, replay, and follow-up constraints; the raw solver stdout remains part of the record, and the binding list is still only evidence about the encoded SMT-LIB artifact.
+When a satisfiable SMT check includes `(get-model)`, Truth Harness may parse Z3 `define-fun` bindings into structured JSON. Parsed model bindings are a convenience for review, replay, and follow-up constraints; the raw solver stdout remains part of the record, and the binding list is still only evidence about the encoded SMT-LIB artifact.
 
 Every receipt includes an `evidenceProfile` with the evidence kind, backend ids, backend roles, versions when available, inputs, outputs, replayability, proof-checker status, and limitations. Agents should read this field before relying on a trust label.
 
-Symbolic CAS receipts use SymPy as the primary local symbolic adapter. When Maxima is available through `THEOREM_MAXIMA` or `maxima`, Theorem also runs an independent symbolic equality check and may upgrade a symbolic result to `cross-checked` only when Maxima agrees. Missing Maxima, unparseable output, execution errors, or disagreement do not upgrade trust; a disagreement leaves the symbolic claim `unverified` until resolved by a stronger checker or human review.
+Symbolic CAS receipts use SymPy as the primary local symbolic adapter. When Maxima is available through `THEOREM_MAXIMA` or `maxima`, Truth Harness also runs an independent symbolic equality check and may upgrade a symbolic result to `cross-checked` only when Maxima agrees. Missing Maxima, unparseable output, execution errors, or disagreement do not upgrade trust; a disagreement leaves the symbolic claim `unverified` until resolved by a stronger checker or human review.
 
 Receipt JSON is runtime-validated before replay, rendering, evidence audits, and discovery packages use it. Invalid or legacy receipt files must be treated as unresolved evidence, not downgraded-but-trusted claims.
 
 Workspace validation scans receipts for schema failures, non-local-first privacy metadata, missing backend records, and `proved` labels without accepted proof-checker metadata. It also checks known workspace JSON records, including proof-check, SMT-check, and code-run records, against their checked-in JSON Schema contracts, expected artifact ids, resolvable local evidence refs, and approval/disclosure linkage before agents rely on sent or received external-context records.
 
-CAS output, notebook output, code-run stdout/stderr, simulations, RAG hits, and hosted model responses are evidence artifacts. They are not truth by themselves. A code-run record proves only that a local direct process was launched and captured under the recorded command, cwd, timeout, environment boundary, output limit, sandbox measurement, and execution-policy decision. Native host code-run records must say `networkAccess: unknown`; the Docker no-network profile may say `networkAccess: none` only when the runtime measures the Theorem container marker, a container runtime marker, loopback-only networking, and no default route. Workflows that require isolation should set `requireSandbox` and accept a fail-closed result when no sandbox provider is available. MCP agents cannot request unsandboxed code execution unless the server operator enables both `THEOREM_ALLOW_CODE_RUN=1` and `THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1`.
+CAS output, notebook output, code-run stdout/stderr, simulations, RAG hits, and hosted model responses are evidence artifacts. They are not truth by themselves. A code-run record proves only that a local direct process was launched and captured under the recorded command, cwd, timeout, environment boundary, output limit, sandbox measurement, and execution-policy decision. Native host code-run records must say `networkAccess: unknown`; the Docker no-network profile may say `networkAccess: none` only when the runtime measures the legacy Theorem container marker, a container runtime marker, loopback-only networking, and no default route. Workflows that require isolation should set `requireSandbox` and accept a fail-closed result when no sandbox provider is available. MCP agents cannot request unsandboxed code execution unless the server operator enables both `THEOREM_ALLOW_CODE_RUN=1` and `THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1`.
 
 Exact arithmetic receipts include deterministic trace artifacts with every local rational-arithmetic step plus middle-school, high-school, college, and expert explanation views. Those explanations are teaching aids derived from the machine trace; if a natural-language explanation ever conflicts with the trace, the trace is authoritative.
 

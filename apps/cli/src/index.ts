@@ -2215,7 +2215,7 @@ disclosure
 
 const workspace = program
   .command("workspace")
-  .description("Manage a local-first private Theorem Workbench project store.");
+  .description("Manage a local-first private Truth Harness project store.");
 
 workspace
   .command("init")
@@ -2790,7 +2790,7 @@ program
       return;
     }
 
-    console.log("Theorem Workbench doctor");
+    console.log("Truth Harness doctor");
     console.log("");
     printEngineManifest(manifest);
   });

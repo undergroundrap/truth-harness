@@ -1,12 +1,12 @@
-# Theorem Workbench Engine Strategy
+# Truth Harness Engine Strategy
 
 Date: 2026-06-12
 
 ## Short Answer
 
-Theorem Workbench is building its own engine, but the engine is not a monolithic replacement for Lean, Z3, SymPy, SageMath, Jupyter, or every simulator.
+Truth Harness is building its own engine, but the engine is not a monolithic replacement for Lean, Z3, SymPy, SageMath, Jupyter, or every simulator.
 
-The engine Theorem owns is the local verification operating system:
+The engine Truth Harness owns is the local verification operating system:
 
 - problem normalization
 - verifier routing
@@ -19,11 +19,11 @@ The engine Theorem owns is the local verification operating system:
 - replay, benchmark, snapshot, and report contracts
 - agent-facing CLI/MCP/API/web surfaces
 
-Specialized solvers remain specialized solvers. Theorem decides when to call them, what their output means, how much trust that output earns, where the artifact is stored, how it can be replayed, and whether an agent is allowed to build a stronger claim from it.
+Specialized solvers remain specialized solvers. Truth Harness decides when to call them, what their output means, how much trust that output earns, where the artifact is stored, how it can be replayed, and whether an agent is allowed to build a stronger claim from it.
 
 ## What We Own
 
-Theorem should own the parts that make the product unique and defensible:
+Truth Harness should own the parts that make the product unique and defensible:
 
 1. **Truth policy**
    The rules that decide when a claim is `unverified`, `refuted`, `exact-computed`, `smt-checked`, `cross-checked`, or `proved`.
@@ -53,7 +53,7 @@ These pieces are the product. They are not available by simply installing a CAS 
 
 ## What We Should Adapt
 
-Theorem should adapt mature engines when they are already world-class:
+Truth Harness should adapt mature engines when they are already world-class:
 
 | Need | Preferred strategy |
 | --- | --- |
@@ -65,7 +65,7 @@ Theorem should adapt mature engines when they are already world-class:
 | Literature/RAG | Local lexical/vector adapters that create citation receipts; external APIs only through disclosure records. |
 | Simulation | Record model, parameters, assumptions, uncertainty, validation boundary, and replay; domain engines remain adapters. |
 
-Adapters must be boring, typed, replayable, and replaceable. Theorem should never depend on one external engine as an oracle.
+Adapters must be boring, typed, replayable, and replaceable. Truth Harness should never depend on one external engine as an oracle.
 
 ## Native Kernels We Should Build
 
@@ -126,7 +126,7 @@ Not every problem uses every rung. The router should choose the smallest verifie
 
 ## Trust Rules
 
-Theorem must keep these rules stable:
+Truth Harness must keep these rules stable:
 
 1. **AI output never creates truth by itself.**
 2. **A backend availability probe never creates evidence.**
@@ -141,7 +141,7 @@ Theorem must keep these rules stable:
 
 A raw engine gives an answer.
 
-Theorem gives:
+Truth Harness gives:
 
 - the normalized claim,
 - which engine ran,
@@ -167,7 +167,7 @@ Serious researchers will trust a system faster when it can say:
 
 > This claim is not trusted because our AI likes it. It is trusted because the local receipt links to a concrete Z3/Lean/SymPy/native-kernel run, records the exact artifact, and prevents the claim from outrunning that evidence.
 
-Theorem should be judged by how well it coordinates, constrains, records, and audits engines, not by pretending it can replace decades of proof-assistant and CAS work in one repo.
+Truth Harness should be judged by how well it coordinates, constrains, records, and audits engines, not by pretending it can replace decades of proof-assistant and CAS work in one repo.
 
 ## Roadmap
 
@@ -216,4 +216,4 @@ Build native kernels for small, auditable truth-preserving primitives.
 
 Use proven external engines for deep domain computation.
 
-Make Theorem own the evidence loop that turns engine output into trustworthy, replayable, local research artifacts.
+Make Truth Harness own the evidence loop that turns engine output into trustworthy, replayable, local research artifacts.

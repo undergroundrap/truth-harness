@@ -735,6 +735,66 @@ h1 {
   background: #181818;
 }
 
+body[data-surface="plot"] .session-title,
+body[data-surface="graph"] .session-title {
+  margin-bottom: 10px;
+}
+
+body[data-surface="plot"] .message,
+body[data-surface="graph"] .message {
+  margin-bottom: 8px;
+  box-shadow: none;
+  padding: 10px 12px;
+}
+
+body[data-surface="plot"] .user-message,
+body[data-surface="graph"] .user-message {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+body[data-surface="plot"] .user-message .message-meta,
+body[data-surface="graph"] .user-message .message-meta {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
+body[data-surface="plot"] .user-message .math-display,
+body[data-surface="graph"] .user-message .math-display {
+  margin-top: 0;
+}
+
+body[data-surface="plot"] .engine-message,
+body[data-surface="graph"] .engine-message {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 14px;
+}
+
+body[data-surface="plot"] .engine-message .message-meta,
+body[data-surface="graph"] .engine-message .message-meta {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
+body[data-surface="plot"] .answer-line,
+body[data-surface="graph"] .answer-line {
+  margin-bottom: 0;
+}
+
+body[data-surface="plot"] .answer-value,
+body[data-surface="graph"] .answer-value {
+  font-size: clamp(30px, 4vw, 44px);
+}
+
+body[data-surface="plot"] .receipt-summary,
+body[data-surface="graph"] .receipt-summary {
+  align-self: center;
+}
+
 .message-meta {
   color: var(--muted);
   font-size: 12px;
@@ -806,11 +866,12 @@ h1 {
   display: inline-grid;
   grid-template-rows: auto auto;
   justify-items: stretch;
-  min-width: 1.48em;
+  min-width: 1.9em;
   vertical-align: middle;
   text-align: center;
   line-height: 1;
   font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
 }
 
 .math-frac-row {
@@ -1456,50 +1517,97 @@ dd {
 
 .plot-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.36fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+
+.plot-heading > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.visual-mode-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #202020;
+  padding: 3px;
+}
+
+.visual-mode-button {
+  min-width: 116px;
+  min-height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 12px;
+}
+
+.visual-mode-button:hover {
+  color: #dfd8cb;
+}
+
+.visual-mode-button.active {
+  background: #3a3834;
+  color: var(--text);
 }
 
 .plot-canvas {
+  display: grid;
+  place-items: stretch;
   min-width: 0;
-  overflow: auto;
+  min-height: clamp(340px, 46vh, 560px);
+  overflow: hidden;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: #101010;
-  padding: 10px;
-  scrollbar-gutter: stable;
+  padding: 12px;
 }
 
 .plot-canvas svg {
   display: block;
   width: 100%;
-  min-width: 620px;
-  height: auto;
+  min-width: 0;
+  height: 100%;
+  min-height: 340px;
 }
 
 .plot-detail {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.7fr) minmax(320px, 1.3fr);
+  gap: 12px 16px;
   min-width: 0;
-  overflow: auto;
+  overflow: visible;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: #101010;
   padding: 12px;
-  scrollbar-gutter: stable;
 }
 
 .plot-detail h4 {
+  grid-column: 1 / -1;
   color: #f1eadc;
   font-size: 14px;
   margin: 0 0 8px;
 }
 
 .plot-detail p {
+  grid-column: 1 / -1;
   color: #d8d2c8;
   font-size: 12px;
   line-height: 1.45;
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .plot-facts {
@@ -1515,9 +1623,10 @@ dd {
 }
 
 .plot-data {
-  border-top: 1px solid var(--line-soft);
-  margin-top: 12px;
-  padding-top: 12px;
+  min-width: 0;
+  border-left: 1px solid var(--line-soft);
+  margin-top: 0;
+  padding-left: 16px;
 }
 
 .plot-data h5 {
@@ -1527,7 +1636,7 @@ dd {
 }
 
 .plot-data-table-wrap {
-  max-height: 190px;
+  max-height: 220px;
   overflow: auto;
   border: 1px solid var(--line-soft);
   border-radius: 7px;
@@ -1567,22 +1676,23 @@ dd {
 }
 
 .graph-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
 }
 
 .graph-canvas {
   display: grid;
-  flex: 1 1 auto;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  flex: 0 0 auto;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   align-content: start;
   gap: 10px;
   min-height: 0;
-  overflow: auto;
-  scrollbar-gutter: stable;
+  overflow: visible;
 }
 
 .canvas-node {
@@ -1643,13 +1753,13 @@ dd {
 }
 
 .graph-detail {
+  flex: 0 0 auto;
   min-width: 0;
-  overflow: auto;
+  overflow: visible;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: #101010;
   padding: 12px;
-  scrollbar-gutter: stable;
 }
 
 .graph-detail h4 {
@@ -3270,6 +3380,21 @@ textarea:focus-visible {
   .graph-canvas,
   .report-facts {
     grid-template-columns: 1fr;
+  }
+
+  .plot-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .plot-data {
+    border-left: 0;
+    border-top: 1px solid var(--line-soft);
+    padding-left: 0;
+    padding-top: 12px;
+  }
+
+  .visual-mode-button {
+    flex: 1 1 120px;
   }
 
   .segmented {

@@ -1,10 +1,10 @@
-# Theorem Workbench Moat
+# Truth Harness Moat
 
 Date: 2026-06-12
 
 ## The Moat
 
-Theorem Workbench should win by becoming the local verification layer for serious agentic work.
+Truth Harness should win by becoming the local verification layer for serious agentic work.
 
 The moat is not a prettier chat interface. It is the combination of:
 
@@ -21,9 +21,9 @@ The short version:
 
 ## Engine Positioning
 
-Theorem Workbench is building its own engine, but the engine is the verification layer around research work, not a from-scratch replacement for every specialized solver.
+Truth Harness is building its own engine, but the engine is the verification layer around research work, not a from-scratch replacement for every specialized solver.
 
-Theorem owns:
+Truth Harness owns:
 
 - the trust policy,
 - verifier routing,
@@ -35,7 +35,7 @@ Theorem owns:
 - replay/report contracts,
 - agent-facing CLI/MCP/web surfaces.
 
-Theorem adapts mature engines such as SymPy, Z3, Lean, SageMath, Maxima, notebooks, local search, and later domain simulators. That is a strength, not a weakness. The core product decides what each engine output can and cannot prove, records the exact artifact, and blocks claims from outrunning the evidence.
+Truth Harness adapts mature engines such as SymPy, Z3, Lean, SageMath, Maxima, notebooks, local search, and later domain simulators. That is a strength, not a weakness. The core product decides what each engine output can and cannot prove, records the exact artifact, and blocks claims from outrunning the evidence.
 
 Native kernels should stay small and auditable: exact rational arithmetic, expression normalization, counterexample search, dimensions, intervals, evidence-reference resolution, and trust-label gates. Large domain engines should be adapters until there is a clear reason to own a narrow kernel ourselves.
 
@@ -53,7 +53,7 @@ Existing tools are excellent at parts of the workflow:
 - Lab notebooks record work.
 - Benchmark suites measure systems.
 
-Theorem Workbench is different because it treats **the claim itself** as the core object.
+Truth Harness is different because it treats **the claim itself** as the core object.
 
 A serious research result is rarely one answer. It is a chain:
 
@@ -69,7 +69,7 @@ A serious research result is rarely one answer. It is a chain:
 10. Human review.
 11. A final, scoped claim.
 
-Most AI interfaces lose that chain inside chat history. Theorem Workbench records it as local artifacts agents can query, replay, inspect, and improve.
+Most AI interfaces lose that chain inside chat history. Truth Harness records it as local artifacts agents can query, replay, inspect, and improve.
 
 ## Claim Ledger Contract
 
@@ -93,7 +93,7 @@ This is the primitive that lets math become modular like code. A long proof, pap
 
 Claude and Codex are powerful, but by default their reasoning state is trapped in a conversation. They can forget, summarize too aggressively, or sound confident after a bad assumption.
 
-Theorem Workbench gives agents a harder substrate:
+Truth Harness gives agents a harder substrate:
 
 - Ask the model to propose a subclaim.
 - Record that subclaim in the claim ledger.
@@ -123,7 +123,7 @@ Claims to avoid until earned:
 
 The credible line:
 
-> Theorem Workbench does not make AI true. It makes AI-assisted work inspectable, replayable, and harder to overclaim.
+> Truth Harness does not make AI true. It makes AI-assisted work inspectable, replayable, and harder to overclaim.
 
 ## Near-Term Product Wedge
 
@@ -133,7 +133,7 @@ The next moat-building sequence should be:
 2. Make every result promotable into a claim ledger record.
 3. Make the web UI show a claim graph that can be searched, filtered, copied, downloaded, and exported into a report.
 4. Make agent sessions recursively update the ledger rather than leaving important state in chat.
-5. Publish benchmark demos where Theorem catches fluent AI mistakes and exports replayable receipts.
+5. Publish benchmark demos where Truth Harness catches fluent AI mistakes and exports replayable receipts.
 
 ## Product Rule
 

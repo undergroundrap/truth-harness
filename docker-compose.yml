@@ -1,4 +1,4 @@
-name: theorem-workbench
+name: truth-harness
 
 x-theorem-security: &theorem-security
   security_opt:
@@ -13,7 +13,7 @@ services:
     build:
       context: .
       target: dev
-    image: theorem-workbench:dev
+    image: truth-harness:dev
     working_dir: /workspace
     network_mode: "none"
     environment:
@@ -24,8 +24,8 @@ services:
       THEOREM_Z3: "z3"
     volumes:
       - .:/workspace
-      - theorem_node_modules:/workspace/node_modules
-      - theorem_npm_cache:/home/theorem/.npm
+      - truth_harness_node_modules:/workspace/node_modules
+      - truth_harness_npm_cache:/home/theorem/.npm
     command: ["npm", "run", "check"]
 
   mcp:
@@ -33,7 +33,7 @@ services:
     build:
       context: .
       target: dev
-    image: theorem-workbench:dev
+    image: truth-harness:dev
     working_dir: /workspace
     network_mode: "none"
     environment:
@@ -44,8 +44,8 @@ services:
       THEOREM_Z3: "z3"
     volumes:
       - .:/workspace
-      - theorem_node_modules:/workspace/node_modules
-      - theorem_npm_cache:/home/theorem/.npm
+      - truth_harness_node_modules:/workspace/node_modules
+      - truth_harness_npm_cache:/home/theorem/.npm
     command: ["npm", "run", "mcp"]
     stdin_open: true
 
@@ -54,7 +54,7 @@ services:
     build:
       context: .
       target: dev
-    image: theorem-workbench:dev
+    image: truth-harness:dev
     working_dir: /workspace
     environment:
       CI: "true"
@@ -64,12 +64,12 @@ services:
       THEOREM_Z3: "z3"
     volumes:
       - .:/workspace
-      - theorem_node_modules:/workspace/node_modules
-      - theorem_npm_cache:/home/theorem/.npm
+      - truth_harness_node_modules:/workspace/node_modules
+      - truth_harness_npm_cache:/home/theorem/.npm
     command: ["npm", "run", "web:serve", "--", "--host", "0.0.0.0", "--port", "4180"]
     ports:
       - "127.0.0.1:4180:4180"
 
 volumes:
-  theorem_node_modules:
-  theorem_npm_cache:
+  truth_harness_node_modules:
+  truth_harness_npm_cache:

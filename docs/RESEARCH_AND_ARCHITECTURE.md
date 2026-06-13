@@ -1,19 +1,20 @@
-# Theorem Workbench Research And Architecture
+# Truth Harness Research And Architecture
 
 Date: 2026-06-08
 
 ## Name Check
 
-Theorem Workbench means two things:
+Truth Harness means one product idea:
 
-1. A workbench for doing verified math with AI agents.
-2. A benchmark harness for measuring whether agents, tools, prompts, and solver portfolios actually produce trustworthy math.
+1. A local harness for routing claims through evidence, replay, and verification.
+2. A workbench for humans and agents to organize long mathematical, scientific, code, source, and simulation investigations.
 
-Working repo/package name: `theorem-workbench`.
-Display brand: `Theorem Workbench`.
+Working repo/package name: `truth-harness`.
+Display brand: `Truth Harness`.
 Suggested subtitle: `Verified Math for AI Agents`.
+Compatibility namespace: the CLI command, package scope, schemas, MCP tool names, and local store currently retain `theorem`/`.theorem-workbench` names until a migration preserves existing receipts and tests.
 
-Direct checks performed on 2026-06-08:
+Legacy direct checks performed for the prior `theorem-workbench` name on 2026-06-08:
 
 | Surface | Query | Result |
 | --- | --- | --- |
@@ -23,16 +24,16 @@ Direct checks performed on 2026-06-08:
 | crates.io | `https://crates.io/api/v1/crates/theorem-workbench` | 404 |
 | Collapsed spelling checks | `theoremworkbench` | No exact GitHub user/org or package hits found |
 
-Broader risk: `theorem workbench` has adjacent academic/theorem-prover phrase collisions, including older projects such as Tableau Workbench and SPASS Workbench. That is acceptable because there was no exact `theorem-workbench` or `theoremworkbench` product/package collision in the checks. Use the hyphenated package/repo name `theorem-workbench`, and use `Theorem Workbench` as the display brand.
+Broader risk: `theorem workbench` has adjacent academic/theorem-prover phrase collisions, including older projects such as Tableau Workbench and SPASS Workbench. The move to `truth-harness` should get fresh GitHub, npm, PyPI, crates.io, domain, and trademark-adjacent checks before public launch. Until then, code keeps the legacy `theorem` compatibility namespace where changing it would break receipts or APIs.
 
 Brand/subtitle options:
 
 | Name | Why |
 | --- | --- |
-| Theorem Workbench: Verified Math for AI Agents | Best public positioning. |
-| Theorem Workbench: Agentic Math Workbench | Strong fit for Claude/Codex usage. |
-| Theorem Workbench: Proof And Computation Lab | Explains scope without narrowing to benchmarks only. |
-| Theorem Workbench: Auditable Math For Agents | Sharp differentiator. |
+| Truth Harness: Verified Math for AI Agents | Best public positioning. |
+| Truth Harness: Agentic Math Workbench | Strong fit for Claude/Codex usage. |
+| Truth Harness: Proof And Computation Lab | Explains scope without narrowing to benchmarks only. |
+| Truth Harness: Auditable Math For Agents | Sharp differentiator. |
 
 Trademark note: this is a developer-name availability check, not legal clearance.
 
@@ -60,7 +61,7 @@ Do not fork one large repo as the foundation. The better strategy is a small, st
 
 AI should plan and explain. Verification engines should decide what is trusted.
 
-Theorem Workbench is not only a bundle of third-party solvers, and it is not a plan to rewrite every solver from scratch. The native engine is the verification operating system: problem normalization, verifier routing, trust-label policy, receipt generation, evidence graphs, claim-ledger gates, workspace validation, model disclosure, replay, benchmarks, and reports. Specialized tools such as SymPy, Z3, Lean, SageMath, Maxima, notebooks, RAG indexes, and simulators should plug into that engine as adapters with explicit trust boundaries. See [ENGINE_STRATEGY.md](ENGINE_STRATEGY.md) for the detailed boundary between native kernels and external engines.
+Truth Harness is not only a bundle of third-party solvers, and it is not a plan to rewrite every solver from scratch. The native engine is the verification operating system: problem normalization, verifier routing, trust-label policy, receipt generation, evidence graphs, claim-ledger gates, workspace validation, model disclosure, replay, benchmarks, and reports. Specialized tools such as SymPy, Z3, Lean, SageMath, Maxima, notebooks, RAG indexes, and simulators should plug into that engine as adapters with explicit trust boundaries. See [ENGINE_STRATEGY.md](ENGINE_STRATEGY.md) for the detailed boundary between native kernels and external engines.
 
 The system should never return a naked answer when it can return:
 
@@ -71,7 +72,7 @@ The system should never return a naked answer when it can return:
 5. A trust label for every result.
 6. Privacy metadata that states whether the run stayed local or disclosed data to an external service.
 
-The moat is the claim ledger: Theorem treats claims as first-class local artifacts, not as loose chat messages. A claim can depend on earlier claims, supersede a mistaken claim, carry tags, attach evidence refs, expose a verifier ladder, and export a Markdown review packet. This gives long mathematical and scientific work a codebase-like structure: small claims, explicit dependencies, inspectable diffs later, and no hidden final answer detached from its evidence chain.
+The moat is the claim ledger: Truth Harness treats claims as first-class local artifacts, not as loose chat messages. A claim can depend on earlier claims, supersede a mistaken claim, carry tags, attach evidence refs, expose a verifier ladder, and export a Markdown review packet. This gives long mathematical and scientific work a codebase-like structure: small claims, explicit dependencies, inspectable diffs later, and no hidden final answer detached from its evidence chain.
 
 Trust labels:
 
@@ -230,7 +231,7 @@ Current proof-check records use `theorem.proof-check.v0` and live under `.theore
 
 Current SMT-check records use `theorem.smt-check.v0` and live under `.theorem-workbench/smt/` when `theorem smt check <file> --write`, `theorem smt solve`, MCP `theorem_smt_check` with `write: true`, or MCP `theorem_smt_solve` is used. They store the Z3 command, source path, source hash, optional query name, stdout/stderr, replay command, solver boundary, JSON path, and Markdown report path. `theorem smt solve` and `theorem_smt_solve` generate `.smt2` sources under `.theorem-workbench/smt/sources/` from explicit integer variables and constraints before checking them. When `get-model` is present and Z3 returns `sat`, records also extract simple `define-fun` model bindings into structured JSON while preserving raw stdout. `sat` and `unsat` map to `smt-checked`; missing Z3, execution errors, `unknown`, or unrecognized output stay `unverified`. `theorem smt list` and `theorem_smt_list` expose those records for audits, snapshots, research-session evidence refs, and agent follow-up.
 
-This makes Theorem Workbench useful for:
+This makes Truth Harness useful for:
 
 1. Regression testing the app itself.
 2. Comparing Claude/Codex prompting strategies.
@@ -551,7 +552,7 @@ This gives agents a local artifact to cite before they make biomedical, physics,
 
 ## Notebook Run Records
 
-Notebook run records are local provenance records for notebooks, scripts, tests, analyses, simulations, and pipelines. They are record-only artifacts: Theorem Workbench does not execute the command or verify outputs at this layer.
+Notebook run records are local provenance records for notebooks, scripts, tests, analyses, simulations, and pipelines. They are record-only artifacts: Truth Harness does not execute the command or verify outputs at this layer.
 
 Each `theorem.notebook-run.v0` entry stores:
 
@@ -566,9 +567,9 @@ Each `theorem.notebook-run.v0` entry stores:
 
 This gives agents a disciplined place to point when a simulation, analysis, benchmark, or discovery package depends on local code.
 
-Code-run records are the actual local execution layer. They are direct process records: Theorem Workbench launches an executable plus explicit args without shell interpolation, under a workspace-confined cwd and a default-local execution policy. `theorem code sandbox-status` and MCP `theorem_code_sandbox_status` report whether a measured sandbox provider is available. The policy is default-deny for executables: a non-empty explicit allowlist is required before anything runs, and `requireSandbox`/`--require-sandbox` fails closed unless the sandbox status can attest enforced isolation. It also blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden. Execution uses async child processes, streamed capture, timeout kill, output-budget kill, and a per-workspace concurrency queue so one long run does not freeze the MCP server event loop.
+Code-run records are the actual local execution layer. They are direct process records: Truth Harness launches an executable plus explicit args without shell interpolation, under a workspace-confined cwd and a default-local execution policy. `theorem code sandbox-status` and MCP `theorem_code_sandbox_status` report whether a measured sandbox provider is available. The policy is default-deny for executables: a non-empty explicit allowlist is required before anything runs, and `requireSandbox`/`--require-sandbox` fails closed unless the sandbox status can attest enforced isolation. It also blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden. Execution uses async child processes, streamed capture, timeout kill, output-budget kill, and a per-workspace concurrency queue so one long run does not freeze the MCP server event loop.
 
-The implementation is intentionally honest about its limits. Native host execution does not enforce an OS sandbox, network namespace, or filesystem boundary beyond the workspace cwd, so host code-run records store `privacy.mode: "unsandboxed-local-execution"`, `networkAccess: "unknown"`, and `replay.localOnly: false`. The Docker no-network profile can produce `privacy.mode: "sandboxed-local-execution"` and `networkAccess: "none"` only when the runtime measures the Theorem container marker, a Docker/container runtime marker, loopback-only networking, and no IPv4/IPv6 default route. The record captures stdout, stderr, exit code, duration, output hashes, timeout, policy decision, sandbox measurement notes, and replay notes, then writes `theorem.code-run.v0` JSON plus Markdown under `.theorem-workbench/code-runs/`. Timeouts are capped at 120000 ms and each output stream is capped at 1048576 bytes.
+The implementation is intentionally honest about its limits. Native host execution does not enforce an OS sandbox, network namespace, or filesystem boundary beyond the workspace cwd, so host code-run records store `privacy.mode: "unsandboxed-local-execution"`, `networkAccess: "unknown"`, and `replay.localOnly: false`. The Docker no-network profile can produce `privacy.mode: "sandboxed-local-execution"` and `networkAccess: "none"` only when the runtime measures the legacy Theorem container marker, a Docker/container runtime marker, loopback-only networking, and no IPv4/IPv6 default route. The record captures stdout, stderr, exit code, duration, output hashes, timeout, policy decision, sandbox measurement notes, and replay notes, then writes `theorem.code-run.v0` JSON plus Markdown under `.theorem-workbench/code-runs/`. Timeouts are capped at 120000 ms and each output stream is capped at 1048576 bytes.
 
 Agent-facing MCP code execution has an additional gate. `theorem_code_run` is not reachable unless the server process has `THEOREM_ALLOW_CODE_RUN=1`. Even then, unsandboxed direct execution is blocked unless either the caller sets `policy.requireSandbox: true` or the server process also has `THEOREM_ALLOW_UNSANDBOXED_CODE_RUN=1`. `policy.requireSandbox: true` fails closed on native hosts and can pass inside the measured Docker no-network provider.
 

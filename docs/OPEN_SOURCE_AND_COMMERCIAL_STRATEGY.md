@@ -25,7 +25,7 @@ That second sentence is big enough to support a venture-scale outcome. It also h
 
 ## Why Open Source First
 
-Open source is the right first move because Theorem Workbench needs trust more than secrecy.
+Open source is the right first move because Truth Harness needs trust more than secrecy.
 
 Open-source core:
 
@@ -51,18 +51,18 @@ This keeps the trust-critical layer inspectable while leaving room for a busines
 
 ## License Posture
 
-The selected repo license is **GNU Affero General Public License v3.0 with a visible attribution requirement**. AGPL fits Theorem Workbench better than MIT if the goal is open research infrastructure with commercial upside, because hosted forks and network services must preserve source availability for their users.
+The selected repo license is **GNU Affero General Public License v3.0 with a visible attribution requirement**. AGPL fits Truth Harness better than MIT if the goal is open research infrastructure with commercial upside, because hosted forks and network services must preserve source availability for their users.
 
 The visible attribution term is intentionally plain:
 
-> Built on Theorem Workbench by Ocean Bennett (https://github.com/undergroundrap/theorem-workbench)
+> Built on Truth Harness by Ocean Bennett (https://github.com/undergroundrap/truth-harness)
 
 Attribution structure:
 
 - `LICENSE`: AGPL-3.0 posture with the visible attribution term selected by Ocean Bennett.
 - `NOTICE`: product name, copyright owner line, minimum visible credit, and project mission summary.
 - `AUTHORS.md`: founder/copyright-holder and future contributor attribution.
-- UI/About and generated reports: "Theorem Workbench by Ocean Bennett" plus the license posture.
+- UI/About and generated reports: "Truth Harness by Ocean Bennett" plus the license posture.
 - `package.json`: `"license": "SEE LICENSE IN LICENSE"` because the local license includes a custom attribution term beyond a stock SPDX identifier.
 
 Before a public launch, have counsel review the exact wording. The engineering goal is clear - keep the trust-critical core open and make downstream users preserve visible credit - but custom open-source terms should be easy for serious adopters to understand.
@@ -135,7 +135,7 @@ The line should feel fair: the open core must be genuinely useful and auditable 
 
 ## Acquisition Logic
 
-The acquisition story is plausible if Theorem Workbench becomes infrastructure that a larger AI, cloud, scientific-computing, or developer-tools company would rather buy than rebuild.
+The acquisition story is plausible if Truth Harness becomes infrastructure that a larger AI, cloud, scientific-computing, or developer-tools company would rather buy than rebuild.
 
 Signals that make it valuable:
 
@@ -173,7 +173,7 @@ Phase 1: Public credibility
 - Receipt replay.
 - HN launch.
 - Feedback from Lean/math/CAS/scientific-computing communities.
-- Public examples of AI math hallucinations caught by Theorem Workbench.
+- Public examples of AI math hallucinations caught by Truth Harness.
 
 Phase 2: Agent-native adoption
 

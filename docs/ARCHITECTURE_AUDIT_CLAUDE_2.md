@@ -1,4 +1,4 @@
-# Theorem Workbench — Architecture Audit #2 (Claude)
+# Truth Harness — Architecture Audit #2 (Claude)
 
 Date: 2026-06-11
 Commit audited: `74f43ca` "feat: build local-first evidence workbench foundation"

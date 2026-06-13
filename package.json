@@ -1,5 +1,5 @@
 {
-  "name": "theorem-workbench",
+  "name": "truth-harness",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -17,7 +17,7 @@
     "docker:cli": "docker compose run --rm theorem npm run cli --",
     "docker:mcp": "docker compose run --rm -i mcp",
     "docker:proof": "docker compose run --rm theorem npm run proof:launch:engines",
-    "docker:verify": "docker build --target verify -t theorem-workbench:verify .",
+    "docker:verify": "docker build --target verify -t truth-harness:verify .",
     "docker:web": "docker compose up web",
     "cli": "node apps/cli/dist/index.js",
     "dev:cli": "tsx apps/cli/src/index.ts",

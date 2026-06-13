@@ -1,4 +1,4 @@
-# Theorem Workbench Launch Plan
+# Truth Harness Launch Plan
 
 Date: 2026-06-08
 
@@ -50,19 +50,19 @@ Expected story:
 - It still returns `unverified` because division is outside the narrow polynomial parity checker.
 - It explicitly says the local checker boundary blocked stronger trust.
 
-That contrast is the product. It shows Theorem Workbench can compute/check narrow claims, refute false claims, and admit when a statement is outside the current checker. The `proved` label stays reserved for accepted proof-checking backends such as Lean.
+That contrast is the product. It shows Truth Harness can compute/check narrow claims, refute false claims, and admit when a statement is outside the current checker. The `proved` label stays reserved for accepted proof-checking backends such as Lean.
 
 ## HN Post Draft
 
 Title options:
 
-- Show HN: Theorem Workbench, local evidence receipts for AI-generated math
+- Show HN: Truth Harness, local evidence receipts for AI-generated math
 - Show HN: I built a replayable receipt CLI for AI math answers
 - Show HN: A tiny workbench that makes AI math answers replayable
 
 Body draft:
 
-> Theorem Workbench is an open-source CLI/workbench for turning AI-generated math into auditable local receipts.
+> Truth Harness is an open-source CLI/workbench for turning AI-generated math into auditable local receipts.
 >
 > The current MVP is tiny: exact rational arithmetic, finite counterexample search, a local modular parity checker, conservative interval arithmetic, dimensional analysis, SymPy-backed symbolic computation, evidence graphs, trust labels, replay commands, and seed benchmark suites. The important part is the trust policy: it will not label something `proved` unless a proof checker accepts it. The local parity checker produces `exact-computed` certificates, not formal proof labels.
 >

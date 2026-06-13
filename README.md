@@ -1,31 +1,31 @@
-# Theorem Workbench
+# Truth Harness
 
 **Local-First Verified Math for AI Agents.**
 
-Theorem Workbench is a verification-first mathematical workbench for humans, Claude, Codex, and other agentic tools.
+Truth Harness is a verification-first mathematical workbench for humans, Claude, Codex, and other agentic tools.
 
 The project goal is not to replace WolframAlpha by rebuilding every math engine. The goal is to build the missing verification engine around AI-assisted work: problem normalization, verifier routing, receipts, trust labels, claim ledgers, replay, disclosures, benchmarks, and reports. Every answer should be backed by a replayable local tool run, proof check, cited source, counterexample search, workspace snapshot, or an explicit uncertainty label. Claude, Codex, and other frontier models can still help reason, plan, and critique, but the app is local-first: project data and artifacts stay in the local workspace unless the user explicitly sends selected context to a hosted model or network service, and that selected context plus disclosure is recorded locally.
 
 The long-term mission is open-source discovery infrastructure: help humans and agents investigate hard math, physics, materials, climate, biomedical, and engineering problems without turning model output into fake certainty. The workbench should make it easy to use the best available local solvers and, when the user chooses, the latest capable frontier models as outside critics while keeping the private workspace private.
 
-The name is intentional: it is both a workbench for doing verified math and a benchmark harness for measuring agents, tools, prompts, and solver portfolios against reproducible math tasks.
+The name is intentional: it describes the product as a local harness for routing claims through evidence, replay, and verification instead of letting AI output float around as vibes.
 
-The public name should remain **Theorem Workbench**. Use `theorem` as the CLI shorthand, but avoid branding the product as only "Theorem"; the combined name is clearer, more searchable, and more honest. See [docs/PARITY_LEDGER.md](docs/PARITY_LEDGER.md) for the naming decision and parity gates against WolframAlpha, SageMath, Lean, JupyterLab, provenance tools, and scientific RAG.
+The public name is **Truth Harness**. The current CLI command, package scope, schemas, and local store still use the legacy `theorem`/`.theorem-workbench` namespace for compatibility until a deliberate migration lands. See [docs/PARITY_LEDGER.md](docs/PARITY_LEDGER.md) for the naming decision and parity gates against WolframAlpha, SageMath, Lean, JupyterLab, provenance tools, and scientific RAG.
 
 ## Why It Exists
 
 AI is already good at writing plausible math. The hard part is knowing when the math is true.
 
-Theorem Workbench turns math answers into receipts:
+Truth Harness turns math answers into receipts:
 
-- Theorem owns the trust policy, verifier router, evidence graph, claim ledger, replay contracts, and agent-facing local workspace,
+- Truth Harness owns the trust policy, verifier router, evidence graph, claim ledger, replay contracts, and agent-facing local workspace,
 - exact computations use exact rational arithmetic or CAS adapters,
 - exact arithmetic receipts include machine-readable step traces and deterministic audience-level explanations,
 - false universal claims get counterexample search before explanation,
 - formal proofs will only be labeled `proved` when a proof checker accepts them,
 - every result carries a trust label, replay command, and privacy metadata.
 
-The current MVP is local-first by default. Receipt metadata records `local-only` mode, `networkAccess: none`, local workspace data residency, external disclosure metadata when relevant, and an `evidenceProfile` summarizing backend ids, versions, inputs, outputs, replayability, proof-checker status, and limitations. Live code-run records are stricter about honesty: native host execution records `networkAccess: unknown`, while the Docker no-network profile can attest `networkAccess: none` only when the runtime measures the Theorem container marker, a container runtime marker, loopback-only networking, and no default route.
+The current MVP is local-first by default. Receipt metadata records `local-only` mode, `networkAccess: none`, local workspace data residency, external disclosure metadata when relevant, and an `evidenceProfile` summarizing backend ids, versions, inputs, outputs, replayability, proof-checker status, and limitations. Live code-run records are stricter about honesty: native host execution records `networkAccess: unknown`, while the Docker no-network profile can attest `networkAccess: none` only when the runtime measures the legacy Theorem container marker, a container runtime marker, loopback-only networking, and no default route.
 
 ## Docker-First Quickstart (Recommended)
 
@@ -35,7 +35,7 @@ Highest-safety verification, with no repo bind mount during the checks:
 
 ```bash
 docker --version
-docker build --target verify -t theorem-workbench:verify .
+docker build --target verify -t truth-harness:verify .
 ```
 
 This verification image runs the TypeScript build, test suite, launch demos, a concrete Maxima CAS agreement check, and a concrete Z3 SMT-LIB check inside the container image.
@@ -106,7 +106,7 @@ npm run cli -- smt list
 npm run cli -- check docs/examples/strict-claims.md
 npm run cli -- source ingest docs
 npm run cli -- source search "verified math agents"
-npm run cli -- source cite "Theorem Workbench is built for verified math agents" --query "verified math agents"
+npm run cli -- source cite "Truth Harness is built for verified math agents" --query "verified math agents"
 npm run cli -- notebook log "Run a local notebook that checks a parity conjecture" --kind notebook --runner jupyter --command "jupyter nbconvert --execute notebooks/parity.ipynb" --notebook notebooks/parity.ipynb --code src/parity.py --output artifacts/parity-output.json --runtime python --runtime-version 3.12 --dependency sympy==1.14.0 --metric checked_cases=2 --limitation "Notebook output is provenance, not a proof-checker-backed result"
 npm run cli -- notebook list
 npm run cli -- code run "Run a tiny local code check" --command node --allow-executable node --arg -e --arg "console.log(6 * 7)" --code inline:node-eval --input prompt:6x7 --output stdout
@@ -119,7 +119,7 @@ npm run cli -- workspace snapshot
 
 The current MVP is intentionally small and honest. It supports exact rational arithmetic, finite counterexample search, a narrow local modular parity checker, conservative rational interval bounds, dimensional analysis, a local SymPy symbolic adapter, policy-gated direct local code-run records, local proof-backend readiness probes, local Lean proof artifact checks when Lean is installed, local Z3 SMT-LIB checks when Z3 is installed, first-class claim-ledger records with dependencies/supersession/tags/finalization gates, first-class proof-check and SMT-check records, receipt replay, Markdown/HTML receipt export, benchmark runs, first-class benchmark-run and benchmark-comparison records, and a local MCP server. The parity checker can emit an exact local certificate, but it is not labeled `proved` until an accepted proof-checking backend verifies the result. Sage, cvc5, and richer RAG adapters are planned as modular packages.
 
-The first web surface lives at [apps/web](apps/web). It is a local workbench shell, designed like a dense desktop research tool: sessions and claims on the left, receipt-first verification in the center, and trust labels, replay commands, math plots, evidence lineage, activity logs, and limitations in the inspector. The browser calls localhost `/api/receipt` and `/api/claims` endpoints backed by `@theorem-workbench/core`; it does not call a hosted model or external service. Verified receipts can be recorded into the local claim ledger so exported reports cite stable claim IDs, activity events, and local API request ids. In the UI, `Plot` means numeric/math visualization; `Lineage` means the receipt/claim dependency graph. Run it with `npm run web:serve` or `docker compose up web`, then open `http://127.0.0.1:4180`.
+The first web surface lives at [apps/web](apps/web). It is a local workbench shell, designed like a dense desktop research tool: sessions and claims on the left, receipt-first verification in the center, and trust labels, replay commands, math visuals, evidence lineage, activity logs, and limitations in the inspector. The browser calls localhost `/api/receipt` and `/api/claims` endpoints backed by `@theorem-workbench/core`; it does not call a hosted model or external service. Verified receipts can be recorded into the local claim ledger so exported reports cite stable claim IDs, activity events, and local API request ids. In the UI, `Visuals` means number lines, concept maps, bubble maps, and future domain visualizers; `Lineage` means the receipt/claim dependency graph. Run it with `npm run web:serve` or `docker compose up web`, then open `http://127.0.0.1:4180`.
 
 The web inspector also calls localhost `/api/status` to show safety and verification-engine readiness. It reports the measured code-run sandbox boundary plus local Maxima, Lean, and Z3 availability probes. These probes are readiness checks only: they never mint `cross-checked`, `smt-checked`, or `proved` by themselves. Those labels still require a concrete replayable Maxima agreement run, Z3 solver run, or accepted Lean proof-check artifact.
 
@@ -145,7 +145,7 @@ Literature commands write `theorem.literature.v0` records into `.theorem-workben
 
 Notebook commands write `theorem.notebook-run.v0` records into `.theorem-workbench/notebook-runs/` for local notebooks, scripts, tests, analyses, simulations, and pipelines. They capture runner, replay command, notebook/code/input/output refs, runtime, dependencies, parameters, metrics, observations, limitations, and next checks. They do not execute code; they record provenance so humans and agents can replay, snapshot, audit, and review outputs without pretending notebook output is truth.
 
-Code commands write `theorem.code-run.v0` records into `.theorem-workbench/code-runs/`. `theorem code sandbox-status` reports whether a measured code-run sandbox is available. Native host execution reports unavailable; the Docker no-network profile reports available only when the process is inside the Theorem container image, the container runtime marker is present, `/sys/class/net` is loopback-only, and IPv4/IPv6 default routes are absent. `theorem code run` launches a local command directly without shell interpolation only when a non-empty `--allow-executable` policy is supplied. Add `--require-sandbox` when a workflow needs enforceable isolation; outside a measured provider that fails closed instead of writing a misleading receipt. The default-local policy is default-deny for executables and also blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden. Execution uses async process capture, per-workspace concurrency limiting, a 120s timeout cap, and a 1 MiB per-stream output cap. This proves a bounded local process execution happened under the recorded policy; it does not prove the code is correct, deterministic, scientifically valid, safe, regulatory-approved, or patentable.
+Code commands write `theorem.code-run.v0` records into `.theorem-workbench/code-runs/`. `theorem code sandbox-status` reports whether a measured code-run sandbox is available. Native host execution reports unavailable; the Docker no-network profile reports available only when the process is inside the Truth Harness container image, the legacy Theorem container marker is present, `/sys/class/net` is loopback-only, and IPv4/IPv6 default routes are absent. `theorem code run` launches a local command directly without shell interpolation only when a non-empty `--allow-executable` policy is supplied. Add `--require-sandbox` when a workflow needs enforceable isolation; outside a measured provider that fails closed instead of writing a misleading receipt. The default-local policy is default-deny for executables and also blocks shell launchers, obvious network clients, destructive commands, package mutations, and git mutations unless explicitly overridden. Execution uses async process capture, per-workspace concurrency limiting, a 120s timeout cap, and a 1 MiB per-stream output cap. This proves a bounded local process execution happened under the recorded policy; it does not prove the code is correct, deterministic, scientifically valid, safe, regulatory-approved, or patentable.
 
 Benchmark commands can write `theorem.benchmark-run.v0` records into `.theorem-workbench/benchmarks/` with `theorem bench run <suite> --write`. Records capture suite metadata, runner metadata, replay command, per-case receipt hashes, receipt trust labels, backend ids, failures, aggregate trust accuracy, and explicit warnings that benchmarks measure system behavior rather than proving mathematical or scientific truth. Add `--fail-on-failures` when a CLI or CI workflow should exit non-zero if any benchmark case fails. Once two benchmark-run files exist, `theorem bench compare <baseline.json> <current.json> --write` writes a `theorem.benchmark-comparison.v0` record that flags regressions, improvements, trust-label changes, changed receipt hashes, added/removed cases, and suite drift. Add `--fail-on-regression` when comparison regressions or incomparable suites should fail the workflow.
 Use `theorem bench list` to find local benchmark run and comparison paths for follow-up comparisons, audits, research-session evidence refs, or agent reports.
@@ -215,7 +215,7 @@ npm run docker:proof
 
 See [docs/TRUST_LABELS.md](docs/TRUST_LABELS.md) for the conservative meaning of each trust label and the current rule that local parity certificates are `exact-computed`, not `proved`.
 
-See [docs/ENGINE_STRATEGY.md](docs/ENGINE_STRATEGY.md) for the boundary between Theorem's native verification engine and the external solvers/adapters it uses.
+See [docs/ENGINE_STRATEGY.md](docs/ENGINE_STRATEGY.md) for the boundary between Truth Harness's native verification engine and the external solvers/adapters it uses.
 
 See [docs/RESEARCH_AND_ARCHITECTURE.md](docs/RESEARCH_AND_ARCHITECTURE.md) for the current naming check, open-source landscape, architecture, data structures, CLI/MCP surface, benchmarking surface, and test strategy.
 
@@ -223,7 +223,7 @@ See [docs/CREDIBILITY_AND_GROWTH_STRATEGY.md](docs/CREDIBILITY_AND_GROWTH_STRATE
 
 See [docs/MOAT.md](docs/MOAT.md) for the product moat: claim ledger plus verifier ladder plus local agent harness.
 
-See [docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md](docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md) for the recommended private-prototype -> closed-alpha -> open-source technical-preview path and AGPL-3.0 visible-attribution posture. The short version: keep the trust-critical core open-source long term, keep the rough prototype private until credibility gates pass, and preserve visible credit to Theorem Workbench by Ocean Bennett.
+See [docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md](docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md) for the recommended private-prototype -> closed-alpha -> open-source technical-preview path and AGPL-3.0 visible-attribution posture. The short version: keep the trust-critical core open-source long term, keep the rough prototype private until credibility gates pass, and preserve visible credit to Truth Harness by Ocean Bennett.
 
 See [docs/LAUNCH_PLAN.md](docs/LAUNCH_PLAN.md) for the first Hacker News-ready demo path.
 

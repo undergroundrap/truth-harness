@@ -229,6 +229,7 @@ const state = {
   receiptKey: "rational",
   level: "middle",
   surface: "trace",
+  visualMode: "number-line",
   lane: "math",
   replayIndex: 0,
   selectedGraphIndex: 0,
@@ -365,12 +366,13 @@ const plotData = document.querySelector("#plot-data");
 const copyPlotDataButton = document.querySelector("#copy-plot-data");
 const downloadPlotDataButton = document.querySelector("#download-plot-data");
 const downloadPlotSvgButton = document.querySelector("#download-plot-svg");
+const visualModeButtons = document.querySelectorAll(".visual-mode-button");
 const taskDockState = document.querySelector("#task-dock-state");
 const taskDockSummary = document.querySelector("#task-dock-summary");
 const taskList = document.querySelector("#task-list");
 const surfaceStatusText = {
   trace: "explainable steps",
-  plot: "math visualization",
+  plot: "visual lab",
   runbook: "agent harness",
   checks: "verification gates",
   graph: "claim lineage",
@@ -1229,15 +1231,34 @@ function renderMathPlot(receipt) {
     return;
   }
 
-  const plot = createPlotModel(receipt);
+  const plot = createVisualModel(receipt, state.visualMode);
   plotKind.textContent = plot.kind;
   plotTitle.textContent = plot.title;
   plotCaption.textContent = plot.caption;
   plotCanvas.innerHTML = plot.svg;
+  plotCanvas.dataset.visualMode = state.visualMode;
   plotFacts.innerHTML = plot.facts
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join("");
   plotData.innerHTML = renderPlotDataTable(plot);
+  visualModeButtons.forEach((button) => {
+    const active = button.dataset.visualMode === state.visualMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+}
+
+function createVisualModel(receipt, mode) {
+  const basePlot = createPlotModel(receipt);
+  if (mode === "concept-map") {
+    return createConceptMapVisualModel(receipt, basePlot);
+  }
+
+  if (mode === "bubble-map") {
+    return createBubbleMapVisualModel(receipt, basePlot);
+  }
+
+  return basePlot;
 }
 
 function createPlotModel(receipt) {
@@ -1440,13 +1461,240 @@ function createFallbackPlotModel(receipt) {
   };
 }
 
+function createConceptMapVisualModel(receipt, basePlot) {
+  const width = 920;
+  const height = 440;
+  const nodes = [
+    {
+      label: "Problem",
+      detail: receipt.title,
+      x: 340,
+      y: 30,
+      width: 240,
+      height: 78,
+      tone: "accent"
+    },
+    {
+      label: "Verifier",
+      detail: receipt.engine,
+      x: 72,
+      y: 172,
+      width: 220,
+      height: 86,
+      tone: "muted"
+    },
+    {
+      label: "Output",
+      detail: receipt.output,
+      x: 350,
+      y: 176,
+      width: 220,
+      height: 82,
+      tone: "good"
+    },
+    {
+      label: "Trust label",
+      detail: receipt.trust,
+      x: 628,
+      y: 172,
+      width: 220,
+      height: 86,
+      tone: receipt.trust === "refuted" ? "danger" : "good"
+    },
+    {
+      label: "Evidence path",
+      detail: `${receipt.graph.length} receipt steps, ${receiptTags(receipt).length} tags`,
+      x: 184,
+      y: 326,
+      width: 238,
+      height: 80,
+      tone: "muted"
+    },
+    {
+      label: "Boundary",
+      detail: receipt.limitations[0] ?? basePlot.caption,
+      x: 498,
+      y: 326,
+      width: 238,
+      height: 80,
+      tone: "warn"
+    }
+  ];
+  const edges = [
+    [460, 108, 182, 172],
+    [460, 108, 460, 176],
+    [460, 108, 738, 172],
+    [460, 258, 303, 326],
+    [460, 258, 617, 326]
+  ];
+  const lineSvg = edges.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#343230" stroke-width="2" />`).join("");
+  const nodeSvg = nodes.map((node) => conceptNodeSvg(node)).join("");
+
+  return {
+    kind: "concept map",
+    title: "Receipt Concept Map",
+    caption: "The same receipt is shown as a claim, verifier, output, trust label, evidence path, and boundary map.",
+    svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Receipt concept map">
+      <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+      <text x="44" y="42" fill="#f2f2ee" font-size="21" font-weight="750">${escapeXml(receipt.title)}</text>
+      <text x="44" y="68" fill="#aaa59d" font-size="13">auditable structure generated from the current receipt</text>
+      ${lineSvg}
+      ${nodeSvg}
+    </svg>`,
+    facts: [
+      ["Mode", "concept map"],
+      ["Verifier", receipt.engine],
+      ["Trust", receipt.trust],
+      ["Boundary", receipt.limitations[0] ?? "receipt scoped"]
+    ],
+    dataColumns: ["node", "value", "source"],
+    dataRows: [
+      ["problem", receipt.title, "receipt.title"],
+      ["verifier", receipt.engine, "receipt.engine"],
+      ["output", receipt.output, "receipt.output"],
+      ["trust", receipt.trust, "receipt.trust"],
+      ["evidence-path", String(receipt.graph.length), "receipt.graph"],
+      ["boundary", receipt.limitations[0] ?? basePlot.caption, "receipt.limitations"]
+    ]
+  };
+}
+
+function conceptNodeSvg(node) {
+  const tones = {
+    accent: ["#171512", "#b7a98a", "#f2f2ee"],
+    good: ["#102017", "#7dd3a8", "#f2f2ee"],
+    warn: ["#211c10", "#e6c36a", "#f2f2ee"],
+    danger: ["#241414", "#f28b82", "#f2f2ee"],
+    muted: ["#141414", "#30302f", "#f2f2ee"]
+  };
+  const [fill, stroke, text] = tones[node.tone] ?? tones.muted;
+  return `<g transform="translate(${node.x} ${node.y})">
+    <rect width="${node.width}" height="${node.height}" rx="10" fill="${fill}" stroke="${stroke}" />
+    <text x="18" y="28" fill="#aaa59d" font-size="12" font-weight="650">${escapeXml(node.label)}</text>
+    ${svgTextBlock(node.detail, 18, 52, { fill: text, maxChars: 28, maxLines: 2, lineHeight: 17, fontSize: 14, fontWeight: 750 })}
+  </g>`;
+}
+
+function createBubbleMapVisualModel(receipt, basePlot) {
+  const width = 920;
+  const height = 440;
+  const numericRows = normalizedPlotNumericRows(basePlot).slice(0, 8);
+  const fallbackRows = [
+    { role: "claim", label: receipt.title, value: 1, source: "receipt.title" },
+    { role: "output", label: receipt.output, value: 1.25, source: "receipt.output" },
+    { role: "trust", label: receipt.trust, value: 0.9, source: "receipt.trust" },
+    { role: "trace", label: `${receipt.graph.length} steps`, value: Math.max(1, receipt.graph.length / 4), source: "receipt.graph" }
+  ];
+  const rows = numericRows.length > 0 ? numericRows : fallbackRows;
+  const maxValue = Math.max(1, ...rows.map((row) => Math.abs(row.value)));
+  const positions = [
+    [224, 176],
+    [458, 166],
+    [696, 178],
+    [320, 308],
+    [584, 310],
+    [150, 318],
+    [770, 312],
+    [458, 286]
+  ];
+  const bubbleSvg = rows.map((row, index) => {
+    const [x, y] = positions[index % positions.length];
+    const radius = 34 + Math.min(52, (Math.abs(row.value) / maxValue) * 52);
+    const isOutput = /output|verified/u.test(row.role);
+    const stroke = isOutput ? "#7dd3a8" : index % 2 === 0 ? "#b7a98a" : "#8db4ff";
+    const fill = isOutput ? "#102017" : "#141414";
+    return `<g>
+      <circle cx="${x}" cy="${y}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="2" opacity="0.97" />
+      <text x="${x}" y="${y - 6}" text-anchor="middle" fill="#f2f2ee" font-size="16" font-weight="750">${escapeXml(truncateForImage(row.label, 18))}</text>
+      <text x="${x}" y="${y + 17}" text-anchor="middle" fill="#aaa59d" font-size="12">${escapeXml(row.role)}</text>
+    </g>`;
+  }).join("");
+
+  return {
+    kind: "bubble map",
+    title: "Quantity And Evidence Bubble Map",
+    caption: "Quantities and receipt facets are shown as weighted bubbles; verified output is highlighted when present.",
+    svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Quantity and evidence bubble map">
+      <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+      <text x="44" y="42" fill="#f2f2ee" font-size="21" font-weight="750">${escapeXml(receipt.title)}</text>
+      <text x="44" y="68" fill="#aaa59d" font-size="13">bubble size is generated from exact receipt data where numeric values exist</text>
+      ${bubbleSvg}
+    </svg>`,
+    facts: [
+      ["Mode", "bubble map"],
+      ["Bubbles", String(rows.length)],
+      ["Source visual", basePlot.kind],
+      ["Trust", receipt.trust]
+    ],
+    dataColumns: ["bubble", "role", "value", "source"],
+    dataRows: rows.map((row) => [row.label, row.role, String(row.value), row.source])
+  };
+}
+
+function normalizedPlotNumericRows(plot) {
+  const columns = plot.dataColumns ?? [];
+  const decimalIndex = columns.indexOf("decimal");
+  const exactIndex = columns.indexOf("exact");
+  const roleIndex = columns.indexOf("role");
+  const valueIndex = columns.indexOf("value");
+  const labelIndex = exactIndex >= 0 ? exactIndex : valueIndex >= 0 ? valueIndex : 0;
+
+  return (plot.dataRows ?? [])
+    .map((row) => {
+      const decimalValue = decimalIndex >= 0 ? Number(row[decimalIndex]) : NaN;
+      const exactValue = exactIndex >= 0 ? fractionValue(parseFraction(row[exactIndex]) ?? { numerator: NaN, denominator: NaN }) : NaN;
+      const value = Number.isFinite(decimalValue) ? decimalValue : exactValue;
+      return {
+        role: roleIndex >= 0 ? row[roleIndex] : "value",
+        label: row[labelIndex] ?? row[0] ?? "value",
+        value,
+        source: plot.kind
+      };
+    })
+    .filter((row) => Number.isFinite(row.value));
+}
+
+function svgTextBlock(value, x, y, options = {}) {
+  const {
+    fill = "#f2f2ee",
+    maxChars = 34,
+    maxLines = 2,
+    lineHeight = 16,
+    fontSize = 13,
+    fontWeight = 650
+  } = options;
+  const words = String(value ?? "").replace(/\s+/gu, " ").trim().split(" ").filter(Boolean);
+  const lines = [];
+  let current = "";
+  words.forEach((word) => {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > maxChars && current) {
+      lines.push(current);
+      current = word;
+      return;
+    }
+    current = next;
+  });
+  if (current) {
+    lines.push(current);
+  }
+  const visibleLines = lines.slice(0, maxLines);
+  if (lines.length > maxLines && visibleLines.length > 0) {
+    visibleLines[visibleLines.length - 1] = `${visibleLines[visibleLines.length - 1].slice(0, Math.max(0, maxChars - 3))}...`;
+  }
+
+  return `<text fill="${fill}" font-size="${fontSize}" font-weight="${fontWeight}">
+    ${visibleLines.map((line, index) => `<tspan x="${x}" y="${y + index * lineHeight}">${escapeXml(line)}</tspan>`).join("")}
+  </text>`;
+}
+
 function renderPlotDataTable(plot) {
   if (!plot.dataColumns?.length || !plot.dataRows?.length) {
-    return `<div class="activity-empty">No plot data rows available.</div>`;
+    return `<div class="activity-empty">No visual data rows available.</div>`;
   }
 
   return `<section>
-    <h5>Plot Data</h5>
+    <h5>Visual Data</h5>
     <div class="plot-data-table-wrap">
       <table class="plot-data-table">
         <thead>
@@ -1475,7 +1723,7 @@ function csvCell(value) {
 
 function currentPlotModel() {
   const receipt = receiptStore.get(state.receiptKey);
-  return receipt ? createPlotModel(receipt) : undefined;
+  return receipt ? createVisualModel(receipt, state.visualMode) : undefined;
 }
 
 async function copyCurrentPlotData() {
@@ -1490,9 +1738,9 @@ async function copyCurrentPlotData() {
     filename: `${receipt.runId}-plot-data.csv`,
     type: "text/csv",
     button: copyPlotDataButton,
-    copiedTitle: "Copied plot data",
+    copiedTitle: "Copied visual data",
     copiedDetail: `${receipt.runId} ${plot.kind} rows copied as CSV.`,
-    fallbackTitle: "Downloaded plot data",
+    fallbackTitle: "Downloaded visual data",
     fallbackDetail: `${receipt.runId} ${plot.kind} rows were saved as CSV instead.`
   });
 }
@@ -1505,7 +1753,7 @@ function downloadCurrentPlotData() {
   }
 
   downloadTextFile(`${receipt.runId}-plot-data.csv`, formatPlotDataCsv(plot), "text/csv");
-  addActivity("human", "Downloaded plot data", `${receipt.runId} ${plot.kind} rows saved as CSV.`, "passed");
+  addActivity("human", "Downloaded visual data", `${receipt.runId} ${plot.kind} rows saved as CSV.`, "passed");
 }
 
 function downloadCurrentPlotSvg() {
@@ -1516,7 +1764,7 @@ function downloadCurrentPlotSvg() {
   }
 
   downloadTextFile(`${receipt.runId}-plot.svg`, plot.svg, "image/svg+xml");
-  addActivity("human", "Downloaded plot SVG", `${receipt.runId} ${plot.kind} visualization saved as SVG.`, "passed");
+  addActivity("human", "Downloaded visual SVG", `${receipt.runId} ${plot.kind} visualization saved as SVG.`, "passed");
 }
 
 function parseFractionsFromText(text) {
@@ -2851,6 +3099,7 @@ function linkedClaimLabel(key) {
 }
 
 function renderSurface() {
+  document.body.dataset.surface = state.surface;
   surfaceTabs.forEach((button) => {
     const active = button.dataset.surface === state.surface;
     button.classList.toggle("active", active);
@@ -3017,7 +3266,7 @@ function formatRunbookPacket(packet) {
   const environmentCommands = Object.entries(packet.environment?.commands ?? {});
   const environmentNotes = packet.environment?.notes ?? [];
   return [
-    "# Theorem Workbench Agent Runbook",
+    "# Truth Harness Agent Runbook",
     "",
     `Schema: ${packet.schemaVersion}`,
     "",
@@ -4210,7 +4459,7 @@ function replaySvg(receipt) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
     <rect width="100%" height="100%" fill="#101010" />
     <rect x="24" y="24" width="${width - 48}" height="${height - 48}" rx="20" fill="#171717" stroke="#30302f" />
-    <text x="42" y="70" fill="#f2f2ee" font-family="Inter, Segoe UI, sans-serif" font-size="30" font-weight="750">Theorem Workbench Session Replay</text>
+    <text x="42" y="70" fill="#f2f2ee" font-family="Inter, Segoe UI, sans-serif" font-size="30" font-weight="750">Truth Harness Session Replay</text>
     <text x="42" y="108" fill="#b7a98a" font-family="Inter, Segoe UI, sans-serif" font-size="18">${escapeXml(receipt.runId)} - ${escapeXml(receipt.trust)}</text>
     ${rows}
   </svg>`;
@@ -4495,7 +4744,7 @@ async function copyActivityLog() {
   const text = formatActivityExport(activityEvents);
   await copyOrDownloadText({
     text,
-    filename: `theorem-workbench-activity-${safeFilenameTimestamp()}.txt`,
+    filename: `truth-harness-activity-${safeFilenameTimestamp()}.txt`,
     type: "text/plain",
     button: copyActivityButton,
     copiedTitle: "Copied activity log",
@@ -4518,7 +4767,7 @@ function downloadActivityLog() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `theorem-workbench-activity-${payload.exportedAt.replaceAll(":", "-")}.json`;
+  link.download = `truth-harness-activity-${payload.exportedAt.replaceAll(":", "-")}.json`;
   document.body.append(link);
   link.click();
   link.remove();
@@ -5021,11 +5270,11 @@ function renderReport(receipt) {
     <header>
       <h2>${escapeHtml(receipt.title)}</h2>
       <p>${escapeHtml(receipt.subtitle)}</p>
-      <p>Researcher: ${escapeHtml(researcher)}. Agent/tooling: Theorem Workbench local evidence session.</p>
-      <p>Workbench: Theorem Workbench by Ocean Bennett. License: AGPL-3.0 with visible attribution requirement.</p>
+      <p>Researcher: ${escapeHtml(researcher)}. Agent/tooling: Truth Harness local evidence session.</p>
+      <p>Workbench: Truth Harness by Ocean Bennett. License: AGPL-3.0 with visible attribution requirement.</p>
     </header>
     <div class="report-math">${renderMathInline(mathInput ?? receipt.title)} <span>&rarr;</span> ${renderMathInline(mathOutput ?? receipt.output)}</div>
-    <h3>Plot</h3>
+    <h3>Visual Evidence</h3>
     <dl class="report-facts">
       <div><dt>Kind</dt><dd>${escapeHtml(plot.kind)}</dd></div>
       <div><dt>Title</dt><dd>${escapeHtml(plot.title)}</dd></div>
@@ -5042,7 +5291,7 @@ function renderReport(receipt) {
       <div><dt>Run</dt><dd>${escapeHtml(receipt.runId)}</dd></div>
       <div><dt>Claim ledger</dt><dd>${escapeHtml(receipt.claimId ?? "not recorded")}</dd></div>
       <div><dt>Researcher</dt><dd>${escapeHtml(researcher)}</dd></div>
-      <div><dt>Workbench</dt><dd>Theorem Workbench by Ocean Bennett</dd></div>
+      <div><dt>Workbench</dt><dd>Truth Harness by Ocean Bennett</dd></div>
       <div><dt>License</dt><dd>AGPL-3.0 with visible attribution</dd></div>
       <div><dt>Replay</dt><dd><code>${escapeHtml(receipt.replay)}</code></dd></div>
     </dl>
@@ -5145,8 +5394,8 @@ function generateReportMarkdown(receipt) {
     "## Authorship and Session Identity",
     "",
     `- Human researcher: ${researcher}`,
-    "- Agent/tooling: Theorem Workbench local evidence session",
-    "- Workbench: Theorem Workbench by Ocean Bennett",
+    "- Agent/tooling: Truth Harness local evidence session",
+    "- Workbench: Truth Harness by Ocean Bennett",
     "- License: AGPL-3.0 with visible attribution requirement",
     "- Identity storage: local browser storage; include stronger signatures before public or legal use",
     "",
@@ -5155,13 +5404,13 @@ function generateReportMarkdown(receipt) {
     `- Input TeX: \`${mathInput}\``,
     `- Output TeX: \`${mathOutput}\``,
     "",
-    "## Plot",
+    "## Visual Evidence",
     "",
     `- Kind: ${plot.kind}`,
     `- Title: ${plot.title}`,
     `- Boundary: ${plot.caption}`,
     "",
-    "Plot data CSV:",
+    "Visual data CSV:",
     "",
     "```csv",
     formatPlotDataCsv(plot).trimEnd(),
@@ -5751,6 +6000,20 @@ surfaceTabs.forEach((button) => {
     }
 
     state.surface = nextSurface;
+    render();
+    resetActiveSurfaceScroll();
+  });
+});
+
+visualModeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const nextMode = button.dataset.visualMode;
+    if (!nextMode || nextMode === state.visualMode) {
+      return;
+    }
+
+    state.visualMode = nextMode;
+    state.surface = "plot";
     render();
     resetActiveSurfaceScroll();
   });

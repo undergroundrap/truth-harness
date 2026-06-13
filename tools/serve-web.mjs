@@ -64,7 +64,7 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`Theorem Workbench web: http://${host}:${port}`);
+  console.log(`Truth Harness web: http://${host}:${port}`);
 });
 
 async function resolveRequestPath(pathname) {
@@ -457,7 +457,7 @@ async function handleApiRequest(request, response, requestUrl) {
         {
           actor: "web-ui",
           action: "submitted-local-problem",
-          detail: "Browser submitted selected prompt text to the local Theorem Workbench API.",
+          detail: "Browser submitted selected prompt text to the local Truth Harness API.",
           at: receivedAt
         },
         {
@@ -542,7 +542,7 @@ function artifactPathsFor(relativeOrAbsoluteJsonPath) {
 async function ensureLocalWorkspace() {
   const { initLocalWorkspace } = await loadCoreModule();
   await initLocalWorkspace(projectRoot, {
-    displayName: "Theorem Workbench Local Web Session"
+    displayName: "Truth Harness Local Web Session"
   });
 }
 

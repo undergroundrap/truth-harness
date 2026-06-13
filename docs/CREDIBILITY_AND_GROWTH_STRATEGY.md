@@ -1,10 +1,10 @@
-# Theorem Workbench Credibility And Growth Strategy
+# Truth Harness Credibility And Growth Strategy
 
 Date: 2026-06-08
 
 ## Product Promise
 
-Theorem Workbench should not present itself as an AI oracle. The credible promise is:
+Truth Harness should not present itself as an AI oracle. The credible promise is:
 
 > Turn AI math into auditable proof, computation, citation, replay, and benchmark artifacts.
 
@@ -25,7 +25,7 @@ The serious version is not "an LLM that solves everything." It is a workbench th
 - RAG with citation spans for literature and definitions.
 - Benchmarks that measure the whole pipeline, including failures.
 
-DeepMind's 2026 AI co-mathematician paper points in the same direction: a stateful workbench for iterative mathematical workflows, including literature search, computational exploration, theorem proving, theory building, uncertainty tracking, and failed hypothesis tracking. Theorem Workbench should be the open, agent-native, proof-receipt version of that idea.
+DeepMind's 2026 AI co-mathematician paper points in the same direction: a stateful workbench for iterative mathematical workflows, including literature search, computational exploration, theorem proving, theory building, uncertainty tracking, and failed hypothesis tracking. Truth Harness should be the open, agent-native, proof-receipt version of that idea.
 
 ## Respect Contract
 
@@ -47,7 +47,7 @@ What we should not say until earned:
 
 The aspirational sentence is:
 
-> Theorem Workbench helps researchers and learners turn mathematical ideas into replayable evidence trails.
+> Truth Harness helps researchers and learners turn mathematical ideas into replayable evidence trails.
 
 ## Moat Statement
 
@@ -57,7 +57,7 @@ The defensible wedge is not "chat with math." It is:
 
 The claim ledger makes research feel more like a codebase: each claim has an id, tags, dependencies, supersession links, evidence refs, trust label, open checks, and report output. The verifier ladder makes the current truth boundary visible: stated, computed, cited, independently checked, formally proved, or human reviewed.
 
-That is why Theorem Workbench can be different from standalone CAS, notebooks, proof assistants, RAG apps, and chat agents. Those tools remain valuable engines. Theorem coordinates them into a durable local evidence graph that agents and humans can inspect together.
+That is why Truth Harness can be different from standalone CAS, notebooks, proof assistants, RAG apps, and chat agents. Those tools remain valuable engines. Truth Harness coordinates them into a durable local evidence graph that agents and humans can inspect together.
 
 ## Minimum Credibility Bar
 
@@ -92,7 +92,7 @@ The viral version should spread because it is useful and legible, not because it
 3. "AI math hallucination audit" posts that test popular models on tricky but fair problems.
 4. A public `false-claims-100` benchmark where models lose points for confident nonsense.
 5. A GitHub Action that checks Markdown, notebooks, or docs for replayable math claims.
-6. A Claude/Codex MCP demo where the agent asks Theorem Workbench to verify its own subclaims.
+6. A Claude/Codex MCP demo where the agent asks Truth Harness to verify its own subclaims.
 7. A verified lesson mode where students can click each step and see the tool/proof behind it.
 
 The first launch headline should be something like:
@@ -153,7 +153,7 @@ Earn trust by being useful to existing communities:
 
 The first expert-facing post should avoid hype. A better structure:
 
-1. What problem Theorem Workbench solves.
+1. What problem Truth Harness solves.
 2. What it refuses to claim.
 3. How trust labels work.
 4. How to replay a result.

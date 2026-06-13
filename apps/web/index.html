@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Theorem Workbench</title>
+    <title>Truth Harness</title>
     <link rel="stylesheet" href="./src/styles.css">
   </head>
   <body>
     <div class="app-shell" id="app-shell">
       <aside class="sidebar" id="sidebar" aria-label="Workspace navigation">
         <div class="top-strip">
-          <span class="workspace-mark" aria-hidden="true">TW</span>
+          <span class="workspace-mark" aria-hidden="true">TH</span>
           <span class="workspace-kicker">Local workbench</span>
           <button class="icon-button sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-pressed="false">&lt;</button>
         </div>
@@ -30,7 +30,7 @@
         <section class="sidebar-section">
           <div class="section-label">Projects</div>
           <button class="project-row selected" type="button">
-            <span>Theorem Workbench</span>
+            <span>Truth Harness</span>
             <span>now</span>
           </button>
           <button class="project-row" type="button">
@@ -118,7 +118,7 @@
             <label for="researcher-name-input">Researcher name</label>
             <input id="researcher-name-input" type="text" autocomplete="name" placeholder="Your name">
             <p>Stored locally. Printed on reports as the human researcher attached to this session.</p>
-            <p class="identity-license">Theorem Workbench by Ocean Bennett. AGPL-3.0 with visible attribution.</p>
+            <p class="identity-license">Truth Harness by Ocean Bennett. AGPL-3.0 with visible attribution.</p>
           </details>
         </div>
         <div class="sidebar-resizer" id="sidebar-resizer" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" aria-valuemin="220" aria-valuemax="420" aria-valuenow="300" tabindex="0"></div>
@@ -130,7 +130,7 @@
             <button class="icon-button sidebar-restore" id="sidebar-restore" type="button" aria-label="Expand sidebar" hidden>&gt;</button>
             <div class="workspace-title-copy">
               <div class="workspace-title-row">
-                <h1>Theorem Workbench</h1>
+                <h1>Truth Harness</h1>
                 <span class="lane-status" id="lane-status">Math lane</span>
               </div>
               <p class="header-subtitle">Local evidence session</p>
@@ -178,7 +178,7 @@
               <div class="surface-header">
                 <div class="surface-tabs" role="tablist" aria-label="Workbench view">
                   <button class="surface-tab active" id="tab-trace" role="tab" aria-controls="surface-trace" aria-selected="true" data-surface="trace" type="button">Trace</button>
-                  <button class="surface-tab" id="tab-plot" role="tab" aria-controls="surface-plot" aria-selected="false" data-surface="plot" type="button">Plot</button>
+                  <button class="surface-tab" id="tab-plot" role="tab" aria-controls="surface-plot" aria-selected="false" data-surface="plot" type="button">Visuals</button>
                   <button class="surface-tab" id="tab-runbook" role="tab" aria-controls="surface-runbook" aria-selected="false" data-surface="runbook" type="button">Run</button>
                   <button class="surface-tab" id="tab-checks" role="tab" aria-controls="surface-checks" aria-selected="false" data-surface="checks" type="button">Checks</button>
                   <button class="surface-tab" id="tab-graph" role="tab" aria-controls="surface-graph" aria-selected="false" data-surface="graph" type="button">Lineage</button>
@@ -205,23 +205,30 @@
                 <ol class="trace-list" id="trace-list"></ol>
               </section>
 
-              <section class="surface-panel" id="surface-plot" role="tabpanel" aria-labelledby="tab-plot" data-surface-panel="plot" tabindex="0" aria-label="Math plot" hidden>
-                <div class="panel-heading">
-                  <h3>Math Plot</h3>
-                  <div class="activity-actions" aria-label="Plot actions">
+              <section class="surface-panel" id="surface-plot" role="tabpanel" aria-labelledby="tab-plot" data-surface-panel="plot" tabindex="0" aria-label="Math visuals" hidden>
+                <div class="panel-heading plot-heading">
+                  <div>
+                    <h3>Visual Lab</h3>
                     <span class="mini-label" id="plot-kind">exact visualization</span>
+                  </div>
+                  <div class="activity-actions" aria-label="Visual actions">
                     <button class="text-button compact-button" id="copy-plot-data" type="button">Copy data</button>
                     <button class="text-button compact-button" id="download-plot-data" type="button">Download CSV</button>
                     <button class="text-button compact-button" id="download-plot-svg" type="button">Download SVG</button>
                   </div>
                 </div>
+                <div class="visual-mode-bar" role="tablist" aria-label="Visual math mode">
+                  <button class="visual-mode-button active" data-visual-mode="number-line" type="button">Number line</button>
+                  <button class="visual-mode-button" data-visual-mode="concept-map" type="button">Concept map</button>
+                  <button class="visual-mode-button" data-visual-mode="bubble-map" type="button">Bubble map</button>
+                </div>
                 <div class="plot-layout">
                   <div class="plot-canvas" id="plot-canvas" aria-label="Rendered math visualization"></div>
-                  <aside class="plot-detail" aria-label="Plot explanation">
+                  <aside class="plot-detail" aria-label="Visual explanation">
                     <h4 id="plot-title">Visualization</h4>
-                    <p id="plot-caption">The plot is generated from the verified receipt output.</p>
+                    <p id="plot-caption">The visual is generated from the verified receipt output.</p>
                     <dl class="plot-facts" id="plot-facts"></dl>
-                    <div class="plot-data" id="plot-data" aria-label="Exact plot data"></div>
+                    <div class="plot-data" id="plot-data" aria-label="Exact visual data"></div>
                   </aside>
                 </div>
               </section>

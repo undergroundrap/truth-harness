@@ -2,7 +2,7 @@
   "name": "@theorem-workbench/cli",
   "version": "0.0.0",
   "type": "module",
-  "description": "Human and agent CLI for Theorem Workbench.",
+  "description": "Human and agent CLI for Truth Harness.",
   "license": "SEE LICENSE IN LICENSE",
   "bin": {
     "theorem": "./dist/index.js"
