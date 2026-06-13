@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -372,6 +372,47 @@ describe("verifier route", () => {
         now: new Date("2026-06-12T00:02:00.000Z")
       })
     ).rejects.toThrow("formal-proof obligations require `proved` evidence");
+  });
+
+  it("refuses malformed proof-check JSON even when it claims proved", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-12T00:00:00.000Z"
+    });
+    const routeWrite = await writeVerifierRoute({
+      rootPath: root,
+      problem: "prove the Riemann hypothesis",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+    const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
+    const proofRef = join(".theorem-workbench", "proofs", "forged-proof.json");
+    await mkdir(join(root, ".theorem-workbench", "proofs"), { recursive: true });
+    await writeFile(
+      join(root, proofRef),
+      `${JSON.stringify({
+        schemaVersion: "theorem.proof-check.v0",
+        checkId: "proof_0123456789abcdef",
+        backend: { acceptedProofChecker: true },
+        status: "accepted",
+        trust: "proved",
+        proofCheckerBacked: true
+      })}\n`,
+      "utf8"
+    );
+
+    await expect(
+      satisfyVerifierRouteObligation({
+        rootPath: root,
+        routeRef: routeWrite.route.routeId,
+        obligationId: obligation?.obligationId ?? "",
+        evidenceRef: { kind: "proof", ref: proofRef },
+        now: new Date("2026-06-12T00:01:00.000Z")
+      })
+    ).rejects.toThrow("Invalid proof-check record");
   });
 });
 

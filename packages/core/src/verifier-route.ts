@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { createReceipt, type CreateReceiptOptions } from "./receipt.js";
 import { parseReceiptJson } from "./receipt-validation.js";
 import { stableHash } from "./stable-hash.js";
@@ -904,6 +905,20 @@ async function resolveVerifierRouteEvidence(
 
   if (!isRecord(artifact.parsed)) {
     throw new Error(`Evidence artifact is not JSON object: ${evidenceRef.ref}.`);
+  }
+
+  if (evidenceRef.kind === "proof") {
+    const record = parseLeanProofCheckRecord(artifact.raw, evidenceRef.ref);
+    return {
+      ...evidenceRef,
+      trust: record.trust,
+      summary: evidenceRef.summary ?? `Lean proof check status: ${record.status}.`,
+      schemaVersion: record.schemaVersion,
+      artifactId: record.checkId,
+      status: record.status,
+      proofCheckerBacked: record.proofCheckerBacked,
+      acceptedProofChecker: record.backend.acceptedProofChecker
+    };
   }
 
   const schemaVersion = typeof artifact.parsed.schemaVersion === "string" ? artifact.parsed.schemaVersion : undefined;

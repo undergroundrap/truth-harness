@@ -214,6 +214,7 @@ export {
   checkLeanProofArtifact,
   getProofBackendStatus,
   listLeanProofChecks,
+  parseLeanProofCheckRecord,
   renderLeanProofCheckMarkdown,
   writeLeanProofCheckRecord
 } from "./proof-backend.js";

@@ -170,6 +170,46 @@ describe("claim ledger", () => {
     expect(written.claim.finalization.readyForNarrowClaim).toBe(true);
   });
 
+  it("does not derive proved claim trust from malformed proof-check JSON", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
+    const proofRef = ".theorem-workbench/proofs/forged-proof.json";
+    await mkdir(join(root, ".theorem-workbench", "proofs"), { recursive: true });
+    await writeFile(
+      join(root, proofRef),
+      `${JSON.stringify({
+        schemaVersion: "theorem.proof-check.v0",
+        checkId: "proof_0123456789abcdef",
+        backend: { acceptedProofChecker: true },
+        status: "accepted",
+        trust: "proved",
+        proofCheckerBacked: true
+      })}\n`,
+      "utf8"
+    );
+
+    const written = await writeClaimLedgerRecord({
+      rootPath: root,
+      statement: "This malformed proof-check artifact proves the theorem.",
+      trust: "proved",
+      evidenceRefs: [{ kind: "proof", ref: proofRef }],
+      now: "2026-06-12T00:10:00.000Z"
+    });
+
+    expect(written.claim.trust).toBe("unverified");
+    expect(written.claim.evidenceRefs[0]).toMatchObject({
+      kind: "proof",
+      ref: proofRef
+    });
+    expect(written.claim.evidenceRefs[0].trust).toBeUndefined();
+    expect(written.claim.warnings).toContain(
+      `Could not resolve trust for evidence ref proof:${proofRef}; it cannot support finalization yet.`
+    );
+    expect(written.claim.finalization.openChecks).toContain(
+      "Requested trust proved is not backed by attached evidence; effective claim trust is unverified."
+    );
+  });
+
   it("does not let requested trust outrun attached evidence", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });

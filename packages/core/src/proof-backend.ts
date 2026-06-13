@@ -405,6 +405,66 @@ export async function listLeanProofChecks(rootPath: string): Promise<LeanProofCh
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
+export function parseLeanProofCheckRecord(raw: string, sourcePath = "proof-check record"): LeanProofCheckRecord {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch (error) {
+    throw new Error(`Proof-check JSON is not valid JSON in ${sourcePath}: ${error instanceof Error ? error.message : String(error)}.`);
+  }
+
+  if (!isRecord(parsed)) {
+    throw new Error(`Proof-check JSON must be an object: ${sourcePath}.`);
+  }
+
+  const issues: string[] = [];
+  if (parsed.schemaVersion !== "theorem.proof-check.v0") {
+    issues.push(`$.schemaVersion must equal "theorem.proof-check.v0"`);
+  }
+  expectPattern(parsed, "checkId", /^proof_[a-f0-9]{16}$/u, "$.checkId", issues);
+  expectDateTime(parsed, "createdAt", "$.createdAt", issues);
+
+  const backend = expectRecord(parsed, "backend", "$.backend", issues);
+  if (backend) {
+    expectConst(backend, "id", "lean", "$.backend.id", issues);
+    expectConst(backend, "displayName", "Lean proof checker", "$.backend.displayName", issues);
+    expectConst(backend, "adapter", "local-lean-subprocess", "$.backend.adapter", issues);
+    expectConst(backend, "role", "proof-checker", "$.backend.role", issues);
+    expectConst(backend, "acceptedProofChecker", true, "$.backend.acceptedProofChecker", issues);
+    expectNonEmptyString(backend, "command", "$.backend.command", issues);
+    expectStringArray(backend, "args", "$.backend.args", issues);
+  }
+
+  const source = expectRecord(parsed, "source", "$.source", issues);
+  if (source) {
+    expectNonEmptyString(source, "path", "$.source.path", issues);
+    expectPattern(source, "sha256", /^[a-f0-9]{64}$/u, "$.source.sha256", issues);
+    expectNonNegativeInteger(source, "byteLength", "$.source.byteLength", issues);
+  }
+
+  const status = expectOneOf(parsed, "status", ["accepted", "rejected", "backend-unavailable", "error"], "$.status", issues);
+  const trust = expectOneOf(parsed, "trust", ["proved", "unverified"], "$.trust", issues);
+  const proofCheckerBacked = expectBoolean(parsed, "proofCheckerBacked", "$.proofCheckerBacked", issues);
+  expectConst(parsed, "localOnly", true, "$.localOnly", issues);
+  expectConst(parsed, "networkAccess", "none", "$.networkAccess", issues);
+  expectNonEmptyString(parsed, "replay", "$.replay", issues);
+  expectStringArray(parsed, "limitations", "$.limitations", issues);
+  expectStringArray(parsed, "warnings", "$.warnings", issues);
+
+  if (trust === "proved" && (status !== "accepted" || proofCheckerBacked !== true)) {
+    issues.push("$.trust may be `proved` only when status is `accepted` and proofCheckerBacked is true");
+  }
+  if (status === "accepted" && trust !== "proved") {
+    issues.push("$.status `accepted` must carry trust `proved`");
+  }
+
+  if (issues.length > 0) {
+    throw new Error(`Invalid proof-check record in ${sourcePath}: ${issues.join("; ")}.`);
+  }
+
+  return parsed as unknown as LeanProofCheckRecord;
+}
+
 export function renderLeanProofCheckMarkdown(record: LeanProofCheckRecord): string {
   const lines = [
     `# Lean Proof Check ${record.checkId}`,
@@ -655,18 +715,13 @@ function summarizeLeanProofCheck(
   path: string,
   raw: string
 ): LeanProofCheckSummary | undefined {
-  let parsed: unknown;
+  let record: LeanProofCheckRecord;
   try {
-    parsed = JSON.parse(raw) as unknown;
+    record = parseLeanProofCheckRecord(raw, path);
   } catch {
     return undefined;
   }
 
-  if (!isRecord(parsed) || parsed.schemaVersion !== "theorem.proof-check.v0") {
-    return undefined;
-  }
-
-  const record = parsed as unknown as LeanProofCheckRecord;
   return {
     path: toPortablePath(relative(root, path)),
     checkId: record.checkId,
@@ -688,4 +743,111 @@ function toPortablePath(path: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function expectRecord(
+  value: Record<string, unknown>,
+  key: string,
+  path: string,
+  issues: string[]
+): Record<string, unknown> | undefined {
+  const entry = value[key];
+  if (!isRecord(entry)) {
+    issues.push(`${path} must be an object`);
+    return undefined;
+  }
+
+  return entry;
+}
+
+function expectConst(
+  value: Record<string, unknown>,
+  key: string,
+  expected: string | boolean,
+  path: string,
+  issues: string[]
+): void {
+  if (value[key] !== expected) {
+    issues.push(`${path} must equal ${JSON.stringify(expected)}`);
+  }
+}
+
+function expectNonEmptyString(value: Record<string, unknown>, key: string, path: string, issues: string[]): string | undefined {
+  const entry = value[key];
+  if (typeof entry !== "string" || entry.length === 0) {
+    issues.push(`${path} must be a non-empty string`);
+    return undefined;
+  }
+
+  return entry;
+}
+
+function expectPattern(
+  value: Record<string, unknown>,
+  key: string,
+  pattern: RegExp,
+  path: string,
+  issues: string[]
+): string | undefined {
+  const entry = expectNonEmptyString(value, key, path, issues);
+  if (entry && !pattern.test(entry)) {
+    issues.push(`${path} must match ${pattern.source}`);
+  }
+
+  return entry;
+}
+
+function expectDateTime(value: Record<string, unknown>, key: string, path: string, issues: string[]): string | undefined {
+  const entry = expectNonEmptyString(value, key, path, issues);
+  if (entry && Number.isNaN(Date.parse(entry))) {
+    issues.push(`${path} must be a date-time string`);
+  }
+
+  return entry;
+}
+
+function expectNonNegativeInteger(value: Record<string, unknown>, key: string, path: string, issues: string[]): number | undefined {
+  const entry = value[key];
+  if (!Number.isInteger(entry) || (entry as number) < 0) {
+    issues.push(`${path} must be a non-negative integer`);
+    return undefined;
+  }
+
+  return entry as number;
+}
+
+function expectBoolean(value: Record<string, unknown>, key: string, path: string, issues: string[]): boolean | undefined {
+  const entry = value[key];
+  if (typeof entry !== "boolean") {
+    issues.push(`${path} must be a boolean`);
+    return undefined;
+  }
+
+  return entry;
+}
+
+function expectStringArray(value: Record<string, unknown>, key: string, path: string, issues: string[]): string[] | undefined {
+  const entry = value[key];
+  if (!Array.isArray(entry) || !entry.every((item) => typeof item === "string")) {
+    issues.push(`${path} must be an array of strings`);
+    return undefined;
+  }
+
+  return entry;
+}
+
+function expectOneOf<const T extends string>(
+  value: Record<string, unknown>,
+  key: string,
+  allowed: readonly T[],
+  path: string,
+  issues: string[]
+): T | undefined {
+  const entry = value[key];
+  if (typeof entry !== "string" || !allowed.includes(entry as T)) {
+    issues.push(`${path} must be one of ${allowed.map((item) => JSON.stringify(item)).join(", ")}`);
+    return undefined;
+  }
+
+  return entry as T;
 }

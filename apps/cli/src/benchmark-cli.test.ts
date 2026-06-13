@@ -324,10 +324,29 @@ describe("benchmark CLI", () => {
           schemaVersion: "theorem.proof-check.v0",
           checkId: "proof_0123456789abcdef",
           createdAt: "2026-06-12T00:00:00.000Z",
-          backend: { acceptedProofChecker: true },
+          backend: {
+            id: "lean",
+            displayName: "Lean proof checker",
+            adapter: "local-lean-subprocess",
+            role: "proof-checker",
+            acceptedProofChecker: true,
+            command: "lean",
+            args: ["manual-proof.lean"],
+            exitCode: 0
+          },
+          source: {
+            path: "manual-proof.lean",
+            sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            byteLength: 16
+          },
           status: "accepted",
           trust: "proved",
-          proofCheckerBacked: true
+          proofCheckerBacked: true,
+          localOnly: true,
+          networkAccess: "none",
+          replay: "theorem proof check manual-proof.lean --write --json",
+          limitations: ["Test fixture for CLI route-satisfaction contract only."],
+          warnings: []
         },
         null,
         2

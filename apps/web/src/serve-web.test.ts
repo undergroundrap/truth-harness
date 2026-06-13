@@ -256,12 +256,31 @@ describe("local web route ledger API", () => {
       `${JSON.stringify(
         {
           schemaVersion: "theorem.proof-check.v0",
-          checkId: "proof_web_manual_0001",
+          checkId: "proof_abcdef0123456789",
           createdAt: "2026-06-12T00:00:00.000Z",
-          backend: { acceptedProofChecker: true },
+          backend: {
+            id: "lean",
+            displayName: "Lean proof checker",
+            adapter: "local-lean-subprocess",
+            role: "proof-checker",
+            acceptedProofChecker: true,
+            command: "lean",
+            args: ["web-proof.lean"],
+            exitCode: 0
+          },
+          source: {
+            path: "web-proof.lean",
+            sha256: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+            byteLength: 16
+          },
           status: "accepted",
           trust: "proved",
-          proofCheckerBacked: true
+          proofCheckerBacked: true,
+          localOnly: true,
+          networkAccess: "none",
+          replay: "theorem proof check web-proof.lean --write --json",
+          limitations: ["Test fixture for web route-satisfaction contract only."],
+          warnings: []
         },
         null,
         2

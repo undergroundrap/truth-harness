@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { parseReceiptJson } from "./receipt-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
@@ -637,8 +638,12 @@ async function inferEvidenceRefTrust(input: {
   }
 
   if (input.ref.kind === "proof" && artifact.parsed.schemaVersion === "theorem.proof-check.v0") {
-    const status = typeof artifact.parsed.status === "string" ? artifact.parsed.status : "unknown";
-    return { trust: artifact.parsed.trust, summary: `Lean proof check status: ${status}.` };
+    try {
+      const record = parseLeanProofCheckRecord(artifact.raw, input.ref.ref);
+      return { trust: record.trust, summary: `Lean proof check status: ${record.status}.` };
+    } catch {
+      return undefined;
+    }
   }
 
   if (input.ref.kind === "smt" && artifact.parsed.schemaVersion === "theorem.smt-check.v0") {

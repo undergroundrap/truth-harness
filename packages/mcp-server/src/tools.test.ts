@@ -200,10 +200,29 @@ describe("MCP tool handlers", () => {
           schemaVersion: "theorem.proof-check.v0",
           checkId: "proof_0123456789abcdef",
           createdAt: "2026-06-12T00:00:00.000Z",
-          backend: { acceptedProofChecker: true },
+          backend: {
+            id: "lean",
+            displayName: "Lean proof checker",
+            adapter: "local-lean-subprocess",
+            role: "proof-checker",
+            acceptedProofChecker: true,
+            command: "lean",
+            args: ["trivial.lean"],
+            exitCode: 0
+          },
+          source: {
+            path: "trivial.lean",
+            sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            byteLength: 16
+          },
           status: "accepted",
           trust: "proved",
-          proofCheckerBacked: true
+          proofCheckerBacked: true,
+          localOnly: true,
+          networkAccess: "none",
+          replay: "theorem proof check trivial.lean --write --json",
+          limitations: ["Test fixture for route-satisfaction contract only."],
+          warnings: []
         },
         null,
         2
