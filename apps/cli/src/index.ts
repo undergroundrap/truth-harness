@@ -5102,6 +5102,7 @@ function parseResearchEvidenceRef(value: string): ResearchEvidenceRef {
     maybeKind === "vault" ||
     maybeKind === "audit" ||
     maybeKind === "snapshot" ||
+    maybeKind === "workspace-review" ||
     maybeKind === "review" ||
     maybeKind === "validation" ||
     maybeKind === "model-context" ||

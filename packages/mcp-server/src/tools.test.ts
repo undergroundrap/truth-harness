@@ -853,31 +853,49 @@ describe("MCP tool handlers", () => {
     process.env.TRUTH_HARNESS_ROOT = root;
     await handleTruthHarnessWorkspaceInit({ name: "MCP Research Session Lab" });
     const snapshot = await handleTruthHarnessWorkspaceSnapshot({});
+    const review = await handleTruthHarnessWorkspaceReview({
+      maxRoutes: 0,
+      maxClaims: 0,
+      write: true
+    });
+
+    if (!("written" in review)) {
+      throw new Error("Expected persisted workspace review for research session evidence.");
+    }
 
     const start = await handleTruthHarnessResearchSessionStart({
       title: "Cancer evidence runbook",
       objective: "Investigate a cancer pathway hypothesis without claiming a cure.",
       domains: ["biomedical"],
-      evidenceRefs: [{ kind: "snapshot", ref: snapshot.snapshot.snapshotId }],
+      evidenceRefs: [
+        { kind: "snapshot", ref: snapshot.snapshot.snapshotId },
+        { kind: "workspace-review", ref: review.review.reviewId }
+      ],
       snapshotRefs: [snapshot.snapshot.snapshotId],
       tasks: ["Create an evidence audit", "Record required expert review"]
     });
     const checkpoint = await handleTruthHarnessResearchSessionCheckpoint({
       sessionRef: start.session.sessionId,
       summary: "Initial local runbook created; no clinical conclusion is allowed.",
+      evidenceRefs: [{ kind: "workspace-review", ref: review.review.reviewId }],
       snapshotRefs: [snapshot.snapshot.snapshotId],
       decisions: ["Keep the claim phrased as a computational hypothesis."],
       nextChecks: ["Attach simulation and source evidence before audit."]
     });
     const list = await handleTruthHarnessResearchSessionList({});
+    const validation = await handleTruthHarnessWorkspaceValidate({});
 
     expect(start.session.schemaVersion).toBe("truth-harness.research-session.v0");
     expect(start.session.modelPolicy.hostedModels).toBe("optional-with-disclosure");
     expect(start.session.reviewBoundary.wetLabValidationRequired).toBe(true);
     expect(start.markdown).toContain("Do not describe biomedical hypotheses as cures");
     expect(checkpoint.checkpoint.checkpointId).toMatch(/^chk_[a-f0-9]{16}$/);
+    expect(checkpoint.session.evidenceRefs).toContainEqual(
+      expect.objectContaining({ kind: "workspace-review", ref: review.review.reviewId })
+    );
     expect(checkpoint.session.checkpoints).toHaveLength(1);
     expect(list.total).toBe(1);
+    expect(validation.passed).toBe(true);
   });
 
   it("writes and lists expert review records for agents", async () => {

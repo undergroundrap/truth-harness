@@ -39,6 +39,7 @@ export interface ResearchEvidenceRef {
     | "vault"
     | "audit"
     | "snapshot"
+    | "workspace-review"
     | "review"
     | "validation"
     | "model-context"

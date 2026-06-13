@@ -507,7 +507,7 @@ async function validateGenericJsonFiles(
       const effectiveSchemaFile = variant?.schemaFile ?? rule.schemaFile;
       const effectiveIdKey = variant?.idKey ?? rule.idKey;
       const artifactIdValue = effectiveIdKey && record ? record[effectiveIdKey] : undefined;
-      const artifactId = typeof artifactIdValue === "string" ? artifactIdValue : undefined;
+      const artifactId = typeof artifactIdValue === "string" ? artifactIdValue : inferLooseArtifactId(rule.kind, record);
 
       if (!record) {
         artifactIssues.push({
@@ -1000,6 +1000,8 @@ function kindToArtifactKind(kind: string | undefined): WorkspaceValidationArtifa
       return "audits";
     case "snapshot":
       return "snapshots";
+    case "workspace-review":
+      return "findings";
     case "claim-chart":
       return "patents";
     case "model-context":
@@ -1010,6 +1012,17 @@ function kindToArtifactKind(kind: string | undefined): WorkspaceValidationArtifa
     default:
       return undefined;
   }
+}
+
+function inferLooseArtifactId(
+  kind: WorkspaceValidationArtifactKind,
+  record: Record<string, unknown> | undefined
+): string | undefined {
+  if (kind !== "findings" || record?.schemaVersion !== "truth-harness.workspace-review.v0") {
+    return undefined;
+  }
+
+  return typeof record.reviewId === "string" ? record.reviewId : undefined;
 }
 
 function looksLikePathReference(ref: string): boolean {

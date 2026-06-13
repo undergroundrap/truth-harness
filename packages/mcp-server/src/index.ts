@@ -1880,6 +1880,7 @@ export function createTruthHarnessMcpServer(): McpServer {
       "vault",
       "audit",
       "snapshot",
+      "workspace-review",
       "review",
       "validation",
       "model-context",

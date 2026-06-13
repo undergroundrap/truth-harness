@@ -258,6 +258,7 @@
             "vault",
             "audit",
             "snapshot",
+            "workspace-review",
             "review",
             "validation",
             "model-context",

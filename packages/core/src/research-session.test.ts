@@ -9,6 +9,8 @@ import {
   listResearchSessions,
   writeResearchSession
 } from "./research-session.js";
+import { validateWorkspaceArtifacts } from "./workspace-validation.js";
+import { writeWorkspaceReview } from "./workspace-review.js";
 import { writeWorkspaceSnapshot } from "./workspace-snapshot.js";
 
 const roots: string[] = [];
@@ -90,6 +92,52 @@ describe("research sessions", () => {
     expect(checkpoint.markdown).toContain("exact modular certificate");
     expect(list).toHaveLength(1);
     expect(list[0]?.checkpoints).toHaveLength(1);
+  });
+
+  it("cites persisted workspace review handoffs from long-running sessions", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-13T00:00:00.000Z" });
+    const review = await writeWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-13T00:05:00.000Z"
+    });
+    const write = await writeResearchSession({
+      rootPath: root,
+      objective: "Continue from a persisted agent handoff queue without relying on chat memory.",
+      domains: ["math"],
+      evidenceRefs: [
+        {
+          kind: "workspace-review",
+          ref: review.review.reviewId,
+          summary: "Initial local handoff queue."
+        }
+      ],
+      now: "2026-06-13T00:10:00.000Z"
+    });
+
+    const checkpoint = await addResearchSessionCheckpoint({
+      rootPath: root,
+      sessionRef: write.session.sessionId,
+      summary: "Agent resumed from the persisted workspace review queue.",
+      evidenceRefs: [
+        {
+          kind: "workspace-review",
+          ref: review.review.reviewId,
+          summary: "Queue used for this continuation."
+        }
+      ],
+      now: "2026-06-13T00:20:00.000Z"
+    });
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(checkpoint.session.evidenceRefs).toContainEqual(
+      expect.objectContaining({
+        kind: "workspace-review",
+        ref: review.review.reviewId
+      })
+    );
+    expect(checkpoint.markdown).toContain("workspace-review");
+    expect(validation.passed).toBe(true);
   });
 });
 
