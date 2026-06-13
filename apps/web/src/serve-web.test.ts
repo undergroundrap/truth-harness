@@ -119,6 +119,27 @@ describe("local web route ledger API", () => {
     expect(listPayload.routes[0].readinessSummary).toContain("Ready only as a narrow exact-computed claim");
     expect(listPayload.routes[0].routePaths.json).toBe(receiptPayload.routePaths.json);
 
+    const reviewResponse = await fetch(`${baseUrl}/api/workspace-review`);
+    expect(reviewResponse.status).toBe(200);
+    const reviewPayload = await reviewResponse.json();
+    expectLocalApiSuccess(reviewResponse, reviewPayload);
+    expect(reviewPayload.localOnly).toBe(true);
+    expect(reviewPayload.externalCalls).toEqual([]);
+    expect(reviewPayload.review).toMatchObject({
+      schemaVersion: "theorem.workspace-review.v0",
+      localOnly: true,
+      networkAccess: "none"
+    });
+    expect(reviewPayload.review.summary.routes).toBe(1);
+    expect(reviewPayload.review.summary.readyRoutesWithoutClaims).toBe(1);
+    expect(reviewPayload.review.items).toContainEqual(
+      expect.objectContaining({
+        kind: "route-ready-claim",
+        routeId: receiptPayload.route.routeId,
+        command: expect.stringContaining("theorem claim add")
+      })
+    );
+
     const routeResponse = await fetch(`${baseUrl}/api/routes/${receiptPayload.route.routeId}`);
     expect(routeResponse.status).toBe(200);
     const routePayload = await routeResponse.json();

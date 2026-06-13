@@ -91,6 +91,7 @@ import {
   verifierRouteReadiness,
   solveSmtProblem,
   addResearchSessionCheckpoint,
+  createWorkspaceReview,
   validateWorkspaceArtifacts,
   verifyVaultEntry,
   verifyWorkspaceSnapshot,
@@ -220,6 +221,7 @@ import {
   type WorkspaceSnapshotWriteResult,
   type TrustLabel,
   type WorkspaceValidation,
+  type WorkspaceReview,
   type SympyOperation
 } from "@theorem-workbench/core";
 
@@ -2299,6 +2301,29 @@ workspace
   });
 
 workspace
+  .command("review")
+  .description("Show the ordered local work queue across saved routes and claims.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full workspace review JSON")
+  .option("--fail-on-critical", "Exit non-zero when critical review items exist")
+  .action(async (path: string, options: { json?: boolean; failOnCritical?: boolean }) => {
+    const review = await createWorkspaceReview({ rootPath: path });
+
+    if (options.json) {
+      printJson(review);
+      if (options.failOnCritical && review.summary.criticalItems > 0) {
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    printWorkspaceReview(review);
+    if (options.failOnCritical && review.summary.criticalItems > 0) {
+      process.exitCode = 1;
+    }
+  });
+
+workspace
   .command("snapshot")
   .description("Write a portable provenance snapshot of local workspace artifacts.")
   .argument("[path]", "Project root path", ".")
@@ -3686,6 +3711,39 @@ function printWorkspaceValidation(validation: WorkspaceValidation): void {
     console.log("");
     console.log("Validation boundary:");
     for (const warning of validation.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printWorkspaceReview(review: WorkspaceReview): void {
+  console.log("Theorem workspace review");
+  console.log(`Project: ${review.projectId}`);
+  console.log(`Routes: ${review.summary.routes}`);
+  console.log(`Claims: ${review.summary.claims}`);
+  console.log(`Queue items: ${review.summary.totalItems}`);
+  console.log(`Critical/high/medium/low: ${review.summary.criticalItems}/${review.summary.highItems}/${review.summary.mediumItems}/${review.summary.lowItems}`);
+  console.log(`Privacy: ${review.privacy.mode} (network: ${review.networkAccess})`);
+
+  if (review.items.length === 0) {
+    console.log("");
+    console.log("No open workspace review items were found.");
+  } else {
+    console.log("");
+    console.log("Ordered work queue:");
+    for (const item of review.items) {
+      console.log(`  ${item.priority.toUpperCase()} ${item.kind} ${item.itemId}`);
+      console.log(`    ${item.title}`);
+      console.log(`    ${item.summary}`);
+      console.log(`    Source: ${item.source.label} ${item.source.ref}`);
+      console.log(`    Command: ${item.command}`);
+    }
+  }
+
+  if (review.warnings.length > 0) {
+    console.log("");
+    console.log("Review boundary:");
+    for (const warning of review.warnings) {
       console.log(`  ${warning}`);
     }
   }

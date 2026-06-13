@@ -136,6 +136,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "validation-plan",
         "engine-manifest",
         "verification-readiness",
+        "workspace-review-queue",
         "docker-verifier-guidance",
         "sandbox-status",
         "safety-center"
@@ -162,6 +163,19 @@ async function handleApiRequest(request, response, requestUrl) {
       localOnly: true,
       externalCalls: [],
       routes
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/workspace-review" && request.method === "GET") {
+    const { createWorkspaceReview } = await loadCoreModule();
+    await ensureLocalWorkspace();
+    const review = await createWorkspaceReview({ rootPath: projectRoot });
+    writeJson(response, 200, {
+      schemaVersion: "theorem.web-workspace-review-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      review
     });
     return;
   }

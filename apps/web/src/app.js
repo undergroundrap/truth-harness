@@ -197,6 +197,17 @@ const claimLedgerStore = new Map();
 const routeLedgerStore = new Map();
 const casCheckStore = new Map();
 const smtCheckStore = new Map();
+let workspaceReview = {
+  schemaVersion: "theorem.workspace-review.v0",
+  summary: {
+    totalItems: 0,
+    criticalItems: 0,
+    highItems: 0,
+    mediumItems: 0,
+    lowItems: 0
+  },
+  items: []
+};
 let claimLedgerGraph = {
   schemaVersion: "theorem.claim-graph.v0",
   nodes: [],
@@ -252,6 +263,8 @@ const claimLedgerSearch = document.querySelector("#claim-ledger-search");
 const routeHistoryList = document.querySelector("#route-history-list");
 const routeHistoryCount = document.querySelector("#route-history-count");
 const routeHistorySearch = document.querySelector("#route-history-search");
+const workspaceReviewList = document.querySelector("#workspace-review-list");
+const workspaceReviewCount = document.querySelector("#workspace-review-count");
 const mainGraphList = document.querySelector("#main-graph-list");
 const graphDetail = document.querySelector("#graph-detail");
 const matrixSummary = document.querySelector("#matrix-summary");
@@ -945,6 +958,7 @@ render();
 void refreshSafetyStatus();
 void refreshClaimLedger();
 void refreshRouteLedger();
+void refreshWorkspaceReview();
 void refreshCasChecks();
 void refreshSmtChecks();
 
@@ -1001,6 +1015,7 @@ function render() {
   renderClaimList();
   renderClaimLedger();
   renderRouteHistory();
+  renderWorkspaceReview();
   renderActivityLog();
   renderSurface();
   renderLane();
@@ -1710,6 +1725,97 @@ function renderRouteHistory() {
   });
 }
 
+function renderWorkspaceReview() {
+  if (!workspaceReviewList || !workspaceReviewCount) {
+    return;
+  }
+
+  const items = Array.isArray(workspaceReview.items) ? workspaceReview.items : [];
+  const summary = workspaceReview.summary ?? {};
+  workspaceReviewCount.textContent = workspaceReviewCountText(summary);
+  const visibleItems = items.slice(0, 6);
+
+  workspaceReviewList.innerHTML = visibleItems.length === 0
+    ? `<div class="activity-empty">No project queue items yet. Saved verifier routes and claim blockers will appear here.</div>`
+    : visibleItems
+      .map((item) => {
+        const meta = workspaceReviewItemMeta(item);
+        const canOpenRoute = Boolean(item.routeId);
+        return `<article class="queue-item queue-${escapeHtml(item.priority ?? "medium")}">
+          <div class="queue-main">
+            <span class="queue-priority">${escapeHtml(item.priority ?? "medium")}</span>
+            <div>
+              <strong>${escapeHtml(item.title ?? "Workspace review item")}</strong>
+              <small>${escapeHtml(item.summary ?? "")}</small>
+              <small>${escapeHtml(meta)}</small>
+            </div>
+          </div>
+          <code class="queue-command">${escapeHtml(item.command ?? "")}</code>
+          <div class="queue-actions">
+            ${canOpenRoute ? `<button class="text-button compact-button open-workspace-route" data-route-id="${escapeHtml(item.routeId)}" type="button">Open route</button>` : ""}
+            <button class="text-button compact-button copy-workspace-command" data-command="${escapeHtml(item.command ?? "")}" type="button">Copy command</button>
+          </div>
+        </article>`;
+      })
+      .join("");
+
+  workspaceReviewList.querySelectorAll(".open-workspace-route").forEach((button) => {
+    button.addEventListener("click", () => {
+      void openSavedRoute(button.dataset.routeId);
+    });
+  });
+  workspaceReviewList.querySelectorAll(".copy-workspace-command").forEach((button) => {
+    button.addEventListener("click", () => {
+      const command = button.dataset.command;
+      if (!command) {
+        return;
+      }
+
+      copyOrDownloadText({
+        text: `${command}\n`,
+        filename: `theorem-project-queue-command-${safeFilenameTimestamp()}.txt`,
+        type: "text/plain",
+        button,
+        copiedTitle: "Copied project queue command",
+        copiedDetail: command,
+        fallbackTitle: "Downloaded project queue command",
+        fallbackDetail: "the project queue command was saved as plain text instead."
+      });
+    });
+  });
+}
+
+function workspaceReviewCountText(summary) {
+  const total = Number(summary?.totalItems ?? 0);
+  if (total === 0) {
+    return "clear";
+  }
+
+  const critical = Number(summary?.criticalItems ?? 0);
+  const high = Number(summary?.highItems ?? 0);
+  if (critical > 0) {
+    return `${total} items / ${critical} critical`;
+  }
+
+  if (high > 0) {
+    return `${total} items / ${high} high`;
+  }
+
+  return `${total} items`;
+}
+
+function workspaceReviewItemMeta(item) {
+  const parts = [
+    item.kind,
+    item.trust,
+    item.domain,
+    item.routeId,
+    item.claimId,
+    item.obligationId
+  ].filter(Boolean);
+  return parts.join(" - ");
+}
+
 function routeObligationSummaryText(route) {
   return routeObligationCounts(route).summary;
 }
@@ -1960,6 +2066,49 @@ function applyRouteLedgerPayload(payload) {
       routeLedgerStore.set(route.routeId, route);
     }
   }
+}
+
+async function refreshWorkspaceReview({ announce = true } = {}) {
+  if (!workspaceReviewList || !workspaceReviewCount) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/workspace-review", {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local workspace review API failed.");
+
+    applyWorkspaceReviewPayload(payload);
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded project queue",
+        localApiSuccessMessage(payload, `${workspaceReview.summary.totalItems ?? 0} local next actions available.`),
+        "passed"
+      );
+    }
+    render();
+  } catch (error) {
+    workspaceReviewCount.textContent = "unavailable";
+    workspaceReviewList.innerHTML = `<div class="activity-empty">Project queue unavailable from the local API.</div>`;
+    addActivity("local-api", "Project queue unavailable", error instanceof Error ? error.message : "Unknown workspace review failure.", "waiting");
+  }
+}
+
+function applyWorkspaceReviewPayload(payload) {
+  workspaceReview = payload.review ?? {
+    schemaVersion: "theorem.workspace-review.v0",
+    summary: {
+      totalItems: 0,
+      criticalItems: 0,
+      highItems: 0,
+      mediumItems: 0,
+      lowItems: 0
+    },
+    items: []
+  };
 }
 
 async function refreshCasChecks({ announce = true } = {}) {
@@ -2231,6 +2380,7 @@ async function attachEvidenceToRoute(input) {
     for (const item of payload.activity ?? []) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }
+    await refreshWorkspaceReview({ announce: false });
     render();
   } catch (error) {
     addActivity("local-api", `${label} attach rejected`, error instanceof Error ? error.message : "Unknown route satisfaction failure.", "refuted");
@@ -2432,6 +2582,7 @@ async function recordCurrentClaim() {
     for (const item of payload.activity ?? []) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }
+    await refreshWorkspaceReview({ announce: false });
   } catch (error) {
     updateLatestActivity("Recording claim", "refuted", error instanceof Error ? error.message : "Unknown claim ledger failure.");
   } finally {
@@ -2454,6 +2605,7 @@ async function recordCurrentChain() {
       reviseExisting: true,
       visited: new Set()
     });
+    await refreshWorkspaceReview({ announce: false });
     updateLatestActivity("Recording claim chain", "passed", `${claimId} is now linked to recorded upstream claims.`);
   } catch (error) {
     updateLatestActivity("Recording claim chain", "refuted", error instanceof Error ? error.message : "Unknown claim chain failure.");
@@ -5734,6 +5886,7 @@ composer.addEventListener("submit", async (event) => {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }
     await refreshRouteLedger({ announce: false });
+    await refreshWorkspaceReview({ announce: false });
     addActivity("web-ui", "Rendered receipt", `${payload.receipt.runId} displayed with trace and evidence graph.`, "passed");
   } catch (error) {
     updateLatestActivity("Calling local API", "refuted", "POST /api/receipt failed");

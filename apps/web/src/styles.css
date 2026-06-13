@@ -1136,6 +1136,10 @@ h4 {
   background: #111;
 }
 
+.workspace-review-section {
+  background: #121211;
+}
+
 .route-ledger-status-live {
   color: var(--exact);
 }
@@ -1178,6 +1182,109 @@ h4 {
   overflow: auto;
   padding-right: 2px;
   scrollbar-gutter: stable;
+}
+
+.workspace-review-list {
+  display: grid;
+  gap: 8px;
+}
+
+.queue-hint {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  margin-bottom: 9px;
+}
+
+.queue-item {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  padding: 10px;
+}
+
+.queue-item.queue-critical {
+  border-color: rgba(242, 139, 130, 0.34);
+}
+
+.queue-item.queue-high {
+  border-color: rgba(230, 195, 106, 0.28);
+}
+
+.queue-item.queue-low {
+  border-color: rgba(125, 211, 168, 0.2);
+}
+
+.queue-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+}
+
+.queue-priority {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--accent);
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.queue-critical .queue-priority {
+  color: var(--refuted);
+}
+
+.queue-high .queue-priority {
+  color: var(--warn);
+}
+
+.queue-low .queue-priority {
+  color: var(--exact);
+}
+
+.queue-item strong,
+.queue-item small {
+  display: block;
+  min-width: 0;
+}
+
+.queue-item strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.queue-item small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  margin-top: 3px;
+}
+
+.queue-command {
+  display: block;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0d0d0d;
+  color: #e7decd;
+  font-size: 11px;
+  overflow: hidden;
+  padding: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .ledger-tools {

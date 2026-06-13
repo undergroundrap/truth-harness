@@ -194,6 +194,10 @@ export {
   writeWorkspaceSnapshot
 } from "./workspace-snapshot.js";
 export { validateWorkspaceArtifacts } from "./workspace-validation.js";
+export {
+  createWorkspaceReview,
+  renderWorkspaceReviewMarkdown
+} from "./workspace-review.js";
 export { getEngineManifest } from "./engine-manifest.js";
 export {
   createVerifierRoute,
@@ -468,6 +472,13 @@ export type {
   WorkspaceValidationIssue,
   WorkspaceValidationIssueSeverity
 } from "./workspace-validation.js";
+export type {
+  CreateWorkspaceReviewInput,
+  WorkspaceReview,
+  WorkspaceReviewItem,
+  WorkspaceReviewItemKind,
+  WorkspaceReviewPriority
+} from "./workspace-review.js";
 export type {
   EngineCapability,
   EngineCapabilityKind,
