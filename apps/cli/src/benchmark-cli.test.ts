@@ -251,7 +251,16 @@ describe("benchmark CLI", () => {
     };
     const listed = JSON.parse((await runCli(["route", "list", root, "--json"])).stdout) as {
       total: number;
-      routes: Array<{ routeId: string; finalTrust: string; path: string; proofObligations: number }>;
+      routes: Array<{
+        routeId: string;
+        finalTrust: string;
+        path: string;
+        proofObligations: number;
+        openProofObligations: number;
+        satisfiedProofObligations: number;
+        notRequiredProofObligations: number;
+        criticalOpenProofObligations: number;
+      }>;
     };
     const shown = JSON.parse(
       (await runCli(["route", "show", written.route.routeId, "--workspace", root, "--json"])).stdout
@@ -267,11 +276,15 @@ describe("benchmark CLI", () => {
     expect(listed.routes[0]).toMatchObject({
       routeId: written.route.routeId,
       finalTrust: "exact-computed",
-      proofObligations: 1
+      proofObligations: 1,
+      openProofObligations: 0,
+      satisfiedProofObligations: 0,
+      notRequiredProofObligations: 1,
+      criticalOpenProofObligations: 0
     });
     expect(shown.routeId).toBe(written.route.routeId);
     expect(shown.replay).toContain("theorem verify");
-    expect(humanList.stdout).toContain("Proof obligations: 1");
+    expect(humanList.stdout).toContain("Proof obligations: 1 total / 1 not-required");
   });
 
   it("satisfies verifier route obligations from accepted local evidence", async () => {

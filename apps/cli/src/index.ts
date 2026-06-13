@@ -3333,9 +3333,25 @@ function printVerifierRouteList(routes: VerifierRouteSummary[]): void {
     console.log(`  Problem: ${singleLineSnippet(route.problem)}`);
     console.log(`  Used: ${route.usedCapabilities.length > 0 ? route.usedCapabilities.join(", ") : "none"}`);
     console.log(`  Gaps: ${route.gaps} (${route.criticalGaps} critical)`);
-    console.log(`  Proof obligations: ${route.proofObligations}`);
+    console.log(`  Proof obligations: ${routeObligationSummary(route)}`);
     console.log(`  Path: ${route.path}`);
   }
+}
+
+function routeObligationSummary(route: VerifierRouteSummary): string {
+  if (route.proofObligations === 0) {
+    return "none";
+  }
+
+  const parts = [
+    `${route.proofObligations} total`,
+    route.openProofObligations > 0 ? `${route.openProofObligations} open` : undefined,
+    route.criticalOpenProofObligations > 0 ? `${route.criticalOpenProofObligations} critical-open` : undefined,
+    route.satisfiedProofObligations > 0 ? `${route.satisfiedProofObligations} satisfied` : undefined,
+    route.notRequiredProofObligations > 0 ? `${route.notRequiredProofObligations} not-required` : undefined
+  ].filter(Boolean);
+
+  return parts.join(" / ");
 }
 
 function printVerifierRouteSatisfaction(result: SatisfyVerifierRouteObligationResult): void {
