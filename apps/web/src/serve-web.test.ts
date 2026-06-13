@@ -300,10 +300,7 @@ describe("local web safety guard", () => {
         Host: "example.com"
       }
     });
-    expect(rejectedHost.statusCode).toBe(403);
-    expect(JSON.parse(rejectedHost.body)).toMatchObject({
-      error: "non-local API host rejected"
-    });
+    expectLocalApiError(rejectedHost, 403, "non-local API host rejected");
 
     const rejectedOrigin = await requestText({
       port,
@@ -316,10 +313,7 @@ describe("local web safety guard", () => {
       },
       body: JSON.stringify({ problem: "compute 1 + 1" })
     });
-    expect(rejectedOrigin.statusCode).toBe(403);
-    expect(JSON.parse(rejectedOrigin.body)).toMatchObject({
-      error: "cross-origin API write rejected"
-    });
+    expectLocalApiError(rejectedOrigin, 403, "cross-origin API write rejected");
 
     const invalidJson = await requestText({
       port,
@@ -332,11 +326,7 @@ describe("local web safety guard", () => {
       },
       body: "{"
     });
-    expect(invalidJson.statusCode).toBe(400);
-    expect(invalidJson.headers["cache-control"]).toBe("no-store");
-    expect(JSON.parse(invalidJson.body)).toMatchObject({
-      error: "invalid JSON body"
-    });
+    expectLocalApiError(invalidJson, 400, "invalid JSON body");
 
     const oversizedJson = await requestText({
       port,
@@ -349,11 +339,29 @@ describe("local web safety guard", () => {
       },
       body: JSON.stringify({ problem: "x".repeat(17_000) })
     });
-    expect(oversizedJson.statusCode).toBe(413);
-    expect(oversizedJson.headers["cache-control"]).toBe("no-store");
-    expect(JSON.parse(oversizedJson.body)).toMatchObject({
-      error: "JSON body too large"
+    expectLocalApiError(oversizedJson, 413, "JSON body too large");
+
+    const missingProblem = await requestText({
+      port,
+      method: "POST",
+      path: "/api/receipt",
+      headers: {
+        Host: `127.0.0.1:${port}`,
+        Origin: `http://127.0.0.1:${port}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({})
     });
+    expectLocalApiError(missingProblem, 400, "problem is required");
+
+    const unknownRoute = await requestText({
+      port,
+      path: "/api/nope",
+      headers: {
+        Host: `127.0.0.1:${port}`
+      }
+    });
+    expectLocalApiError(unknownRoute, 404, "unknown API route");
 
     const sameOriginWrite = await requestText({
       port,
@@ -456,6 +464,22 @@ async function requestText(input: {
       request.write(input.body);
     }
     request.end();
+  });
+}
+
+function expectLocalApiError(
+  response: { statusCode: number; headers: Record<string, string | string[] | undefined>; body: string },
+  statusCode: number,
+  error: string
+): void {
+  expect(response.statusCode).toBe(statusCode);
+  expect(response.headers["cache-control"]).toBe("no-store");
+  expect(JSON.parse(response.body)).toMatchObject({
+    schemaVersion: "theorem.web-error.v0",
+    localOnly: true,
+    externalCalls: [],
+    status: statusCode,
+    error
   });
 }
 

@@ -51,9 +51,7 @@ const server = createServer(async (request, response) => {
       console.error(error);
     }
     if (request.url?.startsWith("/api/")) {
-      writeJson(response, status, {
-        error: error instanceof HttpError ? error.message : "internal server error"
-      });
+      writeApiError(response, status, error instanceof HttpError ? error.message : "internal server error");
       return;
     }
 
@@ -230,9 +228,7 @@ async function handleApiRequest(request, response, requestUrl) {
         ]
       });
     } catch (error) {
-      writeJson(response, 400, {
-        error: error instanceof Error ? error.message : "SMT solve failed."
-      });
+      writeApiError(response, 400, error instanceof Error ? error.message : "SMT solve failed.");
     }
     return;
   }
@@ -280,9 +276,7 @@ async function handleApiRequest(request, response, requestUrl) {
         ]
       });
     } catch (error) {
-      writeJson(response, 400, {
-        error: error instanceof Error ? error.message : "CAS check failed."
-      });
+      writeApiError(response, 400, error instanceof Error ? error.message : "CAS check failed.");
     }
     return;
   }
@@ -303,9 +297,7 @@ async function handleApiRequest(request, response, requestUrl) {
         routePaths: routePathsFor(summary?.path ?? routeRef)
       });
     } catch (error) {
-      writeJson(response, 404, {
-        error: error instanceof Error ? error.message : "Verifier route not found."
-      });
+      writeApiError(response, 404, error instanceof Error ? error.message : "Verifier route not found.");
     }
     return;
   }
@@ -349,9 +341,7 @@ async function handleApiRequest(request, response, requestUrl) {
         ]
       });
     } catch (error) {
-      writeJson(response, 400, {
-        error: error instanceof Error ? error.message : "Route obligation satisfaction failed."
-      });
+      writeApiError(response, 400, error instanceof Error ? error.message : "Route obligation satisfaction failed.");
     }
     return;
   }
@@ -396,9 +386,7 @@ async function handleApiRequest(request, response, requestUrl) {
         ]
       });
     } catch (error) {
-      writeJson(response, 400, {
-        error: error instanceof Error ? error.message : "Claim ledger write failed."
-      });
+      writeApiError(response, 400, error instanceof Error ? error.message : "Claim ledger write failed.");
     }
     return;
   }
@@ -416,9 +404,7 @@ async function handleApiRequest(request, response, requestUrl) {
         claim
       });
     } catch (error) {
-      writeJson(response, 404, {
-        error: error instanceof Error ? error.message : "Claim not found."
-      });
+      writeApiError(response, 404, error instanceof Error ? error.message : "Claim not found.");
     }
     return;
   }
@@ -428,9 +414,7 @@ async function handleApiRequest(request, response, requestUrl) {
     const input = await readJsonBody(request);
     const problem = typeof input.problem === "string" ? input.problem.trim() : "";
     if (!problem) {
-      writeJson(response, 400, {
-        error: "problem is required"
-      });
+      writeApiError(response, 400, "problem is required");
       return;
     }
 
@@ -477,9 +461,7 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
-  writeJson(response, 404, {
-    error: "unknown API route"
-  });
+  writeApiError(response, 404, "unknown API route");
 }
 
 async function readClaimLedgerSnapshot() {
@@ -617,16 +599,12 @@ function parseRouteEvidenceRef(value) {
 
 function guardApiRequest(request, response) {
   if (!isAllowedLocalHostHeader(request.headers.host)) {
-    writeJson(response, 403, {
-      error: "non-local API host rejected"
-    });
+    writeApiError(response, 403, "non-local API host rejected");
     return false;
   }
 
   if (!isReadMethod(request.method) && !isAllowedSameOriginWrite(request)) {
-    writeJson(response, 403, {
-      error: "cross-origin API write rejected"
-    });
+    writeApiError(response, 403, "cross-origin API write rejected");
     return false;
   }
 
@@ -948,6 +926,16 @@ function writeJson(response, status, payload) {
     "Cache-Control": "no-store"
   });
   response.end(`${JSON.stringify(payload, null, 2)}\n`);
+}
+
+function writeApiError(response, status, error) {
+  writeJson(response, status, {
+    schemaVersion: "theorem.web-error.v0",
+    localOnly: true,
+    externalCalls: [],
+    status,
+    error
+  });
 }
 
 function setWebSecurityHeaders(response) {
