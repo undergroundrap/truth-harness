@@ -1993,18 +1993,18 @@ function createResearchMindMapVisualModel(receipt, basePlot) {
   const openGateLabels = rows.filter((row) => ["missing", "waiting"].includes(row.status)).slice(0, 2).map((row) => row.label);
   const passedGateCount = rows.filter((row) => row.status === "passed").length;
   const tags = receiptTags(receipt).slice(0, 4).map((tag) => `#${tag}`);
-  const width = 1180;
-  const height = 520;
-  const center = { x: 466, y: 214, width: 250, height: 92 };
+  const width = 1240;
+  const height = 640;
+  const center = { x: 470, y: 274, width: 300, height: 100 };
   const nodes = [
-    { id: "project-thread", label: "Project thread", detail: "Truth Harness workspace", x: 76, y: 70, width: 230, height: 76, tone: "accent" },
-    { id: "current-claim", label: "Current claim", detail: receipt.title, x: center.x, y: center.y, width: center.width, height: center.height, tone: receipt.trust === "refuted" ? "danger" : "good" },
-    { id: "parent-receipts", label: "Parent receipts", detail: dependencyLabels.length > 0 ? dependencyLabels.join("; ") : "none linked yet", x: 76, y: 224, width: 260, height: 84, tone: dependencyLabels.length > 0 ? "muted" : "warn" },
-    { id: "child-receipts", label: "Child receipts", detail: dependentLabels.length > 0 ? dependentLabels.join("; ") : "future branches can attach here", x: 76, y: 374, width: 260, height: 84, tone: dependentLabels.length > 0 ? "muted" : "warn" },
-    { id: "verified-gates", label: "Verified gates", detail: `${passedGateCount} gates satisfied`, x: 848, y: 72, width: 230, height: 74, tone: "good" },
-    { id: "open-obligations", label: "Open obligations", detail: openGateLabels.length > 0 ? openGateLabels.join("; ") : "no open gates shown", x: 854, y: 220, width: 240, height: 86, tone: openGateLabels.length > 0 ? "warn" : "good" },
-    { id: "tags", label: "Tags", detail: tags.length > 0 ? tags.join(" ") : "untagged", x: 864, y: 374, width: 220, height: 74, tone: "muted" },
-    { id: "report-packet", label: "Report packet", detail: "receipts, limits, replay, visuals", x: 455, y: 408, width: 270, height: 74, tone: "accent" }
+    { id: "project-thread", label: "Project thread", detail: "Truth Harness workspace", x: 76, y: 118, width: 270, height: 90, tone: "accent", maxLines: 2 },
+    { id: "current-claim", label: "Current claim", detail: receipt.title, x: center.x, y: center.y, width: center.width, height: center.height, tone: receipt.trust === "refuted" ? "danger" : "good", maxLines: 3 },
+    { id: "parent-receipts", label: "Parent receipts", detail: dependencyLabels.length > 0 ? dependencyLabels.join("; ") : "none linked yet", x: 76, y: 274, width: 312, height: 104, tone: dependencyLabels.length > 0 ? "muted" : "warn", maxLines: 3 },
+    { id: "child-receipts", label: "Child receipts", detail: dependentLabels.length > 0 ? dependentLabels.join("; ") : "future branches can attach here", x: 76, y: 456, width: 312, height: 96, tone: dependentLabels.length > 0 ? "muted" : "warn", maxLines: 3 },
+    { id: "verified-gates", label: "Verified gates", detail: `${passedGateCount} gates satisfied`, x: 880, y: 120, width: 280, height: 88, tone: "good", maxLines: 2 },
+    { id: "open-obligations", label: "Open obligations", detail: openGateLabels.length > 0 ? openGateLabels.join("; ") : "no open gates shown", x: 880, y: 274, width: 300, height: 104, tone: openGateLabels.length > 0 ? "warn" : "good", maxLines: 3 },
+    { id: "tags", label: "Tags", detail: tags.length > 0 ? tags.join(" ") : "untagged", x: 880, y: 456, width: 280, height: 96, tone: "muted", maxLines: 3 },
+    { id: "report-packet", label: "Report packet", detail: "receipts, limits, replay, visuals", x: 472, y: 490, width: 296, height: 90, tone: "accent", maxLines: 3 }
   ];
   const centerPoint = [center.x + center.width / 2, center.y + center.height / 2];
   const linkedNodes = nodes
@@ -2018,8 +2018,8 @@ function createResearchMindMapVisualModel(receipt, basePlot) {
     caption: "A project-scale map linking the current claim to receipts, open gates, tags, reports, and future branches.",
     svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Research mind map">
       <rect width="${width}" height="${height}" rx="16" fill="#101010" />
-      <text x="44" y="44" fill="#f2f2ee" font-size="23" font-weight="750">${escapeXml(receipt.title)}</text>
-      <text x="44" y="72" fill="#aaa59d" font-size="13">designed for multi-day problems where equations, evidence, agents, notes, and reports need one map</text>
+      <text x="54" y="50" fill="#f2f2ee" font-size="26" font-weight="750">${escapeXml(receipt.title)}</text>
+      <text x="54" y="82" fill="#aaa59d" font-size="15">Designed for multi-day problems where equations, evidence, agents, notes, and reports need one map.</text>
       ${edgeSvg}
       ${nodes.map((node) => conceptNodeSvg(node)).join("")}
     </svg>`,
@@ -2162,11 +2162,15 @@ function conceptNodeSvg(node, options = {}) {
   const activeRing = options.active
     ? `<rect x="-5" y="-5" width="${node.width + 10}" height="${node.height + 10}" rx="14" fill="none" stroke="#f1eadc" stroke-width="2" stroke-dasharray="5 4" />`
     : "";
+  const detailFontSize = node.detailFontSize ?? 14;
+  const detailLineHeight = node.detailLineHeight ?? 18;
+  const detailMaxChars = node.maxChars ?? Math.max(18, Math.floor((node.width - 36) / 7.2));
+  const detailMaxLines = node.maxLines ?? Math.max(2, Math.floor((node.height - 50) / detailLineHeight));
   return `<g${interactiveAttributes} transform="translate(${node.x} ${node.y})">
     ${activeRing}
     <rect width="${node.width}" height="${node.height}" rx="10" fill="${fill}" stroke="${stroke}" />
-    <text x="18" y="28" fill="#aaa59d" font-size="12" font-weight="650">${escapeXml(node.label)}</text>
-    ${svgTextBlock(node.detail, 18, 52, { fill: text, maxChars: 28, maxLines: 2, lineHeight: 17, fontSize: 14, fontWeight: 750 })}
+    <text x="18" y="29" fill="#aaa59d" font-size="13" font-weight="650">${escapeXml(node.label)}</text>
+    ${svgTextBlock(node.detail, 18, 56, { fill: text, maxChars: detailMaxChars, maxLines: detailMaxLines, lineHeight: detailLineHeight, fontSize: detailFontSize, fontWeight: 750 })}
   </g>`;
 }
 

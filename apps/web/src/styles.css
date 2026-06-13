@@ -2012,7 +2012,7 @@ dd {
   min-height: 0;
   height: 100%;
   max-height: min(68vh, 760px);
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: auto;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
@@ -2027,6 +2027,16 @@ dd {
   min-width: 0;
   min-height: clamp(320px, 46vh, 520px);
   height: auto;
+}
+
+.plot-canvas[data-visual-mode="mind-map"] svg,
+.plot-canvas[data-visual-mode="concept-map"] svg,
+.plot-canvas[data-visual-mode="equation-map"] svg {
+  min-width: 980px;
+}
+
+.plot-canvas[data-visual-mode="mind-map"] svg {
+  min-height: clamp(460px, 58vh, 700px);
 }
 
 .visual-map-node {
