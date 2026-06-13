@@ -798,26 +798,42 @@ h1 {
 .math-inline {
   display: inline-flex;
   align-items: center;
-  gap: 0.16em;
+  gap: 0.22em;
   white-space: nowrap;
 }
 
 .math-frac {
   display: inline-grid;
   grid-template-rows: auto auto;
-  min-width: 1.2em;
+  justify-items: stretch;
+  min-width: 1.48em;
   vertical-align: middle;
   text-align: center;
-  line-height: 1.05;
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
-.math-frac > span:first-child {
+.math-frac-row {
+  display: flex;
+  justify-content: center;
+  min-width: 100%;
+}
+
+.math-frac-row > .math-inline {
+  display: inline-flex;
+  justify-content: center;
+  min-width: 1ch;
+  font-size: 1em;
+  line-height: 1;
+}
+
+.math-frac-num {
   border-bottom: 1px solid currentColor;
-  padding: 0 0.18em 0.08em;
+  padding: 0 0.16em 0.09em;
 }
 
-.math-frac > span:last-child {
-  padding: 0.08em 0.18em 0;
+.math-frac-den {
+  padding: 0.09em 0.16em 0;
 }
 
 .math-text {
@@ -1880,6 +1896,122 @@ dd {
   margin-top: 5px;
 }
 
+.claim-gate-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  margin-bottom: 10px;
+  padding: 12px;
+}
+
+.claim-gate-card.ready {
+  border-color: rgba(123, 214, 163, 0.26);
+}
+
+.claim-gate-card.blocked,
+.claim-gate-card.not-recorded {
+  border-color: rgba(240, 200, 109, 0.24);
+}
+
+.claim-gate-card.refuted {
+  border-color: rgba(255, 137, 137, 0.3);
+}
+
+.claim-gate-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.7fr);
+  gap: 14px;
+  align-items: start;
+  min-width: 0;
+}
+
+.claim-gate-main strong {
+  display: block;
+  color: #f1eadc;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.claim-gate-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+}
+
+.claim-gate-facts div {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0d0d0d;
+  padding: 8px;
+}
+
+.claim-gate-facts dt {
+  color: var(--faint);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.claim-gate-facts dd {
+  min-width: 0;
+  overflow: hidden;
+  color: #f1eadc;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.claim-gate-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(240px, 0.9fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.claim-gate-grid section {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0d0d0d;
+  padding: 10px;
+}
+
+.claim-gate-grid h4 {
+  margin-bottom: 8px;
+}
+
+.claim-gate-grid ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: #d8d2c8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.claim-gate-grid li::marker {
+  color: var(--warn);
+}
+
+.claim-gate-grid code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #070707;
+  color: #e6dfce;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  padding: 7px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .docker-verifier-card {
   display: grid;
   gap: 10px;
@@ -2922,6 +3054,8 @@ textarea:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .claim-gate-main,
+  .claim-gate-grid,
   .docker-verifier-main,
   .docker-command-row {
     grid-template-columns: minmax(0, 1fr);
@@ -2998,7 +3132,8 @@ textarea:focus-visible {
   .runbook-next,
   .runbook-grid,
   .runbook-utility-row,
-  .matrix-hero {
+  .matrix-hero,
+  .claim-gate-facts {
     grid-template-columns: 1fr;
   }
 

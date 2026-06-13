@@ -258,6 +258,12 @@ const matrixSummary = document.querySelector("#matrix-summary");
 const matrixCurrentClaim = document.querySelector("#matrix-current-claim");
 const matrixNextCommand = document.querySelector("#matrix-next-command");
 const verificationMatrix = document.querySelector("#verification-matrix");
+const claimReviewGate = document.querySelector("#claim-review-gate");
+const claimReviewStatus = document.querySelector("#claim-review-status");
+const claimReviewDecision = document.querySelector("#claim-review-decision");
+const claimReviewFacts = document.querySelector("#claim-review-facts");
+const claimReviewBlockers = document.querySelector("#claim-review-blockers");
+const claimReviewCommand = document.querySelector("#claim-review-command");
 const dockerVerifierPill = document.querySelector("#docker-verifier-pill");
 const dockerVerifierSummary = document.querySelector("#docker-verifier-summary");
 const dockerVerifierNotes = document.querySelector("#docker-verifier-notes");
@@ -2936,6 +2942,7 @@ function renderVerificationMatrix(receipt) {
   }
 
   const rows = verificationRows(receipt);
+  const claimReview = claimReviewGateModel(receipt);
   const counts = rows.reduce((accumulator, row) => {
     accumulator[row.status] = (accumulator[row.status] ?? 0) + 1;
     return accumulator;
@@ -2943,8 +2950,9 @@ function renderVerificationMatrix(receipt) {
   const nextAction = rows.find((row) => ["missing", "waiting"].includes(row.status)) ?? rows.find((row) => row.status === "skipped") ?? rows[0];
 
   matrixCurrentClaim.textContent = receipt.title;
-  matrixNextCommand.textContent = nextAction?.command ?? receipt.replay;
-  matrixSummary.textContent = `${counts.passed ?? 0} passed / ${counts.waiting ?? 0} waiting / ${counts.missing ?? 0} missing`;
+  matrixNextCommand.textContent = claimReview.nextCommand ?? nextAction?.command ?? receipt.replay;
+  matrixSummary.textContent = `${claimReview.label} / ${counts.passed ?? 0} passed / ${counts.waiting ?? 0} waiting / ${counts.missing ?? 0} missing`;
+  renderClaimReviewGate(claimReview);
 
   verificationMatrix.innerHTML = rows
     .map((row) => `<article class="matrix-row ${row.status}">
@@ -2971,6 +2979,121 @@ function renderVerificationMatrix(receipt) {
       <small>${escapeHtml(statusLabel(row.status))}</small>
     </div>`)
     .join("");
+}
+
+function claimReviewGateModel(receipt) {
+  const claim = receipt.claimId ? claimLedgerStore.get(receipt.claimId) : undefined;
+  if (!claim) {
+    return {
+      status: "not-recorded",
+      label: "not recorded",
+      trust: receipt.trust,
+      ready: false,
+      decision: "Record this result into the claim ledger before an agent relies on it downstream.",
+      blockers: ["No local claim ledger record is linked to the selected receipt."],
+      claimId: receipt.claimId ?? "not recorded",
+      nextCommand: receipt.claimId
+        ? `theorem claim show ${receipt.claimId} --json`
+        : `theorem claim add ${quoteCommandArgForUi(receipt.title)} --evidence receipt:<receipt.json> --json`
+    };
+  }
+
+  const finalization = claimFinalizationSummary(claim);
+  const reviewStatus = claimReviewStatusForClaim(claim, finalization);
+  const blockers = claimReviewBlockersForClaim(claim, finalization);
+  return {
+    status: reviewStatus,
+    label: claimReviewStatusLabel(reviewStatus),
+    trust: claim.trust,
+    ready: reviewStatus === "ready",
+    decision: claimReviewDecisionForClaim(claim, reviewStatus),
+    blockers,
+    claimId: claim.claimId,
+    nextCommand: `theorem claim review ${claim.claimId} --json`
+  };
+}
+
+function renderClaimReviewGate(model) {
+  if (!claimReviewGate) {
+    return;
+  }
+
+  claimReviewGate.className = `claim-gate-card ${model.status}`;
+  claimReviewStatus.textContent = model.label;
+  claimReviewStatus.className = `status-pill ${claimReviewStatusClass(model.status)}`;
+  claimReviewDecision.textContent = model.decision;
+  claimReviewFacts.innerHTML = [
+    ["Claim", model.claimId],
+    ["Trust", model.trust],
+    ["Ready", model.ready ? "yes" : "no"],
+    ["Blockers", String(model.blockers.length)]
+  ]
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
+    .join("");
+  const visibleBlockers = model.blockers.slice(0, 6);
+  const hiddenBlockerCount = Math.max(0, model.blockers.length - visibleBlockers.length);
+  claimReviewBlockers.innerHTML = model.blockers.length > 0
+    ? [
+      ...visibleBlockers.map((blocker) => `<li>${escapeHtml(blocker)}</li>`),
+      ...(hiddenBlockerCount > 0 ? [`<li>${escapeHtml(`${hiddenBlockerCount} more checks in claim review packet.`)}</li>`] : [])
+    ].join("")
+    : "<li>No blocking checks remain for the current narrow claim.</li>";
+  claimReviewCommand.textContent = model.nextCommand;
+}
+
+function claimReviewStatusForClaim(claim, finalization) {
+  if (claim.status !== "active") {
+    return "inactive";
+  }
+
+  if (claim.trust === "refuted") {
+    return "refuted";
+  }
+
+  return finalization.ready ? "ready" : "blocked";
+}
+
+function claimReviewStatusLabel(status) {
+  return status.replaceAll("-", " ");
+}
+
+function claimReviewStatusClass(status) {
+  if (status === "ready") {
+    return "exact";
+  }
+
+  if (status === "refuted") {
+    return "refuted";
+  }
+
+  return "waiting";
+}
+
+function claimReviewDecisionForClaim(claim, status) {
+  if (status === "ready") {
+    return `Ready only as a narrow ${claim.trust} claim matching the attached evidence.`;
+  }
+
+  if (status === "refuted") {
+    return "Do not present this as true; cite it only as a refuted result under the recorded assumptions.";
+  }
+
+  if (status === "inactive") {
+    return `Do not cite this as current; claim status is ${claim.status}.`;
+  }
+
+  return "Not ready for a final claim; keep it scoped or attach stronger evidence.";
+}
+
+function claimReviewBlockersForClaim(claim, finalization) {
+  const blockers = [...finalization.openChecks];
+  for (const step of claim.verification ?? []) {
+    if (step.status === "waiting" || step.status === "blocked") {
+      blockers.push(`${step.stage}: ${step.summary}`);
+    }
+  }
+
+  return [...new Set(blockers)];
 }
 
 function verificationRowObligationHtml(row) {
@@ -3772,6 +3895,11 @@ function agentRouteCommands(receipt) {
 function truncateForCommand(value, maxLength) {
   const text = String(value).replace(/\s+/g, " ").trim();
   return text.length <= maxLength ? text : `${text.slice(0, maxLength - 3)}...`;
+}
+
+function quoteCommandArgForUi(value) {
+  const text = String(value).replace(/\s+/g, " ").trim();
+  return /^[A-Za-z0-9_./\\:-]+$/u.test(text) ? text : JSON.stringify(text);
 }
 
 function applySidebarSearch() {
@@ -5227,7 +5355,7 @@ function escapeXml(value) {
 function renderMathInline(value) {
   let html = escapeHtml(value);
   html = html.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/gu, (_match, numerator, denominator) => {
-    return `<span class="math-frac"><span>${renderMathInline(numerator)}</span><span>${renderMathInline(denominator)}</span></span>`;
+    return `<span class="math-frac"><span class="math-frac-row math-frac-num">${renderMathInline(numerator)}</span><span class="math-frac-row math-frac-den">${renderMathInline(denominator)}</span></span>`;
   });
   html = html
     .replace(/\\text\{([^{}]+)\}/gu, '<span class="math-text">$1</span>')

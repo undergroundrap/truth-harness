@@ -318,6 +318,28 @@
                     <code id="matrix-next-command">theorem bench run</code>
                   </div>
                 </div>
+                <section class="claim-gate-card" id="claim-review-gate" aria-label="Claim review gate">
+                  <div class="claim-gate-main">
+                    <div>
+                      <div class="panel-heading compact-heading">
+                        <h3>Claim Review Gate</h3>
+                        <span class="status-pill waiting" id="claim-review-status">not recorded</span>
+                      </div>
+                      <strong id="claim-review-decision">Record a claim before using this result downstream.</strong>
+                    </div>
+                    <dl class="claim-gate-facts" id="claim-review-facts"></dl>
+                  </div>
+                  <div class="claim-gate-grid">
+                    <section>
+                      <h4>Blocking Checks</h4>
+                      <ul id="claim-review-blockers"></ul>
+                    </section>
+                    <section>
+                      <h4>Agent Gate</h4>
+                      <code id="claim-review-command">theorem claim review &lt;claim_id&gt; --json</code>
+                    </section>
+                  </div>
+                </section>
                 <section class="docker-verifier-card" id="docker-verifier-card" aria-label="Docker verifier fallback">
                   <div class="docker-verifier-main">
                     <div>
