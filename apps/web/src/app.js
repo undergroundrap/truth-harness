@@ -2003,17 +2003,16 @@ async function copyObligationCommand(button) {
     return;
   }
 
-  try {
-    await copyTextToClipboard(command);
-    addActivity("human", "Copied verifier command", command, "passed");
-    const originalText = button.textContent;
-    button.textContent = "Copied";
-    setTimeout(() => {
-      button.textContent = originalText;
-    }, 1200);
-  } catch (error) {
-    addActivity("web-ui", "Copy command failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
-  }
+  await copyOrDownloadText({
+    text: `${command}\n`,
+    filename: `theorem-verifier-command-${safeFilenameTimestamp()}.txt`,
+    type: "text/plain",
+    button,
+    copiedTitle: "Copied verifier command",
+    copiedDetail: command,
+    fallbackTitle: "Downloaded verifier command",
+    fallbackDetail: "the verifier command was saved as plain text instead."
+  });
 }
 
 function syncRouteIntoReceipts(route, routePaths) {
@@ -4964,17 +4963,16 @@ document.querySelectorAll(".docker-copy-command").forEach((button) => {
       return;
     }
 
-    try {
-      await copyTextToClipboard(command);
-      addActivity("human", "Copied Docker verifier command", command, "passed");
-      const originalText = button.textContent;
-      button.textContent = "Copied";
-      setTimeout(() => {
-        button.textContent = originalText;
-      }, 1200);
-    } catch (error) {
-      addActivity("web-ui", "Docker command copy failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
-    }
+    await copyOrDownloadText({
+      text: `${command}\n`,
+      filename: `theorem-docker-verifier-command-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      button,
+      copiedTitle: "Copied Docker verifier command",
+      copiedDetail: command,
+      fallbackTitle: "Downloaded Docker verifier command",
+      fallbackDetail: "the Docker verifier command was saved as plain text instead."
+    });
   });
 });
 
