@@ -2049,11 +2049,27 @@ dd {
   padding: 14px;
   scrollbar-gutter: stable both-edges;
   cursor: grab;
+  touch-action: none;
+  overscroll-behavior: contain;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .plot-canvas.panning {
   cursor: grabbing;
   user-select: none;
+  -webkit-user-select: none;
+}
+
+.plot-canvas *,
+.plot-canvas svg,
+.plot-canvas svg * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.plot-canvas svg text {
+  pointer-events: none;
 }
 
 .plot-canvas svg {

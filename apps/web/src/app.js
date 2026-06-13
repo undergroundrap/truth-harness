@@ -255,6 +255,7 @@ const VISUAL_ZOOM_STEP = 0.15;
 const activityEvents = [];
 let activityEventCounter = 0;
 let visualPanDrag;
+let suppressVisualClick = false;
 const state = {
   receiptKey: "rational",
   level: "middle",
@@ -8308,15 +8309,26 @@ plotCanvas.addEventListener(
   { passive: false }
 );
 
+plotCanvas.addEventListener("selectstart", (event) => {
+  event.preventDefault();
+});
+
+plotCanvas.addEventListener("dragstart", (event) => {
+  event.preventDefault();
+});
+
 plotCanvas.addEventListener("pointerdown", (event) => {
-  if (event.button !== 0 || event.target.closest("[data-map-node-id]")) {
+  if (event.button !== 0) {
     return;
   }
 
+  event.preventDefault();
+  suppressVisualClick = false;
   visualPanDrag = {
     pointerId: event.pointerId,
     x: event.clientX,
     y: event.clientY,
+    moved: false,
     scrollLeft: plotCanvas.scrollLeft,
     scrollTop: plotCanvas.scrollTop
   };
@@ -8329,8 +8341,14 @@ plotCanvas.addEventListener("pointermove", (event) => {
     return;
   }
 
-  plotCanvas.scrollLeft = visualPanDrag.scrollLeft - (event.clientX - visualPanDrag.x);
-  plotCanvas.scrollTop = visualPanDrag.scrollTop - (event.clientY - visualPanDrag.y);
+  event.preventDefault();
+  const deltaX = event.clientX - visualPanDrag.x;
+  const deltaY = event.clientY - visualPanDrag.y;
+  if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+    visualPanDrag.moved = true;
+  }
+  plotCanvas.scrollLeft = visualPanDrag.scrollLeft - deltaX;
+  plotCanvas.scrollTop = visualPanDrag.scrollTop - deltaY;
 });
 
 function stopVisualPan(event) {
@@ -8338,6 +8356,7 @@ function stopVisualPan(event) {
     return;
   }
 
+  suppressVisualClick = Boolean(visualPanDrag.moved);
   plotCanvas.classList.remove("panning");
   plotCanvas.releasePointerCapture?.(visualPanDrag.pointerId);
   visualPanDrag = undefined;
@@ -8348,6 +8367,13 @@ plotCanvas.addEventListener("pointercancel", stopVisualPan);
 plotCanvas.addEventListener("pointerleave", stopVisualPan);
 
 plotCanvas.addEventListener("click", (event) => {
+  if (suppressVisualClick) {
+    event.preventDefault();
+    event.stopPropagation();
+    suppressVisualClick = false;
+    return;
+  }
+
   const nodeElement = event.target.closest("[data-map-node-id]");
   if (!nodeElement) {
     return;
