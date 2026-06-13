@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { addResearchSessionCheckpoint, writeResearchSession } from "./research-session.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createWorkspaceReview, listWorkspaceReviews, readWorkspaceReview, writeWorkspaceReview } from "./workspace-review.js";
 import { writeVerifierRoute } from "./verifier-route.js";
@@ -170,6 +171,66 @@ describe("workspace review", () => {
     expect(review.summary.claims).toBe(0);
     expect(review.items.every((item) => item.kind !== "claim-blocker")).toBe(true);
     expect(review.markdown).toContain("## Ordered Work Queue");
+  });
+
+  it("includes active research sessions in bounded agent handoffs", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const start = await writeResearchSession({
+      rootPath: root,
+      title: "Exact arithmetic proof route",
+      objective: "Turn a reusable fraction computation into auditable proof work.",
+      domains: ["math"],
+      tasks: ["Attach a Lean proof attempt", "Run a second symbolic checker"],
+      now: "2026-06-13T00:01:00.000Z"
+    });
+    await addResearchSessionCheckpoint({
+      rootPath: root,
+      sessionRef: start.session.sessionId,
+      summary: "Initial route exists but the proof gate is still open.",
+      nextChecks: ["Attach an accepted Lean or SMT artifact to the route."],
+      now: "2026-06-13T00:02:00.000Z"
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 1,
+      now: "2026-06-13T00:03:00.000Z"
+    });
+    const skipped = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-13T00:03:00.000Z"
+    });
+
+    expect(review.summary.sessions).toBe(1);
+    expect(review.summary.sessionTasks).toBe(2);
+    expect(review.summary.sessionNextChecks).toBe(1);
+    expect(review.items).toContainEqual(
+      expect.objectContaining({
+        kind: "session-task",
+        sessionId: start.session.sessionId,
+        title: "Research task: Attach a Lean proof attempt",
+        command: expect.stringContaining("truth-harness research show")
+      })
+    );
+    expect(review.items).toContainEqual(
+      expect.objectContaining({
+        kind: "session-next-check",
+        sessionId: start.session.sessionId,
+        summary: expect.stringContaining("checkpoint"),
+        command: expect.stringContaining(start.session.sessionId)
+      })
+    );
+    expect(review.markdown).toContain("| Sessions | `1` |");
+    expect(skipped.summary.sessions).toBe(0);
+    expect(skipped.summary.totalItems).toBe(0);
   });
 
   it("writes review handoff packets into findings without breaking validation", async () => {

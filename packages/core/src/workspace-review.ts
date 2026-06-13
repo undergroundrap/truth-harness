@@ -9,10 +9,21 @@ import {
   type ProofObligation,
   type VerifierRoute
 } from "./verifier-route.js";
+import {
+  listResearchSessions,
+  type ResearchSession,
+  type ResearchSessionCheckpoint,
+  type ResearchSessionTask
+} from "./research-session.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 
-export type WorkspaceReviewItemKind = "route-obligation" | "route-ready-claim" | "claim-blocker";
+export type WorkspaceReviewItemKind =
+  | "route-obligation"
+  | "route-ready-claim"
+  | "claim-blocker"
+  | "session-task"
+  | "session-next-check";
 export type WorkspaceReviewPriority = "critical" | "high" | "medium" | "low";
 
 export interface WorkspaceReviewItem {
@@ -25,6 +36,9 @@ export interface WorkspaceReviewItem {
   routeId?: string;
   obligationId?: string;
   claimId?: string;
+  sessionId?: string;
+  taskId?: string;
+  checkpointId?: string;
   domain?: string;
   trust?: TrustLabel;
   createdAt?: string;
@@ -46,10 +60,13 @@ export interface WorkspaceReview {
   summary: {
     routes: number;
     claims: number;
+    sessions: number;
     totalItems: number;
     routeObligations: number;
     readyRoutesWithoutClaims: number;
     blockedClaims: number;
+    sessionTasks: number;
+    sessionNextChecks: number;
     criticalItems: number;
     highItems: number;
     mediumItems: number;
@@ -64,6 +81,7 @@ export interface CreateWorkspaceReviewInput {
   rootPath: string;
   maxRoutes?: number;
   maxClaims?: number;
+  maxSessions?: number;
   now?: string;
 }
 
@@ -98,11 +116,13 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const createdAt = input.now ?? new Date().toISOString();
   const routeSummaries = (await listVerifierRoutes(status.root)).slice(0, input.maxRoutes ?? 100);
   const claims = (await listClaimRecords(status.root)).slice(0, input.maxClaims ?? 200);
+  const sessions = (await listResearchSessions(status.root)).slice(0, input.maxSessions ?? 100);
   const claimsByRouteRef = claimsByRouteEvidence(claims);
   const routes = await Promise.all(routeSummaries.map((route) => readVerifierRoute(status.root, route.routeId)));
   const items = sortReviewItems([
     ...routes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef)),
-    ...claims.flatMap((claim) => claimReviewItems(status.root, claim))
+    ...claims.flatMap((claim) => claimReviewItems(status.root, claim)),
+    ...sessions.flatMap((session) => sessionReviewItems(status.root, session))
   ]);
   const reviewWithoutMarkdown = {
     schemaVersion: WORKSPACE_REVIEW_SCHEMA_VERSION,
@@ -115,6 +135,7 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
     summary: summarizeItems({
       routes: routeSummaries.length,
       claims: claims.length,
+      sessions: sessions.length,
       items
     }),
     items,
@@ -245,6 +266,7 @@ export function renderWorkspaceReviewMarkdown(review: Omit<WorkspaceReview, "mar
     `| Network | \`${review.networkAccess}\` |`,
     `| Routes | \`${review.summary.routes}\` |`,
     `| Claims | \`${review.summary.claims}\` |`,
+    `| Sessions | \`${review.summary.sessions ?? 0}\` |`,
     `| Queue items | \`${review.summary.totalItems}\` |`,
     "",
     "## Ordered Work Queue",
@@ -423,6 +445,80 @@ function claimReviewItems(workspacePath: string, claim: ClaimLedgerRecord): Work
   ];
 }
 
+function sessionReviewItems(workspacePath: string, session: ResearchSession): WorkspaceReviewItem[] {
+  const command = researchSessionCommand(workspacePath, session.sessionId);
+  const taskItems = session.tasks
+    .filter((task) => task.status !== "done")
+    .map((task) => sessionTaskItem(command, session, task));
+  const nextCheckItems = recentSessionNextChecks(session).map(({ checkpoint, check }) =>
+    sessionNextCheckItem(command, session, checkpoint, check)
+  );
+
+  return [...taskItems, ...nextCheckItems];
+}
+
+function sessionTaskItem(command: string, session: ResearchSession, task: ResearchSessionTask): WorkspaceReviewItem {
+  return {
+    itemId: itemIdFor({
+      kind: "session-task",
+      sessionId: session.sessionId,
+      taskId: task.taskId,
+      updatedAt: session.updatedAt
+    }),
+    kind: "session-task",
+    priority: priorityForSessionTask(task),
+    title: `Research task: ${task.title}`,
+    summary: `${session.title} - ${task.status}`,
+    command,
+    sessionId: session.sessionId,
+    taskId: task.taskId,
+    domain: session.domains[0],
+    createdAt: session.updatedAt,
+    source: {
+      label: "research session",
+      ref: `${session.sessionId}:${task.taskId}`
+    }
+  };
+}
+
+function sessionNextCheckItem(
+  command: string,
+  session: ResearchSession,
+  checkpoint: ResearchSessionCheckpoint,
+  check: string
+): WorkspaceReviewItem {
+  return {
+    itemId: itemIdFor({
+      kind: "session-next-check",
+      sessionId: session.sessionId,
+      checkpointId: checkpoint.checkpointId,
+      check
+    }),
+    kind: "session-next-check",
+    priority: "medium",
+    title: `Session next check: ${check}`,
+    summary: `${session.title} checkpoint ${checkpoint.checkpointId}`,
+    command,
+    sessionId: session.sessionId,
+    checkpointId: checkpoint.checkpointId,
+    domain: session.domains[0],
+    createdAt: checkpoint.createdAt,
+    source: {
+      label: "research checkpoint",
+      ref: `${session.sessionId}:${checkpoint.checkpointId}`
+    }
+  };
+}
+
+function recentSessionNextChecks(
+  session: ResearchSession
+): Array<{ checkpoint: ResearchSessionCheckpoint; check: string }> {
+  return [...session.checkpoints]
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .flatMap((checkpoint) => checkpoint.nextChecks.map((check) => ({ checkpoint, check })))
+    .slice(0, 20);
+}
+
 function claimsByRouteEvidence(claims: ClaimLedgerRecord[]): Map<string, ClaimLedgerRecord[]> {
   const map = new Map<string, ClaimLedgerRecord[]>();
   for (const claim of claims) {
@@ -443,15 +539,19 @@ function claimsByRouteEvidence(claims: ClaimLedgerRecord[]): Map<string, ClaimLe
 function summarizeItems(input: {
   routes: number;
   claims: number;
+  sessions: number;
   items: WorkspaceReviewItem[];
 }): WorkspaceReview["summary"] {
   return {
     routes: input.routes,
     claims: input.claims,
+    sessions: input.sessions,
     totalItems: input.items.length,
     routeObligations: input.items.filter((item) => item.kind === "route-obligation").length,
     readyRoutesWithoutClaims: input.items.filter((item) => item.kind === "route-ready-claim").length,
     blockedClaims: input.items.filter((item) => item.kind === "claim-blocker").length,
+    sessionTasks: input.items.filter((item) => item.kind === "session-task").length,
+    sessionNextChecks: input.items.filter((item) => item.kind === "session-next-check").length,
     criticalItems: input.items.filter((item) => item.priority === "critical").length,
     highItems: input.items.filter((item) => item.priority === "high").length,
     mediumItems: input.items.filter((item) => item.priority === "medium").length,
@@ -483,6 +583,14 @@ function priorityForClaim(claim: ClaimLedgerRecord): WorkspaceReviewPriority {
   return "medium";
 }
 
+function priorityForSessionTask(task: ResearchSessionTask): WorkspaceReviewPriority {
+  if (task.status === "blocked" || task.status === "doing") {
+    return "high";
+  }
+
+  return "medium";
+}
+
 function sortReviewItems(items: WorkspaceReviewItem[]): WorkspaceReviewItem[] {
   const rank: Record<WorkspaceReviewPriority, number> = {
     critical: 0,
@@ -507,6 +615,10 @@ function itemIdFor(value: unknown): string {
 
 function quoteCommandArg(value: string): string {
   return /^[A-Za-z0-9_./\\:-]+$/u.test(value) ? value : JSON.stringify(value);
+}
+
+function researchSessionCommand(workspacePath: string, sessionId: string): string {
+  return `truth-harness research show ${quoteCommandArg(sessionId)} --workspace ${quoteCommandArg(workspacePath)} --json`;
 }
 
 function escapeMarkdownTable(value: string): string {

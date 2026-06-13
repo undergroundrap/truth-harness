@@ -2331,16 +2331,25 @@ workspace
   .option("--write", "Write JSON and Markdown into .truth-harness/findings")
   .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
   .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
+  .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
   .option("--fail-on-critical", "Exit non-zero when critical review items exist")
   .action(
     async (
       path: string,
-      options: { json?: boolean; write?: boolean; maxRoutes?: number; maxClaims?: number; failOnCritical?: boolean }
+      options: {
+        json?: boolean;
+        write?: boolean;
+        maxRoutes?: number;
+        maxClaims?: number;
+        maxSessions?: number;
+        failOnCritical?: boolean;
+      }
     ) => {
       const reviewInput = {
         rootPath: path,
         maxRoutes: options.maxRoutes,
-        maxClaims: options.maxClaims
+        maxClaims: options.maxClaims,
+        maxSessions: options.maxSessions
       };
       const writeResult = options.write ? await writeWorkspaceReview(reviewInput) : undefined;
       const review = writeResult?.review ?? (await createWorkspaceReview(reviewInput));
@@ -3792,6 +3801,7 @@ function printWorkspaceReview(review: WorkspaceReview, writeResult?: WorkspaceRe
   console.log(`Project: ${review.projectId}`);
   console.log(`Routes: ${review.summary.routes}`);
   console.log(`Claims: ${review.summary.claims}`);
+  console.log(`Sessions: ${review.summary.sessions ?? 0}`);
   console.log(`Queue items: ${review.summary.totalItems}`);
   console.log(`Critical/high/medium/low: ${review.summary.criticalItems}/${review.summary.highItems}/${review.summary.mediumItems}/${review.summary.lowItems}`);
   console.log(`Privacy: ${review.privacy.mode} (network: ${review.networkAccess})`);

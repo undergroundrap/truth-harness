@@ -887,7 +887,16 @@ describe("MCP tool handlers", () => {
     const shown = await handleTruthHarnessResearchSessionShow({
       sessionRef: start.session.sessionId
     });
+    const handoff = await handleTruthHarnessWorkspaceReview({
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 1
+    });
     const validation = await handleTruthHarnessWorkspaceValidate({});
+
+    if ("written" in handoff) {
+      throw new Error("Expected an in-memory workspace review.");
+    }
 
     expect(start.session.schemaVersion).toBe("truth-harness.research-session.v0");
     expect(start.session.modelPolicy.hostedModels).toBe("optional-with-disclosure");
@@ -901,6 +910,16 @@ describe("MCP tool handlers", () => {
     expect(list.total).toBe(1);
     expect(shown.sessionId).toBe(start.session.sessionId);
     expect(shown.checkpoints).toHaveLength(1);
+    expect(handoff.summary.sessions).toBe(1);
+    expect(handoff.summary.sessionTasks).toBe(2);
+    expect(handoff.summary.sessionNextChecks).toBe(1);
+    expect(handoff.items).toContainEqual(
+      expect.objectContaining({
+        kind: "session-next-check",
+        sessionId: start.session.sessionId,
+        command: expect.stringContaining("truth-harness research show")
+      })
+    );
     expect(validation.passed).toBe(true);
   });
 

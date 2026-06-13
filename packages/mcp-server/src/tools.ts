@@ -454,6 +454,7 @@ export interface TruthHarnessWorkspaceReviewInput {
   workspacePath?: string;
   maxRoutes?: number;
   maxClaims?: number;
+  maxSessions?: number;
   write?: boolean;
 }
 
@@ -1342,7 +1343,8 @@ export async function handleTruthHarnessWorkspaceReview(
   const reviewInput = {
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     maxRoutes: input.maxRoutes,
-    maxClaims: input.maxClaims
+    maxClaims: input.maxClaims,
+    maxSessions: input.maxSessions
   };
 
   if (input.write) {

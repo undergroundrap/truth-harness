@@ -959,7 +959,7 @@ export function createTruthHarnessMcpServer(): McpServer {
     {
       title: "Review Workspace Work Queue",
       description:
-        "Return the ordered local work queue across saved verifier routes and claim-ledger records, including blockers, next commands, privacy boundary, and Markdown handoff for agents.",
+        "Return the ordered local work queue across saved verifier routes, claim-ledger records, and research sessions, including blockers, next commands, privacy boundary, and Markdown handoff for agents.",
       inputSchema: {
         workspacePath: z
           .string()
@@ -979,6 +979,13 @@ export function createTruthHarnessMcpServer(): McpServer {
           .max(1000)
           .optional()
           .describe("Maximum claim records to inspect. Defaults to 200; use 0 to skip claims."),
+        maxSessions: z
+          .number()
+          .int()
+          .min(0)
+          .max(500)
+          .optional()
+          .describe("Maximum research sessions to inspect. Defaults to 100; use 0 to skip sessions."),
         write: z
           .boolean()
           .optional()
@@ -989,8 +996,8 @@ export function createTruthHarnessMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath, maxRoutes, maxClaims, write }) =>
-      toolJson(await handleTruthHarnessWorkspaceReview({ workspacePath, maxRoutes, maxClaims, write }))
+    async ({ workspacePath, maxRoutes, maxClaims, maxSessions, write }) =>
+      toolJson(await handleTruthHarnessWorkspaceReview({ workspacePath, maxRoutes, maxClaims, maxSessions, write }))
   );
 
   server.registerTool(

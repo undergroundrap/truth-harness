@@ -1040,6 +1040,25 @@ describe("benchmark CLI", () => {
     ) as { sessionId: string; checkpoints: unknown[] };
     const list = JSON.parse((await runCli(["research", "list", root, "--json"])).stdout) as { total: number };
     const humanShow = await runCli(["research", "show", started.session.sessionId, "--workspace", root]);
+    const handoff = JSON.parse(
+      (
+        await runCli([
+          "workspace",
+          "review",
+          root,
+          "--max-routes",
+          "0",
+          "--max-claims",
+          "0",
+          "--max-sessions",
+          "1",
+          "--json"
+        ])
+      ).stdout
+    ) as {
+      summary: { sessions: number; sessionTasks: number; sessionNextChecks: number };
+      items: Array<{ kind: string; sessionId?: string; command: string }>;
+    };
 
     expect(start.exitCode).toBe(0);
     expect(started.session.schemaVersion).toBe("truth-harness.research-session.v0");
@@ -1051,6 +1070,16 @@ describe("benchmark CLI", () => {
     expect(list.total).toBe(1);
     expect(humanShow.stdout).toContain(`Truth Harness research session ${started.session.sessionId}`);
     expect(humanShow.stdout).toContain("Recent checkpoints:");
+    expect(handoff.summary.sessions).toBe(1);
+    expect(handoff.summary.sessionTasks).toBe(1);
+    expect(handoff.summary.sessionNextChecks).toBe(1);
+    expect(handoff.items).toContainEqual(
+      expect.objectContaining({
+        kind: "session-task",
+        sessionId: started.session.sessionId,
+        command: expect.stringContaining("truth-harness research show")
+      })
+    );
   });
 });
 
