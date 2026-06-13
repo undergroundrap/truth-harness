@@ -156,6 +156,15 @@ button {
   color: #f1eadc;
   font-size: 10px;
   font-weight: 750;
+  overflow: hidden;
+}
+
+.workspace-mark img,
+.header-brand-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .workspace-kicker {
@@ -604,6 +613,18 @@ button {
   gap: 8px;
 }
 
+.header-brand-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #151515;
+}
+
 .workspace-title-copy {
   display: grid;
   align-content: center;
@@ -692,6 +713,101 @@ h1 {
   overflow: auto;
   scrollbar-gutter: stable;
   padding: 18px clamp(16px, 3vw, 42px) 118px;
+}
+
+.project-start-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 14px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(183, 169, 138, 0.08), rgba(18, 18, 18, 0.2) 42%),
+    #141414;
+  padding: 12px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.26);
+}
+
+.project-start-brand {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.project-start-logo {
+  width: 58px;
+  height: 58px;
+  border: 1px solid rgba(183, 169, 138, 0.22);
+  border-radius: 10px;
+  background: #0f0f0f;
+  object-fit: cover;
+}
+
+.project-start-brand h2 {
+  margin-top: 2px;
+  font-size: 18px;
+  font-weight: 760;
+}
+
+.project-start-brand p {
+  max-width: 520px;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.project-start-stats {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.project-start-stats div {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #101010;
+  padding: 8px;
+}
+
+.project-start-stats span,
+.project-start-stats strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-start-stats span {
+  color: var(--faint);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.project-start-stats strong {
+  margin-top: 3px;
+  color: #efe8da;
+  font-size: 12px;
+}
+
+.project-start-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.project-start-actions .text-button {
+  height: 30px;
+  white-space: nowrap;
 }
 
 .session-title {
@@ -3508,6 +3624,18 @@ textarea:focus-visible {
 @media (max-width: 1120px) {
   .session-grid {
     grid-template-columns: 1fr;
+  }
+
+  .project-start-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .project-start-stats {
+    grid-column: auto;
+  }
+
+  .project-start-actions {
+    justify-content: flex-start;
   }
 
   .inspector {

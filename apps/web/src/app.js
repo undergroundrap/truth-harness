@@ -255,6 +255,11 @@ const sidebarSearch = document.querySelector("#sidebar-search");
 const sidebarSearchCount = document.querySelector("#sidebar-search-count");
 const laneButtons = document.querySelectorAll(".lane-row");
 const laneStatus = document.querySelector("#lane-status");
+const projectStartLane = document.querySelector("#project-start-lane");
+const projectStartClaims = document.querySelector("#project-start-claims");
+const projectStartFocus = document.querySelector("#project-start-focus");
+const projectStartChecks = document.querySelector("#project-start-checks");
+const projectStartReport = document.querySelector("#project-start-report");
 const traceList = document.querySelector("#trace-list");
 const receiptDetails = document.querySelector("#receipt-details");
 const graphList = document.querySelector("#graph-list");
@@ -1024,6 +1029,7 @@ function render() {
   renderActivityLog();
   renderSurface();
   renderLane();
+  renderProjectStart();
   renderProtocol();
   renderSafetyStatus();
   renderAgentRoutes(receipt);
@@ -1038,6 +1044,16 @@ function render() {
   document.querySelectorAll(".segment").forEach((button) => {
     button.classList.toggle("active", button.dataset.level === state.level);
   });
+}
+
+function renderProjectStart() {
+  if (projectStartLane) {
+    projectStartLane.textContent = laneStatusText[state.lane] ?? "Research lane";
+  }
+  if (projectStartClaims) {
+    const count = receiptStore.size;
+    projectStartClaims.textContent = `${count} ${count === 1 ? "claim" : "claims"}`;
+  }
 }
 
 function renderRouteLedger(receipt) {
@@ -5923,6 +5939,26 @@ sidebarResizer.addEventListener("pointercancel", endSidebarResize);
 sidebarResizer.addEventListener("keydown", handleSidebarResizerKey);
 
 researcherNameInput.addEventListener("input", saveResearcherName);
+
+projectStartFocus?.addEventListener("click", () => {
+  state.surface = "trace";
+  render();
+  promptInput.focus();
+  composer.scrollIntoView({ block: "nearest" });
+  addActivity("human", "Opened new route composer", "Researcher focused the local verification composer from the project start panel.", "waiting");
+});
+
+projectStartChecks?.addEventListener("click", () => {
+  state.surface = "checks";
+  render();
+  resetActiveSurfaceScroll();
+});
+
+projectStartReport?.addEventListener("click", () => {
+  state.surface = "report";
+  render();
+  resetActiveSurfaceScroll();
+});
 
 claimList.addEventListener("click", (event) => {
   const button = event.target.closest(".claim-row");

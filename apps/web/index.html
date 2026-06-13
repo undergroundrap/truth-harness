@@ -4,13 +4,18 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Truth Harness</title>
+    <meta name="theme-color" content="#101010">
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/icon-32.png">
+    <link rel="icon" type="image/png" sizes="64x64" href="./assets/icon-64.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/icon-180.png">
+    <link rel="manifest" href="./manifest.webmanifest">
     <link rel="stylesheet" href="./src/styles.css">
   </head>
   <body>
     <div class="app-shell" id="app-shell">
       <aside class="sidebar" id="sidebar" aria-label="Workspace navigation">
         <div class="top-strip">
-          <span class="workspace-mark" aria-hidden="true">TH</span>
+          <span class="workspace-mark" aria-hidden="true"><img src="./assets/icon-64.png" alt=""></span>
           <span class="workspace-kicker">Local workbench</span>
           <button class="icon-button sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-pressed="false">&lt;</button>
         </div>
@@ -128,6 +133,7 @@
         <header class="workspace-header">
           <div class="workspace-title-group">
             <button class="icon-button sidebar-restore" id="sidebar-restore" type="button" aria-label="Expand sidebar" hidden>&gt;</button>
+            <span class="header-brand-icon" aria-hidden="true"><img src="./assets/icon-64.png" alt=""></span>
             <div class="workspace-title-copy">
               <div class="workspace-title-row">
                 <h1>Truth Harness</h1>
@@ -147,6 +153,36 @@
 
         <section class="session-grid">
           <section class="thread-panel" aria-label="Verification session">
+            <section class="project-start-panel" aria-label="Project start">
+              <div class="project-start-brand">
+                <img src="./assets/icon-192.png" alt="" class="project-start-logo">
+                <div>
+                  <span class="mini-label">local project</span>
+                  <h2>Truth Harness</h2>
+                  <p>Receipts, claims, routes, notes, and reports stay in this workspace.</p>
+                </div>
+              </div>
+              <div class="project-start-stats" aria-label="Project state">
+                <div>
+                  <span>Lane</span>
+                  <strong id="project-start-lane">Math lane</strong>
+                </div>
+                <div>
+                  <span>Claims</span>
+                  <strong id="project-start-claims">4 loaded</strong>
+                </div>
+                <div>
+                  <span>Status</span>
+                  <strong>local-only</strong>
+                </div>
+              </div>
+              <div class="project-start-actions">
+                <button class="text-button" id="project-start-focus" type="button">New route</button>
+                <button class="text-button" id="project-start-checks" type="button">Review checks</button>
+                <button class="text-button" id="project-start-report" type="button">Report</button>
+              </div>
+            </section>
+
             <div class="session-title">
               <div>
                 <h2>Verified Calculation</h2>
