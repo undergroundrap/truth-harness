@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -273,6 +273,66 @@ describe("local web route ledger API", () => {
   }, 30_000);
 });
 
+describe("local web safety guard", () => {
+  it("sets browser safety headers and rejects non-local or cross-origin API writes", async () => {
+    tempProjectRoot = await mkdtemp(join(tmpdir(), "theorem-web-safety-"));
+    const port = await getFreePort();
+    runningServer = await startWebServer(port, tempProjectRoot);
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    const indexResponse = await fetch(`${baseUrl}/`);
+    expect(indexResponse.status).toBe(200);
+    expect(indexResponse.headers.get("content-security-policy")).toContain("connect-src 'self'");
+    expect(indexResponse.headers.get("permissions-policy")).toContain("camera=()");
+    expect(indexResponse.headers.get("x-frame-options")).toBe("DENY");
+
+    const rejectedHost = await requestText({
+      port,
+      path: "/api/status",
+      headers: {
+        Host: "example.com"
+      }
+    });
+    expect(rejectedHost.statusCode).toBe(403);
+    expect(JSON.parse(rejectedHost.body)).toMatchObject({
+      error: "non-local API host rejected"
+    });
+
+    const rejectedOrigin = await requestText({
+      port,
+      method: "POST",
+      path: "/api/receipt",
+      headers: {
+        Host: `127.0.0.1:${port}`,
+        Origin: "http://evil.example",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ problem: "compute 1 + 1" })
+    });
+    expect(rejectedOrigin.statusCode).toBe(403);
+    expect(JSON.parse(rejectedOrigin.body)).toMatchObject({
+      error: "cross-origin API write rejected"
+    });
+
+    const sameOriginWrite = await requestText({
+      port,
+      method: "POST",
+      path: "/api/receipt",
+      headers: {
+        Host: `127.0.0.1:${port}`,
+        Origin: `http://127.0.0.1:${port}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ problem: "compute 1 + 1" })
+    });
+    expect(sameOriginWrite.statusCode).toBe(200);
+    expect(JSON.parse(sameOriginWrite.body)).toMatchObject({
+      localOnly: true,
+      externalCalls: []
+    });
+  }, 30_000);
+});
+
 async function getFreePort(): Promise<number> {
   return new Promise((resolvePort, rejectPort) => {
     const server = createServer();
@@ -322,6 +382,40 @@ async function startWebServer(port: number, projectRoot: string): Promise<ChildP
 
   await waitForServerReady(server, () => stdout.includes(`http://127.0.0.1:${port}`), () => stdout + stderr);
   return server;
+}
+
+async function requestText(input: {
+  port: number;
+  method?: string;
+  path: string;
+  headers?: Record<string, string>;
+  body?: string;
+}): Promise<{ statusCode: number; headers: Record<string, string | string[] | undefined>; body: string }> {
+  return new Promise((resolveRequest, rejectRequest) => {
+    const request = httpRequest({
+      hostname: "127.0.0.1",
+      port: input.port,
+      method: input.method ?? "GET",
+      path: input.path,
+      headers: input.headers
+    }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+      response.on("end", () => {
+        resolveRequest({
+          statusCode: response.statusCode ?? 0,
+          headers: response.headers,
+          body: Buffer.concat(chunks).toString("utf8")
+        });
+      });
+    });
+
+    request.on("error", rejectRequest);
+    if (input.body) {
+      request.write(input.body);
+    }
+    request.end();
+  });
 }
 
 async function waitForServerReady(
