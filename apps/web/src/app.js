@@ -5974,7 +5974,7 @@ function graphNodeRank(node, currentIds) {
 function graphNodeKindLabel(node) {
   const label = String(node.kind ?? "artifact").replaceAll("-", " ");
   if (node.missing) {
-    return `missing ${label}`;
+    return label === "missing ref" ? "missing ref" : `missing ${label}`;
   }
   if (node.valid === false) {
     return `${label} needs review`;
@@ -6059,6 +6059,7 @@ function renderWorkspaceGraphNodeDetail(entry, index) {
   const node = entry.node;
   const edges = workspaceGraphNodeEdges(node.nodeId);
   const issueText = node.issueCodes?.length ? node.issueCodes.join(", ") : "none";
+  const repairHtml = node.missing ? renderMissingGraphRefRepair(node, edges) : "";
   const edgeHtml = edges.length
     ? `<ul class="graph-edge-list">
         ${edges.slice(0, 8).map((edge) => `<li>
@@ -6083,9 +6084,59 @@ function renderWorkspaceGraphNodeDetail(entry, index) {
       <div><dt>Edges</dt><dd>${escapeHtml(String(edges.length))}</dd></div>
       <div><dt>Issues</dt><dd>${escapeHtml(issueText)}</dd></div>
     </dl>
+    ${repairHtml}
     <h5>Evidence Connections</h5>
     ${edgeHtml}
   `;
+}
+
+function renderMissingGraphRefRepair(node, edges) {
+  const firstEdge = edges[0];
+  const refText = firstEdge ? `${firstEdge.refKind ?? "artifact"}:${firstEdge.ref}` : node.label;
+  const packet = missingGraphRefRepairPacket(node, edges);
+  const sourceList = edges.length
+    ? `<ul>${edges.slice(0, 5).map((edge) => `<li><code>${escapeHtml(edge.sourcePath)}</code> <span>${escapeHtml(edge.fieldPath)}</span></li>`).join("")}</ul>`
+    : "<p>No source artifact was recorded for this missing ref.</p>";
+
+  return `<section class="graph-repair-panel">
+    <h5>Repair Missing Reference</h5>
+    <p>This graph node is not corrupted data. It means one or more local artifacts point at evidence that has not been persisted into the workspace yet.</p>
+    <dl class="graph-detail-facts">
+      <div><dt>Missing ref</dt><dd><code>${escapeHtml(refText)}</code></dd></div>
+      <div><dt>Sources</dt><dd>${escapeHtml(String(edges.length))} workspace reference${edges.length === 1 ? "" : "s"}</dd></div>
+      <div><dt>Next</dt><dd>Attach a saved receipt, route, claim, or source artifact, then refresh the workspace graph.</dd></div>
+    </dl>
+    <div class="graph-detail-actions">
+      <button class="text-button compact-button graph-copy-text" data-copy-text="${escapeHtml(refText)}" data-copy-title="Copied missing ref" type="button">Copy ref</button>
+      <button class="text-button compact-button graph-copy-text" data-copy-text="${escapeHtml(packet)}" data-copy-title="Copied missing-ref repair packet" type="button">Copy repair packet</button>
+    </div>
+    <h5>Source Fields</h5>
+    ${sourceList}
+  </section>`;
+}
+
+function missingGraphRefRepairPacket(node, edges) {
+  const firstEdge = edges[0];
+  const refText = firstEdge ? `${firstEdge.refKind ?? "artifact"}:${firstEdge.ref}` : node.label;
+  return [
+    "# Truth Harness Missing Reference",
+    "",
+    `Missing ref: ${refText}`,
+    `Graph node: ${node.nodeId}`,
+    "",
+    "## Source Fields",
+    ...(edges.length > 0
+      ? edges.map((edge) => `- ${edge.sourcePath} ${edge.fieldPath} (${edge.kind})`)
+      : ["- No source fields recorded."]),
+    "",
+    "## Repair Options",
+    "- Persist the missing evidence as a receipt, route, claim, source, proof, SMT, CAS, snapshot, or other local artifact.",
+    "- Replace legacy refs with workspace-local evidence refs that validation can resolve.",
+    "- If this is intentionally external or historical, record that boundary in the artifact summary before relying on the claim.",
+    "",
+    "Validation command: truth-harness workspace validate",
+    "Graph command: truth-harness workspace graph"
+  ].join("\n");
 }
 
 function renderWorkspaceGraphSummaryDetail(index) {
@@ -7544,6 +7595,21 @@ mainGraphList.addEventListener("click", (event) => {
 });
 
 graphDetail.addEventListener("click", (event) => {
+  const copyButton = event.target.closest(".graph-copy-text");
+  if (copyButton) {
+    void copyOrDownloadText({
+      button: copyButton,
+      text: copyButton.dataset.copyText ?? "",
+      filename: `truth-harness-graph-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      copiedTitle: copyButton.dataset.copyTitle ?? "Copied graph detail",
+      copiedDetail: "Workspace graph detail copied from the local lineage inspector.",
+      fallbackTitle: "Downloaded graph detail",
+      fallbackDetail: "the graph detail was saved as a local text file instead."
+    });
+    return;
+  }
+
   const button = event.target.closest(".graph-open-receipt");
   if (!button) {
     return;

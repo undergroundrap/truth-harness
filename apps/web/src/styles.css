@@ -2476,6 +2476,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   grid-template-columns: 28px minmax(0, 1fr);
   gap: 10px;
   width: 100%;
+  min-width: 0;
   min-height: 96px;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
@@ -2484,6 +2485,10 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   cursor: pointer;
   padding: 12px;
   text-align: left;
+}
+
+.canvas-node > div {
+  min-width: 0;
 }
 
 .canvas-node:hover,
@@ -2527,12 +2532,16 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   color: #efe9dc;
   font-size: 13px;
   margin-bottom: 5px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .canvas-node p {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .graph-detail {
@@ -2562,6 +2571,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   font-size: 12px;
   line-height: 1.45;
   margin-bottom: 10px;
+  overflow-wrap: anywhere;
 }
 
 .graph-detail .claim-finalization-summary {
@@ -2581,6 +2591,16 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   display: grid;
   grid-template-columns: minmax(86px, 0.7fr) minmax(0, 1.3fr);
   gap: 8px;
+  min-width: 0;
+}
+
+.graph-detail-facts dd,
+.graph-detail-facts code,
+.graph-detail code {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .graph-detail-tags {
@@ -2615,9 +2635,50 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 
 .graph-edge-list code {
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.graph-repair-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(221, 184, 89, 0.28);
+  border-radius: 8px;
+  background: rgba(221, 184, 89, 0.06);
+  margin: 12px 0;
+  padding: 10px;
+  min-width: 0;
+}
+
+.graph-repair-panel h5 {
+  margin: 0;
+}
+
+.graph-repair-panel p {
+  margin: 0;
+}
+
+.graph-repair-panel ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.graph-repair-panel li,
+.graph-repair-panel span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.graph-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
 }
 
 .claim-review-panel {
