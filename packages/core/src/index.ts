@@ -197,6 +197,7 @@ export {
   writeWorkspaceSnapshot
 } from "./workspace-snapshot.js";
 export { validateWorkspaceArtifacts } from "./workspace-validation.js";
+export { createWorkspaceGraph } from "./workspace-graph.js";
 export {
   createWorkspaceReview,
   listWorkspaceReviews,
@@ -481,6 +482,14 @@ export type {
   WorkspaceValidationIssue,
   WorkspaceValidationIssueSeverity
 } from "./workspace-validation.js";
+export type {
+  CreateWorkspaceGraphInput,
+  WorkspaceGraph,
+  WorkspaceGraphEdge,
+  WorkspaceGraphEdgeKind,
+  WorkspaceGraphNode,
+  WorkspaceGraphNodeKind
+} from "./workspace-graph.js";
 export type {
   CreateWorkspaceReviewInput,
   WorkspaceReview,

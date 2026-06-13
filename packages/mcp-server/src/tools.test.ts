@@ -67,6 +67,7 @@ import {
   handleTruthHarnessVaultVerify,
   handleTruthHarnessVerify,
   handleTruthHarnessWorkspaceInit,
+  handleTruthHarnessWorkspaceGraph,
   handleTruthHarnessWorkspaceRepair,
   handleTruthHarnessWorkspaceReview,
   handleTruthHarnessWorkspaceReviewList,
@@ -899,6 +900,7 @@ describe("MCP tool handlers", () => {
       maxClaims: 0,
       maxSessions: 1
     });
+    const graph = await handleTruthHarnessWorkspaceGraph({});
     const validation = await handleTruthHarnessWorkspaceValidate({});
 
     if ("written" in handoff) {
@@ -929,6 +931,14 @@ describe("MCP tool handlers", () => {
         kind: "session-next-check",
         sessionId: start.session.sessionId,
         command: expect.stringContaining("truth-harness research show")
+      })
+    );
+    expect(graph.schemaVersion).toBe("truth-harness.workspace-graph.v0");
+    expect(graph.edges).toContainEqual(
+      expect.objectContaining({
+        refKind: "workspace-review",
+        ref: review.review.reviewId,
+        resolved: true
       })
     );
     expect(validation.passed).toBe(true);

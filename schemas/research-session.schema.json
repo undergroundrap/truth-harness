@@ -243,6 +243,7 @@
       "properties": {
         "kind": {
           "enum": [
+            "claim",
             "receipt",
             "artifact",
             "source",

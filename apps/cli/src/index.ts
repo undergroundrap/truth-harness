@@ -96,6 +96,7 @@ import {
   solveSmtProblem,
   addResearchSessionCheckpoint,
   createWorkspaceReview,
+  createWorkspaceGraph,
   updateResearchSessionTask,
   validateWorkspaceArtifacts,
   verifyVaultEntry,
@@ -229,6 +230,7 @@ import {
   type WorkspaceSnapshotWriteResult,
   type TrustLabel,
   type WorkspaceValidation,
+  type WorkspaceGraph,
   type WorkspaceReview,
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
@@ -2408,6 +2410,22 @@ workspace
   );
 
 workspace
+  .command("graph")
+  .description("Show the local evidence graph across workspace artifacts and refs.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full workspace graph JSON")
+  .action(async (path: string, options: { json?: boolean }) => {
+    const graph = await createWorkspaceGraph({ rootPath: path });
+
+    if (options.json) {
+      printJson(graph);
+      return;
+    }
+
+    printWorkspaceGraph(graph);
+  });
+
+workspace
   .command("reviews")
   .description("List persisted workspace review handoff packets.")
   .argument("[path]", "Project root path", ".")
@@ -3874,6 +3892,38 @@ function printWorkspaceReview(review: WorkspaceReview, writeResult?: WorkspaceRe
   }
 }
 
+function printWorkspaceGraph(graph: WorkspaceGraph): void {
+  console.log("Truth Harness workspace graph");
+  console.log(`Project: ${graph.projectId}`);
+  console.log(`Nodes: ${graph.summary.nodes}`);
+  console.log(`Edges: ${graph.summary.edges}`);
+  console.log(`Artifacts: ${graph.summary.artifacts}`);
+  console.log(`Missing refs: ${graph.summary.missingRefs}`);
+  console.log(`Validation: ${graph.validation.passed ? "passed" : "failed"} (${graph.validation.errors} errors, ${graph.validation.warnings} warnings)`);
+  console.log(`Privacy: ${graph.privacy.mode} (network: ${graph.networkAccess})`);
+
+  if (graph.edges.length > 0) {
+    console.log("");
+    console.log("Edges:");
+    for (const edge of graph.edges.slice(0, 20)) {
+      const status = edge.resolved ? "ok" : "missing";
+      console.log(`  ${status} ${edge.kind} ${edge.refKind ? `${edge.refKind}:` : ""}${edge.ref}`);
+      console.log(`    ${edge.sourcePath} ${edge.fieldPath}`);
+    }
+    if (graph.edges.length > 20) {
+      console.log(`  ... ${graph.edges.length - 20} more edges`);
+    }
+  }
+
+  if (graph.warnings.length > 0) {
+    console.log("");
+    console.log("Graph boundary:");
+    for (const warning of graph.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
 function printWorkspaceReviewList(reviews: WorkspaceReviewSummary[]): void {
   console.log(`Truth Harness workspace reviews: ${reviews.length}`);
 
@@ -5133,7 +5183,6 @@ function parseClaimLedgerEvidenceRef(value: string): ClaimLedgerEvidenceRef {
   const maybeKind = rawRef.slice(0, separator);
   const ref = rawRef.slice(separator + 1);
   if (
-    maybeKind === "claim" ||
     maybeKind === "receipt" ||
     maybeKind === "artifact" ||
     maybeKind === "source" ||
@@ -5227,6 +5276,7 @@ function parseResearchEvidenceRef(value: string): ResearchEvidenceRef {
   const maybeKind = value.slice(0, separator);
   const ref = value.slice(separator + 1);
   if (
+    maybeKind === "claim" ||
     maybeKind === "receipt" ||
     maybeKind === "artifact" ||
     maybeKind === "source" ||

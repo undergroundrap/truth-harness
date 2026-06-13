@@ -25,6 +25,7 @@ import {
   createValidationPlan,
   createVerifierRoute,
   createWorkspaceReview,
+  createWorkspaceGraph,
   createSymbolicCasCheckRecord,
   getCasBackendStatus,
   isClaimLedgerDomain,
@@ -204,6 +205,7 @@ import {
   type WorkspaceSnapshotWriteResult,
   type TrustLabel,
   type WorkspaceValidation,
+  type WorkspaceGraph,
   type WorkspaceReview,
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
@@ -450,6 +452,10 @@ export interface TruthHarnessWorkspaceInput {
 }
 
 export interface TruthHarnessWorkspaceSnapshotInput {
+  workspacePath?: string;
+}
+
+export interface TruthHarnessWorkspaceGraphInput {
   workspacePath?: string;
 }
 
@@ -1345,6 +1351,12 @@ export async function handleTruthHarnessWorkspaceRepair(input: TruthHarnessWorks
 
 export async function handleTruthHarnessWorkspaceValidate(input: TruthHarnessWorkspaceSnapshotInput): Promise<WorkspaceValidation> {
   return validateWorkspaceArtifacts({
+    rootPath: resolveWorkspaceRoot(input.workspacePath)
+  });
+}
+
+export async function handleTruthHarnessWorkspaceGraph(input: TruthHarnessWorkspaceGraphInput): Promise<WorkspaceGraph> {
+  return createWorkspaceGraph({
     rootPath: resolveWorkspaceRoot(input.workspacePath)
   });
 }

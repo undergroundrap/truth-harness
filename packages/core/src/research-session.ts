@@ -25,6 +25,7 @@ export type ResearchTaskStatus = (typeof RESEARCH_TASK_STATUSES)[number];
 
 export interface ResearchEvidenceRef {
   kind:
+    | "claim"
     | "receipt"
     | "artifact"
     | "source"

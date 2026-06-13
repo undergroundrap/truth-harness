@@ -816,8 +816,15 @@ describe("benchmark CLI", () => {
     const reviewShow = JSON.parse(
       (await runCli(["workspace", "show-review", written.review.reviewId, "--workspace", root, "--json"])).stdout
     ) as { reviewId: string; summary: { routes: number } };
+    const graph = JSON.parse((await runCli(["workspace", "graph", root, "--json"])).stdout) as {
+      schemaVersion: string;
+      localOnly: boolean;
+      networkAccess: string;
+      summary: { nodes: number; artifacts: number };
+    };
     const reviewListText = await runCli(["workspace", "reviews", root]);
     const reviewText = await runCli(["workspace", "review", root, "--max-routes", "1", "--max-claims", "0", "--write"]);
+    const graphText = await runCli(["workspace", "graph", root]);
 
     expect(reviewResult.exitCode).toBe(0);
     expect(review.schemaVersion).toBe("truth-harness.workspace-review.v0");
@@ -840,11 +847,18 @@ describe("benchmark CLI", () => {
     });
     expect(reviewShow.reviewId).toBe(written.review.reviewId);
     expect(reviewShow.summary.routes).toBe(1);
+    expect(graph.schemaVersion).toBe("truth-harness.workspace-graph.v0");
+    expect(graph.localOnly).toBe(true);
+    expect(graph.networkAccess).toBe("none");
+    expect(graph.summary.nodes).toBeGreaterThan(0);
+    expect(graph.summary.artifacts).toBeGreaterThan(0);
     expect(reviewListText.stdout).toContain("Truth Harness workspace reviews: 1");
     expect(reviewListText.stdout).toContain(written.review.reviewId);
     expect(reviewText.stdout).toContain("Truth Harness workspace review");
     expect(reviewText.stdout).toContain("Queue items:");
     expect(reviewText.stdout).toContain("Markdown:");
+    expect(graphText.stdout).toContain("Truth Harness workspace graph");
+    expect(graphText.stdout).toContain("Nodes:");
   });
 
   it("writes, lists, compares, and gates benchmark artifacts", async () => {

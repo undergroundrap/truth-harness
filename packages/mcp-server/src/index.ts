@@ -68,6 +68,7 @@ import {
   handleTruthHarnessVaultVerify,
   handleTruthHarnessVerify,
   handleTruthHarnessWorkspaceInit,
+  handleTruthHarnessWorkspaceGraph,
   handleTruthHarnessWorkspaceRepair,
   handleTruthHarnessWorkspaceReview,
   handleTruthHarnessWorkspaceReviewList,
@@ -953,6 +954,26 @@ export function createTruthHarnessMcpServer(): McpServer {
       }
     },
     async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceValidate({ workspacePath }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_graph",
+    {
+      title: "Graph Workspace Evidence",
+      description:
+        "Return a read-only local evidence graph across workspace artifacts, refs, missing links, and validation issues for agent and UI lineage views.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceGraph({ workspacePath }))
   );
 
   server.registerTool(
@@ -1874,6 +1895,7 @@ export function createTruthHarnessMcpServer(): McpServer {
 
   const researchEvidenceRefSchema = z.object({
     kind: z.enum([
+      "claim",
       "receipt",
       "artifact",
       "source",

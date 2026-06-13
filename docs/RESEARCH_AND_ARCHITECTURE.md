@@ -658,6 +658,7 @@ Current MCP tools:
 | `truth_harness_workspace_init` | Initialize the private local workspace. |
 | `truth_harness_workspace_status` | Check local workspace health. |
 | `truth_harness_workspace_repair` | Create missing private directories and persist newly added manifest defaults. |
+| `truth_harness_workspace_graph` | Return a read-only local evidence graph across artifacts, evidence refs, claim lineage, sessions, snapshots, selected context refs, and missing links. |
 | `truth_harness_workspace_review` | Return or write a bounded local work queue across saved verifier routes, claim records, and active research sessions for agent handoff. |
 | `truth_harness_workspace_review_list` / `truth_harness_workspace_review_show` | Reopen persisted review handoffs by id or path so agents can resume from exact local queues instead of chat memory. |
 | `truth_harness_workspace_snapshot` | Write a local provenance hash snapshot for workspace artifacts. |

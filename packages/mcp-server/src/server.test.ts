@@ -135,6 +135,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_vault_seal",
         "truth_harness_vault_verify",
         "truth_harness_verify",
+        "truth_harness_workspace_graph",
         "truth_harness_workspace_init",
         "truth_harness_workspace_repair",
         "truth_harness_workspace_review",
@@ -519,6 +520,15 @@ describe("Truth Harness MCP server", () => {
       const researchShowText = firstText(researchShowResult.content);
       expect(researchShowText).toContain("\"schemaVersion\": \"truth-harness.research-session.v0\"");
       expect(researchShowText).toContain("\"checkpoints\": [");
+
+      const workspaceGraphResult = await client.callTool({
+        name: "truth_harness_workspace_graph",
+        arguments: {}
+      });
+      const workspaceGraphText = firstText(workspaceGraphResult.content);
+      expect(workspaceGraphResult.isError).not.toBe(true);
+      expect(workspaceGraphText).toContain("\"schemaVersion\": \"truth-harness.workspace-graph.v0\"");
+      expect(workspaceGraphText).toContain(JSON.parse(snapshotText).snapshot.snapshotId);
 
       const expertReviewResult = await client.callTool({
         name: "truth_harness_expert_review_log",
