@@ -207,6 +207,7 @@ export {
   createSymbolicCasCheckRecord,
   getCasBackendStatus,
   listSymbolicCasChecks,
+  parseSymbolicCasCheckRecord,
   renderSymbolicCasCheckMarkdown,
   writeSymbolicCasCheckRecord
 } from "./cas-backend.js";
@@ -222,6 +223,7 @@ export {
   checkSmtLibArtifact,
   getSmtBackendStatus,
   listSmtChecks,
+  parseSmtCheckRecord,
   parseSmtModel,
   renderSmtCheckMarkdown,
   writeSmtCheckRecord

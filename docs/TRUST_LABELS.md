@@ -26,7 +26,7 @@ The local modular parity checker emits `exact-computed`, not `proved`. It can at
 
 `theorem proof check <file>` and the MCP `theorem_proof_check` tool run a concrete local Lean source file through Lean when the backend is available. Use `--write` or MCP `write: true` to store a local `theorem.proof-check.v0` JSON record plus Markdown report under `.theorem-workbench/proofs/`; `theorem proof list` and `theorem_proof_list` expose those paths for audits and agent follow-up. Only `status: accepted` produces `trust: proved` and `proofCheckerBacked: true`. Missing Lean, execution errors, syntax errors, incomplete proofs, and rejected proof attempts remain `unverified`; they do not refute the theorem by themselves.
 
-Route obligations and claim-ledger evidence promotion parse proof-check records strictly before trusting them. A hand-written or malformed JSON file that merely says `trust: proved` is unresolved evidence, not proof.
+Route obligations and claim-ledger evidence promotion parse proof-check, CAS-check, and SMT-check records strictly before trusting them. A hand-written or malformed JSON file that merely says `trust: proved`, `trust: cross-checked`, or `trust: smt-checked` is unresolved evidence, not proof, independent verification, or solver evidence.
 
 `theorem smt backends` and the MCP `theorem_smt_backends` tool report local Z3 availability without network access. A successful Z3 version probe means this machine may be able to check SMT-LIB artifacts; it does not check any constraint file and never mints `smt-checked` by itself.
 

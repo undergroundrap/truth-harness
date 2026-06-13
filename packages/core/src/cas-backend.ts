@@ -1,6 +1,18 @@
 import { spawnSync } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import {
+  expectBoolean,
+  expectConst,
+  expectDateTime,
+  expectNonEmptyString,
+  expectOneOf,
+  expectPattern,
+  expectRecord,
+  expectStringArray,
+  formatValidationError,
+  parseJsonObject
+} from "./artifact-record-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import type { SymbolicPrompt } from "./sympy.js";
 import type { TrustLabel } from "./types.js";
@@ -392,6 +404,54 @@ export async function listSymbolicCasChecks(rootPath: string): Promise<SymbolicC
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
+export function parseSymbolicCasCheckRecord(raw: string, sourcePath = "CAS check record"): SymbolicCasCheckRecord {
+  const parsed = parseJsonObject(raw, sourcePath, "CAS check");
+  const issues: string[] = [];
+  if (parsed.schemaVersion !== "theorem.cas-check.v0") {
+    issues.push(`$.schemaVersion must equal "theorem.cas-check.v0"`);
+  }
+  expectPattern(parsed, "checkId", /^cas_[a-f0-9]{16}$/u, "$.checkId", issues);
+  expectDateTime(parsed, "createdAt", "$.createdAt", issues);
+
+  const backend = expectRecord(parsed, "backend", "$.backend", issues);
+  if (backend) {
+    expectConst(backend, "id", "maxima", "$.backend.id", issues);
+    expectConst(backend, "displayName", "Maxima CAS", "$.backend.displayName", issues);
+    expectConst(backend, "adapter", "local-maxima-symbolic-subprocess", "$.backend.adapter", issues);
+    expectConst(backend, "role", "cas", "$.backend.role", issues);
+    expectConst(backend, "acceptedProofChecker", false, "$.backend.acceptedProofChecker", issues);
+    expectNonEmptyString(backend, "command", "$.backend.command", issues);
+    expectStringArray(backend, "args", "$.backend.args", issues);
+  }
+
+  expectOneOf(parsed, "operation", ["simplify", "factor", "expand", "differentiate", "integrate"], "$.operation", issues);
+  expectNonEmptyString(parsed, "expression", "$.expression", issues);
+  expectNonEmptyString(parsed, "result", "$.result", issues);
+  expectPattern(parsed, "variable", /^[A-Za-z_][A-Za-z0-9_]*$/u, "$.variable", issues);
+  const status = expectOneOf(parsed, "status", ["passed", "failed", "solver-unavailable", "error"], "$.status", issues);
+  const trust = expectOneOf(parsed, "trust", ["cross-checked", "unverified"], "$.trust", issues);
+  const proofCheckerBacked = expectBoolean(parsed, "proofCheckerBacked", "$.proofCheckerBacked", issues);
+  expectConst(parsed, "proofCheckerBacked", false, "$.proofCheckerBacked", issues);
+  expectConst(parsed, "localOnly", true, "$.localOnly", issues);
+  expectConst(parsed, "networkAccess", "none", "$.networkAccess", issues);
+  expectNonEmptyString(parsed, "replay", "$.replay", issues);
+  expectStringArray(parsed, "limitations", "$.limitations", issues);
+  expectStringArray(parsed, "warnings", "$.warnings", issues);
+
+  if (trust === "cross-checked" && (status !== "passed" || proofCheckerBacked !== false)) {
+    issues.push("$.trust may be `cross-checked` only when status is `passed` and proofCheckerBacked is false");
+  }
+  if (status === "passed" && trust !== "cross-checked") {
+    issues.push("$.status `passed` must carry trust `cross-checked`");
+  }
+
+  if (issues.length > 0) {
+    throw formatValidationError("CAS check", sourcePath, issues);
+  }
+
+  return parsed as unknown as SymbolicCasCheckRecord;
+}
+
 export function renderSymbolicCasCheckMarkdown(record: SymbolicCasCheckRecord): string {
   const lines = [
     `# CAS Check ${record.checkId}`,
@@ -609,18 +669,13 @@ function summarizeSymbolicCasCheck(
   path: string,
   raw: string
 ): SymbolicCasCheckSummary | undefined {
-  let parsed: unknown;
+  let record: SymbolicCasCheckRecord;
   try {
-    parsed = JSON.parse(raw) as unknown;
+    record = parseSymbolicCasCheckRecord(raw, path);
   } catch {
     return undefined;
   }
 
-  if (!isRecord(parsed) || parsed.schemaVersion !== "theorem.cas-check.v0") {
-    return undefined;
-  }
-
-  const record = parsed as unknown as SymbolicCasCheckRecord;
   return {
     path: toPortablePath(relative(root, path)),
     checkId: record.checkId,
@@ -668,10 +723,6 @@ async function requireLocalWorkspace(
 
 function toPortablePath(path: string): string {
   return path.split(sep).join("/");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function firstNonEmptyLine(text: string): string | undefined {

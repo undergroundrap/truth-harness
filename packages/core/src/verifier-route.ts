@@ -1,10 +1,12 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { createReceipt, type CreateReceiptOptions } from "./receipt.js";
 import { parseReceiptJson } from "./receipt-validation.js";
+import { parseSmtCheckRecord } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
 import type { Receipt, ReceiptEvidenceProfile, TrustLabel } from "./types.js";
 
@@ -913,6 +915,34 @@ async function resolveVerifierRouteEvidence(
       ...evidenceRef,
       trust: record.trust,
       summary: evidenceRef.summary ?? `Lean proof check status: ${record.status}.`,
+      schemaVersion: record.schemaVersion,
+      artifactId: record.checkId,
+      status: record.status,
+      proofCheckerBacked: record.proofCheckerBacked,
+      acceptedProofChecker: record.backend.acceptedProofChecker
+    };
+  }
+
+  if (evidenceRef.kind === "cas") {
+    const record = parseSymbolicCasCheckRecord(artifact.raw, evidenceRef.ref);
+    return {
+      ...evidenceRef,
+      trust: record.trust,
+      summary: evidenceRef.summary ?? `CAS check status: ${record.status}.`,
+      schemaVersion: record.schemaVersion,
+      artifactId: record.checkId,
+      status: record.status,
+      proofCheckerBacked: record.proofCheckerBacked,
+      acceptedProofChecker: record.backend.acceptedProofChecker
+    };
+  }
+
+  if (evidenceRef.kind === "smt") {
+    const record = parseSmtCheckRecord(artifact.raw, evidenceRef.ref);
+    return {
+      ...evidenceRef,
+      trust: record.trust,
+      summary: evidenceRef.summary ?? `SMT check status: ${record.status}.`,
       schemaVersion: record.schemaVersion,
       artifactId: record.checkId,
       status: record.status,

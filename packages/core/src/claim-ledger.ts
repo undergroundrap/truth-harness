@@ -1,8 +1,10 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
+import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { parseReceiptJson } from "./receipt-validation.js";
+import { parseSmtCheckRecord } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { readVerifierRoute } from "./verifier-route.js";
@@ -633,8 +635,12 @@ async function inferEvidenceRefTrust(input: {
   }
 
   if (input.ref.kind === "cas" && artifact.parsed.schemaVersion === "theorem.cas-check.v0") {
-    const status = typeof artifact.parsed.status === "string" ? artifact.parsed.status : "unknown";
-    return { trust: artifact.parsed.trust, summary: `CAS check status: ${status}.` };
+    try {
+      const record = parseSymbolicCasCheckRecord(artifact.raw, input.ref.ref);
+      return { trust: record.trust, summary: `CAS check status: ${record.status}.` };
+    } catch {
+      return undefined;
+    }
   }
 
   if (input.ref.kind === "proof" && artifact.parsed.schemaVersion === "theorem.proof-check.v0") {
@@ -647,8 +653,12 @@ async function inferEvidenceRefTrust(input: {
   }
 
   if (input.ref.kind === "smt" && artifact.parsed.schemaVersion === "theorem.smt-check.v0") {
-    const status = typeof artifact.parsed.status === "string" ? artifact.parsed.status : "unknown";
-    return { trust: artifact.parsed.trust, summary: `SMT check status: ${status}.` };
+    try {
+      const record = parseSmtCheckRecord(artifact.raw, input.ref.ref);
+      return { trust: record.trust, summary: `SMT check status: ${record.status}.` };
+    } catch {
+      return undefined;
+    }
   }
 
   return undefined;

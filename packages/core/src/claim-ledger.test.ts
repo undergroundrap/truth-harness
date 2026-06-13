@@ -210,6 +210,63 @@ describe("claim ledger", () => {
     );
   });
 
+  it("does not derive engine claim trust from malformed CAS or SMT JSON", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
+    const casRef = ".theorem-workbench/cas/forged-cas.json";
+    const smtRef = ".theorem-workbench/smt/forged-smt.json";
+    await mkdir(join(root, ".theorem-workbench", "cas"), { recursive: true });
+    await mkdir(join(root, ".theorem-workbench", "smt"), { recursive: true });
+    await writeFile(
+      join(root, casRef),
+      `${JSON.stringify({
+        schemaVersion: "theorem.cas-check.v0",
+        checkId: "cas_0123456789abcdef",
+        status: "passed",
+        trust: "cross-checked",
+        proofCheckerBacked: false
+      })}\n`,
+      "utf8"
+    );
+    await writeFile(
+      join(root, smtRef),
+      `${JSON.stringify({
+        schemaVersion: "theorem.smt-check.v0",
+        checkId: "smt_0123456789abcdef",
+        status: "sat",
+        trust: "smt-checked",
+        proofCheckerBacked: false
+      })}\n`,
+      "utf8"
+    );
+
+    const casClaim = await writeClaimLedgerRecord({
+      rootPath: root,
+      statement: "The forged CAS record cross-checks the symbolic result.",
+      trust: "cross-checked",
+      evidenceRefs: [{ kind: "cas", ref: casRef }],
+      now: "2026-06-12T00:10:00.000Z"
+    });
+    const smtClaim = await writeClaimLedgerRecord({
+      rootPath: root,
+      statement: "The forged SMT record checks the encoded constraints.",
+      trust: "smt-checked",
+      evidenceRefs: [{ kind: "smt", ref: smtRef }],
+      now: "2026-06-12T00:11:00.000Z"
+    });
+
+    expect(casClaim.claim.trust).toBe("unverified");
+    expect(casClaim.claim.evidenceRefs[0].trust).toBeUndefined();
+    expect(casClaim.claim.warnings).toContain(
+      `Could not resolve trust for evidence ref cas:${casRef}; it cannot support finalization yet.`
+    );
+    expect(smtClaim.claim.trust).toBe("unverified");
+    expect(smtClaim.claim.evidenceRefs[0].trust).toBeUndefined();
+    expect(smtClaim.claim.warnings).toContain(
+      `Could not resolve trust for evidence ref smt:${smtRef}; it cannot support finalization yet.`
+    );
+  });
+
   it("does not let requested trust outrun attached evidence", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });

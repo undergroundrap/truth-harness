@@ -2,6 +2,20 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import {
+  expectBoolean,
+  expectConst,
+  expectDateTime,
+  expectNonEmptyString,
+  expectNonNegativeInteger,
+  expectOneOf,
+  expectPattern,
+  expectRecord,
+  expectStringArray,
+  formatValidationError,
+  isRecord,
+  parseJsonObject
+} from "./artifact-record-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import type { TrustLabel } from "./types.js";
 
@@ -419,6 +433,58 @@ export async function listSmtChecks(rootPath: string): Promise<SmtCheckSummary[]
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
+export function parseSmtCheckRecord(raw: string, sourcePath = "SMT check record"): SmtCheckRecord {
+  const parsed = parseJsonObject(raw, sourcePath, "SMT check");
+  const issues: string[] = [];
+  if (parsed.schemaVersion !== "theorem.smt-check.v0") {
+    issues.push(`$.schemaVersion must equal "theorem.smt-check.v0"`);
+  }
+  expectPattern(parsed, "checkId", /^smt_[a-f0-9]{16}$/u, "$.checkId", issues);
+  expectDateTime(parsed, "createdAt", "$.createdAt", issues);
+
+  const backend = expectRecord(parsed, "backend", "$.backend", issues);
+  if (backend) {
+    expectConst(backend, "id", "z3", "$.backend.id", issues);
+    expectConst(backend, "displayName", "Z3 SMT solver", "$.backend.displayName", issues);
+    expectConst(backend, "adapter", "local-z3-smtlib-subprocess", "$.backend.adapter", issues);
+    expectConst(backend, "role", "checker", "$.backend.role", issues);
+    expectConst(backend, "acceptedProofChecker", false, "$.backend.acceptedProofChecker", issues);
+    expectNonEmptyString(backend, "command", "$.backend.command", issues);
+    expectStringArray(backend, "args", "$.backend.args", issues);
+  }
+
+  const source = expectRecord(parsed, "source", "$.source", issues);
+  if (source) {
+    expectNonEmptyString(source, "path", "$.source.path", issues);
+    expectPattern(source, "sha256", /^[a-f0-9]{64}$/u, "$.source.sha256", issues);
+    expectNonNegativeInteger(source, "byteLength", "$.source.byteLength", issues);
+  }
+
+  const status = expectOneOf(parsed, "status", ["sat", "unsat", "unknown", "solver-unavailable", "error"], "$.status", issues);
+  const trust = expectOneOf(parsed, "trust", ["smt-checked", "unverified"], "$.trust", issues);
+  const proofCheckerBacked = expectBoolean(parsed, "proofCheckerBacked", "$.proofCheckerBacked", issues);
+  expectConst(parsed, "proofCheckerBacked", false, "$.proofCheckerBacked", issues);
+  expectConst(parsed, "localOnly", true, "$.localOnly", issues);
+  expectConst(parsed, "networkAccess", "none", "$.networkAccess", issues);
+  expectNonEmptyString(parsed, "replay", "$.replay", issues);
+  expectStringArray(parsed, "limitations", "$.limitations", issues);
+  expectStringArray(parsed, "warnings", "$.warnings", issues);
+  validateOptionalSmtModel(parsed.model, issues);
+
+  if (trust === "smt-checked" && ((status !== "sat" && status !== "unsat") || proofCheckerBacked !== false)) {
+    issues.push("$.trust may be `smt-checked` only when status is `sat` or `unsat` and proofCheckerBacked is false");
+  }
+  if ((status === "sat" || status === "unsat") && trust !== "smt-checked") {
+    issues.push("$.status `sat` or `unsat` must carry trust `smt-checked`");
+  }
+
+  if (issues.length > 0) {
+    throw formatValidationError("SMT check", sourcePath, issues);
+  }
+
+  return parsed as unknown as SmtCheckRecord;
+}
+
 export function renderSmtCheckMarkdown(record: SmtCheckRecord): string {
   const lines = [
     `# SMT Check ${record.checkId}`,
@@ -782,18 +848,13 @@ function resolveWorkspacePath(root: string, path: string): string {
 }
 
 function summarizeSmtCheck(root: string, path: string, raw: string): SmtCheckSummary | undefined {
-  let parsed: unknown;
+  let record: SmtCheckRecord;
   try {
-    parsed = JSON.parse(raw) as unknown;
+    record = parseSmtCheckRecord(raw, path);
   } catch {
     return undefined;
   }
 
-  if (!isRecord(parsed) || parsed.schemaVersion !== "theorem.smt-check.v0") {
-    return undefined;
-  }
-
-  const record = parsed as unknown as SmtCheckRecord;
   return {
     path: toPortablePath(relative(root, path)),
     checkId: record.checkId,
@@ -809,10 +870,37 @@ function summarizeSmtCheck(root: string, path: string, raw: string): SmtCheckSum
   };
 }
 
-function toPortablePath(path: string): string {
-  return path.split(sep).join("/");
+function validateOptionalSmtModel(value: unknown, issues: string[]): void {
+  if (value === undefined) {
+    return;
+  }
+
+  if (!isRecord(value)) {
+    issues.push("$.model must be an object");
+    return;
+  }
+
+  expectConst(value, "format", "z3-define-fun", "$.model.format", issues);
+  const bindings = value.bindings;
+  if (!Array.isArray(bindings)) {
+    issues.push("$.model.bindings must be an array");
+  } else {
+    bindings.forEach((binding, index) => {
+      const path = `$.model.bindings[${index}]`;
+      if (!isRecord(binding)) {
+        issues.push(`${path} must be an object`);
+        return;
+      }
+
+      expectNonEmptyString(binding, "name", `${path}.name`, issues);
+      expectNonEmptyString(binding, "sort", `${path}.sort`, issues);
+      expectNonEmptyString(binding, "value", `${path}.value`, issues);
+      expectNonEmptyString(binding, "raw", `${path}.raw`, issues);
+    });
+  }
+  expectStringArray(value, "warnings", "$.model.warnings", issues);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function toPortablePath(path: string): string {
+  return path.split(sep).join("/");
 }

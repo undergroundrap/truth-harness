@@ -337,6 +337,86 @@ describe("verifier route", () => {
     expect(validation.passed).toBe(true);
   });
 
+  it("refuses malformed CAS JSON even when it claims cross-checked", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-12T00:00:00.000Z"
+    });
+    const routeWrite = await writeVerifierRoute({
+      rootPath: root,
+      problem: "prove the Riemann hypothesis",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+    const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "independent-check");
+    const casRef = join(".theorem-workbench", "cas", "forged-cas.json");
+    await mkdir(join(root, ".theorem-workbench", "cas"), { recursive: true });
+    await writeFile(
+      join(root, casRef),
+      `${JSON.stringify({
+        schemaVersion: "theorem.cas-check.v0",
+        checkId: "cas_0123456789abcdef",
+        status: "passed",
+        trust: "cross-checked",
+        proofCheckerBacked: false
+      })}\n`,
+      "utf8"
+    );
+
+    await expect(
+      satisfyVerifierRouteObligation({
+        rootPath: root,
+        routeRef: routeWrite.route.routeId,
+        obligationId: obligation?.obligationId ?? "",
+        evidenceRef: { kind: "cas", ref: casRef },
+        now: new Date("2026-06-12T00:01:00.000Z")
+      })
+    ).rejects.toThrow("Invalid CAS check record");
+  });
+
+  it("refuses malformed SMT JSON even when it claims smt-checked", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-12T00:00:00.000Z"
+    });
+    const routeWrite = await writeVerifierRoute({
+      rootPath: root,
+      problem: "solve integer constraints x > 0 and x < 3",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "theorem-workbench-missing-maxima-command",
+      leanCommand: "theorem-workbench-missing-lean-command",
+      z3Command: "theorem-workbench-missing-z3-command",
+      timeoutMs: 50
+    });
+    const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "solver-encoding");
+    const smtRef = join(".theorem-workbench", "smt", "forged-smt.json");
+    await mkdir(join(root, ".theorem-workbench", "smt"), { recursive: true });
+    await writeFile(
+      join(root, smtRef),
+      `${JSON.stringify({
+        schemaVersion: "theorem.smt-check.v0",
+        checkId: "smt_0123456789abcdef",
+        status: "sat",
+        trust: "smt-checked",
+        proofCheckerBacked: false
+      })}\n`,
+      "utf8"
+    );
+
+    await expect(
+      satisfyVerifierRouteObligation({
+        rootPath: root,
+        routeRef: routeWrite.route.routeId,
+        obligationId: obligation?.obligationId ?? "",
+        evidenceRef: { kind: "smt", ref: smtRef },
+        now: new Date("2026-06-12T00:01:00.000Z")
+      })
+    ).rejects.toThrow("Invalid SMT check record");
+  });
+
   it("refuses to satisfy a formal proof obligation with non-proof evidence", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {
