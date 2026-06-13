@@ -1593,7 +1593,7 @@ function createEquationMapVisualModel(receipt, basePlot) {
         <text x="42" y="44" fill="#f2f2ee" font-size="22" font-weight="750">${escapeXml(receipt.title)}</text>
         <text x="42" y="70" fill="#aaa59d" font-size="13">modules can be linked to receipts, project threads, and reusable lemmas</text>
         ${edges.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#343230" stroke-width="2" />`).join("")}
-        ${modules.map((node) => conceptNodeSvg(node)).join("")}
+        ${modules.map((node) => conceptNodeSvg(node, { interactive: true, active: isActiveVisualMapNode(node, modules) })).join("")}
       </svg>`,
       facts: [
         ["Mode", "equation map"],
@@ -1646,7 +1646,7 @@ function createEquationMapVisualModel(receipt, basePlot) {
       <text x="42" y="44" fill="#f2f2ee" font-size="22" font-weight="750">${escapeXml(receipt.title)}</text>
       <text x="42" y="70" fill="#aaa59d" font-size="13">generic module graph generated from receipt evidence entries</text>
       ${edges.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#343230" stroke-width="2" />`).join("")}
-      ${nodes.map((node) => conceptNodeSvg(node)).join("")}
+      ${nodes.map((node) => conceptNodeSvg(node, { interactive: true, active: isActiveVisualMapNode(node, nodes) })).join("")}
     </svg>`,
     facts: [
       ["Mode", "equation map"],
@@ -2021,7 +2021,7 @@ function createResearchMindMapVisualModel(receipt, basePlot) {
       <text x="54" y="50" fill="#f2f2ee" font-size="26" font-weight="750">${escapeXml(receipt.title)}</text>
       <text x="54" y="82" fill="#aaa59d" font-size="15">Designed for multi-day problems where equations, evidence, agents, notes, and reports need one map.</text>
       ${edgeSvg}
-      ${nodes.map((node) => conceptNodeSvg(node)).join("")}
+      ${nodes.map((node) => conceptNodeSvg(node, { interactive: true, active: isActiveVisualMapNode(node, nodes) })).join("")}
     </svg>`,
     facts: [
       ["Mode", "mind map"],
@@ -2054,6 +2054,7 @@ function createConceptMapVisualModel(receipt, basePlot) {
   const height = 440;
   const nodes = [
     {
+      id: "problem",
       label: "Problem",
       detail: receipt.title,
       x: 340,
@@ -2063,6 +2064,7 @@ function createConceptMapVisualModel(receipt, basePlot) {
       tone: "accent"
     },
     {
+      id: "verifier",
       label: "Verifier",
       detail: receipt.engine,
       x: 72,
@@ -2072,6 +2074,7 @@ function createConceptMapVisualModel(receipt, basePlot) {
       tone: "muted"
     },
     {
+      id: "output",
       label: "Output",
       detail: receipt.output,
       x: 350,
@@ -2081,6 +2084,7 @@ function createConceptMapVisualModel(receipt, basePlot) {
       tone: "good"
     },
     {
+      id: "trust-label",
       label: "Trust label",
       detail: receipt.trust,
       x: 628,
@@ -2090,6 +2094,7 @@ function createConceptMapVisualModel(receipt, basePlot) {
       tone: receipt.trust === "refuted" ? "danger" : "good"
     },
     {
+      id: "evidence-path",
       label: "Evidence path",
       detail: `${receipt.graph.length} receipt steps, ${receiptTags(receipt).length} tags`,
       x: 184,
@@ -2099,6 +2104,7 @@ function createConceptMapVisualModel(receipt, basePlot) {
       tone: "muted"
     },
     {
+      id: "boundary",
       label: "Boundary",
       detail: receipt.limitations[0] ?? basePlot.caption,
       x: 498,
@@ -2116,8 +2122,6 @@ function createConceptMapVisualModel(receipt, basePlot) {
     [460, 258, 617, 326]
   ];
   const lineSvg = edges.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#343230" stroke-width="2" />`).join("");
-  const nodeSvg = nodes.map((node) => conceptNodeSvg(node)).join("");
-
   return {
     kind: "concept map",
     title: "Receipt Concept Map",
@@ -2127,7 +2131,7 @@ function createConceptMapVisualModel(receipt, basePlot) {
       <text x="44" y="42" fill="#f2f2ee" font-size="21" font-weight="750">${escapeXml(receipt.title)}</text>
       <text x="44" y="68" fill="#aaa59d" font-size="13">auditable structure generated from the current receipt</text>
       ${lineSvg}
-      ${nodeSvg}
+      ${nodes.map((node) => conceptNodeSvg(node, { interactive: true, active: isActiveVisualMapNode(node, nodes) })).join("")}
     </svg>`,
     facts: [
       ["Mode", "concept map"],
@@ -2143,8 +2147,25 @@ function createConceptMapVisualModel(receipt, basePlot) {
       ["trust", receipt.trust, "receipt.trust"],
       ["evidence-path", String(receipt.graph.length), "receipt.graph"],
       ["boundary", receipt.limitations[0] ?? basePlot.caption, "receipt.limitations"]
+    ],
+    mapNodes: nodes.map((node) => visualNodeForSnapshot(node, "concept-map-node")),
+    mapEdges: [
+      { from: "problem", to: "verifier", kind: "checked-by" },
+      { from: "problem", to: "output", kind: "produces" },
+      { from: "problem", to: "trust-label", kind: "assigned-trust" },
+      { from: "output", to: "evidence-path", kind: "supported-by" },
+      { from: "output", to: "boundary", kind: "bounded-by" }
     ]
   };
+}
+
+function isActiveVisualMapNode(node, nodes) {
+  const selectedNodeId = state.selectedResearchMapNodeId;
+  if (selectedNodeId) {
+    return node.id === selectedNodeId;
+  }
+
+  return nodes[0]?.id === node.id;
 }
 
 function conceptNodeSvg(node, options = {}) {
@@ -2332,7 +2353,6 @@ function currentPlotModel() {
 
 function selectedResearchMapSnapshot() {
   if (!state.selectedResearchMapSnapshotId) {
-    state.selectedResearchMapNodeId = undefined;
     return undefined;
   }
 
@@ -2369,6 +2389,42 @@ function selectedResearchMapNode(snapshot = selectedResearchMapSnapshot()) {
   }
 
   return node;
+}
+
+function createLiveResearchMapSnapshot(plot) {
+  const nodes = Array.isArray(plot?.mapNodes) ? plot.mapNodes : [];
+  if (nodes.length === 0) {
+    return undefined;
+  }
+
+  const receipt = receiptStore.get(state.receiptKey);
+  return {
+    schemaVersion: "truth-harness.research-map-snapshot.v0",
+    snapshotId: "live-visual-map",
+    createdAt: receipt?.createdAt ?? new Date(0).toISOString(),
+    visualMode: state.visualMode,
+    kind: plot.kind ?? "visual map",
+    title: plot.title ?? "Live Visual Map",
+    caption: plot.caption ?? "Live local visual map generated from the current receipt.",
+    receiptRef: receipt
+      ? {
+        runId: receipt.runId,
+        claimId: receipt.claimId,
+        routeId: receipt.verifierRoute?.routeId,
+        title: receipt.title,
+        trust: receipt.trust
+      }
+      : {},
+    facts: plot.facts ?? [],
+    dataColumns: plot.dataColumns ?? [],
+    dataRows: plot.dataRows ?? [],
+    nodes,
+    edges: Array.isArray(plot.mapEdges) ? plot.mapEdges : visualRowsAsMapEdges(nodes),
+    tags: receipt ? receiptTags(receipt) : [],
+    localOnly: true,
+    networkAccess: "none",
+    live: true
+  };
 }
 
 function createSavedResearchMapVisualModel(snapshot) {
@@ -2505,7 +2561,10 @@ function renderResearchMapNodeInspector(snapshot, plot) {
     return;
   }
 
-  if (!snapshot) {
+  const inspectorSnapshot = snapshot ?? createLiveResearchMapSnapshot(plot);
+  const liveMap = Boolean(inspectorSnapshot?.live);
+
+  if (!inspectorSnapshot) {
     const mapNodeCount = Array.isArray(plot?.mapNodes) ? plot.mapNodes.length : 0;
     plotNodeInspector.innerHTML = `<div class="map-node-empty">
       <h5>Map Node Inspector</h5>
@@ -2516,7 +2575,7 @@ function renderResearchMapNodeInspector(snapshot, plot) {
     return;
   }
 
-  const node = selectedResearchMapNode(snapshot);
+  const node = selectedResearchMapNode(inspectorSnapshot);
   if (!node) {
     plotNodeInspector.innerHTML = `<div class="map-node-empty">
       <h5>Map Node Inspector</h5>
@@ -2525,9 +2584,9 @@ function renderResearchMapNodeInspector(snapshot, plot) {
     return;
   }
 
-  const nodeSource = researchMapNodeSource(snapshot, node);
-  const edges = researchMapNodeEdges(snapshot, node);
-  const receiptKey = receiptKeyForResearchMapNode(snapshot, node);
+  const nodeSource = researchMapNodeSource(inspectorSnapshot, node);
+  const edges = researchMapNodeEdges(inspectorSnapshot, node);
+  const receiptKey = receiptKeyForResearchMapNode(inspectorSnapshot, node);
   const edgeHtml = edges.length > 0
     ? `<ul class="map-node-edge-list">${edges.slice(0, 6).map((edge) => {
       const direction = edge.from === node.id ? "out" : "in";
@@ -2550,15 +2609,20 @@ function renderResearchMapNodeInspector(snapshot, plot) {
       <div><dt>Source</dt><dd>${escapeHtml(nodeSource.source)}</dd></div>
       <div><dt>Value</dt><dd>${escapeHtml(nodeSource.value)}</dd></div>
       <div><dt>Edges</dt><dd>${escapeHtml(String(edges.length))}</dd></div>
-      <div><dt>Snapshot</dt><dd><code>${escapeHtml(snapshot.snapshotId ?? "unknown")}</code></dd></div>
-      <div><dt>Receipt</dt><dd>${snapshot.receiptRef?.runId ? `<code>${escapeHtml(snapshot.receiptRef.runId)}</code>` : "not linked"}</dd></div>
+      <div><dt>Snapshot</dt><dd><code>${escapeHtml(liveMap ? "live unsaved map" : inspectorSnapshot.snapshotId ?? "unknown")}</code></dd></div>
+      <div><dt>Receipt</dt><dd>${inspectorSnapshot.receiptRef?.runId ? `<code>${escapeHtml(inspectorSnapshot.receiptRef.runId)}</code>` : "not linked"}</dd></div>
     </dl>
     ${edgeHtml}
     <div class="map-node-actions">
       <button class="text-button compact-button" data-map-copy-node="${escapeHtml(node.id)}" type="button">Copy node</button>
       ${receiptKey ? `<button class="text-button compact-button" data-map-open-receipt="${escapeHtml(receiptKey)}" type="button">Open receipt</button>` : ""}
     </div>
-    <form class="map-thought-form" data-map-thought-form>
+    ${liveMap
+      ? `<div class="map-node-live-note">
+        <strong>Live map</strong>
+        <p>Save this map before attaching linked thoughts so future agents can replay the exact snapshot.</p>
+      </div>`
+      : `<form class="map-thought-form" data-map-thought-form>
       <div class="map-thought-form-header">
         <strong>Add Linked Thought</strong>
         <span class="mini-label">local snapshot</span>
@@ -2582,7 +2646,7 @@ function renderResearchMapNodeInspector(snapshot, plot) {
         <textarea name="detail" rows="3" maxlength="260" placeholder="What should future you or an agent verify?"></textarea>
       </label>
       <button class="text-button compact-button" type="submit">Save thought</button>
-    </form>
+    </form>`}
   </div>`;
 }
 
@@ -2815,7 +2879,8 @@ async function saveResearchMapThought(form) {
 }
 
 function selectResearchMapNode(nodeId) {
-  const snapshot = selectedResearchMapSnapshot();
+  const savedSnapshot = selectedResearchMapSnapshot();
+  const snapshot = savedSnapshot ?? createLiveResearchMapSnapshot(currentPlotModel());
   if (!snapshot || !nodeId) {
     return;
   }
@@ -2826,12 +2891,17 @@ function selectResearchMapNode(nodeId) {
   }
 
   state.selectedResearchMapNodeId = node.id;
-  addActivity("human", "Selected research map node", `${node.label ?? node.id} inspected from ${snapshot.snapshotId}.`, "passed");
+  addActivity(
+    "human",
+    "Selected research map node",
+    `${node.label ?? node.id} inspected from ${snapshot.live ? "live visual map" : snapshot.snapshotId}.`,
+    "passed"
+  );
   render();
 }
 
 async function copySelectedResearchMapNode(button) {
-  const snapshot = selectedResearchMapSnapshot();
+  const snapshot = selectedResearchMapSnapshot() ?? createLiveResearchMapSnapshot(currentPlotModel());
   const node = selectedResearchMapNode(snapshot);
   if (!snapshot || !node) {
     return;
