@@ -249,8 +249,12 @@ const SIDEBAR_COLLAPSED_STORAGE_KEY = "truth-harness.sidebar-collapsed.v0";
 const SIDEBAR_DEFAULT_WIDTH = 300;
 const SIDEBAR_MIN_WIDTH = 220;
 const SIDEBAR_MAX_WIDTH = 420;
+const VISUAL_ZOOM_MIN = 0.45;
+const VISUAL_ZOOM_MAX = 2.25;
+const VISUAL_ZOOM_STEP = 0.15;
 const activityEvents = [];
 let activityEventCounter = 0;
+let visualPanDrag;
 const state = {
   receiptKey: "rational",
   level: "middle",
@@ -267,6 +271,7 @@ const state = {
   selectedResearchMapNodeId: undefined,
   visualDetailCollapsed: false,
   visualFocus: false,
+  visualZoom: 1,
   sidebarCollapsed: false,
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE,
@@ -416,6 +421,10 @@ const downloadPlotDataButton = document.querySelector("#download-plot-data");
 const downloadPlotSvgButton = document.querySelector("#download-plot-svg");
 const toggleVisualFocusButton = document.querySelector("#toggle-visual-focus");
 const toggleVisualDetailButton = document.querySelector("#toggle-visual-detail");
+const visualZoomOutButton = document.querySelector("#visual-zoom-out");
+const visualZoomResetButton = document.querySelector("#visual-zoom-reset");
+const visualZoomInButton = document.querySelector("#visual-zoom-in");
+const visualZoomFitButton = document.querySelector("#visual-zoom-fit");
 const visualModeButtons = document.querySelectorAll(".visual-mode-button");
 const taskDockState = document.querySelector("#task-dock-state");
 const taskDockSummary = document.querySelector("#task-dock-summary");
@@ -1320,6 +1329,7 @@ function renderMathPlot(receipt) {
   plotCanvas.innerHTML = plot.svg;
   plotCanvas.dataset.visualMode = state.visualMode;
   plotCanvas.dataset.savedMapSnapshot = selectedMapSnapshot?.snapshotId ?? "";
+  applyVisualZoomToCanvas();
   plotFacts.innerHTML = plot.facts
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join("");
@@ -1332,6 +1342,95 @@ function renderMathPlot(receipt) {
     button.setAttribute("aria-selected", String(active));
   });
   renderResearchMapHistory();
+}
+
+function visualZoomPercent() {
+  return `${Math.round(state.visualZoom * 100)}%`;
+}
+
+function clampVisualZoom(value) {
+  return Math.min(VISUAL_ZOOM_MAX, Math.max(VISUAL_ZOOM_MIN, Number(value) || 1));
+}
+
+function applyVisualZoomToCanvas(options = {}) {
+  if (!plotCanvas) {
+    return;
+  }
+
+  const svg = plotCanvas.querySelector("svg");
+  if (!svg) {
+    return;
+  }
+
+  const viewBox = svg.getAttribute("viewBox")?.split(/\s+/u).map(Number) ?? [];
+  const baseWidth = Number.isFinite(viewBox[2]) && viewBox[2] > 0 ? viewBox[2] : 980;
+  const baseHeight = Number.isFinite(viewBox[3]) && viewBox[3] > 0 ? viewBox[3] : 520;
+  const zoom = clampVisualZoom(state.visualZoom);
+  state.visualZoom = zoom;
+  svg.style.width = `${Math.round(baseWidth * zoom)}px`;
+  svg.style.minWidth = `${Math.round(baseWidth * zoom)}px`;
+  svg.style.minHeight = `${Math.round(baseHeight * zoom)}px`;
+  plotCanvas.dataset.visualZoom = visualZoomPercent();
+
+  if (visualZoomResetButton) {
+    visualZoomResetButton.textContent = visualZoomPercent();
+    visualZoomResetButton.title = "Reset zoom to 100%";
+  }
+
+  if (visualZoomOutButton) {
+    visualZoomOutButton.disabled = zoom <= VISUAL_ZOOM_MIN + 0.001;
+  }
+
+  if (visualZoomInButton) {
+    visualZoomInButton.disabled = zoom >= VISUAL_ZOOM_MAX - 0.001;
+  }
+
+  if (options.center) {
+    centerVisualCanvas();
+  }
+}
+
+function setVisualZoom(nextZoom, options = {}) {
+  const previousZoom = state.visualZoom;
+  const previousScroll = {
+    left: plotCanvas.scrollLeft,
+    top: plotCanvas.scrollTop,
+    width: Math.max(1, plotCanvas.scrollWidth),
+    height: Math.max(1, plotCanvas.scrollHeight)
+  };
+  state.visualZoom = clampVisualZoom(nextZoom);
+  applyVisualZoomToCanvas();
+
+  if (options.center) {
+    centerVisualCanvas();
+    return;
+  }
+
+  const leftRatio = (previousScroll.left + plotCanvas.clientWidth / 2) / previousScroll.width;
+  const topRatio = (previousScroll.top + plotCanvas.clientHeight / 2) / previousScroll.height;
+  plotCanvas.scrollLeft = Math.max(0, leftRatio * plotCanvas.scrollWidth - plotCanvas.clientWidth / 2);
+  plotCanvas.scrollTop = Math.max(0, topRatio * plotCanvas.scrollHeight - plotCanvas.clientHeight / 2);
+
+  if (Math.abs(previousZoom - state.visualZoom) > 0.001 && options.activity) {
+    addActivity("human", "Adjusted visual zoom", `Visual canvas zoom set to ${visualZoomPercent()}.`, "passed");
+  }
+}
+
+function fitVisualToCanvas() {
+  const svg = plotCanvas.querySelector("svg");
+  if (!svg) {
+    return;
+  }
+
+  const viewBox = svg.getAttribute("viewBox")?.split(/\s+/u).map(Number) ?? [];
+  const baseWidth = Number.isFinite(viewBox[2]) && viewBox[2] > 0 ? viewBox[2] : 980;
+  const targetWidth = Math.max(360, plotCanvas.clientWidth - 30);
+  setVisualZoom(targetWidth / baseWidth, { center: true, activity: true });
+}
+
+function centerVisualCanvas() {
+  plotCanvas.scrollLeft = Math.max(0, (plotCanvas.scrollWidth - plotCanvas.clientWidth) / 2);
+  plotCanvas.scrollTop = Math.max(0, (plotCanvas.scrollHeight - plotCanvas.clientHeight) / 2);
 }
 
 function createVisualModel(receipt, mode) {
@@ -2621,6 +2720,7 @@ function renderResearchMapNodeInspector(snapshot, plot) {
       ? `<div class="map-node-live-note">
         <strong>Live map</strong>
         <p>Save this map before attaching linked thoughts so future agents can replay the exact snapshot.</p>
+        <button class="text-button compact-button" data-map-save-current type="button">Save map to add notes</button>
       </div>`
       : `<form class="map-thought-form" data-map-thought-form>
       <div class="map-thought-form-header">
@@ -8059,11 +8159,28 @@ visualModeButtons.forEach((button) => {
 
     state.selectedResearchMapSnapshotId = undefined;
     state.selectedResearchMapNodeId = undefined;
+    state.visualZoom = 1;
     state.visualMode = nextMode;
     state.surface = "plot";
     render();
     resetActiveSurfaceScroll();
   });
+});
+
+visualZoomOutButton.addEventListener("click", () => {
+  setVisualZoom(state.visualZoom - VISUAL_ZOOM_STEP, { activity: true });
+});
+
+visualZoomResetButton.addEventListener("click", () => {
+  setVisualZoom(1, { center: true, activity: true });
+});
+
+visualZoomInButton.addEventListener("click", () => {
+  setVisualZoom(state.visualZoom + VISUAL_ZOOM_STEP, { activity: true });
+});
+
+visualZoomFitButton.addEventListener("click", () => {
+  fitVisualToCanvas();
 });
 
 toggleVisualFocusButton.addEventListener("click", () => {
@@ -8133,6 +8250,59 @@ refreshResearchMapButton.addEventListener("click", () => {
   void refreshResearchMap();
 });
 
+plotCanvas.addEventListener(
+  "wheel",
+  (event) => {
+    if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+      return;
+    }
+
+    event.preventDefault();
+    const direction = event.deltaY > 0 ? -1 : 1;
+    setVisualZoom(state.visualZoom + direction * VISUAL_ZOOM_STEP);
+  },
+  { passive: false }
+);
+
+plotCanvas.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || event.target.closest("[data-map-node-id]")) {
+    return;
+  }
+
+  visualPanDrag = {
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    scrollLeft: plotCanvas.scrollLeft,
+    scrollTop: plotCanvas.scrollTop
+  };
+  plotCanvas.classList.add("panning");
+  plotCanvas.setPointerCapture?.(event.pointerId);
+});
+
+plotCanvas.addEventListener("pointermove", (event) => {
+  if (!visualPanDrag || visualPanDrag.pointerId !== event.pointerId) {
+    return;
+  }
+
+  plotCanvas.scrollLeft = visualPanDrag.scrollLeft - (event.clientX - visualPanDrag.x);
+  plotCanvas.scrollTop = visualPanDrag.scrollTop - (event.clientY - visualPanDrag.y);
+});
+
+function stopVisualPan(event) {
+  if (!visualPanDrag || (event.pointerId && visualPanDrag.pointerId !== event.pointerId)) {
+    return;
+  }
+
+  plotCanvas.classList.remove("panning");
+  plotCanvas.releasePointerCapture?.(visualPanDrag.pointerId);
+  visualPanDrag = undefined;
+}
+
+plotCanvas.addEventListener("pointerup", stopVisualPan);
+plotCanvas.addEventListener("pointercancel", stopVisualPan);
+plotCanvas.addEventListener("pointerleave", stopVisualPan);
+
 plotCanvas.addEventListener("click", (event) => {
   const nodeElement = event.target.closest("[data-map-node-id]");
   if (!nodeElement) {
@@ -8157,6 +8327,14 @@ plotCanvas.addEventListener("keydown", (event) => {
 });
 
 plotNodeInspector.addEventListener("click", (event) => {
+  const saveButton = event.target.closest("[data-map-save-current]");
+  if (saveButton) {
+    saveCurrentResearchMap().catch((error) => {
+      addActivity("web-ui", "Save map failed", error instanceof Error ? error.message : "Unknown research map failure.", "refuted");
+    });
+    return;
+  }
+
   const openButton = event.target.closest("[data-map-open-receipt]");
   if (openButton?.dataset.mapOpenReceipt) {
     openResearchMapNodeReceipt(openButton.dataset.mapOpenReceipt);

@@ -2019,6 +2019,12 @@ dd {
   background: #101010;
   padding: 14px;
   scrollbar-gutter: stable both-edges;
+  cursor: grab;
+}
+
+.plot-canvas.panning {
+  cursor: grabbing;
+  user-select: none;
 }
 
 .plot-canvas svg {
@@ -2313,6 +2319,10 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   font-size: 12px;
   line-height: 1.4;
   margin: 0;
+}
+
+.map-node-live-note .compact-button {
+  justify-self: start;
 }
 
 .map-thought-form {
@@ -4053,6 +4063,12 @@ textarea:focus-visible {
   height: 26px;
   padding: 0 8px;
   font-size: 12px;
+}
+
+.compact-button:disabled,
+.icon-button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .compact-button[hidden] {
