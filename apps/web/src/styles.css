@@ -338,7 +338,8 @@ button {
   display: grid;
   gap: 4px;
   max-height: min(24vh, 230px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-right: 2px;
   scrollbar-gutter: stable;
 }
@@ -386,7 +387,8 @@ button {
 
 #claim-list {
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding-bottom: 28px;
   scrollbar-gutter: stable;
 }
@@ -712,7 +714,7 @@ h1 {
   min-width: 0;
   overflow: auto;
   scrollbar-gutter: stable;
-  padding: 18px clamp(16px, 3vw, 42px) 118px;
+  padding: 18px clamp(16px, 3vw, 42px) 152px;
 }
 
 .project-start-panel {
@@ -856,59 +858,14 @@ body[data-surface="graph"] .session-title {
   margin-bottom: 10px;
 }
 
-body[data-surface="plot"] .message,
-body[data-surface="graph"] .message {
-  margin-bottom: 8px;
-  box-shadow: none;
-  padding: 10px 12px;
+body[data-surface="plot"] .project-start-panel,
+body[data-surface="graph"] .project-start-panel {
+  display: none;
 }
 
-body[data-surface="plot"] .user-message,
-body[data-surface="graph"] .user-message {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px 12px;
-}
-
-body[data-surface="plot"] .user-message .message-meta,
-body[data-surface="graph"] .user-message .message-meta {
-  grid-column: 1 / -1;
-  margin-bottom: 0;
-}
-
-body[data-surface="plot"] .user-message .math-display,
-body[data-surface="graph"] .user-message .math-display {
-  margin-top: 0;
-}
-
-body[data-surface="plot"] .engine-message,
-body[data-surface="graph"] .engine-message {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 6px 14px;
-}
-
-body[data-surface="plot"] .engine-message .message-meta,
-body[data-surface="graph"] .engine-message .message-meta {
-  grid-column: 1 / -1;
-  margin-bottom: 0;
-}
-
-body[data-surface="plot"] .answer-line,
-body[data-surface="graph"] .answer-line {
-  margin-bottom: 0;
-}
-
-body[data-surface="plot"] .answer-value,
-body[data-surface="graph"] .answer-value {
-  font-size: clamp(30px, 4vw, 44px);
-}
-
-body[data-surface="plot"] .receipt-summary,
-body[data-surface="graph"] .receipt-summary {
-  align-self: center;
+body[data-surface="plot"] .work-surface,
+body[data-surface="graph"] .work-surface {
+  height: clamp(540px, 76vh, 860px);
 }
 
 .thread-panel > .user-message,
@@ -1226,6 +1183,11 @@ body[data-surface="graph"] .receipt-summary {
 }
 
 #surface-runbook.active {
+  overflow: auto;
+  padding-right: 2px;
+}
+
+#surface-plot.active {
   overflow: auto;
   padding-right: 2px;
 }
@@ -1965,7 +1927,8 @@ dd {
   gap: 10px;
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
+  padding-bottom: 6px;
   padding-right: 2px;
   scrollbar-gutter: stable;
 }
@@ -1977,12 +1940,12 @@ dd {
 
 .visual-mode-bar {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 4px;
   flex: 0 0 auto;
   min-width: 0;
   margin-bottom: 12px;
-  overflow-x: auto;
+  overflow: visible;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #202020;
@@ -1991,15 +1954,17 @@ dd {
 }
 
 .visual-mode-button {
-  flex: 0 0 auto;
-  min-width: 116px;
+  flex: 1 1 98px;
+  min-width: 92px;
   min-height: 30px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  padding: 0 12px;
+  padding: 0 8px;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .visual-mode-button:hover {
@@ -2019,7 +1984,8 @@ dd {
   min-height: 0;
   height: auto;
   max-height: none;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: #101010;

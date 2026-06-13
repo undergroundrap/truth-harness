@@ -1289,8 +1289,20 @@ function createVisualModel(receipt, mode) {
     return createFractionBarsVisualModel(receipt, basePlot);
   }
 
+  if (mode === "equation-map") {
+    return createEquationMapVisualModel(receipt, basePlot);
+  }
+
   if (mode === "step-flow") {
     return createStepFlowVisualModel(receipt, basePlot);
+  }
+
+  if (mode === "evidence-counts") {
+    return createEvidenceCountsVisualModel(receipt, basePlot);
+  }
+
+  if (mode === "mind-map") {
+    return createResearchMindMapVisualModel(receipt, basePlot);
   }
 
   if (mode === "concept-map") {
@@ -1482,6 +1494,109 @@ function createFractionBarsVisualModel(receipt, basePlot) {
   };
 }
 
+function createEquationMapVisualModel(receipt, basePlot) {
+  const inputFractions = uniqueFractionsByLabel(parseFractionsFromText(`${receipt.title} ${receipt.math?.input ?? ""}`)).slice(0, 4);
+  const outputFraction = parseFraction(receipt.output) ?? parseFractionsFromText(receipt.math?.output ?? "").at(-1);
+  const width = 1080;
+  const height = 430;
+
+  if (inputFractions.length >= 2 && outputFraction) {
+    const denominator = lcmMany(inputFractions.map((fraction) => fraction.denominator).filter(Boolean));
+    const rewritten = inputFractions.map((fraction) => ({
+      original: fraction,
+      numerator: fraction.numerator * (denominator / fraction.denominator),
+      denominator
+    }));
+    const modules = [
+      { label: "Problem", detail: receipt.math?.input ?? receipt.title, x: 42, y: 158, width: 190, height: 82, tone: "accent" },
+      ...inputFractions.slice(0, 2).map((fraction, index) => ({
+        label: `Term ${index + 1}`,
+        detail: fractionLabel(fraction),
+        x: 284,
+        y: index === 0 ? 70 : 246,
+        width: 170,
+        height: 74,
+        tone: "muted"
+      })),
+      { label: "Shared module", detail: `common denominator ${denominator}`, x: 510, y: 158, width: 210, height: 82, tone: "warn" },
+      { label: "Rewrite", detail: rewritten.map((item) => `${fractionLabel(item.original)}=${item.numerator}/${item.denominator}`).join("; "), x: 770, y: 158, width: 190, height: 82, tone: "muted" },
+      { label: "Verified result", detail: fractionLabel(outputFraction), x: 436, y: 326, width: 220, height: 76, tone: "good" }
+    ];
+    const edges = [
+      [232, 198, 284, 107],
+      [232, 198, 284, 283],
+      [454, 107, 510, 198],
+      [454, 283, 510, 198],
+      [720, 198, 770, 198],
+      [865, 240, 546, 326],
+      [612, 240, 546, 326]
+    ];
+
+    return {
+      kind: "equation map",
+      title: "Modular Equation Map",
+      caption: "The arithmetic is shown as linked modules so longer equations can become reusable, reviewable subclaims.",
+      svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Modular equation map">
+        <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+        <text x="42" y="44" fill="#f2f2ee" font-size="22" font-weight="750">${escapeXml(receipt.title)}</text>
+        <text x="42" y="70" fill="#aaa59d" font-size="13">modules can be linked to receipts, project threads, and reusable lemmas</text>
+        ${edges.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#343230" stroke-width="2" />`).join("")}
+        ${modules.map((node) => conceptNodeSvg(node)).join("")}
+      </svg>`,
+      facts: [
+        ["Mode", "equation map"],
+        ["Modules", String(modules.length)],
+        ["Reusable denominator", String(denominator)],
+        ["Trust", receipt.trust]
+      ],
+      dataColumns: ["module", "value", "source"],
+      dataRows: [
+        ["problem", receipt.math?.input ?? receipt.title, "receipt.math.input"],
+        ...inputFractions.map((fraction, index) => [`term-${index + 1}`, fractionLabel(fraction), "parsed input"]),
+        ["common-denominator", String(denominator), "local lcm"],
+        ["rewrite", rewritten.map((item) => `${fractionLabel(item.original)}=${item.numerator}/${item.denominator}`).join("; "), "derived module"],
+        ["verified-result", fractionLabel(outputFraction), "receipt.output"]
+      ]
+    };
+  }
+
+  const graphEntries = evidenceGraphEntries(receipt).slice(0, 5);
+  const nodes = [
+    { label: "Claim", detail: receipt.title, x: 58, y: 156, width: 230, height: 86, tone: "accent" },
+    ...graphEntries.map(([kind, summary], index) => ({
+      label: kind,
+      detail: summary,
+      x: 372 + (index % 3) * 210,
+      y: index < 3 ? 88 : 254,
+      width: 180,
+      height: 78,
+      tone: kind.includes("proof") || kind.includes("computation") ? "good" : "muted"
+    }))
+  ];
+  const edges = nodes.slice(1).map((node) => [288, 199, node.x, node.y + node.height / 2]);
+
+  return {
+    kind: "equation map",
+    title: "Claim Module Map",
+    caption: "This receipt does not expose a fraction pipeline yet, so the map shows its current evidence modules.",
+    svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Claim module map">
+      <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+      <text x="42" y="44" fill="#f2f2ee" font-size="22" font-weight="750">${escapeXml(receipt.title)}</text>
+      <text x="42" y="70" fill="#aaa59d" font-size="13">generic module graph generated from receipt evidence entries</text>
+      ${edges.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#343230" stroke-width="2" />`).join("")}
+      ${nodes.map((node) => conceptNodeSvg(node)).join("")}
+    </svg>`,
+    facts: [
+      ["Mode", "equation map"],
+      ["Modules", String(nodes.length)],
+      ["Source visual", basePlot.kind],
+      ["Trust", receipt.trust]
+    ],
+    dataColumns: ["module", "value", "source"],
+    dataRows: nodes.map((node) => [node.label, node.detail, "receipt graph"])
+  };
+}
+
 function createStepFlowVisualModel(receipt, basePlot) {
   const trace = receipt.traces[state.level] ?? receipt.traces.middle ?? [];
   const steps = trace.length > 0 ? trace.slice(0, 8) : [receipt.summary ?? basePlot.caption];
@@ -1522,6 +1637,62 @@ function createStepFlowVisualModel(receipt, basePlot) {
     ],
     dataColumns: ["step", "level", "text", "source"],
     dataRows: steps.map((step, index) => [String(index + 1), state.level, step, "receipt.traces"])
+  };
+}
+
+function createEvidenceCountsVisualModel(receipt, basePlot) {
+  const rows = verificationRows(receipt);
+  const openGates = rows.filter((row) => ["missing", "waiting"].includes(row.status)).length;
+  const passedGates = rows.filter((row) => row.status === "passed").length;
+  const dependencies = receiptDependencies(receipt).length;
+  const dependents = dependentReceiptKeys(receipt).length;
+  const metrics = [
+    { label: "Trace steps", value: (receipt.traces[state.level] ?? receipt.traces.middle ?? []).length, source: "receipt.traces", color: "#b7a98a" },
+    { label: "Graph nodes", value: evidenceGraphEntries(receipt).length, source: "receipt.graph", color: "#8db4ff" },
+    { label: "Tags", value: receiptTags(receipt).length, source: "receipt.tags", color: "#c9b27f" },
+    { label: "Linked claims", value: dependencies + dependents, source: "claim dependencies", color: "#a78bfa" },
+    { label: "Verified gates", value: passedGates, source: "verification rows", color: "#7dd3a8" },
+    { label: "Open gates", value: openGates, source: "verification rows", color: "#e6c36a" },
+    { label: "Limitations", value: receipt.limitations.length, source: "receipt.limitations", color: "#f28b82" },
+    { label: "Visual rows", value: basePlot.dataRows?.length ?? 0, source: basePlot.kind, color: "#8f8a83" }
+  ];
+  const maxValue = Math.max(1, ...metrics.map((metric) => metric.value));
+  const width = 1040;
+  const height = 500;
+  const barX = 260;
+  const barWidth = 620;
+  const rowTop = 104;
+  const rowHeight = 42;
+  const barSvg = metrics.map((metric, index) => {
+    const y = rowTop + index * rowHeight;
+    const fillWidth = Math.max(4, (metric.value / maxValue) * barWidth);
+    return `<g>
+      <text x="58" y="${y + 19}" fill="#f2f2ee" font-size="13" font-weight="700">${escapeXml(metric.label)}</text>
+      <rect x="${barX}" y="${y}" width="${barWidth}" height="24" rx="7" fill="#171717" stroke="#2f2f2e" />
+      <rect x="${barX}" y="${y}" width="${fillWidth}" height="24" rx="7" fill="${metric.color}" opacity="0.82" />
+      <text x="${barX + fillWidth + 12}" y="${y + 18}" fill="${metric.color}" font-size="13" font-weight="800">${metric.value}</text>
+      <text x="${barX + barWidth + 26}" y="${y + 18}" fill="#8f8a83" font-size="12">${escapeXml(metric.source)}</text>
+    </g>`;
+  }).join("");
+
+  return {
+    kind: "evidence counts",
+    title: "Evidence Count Comparison",
+    caption: "A quick dashboard of receipt volume, open gaps, verified gates, links, tags, and limitations.",
+    svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Evidence count comparison">
+      <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+      <text x="42" y="44" fill="#f2f2ee" font-size="22" font-weight="750">${escapeXml(receipt.title)}</text>
+      <text x="42" y="70" fill="#aaa59d" font-size="13">counts make long-running work scannable before reading every receipt</text>
+      ${barSvg}
+    </svg>`,
+    facts: [
+      ["Mode", "counts"],
+      ["Verified gates", String(passedGates)],
+      ["Open gates", String(openGates)],
+      ["Linked claims", String(dependencies + dependents)]
+    ],
+    dataColumns: ["metric", "count", "source"],
+    dataRows: metrics.map((metric) => [metric.label, String(metric.value), metric.source])
   };
 }
 
@@ -1593,7 +1764,10 @@ function visualModeLabel(mode) {
   return {
     "number-line": "number line",
     "fraction-bars": "fraction bars",
+    "equation-map": "equation map",
     "step-flow": "step flow",
+    "evidence-counts": "counts",
+    "mind-map": "mind map",
     "concept-map": "concept map",
     "trust-ladder": "trust ladder",
     "bubble-map": "bubble map"
@@ -1725,6 +1899,63 @@ function createFallbackPlotModel(receipt) {
       ["engine", receipt.engine],
       ["trust", receipt.trust],
       ["output", receipt.output]
+    ]
+  };
+}
+
+function createResearchMindMapVisualModel(receipt, basePlot) {
+  const dependencyLabels = receiptDependencies(receipt).map((key) => linkedClaimLabel(key));
+  const dependentLabels = dependentReceiptKeys(receipt).map((key) => linkedClaimLabel(key));
+  const rows = verificationRows(receipt);
+  const openGateLabels = rows.filter((row) => ["missing", "waiting"].includes(row.status)).slice(0, 2).map((row) => row.label);
+  const passedGateCount = rows.filter((row) => row.status === "passed").length;
+  const tags = receiptTags(receipt).slice(0, 4).map((tag) => `#${tag}`);
+  const width = 1180;
+  const height = 520;
+  const center = { x: 466, y: 214, width: 250, height: 92 };
+  const nodes = [
+    { label: "Project thread", detail: "Truth Harness workspace", x: 76, y: 70, width: 230, height: 76, tone: "accent" },
+    { label: "Current claim", detail: receipt.title, x: center.x, y: center.y, width: center.width, height: center.height, tone: receipt.trust === "refuted" ? "danger" : "good" },
+    { label: "Parent receipts", detail: dependencyLabels.length > 0 ? dependencyLabels.join("; ") : "none linked yet", x: 76, y: 224, width: 260, height: 84, tone: dependencyLabels.length > 0 ? "muted" : "warn" },
+    { label: "Child receipts", detail: dependentLabels.length > 0 ? dependentLabels.join("; ") : "future branches can attach here", x: 76, y: 374, width: 260, height: 84, tone: dependentLabels.length > 0 ? "muted" : "warn" },
+    { label: "Verified gates", detail: `${passedGateCount} gates satisfied`, x: 848, y: 72, width: 230, height: 74, tone: "good" },
+    { label: "Open obligations", detail: openGateLabels.length > 0 ? openGateLabels.join("; ") : "no open gates shown", x: 854, y: 220, width: 240, height: 86, tone: openGateLabels.length > 0 ? "warn" : "good" },
+    { label: "Tags", detail: tags.length > 0 ? tags.join(" ") : "untagged", x: 864, y: 374, width: 220, height: 74, tone: "muted" },
+    { label: "Report packet", detail: "receipts, limits, replay, visuals", x: 455, y: 408, width: 270, height: 74, tone: "accent" }
+  ];
+  const centerPoint = [center.x + center.width / 2, center.y + center.height / 2];
+  const edges = nodes
+    .filter((node) => node.label !== "Current claim")
+    .map((node) => [centerPoint[0], centerPoint[1], node.x + node.width / 2, node.y + node.height / 2]);
+  const edgeSvg = edges.map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#343230" stroke-width="2" />`).join("");
+
+  return {
+    kind: "mind map",
+    title: "Research Mind Map",
+    caption: "A project-scale map linking the current claim to receipts, open gates, tags, reports, and future branches.",
+    svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Research mind map">
+      <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+      <text x="44" y="44" fill="#f2f2ee" font-size="23" font-weight="750">${escapeXml(receipt.title)}</text>
+      <text x="44" y="72" fill="#aaa59d" font-size="13">designed for multi-day problems where equations, evidence, agents, notes, and reports need one map</text>
+      ${edgeSvg}
+      ${nodes.map((node) => conceptNodeSvg(node)).join("")}
+    </svg>`,
+    facts: [
+      ["Mode", "mind map"],
+      ["Parent receipts", String(dependencyLabels.length)],
+      ["Child receipts", String(dependentLabels.length)],
+      ["Source visual", basePlot.kind]
+    ],
+    dataColumns: ["node", "value", "source"],
+    dataRows: [
+      ["project-thread", "Truth Harness workspace", "local project"],
+      ["current-claim", receipt.title, "receipt.title"],
+      ["parent-receipts", dependencyLabels.join("; ") || "none", "receipt.dependsOn"],
+      ["child-receipts", dependentLabels.join("; ") || "none", "dependent receipts"],
+      ["verified-gates", String(passedGateCount), "verification rows"],
+      ["open-obligations", openGateLabels.join("; ") || "none", "verification rows"],
+      ["tags", tags.join(" ") || "untagged", "receipt.tags"],
+      ["report-packet", "receipts, limits, replay, visuals", "export surface"]
     ]
   };
 }
