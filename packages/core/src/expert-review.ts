@@ -338,7 +338,7 @@ function boundary(): ExpertReviewRecord["boundary"] {
 
 function inferReviewKind(subject: string, question: string | undefined): ExpertReviewKind {
   const normalized = `${subject} ${question ?? ""}`.toLowerCase();
-  if (/\b(theorem|proof|lemma|equation|math)\b/i.test(normalized)) {
+  if (/\b(proof|lemma|equation|math)\b/i.test(normalized)) {
     return "math";
   }
   if (/\b(code|software|test|api|compiler)\b/i.test(normalized)) {

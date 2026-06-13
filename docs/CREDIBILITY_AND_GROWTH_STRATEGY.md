@@ -25,7 +25,7 @@ The serious version is not "an LLM that solves everything." It is a workbench th
 - RAG with citation spans for literature and definitions.
 - Benchmarks that measure the whole pipeline, including failures.
 
-DeepMind's 2026 AI co-mathematician paper points in the same direction: a stateful workbench for iterative mathematical workflows, including literature search, computational exploration, theorem proving, theory building, uncertainty tracking, and failed hypothesis tracking. Truth Harness should be the open, agent-native, proof-receipt version of that idea.
+DeepMind's 2026 AI co-mathematician paper points in the same direction: a stateful workbench for iterative mathematical workflows, including literature search, computational exploration, formal proof work, theory building, uncertainty tracking, and failed hypothesis tracking. Truth Harness should be the open, agent-native, proof-receipt version of that idea.
 
 ## Respect Contract
 
@@ -191,7 +191,7 @@ Before coding, lock these product decisions:
 - [AI co-mathematician: Accelerating mathematicians with agentic AI](https://arxiv.org/abs/2605.06651)
 - [Lean programming language and proof assistant](https://lean-lang.org/)
 - [Lean community and Mathlib](https://leanprover-community.github.io/)
-- [LeanDojo: Theorem Proving with Retrieval-Augmented Language Models](https://arxiv.org/abs/2306.15626)
+- [LeanDojo retrieval-augmented formal proof work](https://arxiv.org/abs/2306.15626)
 - [ProofGrader and ProofBench](https://proofgrader.github.io/)
 - [SageMath](https://www.sagemath.org/)
 - [SymPy](https://www.sympy.org/)

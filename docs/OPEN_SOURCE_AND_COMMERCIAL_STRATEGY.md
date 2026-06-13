@@ -159,8 +159,8 @@ Recent acquisitions support the pattern:
 
 For the technical thesis, current research also supports this direction:
 
-- DeepMind's AI co-mathematician frames the frontier as a stateful workbench for literature search, computation, theorem proving, uncertainty tracking, and native mathematical artifacts.
-- A 2026 ICML paper on minimal theorem-proving agents argues that simple open-source agentic baselines can be useful for systematic comparison across theorem-prover architectures.
+- DeepMind's AI co-mathematician frames the frontier as a stateful workbench for literature search, computation, formal proof work, uncertainty tracking, and native mathematical artifacts.
+- A 2026 ICML paper on minimal formal-proving agents argues that simple open-source agentic baselines can be useful for systematic comparison across proof-assistant architectures.
 - A 2026 program-verification paper reports strong results from compiler-in-the-loop agentic proving, pointing toward code verification as a natural next domain after math.
 
 ## Million-Dollar Path
@@ -217,5 +217,5 @@ These protect the brand:
 - [Anaconda acquires Outerbounds](https://www.crn.com/news/ai/2026/anaconda-extends-ai-native-application-development-with-acquisition)
 - [Hacker News Show HN guidelines](https://news.ycombinator.com/showhn.html)
 - [AI co-mathematician](https://arxiv.org/abs/2605.06651)
-- [A Minimal Agent for Automated Theorem Proving](https://arxiv.org/abs/2602.24273)
+- [A minimal automated formal-proving agent](https://arxiv.org/abs/2602.24273)
 - [Agentic Proving for Program Verification](https://arxiv.org/abs/2605.23772)

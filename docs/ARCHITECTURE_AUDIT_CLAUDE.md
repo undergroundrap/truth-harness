@@ -27,7 +27,7 @@ System (1) computes things and can be wrong or right. System (2) **records what 
 
 But three structural gaps separate it from the mission:
 
-- **The verification surface is a sliver.** The only things the system can actually verify are: integer-coefficient rational arithmetic, parity of univariate integer polynomials, interval bounds, SI dimensions, and five SymPy operations. No theorem prover, no SMT, no notebook execution, no simulation capture. Everything else is self-reported metadata.
+- **The verification surface is a sliver.** The only things the system can actually verify are: integer-coefficient rational arithmetic, parity of univariate integer polynomials, interval bounds, SI dimensions, and five SymPy operations. No proof assistant, no SMT, no notebook execution, no simulation capture. Everything else is self-reported metadata.
 - **The evidence layer is honor-system.** Schemas are not enforced (see §4 R2), evidence refs are strings that may or may not resolve, simulation/experiment "metrics" are typed by the person logging them, and the privacy/disclosure model records intent rather than constraining behavior.
 - **The storage model will not scale past a single small project.** One JSON file per record, O(n) directory scans for every `list`/lookup, a single monolithic corpus index, no locking, no transactional writes, base64 ciphertext inlined in vault JSON.
 
@@ -116,7 +116,7 @@ Evidence is a graph inside each receipt plus loose string refs between record ar
 | Local-first private workflows | **Present** | No network code in any first-party package; `.truth-harness/` store (`local-workspace.ts`); privacy metadata on every artifact. Gap: enforced only by convention — no egress test, no boundary (§4 R4). |
 | Optional / auditable hosted model usage | **Partially present** | `model-context.ts` (packets, redaction warnings), `disclosure-log.ts` (audit records), MCP tools `truth_harness_model_context_prepare` / `truth_harness_disclosure_log`. Gap: honor system — nothing makes the call, intercepts the call, or detects an unlogged call; the audit trail proves diligence, not behavior. |
 | Math verification | **Partially present** | Real but narrow: `rational.ts`, `expression.ts`, `interval.ts`, `dimension.ts`, parity kernel, counterexample search (`receipt.ts:~470`, range hardcoded to [-20, 20]). Anything outside five prompt shapes → `unverified` plan node. |
-| Theorem proving integration | **Missing** | Lean/Z3 appear only as `nextAdapters` strings in plan-node payloads (`receipt.ts`) and prior-art tables (`docs/RESEARCH_AND_ARCHITECTURE.md`). No adapter interface, no Lean/SMT code. Meanwhile `proved` is already issued by `parity-proof.ts` — see §4 R1 (**Risky/misleading** in combination). |
+| Formal proof integration | **Missing** | Lean/Z3 appear only as `nextAdapters` strings in plan-node payloads (`receipt.ts`) and prior-art tables (`docs/RESEARCH_AND_ARCHITECTURE.md`). No adapter interface, no Lean/SMT code. Meanwhile `proved` is already issued by `parity-proof.ts` — see §4 R1 (**Risky/misleading** in combination). |
 | CAS / symbolic computation | **Partially present** | SymPy subprocess adapter, 5 ops (simplify/factor/expand/diff/integrate), charset-sanitized `parse_expr` (`tools/sympy_bridge.py:24,93`), timeout, version pinned in CI. Gap: results labeled `exact-computed` with no cross-check against a second engine; no Sage/Maxima; no expression round-trip validation (srepr is captured but unused). |
 | Simulation provenance | **Partially present / risky at edges** | `simulation-log.ts` records assumptions, parameters, metrics, uncertainty, limitations. Gap: metrics are self-reported strings; no hash binding to actual simulation inputs/outputs; no execution or capture. A fabricated metric is indistinguishable from a real one. |
 | Notebook / replay workflows | **Partially present** | `notebook-run.ts` records runner/command/refs/deps — explicitly does not execute. `replay.ts` replays only `ask` receipts (runId/trust/summary compare). Gap: no notebook execution, no output-hash capture, no replay of any record artifact, env-sensitive run IDs (§4 R3). |
@@ -245,7 +245,7 @@ A `truth-harness workspace rebuild-index` command regenerates `catalog.db` from 
 - Stage 2: optional local embeddings (e.g., ONNX runtime, model file user-supplied) as a separate adapter with the same citation contract; PDF ingestion via local extraction; per-chunk page/offset anchors so citations are verifiable spans, not chunk blobs.
 - Never let retrieval mint anything stronger than `source-cited`; consider renaming the label `source-matched` until an entailment check exists.
 
-### 5.6 CAS / theorem prover adapter architecture
+### 5.6 CAS / Proof Assistant Adapter Architecture
 Define one interface in core:
 ```ts
 interface VerifierAdapter {
@@ -351,7 +351,7 @@ interface VerifierAdapter {
 
 **What you have that HN will respect:** a tool that catches AI math lies with exact local computation, refuses to say `proved` when it only searched, and emits replayable receipts — with zero network calls. That story is crisp, demonstrable in one screenshot, and falsifiable (which builds trust).
 
-**What will get you destroyed if shipped as-is:** (1) the word "Theorem" + a homemade proof kernel — the first commenter who finds *any* soundness gap ends the thread; ship the Lean-verified kernel or the humbler label first. (2) Cancer/hair-loss strings in the README — "AI math tool pivots to curing cancer" is the top comment within an hour. (3) The phrase "benchmark harness for measuring agents" with only self-regression suites behind it. (4) 18 unenforced schemas — one `grep -r ajv` by a commenter is all it takes.
+**What will get you destroyed if shipped as-is:** (1) a proof-first brand plus a homemade proof kernel — the first commenter who finds *any* soundness gap ends the thread; ship the Lean-verified kernel or the humbler label first. (2) Cancer/hair-loss strings in the README — "AI math tool pivots to curing cancer" is the top comment within an hour. (3) The phrase "benchmark harness for measuring agents" with only self-regression suites behind it. (4) 18 unenforced schemas — one `grep -r ajv` by a commenter is all it takes.
 
 **The right first demo** (technically impressive, reproducible, zero overclaim):
 

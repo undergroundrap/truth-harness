@@ -1092,7 +1092,7 @@ function warningsFor(input: {
 }
 
 function inferClaimDomain(statement: string): ClaimLedgerDomain {
-  if (/\b(theorem|proof|lemma|equation|integral|matrix|number theory|math|fraction)\b/i.test(statement)) return "math";
+  if (/\b(proof|lemma|equation|integral|matrix|number theory|math|fraction)\b/i.test(statement)) return "math";
   if (/\b(source|citation|paper|literature|quote|doi)\b/i.test(statement)) return "sources";
   if (/\b(code|program|compiler|test|api|software)\b/i.test(statement)) return "code";
   if (/\b(data|dataset|statistics|regression|causal)\b/i.test(statement)) return "data";

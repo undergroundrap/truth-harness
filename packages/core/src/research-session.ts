@@ -468,7 +468,7 @@ function normalizeDomains(values: ResearchSessionDomain[] | undefined, objective
   }
 
   const normalized = objective.toLowerCase();
-  if (/\b(theorem|proof|lemma|equation|integral|matrix|number theory|math)\b/i.test(normalized)) {
+  if (/\b(proof|lemma|equation|integral|matrix|number theory|math)\b/i.test(normalized)) {
     domains.add("math");
   }
   if (/\b(physics|energy|force|quantum|molecular|simulation|climate)\b/i.test(normalized)) {

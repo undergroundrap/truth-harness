@@ -11,7 +11,7 @@ The current differentiator is the claim ledger: specialized tools compute, prove
 Use **Truth Harness** as the public product name.
 
 - **Keep:** Truth Harness is broader than math without weakening the verification promise: it can cover math, code, science, sources, simulations, and research provenance.
-- **Avoid:** Do not brand the public product around theorem-only wording. It is too generic, competes with proof-assistant terminology, and is weaker for search and trademark distinctiveness.
+- **Avoid:** Do not brand the public product around proof-only wording. It is too generic, competes with proof-assistant terminology, and is weaker for search and trademark distinctiveness.
 - **Shorthand:** `truth-harness` is the CLI command and public agent-facing shorthand.
 - **Positioning:** "Truth Harness" should mean a local-first research IDE for verifiable claims, not a chatbot or black-box answer engine.
 

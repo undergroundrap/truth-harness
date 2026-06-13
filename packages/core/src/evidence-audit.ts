@@ -728,7 +728,7 @@ function classifyClaim(
   const types = new Set<EvidenceAuditClaimType>();
   const normalized = claim.toLowerCase();
 
-  if (/\b(theorem|prove|proof|lemma|for all|integer|rational|equals|equation|derive|simplify|factor|integrate|differentiate)\b/i.test(claim)) {
+  if (/\b(prove|proof|lemma|for all|integer|rational|equals|equation|derive|simplify|factor|integrate|differentiate)\b/i.test(claim)) {
     types.add("math");
   }
 

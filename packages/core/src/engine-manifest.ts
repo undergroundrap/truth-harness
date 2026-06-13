@@ -380,7 +380,7 @@ function plannedCapabilities(): EngineCapability[] {
   return [
     plannedCapability("sage-cas", "SageMath CAS", "math", "CAS breadth and independent symbolic/numeric checks."),
     plannedCapability("cvc5-smt-solver", "cvc5 SMT solver", "math", "Second SMT solver for cross-solver confidence and regressions."),
-    plannedCapability("lean-lsp-router", "Lean LSP proof workflow", "math", "Goals, diagnostics, theorem search, and interactive proof repair."),
+    plannedCapability("lean-lsp-router", "Lean LSP proof workflow", "math", "Goals, diagnostics, formal library search, and interactive proof repair."),
     plannedCapability("local-vector-rag", "Local vector/PDF RAG", "sources", "Source ingestion, citation spans, contradiction checks, and reusable indexes."),
     plannedCapability("rigorous-numerics", "Rigorous numerics", "math", "Ball arithmetic, precision budgets, and reproducible error bounds."),
     plannedCapability("domain-simulation-adapters", "Domain simulation adapters", "physics/bio/engineering", "Simulation provenance with assumptions, parameters, uncertainty, and validation gates.")

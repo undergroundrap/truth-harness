@@ -46,7 +46,7 @@ Do not fork one large repo as the foundation. The better strategy is a small, st
 | [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) | Primary MCP server/client implementation path. Official SDK docs list TypeScript as Tier 1, while Rust is Tier 2. |
 | [MCP Rust SDK](https://github.com/modelcontextprotocol/rust-sdk) | Later candidate for a hardened local executor or high-throughput service. |
 | [SecretiveShell/MCP-wolfram-alpha](https://github.com/SecretiveShell/MCP-wolfram-alpha) | Minimal WolframAlpha MCP bridge. Good inspiration, not enough as the core product. |
-| [oOo0oOo/lean-lsp-mcp](https://github.com/oOo0oOo/lean-lsp-mcp) | Strong Lean MCP integration: diagnostics, goals, hover info, theorem search. Prefer integration or adapter over rebuilding Lean LSP. |
+| [oOo0oOo/lean-lsp-mcp](https://github.com/oOo0oOo/lean-lsp-mcp) | Strong Lean MCP integration: diagnostics, goals, hover info, formal library search. Prefer integration or adapter over rebuilding Lean LSP. |
 | [LeanDojo/ReProver](https://github.com/lean-dojo/ReProver) | Retrieval-augmented proof search pattern for Lean. Use as research inspiration for proof search loops. |
 | [lean-dojo/LeanCopilot](https://github.com/lean-dojo/LeanCopilot) | Native Lean LLM proof automation ideas: tactic suggestions, premise search, local/cloud models. |
 | [SageMath](https://github.com/sagemath/sage) | Main open-source CAS bundle. Use as a subprocess/container adapter, not an embedded dependency. |
@@ -197,7 +197,7 @@ Initial benchmark suites:
 | `number-theory-75` | Modular arithmetic, divisibility, primality, Diophantine examples. |
 | `false-claims-100` | Plausible but false claims designed to force counterexamples. |
 | `lean-smoke-50` | Small Lean theorems with expected proof outcomes. |
-| `rag-citation-50` | Source-grounded theorem/history/formula questions. |
+| `rag-citation-50` | Source-grounded proof, history, and formula questions. |
 
 CLI shape:
 
@@ -752,10 +752,10 @@ truth-harness verify "for all n, n^2+n is even" --lean
 truth-harness compute "factor x^4 - 1" --engine sympy --json
 truth-harness smt translate "find an integer x with 0 < x < 3" --review
 truth-harness rag ingest ./papers --collection math
-truth-harness rag search "Fourier transform convolution theorem" --collection math
+truth-harness rag search "Fourier transform convolution identity" --collection math
 truth-harness source ingest ./papers
-truth-harness source search "Fourier transform convolution theorem"
-truth-harness source cite "The convolution theorem is discussed in the local notes" --query "Fourier transform convolution theorem"
+truth-harness source search "Fourier transform convolution identity"
+truth-harness source cite "The Fourier convolution identity is discussed in the local notes" --query "Fourier transform convolution identity"
 truth-harness literature log "Local pathway paper" --kind paper --status annotated --identifier doi:10.0000/example --local-ref papers/pathway.md --claim "Reports a toy pathway marker change" --method "Toy model only" --limitation "No clinical endpoint"
 truth-harness literature list
 truth-harness notebook log "Run a local notebook that computes a toy pathway score" --kind notebook --runner jupyter --command "jupyter nbconvert --execute notebooks/pathway.ipynb" --notebook notebooks/pathway.ipynb --code src/pathway.py --input data/pathway.csv --output artifacts/pathway-output.json --runtime python --dependency sympy==1.14.0 --limitation "Toy model only"
@@ -836,7 +836,7 @@ Loop:
 
 1. Formalize the user goal into claims and assumptions.
 2. Start or reuse a local research session with budgets, claims, tasks, evidence refs, and snapshot refs.
-3. Search local corpus and known theorem/library indexes.
+3. Search local corpus and known formal-library indexes.
 4. Create literature records for key papers, patents, datasets, database exports, or prior-art notes before relying on source-derived claims.
 5. Create notebook-run records for local notebooks, scripts, or pipelines that produce evidence artifacts, and code-run records for commands actually executed by the workbench.
 6. Try cheap refutation first.
@@ -958,8 +958,8 @@ Phase 4: Research mode
 - Bounded recursive Claude/Codex workflows.
 - Findings docs auto-updated from run graphs.
 - Long calculations with checkpoint/resume.
-- Corpus-aware theorem search and proof attempt loops.
+- Corpus-aware formal statement search and proof attempt loops.
 
 ## Decision
 
-Build the repo as TypeScript-first with modular adapters. Use Rust later for isolated executor pieces if benchmarks or sandboxing demand it. Do not implement a CAS, theorem prover, vector database, or notebook engine from scratch. The differentiator is the evidence graph and the agent-native verification workflow.
+Build the repo as TypeScript-first with modular adapters. Use Rust later for isolated executor pieces if benchmarks or sandboxing demand it. Do not implement a CAS, proof assistant, vector database, or notebook engine from scratch. The differentiator is the evidence graph and the agent-native verification workflow.

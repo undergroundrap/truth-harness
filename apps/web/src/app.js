@@ -460,7 +460,7 @@ const verificationGateCatalog = [
     label: "Lean proof bridge",
     command: "truth-harness proof check --backend lean",
     description: "Only accepted proof-checker output may mint a formally proved trust label.",
-    applies: (receipt) => state.lane === "math" || /proof|theorem|lemma|forall|for all/u.test(receipt.title),
+    applies: (receipt) => state.lane === "math" || /proof|lemma|forall|for all/u.test(receipt.title),
     status: (receipt) => receipt.details["Proof checker"] === "true" || receipt.trust === "proved" ? "passed" : "waiting"
   },
   {
