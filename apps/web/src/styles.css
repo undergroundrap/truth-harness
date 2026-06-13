@@ -864,6 +864,14 @@ body[data-surface="graph"] .project-start-panel {
   display: none;
 }
 
+body[data-surface="plot"] .session-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body[data-surface="plot"] .inspector {
+  display: none;
+}
+
 body[data-surface="plot"] .work-surface,
 body[data-surface="graph"] .work-surface {
   height: clamp(700px, calc(100vh - 116px), 1180px);
@@ -1949,7 +1957,7 @@ dd {
 
 .plot-layout {
   display: grid;
-  grid-template-columns: minmax(620px, 1fr) minmax(280px, 340px);
+  grid-template-columns: minmax(720px, 1fr) minmax(260px, 300px);
   grid-template-rows: minmax(0, 1fr);
   align-items: stretch;
   gap: 12px;
@@ -2079,7 +2087,7 @@ dd {
 }
 
 body.visual-focus-active[data-surface="plot"] .plot-layout {
-  grid-template-columns: minmax(760px, 1fr) minmax(290px, 350px);
+  grid-template-columns: minmax(840px, 1fr) minmax(260px, 300px);
 }
 
 body.visual-focus-active[data-surface="plot"] .plot-canvas,

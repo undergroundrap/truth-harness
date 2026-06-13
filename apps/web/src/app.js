@@ -269,7 +269,7 @@ const state = {
   routeHistoryQuery: "",
   selectedResearchMapSnapshotId: undefined,
   selectedResearchMapNodeId: undefined,
-  visualDetailCollapsed: false,
+  visualDetailCollapsed: true,
   visualFocus: false,
   visualZoom: 1,
   sidebarCollapsed: false,
@@ -1579,12 +1579,14 @@ function createFractionBarsVisualModel(receipt, basePlot) {
     };
   }
 
-  const width = 920;
-  const rowHeight = 56;
-  const top = 104;
-  const left = 68;
-  const barWidth = 690;
-  const height = Math.max(360, top + fractions.length * rowHeight + 76);
+  const width = 1240;
+  const rowHeight = 92;
+  const top = 166;
+  const left = 118;
+  const right = 190;
+  const barHeight = 34;
+  const barWidth = width - left - right;
+  const height = Math.max(540, top + fractions.length * rowHeight + 92);
   const maxValue = Math.max(1, ...fractions.map(fractionValue));
   const axisMax = Math.ceil(maxValue);
   const outputLabel = fractionLabel(explicitOutputFraction ?? fractions[fractions.length - 1]);
@@ -1598,18 +1600,18 @@ function createFractionBarsVisualModel(receipt, basePlot) {
     const backgroundTicks = Array.from({ length: axisMax + 1 }, (_item, tick) => {
       const x = left + (tick / axisMax) * barWidth;
       return `<g>
-        <line x1="${x}" y1="${y - 4}" x2="${x}" y2="${y + 28}" stroke="#343230" />
-        <text x="${x}" y="${y + 48}" text-anchor="middle" fill="#77716a" font-size="11">${tick}</text>
+        <line x1="${x}" y1="${y - 8}" x2="${x}" y2="${y + barHeight + 8}" stroke="#343230" />
+        <text x="${x}" y="${y + barHeight + 34}" text-anchor="middle" fill="#77716a" font-size="12">${tick}</text>
       </g>`;
     }).join("");
 
     return `<g>
       ${backgroundTicks}
-      <rect x="${left}" y="${y}" width="${barWidth}" height="24" rx="6" fill="#171717" stroke="#2f2f2e" />
-      <rect x="${left}" y="${y}" width="${fillWidth}" height="24" rx="6" fill="${fill}" opacity="0.78" />
-      <text x="${left - 18}" y="${y + 17}" text-anchor="end" fill="#f2f2ee" font-size="14" font-weight="750">${escapeXml(label)}</text>
-      <text x="${left + fillWidth + 12}" y="${y + 17}" fill="${fill}" font-size="12" font-weight="700">${value.toFixed(3).replace(/0+$/u, "").replace(/\.$/u, "")}</text>
-      ${isOutput ? `<text x="${left + barWidth + 24}" y="${y + 17}" fill="#7dd3a8" font-size="12" font-weight="750">verified output</text>` : ""}
+      <rect x="${left}" y="${y}" width="${barWidth}" height="${barHeight}" rx="9" fill="#171717" stroke="#2f2f2e" />
+      <rect x="${left}" y="${y}" width="${fillWidth}" height="${barHeight}" rx="9" fill="${fill}" opacity="0.78" />
+      <text x="${left - 24}" y="${y + 23}" text-anchor="end" fill="#f2f2ee" font-size="17" font-weight="750">${escapeXml(label)}</text>
+      <text x="${left + fillWidth + 18}" y="${y + 23}" fill="${fill}" font-size="14" font-weight="750">${value.toFixed(3).replace(/0+$/u, "").replace(/\.$/u, "")}</text>
+      ${isOutput ? `<text x="${left + barWidth + 28}" y="${y + 23}" fill="#7dd3a8" font-size="13" font-weight="750">verified output</text>` : ""}
     </g>`;
   }).join("");
 
@@ -1619,9 +1621,9 @@ function createFractionBarsVisualModel(receipt, basePlot) {
     caption: "Each bar is scaled from the exact rational value recorded by the receipt; the verified output is highlighted.",
     svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Exact fraction bar comparison">
       <rect width="${width}" height="${height}" rx="16" fill="#101010" />
-      <text x="44" y="44" fill="#f2f2ee" font-size="22" font-weight="750">${escapeXml(receipt.title)}</text>
-      <text x="44" y="72" fill="#aaa59d" font-size="13">concrete proportion view for arithmetic intuition and checking</text>
-      <text x="${left}" y="${top - 24}" fill="#aaa59d" font-size="12">0 to ${axisMax} exact units</text>
+      <text x="72" y="62" fill="#f2f2ee" font-size="28" font-weight="750">${escapeXml(receipt.title)}</text>
+      <text x="72" y="96" fill="#aaa59d" font-size="15">concrete proportion view for arithmetic intuition and checking</text>
+      <text x="${left}" y="${top - 34}" fill="#aaa59d" font-size="13">0 to ${axisMax} exact units</text>
       ${rows}
     </svg>`,
     facts: [
