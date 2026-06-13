@@ -1269,8 +1269,20 @@ function renderMathPlot(receipt) {
 
 function createVisualModel(receipt, mode) {
   const basePlot = createPlotModel(receipt);
+  if (mode === "fraction-bars") {
+    return createFractionBarsVisualModel(receipt, basePlot);
+  }
+
+  if (mode === "step-flow") {
+    return createStepFlowVisualModel(receipt, basePlot);
+  }
+
   if (mode === "concept-map") {
     return createConceptMapVisualModel(receipt, basePlot);
+  }
+
+  if (mode === "trust-ladder") {
+    return createTrustLadderVisualModel(receipt, basePlot);
   }
 
   if (mode === "bubble-map") {
@@ -1365,6 +1377,216 @@ function createNumberLinePlotModel(receipt, fractions, outputFraction) {
     dataColumns: ["role", "exact", "numerator", "denominator", "decimal"],
     dataRows
   };
+}
+
+function createFractionBarsVisualModel(receipt, basePlot) {
+  const explicitOutputFraction = parseFraction(receipt.output);
+  const fractions = uniqueFractionsByLabel([
+    ...parseFractionsFromText(`${receipt.title} ${receipt.output} ${receipt.math?.input ?? ""} ${receipt.math?.output ?? ""}`),
+    ...(explicitOutputFraction ? [explicitOutputFraction] : [])
+  ]).slice(0, 5);
+
+  if (fractions.length === 0) {
+    return {
+      ...basePlot,
+      kind: "fraction bars unavailable",
+      title: "Fraction Bars Need Rational Data",
+      caption: "This view appears when a receipt exposes exact rational values. Use another visual mode for this claim.",
+      facts: [
+        ["Mode", "fraction bars"],
+        ["Source visual", basePlot.kind],
+        ["Trust", receipt.trust],
+        ["Next", "attach rational values"]
+      ]
+    };
+  }
+
+  const width = 920;
+  const rowHeight = 56;
+  const top = 104;
+  const left = 68;
+  const barWidth = 690;
+  const height = Math.max(360, top + fractions.length * rowHeight + 76);
+  const maxValue = Math.max(1, ...fractions.map(fractionValue));
+  const axisMax = Math.ceil(maxValue);
+  const outputLabel = fractionLabel(explicitOutputFraction ?? fractions[fractions.length - 1]);
+  const rows = fractions.map((fraction, index) => {
+    const value = fractionValue(fraction);
+    const y = top + index * rowHeight;
+    const fillWidth = Math.max(6, (value / axisMax) * barWidth);
+    const label = fractionLabel(fraction);
+    const isOutput = label === outputLabel;
+    const fill = isOutput ? "#7dd3a8" : "#b7a98a";
+    const backgroundTicks = Array.from({ length: axisMax + 1 }, (_item, tick) => {
+      const x = left + (tick / axisMax) * barWidth;
+      return `<g>
+        <line x1="${x}" y1="${y - 4}" x2="${x}" y2="${y + 28}" stroke="#343230" />
+        <text x="${x}" y="${y + 48}" text-anchor="middle" fill="#77716a" font-size="11">${tick}</text>
+      </g>`;
+    }).join("");
+
+    return `<g>
+      ${backgroundTicks}
+      <rect x="${left}" y="${y}" width="${barWidth}" height="24" rx="6" fill="#171717" stroke="#2f2f2e" />
+      <rect x="${left}" y="${y}" width="${fillWidth}" height="24" rx="6" fill="${fill}" opacity="0.78" />
+      <text x="${left - 18}" y="${y + 17}" text-anchor="end" fill="#f2f2ee" font-size="14" font-weight="750">${escapeXml(label)}</text>
+      <text x="${left + fillWidth + 12}" y="${y + 17}" fill="${fill}" font-size="12" font-weight="700">${value.toFixed(3).replace(/0+$/u, "").replace(/\.$/u, "")}</text>
+      ${isOutput ? `<text x="${left + barWidth + 24}" y="${y + 17}" fill="#7dd3a8" font-size="12" font-weight="750">verified output</text>` : ""}
+    </g>`;
+  }).join("");
+
+  return {
+    kind: "fraction bars",
+    title: "Exact Fraction Bars",
+    caption: "Each bar is scaled from the exact rational value recorded by the receipt; the verified output is highlighted.",
+    svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Exact fraction bar comparison">
+      <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+      <text x="44" y="44" fill="#f2f2ee" font-size="22" font-weight="750">${escapeXml(receipt.title)}</text>
+      <text x="44" y="72" fill="#aaa59d" font-size="13">concrete proportion view for arithmetic intuition and checking</text>
+      <text x="${left}" y="${top - 24}" fill="#aaa59d" font-size="12">0 to ${axisMax} exact units</text>
+      ${rows}
+    </svg>`,
+    facts: [
+      ["Mode", "fraction bars"],
+      ["Fractions", String(fractions.length)],
+      ["Output", outputLabel],
+      ["Trust", receipt.trust]
+    ],
+    dataColumns: ["role", "exact", "numerator", "denominator", "decimal"],
+    dataRows: fractions.map((fraction) => {
+      const label = fractionLabel(fraction);
+      return [
+        label === outputLabel ? "verified-output" : "receipt-rational",
+        label,
+        String(fraction.numerator),
+        String(fraction.denominator),
+        fractionValue(fraction).toFixed(6)
+      ];
+    })
+  };
+}
+
+function createStepFlowVisualModel(receipt, basePlot) {
+  const trace = receipt.traces[state.level] ?? receipt.traces.middle ?? [];
+  const steps = trace.length > 0 ? trace.slice(0, 8) : [receipt.summary ?? basePlot.caption];
+  const levelLabel = visualLevelLabel(state.level);
+  const width = 920;
+  const top = 96;
+  const rowHeight = 76;
+  const height = Math.max(360, top + steps.length * rowHeight + 50);
+  const cardWidth = 686;
+  const cardX = 152;
+  const flowSvg = steps.map((step, index) => {
+    const y = top + index * rowHeight;
+    const isLast = index === steps.length - 1;
+    return `<g>
+      <circle cx="74" cy="${y + 24}" r="15" fill="#24221e" stroke="#b7a98a" />
+      <text x="74" y="${y + 29}" text-anchor="middle" fill="#f2f2ee" font-size="12" font-weight="800">${index + 1}</text>
+      ${isLast ? "" : `<line x1="74" y1="${y + 42}" x2="74" y2="${y + rowHeight - 2}" stroke="#343230" stroke-width="2" />`}
+      <rect x="${cardX}" y="${y}" width="${cardWidth}" height="50" rx="10" fill="#141414" stroke="${isLast ? "#7dd3a8" : "#30302f"}" />
+      ${svgTextBlock(step, cardX + 18, y + 22, { maxChars: 84, maxLines: 2, lineHeight: 17, fontSize: 13, fontWeight: 650 })}
+    </g>`;
+  }).join("");
+
+  return {
+    kind: "step flow",
+    title: "Audience-Level Step Flow",
+    caption: "The selected explanation level is rendered as replayable steps, so students and reviewers can follow the exact route.",
+    svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Step-by-step receipt flow">
+      <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+      <text x="44" y="44" fill="#f2f2ee" font-size="22" font-weight="750">${escapeXml(receipt.title)}</text>
+      <text x="44" y="72" fill="#aaa59d" font-size="13">${escapeXml(levelLabel)} explanation route generated from the receipt trace</text>
+      ${flowSvg}
+    </svg>`,
+    facts: [
+      ["Mode", "step flow"],
+      ["Level", levelLabel],
+      ["Steps shown", String(steps.length)],
+      ["Trust", receipt.trust]
+    ],
+    dataColumns: ["step", "level", "text", "source"],
+    dataRows: steps.map((step, index) => [String(index + 1), state.level, step, "receipt.traces"])
+  };
+}
+
+function createTrustLadderVisualModel(receipt) {
+  const allRows = verificationRows(receipt).filter((row) => row.status !== "skipped");
+  const rows = allRows.length > 0 ? allRows.slice(0, 8) : [{
+    id: "receipt",
+    label: "Receipt envelope",
+    command: receipt.replay,
+    description: "No verification catalog rows were available for this receipt.",
+    status: "waiting"
+  }];
+  const counts = rows.reduce((accumulator, row) => {
+    accumulator[row.status] = (accumulator[row.status] ?? 0) + 1;
+    return accumulator;
+  }, {});
+  const width = 920;
+  const top = 96;
+  const rowHeight = 70;
+  const height = Math.max(380, top + rows.length * rowHeight + 56);
+  const cardX = 142;
+  const cardWidth = 692;
+  const ladderSvg = rows.map((row, index) => {
+    const y = top + index * rowHeight;
+    const color = visualStatusColor(row.status);
+    const isLast = index === rows.length - 1;
+    return `<g>
+      ${isLast ? "" : `<line x1="82" y1="${y + 34}" x2="82" y2="${y + rowHeight}" stroke="#30302f" stroke-width="3" />`}
+      <circle cx="82" cy="${y + 28}" r="16" fill="#141414" stroke="${color}" stroke-width="2" />
+      <text x="82" y="${y + 33}" text-anchor="middle" fill="${color}" font-size="12" font-weight="800">${index + 1}</text>
+      <rect x="${cardX}" y="${y}" width="${cardWidth}" height="56" rx="10" fill="#141414" stroke="${color}" opacity="0.98" />
+      <text x="${cardX + 18}" y="${y + 22}" fill="#f2f2ee" font-size="14" font-weight="750">${escapeXml(row.label)}</text>
+      <text x="${cardX + cardWidth - 18}" y="${y + 22}" text-anchor="end" fill="${color}" font-size="12" font-weight="800">${escapeXml(statusLabel(row.status))}</text>
+      ${svgTextBlock(row.command, cardX + 18, y + 43, { fill: "#aaa59d", maxChars: 72, maxLines: 1, lineHeight: 14, fontSize: 12, fontWeight: 600 })}
+    </g>`;
+  }).join("");
+
+  return {
+    kind: "trust ladder",
+    title: "Verification Gate Ladder",
+    caption: "Open and satisfied gates are shown as a review ladder so a claim cannot outrun its strongest verified evidence.",
+    svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Verification gate ladder">
+      <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+      <text x="44" y="44" fill="#f2f2ee" font-size="22" font-weight="750">${escapeXml(receipt.title)}</text>
+      <text x="44" y="72" fill="#aaa59d" font-size="13">gate order is generated from the current route obligations and verification catalog</text>
+      ${ladderSvg}
+    </svg>`,
+    facts: [
+      ["Mode", "trust ladder"],
+      ["Verified", String(counts.passed ?? 0)],
+      ["Open", String((counts.waiting ?? 0) + (counts.missing ?? 0))],
+      ["Trust", receipt.trust]
+    ],
+    dataColumns: ["gate", "status", "command", "description"],
+    dataRows: rows.map((row) => [row.label, statusLabel(row.status), row.command, row.description ?? ""])
+  };
+}
+
+function visualLevelLabel(level) {
+  return {
+    middle: "Middle school",
+    high: "High school",
+    college: "College",
+    expert: "Expert"
+  }[level] ?? String(level ?? "selected");
+}
+
+function visualStatusColor(status) {
+  if (status === "passed") {
+    return "#7dd3a8";
+  }
+
+  if (status === "missing") {
+    return "#f28b82";
+  }
+
+  if (status === "waiting") {
+    return "#e6c36a";
+  }
+
+  return "#8f8a83";
 }
 
 function createDiscretePolynomialPlotModel(receipt) {
