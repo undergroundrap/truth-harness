@@ -1033,6 +1033,7 @@ function renderRouteLedger(receipt) {
 function routeLedgerRows(receipt, route) {
   const routePaths = receipt.routePaths ?? {};
   const routeReplay = route.replay?.command ?? receipt.replay;
+  const obligationCounts = routeObligationCounts(route);
   return [
     ["Route ID", route.routeId],
     ["Status", `${route.status} / ${route.finalTrust ?? receipt.trust}`],
@@ -1040,7 +1041,9 @@ function routeLedgerRows(receipt, route) {
     ["JSON", routePaths.json ?? "local route JSON path not returned"],
     ["Markdown", routePaths.markdown ?? "local route Markdown path not returned"],
     ["Gaps", String(route.gaps?.length ?? 0)],
-    ["Obligations", String(route.proofObligations?.length ?? 0)]
+    ["Obligations", obligationCounts.summary],
+    ["Open obligations", String(obligationCounts.open)],
+    ["Critical open", String(obligationCounts.criticalOpen)]
   ];
 }
 
@@ -1063,6 +1066,7 @@ function verifierRouteReportFacts(receipt) {
   }
 
   const routePaths = receipt.routePaths ?? {};
+  const obligationCounts = routeObligationCounts(route);
   return [
     ["Route ID", route.routeId],
     ["Status", `${route.status} / ${route.finalTrust ?? receipt.trust}`],
@@ -1071,7 +1075,10 @@ function verifierRouteReportFacts(receipt) {
     ["JSON", routePaths.json ?? "local route JSON path not returned"],
     ["Markdown", routePaths.markdown ?? "local route Markdown path not returned"],
     ["Gaps", String(route.gaps?.length ?? 0)],
-    ["Obligations", String(route.proofObligations?.length ?? 0)]
+    ["Obligations", obligationCounts.summary],
+    ["Open obligations", String(obligationCounts.open)],
+    ["Satisfied obligations", String(obligationCounts.satisfied)],
+    ["Critical open obligations", String(obligationCounts.criticalOpen)]
   ];
 }
 
@@ -1654,34 +1661,60 @@ function renderRouteHistory() {
 }
 
 function routeObligationSummaryText(route) {
-  const total = routeCount(route.proofObligations);
-  const open = routeCount(route.openProofObligations);
-  const satisfied = routeCount(route.satisfiedProofObligations);
-  const notRequired = routeCount(route.notRequiredProofObligations);
-  const criticalOpen = routeCount(route.criticalOpenProofObligations);
+  return routeObligationCounts(route).summary;
+}
+
+function routeObligationCounts(route) {
+  const obligations = Array.isArray(route?.proofObligations) ? route.proofObligations : undefined;
+  const total = obligations ? obligations.length : routeCount(route?.proofObligations);
+  const open = obligations
+    ? obligations.filter((obligation) => obligation.status === "open").length
+    : routeCount(route?.openProofObligations);
+  const satisfied = obligations
+    ? obligations.filter((obligation) => obligation.status === "satisfied").length
+    : routeCount(route?.satisfiedProofObligations);
+  const notRequired = obligations
+    ? obligations.filter((obligation) => obligation.status === "not-required").length
+    : routeCount(route?.notRequiredProofObligations);
+  const criticalOpen = obligations
+    ? obligations.filter((obligation) => obligation.status === "open" && obligation.severity === "critical").length
+    : routeCount(route?.criticalOpenProofObligations);
 
   if (total === 0) {
-    return "no obligations";
+    return {
+      total,
+      open,
+      satisfied,
+      notRequired,
+      criticalOpen,
+      summary: "no obligations"
+    };
   }
 
+  let summary;
   if (open > 0) {
-    return [
+    summary = [
       `${open} open`,
       criticalOpen > 0 ? `${criticalOpen} critical` : undefined,
       satisfied > 0 ? `${satisfied} satisfied` : undefined,
       `${total} total`
     ].filter(Boolean).join(" / ");
+  } else if (satisfied > 0) {
+    summary = [`${satisfied}/${total} satisfied`, notRequired > 0 ? `${notRequired} not required` : undefined].filter(Boolean).join(" / ");
+  } else if (notRequired === total) {
+    summary = total === 1 ? "1 not required" : `${total} not required`;
+  } else {
+    summary = `${total} obligations / none open`;
   }
 
-  if (satisfied > 0) {
-    return [`${satisfied}/${total} satisfied`, notRequired > 0 ? `${notRequired} not required` : undefined].filter(Boolean).join(" / ");
-  }
-
-  if (notRequired === total) {
-    return total === 1 ? "1 not required" : `${total} not required`;
-  }
-
-  return `${total} obligations / none open`;
+  return {
+    total,
+    open,
+    satisfied,
+    notRequired,
+    criticalOpen,
+    summary
+  };
 }
 
 function routeCount(value) {
@@ -2113,11 +2146,13 @@ function syncRouteIntoReceipts(route, routePaths) {
 
   for (const receipt of receiptStore.values()) {
     if (receipt.verifierRoute?.routeId === route.routeId || receipt.runId === route.receipt?.runId) {
+      const obligationCounts = routeObligationCounts(route);
       receipt.verifierRoute = route;
       receipt.routePaths = routePaths ?? receipt.routePaths;
       receipt.details["Route status"] = route.status;
       receipt.details["Route gaps"] = String(route.gaps?.length ?? 0);
-      receipt.details["Proof obligations"] = String(route.proofObligations?.length ?? 0);
+      receipt.details["Proof obligations"] = obligationCounts.summary;
+      receipt.details["Open obligations"] = String(obligationCounts.open);
     }
   }
 }
@@ -4872,10 +4907,12 @@ function receiptToViewModel(receipt, route, routePaths) {
     details["CAS residual"] = String(independentCasArtifact.residual);
   }
   if (route?.routeId) {
+    const obligationCounts = routeObligationCounts(route);
     details["Verifier route"] = route.routeId;
     details["Route status"] = route.status;
     details["Route gaps"] = String(route.gaps?.length ?? 0);
-    details["Proof obligations"] = String(route.proofObligations?.length ?? 0);
+    details["Proof obligations"] = obligationCounts.summary;
+    details["Open obligations"] = String(obligationCounts.open);
   }
 
   return {
