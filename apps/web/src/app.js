@@ -247,6 +247,7 @@ const state = {
   claimLedgerQuery: "",
   routeHistoryQuery: "",
   selectedResearchMapSnapshotId: undefined,
+  selectedResearchMapNodeId: undefined,
   sidebarCollapsed: false,
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE,
@@ -384,6 +385,7 @@ const plotTitle = document.querySelector("#plot-title");
 const plotCaption = document.querySelector("#plot-caption");
 const plotFacts = document.querySelector("#plot-facts");
 const plotData = document.querySelector("#plot-data");
+const plotNodeInspector = document.querySelector("#plot-node-inspector");
 const researchMapStatus = document.querySelector("#research-map-status");
 const saveResearchMapButton = document.querySelector("#save-research-map");
 const refreshResearchMapButton = document.querySelector("#refresh-research-map");
@@ -1293,10 +1295,12 @@ function renderMathPlot(receipt) {
   plotCaption.textContent = plot.caption;
   plotCanvas.innerHTML = plot.svg;
   plotCanvas.dataset.visualMode = state.visualMode;
+  plotCanvas.dataset.savedMapSnapshot = selectedMapSnapshot?.snapshotId ?? "";
   plotFacts.innerHTML = plot.facts
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join("");
   plotData.innerHTML = renderPlotDataTable(plot);
+  renderResearchMapNodeInspector(selectedMapSnapshot, plot);
   visualModeButtons.forEach((button) => {
     const activeMode = selectedMapSnapshot?.visualMode ?? state.visualMode;
     const active = button.dataset.visualMode === activeMode;
@@ -2119,7 +2123,7 @@ function createConceptMapVisualModel(receipt, basePlot) {
   };
 }
 
-function conceptNodeSvg(node) {
+function conceptNodeSvg(node, options = {}) {
   const tones = {
     accent: ["#171512", "#b7a98a", "#f2f2ee"],
     good: ["#102017", "#7dd3a8", "#f2f2ee"],
@@ -2128,7 +2132,14 @@ function conceptNodeSvg(node) {
     muted: ["#141414", "#30302f", "#f2f2ee"]
   };
   const [fill, stroke, text] = tones[node.tone] ?? tones.muted;
-  return `<g transform="translate(${node.x} ${node.y})">
+  const interactiveAttributes = options.interactive
+    ? ` class="visual-map-node${options.active ? " active" : ""}" data-map-node-id="${escapeXml(node.id)}" role="button" tabindex="0" aria-label="${escapeXml(`Inspect ${node.label}`)}"`
+    : "";
+  const activeRing = options.active
+    ? `<rect x="-5" y="-5" width="${node.width + 10}" height="${node.height + 10}" rx="14" fill="none" stroke="#f1eadc" stroke-width="2" stroke-dasharray="5 4" />`
+    : "";
+  return `<g${interactiveAttributes} transform="translate(${node.x} ${node.y})">
+    ${activeRing}
     <rect width="${node.width}" height="${node.height}" rx="10" fill="${fill}" stroke="${stroke}" />
     <text x="18" y="28" fill="#aaa59d" font-size="12" font-weight="650">${escapeXml(node.label)}</text>
     ${svgTextBlock(node.detail, 18, 52, { fill: text, maxChars: 28, maxLines: 2, lineHeight: 17, fontSize: 14, fontWeight: 750 })}
@@ -2293,21 +2304,50 @@ function currentPlotModel() {
 
 function selectedResearchMapSnapshot() {
   if (!state.selectedResearchMapSnapshotId) {
+    state.selectedResearchMapNodeId = undefined;
     return undefined;
   }
 
   const snapshot = (researchMap.snapshots ?? []).find((item) => item.snapshotId === state.selectedResearchMapSnapshotId);
   if (!snapshot) {
     state.selectedResearchMapSnapshotId = undefined;
+    state.selectedResearchMapNodeId = undefined;
     return undefined;
   }
 
   return snapshot;
 }
 
+function selectedResearchMapNode(snapshot = selectedResearchMapSnapshot()) {
+  if (!snapshot) {
+    state.selectedResearchMapNodeId = undefined;
+    return undefined;
+  }
+
+  const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
+  if (nodes.length === 0) {
+    state.selectedResearchMapNodeId = undefined;
+    return undefined;
+  }
+
+  if (!state.selectedResearchMapNodeId) {
+    return nodes[0];
+  }
+
+  const node = nodes.find((item) => item.id === state.selectedResearchMapNodeId);
+  if (!node) {
+    state.selectedResearchMapNodeId = undefined;
+    return nodes[0];
+  }
+
+  return node;
+}
+
 function createSavedResearchMapVisualModel(snapshot) {
   const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
   const edges = Array.isArray(snapshot.edges) ? snapshot.edges : [];
+  const selectedNode = selectedResearchMapNode(snapshot);
+  const selectedNodeId = selectedNode?.id;
   const layoutNodes = layoutResearchMapNodes(nodes);
   const layoutById = new Map(layoutNodes.map((node) => [node.id, node]));
   const width = 1180;
@@ -2336,7 +2376,7 @@ function createSavedResearchMapVisualModel(snapshot) {
       <text x="44" y="44" fill="#f2f2ee" font-size="23" font-weight="750">${escapeXml(snapshot.title ?? "Saved Research Map")}</text>
       <text x="44" y="72" fill="#aaa59d" font-size="13">opened from local research-map artifact - ${escapeXml(snapshot.snapshotId ?? "snapshot")}</text>
       ${edgeSvg}
-      ${layoutNodes.map((node) => conceptNodeSvg(node)).join("")}
+      ${layoutNodes.map((node) => conceptNodeSvg(node, { interactive: true, active: node.id === selectedNodeId })).join("")}
     </svg>`,
     facts: [
       ["Snapshot", snapshot.snapshotId ?? "unknown"],
@@ -2365,6 +2405,8 @@ function layoutResearchMapNodes(nodes) {
     id: centerNode.id ?? "root",
     label: centerNode.label ?? "Root",
     detail: centerNode.detail ?? "",
+    kind: centerNode.kind ?? "research-map-node",
+    sourceRef: centerNode.sourceRef ?? "",
     x: 450,
     y: 132,
     width: 280,
@@ -2387,6 +2429,8 @@ function layoutResearchMapNodes(nodes) {
       id: node.id ?? `node-${index + 2}`,
       label: node.label ?? `Node ${index + 2}`,
       detail: node.detail ?? "",
+      kind: node.kind ?? "research-map-node",
+      sourceRef: node.sourceRef ?? "",
       x,
       y,
       width: 268,
@@ -2426,6 +2470,186 @@ function renderResearchMapHistory() {
       </button>`;
     })
     .join("");
+}
+
+function renderResearchMapNodeInspector(snapshot, plot) {
+  if (!plotNodeInspector) {
+    return;
+  }
+
+  if (!snapshot) {
+    const mapNodeCount = Array.isArray(plot?.mapNodes) ? plot.mapNodes.length : 0;
+    plotNodeInspector.innerHTML = `<div class="map-node-empty">
+      <h5>Map Node Inspector</h5>
+      <p>${mapNodeCount > 0
+        ? "Save or open this map, then click a node to inspect its source, edges, and receipt route."
+        : "Open a saved research map to inspect clickable nodes and their evidence routes."}</p>
+    </div>`;
+    return;
+  }
+
+  const node = selectedResearchMapNode(snapshot);
+  if (!node) {
+    plotNodeInspector.innerHTML = `<div class="map-node-empty">
+      <h5>Map Node Inspector</h5>
+      <p>This saved map has no node records.</p>
+    </div>`;
+    return;
+  }
+
+  const nodeSource = researchMapNodeSource(snapshot, node);
+  const edges = researchMapNodeEdges(snapshot, node);
+  const receiptKey = receiptKeyForResearchMapNode(snapshot, node);
+  const edgeHtml = edges.length > 0
+    ? `<ul class="map-node-edge-list">${edges.slice(0, 6).map((edge) => {
+      const direction = edge.from === node.id ? "out" : "in";
+      const partner = edge.from === node.id ? edge.to : edge.from;
+      return `<li><span>${escapeHtml(direction)}</span><code>${escapeHtml(partner)}</code>${edge.kind ? ` <small>${escapeHtml(edge.kind)}</small>` : ""}</li>`;
+    }).join("")}</ul>`
+    : `<p class="map-node-muted">No edges recorded for this node.</p>`;
+
+  plotNodeInspector.innerHTML = `<div class="map-node-inspector-card">
+    <div class="map-node-inspector-header">
+      <div>
+        <h5>Selected Node</h5>
+        <strong>${escapeHtml(node.label ?? node.id)}</strong>
+      </div>
+      <span class="mini-label">${escapeHtml(node.kind ?? "map node")}</span>
+    </div>
+    <p>${escapeHtml(node.detail ?? "No node detail recorded.")}</p>
+    <dl class="map-node-facts">
+      <div><dt>Node ID</dt><dd><code>${escapeHtml(node.id ?? "unknown")}</code></dd></div>
+      <div><dt>Source</dt><dd>${escapeHtml(nodeSource.source)}</dd></div>
+      <div><dt>Value</dt><dd>${escapeHtml(nodeSource.value)}</dd></div>
+      <div><dt>Edges</dt><dd>${escapeHtml(String(edges.length))}</dd></div>
+      <div><dt>Snapshot</dt><dd><code>${escapeHtml(snapshot.snapshotId ?? "unknown")}</code></dd></div>
+      <div><dt>Receipt</dt><dd>${snapshot.receiptRef?.runId ? `<code>${escapeHtml(snapshot.receiptRef.runId)}</code>` : "not linked"}</dd></div>
+    </dl>
+    ${edgeHtml}
+    <div class="map-node-actions">
+      <button class="text-button compact-button" data-map-copy-node="${escapeHtml(node.id)}" type="button">Copy node</button>
+      ${receiptKey ? `<button class="text-button compact-button" data-map-open-receipt="${escapeHtml(receiptKey)}" type="button">Open receipt</button>` : ""}
+    </div>
+  </div>`;
+}
+
+function researchMapNodeSource(snapshot, node) {
+  const rows = Array.isArray(snapshot.dataRows) ? snapshot.dataRows : [];
+  const nodeId = String(node.id ?? "");
+  const row = rows.find((candidate) => {
+    const key = String(candidate?.[0] ?? "");
+    return key === nodeId || safeMapNodeId(key, 0) === nodeId;
+  });
+  return {
+    value: String(row?.[1] ?? node.detail ?? "not recorded"),
+    source: String(row?.[2] ?? node.sourceRef ?? node.kind ?? "snapshot.nodes")
+  };
+}
+
+function researchMapNodeEdges(snapshot, node) {
+  const nodeId = node?.id;
+  if (!nodeId) {
+    return [];
+  }
+
+  return (snapshot.edges ?? []).filter((edge) => edge.from === nodeId || edge.to === nodeId);
+}
+
+function receiptKeyForResearchMapNode(snapshot, node) {
+  const source = `${node?.sourceRef ?? ""} ${node?.id ?? ""} ${node?.detail ?? ""}`;
+  const explicitRunId = source.match(/run_[a-zA-Z0-9]+/u)?.[0];
+  if (explicitRunId) {
+    return receiptKeyForRunId(explicitRunId);
+  }
+
+  if (["current-claim", "receipt", "claim"].includes(String(node?.id ?? "")) && snapshot.receiptRef?.runId) {
+    return receiptKeyForRunId(snapshot.receiptRef.runId);
+  }
+
+  if (String(node?.sourceRef ?? "").startsWith("receipt.") && snapshot.receiptRef?.runId) {
+    return receiptKeyForRunId(snapshot.receiptRef.runId);
+  }
+
+  return undefined;
+}
+
+function selectedResearchMapNodePacket(snapshot, node) {
+  const nodeSource = researchMapNodeSource(snapshot, node);
+  const edges = researchMapNodeEdges(snapshot, node);
+  return {
+    schemaVersion: "truth-harness.research-map-node-selection.v0",
+    localOnly: true,
+    networkAccess: "none",
+    snapshotId: snapshot.snapshotId,
+    selectedAt: new Date().toISOString(),
+    node: {
+      id: node.id,
+      label: node.label,
+      detail: node.detail,
+      kind: node.kind,
+      sourceRef: node.sourceRef,
+      tone: node.tone
+    },
+    source: nodeSource,
+    receiptRef: snapshot.receiptRef ?? {},
+    edges
+  };
+}
+
+function selectResearchMapNode(nodeId) {
+  const snapshot = selectedResearchMapSnapshot();
+  if (!snapshot || !nodeId) {
+    return;
+  }
+
+  const node = (snapshot.nodes ?? []).find((item) => item.id === nodeId);
+  if (!node) {
+    return;
+  }
+
+  state.selectedResearchMapNodeId = node.id;
+  addActivity("human", "Selected research map node", `${node.label ?? node.id} inspected from ${snapshot.snapshotId}.`, "passed");
+  render();
+}
+
+async function copySelectedResearchMapNode(button) {
+  const snapshot = selectedResearchMapSnapshot();
+  const node = selectedResearchMapNode(snapshot);
+  if (!snapshot || !node) {
+    return;
+  }
+
+  await copyOrDownloadText({
+    text: `${JSON.stringify(selectedResearchMapNodePacket(snapshot, node), null, 2)}\n`,
+    filename: `${snapshot.snapshotId}-${safeMapNodeId(node.id ?? node.label, 0)}.json`,
+    type: "application/json",
+    button,
+    copiedTitle: "Copied map node packet",
+    copiedDetail: `${node.label ?? node.id} copied with snapshot, source, receipt, and edge refs.`,
+    fallbackTitle: "Downloaded map node packet",
+    fallbackDetail: `${node.label ?? node.id} was saved as a local JSON packet instead.`
+  });
+}
+
+function openResearchMapNodeReceipt(receiptKey) {
+  const receipt = receiptStore.get(receiptKey);
+  if (!receipt) {
+    addActivity("web-ui", "Receipt link missing", `${receiptKey} was not found in the current local receipt store.`, "missing");
+    return;
+  }
+
+  state.receiptKey = receiptKey;
+  state.level = "middle";
+  state.surface = "trace";
+  state.selectedGraphIndex = 0;
+  state.selectedResearchMapSnapshotId = undefined;
+  state.selectedResearchMapNodeId = undefined;
+  state.replayIndex = 0;
+  promptInput.value = receipt.title;
+  promoteRecentReceiptKey(receiptKey);
+  addActivity("human", "Opened map receipt", `${receipt.runId} opened from selected research map node.`, "passed");
+  render();
+  resetActiveSurfaceScroll();
 }
 
 async function copyCurrentPlotData() {
@@ -3580,6 +3804,7 @@ function applyResearchMapPayload(payload) {
   const snapshots = researchMap.snapshots ?? [];
   if (state.selectedResearchMapSnapshotId && !snapshots.some((snapshot) => snapshot.snapshotId === state.selectedResearchMapSnapshotId)) {
     state.selectedResearchMapSnapshotId = undefined;
+    state.selectedResearchMapNodeId = undefined;
   }
 }
 
@@ -3625,6 +3850,16 @@ function receiptRunIdFromEvidenceRef(ref) {
 function receiptKeyForClaimId(claimId) {
   for (const [key, receipt] of receiptStore.entries()) {
     if (receipt.claimId === claimId) {
+      return key;
+    }
+  }
+
+  return undefined;
+}
+
+function receiptKeyForRunId(runId) {
+  for (const [key, receipt] of receiptStore.entries()) {
+    if (receipt.runId === runId) {
       return key;
     }
   }
@@ -6824,6 +7059,7 @@ claimList.addEventListener("click", (event) => {
   state.level = "middle";
   state.selectedGraphIndex = 0;
   state.selectedResearchMapSnapshotId = undefined;
+  state.selectedResearchMapNodeId = undefined;
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
@@ -6847,6 +7083,7 @@ claimLedgerList.addEventListener("click", (event) => {
   state.level = "middle";
   state.selectedGraphIndex = 0;
   state.selectedResearchMapSnapshotId = undefined;
+  state.selectedResearchMapNodeId = undefined;
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
@@ -6878,6 +7115,7 @@ graphDetail.addEventListener("click", (event) => {
   state.level = "middle";
   state.selectedGraphIndex = 0;
   state.selectedResearchMapSnapshotId = undefined;
+  state.selectedResearchMapNodeId = undefined;
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
@@ -6893,6 +7131,8 @@ branchMap.addEventListener("click", (event) => {
   state.receiptKey = button.dataset.receiptKey;
   state.level = "middle";
   state.selectedGraphIndex = 0;
+  state.selectedResearchMapSnapshotId = undefined;
+  state.selectedResearchMapNodeId = undefined;
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
@@ -7052,6 +7292,7 @@ visualModeButtons.forEach((button) => {
     }
 
     state.selectedResearchMapSnapshotId = undefined;
+    state.selectedResearchMapNodeId = undefined;
     state.visualMode = nextMode;
     state.surface = "plot";
     render();
@@ -7096,6 +7337,44 @@ refreshResearchMapButton.addEventListener("click", () => {
   void refreshResearchMap();
 });
 
+plotCanvas.addEventListener("click", (event) => {
+  const nodeElement = event.target.closest("[data-map-node-id]");
+  if (!nodeElement) {
+    return;
+  }
+
+  selectResearchMapNode(nodeElement.dataset.mapNodeId);
+});
+
+plotCanvas.addEventListener("keydown", (event) => {
+  if (!["Enter", " "].includes(event.key)) {
+    return;
+  }
+
+  const nodeElement = event.target.closest("[data-map-node-id]");
+  if (!nodeElement) {
+    return;
+  }
+
+  event.preventDefault();
+  selectResearchMapNode(nodeElement.dataset.mapNodeId);
+});
+
+plotNodeInspector.addEventListener("click", (event) => {
+  const openButton = event.target.closest("[data-map-open-receipt]");
+  if (openButton?.dataset.mapOpenReceipt) {
+    openResearchMapNodeReceipt(openButton.dataset.mapOpenReceipt);
+    return;
+  }
+
+  const copyButton = event.target.closest("[data-map-copy-node]");
+  if (copyButton) {
+    copySelectedResearchMapNode(copyButton).catch((error) => {
+      addActivity("web-ui", "Copy map node failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+    });
+  }
+});
+
 researchMapList.addEventListener("click", (event) => {
   const button = event.target.closest(".research-map-row");
   if (!button?.dataset.mapSnapshotId) {
@@ -7103,6 +7382,7 @@ researchMapList.addEventListener("click", (event) => {
   }
 
   state.selectedResearchMapSnapshotId = button.dataset.mapSnapshotId;
+  state.selectedResearchMapNodeId = undefined;
   state.surface = "plot";
   addActivity("human", "Opened saved research map", `${button.dataset.mapSnapshotId} loaded from local map history.`, "passed");
   render();
@@ -7208,6 +7488,7 @@ composer.addEventListener("submit", async (event) => {
     state.receiptKey = key;
     state.level = "middle";
     state.selectedResearchMapSnapshotId = undefined;
+    state.selectedResearchMapNodeId = undefined;
     state.replayIndex = 0;
     for (const item of payload.activity ?? []) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);

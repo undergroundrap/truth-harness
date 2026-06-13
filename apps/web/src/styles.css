@@ -1922,8 +1922,9 @@ dd {
 }
 
 .plot-layout {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(560px, 1fr) minmax(300px, 360px);
+  align-items: start;
   gap: 10px;
   flex: 1 1 auto;
   min-height: 0;
@@ -1983,7 +1984,7 @@ dd {
   min-width: 0;
   min-height: 0;
   height: auto;
-  max-height: none;
+  max-height: min(64vh, 720px);
   overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid var(--line-soft);
@@ -2001,15 +2002,31 @@ dd {
   height: auto;
 }
 
+.visual-map-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.visual-map-node rect {
+  transition: stroke 140ms ease, filter 140ms ease;
+}
+
+.visual-map-node:hover rect,
+.visual-map-node:focus-visible rect,
+.visual-map-node.active rect {
+  filter: brightness(1.12);
+  stroke-width: 2;
+}
+
 .plot-detail {
   display: grid;
-  grid-template-columns: minmax(220px, 0.75fr) minmax(300px, 1.25fr);
+  grid-template-columns: 1fr;
   align-items: start;
   gap: 12px 16px;
   flex: 0 0 auto;
   min-width: 0;
-  max-height: none;
-  overflow: visible;
+  max-height: min(64vh, 720px);
+  overflow: auto;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: #101010;
@@ -2045,10 +2062,11 @@ dd {
 }
 
 .plot-data {
+  grid-column: 1 / -1;
   min-width: 0;
-  border-left: 1px solid var(--line-soft);
+  border-top: 1px solid var(--line-soft);
   margin-top: 0;
-  padding-left: 16px;
+  padding-top: 12px;
 }
 
 .plot-data h5 {
@@ -2058,7 +2076,7 @@ dd {
 }
 
 .plot-data-table-wrap {
-  max-height: 260px;
+  max-height: 180px;
   overflow: auto;
   border: 1px solid var(--line-soft);
   border-radius: 7px;
@@ -2095,6 +2113,117 @@ dd {
 
 .plot-data-table tr:last-child td {
   border-bottom: 0;
+}
+
+.plot-node-inspector {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #121212;
+  padding: 12px;
+}
+
+.map-node-empty h5,
+.map-node-inspector-header h5 {
+  color: #f1eadc;
+  font-size: 13px;
+  margin: 0 0 6px;
+}
+
+.map-node-empty p,
+.map-node-inspector-card p,
+.map-node-muted {
+  color: #d8d2c8;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.map-node-inspector-card {
+  display: grid;
+  gap: 10px;
+}
+
+.map-node-inspector-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.map-node-inspector-header strong {
+  display: block;
+  color: #f1eadc;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.map-node-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.map-node-facts div {
+  min-width: 0;
+}
+
+.map-node-facts dt {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+
+.map-node-facts dd {
+  color: #f1eadc;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.map-node-edge-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map-node-edge-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  padding: 7px 8px;
+  color: #d8d2c8;
+  font-size: 12px;
+}
+
+.map-node-edge-list span {
+  color: var(--accent);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.map-node-edge-list code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-node-edge-list small {
+  color: var(--muted);
+}
+
+.map-node-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .research-map-history {
@@ -2172,6 +2301,7 @@ dd {
   }
 
   .plot-canvas {
+    max-height: none;
     overflow: visible;
   }
 
@@ -2182,10 +2312,23 @@ dd {
   }
 
   .plot-data {
-    border-left: 0;
     border-top: 1px solid var(--line-soft);
-    padding-left: 0;
     padding-top: 12px;
+  }
+}
+
+@container (max-width: 1040px) {
+  .plot-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .plot-detail {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .plot-canvas {
+    max-height: none;
   }
 }
 
