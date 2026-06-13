@@ -214,6 +214,15 @@ let claimLedgerGraph = {
   edges: [],
   warnings: []
 };
+let researchMap = {
+  schemaVersion: "truth-harness.research-map.v0",
+  mapId: "research_map_local",
+  localOnly: true,
+  networkAccess: "none",
+  snapshotCount: 0,
+  snapshots: [],
+  warnings: []
+};
 const recentReceiptKeys = ["rational", "denominator", "parity", "dimension"];
 const ACTIVITY_PAGE_SIZE = 12;
 const NOTES_STORAGE_KEY = "truth-harness.session-notes.v0";
@@ -237,6 +246,7 @@ const state = {
   sidebarQuery: "",
   claimLedgerQuery: "",
   routeHistoryQuery: "",
+  selectedResearchMapSnapshotId: undefined,
   sidebarCollapsed: false,
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE,
@@ -376,6 +386,8 @@ const plotFacts = document.querySelector("#plot-facts");
 const plotData = document.querySelector("#plot-data");
 const researchMapStatus = document.querySelector("#research-map-status");
 const saveResearchMapButton = document.querySelector("#save-research-map");
+const refreshResearchMapButton = document.querySelector("#refresh-research-map");
+const researchMapList = document.querySelector("#research-map-list");
 const copyPlotDataButton = document.querySelector("#copy-plot-data");
 const downloadPlotDataButton = document.querySelector("#download-plot-data");
 const downloadPlotSvgButton = document.querySelector("#download-plot-svg");
@@ -973,6 +985,7 @@ render();
 void refreshSafetyStatus();
 void refreshClaimLedger();
 void refreshRouteLedger();
+void refreshResearchMap();
 void refreshWorkspaceReview();
 void refreshCasChecks();
 void refreshSmtChecks();
@@ -1266,12 +1279,15 @@ function renderMathPlot(receipt) {
     return;
   }
 
-  const plot = createVisualModel(receipt, state.visualMode);
+  const selectedMapSnapshot = selectedResearchMapSnapshot();
+  const plot = selectedMapSnapshot ? createSavedResearchMapVisualModel(selectedMapSnapshot) : createVisualModel(receipt, state.visualMode);
   if (plotKind) {
     plotKind.textContent = plot.kind;
   }
   if (researchMapStatus) {
-    researchMapStatus.textContent = `${plot.kind} can be saved locally`;
+    researchMapStatus.textContent = selectedMapSnapshot
+      ? `${selectedMapSnapshot.snapshotId} opened from local map`
+      : `${plot.kind} can be saved locally`;
   }
   plotTitle.textContent = plot.title;
   plotCaption.textContent = plot.caption;
@@ -1282,10 +1298,12 @@ function renderMathPlot(receipt) {
     .join("");
   plotData.innerHTML = renderPlotDataTable(plot);
   visualModeButtons.forEach((button) => {
-    const active = button.dataset.visualMode === state.visualMode;
+    const activeMode = selectedMapSnapshot?.visualMode ?? state.visualMode;
+    const active = button.dataset.visualMode === activeMode;
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
   });
+  renderResearchMapHistory();
 }
 
 function createVisualModel(receipt, mode) {
@@ -2265,7 +2283,149 @@ function csvCell(value) {
 
 function currentPlotModel() {
   const receipt = receiptStore.get(state.receiptKey);
+  const savedSnapshot = selectedResearchMapSnapshot();
+  if (savedSnapshot) {
+    return createSavedResearchMapVisualModel(savedSnapshot);
+  }
+
   return receipt ? createVisualModel(receipt, state.visualMode) : undefined;
+}
+
+function selectedResearchMapSnapshot() {
+  if (!state.selectedResearchMapSnapshotId) {
+    return undefined;
+  }
+
+  const snapshot = (researchMap.snapshots ?? []).find((item) => item.snapshotId === state.selectedResearchMapSnapshotId);
+  if (!snapshot) {
+    state.selectedResearchMapSnapshotId = undefined;
+    return undefined;
+  }
+
+  return snapshot;
+}
+
+function createSavedResearchMapVisualModel(snapshot) {
+  const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : [];
+  const edges = Array.isArray(snapshot.edges) ? snapshot.edges : [];
+  const layoutNodes = layoutResearchMapNodes(nodes);
+  const layoutById = new Map(layoutNodes.map((node) => [node.id, node]));
+  const width = 1180;
+  const height = Math.max(460, 190 + Math.ceil(Math.max(1, layoutNodes.length) / 3) * 148);
+  const edgeSvg = edges
+    .map((edge) => {
+      const from = layoutById.get(edge.from);
+      const to = layoutById.get(edge.to);
+      if (!from || !to) {
+        return "";
+      }
+
+      return `<g>
+        <line x1="${from.x + from.width / 2}" y1="${from.y + from.height / 2}" x2="${to.x + to.width / 2}" y2="${to.y + to.height / 2}" stroke="#343230" stroke-width="2" />
+        ${edge.label ? `<text x="${(from.x + to.x) / 2 + 72}" y="${(from.y + to.y) / 2 + 22}" fill="#8f8a83" font-size="11">${escapeXml(edge.label)}</text>` : ""}
+      </g>`;
+    })
+    .join("");
+
+  return {
+    kind: `saved ${snapshot.kind ?? "map"}`,
+    title: snapshot.title ?? "Saved Research Map",
+    caption: `${snapshot.caption ?? "Saved local research map snapshot."} Snapshot ${snapshot.snapshotId ?? "unknown"} was loaded from .truth-harness/artifacts/research-map.json.`,
+    svg: `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Saved research map snapshot">
+      <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+      <text x="44" y="44" fill="#f2f2ee" font-size="23" font-weight="750">${escapeXml(snapshot.title ?? "Saved Research Map")}</text>
+      <text x="44" y="72" fill="#aaa59d" font-size="13">opened from local research-map artifact - ${escapeXml(snapshot.snapshotId ?? "snapshot")}</text>
+      ${edgeSvg}
+      ${layoutNodes.map((node) => conceptNodeSvg(node)).join("")}
+    </svg>`,
+    facts: [
+      ["Snapshot", snapshot.snapshotId ?? "unknown"],
+      ["Saved", snapshot.createdAt ? formatActivityTime(snapshot.createdAt) : "unknown"],
+      ["Nodes", String(nodes.length)],
+      ["Edges", String(edges.length)],
+      ["Source receipt", snapshot.receiptRef?.runId ?? "not recorded"],
+      ["Network", snapshot.privacy?.networkAccess ?? snapshot.networkAccess ?? "none"]
+    ],
+    dataColumns: snapshot.dataColumns?.length ? snapshot.dataColumns : ["node", "value", "source"],
+    dataRows: snapshot.dataRows?.length
+      ? snapshot.dataRows
+      : nodes.map((node) => [node.label ?? node.id, node.detail ?? "", node.sourceRef ?? node.kind ?? "saved map"]),
+    mapNodes: nodes,
+    mapEdges: edges,
+    sourceVisualMode: snapshot.visualMode
+  };
+}
+
+function layoutResearchMapNodes(nodes) {
+  const safeNodes = nodes.length > 0
+    ? nodes
+    : [{ id: "empty-map", label: "Empty map", detail: "No nodes were saved in this snapshot.", tone: "warn" }];
+  const centerNode = safeNodes[0];
+  const output = [{
+    id: centerNode.id ?? "root",
+    label: centerNode.label ?? "Root",
+    detail: centerNode.detail ?? "",
+    x: 450,
+    y: 132,
+    width: 280,
+    height: 92,
+    tone: centerNode.tone ?? "good"
+  }];
+  const positions = [
+    [86, 120],
+    [820, 120],
+    [86, 284],
+    [820, 284],
+    [450, 342],
+    [86, 448],
+    [820, 448],
+    [450, 506]
+  ];
+  for (const [index, node] of safeNodes.slice(1, 9).entries()) {
+    const [x, y] = positions[index] ?? [86 + (index % 3) * 360, 640 + Math.floor(index / 3) * 140];
+    output.push({
+      id: node.id ?? `node-${index + 2}`,
+      label: node.label ?? `Node ${index + 2}`,
+      detail: node.detail ?? "",
+      x,
+      y,
+      width: 268,
+      height: 86,
+      tone: node.tone ?? "muted"
+    });
+  }
+
+  return output;
+}
+
+function renderResearchMapHistory() {
+  if (!researchMapList) {
+    return;
+  }
+
+  const snapshots = [...(researchMap.snapshots ?? [])].reverse();
+  if (snapshots.length === 0) {
+    researchMapList.innerHTML = `<div class="activity-empty">No saved maps yet. Use Save map to write the current visual to the local artifact ledger.</div>`;
+    return;
+  }
+
+  researchMapList.innerHTML = snapshots
+    .slice(0, 8)
+    .map((snapshot) => {
+      const active = snapshot.snapshotId === state.selectedResearchMapSnapshotId;
+      const nodeCount = Array.isArray(snapshot.nodes) ? snapshot.nodes.length : 0;
+      const edgeCount = Array.isArray(snapshot.edges) ? snapshot.edges.length : 0;
+      const title = snapshot.title ?? "Saved Research Map";
+      const receipt = snapshot.receiptRef?.title ?? snapshot.receiptRef?.runId ?? "local artifact";
+      return `<button class="research-map-row ${active ? "active" : ""}" data-map-snapshot-id="${escapeHtml(snapshot.snapshotId)}" type="button">
+        <span>
+          <strong>${escapeHtml(title)}</strong>
+          <small>${escapeHtml(snapshot.kind ?? "map")} - ${escapeHtml(formatActivityTime(snapshot.createdAt))}</small>
+          <small>${escapeHtml(receipt)} - ${nodeCount} nodes / ${edgeCount} edges</small>
+        </span>
+      </button>`;
+    })
+    .join("");
 }
 
 async function copyCurrentPlotData() {
@@ -2338,6 +2498,7 @@ async function saveCurrentResearchMap() {
     });
     const payload = await readLocalApiJson(response, "Local research map API failed.");
     const savedSnapshot = payload.snapshot ?? snapshot;
+    applyResearchMapPayload(payload);
     updateLatestActivity(
       "Saving research map",
       "passed",
@@ -2350,6 +2511,7 @@ async function saveCurrentResearchMap() {
       const snapshotCount = payload.map?.snapshotCount ?? 1;
       researchMapStatus.textContent = `${snapshotCount} saved map snapshot${snapshotCount === 1 ? "" : "s"}`;
     }
+    renderResearchMapHistory();
     saved = true;
   } catch (error) {
     updateLatestActivity("Saving research map", "refuted", error instanceof Error ? error.message : "Unknown research map failure.");
@@ -3382,6 +3544,43 @@ function applyClaimLedgerPayload(payload) {
     warnings: []
   };
   linkClaimLedgerToReceipts();
+}
+
+async function refreshResearchMap({ announce = true } = {}) {
+  try {
+    const response = await fetch("/api/research-map", {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local research map API failed.");
+    applyResearchMapPayload(payload);
+    if (announce) {
+      const count = researchMap.snapshotCount ?? researchMap.snapshots?.length ?? 0;
+      addActivity(
+        "local-api",
+        "Loaded research map",
+        localApiSuccessMessage(payload, `${count} saved map snapshot${count === 1 ? "" : "s"} available.`),
+        "passed"
+      );
+    }
+    render();
+  } catch (error) {
+    if (researchMapStatus) {
+      researchMapStatus.textContent = "map ledger unavailable";
+    }
+    if (researchMapList) {
+      researchMapList.innerHTML = `<div class="activity-empty">Saved maps unavailable from the local API.</div>`;
+    }
+    addActivity("local-api", "Research map unavailable", error instanceof Error ? error.message : "Unknown research map failure.", "waiting");
+  }
+}
+
+function applyResearchMapPayload(payload) {
+  researchMap = payload.map ?? researchMap;
+  const snapshots = researchMap.snapshots ?? [];
+  if (state.selectedResearchMapSnapshotId && !snapshots.some((snapshot) => snapshot.snapshotId === state.selectedResearchMapSnapshotId)) {
+    state.selectedResearchMapSnapshotId = undefined;
+  }
 }
 
 function linkClaimLedgerToReceipts() {
@@ -6624,6 +6823,7 @@ claimList.addEventListener("click", (event) => {
   state.receiptKey = button.dataset.receipt;
   state.level = "middle";
   state.selectedGraphIndex = 0;
+  state.selectedResearchMapSnapshotId = undefined;
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
@@ -6646,6 +6846,7 @@ claimLedgerList.addEventListener("click", (event) => {
   state.receiptKey = key;
   state.level = "middle";
   state.selectedGraphIndex = 0;
+  state.selectedResearchMapSnapshotId = undefined;
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
@@ -6676,6 +6877,7 @@ graphDetail.addEventListener("click", (event) => {
   state.receiptKey = key;
   state.level = "middle";
   state.selectedGraphIndex = 0;
+  state.selectedResearchMapSnapshotId = undefined;
   state.replayIndex = 0;
   promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
   render();
@@ -6840,10 +7042,16 @@ surfaceTabs.forEach((button) => {
 visualModeButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const nextMode = button.dataset.visualMode;
-    if (!nextMode || nextMode === state.visualMode) {
+    if (!nextMode) {
       return;
     }
 
+    const alreadyLive = nextMode === state.visualMode && !state.selectedResearchMapSnapshotId;
+    if (alreadyLive) {
+      return;
+    }
+
+    state.selectedResearchMapSnapshotId = undefined;
     state.visualMode = nextMode;
     state.surface = "plot";
     render();
@@ -6883,6 +7091,23 @@ copyRouteLedgerButton.addEventListener("click", () => {
 });
 
 downloadRouteLedgerButton.addEventListener("click", downloadRouteLedgerPacket);
+
+refreshResearchMapButton.addEventListener("click", () => {
+  void refreshResearchMap();
+});
+
+researchMapList.addEventListener("click", (event) => {
+  const button = event.target.closest(".research-map-row");
+  if (!button?.dataset.mapSnapshotId) {
+    return;
+  }
+
+  state.selectedResearchMapSnapshotId = button.dataset.mapSnapshotId;
+  state.surface = "plot";
+  addActivity("human", "Opened saved research map", `${button.dataset.mapSnapshotId} loaded from local map history.`, "passed");
+  render();
+  resetActiveSurfaceScroll();
+});
 
 saveResearchMapButton.addEventListener("click", () => {
   saveCurrentResearchMap().catch((error) => {
@@ -6982,6 +7207,7 @@ composer.addEventListener("submit", async (event) => {
     setReplayPlaying(false);
     state.receiptKey = key;
     state.level = "middle";
+    state.selectedResearchMapSnapshotId = undefined;
     state.replayIndex = 0;
     for (const item of payload.activity ?? []) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);

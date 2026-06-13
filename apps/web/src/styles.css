@@ -2097,6 +2097,75 @@ dd {
   border-bottom: 0;
 }
 
+.research-map-history {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 12px;
+}
+
+.research-map-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.research-map-history h5 {
+  color: #f1eadc;
+  font-size: 13px;
+  margin: 0;
+}
+
+.research-map-list {
+  display: grid;
+  gap: 7px;
+  max-height: 220px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.research-map-row {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #121212;
+  color: var(--text);
+  cursor: pointer;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.research-map-row:hover,
+.research-map-row.active {
+  border-color: rgba(183, 169, 138, 0.46);
+  background: #191714;
+}
+
+.research-map-row strong,
+.research-map-row small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.research-map-row strong {
+  color: #f1eadc;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.research-map-row small {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 3px;
+}
+
 @container (max-width: 760px) {
   .math-overview-grid {
     grid-template-columns: minmax(0, 1fr);
