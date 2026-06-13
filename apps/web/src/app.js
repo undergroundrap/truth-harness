@@ -1091,9 +1091,15 @@ function verifierRouteObligationItems(receipt) {
   }
 
   return obligations.map((obligation) => {
-    const command = obligation.command ? ` <code>${escapeHtml(obligation.command)}</code>` : "";
+    const command = obligation.command ?? commandForObligation(obligation, receipt);
     const satisfiedBy = routeObligationEvidenceHtml(obligation);
-    return `<strong>${escapeHtml(obligation.title)}</strong> <code>${escapeHtml(obligation.obligationId)}</code>: ${escapeHtml(obligation.requiredBefore)}${command}${satisfiedBy}`;
+    return `<strong>${escapeHtml(obligation.title)}</strong> <code>${escapeHtml(obligation.obligationId)}</code>: ${escapeHtml(obligation.requiredBefore)}
+      <ul class="report-sublist">
+        <li>Close with: ${escapeHtml(obligationEvidencePath(obligation))}</li>
+        <li>Acceptance: ${escapeHtml(obligationAcceptanceSummary(obligation))}</li>
+        <li>Command: <code>${escapeHtml(command)}</code></li>
+      </ul>
+      ${satisfiedBy}`;
   });
 }
 
@@ -2625,8 +2631,13 @@ function createRunbookPacket(receipt) {
     openGates: openGates.map((row) => ({
       label: row.label,
       status: statusLabel(row.status),
+      obligationId: row.obligationId,
+      obligationKind: row.obligationKind,
       command: row.command,
-      nextCheck: row.description
+      nextCheck: row.description,
+      evidencePath: row.evidencePath,
+      acceptanceSummary: row.acceptanceSummary,
+      attachedEvidenceSummary: row.attachedEvidenceSummary
     })),
     loop: protocol.verificationGates,
     ledger: protocol.acceptedEvidence,
@@ -2640,7 +2651,15 @@ function createRunbookPacket(receipt) {
 
 function formatRunbookPacket(packet) {
   const openGateLines = packet.openGates.length > 0
-    ? packet.openGates.map((gate) => `- ${gate.label}: ${gate.status}; run ${gate.command}; ${gate.nextCheck}`).join("\n")
+    ? packet.openGates.flatMap((gate) => [
+      `- ${gate.label}: ${gate.status}`,
+      ...(gate.obligationId ? [`  - Obligation: ${gate.obligationId} (${gate.obligationKind ?? "evidence"})`] : []),
+      `  - Command: ${gate.command}`,
+      ...(gate.evidencePath ? [`  - Close with: ${gate.evidencePath}`] : []),
+      ...(gate.acceptanceSummary ? [`  - Accept when: ${gate.acceptanceSummary}`] : []),
+      ...(gate.attachedEvidenceSummary ? [`  - Attached: ${gate.attachedEvidenceSummary}`] : []),
+      `  - Next check: ${gate.nextCheck}`
+    ]).join("\n")
     : "- No open gates. Prepare narrow reviewer packet.";
   const environmentFacts = Object.entries(packet.environment?.facts ?? {});
   const environmentCommands = Object.entries(packet.environment?.commands ?? {});
@@ -2742,7 +2761,8 @@ function renderVerificationMatrix(receipt) {
           <span>${escapeHtml(statusLabel(row.status))}</span>
         </div>
         <p>${escapeHtml(row.description)}</p>
-        <code>${escapeHtml(row.command)}</code>
+        ${verificationRowObligationHtml(row)}
+        <code class="matrix-command">${escapeHtml(row.command)}</code>
         ${verificationRowActionHtml(row)}
       </div>
     </article>`)
@@ -2757,6 +2777,35 @@ function renderVerificationMatrix(receipt) {
       <small>${escapeHtml(statusLabel(row.status))}</small>
     </div>`)
     .join("");
+}
+
+function verificationRowObligationHtml(row) {
+  if (!row.obligationId) {
+    return "";
+  }
+
+  const severity = row.severity ? `<span>${escapeHtml(row.severity)}</span>` : "";
+  return `<div class="obligation-work-order">
+    <div class="obligation-meta">
+      <code>${escapeHtml(row.obligationId)}</code>
+      <span>${escapeHtml(row.obligationKind ?? "evidence")}</span>
+      ${severity}
+    </div>
+    <dl class="obligation-facts">
+      <div>
+        <dt>Close with</dt>
+        <dd>${escapeHtml(row.evidencePath ?? "Replayable local evidence artifact.")}</dd>
+      </div>
+      <div>
+        <dt>Accept when</dt>
+        <dd>${escapeHtml(row.acceptanceSummary ?? "The matching verifier accepts the artifact.")}</dd>
+      </div>
+      <div>
+        <dt>Attached</dt>
+        <dd>${escapeHtml(row.attachedEvidenceSummary ?? "No evidence attached yet.")}</dd>
+      </div>
+    </dl>
+  </div>`;
 }
 
 function renderEvidenceArtifactList(receipt) {
@@ -3277,6 +3326,12 @@ function routeObligationVerificationRows(receipt) {
           obligation.nextStep,
           obligation.satisfactionSummary
         ].filter(Boolean).join(" "),
+        severity: obligation.severity,
+        requiredBefore: obligation.requiredBefore,
+        nextStep: obligation.nextStep,
+        evidencePath: obligationEvidencePath(obligation),
+        acceptanceSummary: obligationAcceptanceSummary(obligation),
+        attachedEvidenceSummary: routeObligationAttachedEvidenceSummary(obligation),
         status: obligation.status === "satisfied"
           ? "passed"
           : obligation.severity === "critical" ? "missing" : "waiting",
@@ -3308,6 +3363,50 @@ function commandForObligation(obligation, receipt) {
   }
 
   return receipt.replay;
+}
+
+function obligationEvidencePath(obligation) {
+  if (obligation.kind === "formal-proof") {
+    return "Accepted proof-check record from .theorem-workbench/proofs, or a proof-checker-backed receipt/route labeled proved.";
+  }
+
+  if (obligation.kind === "solver-encoding") {
+    return "SMT-check record from .theorem-workbench/smt with trust smt-checked, or stronger proof evidence.";
+  }
+
+  if (obligation.kind === "independent-check") {
+    return "Independent CAS-check record from .theorem-workbench/cas with trust cross-checked, or stronger SMT/proof evidence.";
+  }
+
+  return "Replayable evidence artifact stronger than unverified, with the local artifact path attached to this route.";
+}
+
+function obligationAcceptanceSummary(obligation) {
+  if (obligation.satisfactionSummary) {
+    return obligation.satisfactionSummary;
+  }
+
+  const criteria = Array.isArray(obligation.acceptanceCriteria) ? obligation.acceptanceCriteria : [];
+  if (criteria.length > 0) {
+    return criteria[0];
+  }
+
+  return "Attach a replayable local evidence artifact that satisfies this obligation kind.";
+}
+
+function routeObligationAttachedEvidenceSummary(obligation) {
+  const refs = Array.isArray(obligation.satisfiedBy) ? obligation.satisfiedBy : [];
+  if (refs.length === 0) {
+    return "No evidence attached yet.";
+  }
+
+  if (refs.length === 1) {
+    const ref = refs[0];
+    const trust = ref.trust ? ` (${ref.trust})` : "";
+    return `${ref.kind}:${ref.ref}${trust}`;
+  }
+
+  return `${refs.length} evidence refs attached.`;
 }
 
 function casOperationForReceipt(receipt) {
