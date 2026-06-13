@@ -361,6 +361,10 @@ const answerValue = document.querySelector(".answer-value");
 const answerLabel = document.querySelector(".answer-label");
 const promptMath = document.querySelector("#prompt-math");
 const receiptSummary = document.querySelector(".receipt-summary");
+const mathSurfaceStatus = document.querySelector("#math-surface-status");
+const mathSurfaceProblem = document.querySelector("#math-surface-problem");
+const mathSurfaceResult = document.querySelector("#math-surface-result");
+const mathSurfaceFacts = document.querySelector("#math-surface-facts");
 const promptInput = document.querySelector("#prompt-input");
 const composer = document.querySelector("#composer");
 const verifyButton = document.querySelector("#verify-button");
@@ -378,8 +382,8 @@ const taskDockState = document.querySelector("#task-dock-state");
 const taskDockSummary = document.querySelector("#task-dock-summary");
 const taskList = document.querySelector("#task-list");
 const surfaceStatusText = {
-  trace: "explainable steps",
-  plot: "visual lab",
+  trace: "math workspace",
+  plot: "visual modes",
   runbook: "agent harness",
   checks: "verification gates",
   graph: "claim lineage",
@@ -989,6 +993,16 @@ function render() {
   answerValue.setAttribute("aria-label", receipt.output);
   answerLabel.textContent = receipt.trust === "refuted" ? "counterexample" : "verified output";
   promptMath.innerHTML = renderMathInline(receipt.math?.input ?? receipt.title);
+  if (mathSurfaceStatus && mathSurfaceProblem && mathSurfaceResult && mathSurfaceFacts) {
+    mathSurfaceStatus.textContent = `${receipt.trust} / ${receipt.engine}`;
+    mathSurfaceProblem.innerHTML = renderMathInline(receipt.math?.input ?? receipt.title);
+    mathSurfaceResult.innerHTML = renderMathInline(receipt.math?.output ?? receipt.output);
+    mathSurfaceFacts.innerHTML = [
+      ["Trust", receipt.trust],
+      ["Engine", receipt.engine],
+      ["Replay", receipt.replay]
+    ].map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("");
+  }
   replayCommand.textContent = receipt.replay;
   receiptSummary.innerHTML = [
     receipt.runId,
@@ -1246,12 +1260,14 @@ function renderClaimList() {
 }
 
 function renderMathPlot(receipt) {
-  if (!plotCanvas || !plotKind || !plotTitle || !plotCaption || !plotFacts || !plotData) {
+  if (!plotCanvas || !plotTitle || !plotCaption || !plotFacts || !plotData) {
     return;
   }
 
   const plot = createVisualModel(receipt, state.visualMode);
-  plotKind.textContent = plot.kind;
+  if (plotKind) {
+    plotKind.textContent = plot.kind;
+  }
   plotTitle.textContent = plot.title;
   plotCaption.textContent = plot.caption;
   plotCanvas.innerHTML = plot.svg;
@@ -1571,6 +1587,17 @@ function visualLevelLabel(level) {
     college: "College",
     expert: "Expert"
   }[level] ?? String(level ?? "selected");
+}
+
+function visualModeLabel(mode) {
+  return {
+    "number-line": "number line",
+    "fraction-bars": "fraction bars",
+    "step-flow": "step flow",
+    "concept-map": "concept map",
+    "trust-ladder": "trust ladder",
+    "bubble-map": "bubble map"
+  }[mode] ?? String(mode ?? "visual mode");
 }
 
 function visualStatusColor(status) {
@@ -3353,7 +3380,19 @@ function renderSurface() {
     panel.hidden = !active;
     panel.setAttribute("aria-hidden", String(!active));
   });
-  surfaceStatus.textContent = surfaceStatusText[state.surface] ?? "local surface";
+  surfaceStatus.textContent = surfaceStatusLabel();
+}
+
+function surfaceStatusLabel() {
+  if (state.surface === "trace") {
+    return `${visualLevelLabel(state.level)} math`;
+  }
+
+  if (state.surface === "plot") {
+    return visualModeLabel(state.visualMode);
+  }
+
+  return surfaceStatusText[state.surface] ?? "local surface";
 }
 
 function resetActiveSurfaceScroll() {

@@ -213,7 +213,7 @@
             <section class="work-surface" aria-label="Evidence work surface">
               <div class="surface-header">
                 <div class="surface-tabs" role="tablist" aria-label="Workbench view">
-                  <button class="surface-tab active" id="tab-trace" role="tab" aria-controls="surface-trace" aria-selected="true" data-surface="trace" type="button">Trace</button>
+                  <button class="surface-tab active" id="tab-trace" role="tab" aria-controls="surface-trace" aria-selected="true" data-surface="trace" type="button">Math</button>
                   <button class="surface-tab" id="tab-plot" role="tab" aria-controls="surface-plot" aria-selected="false" data-surface="plot" type="button">Visuals</button>
                   <button class="surface-tab" id="tab-runbook" role="tab" aria-controls="surface-runbook" aria-selected="false" data-surface="runbook" type="button">Run</button>
                   <button class="surface-tab" id="tab-checks" role="tab" aria-controls="surface-checks" aria-selected="false" data-surface="checks" type="button">Checks</button>
@@ -224,13 +224,16 @@
                   <button class="surface-tab" id="tab-report" role="tab" aria-controls="surface-report" aria-selected="false" data-surface="report" type="button">Report</button>
                 </div>
                 <div class="surface-actions" id="surface-actions">
-                  <span class="surface-status" id="surface-status">trace view</span>
+                  <span class="surface-status" id="surface-status">math workspace</span>
                 </div>
               </div>
 
-              <section class="surface-panel active" id="surface-trace" role="tabpanel" aria-labelledby="tab-trace" data-surface-panel="trace" tabindex="0" aria-label="Trace">
-                <div class="panel-heading">
-                  <h3>Trace</h3>
+              <section class="surface-panel active" id="surface-trace" role="tabpanel" aria-labelledby="tab-trace" data-surface-panel="trace" tabindex="0" aria-label="Math workspace">
+                <div class="panel-heading math-heading">
+                  <div>
+                    <h3>Math</h3>
+                    <span class="mini-label" id="math-surface-status">verified route</span>
+                  </div>
                   <div class="segmented" role="tablist" aria-label="Explanation level">
                     <button class="segment active" data-level="middle" type="button">Middle</button>
                     <button class="segment" data-level="high" type="button">High</button>
@@ -238,14 +241,31 @@
                     <button class="segment" data-level="expert" type="button">Expert</button>
                   </div>
                 </div>
+                <div class="math-overview-grid" aria-label="Current math receipt">
+                  <article class="math-overview-card">
+                    <span>Problem</span>
+                    <div class="math-overview-expression" id="math-surface-problem"></div>
+                  </article>
+                  <article class="math-overview-card math-overview-result">
+                    <span>Result</span>
+                    <div class="math-overview-expression" id="math-surface-result"></div>
+                  </article>
+                  <article class="math-overview-card">
+                    <span>Receipt</span>
+                    <dl class="math-overview-facts" id="math-surface-facts"></dl>
+                  </article>
+                </div>
+                <div class="surface-subheading">
+                  <h4>Steps</h4>
+                  <span>same receipt, selected audience level</span>
+                </div>
                 <ol class="trace-list" id="trace-list"></ol>
               </section>
 
               <section class="surface-panel" id="surface-plot" role="tabpanel" aria-labelledby="tab-plot" data-surface-panel="plot" tabindex="0" aria-label="Math visuals" hidden>
                 <div class="panel-heading plot-heading">
                   <div>
-                    <h3>Visual Lab</h3>
-                    <span class="mini-label" id="plot-kind">exact visualization</span>
+                    <h3>Visuals</h3>
                   </div>
                   <div class="activity-actions" aria-label="Visual actions">
                     <button class="text-button compact-button" id="copy-plot-data" type="button">Copy data</button>

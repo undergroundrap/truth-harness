@@ -911,6 +911,11 @@ body[data-surface="graph"] .receipt-summary {
   align-self: center;
 }
 
+.thread-panel > .user-message,
+.thread-panel > .engine-message {
+  display: none;
+}
+
 .message-meta {
   color: var(--muted);
   font-size: 12px;
@@ -1231,6 +1236,78 @@ body[data-surface="graph"] .receipt-summary {
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.math-heading > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.math-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(220px, 1fr);
+  gap: 10px;
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+}
+
+.math-overview-card {
+  min-width: 0;
+  min-height: 108px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  padding: 11px 12px;
+}
+
+.math-overview-card > span {
+  display: block;
+  color: var(--faint);
+  font-size: 11px;
+  margin-bottom: 7px;
+}
+
+.math-overview-expression {
+  min-width: 0;
+  overflow: visible;
+  color: #f2eadc;
+  font: 18px/1.35 Georgia, "Times New Roman", serif;
+}
+
+.math-overview-result .math-overview-expression {
+  font-size: 22px;
+  font-weight: 750;
+}
+
+.math-overview-facts {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.math-overview-facts div {
+  display: grid;
+  grid-template-columns: minmax(52px, 0.48fr) minmax(0, 1.52fr);
+  gap: 8px;
+}
+
+.surface-subheading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 0 0 auto;
+  margin: 0 0 8px;
+}
+
+.surface-subheading h4 {
+  margin: 0;
+  color: #f2eadc;
+  font-size: 13px;
+}
+
+.surface-subheading span {
+  color: var(--faint);
+  font-size: 12px;
 }
 
 h3 {
@@ -1883,13 +1960,12 @@ dd {
 }
 
 .plot-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(248px, 300px);
-  align-items: stretch;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
   padding-right: 2px;
   scrollbar-gutter: stable;
 }
@@ -1938,11 +2014,12 @@ dd {
 .plot-canvas {
   display: grid;
   place-items: start stretch;
+  flex: 0 0 auto;
   min-width: 0;
   min-height: 0;
-  height: 100%;
-  max-height: 100%;
-  overflow: auto;
+  height: auto;
+  max-height: none;
+  overflow: hidden;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: #101010;
@@ -1954,18 +2031,19 @@ dd {
   display: block;
   width: 100%;
   min-width: 0;
-  min-height: 280px;
+  min-height: clamp(260px, 36vh, 390px);
   height: auto;
 }
 
 .plot-detail {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-content: start;
-  gap: 12px;
+  grid-template-columns: minmax(220px, 0.75fr) minmax(300px, 1.25fr);
+  align-items: start;
+  gap: 12px 16px;
+  flex: 0 0 auto;
   min-width: 0;
-  max-height: 100%;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: #101010;
@@ -2002,9 +2080,9 @@ dd {
 
 .plot-data {
   min-width: 0;
-  border-top: 1px solid var(--line-soft);
-  margin-top: 2px;
-  padding-top: 12px;
+  border-left: 1px solid var(--line-soft);
+  margin-top: 0;
+  padding-left: 16px;
 }
 
 .plot-data h5 {
@@ -2054,22 +2132,25 @@ dd {
 }
 
 @container (max-width: 760px) {
-  .plot-layout {
-    display: flex;
-    flex-direction: column;
-    overflow: auto;
+  .math-overview-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .plot-canvas {
-    height: auto;
-    min-height: 0;
-    max-height: none;
     overflow: visible;
   }
 
   .plot-detail {
+    grid-template-columns: 1fr;
     max-height: none;
     overflow: visible;
+  }
+
+  .plot-data {
+    border-left: 0;
+    border-top: 1px solid var(--line-soft);
+    padding-left: 0;
+    padding-top: 12px;
   }
 }
 
@@ -3788,16 +3869,11 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .plot-layout {
-    display: flex;
-    flex-direction: column;
-    overflow: auto;
+  .math-overview-grid {
+    grid-template-columns: 1fr;
   }
 
   .plot-canvas {
-    height: auto;
-    min-height: 0;
-    max-height: none;
     overflow: visible;
   }
 
@@ -3808,7 +3884,9 @@ textarea:focus-visible {
   }
 
   .plot-data {
+    border-left: 0;
     border-top: 1px solid var(--line-soft);
+    padding-left: 0;
     padding-top: 12px;
   }
 
