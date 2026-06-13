@@ -1172,6 +1172,14 @@ body[data-surface="graph"] .work-surface {
   scrollbar-gutter: stable;
 }
 
+.surface-panel:focus {
+  outline: none;
+}
+
+.surface-panel:focus-visible {
+  box-shadow: inset 0 0 0 1px rgba(183, 169, 138, 0.28);
+}
+
 #surface-protocol.active {
   overflow: auto;
   padding-right: 2px;
@@ -2224,6 +2232,67 @@ dd {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.map-thought-form {
+  display: grid;
+  gap: 9px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+}
+
+.map-thought-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.map-thought-form-header strong {
+  color: #f1eadc;
+  font-size: 13px;
+}
+
+.map-thought-form label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.map-thought-form label span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.map-thought-form input,
+.map-thought-form select,
+.map-thought-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0f0f0f;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 8px 9px;
+}
+
+.map-thought-form textarea {
+  resize: vertical;
+  min-height: 74px;
+  line-height: 1.45;
+}
+
+.map-thought-form input:focus,
+.map-thought-form select:focus,
+.map-thought-form textarea:focus {
+  border-color: rgba(183, 169, 138, 0.58);
+  outline: none;
+}
+
+.map-thought-form button[type="submit"] {
+  justify-self: start;
 }
 
 .research-map-history {

@@ -2530,6 +2530,31 @@ function renderResearchMapNodeInspector(snapshot, plot) {
       <button class="text-button compact-button" data-map-copy-node="${escapeHtml(node.id)}" type="button">Copy node</button>
       ${receiptKey ? `<button class="text-button compact-button" data-map-open-receipt="${escapeHtml(receiptKey)}" type="button">Open receipt</button>` : ""}
     </div>
+    <form class="map-thought-form" data-map-thought-form>
+      <div class="map-thought-form-header">
+        <strong>Add Linked Thought</strong>
+        <span class="mini-label">local snapshot</span>
+      </div>
+      <label>
+        <span>Type</span>
+        <select name="kind">
+          <option value="next-check">Next check</option>
+          <option value="question">Question</option>
+          <option value="assumption">Assumption</option>
+          <option value="hypothesis">Hypothesis</option>
+          <option value="insight">Insight</option>
+        </select>
+      </label>
+      <label>
+        <span>Title</span>
+        <input name="title" type="text" maxlength="96" placeholder="What should stay connected here?" />
+      </label>
+      <label>
+        <span>Detail</span>
+        <textarea name="detail" rows="3" maxlength="260" placeholder="What should future you or an agent verify?"></textarea>
+      </label>
+      <button class="text-button compact-button" type="submit">Save thought</button>
+    </form>
   </div>`;
 }
 
@@ -2594,6 +2619,171 @@ function selectedResearchMapNodePacket(snapshot, node) {
     receiptRef: snapshot.receiptRef ?? {},
     edges
   };
+}
+
+function researchThoughtKindLabel(kind) {
+  return {
+    "next-check": "Next check",
+    question: "Question",
+    assumption: "Assumption",
+    hypothesis: "Hypothesis",
+    insight: "Insight"
+  }[kind] ?? "Thought";
+}
+
+function researchThoughtTone(kind) {
+  return {
+    "next-check": "accent",
+    question: "warn",
+    assumption: "muted",
+    hypothesis: "warn",
+    insight: "good"
+  }[kind] ?? "muted";
+}
+
+function researchThoughtEdgeKind(kind) {
+  return {
+    "next-check": "requires-check",
+    question: "asks",
+    assumption: "assumes",
+    hypothesis: "hypothesizes",
+    insight: "notes"
+  }[kind] ?? "thought-link";
+}
+
+function createResearchThoughtSnapshot(snapshot, parentNode, form) {
+  const formData = new FormData(form);
+  const kind = String(formData.get("kind") ?? "next-check");
+  const titleText = String(formData.get("title") ?? "").replace(/\s+/gu, " ").trim();
+  const detailText = String(formData.get("detail") ?? "").replace(/\s+/gu, " ").trim();
+  const label = titleText || researchThoughtKindLabel(kind);
+  const detail = detailText || titleText || `${researchThoughtKindLabel(kind)} linked to ${parentNode.label ?? parentNode.id}.`;
+  const nodeId = safeMapNodeId(`thought-${kind}-${Date.now()}-${Math.random().toString(16).slice(2)}`, "thought");
+  const node = {
+    id: nodeId,
+    label,
+    detail,
+    kind: `research-${kind}`,
+    sourceRef: `human:${kind}:${snapshot.snapshotId ?? "local-map"}`,
+    tone: researchThoughtTone(kind)
+  };
+  const edge = {
+    id: safeMapNodeId(`edge-${parentNode.id}-${nodeId}`, "edge"),
+    from: parentNode.id,
+    to: nodeId,
+    kind: researchThoughtEdgeKind(kind),
+    label: researchThoughtKindLabel(kind)
+  };
+  const existingDataColumns = Array.isArray(snapshot.dataColumns) && snapshot.dataColumns.length > 0
+    ? snapshot.dataColumns
+    : ["node", "value", "source"];
+  const dataRow = existingDataColumns.map((column, index) => {
+    const normalized = String(column).toLowerCase();
+    if (index === 0 || normalized.includes("node")) {
+      return node.id;
+    }
+    if (normalized.includes("source")) {
+      return node.sourceRef;
+    }
+    return detail;
+  });
+
+  return {
+    ...snapshot,
+    visualMode: "mind-map",
+    kind: snapshot.kind ?? "mind map",
+    title: snapshot.title ?? "Research Mind Map",
+    caption: `${snapshot.caption ?? "Local research map."} Added ${researchThoughtKindLabel(kind).toLowerCase()} '${label}' under ${parentNode.label ?? parentNode.id}.`,
+    facts: [
+      ...(snapshot.facts ?? []),
+      ["Map edit", `${researchThoughtKindLabel(kind)} linked to ${parentNode.label ?? parentNode.id}`]
+    ].slice(-24),
+    dataColumns: existingDataColumns,
+    dataRows: [
+      ...(snapshot.dataRows ?? []),
+      dataRow
+    ],
+    nodes: [
+      ...(snapshot.nodes ?? []),
+      node
+    ],
+    edges: [
+      ...(snapshot.edges ?? []),
+      edge
+    ],
+    tags: uniqueTags([
+      ...(snapshot.tags ?? []),
+      "research-map",
+      "linked-thought",
+      kind
+    ])
+  };
+}
+
+async function saveResearchMapThought(form) {
+  const snapshot = selectedResearchMapSnapshot();
+  const parentNode = selectedResearchMapNode(snapshot);
+  if (!snapshot || !parentNode) {
+    return;
+  }
+
+  const title = String(new FormData(form).get("title") ?? "").trim();
+  const detail = String(new FormData(form).get("detail") ?? "").trim();
+  if (!title && !detail) {
+    addActivity("web-ui", "Map thought missing", "Add a title or detail before saving a linked thought.", "missing");
+    return;
+  }
+
+  const button = form.querySelector("button[type='submit']");
+  const previousText = button?.textContent;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Saving";
+  }
+  if (researchMapStatus) {
+    researchMapStatus.textContent = "saving linked thought";
+  }
+
+  const draftSnapshot = createResearchThoughtSnapshot(snapshot, parentNode, form);
+  const createdNodeId = draftSnapshot.nodes.at(-1)?.id;
+  addActivity("human", "Saving linked thought", `${draftSnapshot.nodes.at(-1)?.label ?? "Thought"} is being attached to ${parentNode.label ?? parentNode.id}.`, "waiting");
+
+  try {
+    const response = await fetch("/api/research-map", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ snapshot: draftSnapshot })
+    });
+    const payload = await readLocalApiJson(response, "Local research map API failed.");
+    applyResearchMapPayload(payload);
+    state.selectedResearchMapSnapshotId = payload.snapshot?.snapshotId;
+    state.selectedResearchMapNodeId = createdNodeId;
+    updateLatestActivity(
+      "Saving linked thought",
+      "passed",
+      localApiSuccessMessage(payload, `${createdNodeId ?? "thought node"} saved as a new local map snapshot.`)
+    );
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, "passed", item.at);
+    }
+    if (researchMapStatus) {
+      researchMapStatus.textContent = `${payload.snapshot?.snapshotId ?? "map"} saved with linked thought`;
+    }
+    form.reset();
+    render();
+  } catch (error) {
+    updateLatestActivity("Saving linked thought", "refuted", error instanceof Error ? error.message : "Unknown research map failure.");
+    if (researchMapStatus) {
+      researchMapStatus.textContent = "linked thought save failed";
+    }
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previousText ?? "Save thought";
+    }
+  }
 }
 
 function selectResearchMapNode(nodeId) {
@@ -7373,6 +7563,18 @@ plotNodeInspector.addEventListener("click", (event) => {
       addActivity("web-ui", "Copy map node failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
     });
   }
+});
+
+plotNodeInspector.addEventListener("submit", (event) => {
+  const form = event.target.closest("[data-map-thought-form]");
+  if (!form) {
+    return;
+  }
+
+  event.preventDefault();
+  saveResearchMapThought(form).catch((error) => {
+    addActivity("web-ui", "Save map thought failed", error instanceof Error ? error.message : "Unknown research map failure.", "refuted");
+  });
 });
 
 researchMapList.addEventListener("click", (event) => {
