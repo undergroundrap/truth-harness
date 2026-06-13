@@ -127,6 +127,7 @@ export {
   renderResearchSessionMarkdown,
   RESEARCH_SESSION_DOMAINS,
   RESEARCH_TASK_STATUSES,
+  updateResearchSessionTask,
   writeResearchSession
 } from "./research-session.js";
 export {
@@ -399,6 +400,8 @@ export type {
   ResearchSessionCheckpointWriteResult,
   ResearchSessionDomain,
   ResearchSessionTask,
+  ResearchSessionTaskUpdateInput,
+  ResearchSessionTaskUpdateWriteResult,
   ResearchSessionWriteResult,
   ResearchTaskStatus
 } from "./research-session.js";

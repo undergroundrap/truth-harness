@@ -156,6 +156,24 @@ export interface ResearchSessionCheckpointWriteResult {
   markdown: string;
 }
 
+export interface ResearchSessionTaskUpdateInput {
+  rootPath: string;
+  sessionRef: string;
+  taskRef: string;
+  status?: ResearchTaskStatus;
+  evidenceRefs?: ResearchEvidenceRef[];
+  nextChecks?: string[];
+  now?: string;
+}
+
+export interface ResearchSessionTaskUpdateWriteResult {
+  session: ResearchSession;
+  task: ResearchSessionTask;
+  jsonPath: string;
+  markdownPath: string;
+  markdown: string;
+}
+
 export function isResearchSessionDomain(value: string): value is ResearchSessionDomain {
   return (RESEARCH_SESSION_DOMAINS as readonly string[]).includes(value);
 }
@@ -261,6 +279,65 @@ export async function addResearchSessionCheckpoint(
   };
 }
 
+export async function updateResearchSessionTask(
+  input: ResearchSessionTaskUpdateInput
+): Promise<ResearchSessionTaskUpdateWriteResult> {
+  const status = await requireLocalWorkspace(input.rootPath);
+  const { session, path } = await readResearchSessionRef(status, input.sessionRef);
+  const taskRef = requireText(input.taskRef, "Research session task ref is required.");
+  const evidenceRefs = normalizeEvidenceRefs(input.evidenceRefs ?? []);
+  const nextChecks = normalizeStringList(input.nextChecks ?? []);
+  const updatedAt = input.now ?? new Date().toISOString();
+  let updatedTask: ResearchSessionTask | undefined;
+
+  const tasks = session.tasks.map((task) => {
+    if (!taskMatchesRef(task, taskRef)) {
+      return task;
+    }
+
+    updatedTask = {
+      ...task,
+      status: input.status ?? task.status,
+      evidenceRefs: mergeEvidenceRefs(task.evidenceRefs, evidenceRefs),
+      nextChecks: mergeStrings(task.nextChecks, nextChecks)
+    };
+    return updatedTask;
+  });
+
+  if (!updatedTask) {
+    throw new Error(`Research session task not found: ${taskRef}`);
+  }
+  if (updatedTask.status === "done" && updatedTask.evidenceRefs.length === 0) {
+    throw new Error("Research session tasks require at least one evidence ref before they can be marked done.");
+  }
+  if (updatedTask.status === "blocked" && updatedTask.nextChecks.length === 0) {
+    throw new Error("Blocked research session tasks require at least one next check.");
+  }
+
+  const updated: ResearchSession = {
+    ...session,
+    updatedAt,
+    evidenceRefs: mergeEvidenceRefs(session.evidenceRefs, evidenceRefs),
+    tasks
+  };
+  const sessionWithMarkdown: ResearchSession = {
+    ...updated,
+    markdown: renderResearchSessionMarkdown(updated)
+  };
+  const markdownPath = path.replace(/\.json$/u, ".md");
+
+  await writeFile(path, `${JSON.stringify(sessionWithMarkdown, null, 2)}\n`, "utf8");
+  await writeFile(markdownPath, sessionWithMarkdown.markdown, "utf8");
+
+  return {
+    session: sessionWithMarkdown,
+    task: updatedTask,
+    jsonPath: path,
+    markdownPath,
+    markdown: sessionWithMarkdown.markdown
+  };
+}
+
 export async function listResearchSessions(rootPath: string): Promise<ResearchSession[]> {
   const status = await requireLocalWorkspace(rootPath);
   const sessionsDir = resolve(status.root, status.manifest.directories.sessions);
@@ -356,13 +433,13 @@ export function renderResearchSessionMarkdown(session: Omit<ResearchSession, "ma
     }
   }
 
-  lines.push("", "## Tasks", "", "| Status | Task | Next Checks |", "| --- | --- | --- |");
+  lines.push("", "## Tasks", "", "| Status | Task | Evidence | Next Checks |", "| --- | --- | --- | --- |");
   if (session.tasks.length === 0) {
-    lines.push("| `todo` | Define first concrete subclaim or evidence task. |  |");
+    lines.push("| `todo` | Define first concrete subclaim or evidence task. |  |  |");
   } else {
     for (const task of session.tasks) {
       lines.push(
-        `| \`${task.status}\` | ${escapeMarkdownTable(task.title)} | ${escapeMarkdownTable(task.nextChecks.join("; "))} |`
+        `| \`${task.status}\` | ${escapeMarkdownTable(task.title)} | ${escapeMarkdownTable(formatEvidenceRefs(task.evidenceRefs))} | ${escapeMarkdownTable(task.nextChecks.join("; "))} |`
       );
     }
   }
@@ -531,6 +608,10 @@ function createTask(title: string, createdAt: string): ResearchSessionTask {
   };
 }
 
+function taskMatchesRef(task: ResearchSessionTask, taskRef: string): boolean {
+  return task.taskId === taskRef || task.title === taskRef;
+}
+
 function normalizeBudgets(input: CreateResearchSessionInput): ResearchSession["budgets"] {
   return {
     maxDepth: normalizePositiveInteger(input.maxDepth, 4),
@@ -615,6 +696,10 @@ function mergeEvidenceRefs(left: ResearchEvidenceRef[], right: ResearchEvidenceR
 
 function mergeStrings(left: string[], right: string[]): string[] {
   return [...new Set([...left, ...right])];
+}
+
+function formatEvidenceRefs(refs: ResearchEvidenceRef[]): string {
+  return refs.map((ref) => `${ref.kind}:${ref.ref}`).join("; ");
 }
 
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {

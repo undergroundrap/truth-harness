@@ -364,7 +364,7 @@ Each `truth-harness.research-session.v0` entry stores:
 | Model policy | Local-first, hosted models optional, selected context only, disclosure required. |
 | Review boundary | Expert, wet-lab, clinical/preclinical, regulatory, or patent-attorney review requirements inferred from scope. |
 
-Research sessions create Markdown alongside JSON so humans can review the current state. They do not prove claims by themselves. They are the durable coordination layer that tells Claude/Codex what has been checked, what remains uncertain, and what local evidence changed since the last checkpoint.
+Research sessions create Markdown alongside JSON so humans can review the current state. Task updates are intentionally evidence-gated: a task cannot be marked `done` without at least one local evidence ref, and a `blocked` task must name the next check. They do not prove claims by themselves. They are the durable coordination layer that tells Claude/Codex what has been checked, what remains uncertain, and what local evidence changed since the last checkpoint.
 
 ## Expert Reviews
 
@@ -668,6 +668,7 @@ Current MCP tools:
 | `truth_harness_claim_show` | Read one local claim record by id or workspace-local JSON path. |
 | `truth_harness_research_session_start` | Start a local research runbook with budgets, evidence refs, snapshot refs, and review boundaries. |
 | `truth_harness_research_session_checkpoint` | Append decisions, evidence refs, snapshot refs, and next checks to a research runbook. |
+| `truth_harness_research_session_task_update` | Update one runbook task status with evidence refs and next checks; `done` requires evidence and `blocked` requires a next check. |
 | `truth_harness_research_session_show` | Read one local research runbook by id or path before continuing a long investigation. |
 | `truth_harness_research_session_list` | List local research sessions and checkpoints. |
 | `truth_harness_expert_review_log` | Write a local human expert-review record with scope, outcome, limitations, and next checks. |

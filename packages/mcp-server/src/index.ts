@@ -48,6 +48,7 @@ import {
   handleTruthHarnessResearchSessionList,
   handleTruthHarnessResearchSessionShow,
   handleTruthHarnessResearchSessionStart,
+  handleTruthHarnessResearchSessionTaskUpdate,
   handleTruthHarnessRouteList,
   handleTruthHarnessRouteShow,
   handleTruthHarnessRouteSatisfy,
@@ -1974,6 +1975,31 @@ export function createTruthHarnessMcpServer(): McpServer {
       }
     },
     async (input) => toolJson(await handleTruthHarnessResearchSessionCheckpoint(input))
+  );
+
+  server.registerTool(
+    "truth_harness_research_session_task_update",
+    {
+      title: "Update Research Session Task",
+      description:
+        "Update one local research-session task status, evidence refs, and next validation checks. Marking a task done requires at least one evidence ref.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        sessionRef: z.string().min(1).describe("Research session id or workspace-local session JSON path."),
+        taskRef: z.string().min(1).describe("Task id or exact task title."),
+        status: z.enum(["todo", "doing", "blocked", "done"]).optional().describe("New task status."),
+        evidenceRefs: z.array(researchEvidenceRefSchema).optional().describe("Evidence refs that justify or inform this task update."),
+        nextChecks: z.array(z.string().min(1)).optional().describe("Next validation checks for this task.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTruthHarnessResearchSessionTaskUpdate(input))
   );
 
   server.registerTool(

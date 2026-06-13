@@ -1022,7 +1022,7 @@ describe("benchmark CLI", () => {
       "--json"
     ]);
     const started = JSON.parse(start.stdout) as {
-      session: { sessionId: string; schemaVersion: string; tasks: unknown[] };
+      session: { sessionId: string; schemaVersion: string; tasks: Array<{ taskId: string; status: string }> };
     };
     const checkpoint = await runCli([
       "research",
@@ -1035,6 +1035,23 @@ describe("benchmark CLI", () => {
       "Attach a workspace review handoff before delegating.",
       "--json"
     ]);
+    const taskUpdate = JSON.parse(
+      (
+        await runCli([
+          "research",
+          "task",
+          started.session.sessionId,
+          started.session.tasks[0]?.taskId ?? "",
+          "--workspace",
+          root,
+          "--status",
+          "blocked",
+          "--next-check",
+          "Attach a workspace review handoff before delegating.",
+          "--json"
+        ])
+      ).stdout
+    ) as { task: { taskId: string; status: string; nextChecks: string[] } };
     const shown = JSON.parse(
       (await runCli(["research", "show", started.session.sessionId, "--workspace", root, "--json"])).stdout
     ) as { sessionId: string; checkpoints: unknown[] };
@@ -1065,6 +1082,8 @@ describe("benchmark CLI", () => {
     expect(started.session.sessionId).toMatch(/^session_[a-f0-9]{16}$/u);
     expect(started.session.tasks).toHaveLength(1);
     expect(checkpoint.exitCode).toBe(0);
+    expect(taskUpdate.task.status).toBe("blocked");
+    expect(taskUpdate.task.nextChecks).toContain("Attach a workspace review handoff before delegating.");
     expect(shown.sessionId).toBe(started.session.sessionId);
     expect(shown.checkpoints).toHaveLength(1);
     expect(list.total).toBe(1);

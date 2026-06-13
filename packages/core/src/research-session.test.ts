@@ -8,6 +8,7 @@ import {
   createResearchSession,
   listResearchSessions,
   readResearchSession,
+  updateResearchSessionTask,
   writeResearchSession
 } from "./research-session.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
@@ -97,6 +98,65 @@ describe("research sessions", () => {
     expect(list[0]?.checkpoints).toHaveLength(1);
     expect(shownById.sessionId).toBe(write.session.sessionId);
     expect(shownByPath.sessionId).toBe(write.session.sessionId);
+  });
+
+  it("updates research-session tasks with evidence-gated statuses", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-13T00:00:00.000Z" });
+    const write = await writeResearchSession({
+      rootPath: root,
+      objective: "Build a reusable proof route for exact fraction arithmetic.",
+      domains: ["math"],
+      tasks: ["Attach a proof artifact", "Run a second checker"],
+      now: "2026-06-13T00:10:00.000Z"
+    });
+    const review = await writeWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-13T00:10:30.000Z"
+    });
+    const task = write.session.tasks[0];
+
+    await expect(
+      updateResearchSessionTask({
+        rootPath: root,
+        sessionRef: write.session.sessionId,
+        taskRef: task.taskId,
+        status: "done",
+        now: "2026-06-13T00:11:00.000Z"
+      })
+    ).rejects.toThrow("at least one evidence ref");
+
+    const blocked = await updateResearchSessionTask({
+      rootPath: root,
+      sessionRef: write.session.sessionId,
+      taskRef: "Run a second checker",
+      status: "blocked",
+      nextChecks: ["Install or attach an independent CAS/SMT artifact."],
+      now: "2026-06-13T00:12:00.000Z"
+    });
+    const done = await updateResearchSessionTask({
+      rootPath: root,
+      sessionRef: write.session.sessionId,
+      taskRef: task.taskId,
+      status: "done",
+      evidenceRefs: [{ kind: "workspace-review", ref: review.review.reviewId, summary: "Handoff packet used for the proof task." }],
+      now: "2026-06-13T00:13:00.000Z"
+    });
+    const shown = await readResearchSession(root, write.session.sessionId);
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(blocked.task.status).toBe("blocked");
+    expect(blocked.task.nextChecks).toEqual(["Install or attach an independent CAS/SMT artifact."]);
+    expect(done.task.status).toBe("done");
+    expect(done.task.evidenceRefs).toContainEqual(
+      expect.objectContaining({ kind: "workspace-review", ref: review.review.reviewId })
+    );
+    expect(done.session.evidenceRefs).toContainEqual(
+      expect.objectContaining({ kind: "workspace-review", ref: review.review.reviewId })
+    );
+    expect(done.markdown).toContain(`workspace-review:${review.review.reviewId}`);
+    expect(shown.tasks.map((entry) => entry.status)).toEqual(["done", "blocked"]);
+    expect(validation.passed).toBe(true);
   });
 
   it("cites persisted workspace review handoffs from long-running sessions", async () => {

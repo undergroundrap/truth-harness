@@ -116,6 +116,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_research_session_list",
         "truth_harness_research_session_show",
         "truth_harness_research_session_start",
+        "truth_harness_research_session_task_update",
         "truth_harness_route_list",
         "truth_harness_route_satisfy",
         "truth_harness_route_show",
@@ -466,6 +467,9 @@ describe("Truth Harness MCP server", () => {
         }
       });
       const researchStartText = firstText(researchStartResult.content);
+      const researchStartJson = JSON.parse(researchStartText) as {
+        session: { sessionId: string; tasks: Array<{ taskId: string }> };
+      };
       expect(researchStartText).toContain("\"schemaVersion\": \"truth-harness.research-session.v0\"");
       expect(researchStartText).toContain("\"hostedModels\": \"optional-with-disclosure\"");
       expect(researchStartText).toContain("Do not describe biomedical hypotheses as cures");
@@ -473,7 +477,7 @@ describe("Truth Harness MCP server", () => {
       const researchCheckpointResult = await client.callTool({
         name: "truth_harness_research_session_checkpoint",
         arguments: {
-          sessionRef: JSON.parse(researchStartText).session.sessionId,
+          sessionRef: researchStartJson.session.sessionId,
           summary: "Protocol checkpoint recorded before attaching stronger evidence.",
           snapshotRefs: [JSON.parse(snapshotText).snapshot.snapshotId],
           decisions: ["Keep this as a computational hypothesis."],
@@ -482,6 +486,23 @@ describe("Truth Harness MCP server", () => {
       });
       const researchCheckpointText = firstText(researchCheckpointResult.content);
       expect(researchCheckpointText).toContain("\"checkpointId\": \"chk_");
+
+      const researchTaskUpdateResult = await client.callTool({
+        name: "truth_harness_research_session_task_update",
+        arguments: {
+          sessionRef: researchStartJson.session.sessionId,
+          taskRef: researchStartJson.session.tasks[0]?.taskId ?? "",
+          status: "done",
+          evidenceRefs: [
+            {
+              kind: "snapshot",
+              ref: JSON.parse(snapshotText).snapshot.snapshotId
+            }
+          ]
+        }
+      });
+      const researchTaskUpdateText = firstText(researchTaskUpdateResult.content);
+      expect(researchTaskUpdateText).toContain("\"status\": \"done\"");
 
       const researchListResult = await client.callTool({
         name: "truth_harness_research_session_list",
@@ -492,7 +513,7 @@ describe("Truth Harness MCP server", () => {
       const researchShowResult = await client.callTool({
         name: "truth_harness_research_session_show",
         arguments: {
-          sessionRef: JSON.parse(researchStartText).session.sessionId
+          sessionRef: researchStartJson.session.sessionId
         }
       });
       const researchShowText = firstText(researchShowResult.content);

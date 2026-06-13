@@ -52,6 +52,7 @@ import {
   isNotebookRunKind,
   isNotebookRunStatus,
   isResearchSessionDomain,
+  isResearchTaskStatus,
   isSimulationKind,
   isSimulationStage,
   isValidationGateKind,
@@ -95,6 +96,7 @@ import {
   solveSmtProblem,
   addResearchSessionCheckpoint,
   createWorkspaceReview,
+  updateResearchSessionTask,
   validateWorkspaceArtifacts,
   verifyVaultEntry,
   verifyWorkspaceSnapshot,
@@ -194,7 +196,9 @@ import {
   type ResearchSession,
   type ResearchSessionCheckpointWriteResult,
   type ResearchSessionDomain,
+  type ResearchSessionTaskUpdateWriteResult,
   type ResearchSessionWriteResult,
+  type ResearchTaskStatus,
   type ReplayResult,
   type SimulationKind,
   type SimulationLogEntry,
@@ -1736,6 +1740,40 @@ research
       }
 
       printResearchCheckpointWrite(result);
+    }
+  );
+
+research
+  .command("task")
+  .description("Update a research-session task status, evidence refs, and next checks.")
+  .argument("<session>", "Research session id or workspace-local JSON path")
+  .argument("<task>", "Task id or exact task title")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--status <status>", "todo, doing, blocked, or done")
+  .option("--evidence <ref>", "Evidence ref proving or informing this task update; repeatable", collectRepeated, [])
+  .option("--next-check <text>", "Next validation check for this task; repeatable", collectRepeated, [])
+  .option("--json", "Print the full task update JSON")
+  .action(
+    async (
+      sessionRef: string,
+      taskRef: string,
+      options: { workspace: string; status?: string; evidence: string[]; nextCheck: string[]; json?: boolean }
+    ) => {
+      const result = await updateResearchSessionTask({
+        rootPath: options.workspace,
+        sessionRef,
+        taskRef,
+        status: options.status ? parseResearchTaskStatus(options.status) : undefined,
+        evidenceRefs: options.evidence.map(parseResearchEvidenceRef),
+        nextChecks: options.nextCheck
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printResearchTaskUpdate(result);
     }
   );
 
@@ -4506,6 +4544,32 @@ function printResearchCheckpointWrite(result: ResearchSessionCheckpointWriteResu
   }
 }
 
+function printResearchTaskUpdate(result: ResearchSessionTaskUpdateWriteResult): void {
+  console.log(`Updated research task ${result.task.taskId}`);
+  console.log(`Session: ${result.session.sessionId}`);
+  console.log(`Status: ${result.task.status}`);
+  console.log(`JSON: ${result.jsonPath}`);
+  console.log(`Markdown: ${result.markdownPath}`);
+  console.log("");
+  console.log(result.task.title);
+
+  if (result.task.evidenceRefs.length > 0) {
+    console.log("");
+    console.log("Evidence refs:");
+    for (const ref of result.task.evidenceRefs) {
+      console.log(`  ${ref.kind}:${ref.ref}${ref.trust ? ` (${ref.trust})` : ""}`);
+    }
+  }
+
+  if (result.task.nextChecks.length > 0) {
+    console.log("");
+    console.log("Next checks:");
+    for (const check of result.task.nextChecks) {
+      console.log(`  ${check}`);
+    }
+  }
+}
+
 function printResearchSession(session: ResearchSession): void {
   console.log(`Truth Harness research session ${session.sessionId}`);
   console.log(`Updated: ${session.updatedAt}`);
@@ -4524,7 +4588,7 @@ function printResearchSession(session: ResearchSession): void {
     console.log("");
     console.log("Tasks:");
     for (const task of session.tasks.slice(0, 8)) {
-      console.log(`  ${task.status}: ${task.title}`);
+      console.log(`  ${task.status} ${task.taskId}: ${task.title}`);
     }
   }
 
@@ -4955,6 +5019,14 @@ function parseResearchSessionDomain(value: string): ResearchSessionDomain {
   }
 
   throw new Error(`Unsupported research session domain ${JSON.stringify(value)}.`);
+}
+
+function parseResearchTaskStatus(value: string): ResearchTaskStatus {
+  if (isResearchTaskStatus(value)) {
+    return value;
+  }
+
+  throw new Error(`Unsupported research task status ${JSON.stringify(value)}.`);
 }
 
 function parseExpertReviewKind(value: string): ExpertReviewKind {

@@ -69,6 +69,7 @@ import {
   renderEvidenceAuditMarkdown,
   sealVaultFile,
   solveSmtProblem,
+  updateResearchSessionTask,
   validateWorkspaceArtifacts,
   verifyVaultEntry,
   verifyWorkspaceSnapshot,
@@ -171,7 +172,9 @@ import {
   type ResearchSession,
   type ResearchSessionCheckpointWriteResult,
   type ResearchSessionDomain,
+  type ResearchSessionTaskUpdateWriteResult,
   type ResearchSessionWriteResult,
+  type ResearchTaskStatus,
   type ReplayResult,
   type SimulationKind,
   type SimulationLogEntry,
@@ -764,6 +767,15 @@ export interface TruthHarnessResearchSessionCheckpointInput {
   evidenceRefs?: ResearchEvidenceRef[];
   snapshotRefs?: string[];
   decisions?: string[];
+  nextChecks?: string[];
+}
+
+export interface TruthHarnessResearchSessionTaskUpdateInput {
+  workspacePath?: string;
+  sessionRef: string;
+  taskRef: string;
+  status?: ResearchTaskStatus;
+  evidenceRefs?: ResearchEvidenceRef[];
   nextChecks?: string[];
 }
 
@@ -1810,6 +1822,19 @@ export async function handleTruthHarnessResearchSessionCheckpoint(
     evidenceRefs: input.evidenceRefs,
     snapshotRefs: input.snapshotRefs,
     decisions: input.decisions,
+    nextChecks: input.nextChecks
+  });
+}
+
+export async function handleTruthHarnessResearchSessionTaskUpdate(
+  input: TruthHarnessResearchSessionTaskUpdateInput
+): Promise<ResearchSessionTaskUpdateWriteResult> {
+  return updateResearchSessionTask({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    sessionRef: input.sessionRef,
+    taskRef: input.taskRef,
+    status: input.status,
+    evidenceRefs: input.evidenceRefs,
     nextChecks: input.nextChecks
   });
 }

@@ -47,6 +47,7 @@ import {
   handleTruthHarnessResearchSessionList,
   handleTruthHarnessResearchSessionShow,
   handleTruthHarnessResearchSessionStart,
+  handleTruthHarnessResearchSessionTaskUpdate,
   handleTruthHarnessRouteList,
   handleTruthHarnessRouteShow,
   handleTruthHarnessRouteSatisfy,
@@ -883,6 +884,12 @@ describe("MCP tool handlers", () => {
       decisions: ["Keep the claim phrased as a computational hypothesis."],
       nextChecks: ["Attach simulation and source evidence before audit."]
     });
+    const taskUpdate = await handleTruthHarnessResearchSessionTaskUpdate({
+      sessionRef: start.session.sessionId,
+      taskRef: start.session.tasks[0]?.taskId ?? "",
+      status: "done",
+      evidenceRefs: [{ kind: "workspace-review", ref: review.review.reviewId }]
+    });
     const list = await handleTruthHarnessResearchSessionList({});
     const shown = await handleTruthHarnessResearchSessionShow({
       sessionRef: start.session.sessionId
@@ -907,11 +914,15 @@ describe("MCP tool handlers", () => {
       expect.objectContaining({ kind: "workspace-review", ref: review.review.reviewId })
     );
     expect(checkpoint.session.checkpoints).toHaveLength(1);
+    expect(taskUpdate.task.status).toBe("done");
+    expect(taskUpdate.task.evidenceRefs).toContainEqual(
+      expect.objectContaining({ kind: "workspace-review", ref: review.review.reviewId })
+    );
     expect(list.total).toBe(1);
     expect(shown.sessionId).toBe(start.session.sessionId);
     expect(shown.checkpoints).toHaveLength(1);
     expect(handoff.summary.sessions).toBe(1);
-    expect(handoff.summary.sessionTasks).toBe(2);
+    expect(handoff.summary.sessionTasks).toBe(1);
     expect(handoff.summary.sessionNextChecks).toBe(1);
     expect(handoff.items).toContainEqual(
       expect.objectContaining({
