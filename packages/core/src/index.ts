@@ -196,7 +196,8 @@ export {
 export { validateWorkspaceArtifacts } from "./workspace-validation.js";
 export {
   createWorkspaceReview,
-  renderWorkspaceReviewMarkdown
+  renderWorkspaceReviewMarkdown,
+  writeWorkspaceReview
 } from "./workspace-review.js";
 export { getEngineManifest } from "./engine-manifest.js";
 export {
@@ -477,7 +478,8 @@ export type {
   WorkspaceReview,
   WorkspaceReviewItem,
   WorkspaceReviewItemKind,
-  WorkspaceReviewPriority
+  WorkspaceReviewPriority,
+  WorkspaceReviewWriteResult
 } from "./workspace-review.js";
 export type {
   EngineCapability,

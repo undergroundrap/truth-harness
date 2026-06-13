@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { initLocalWorkspace } from "./local-workspace.js";
-import { createWorkspaceReview } from "./workspace-review.js";
+import { validateWorkspaceArtifacts } from "./workspace-validation.js";
+import { createWorkspaceReview, writeWorkspaceReview } from "./workspace-review.js";
 import { writeVerifierRoute } from "./verifier-route.js";
 
 const roots: string[] = [];
@@ -169,6 +170,38 @@ describe("workspace review", () => {
     expect(review.summary.claims).toBe(0);
     expect(review.items.every((item) => item.kind !== "claim-blocker")).toBe(true);
     expect(review.markdown).toContain("## Ordered Work Queue");
+  });
+
+  it("writes review handoff packets into findings without breaking validation", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    await writeVerifierRoute({
+      rootPath: root,
+      problem: "compute 3 / 4 + 5 / 8",
+      now: new Date("2026-06-13T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    const result = await writeWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      now: "2026-06-13T00:02:00.000Z"
+    });
+    const stored = JSON.parse(await readFile(result.jsonPath, "utf8")) as { schemaVersion: string; reviewId: string };
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(result.review.reviewId).toMatch(/^wrev_[a-f0-9]{16}$/u);
+    expect(result.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(result.markdownPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(stored.schemaVersion).toBe("truth-harness.workspace-review.v0");
+    expect(stored.reviewId).toBe(result.review.reviewId);
+    expect(result.markdown).toContain(`| Review | \`${result.review.reviewId}\` |`);
+    expect(validation.passed).toBe(true);
   });
 });
 

@@ -797,22 +797,37 @@ describe("benchmark CLI", () => {
     const reviewResult = await runCli(["workspace", "review", root, "--max-routes", "1", "--max-claims", "0", "--json"]);
     const review = JSON.parse(reviewResult.stdout) as {
       schemaVersion: string;
+      reviewId: string;
       localOnly: boolean;
       networkAccess: string;
       summary: { routes: number; claims: number };
       markdown: string;
     };
-    const reviewText = await runCli(["workspace", "review", root, "--max-routes", "1", "--max-claims", "0"]);
+    const writeResult = await runCli(["workspace", "review", root, "--max-routes", "1", "--max-claims", "0", "--write", "--json"]);
+    const written = JSON.parse(writeResult.stdout) as {
+      written: true;
+      review: { reviewId: string };
+      result: { jsonPath: string; markdownPath: string };
+    };
+    const reviewText = await runCli(["workspace", "review", root, "--max-routes", "1", "--max-claims", "0", "--write"]);
 
     expect(reviewResult.exitCode).toBe(0);
     expect(review.schemaVersion).toBe("truth-harness.workspace-review.v0");
+    expect(review.reviewId).toMatch(/^wrev_[a-f0-9]{16}$/u);
     expect(review.localOnly).toBe(true);
     expect(review.networkAccess).toBe("none");
     expect(review.summary.routes).toBe(1);
     expect(review.summary.claims).toBe(0);
     expect(review.markdown).toContain("## Ordered Work Queue");
+    expect(writeResult.exitCode).toBe(0);
+    expect(written.written).toBe(true);
+    expect(written.review.reviewId).toMatch(/^wrev_[a-f0-9]{16}$/u);
+    expect(written.result.jsonPath.replace(/\\/g, "/")).toContain(".truth-harness/findings/");
+    expect(written.result.markdownPath.replace(/\\/g, "/")).toContain(".truth-harness/findings/");
+    expect(await readFile(written.result.markdownPath, "utf8")).toContain("## Ordered Work Queue");
     expect(reviewText.stdout).toContain("Truth Harness workspace review");
     expect(reviewText.stdout).toContain("Queue items:");
+    expect(reviewText.stdout).toContain("Markdown:");
   });
 
   it("writes, lists, compares, and gates benchmark artifacts", async () => {

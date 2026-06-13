@@ -91,6 +91,7 @@ import {
   writeResearchSession,
   writeValidationPlan,
   writeVerifierRoute,
+  writeWorkspaceReview,
   writeWorkspaceSnapshot,
   type BenchmarkArtifactSummary,
   type BenchmarkComparisonRecord,
@@ -198,6 +199,7 @@ import {
   type TrustLabel,
   type WorkspaceValidation,
   type WorkspaceReview,
+  type WorkspaceReviewWriteResult,
   type SympyOperation
 } from "@truth-harness/core";
 
@@ -448,7 +450,16 @@ export interface TruthHarnessWorkspaceReviewInput {
   workspacePath?: string;
   maxRoutes?: number;
   maxClaims?: number;
+  write?: boolean;
 }
+
+export interface TruthHarnessWorkspaceReviewWriteOutput {
+  review: WorkspaceReview;
+  written: true;
+  result: WorkspaceReviewWriteResult;
+}
+
+export type TruthHarnessWorkspaceReviewOutput = WorkspaceReview | TruthHarnessWorkspaceReviewWriteOutput;
 
 export interface TruthHarnessWorkspaceSnapshotVerifyInput {
   workspacePath?: string;
@@ -1307,12 +1318,25 @@ export async function handleTruthHarnessWorkspaceValidate(input: TruthHarnessWor
   });
 }
 
-export async function handleTruthHarnessWorkspaceReview(input: TruthHarnessWorkspaceReviewInput): Promise<WorkspaceReview> {
-  return createWorkspaceReview({
+export async function handleTruthHarnessWorkspaceReview(
+  input: TruthHarnessWorkspaceReviewInput
+): Promise<TruthHarnessWorkspaceReviewOutput> {
+  const reviewInput = {
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     maxRoutes: input.maxRoutes,
     maxClaims: input.maxClaims
-  });
+  };
+
+  if (input.write) {
+    const result = await writeWorkspaceReview(reviewInput);
+    return {
+      review: result.review,
+      written: true,
+      result
+    };
+  }
+
+  return createWorkspaceReview(reviewInput);
 }
 
 export async function handleTruthHarnessWorkspaceSnapshot(

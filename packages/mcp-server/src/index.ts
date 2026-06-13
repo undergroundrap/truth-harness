@@ -975,15 +975,19 @@ export function createTruthHarnessMcpServer(): McpServer {
           .min(0)
           .max(1000)
           .optional()
-          .describe("Maximum claim records to inspect. Defaults to 200; use 0 to skip claims.")
+          .describe("Maximum claim records to inspect. Defaults to 200; use 0 to skip claims."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write JSON and Markdown handoff packets into .truth-harness/findings.")
       },
       annotations: {
-        readOnlyHint: true,
+        readOnlyHint: false,
         openWorldHint: false
       }
     },
-    async ({ workspacePath, maxRoutes, maxClaims }) =>
-      toolJson(await handleTruthHarnessWorkspaceReview({ workspacePath, maxRoutes, maxClaims }))
+    async ({ workspacePath, maxRoutes, maxClaims, write }) =>
+      toolJson(await handleTruthHarnessWorkspaceReview({ workspacePath, maxRoutes, maxClaims, write }))
   );
 
   server.registerTool(

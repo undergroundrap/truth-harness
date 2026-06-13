@@ -112,6 +112,7 @@ import {
   writeResearchSession,
   writeValidationPlan,
   writeVerifierRoute,
+  writeWorkspaceReview,
   writeWorkspaceSnapshot,
   writeClaimChart,
   createValidationPlan,
@@ -222,6 +223,7 @@ import {
   type TrustLabel,
   type WorkspaceValidation,
   type WorkspaceReview,
+  type WorkspaceReviewWriteResult,
   type SympyOperation
 } from "@truth-harness/core";
 
@@ -2305,29 +2307,37 @@ workspace
   .description("Show the ordered local work queue across saved routes and claims.")
   .argument("[path]", "Project root path", ".")
   .option("--json", "Print the full workspace review JSON")
+  .option("--write", "Write JSON and Markdown into .truth-harness/findings")
   .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
   .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
   .option("--fail-on-critical", "Exit non-zero when critical review items exist")
-  .action(async (path: string, options: { json?: boolean; maxRoutes?: number; maxClaims?: number; failOnCritical?: boolean }) => {
-    const review = await createWorkspaceReview({
-      rootPath: path,
-      maxRoutes: options.maxRoutes,
-      maxClaims: options.maxClaims
-    });
+  .action(
+    async (
+      path: string,
+      options: { json?: boolean; write?: boolean; maxRoutes?: number; maxClaims?: number; failOnCritical?: boolean }
+    ) => {
+      const reviewInput = {
+        rootPath: path,
+        maxRoutes: options.maxRoutes,
+        maxClaims: options.maxClaims
+      };
+      const writeResult = options.write ? await writeWorkspaceReview(reviewInput) : undefined;
+      const review = writeResult?.review ?? (await createWorkspaceReview(reviewInput));
 
-    if (options.json) {
-      printJson(review);
+      if (options.json) {
+        printJson(writeResult ? { review, written: true, result: writeResult } : review);
+        if (options.failOnCritical && review.summary.criticalItems > 0) {
+          process.exitCode = 1;
+        }
+        return;
+      }
+
+      printWorkspaceReview(review, writeResult);
       if (options.failOnCritical && review.summary.criticalItems > 0) {
         process.exitCode = 1;
       }
-      return;
     }
-
-    printWorkspaceReview(review);
-    if (options.failOnCritical && review.summary.criticalItems > 0) {
-      process.exitCode = 1;
-    }
-  });
+  );
 
 workspace
   .command("snapshot")
@@ -3722,8 +3732,9 @@ function printWorkspaceValidation(validation: WorkspaceValidation): void {
   }
 }
 
-function printWorkspaceReview(review: WorkspaceReview): void {
+function printWorkspaceReview(review: WorkspaceReview, writeResult?: WorkspaceReviewWriteResult): void {
   console.log("Truth Harness workspace review");
+  console.log(`Review: ${review.reviewId}`);
   console.log(`Project: ${review.projectId}`);
   console.log(`Routes: ${review.summary.routes}`);
   console.log(`Claims: ${review.summary.claims}`);
@@ -3752,6 +3763,12 @@ function printWorkspaceReview(review: WorkspaceReview): void {
     for (const warning of review.warnings) {
       console.log(`  ${warning}`);
     }
+  }
+
+  if (writeResult) {
+    console.log("");
+    console.log(`JSON: ${writeResult.jsonPath}`);
+    console.log(`Markdown: ${writeResult.markdownPath}`);
   }
 }
 

@@ -66,6 +66,7 @@ import {
   handleTruthHarnessVerify,
   handleTruthHarnessWorkspaceInit,
   handleTruthHarnessWorkspaceRepair,
+  handleTruthHarnessWorkspaceReview,
   handleTruthHarnessWorkspaceSnapshot,
   handleTruthHarnessWorkspaceSnapshotList,
   handleTruthHarnessWorkspaceSnapshotVerify,
@@ -766,6 +767,45 @@ describe("MCP tool handlers", () => {
       expect.objectContaining({
         code: "unresolved-evidence-ref",
         path: expect.stringContaining(invention.entry.entryId)
+      })
+    );
+  });
+
+  it("writes workspace review handoff packets for agents", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Handoff Lab" });
+    const route = await handleTruthHarnessVerify({
+      problem: "compute 3 / 4 + 5 / 8",
+      write: true,
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    const review = await handleTruthHarnessWorkspaceReview({
+      maxRoutes: 1,
+      maxClaims: 0,
+      write: true
+    });
+    const snapshot = await handleTruthHarnessWorkspaceSnapshot({});
+
+    if (!("written" in review)) {
+      throw new Error("Expected workspace review write result.");
+    }
+
+    expect(route.written).toBe(true);
+    expect(review.written).toBe(true);
+    expect(review.review.reviewId).toMatch(/^wrev_[a-f0-9]{16}$/u);
+    expect(review.review.items).toContainEqual(expect.objectContaining({ routeId: route.route.routeId }));
+    expect(review.result.jsonPath.replace(/\\/g, "/")).toContain(".truth-harness/findings/");
+    expect(await readFile(review.result.markdownPath, "utf8")).toContain(route.route.routeId.replace(/_/g, "\\_"));
+    expect(snapshot.snapshot.entries).toContainEqual(
+      expect.objectContaining({
+        path: expect.stringContaining(`${review.review.reviewId}-workspace-review.json`),
+        kind: "findings",
+        artifactId: review.review.reviewId
       })
     );
   });

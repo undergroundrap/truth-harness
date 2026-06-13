@@ -13,7 +13,7 @@ The moat is not a prettier chat interface. It is the combination of:
 3. **Agent-native routes**: the same artifact contracts are reachable through CLI, MCP, web, and later API/desktop surfaces, so Claude, Codex, local models, and humans can work from one shared evidence layer.
 4. **Local-first provenance**: project data, evidence, receipts, disclosures, model-context packets, snapshots, and reports live in the local workspace by default.
 5. **Refutation-first trust policy**: `unverified` and `refuted` are first-class outcomes. The system is allowed to stop the user from saying something too strong.
-6. **Agent handoff queue**: the workspace can produce a bounded, local, prioritized work queue for Claude, Codex, and humans, with source refs and exact next commands instead of relying on chat memory.
+6. **Agent handoff queue**: the workspace can produce and persist a bounded, local, prioritized work queue for Claude, Codex, and humans, with source refs and exact next commands instead of relying on chat memory.
 7. **Replayable reports**: exported reports should cite the exact claims, receipts, commands, limitations, open checks, and activity that produced the conclusion.
 
 The short version:

@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { listClaimRecords, type ClaimLedgerRecord } from "./claim-ledger.js";
 import {
@@ -34,6 +36,7 @@ export interface WorkspaceReviewItem {
 
 export interface WorkspaceReview {
   schemaVersion: "truth-harness.workspace-review.v0";
+  reviewId: string;
   projectId: string;
   createdAt: string;
   workspacePath: string;
@@ -62,6 +65,13 @@ export interface CreateWorkspaceReviewInput {
   maxRoutes?: number;
   maxClaims?: number;
   now?: string;
+}
+
+export interface WorkspaceReviewWriteResult {
+  review: WorkspaceReview;
+  jsonPath: string;
+  markdownPath: string;
+  markdown: string;
 }
 
 export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): Promise<WorkspaceReview> {
@@ -94,10 +104,37 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
       "Follow item commands only inside the local workspace boundary and keep final claims scoped to attached evidence."
     ]
   };
+  const reviewId = `wrev_${stableHash(reviewWithoutMarkdown).slice(0, 16)}`;
+  const reviewWithoutMarkdownAndWithId = {
+    ...reviewWithoutMarkdown,
+    reviewId
+  };
 
   return {
-    ...reviewWithoutMarkdown,
-    markdown: renderWorkspaceReviewMarkdown(reviewWithoutMarkdown)
+    ...reviewWithoutMarkdownAndWithId,
+    markdown: renderWorkspaceReviewMarkdown(reviewWithoutMarkdownAndWithId)
+  };
+}
+
+export async function writeWorkspaceReview(input: CreateWorkspaceReviewInput): Promise<WorkspaceReviewWriteResult> {
+  const status = await requireLocalWorkspace(input.rootPath);
+  const review = await createWorkspaceReview({
+    ...input,
+    rootPath: status.root
+  });
+  const findingsDir = resolve(status.root, status.manifest.directories.findings);
+  await mkdir(findingsDir, { recursive: true });
+  const baseName = `${review.createdAt.slice(0, 10)}-${review.reviewId}-workspace-review`;
+  const jsonPath = join(findingsDir, `${baseName}.json`);
+  const markdownPath = join(findingsDir, `${baseName}.md`);
+  await writeFile(jsonPath, `${JSON.stringify(review, null, 2)}\n`, "utf8");
+  await writeFile(markdownPath, review.markdown, "utf8");
+
+  return {
+    review,
+    jsonPath,
+    markdownPath,
+    markdown: review.markdown
   };
 }
 
@@ -107,6 +144,7 @@ export function renderWorkspaceReviewMarkdown(review: Omit<WorkspaceReview, "mar
     "",
     "| Field | Value |",
     "| --- | --- |",
+    `| Review | \`${review.reviewId}\` |`,
     `| Project | \`${review.projectId}\` |`,
     `| Created | ${escapeMarkdownTable(review.createdAt)} |`,
     `| Local only | \`${String(review.localOnly)}\` |`,
