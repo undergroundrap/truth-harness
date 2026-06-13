@@ -40,6 +40,7 @@ describe("local web route ledger API", () => {
     const statusResponse = await fetch(`${baseUrl}/api/status`);
     expect(statusResponse.status).toBe(200);
     const statusPayload = await statusResponse.json();
+    expectLocalApiSuccess(statusResponse, statusPayload);
     expect(statusPayload.localOnly).toBe(true);
     expect(statusPayload.externalCalls).toBe(false);
     expect(statusPayload.capabilities).toContain("docker-verifier-guidance");
@@ -78,6 +79,7 @@ describe("local web route ledger API", () => {
     });
     expect(receiptResponse.status).toBe(200);
     const receiptPayload = await receiptResponse.json();
+    expectLocalApiSuccess(receiptResponse, receiptPayload);
     expect(receiptPayload.localOnly).toBe(true);
     expect(receiptPayload.externalCalls).toEqual([]);
     expect(receiptPayload.route.routeId).toMatch(/^route_[a-f0-9]{16}$/u);
@@ -508,6 +510,14 @@ function expectLocalApiError(
   });
   expect(typeof payload.createdAt).toBe("string");
   expect(Number.isNaN(Date.parse(payload.createdAt))).toBe(false);
+}
+
+function expectLocalApiSuccess(
+  response: { headers: { get: (name: string) => string | null } },
+  payload: { requestId?: unknown }
+): void {
+  expect(payload.requestId).toMatch(/^web_req_[0-9a-f-]{36}$/u);
+  expect(response.headers.get("x-theorem-request-id")).toBe(payload.requestId);
 }
 
 async function waitForServerReady(

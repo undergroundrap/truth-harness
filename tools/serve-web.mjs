@@ -32,6 +32,7 @@ const mimeTypes = new Map([
 ]);
 
 const server = createServer(async (request, response) => {
+  response.theoremRequestId = `web_req_${randomUUID()}`;
   try {
     const requestUrl = new URL(request.url ?? "/", `http://${host}:${port}`);
     if (requestUrl.pathname.startsWith("/api/")) {
@@ -921,17 +922,22 @@ function readJsonBody(request) {
 }
 
 function writeJson(response, status, payload) {
+  const requestId = payload?.requestId ?? response.theoremRequestId ?? `web_req_${randomUUID()}`;
+  const responsePayload = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? {
+      requestId,
+      ...payload
+    }
+    : payload;
   const headers = {
     ...webSecurityHeaders(),
     "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store"
+    "Cache-Control": "no-store",
+    "X-Theorem-Request-Id": requestId
   };
-  if (payload?.requestId) {
-    headers["X-Theorem-Request-Id"] = payload.requestId;
-  }
 
   response.writeHead(status, headers);
-  response.end(`${JSON.stringify(payload, null, 2)}\n`);
+  response.end(`${JSON.stringify(responsePayload, null, 2)}\n`);
 }
 
 function writeApiError(response, status, error, request) {

@@ -1738,6 +1738,12 @@ function localApiErrorMessage(payload, fallbackMessage) {
   return detailParts.length > 0 ? `${message} (${detailParts.join("; ")}).` : message;
 }
 
+function localApiSuccessMessage(payload, fallbackMessage) {
+  return typeof payload?.requestId === "string" && payload.requestId
+    ? `${fallbackMessage} (${payload.requestId})`
+    : fallbackMessage;
+}
+
 function applyRouteLedgerPayload(payload) {
   routeLedgerStore.clear();
   for (const route of payload.routes ?? []) {
@@ -5145,7 +5151,7 @@ composer.addEventListener("submit", async (event) => {
       body: JSON.stringify({ problem: problemForApi })
     });
     const payload = await readLocalApiJson(response, "Local receipt API failed.");
-    updateLatestActivity("Calling local API", "passed", "POST /api/receipt completed");
+    updateLatestActivity("Calling local API", "passed", localApiSuccessMessage(payload, "POST /api/receipt completed"));
 
     const viewModel = receiptToViewModel(payload.receipt, payload.route, payload.routePaths);
     viewModel.tags = uniqueTags([...receiptTags(viewModel), ...promptTags]);

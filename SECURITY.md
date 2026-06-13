@@ -16,6 +16,8 @@ The local web server sends a restrictive Content Security Policy, denies framing
 
 Local API JSON bodies are capped at 16 KiB. Malformed, oversized, rejected, or unknown API requests return no-store `theorem.web-error.v0` JSON envelopes with a local request id, `localOnly: true`, `externalCalls: []`, timestamp, HTTP method, pathname, status, and a clear error string instead of generic server text.
 
+Successful local JSON API responses also include a `web_req_*` request id in the response body and `X-Theorem-Request-Id` header so UI activity and agent logs can cite the exact local operation without echoing request bodies.
+
 Set `THEOREM_WEB_ALLOW_NONLOCAL=1` only for deliberate LAN or remote testing. Do not expose that mode to untrusted networks.
 
 The regression suite covers this boundary with a local server test that verifies:
