@@ -1034,9 +1034,11 @@ function routeLedgerRows(receipt, route) {
   const routePaths = receipt.routePaths ?? {};
   const routeReplay = route.replay?.command ?? receipt.replay;
   const obligationCounts = routeObligationCounts(route);
+  const readiness = routeReadiness(route);
   return [
     ["Route ID", route.routeId],
     ["Status", `${route.status} / ${route.finalTrust ?? receipt.trust}`],
+    ["Readiness", `${readiness.ready ? "ready" : "not-ready"} / ${readiness.strongestTrust}`],
     ["Replay", routeReplay],
     ["JSON", routePaths.json ?? "local route JSON path not returned"],
     ["Markdown", routePaths.markdown ?? "local route Markdown path not returned"],
@@ -1067,9 +1069,12 @@ function verifierRouteReportFacts(receipt) {
 
   const routePaths = receipt.routePaths ?? {};
   const obligationCounts = routeObligationCounts(route);
+  const readiness = routeReadiness(route);
   return [
     ["Route ID", route.routeId],
     ["Status", `${route.status} / ${route.finalTrust ?? receipt.trust}`],
+    ["Readiness", `${readiness.ready ? "ready" : "not-ready"} / ${readiness.strongestTrust}`],
+    ["Readiness summary", readiness.summary],
     ["Evidence kind", route.evidenceKind ?? receipt.details["Evidence kind"] ?? "unknown"],
     ["Replay", route.replay?.command ?? receipt.replay],
     ["JSON", routePaths.json ?? "local route JSON path not returned"],
@@ -1638,13 +1643,15 @@ function renderRouteHistory() {
           ? "no gaps"
           : `${route.gaps} gap${route.gaps === 1 ? "" : "s"}${route.criticalGaps ? ` / ${route.criticalGaps} critical` : ""}`;
         const obligationText = routeObligationSummaryText(route);
+        const readiness = routeReadiness(route);
         const capabilities = route.usedCapabilities?.slice(0, 3).join(", ") || "no capabilities recorded";
         const created = formatRouteDate(route.createdAt);
         return `<button class="route-record ${active ? "active" : ""}" data-route-id="${escapeHtml(route.routeId)}" type="button">
           <span class="trust-dot ${trustClass(route.finalTrust)}"></span>
           <span>
             <strong>${escapeHtml(route.problem)}</strong>
-            <small>${escapeHtml(route.finalTrust)} - ${escapeHtml(route.status)} - ${escapeHtml(gapText)} - ${escapeHtml(obligationText)}</small>
+            <small>${escapeHtml(readiness.ready ? "ready" : "not-ready")} - ${escapeHtml(readiness.strongestTrust)} - ${escapeHtml(gapText)}</small>
+            <small>${escapeHtml(route.finalTrust)} - ${escapeHtml(route.status)} - ${escapeHtml(obligationText)}</small>
             <small><code>${escapeHtml(route.routeId)}</code> - ${escapeHtml(created)} - ${escapeHtml(route.evidenceKind)}</small>
             <small>${escapeHtml(capabilities)}</small>
           </span>
@@ -1662,6 +1669,68 @@ function renderRouteHistory() {
 
 function routeObligationSummaryText(route) {
   return routeObligationCounts(route).summary;
+}
+
+function routeReadiness(route) {
+  const obligationCounts = routeObligationCounts(route);
+  const strongestTrust = route.strongestRouteTrust ?? strongestRouteTrust(route);
+  const ready = typeof route.readyForNarrowClaim === "boolean"
+    ? route.readyForNarrowClaim
+    : route.status !== "refuted" &&
+      strongestTrust !== "unverified" &&
+      strongestTrust !== "refuted" &&
+      obligationCounts.open === 0;
+  const blocking = routeCount(route.blockingObligations) || obligationCounts.open;
+  const summary = route.readinessSummary ?? routeReadinessSummary({
+    route,
+    ready,
+    strongestTrust,
+    open: obligationCounts.open,
+    criticalOpen: obligationCounts.criticalOpen
+  });
+
+  return {
+    ready,
+    strongestTrust,
+    open: obligationCounts.open,
+    criticalOpen: obligationCounts.criticalOpen,
+    blocking,
+    summary
+  };
+}
+
+function strongestRouteTrust(route) {
+  const obligations = Array.isArray(route?.proofObligations) ? route.proofObligations : [];
+  const trusts = [
+    route?.finalTrust,
+    ...obligations.flatMap((obligation) => (obligation.satisfiedBy ?? []).map((ref) => ref.trust))
+  ].filter(Boolean);
+
+  if (trusts.includes("refuted")) {
+    return "refuted";
+  }
+
+  for (const trust of ["proved", "cross-checked", "smt-checked", "dimension-checked", "exact-computed", "bounded-numeric", "source-cited", "unverified"]) {
+    if (trusts.includes(trust)) {
+      return trust;
+    }
+  }
+
+  return "unverified";
+}
+
+function routeReadinessSummary({ route, ready, strongestTrust, open, criticalOpen }) {
+  if (route?.status === "refuted" || strongestTrust === "refuted") {
+    return "This route is refuted under the recorded assumptions; cite it only as a refutation or supersession input.";
+  }
+
+  if (ready) {
+    return `Ready only as a narrow ${strongestTrust} claim matching the recorded evidence and limitations.`;
+  }
+
+  const plural = open === 1 ? "obligation" : "obligations";
+  const criticalText = criticalOpen > 0 ? `, including ${criticalOpen} critical` : "";
+  return `Not final: ${open} open ${plural}${criticalText}. Strongest support is ${strongestTrust}.`;
 }
 
 function routeObligationCounts(route) {
@@ -1727,12 +1796,16 @@ function matchesRouteHistorySearch(route, query) {
     return true;
   }
 
+  const readiness = routeReadiness(route);
   return [
     route.routeId,
     route.path,
     route.problem,
     route.finalTrust,
     route.status,
+    readiness.ready ? "ready" : "not-ready",
+    readiness.strongestTrust,
+    readiness.summary,
     route.evidenceKind,
     route.receiptRunId,
     ...(route.usedCapabilities ?? []),
@@ -4908,8 +4981,10 @@ function receiptToViewModel(receipt, route, routePaths) {
   }
   if (route?.routeId) {
     const obligationCounts = routeObligationCounts(route);
+    const readiness = routeReadiness(route);
     details["Verifier route"] = route.routeId;
     details["Route status"] = route.status;
+    details["Route readiness"] = `${readiness.ready ? "ready" : "not-ready"} / ${readiness.strongestTrust}`;
     details["Route gaps"] = String(route.gaps?.length ?? 0);
     details["Proof obligations"] = obligationCounts.summary;
     details["Open obligations"] = String(obligationCounts.open);

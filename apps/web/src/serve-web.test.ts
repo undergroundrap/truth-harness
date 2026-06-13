@@ -111,8 +111,12 @@ describe("local web route ledger API", () => {
       notRequiredProofObligations: receiptPayload.route.proofObligations.filter((obligation: { status: string }) => obligation.status === "not-required").length,
       criticalOpenProofObligations: receiptPayload.route.proofObligations.filter((obligation: { status: string; severity: string }) =>
         obligation.status === "open" && obligation.severity === "critical"
-      ).length
+      ).length,
+      readyForNarrowClaim: true,
+      strongestRouteTrust: "exact-computed",
+      blockingObligations: 0
     });
+    expect(listPayload.routes[0].readinessSummary).toContain("Ready only as a narrow exact-computed claim");
     expect(listPayload.routes[0].routePaths.json).toBe(receiptPayload.routePaths.json);
 
     const routeResponse = await fetch(`${baseUrl}/api/routes/${receiptPayload.route.routeId}`);
