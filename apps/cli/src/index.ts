@@ -82,6 +82,7 @@ import {
   parseReceiptJson,
   parseBenchmarkRunRecordJson,
   readClaimRecord,
+  readResearchSession,
   readWorkspaceReview,
   readVerifierRoute,
   renderReceipt,
@@ -1737,6 +1738,23 @@ research
       printResearchCheckpointWrite(result);
     }
   );
+
+research
+  .command("show")
+  .description("Show a private local research session by id or workspace-local JSON path.")
+  .argument("<session>", "Research session id or workspace-local JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--json", "Print the full research session JSON")
+  .action(async (sessionRef: string, options: { workspace: string; json?: boolean }) => {
+    const session = await readResearchSession(options.workspace, sessionRef);
+
+    if (options.json) {
+      printJson(session);
+      return;
+    }
+
+    printResearchSession(session);
+  });
 
 research
   .command("list")
@@ -4474,6 +4492,46 @@ function printResearchCheckpointWrite(result: ResearchSessionCheckpointWriteResu
     console.log("Next checks:");
     for (const check of result.checkpoint.nextChecks) {
       console.log(`  ${check}`);
+    }
+  }
+}
+
+function printResearchSession(session: ResearchSession): void {
+  console.log(`Truth Harness research session ${session.sessionId}`);
+  console.log(`Updated: ${session.updatedAt}`);
+  console.log(`Domains: ${session.domains.join(", ")}`);
+  console.log(`Privacy: ${session.privacy.mode} (network: ${session.privacy.networkAccess})`);
+  console.log(`Hosted models: ${session.modelPolicy.hostedModels}`);
+  console.log(`Evidence refs: ${session.evidenceRefs.length}`);
+  console.log(`Snapshot refs: ${session.snapshotRefs.length}`);
+  console.log(`Tasks: ${session.tasks.length}`);
+  console.log(`Checkpoints: ${session.checkpoints.length}`);
+  console.log("");
+  console.log(session.title);
+  console.log(session.objective);
+
+  if (session.tasks.length > 0) {
+    console.log("");
+    console.log("Tasks:");
+    for (const task of session.tasks.slice(0, 8)) {
+      console.log(`  ${task.status}: ${task.title}`);
+    }
+  }
+
+  if (session.checkpoints.length > 0) {
+    console.log("");
+    console.log("Recent checkpoints:");
+    for (const checkpoint of session.checkpoints.slice(-5)) {
+      console.log(`  ${checkpoint.checkpointId} ${checkpoint.createdAt}`);
+      console.log(`    ${checkpoint.summary}`);
+    }
+  }
+
+  if (session.warnings.length > 0) {
+    console.log("");
+    console.log("Session warnings:");
+    for (const warning of session.warnings) {
+      console.log(`  ${warning}`);
     }
   }
 }

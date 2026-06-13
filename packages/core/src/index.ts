@@ -122,6 +122,8 @@ export {
   isResearchSessionDomain,
   isResearchTaskStatus,
   listResearchSessions,
+  parseResearchSessionJson,
+  readResearchSession,
   renderResearchSessionMarkdown,
   RESEARCH_SESSION_DOMAINS,
   RESEARCH_TASK_STATUSES,

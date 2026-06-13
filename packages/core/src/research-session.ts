@@ -18,6 +18,7 @@ export const RESEARCH_SESSION_DOMAINS = [
 ] as const;
 
 export const RESEARCH_TASK_STATUSES = ["todo", "doing", "blocked", "done"] as const;
+const RESEARCH_SESSION_SCHEMA_VERSION = "truth-harness.research-session.v0" as const;
 
 export type ResearchSessionDomain = (typeof RESEARCH_SESSION_DOMAINS)[number];
 export type ResearchTaskStatus = (typeof RESEARCH_TASK_STATUSES)[number];
@@ -191,7 +192,7 @@ export async function createResearchSession(input: CreateResearchSessionInput): 
   };
   const sessionId = `session_${stableHash(sessionWithoutId).slice(0, 16)}`;
   const session: Omit<ResearchSession, "markdown"> = {
-    schemaVersion: "truth-harness.research-session.v0",
+    schemaVersion: RESEARCH_SESSION_SCHEMA_VERSION,
     sessionId,
     ...sessionWithoutId,
     updatedAt: createdAt,
@@ -279,12 +280,29 @@ export async function listResearchSessions(rootPath: string): Promise<ResearchSe
   const sessions = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => JSON.parse(await readFile(join(sessionsDir, file), "utf8")) as ResearchSession)
+      .map(async (file) => tryParseResearchSessionJson(await readFile(join(sessionsDir, file), "utf8")))
   );
 
   return sessions
-    .filter((session) => session.schemaVersion === "truth-harness.research-session.v0")
+    .filter((session): session is ResearchSession => session !== undefined)
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+export async function readResearchSession(rootPath: string, sessionRef: string): Promise<ResearchSession> {
+  const status = await requireLocalWorkspace(rootPath);
+  return (await readResearchSessionRef(status, sessionRef)).session;
+}
+
+export function parseResearchSessionJson(raw: string): ResearchSession {
+  const session = JSON.parse(raw) as ResearchSession;
+  if (session.schemaVersion !== RESEARCH_SESSION_SCHEMA_VERSION) {
+    throw new Error(`Unsupported research session schema: ${JSON.stringify(session.schemaVersion)}`);
+  }
+  if (!isResearchSessionId(session.sessionId)) {
+    throw new Error(`Invalid research session id: ${JSON.stringify(session.sessionId)}`);
+  }
+
+  return session;
 }
 
 export function renderResearchSessionMarkdown(session: Omit<ResearchSession, "markdown">): string {
@@ -446,8 +464,8 @@ async function readResearchSessionRef(
     const files = await readdir(sessionsDir);
     for (const file of files.filter((candidate) => candidate.endsWith(".json"))) {
       const path = join(sessionsDir, file);
-      const session = JSON.parse(await readFile(path, "utf8")) as ResearchSession;
-      if (session.schemaVersion === "truth-harness.research-session.v0" && session.sessionId === ref) {
+      const session = tryParseResearchSessionJson(await readFile(path, "utf8"));
+      if (session?.sessionId === ref) {
         return { session, path };
       }
     }
@@ -457,9 +475,17 @@ async function readResearchSessionRef(
 
   const path = resolveUnderRoot(status.root, ref);
   return {
-    session: JSON.parse(await readFile(path, "utf8")) as ResearchSession,
+    session: parseResearchSessionJson(await readFile(path, "utf8")),
     path
   };
+}
+
+function tryParseResearchSessionJson(raw: string): ResearchSession | undefined {
+  try {
+    return parseResearchSessionJson(raw);
+  } catch {
+    return undefined;
+  }
 }
 
 function normalizeDomains(values: ResearchSessionDomain[] | undefined, objective: string): ResearchSessionDomain[] {

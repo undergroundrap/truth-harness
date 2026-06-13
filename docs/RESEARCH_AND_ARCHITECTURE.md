@@ -668,6 +668,7 @@ Current MCP tools:
 | `truth_harness_claim_show` | Read one local claim record by id or workspace-local JSON path. |
 | `truth_harness_research_session_start` | Start a local research runbook with budgets, evidence refs, snapshot refs, and review boundaries. |
 | `truth_harness_research_session_checkpoint` | Append decisions, evidence refs, snapshot refs, and next checks to a research runbook. |
+| `truth_harness_research_session_show` | Read one local research runbook by id or path before continuing a long investigation. |
 | `truth_harness_research_session_list` | List local research sessions and checkpoints. |
 | `truth_harness_expert_review_log` | Write a local human expert-review record with scope, outcome, limitations, and next checks. |
 | `truth_harness_expert_review_list` | List local expert-review records. |

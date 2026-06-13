@@ -45,6 +45,7 @@ import {
   handleTruthHarnessReplay,
   handleTruthHarnessResearchSessionCheckpoint,
   handleTruthHarnessResearchSessionList,
+  handleTruthHarnessResearchSessionShow,
   handleTruthHarnessResearchSessionStart,
   handleTruthHarnessRouteList,
   handleTruthHarnessRouteShow,
@@ -883,6 +884,9 @@ describe("MCP tool handlers", () => {
       nextChecks: ["Attach simulation and source evidence before audit."]
     });
     const list = await handleTruthHarnessResearchSessionList({});
+    const shown = await handleTruthHarnessResearchSessionShow({
+      sessionRef: start.session.sessionId
+    });
     const validation = await handleTruthHarnessWorkspaceValidate({});
 
     expect(start.session.schemaVersion).toBe("truth-harness.research-session.v0");
@@ -895,6 +899,8 @@ describe("MCP tool handlers", () => {
     );
     expect(checkpoint.session.checkpoints).toHaveLength(1);
     expect(list.total).toBe(1);
+    expect(shown.sessionId).toBe(start.session.sessionId);
+    expect(shown.checkpoints).toHaveLength(1);
     expect(validation.passed).toBe(true);
   });
 

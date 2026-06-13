@@ -1004,6 +1004,54 @@ describe("benchmark CLI", () => {
     expect(reviewText.stdout).toContain("Claim review");
     expect(reviewText.stdout).toContain("Status: ready");
   });
+
+  it("starts, checkpoints, lists, and shows research sessions", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+
+    const start = await runCli([
+      "research",
+      "start",
+      "Investigate a reusable exact arithmetic proof route.",
+      "--workspace",
+      root,
+      "--domain",
+      "math",
+      "--task",
+      "Create a verifier route",
+      "--json"
+    ]);
+    const started = JSON.parse(start.stdout) as {
+      session: { sessionId: string; schemaVersion: string; tasks: unknown[] };
+    };
+    const checkpoint = await runCli([
+      "research",
+      "checkpoint",
+      started.session.sessionId,
+      "Recorded the next verification step for the session.",
+      "--workspace",
+      root,
+      "--next-check",
+      "Attach a workspace review handoff before delegating.",
+      "--json"
+    ]);
+    const shown = JSON.parse(
+      (await runCli(["research", "show", started.session.sessionId, "--workspace", root, "--json"])).stdout
+    ) as { sessionId: string; checkpoints: unknown[] };
+    const list = JSON.parse((await runCli(["research", "list", root, "--json"])).stdout) as { total: number };
+    const humanShow = await runCli(["research", "show", started.session.sessionId, "--workspace", root]);
+
+    expect(start.exitCode).toBe(0);
+    expect(started.session.schemaVersion).toBe("truth-harness.research-session.v0");
+    expect(started.session.sessionId).toMatch(/^session_[a-f0-9]{16}$/u);
+    expect(started.session.tasks).toHaveLength(1);
+    expect(checkpoint.exitCode).toBe(0);
+    expect(shown.sessionId).toBe(started.session.sessionId);
+    expect(shown.checkpoints).toHaveLength(1);
+    expect(list.total).toBe(1);
+    expect(humanShow.stdout).toContain(`Truth Harness research session ${started.session.sessionId}`);
+    expect(humanShow.stdout).toContain("Recent checkpoints:");
+  });
 });
 
 async function runCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {

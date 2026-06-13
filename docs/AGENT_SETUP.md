@@ -50,6 +50,7 @@ Before an agent presents a ledger claim as usable, call `truth_harness_claim_rev
 | `truth_harness_workspace_snapshot_verify` | Verify a snapshot and report changed, missing, or added artifacts. |
 | `truth_harness_research_session_start` | Start a private local research runbook with objective, budgets, evidence refs, snapshot refs, and review boundaries. |
 | `truth_harness_research_session_checkpoint` | Append a checkpoint with decisions, evidence refs, snapshot refs, and next validation checks. |
+| `truth_harness_research_session_show` | Reopen one private local research session by id or path before adding more checkpoints. |
 | `truth_harness_research_session_list` | List private local research sessions. |
 | `truth_harness_expert_review_log` | Write a private local human expert-review record with scope, evidence refs, limitations, outcome, and next checks. |
 | `truth_harness_expert_review_list` | List private local expert-review records. |

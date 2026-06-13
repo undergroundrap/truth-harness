@@ -114,6 +114,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_replay",
         "truth_harness_research_session_checkpoint",
         "truth_harness_research_session_list",
+        "truth_harness_research_session_show",
         "truth_harness_research_session_start",
         "truth_harness_route_list",
         "truth_harness_route_satisfy",
@@ -487,6 +488,16 @@ describe("Truth Harness MCP server", () => {
         arguments: {}
       });
       expect(firstText(researchListResult.content)).toContain("\"total\": 1");
+
+      const researchShowResult = await client.callTool({
+        name: "truth_harness_research_session_show",
+        arguments: {
+          sessionRef: JSON.parse(researchStartText).session.sessionId
+        }
+      });
+      const researchShowText = firstText(researchShowResult.content);
+      expect(researchShowText).toContain("\"schemaVersion\": \"truth-harness.research-session.v0\"");
+      expect(researchShowText).toContain("\"checkpoints\": [");
 
       const expertReviewResult = await client.callTool({
         name: "truth_harness_expert_review_log",

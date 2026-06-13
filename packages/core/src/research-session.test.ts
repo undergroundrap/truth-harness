@@ -7,6 +7,7 @@ import {
   addResearchSessionCheckpoint,
   createResearchSession,
   listResearchSessions,
+  readResearchSession,
   writeResearchSession
 } from "./research-session.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
@@ -79,6 +80,8 @@ describe("research sessions", () => {
       now: "2026-06-08T00:20:00.000Z"
     });
     const list = await listResearchSessions(root);
+    const shownById = await readResearchSession(root, write.session.sessionId);
+    const shownByPath = await readResearchSession(root, write.jsonPath);
 
     expect(write.jsonPath).toContain(".truth-harness");
     expect(write.markdownPath).toContain(".truth-harness");
@@ -92,6 +95,8 @@ describe("research sessions", () => {
     expect(checkpoint.markdown).toContain("exact modular certificate");
     expect(list).toHaveLength(1);
     expect(list[0]?.checkpoints).toHaveLength(1);
+    expect(shownById.sessionId).toBe(write.session.sessionId);
+    expect(shownByPath.sessionId).toBe(write.session.sessionId);
   });
 
   it("cites persisted workspace review handoffs from long-running sessions", async () => {

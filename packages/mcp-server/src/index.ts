@@ -46,6 +46,7 @@ import {
   handleTruthHarnessReplay,
   handleTruthHarnessResearchSessionCheckpoint,
   handleTruthHarnessResearchSessionList,
+  handleTruthHarnessResearchSessionShow,
   handleTruthHarnessResearchSessionStart,
   handleTruthHarnessRouteList,
   handleTruthHarnessRouteShow,
@@ -1985,6 +1986,28 @@ export function createTruthHarnessMcpServer(): McpServer {
       }
     },
     async ({ workspacePath }) => toolJson(await handleTruthHarnessResearchSessionList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "truth_harness_research_session_show",
+    {
+      title: "Show Research Session",
+      description:
+        "Read one private local research session by id or workspace-local JSON path, including evidence refs, checkpoints, budgets, and local-first boundaries.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        sessionRef: z.string().min(1).describe("Research session id or workspace-local session JSON path.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, sessionRef }) =>
+      toolJson(await handleTruthHarnessResearchSessionShow({ workspacePath, sessionRef }))
   );
 
   const expertReviewEvidenceRefSchema = z.object({

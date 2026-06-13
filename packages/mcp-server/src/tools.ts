@@ -63,6 +63,7 @@ import {
   parseBenchmarkRunRecordJson,
   repairLocalWorkspace,
   readClaimRecord,
+  readResearchSession,
   readWorkspaceReview,
   readVerifierRoute,
   renderEvidenceAuditMarkdown,
@@ -767,6 +768,11 @@ export interface TruthHarnessResearchSessionCheckpointInput {
 
 export interface TruthHarnessResearchSessionListInput {
   workspacePath?: string;
+}
+
+export interface TruthHarnessResearchSessionShowInput {
+  workspacePath?: string;
+  sessionRef: string;
 }
 
 export interface TruthHarnessExpertReviewLogInput {
@@ -1815,6 +1821,12 @@ export async function handleTruthHarnessResearchSessionList(input: TruthHarnessR
     total: sessions.length,
     sessions
   };
+}
+
+export async function handleTruthHarnessResearchSessionShow(
+  input: TruthHarnessResearchSessionShowInput
+): Promise<ResearchSession> {
+  return readResearchSession(resolveWorkspaceRoot(input.workspacePath), input.sessionRef);
 }
 
 export async function handleTruthHarnessExpertReviewLog(input: TruthHarnessExpertReviewLogInput): Promise<ExpertReviewWriteResult> {
