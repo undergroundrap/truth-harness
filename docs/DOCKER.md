@@ -60,6 +60,19 @@ Then open `http://127.0.0.1:4180`. The web service publishes only to localhost. 
 
 The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima and Z3 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; set `THEOREM_LEAN` or build a derived image once that project layout is chosen.
 
+## Web UI Safe Verifier Path
+
+The Checks tab includes a Safe Verifier Path card for machines that do not have local Maxima, Z3, or Lean installed. It does not run Docker automatically. It gives humans and agents copyable commands for the safe path:
+
+```bash
+npm run docker:proof
+npm run docker:verify
+```
+
+Use `npm run docker:proof` for the day-to-day no-runtime-network engine suite after the dev image exists. Use `npm run docker:verify` before demos or review checkpoints when you want the full image build and verification target. Image builds may download dependencies; verifier runs inside the `theorem` compose service use the no-network runtime boundary described below.
+
+The UI card is guidance, not evidence. Claims still need concrete receipts: `cross-checked` requires an accepted independent CAS record, `smt-checked` requires a concrete Z3 solver record, and `proved` requires an accepted proof-checker record.
+
 Run the MCP server over stdio:
 
 ```bash

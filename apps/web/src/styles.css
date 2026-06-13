@@ -1827,6 +1827,86 @@ dd {
   margin-top: 5px;
 }
 
+.docker-verifier-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  margin-bottom: 10px;
+  padding: 12px;
+}
+
+.docker-verifier-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
+  gap: 14px;
+  align-items: start;
+  min-width: 0;
+}
+
+.compact-heading {
+  margin-bottom: 6px;
+}
+
+.docker-verifier-card p {
+  color: #d8d2c8;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.docker-command-grid {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.docker-command-row {
+  display: grid;
+  grid-template-columns: minmax(118px, 0.5fr) minmax(0, 1fr) max-content;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0d0d0d;
+  padding: 8px;
+}
+
+.docker-command-row span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.docker-command-row code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #070707;
+  color: #e6dfce;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  padding: 5px 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.docker-verifier-notes {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.docker-verifier-notes li::marker {
+  color: var(--warn);
+}
+
 .verification-matrix {
   display: grid;
   gap: 8px;
@@ -2728,6 +2808,11 @@ textarea:focus-visible {
   }
 
   .plot-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .docker-verifier-main,
+  .docker-command-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -318,6 +318,32 @@
                     <code id="matrix-next-command">theorem bench run</code>
                   </div>
                 </div>
+                <section class="docker-verifier-card" id="docker-verifier-card" aria-label="Docker verifier fallback">
+                  <div class="docker-verifier-main">
+                    <div>
+                      <div class="panel-heading compact-heading">
+                        <h3>Safe Verifier Path</h3>
+                        <span class="status-pill waiting" id="docker-verifier-pill">checking</span>
+                      </div>
+                      <p id="docker-verifier-summary">Checking local engines and Docker verifier guidance.</p>
+                    </div>
+                    <div class="docker-command-grid">
+                      <div class="docker-command-row">
+                        <span>No-network engine suite</span>
+                        <code id="docker-proof-command">npm run docker:proof</code>
+                        <button class="text-button compact-button docker-copy-command" data-command="npm run docker:proof" type="button">Copy</button>
+                      </div>
+                      <div class="docker-command-row">
+                        <span>Build and verify image</span>
+                        <code id="docker-verify-command">npm run docker:verify</code>
+                        <button class="text-button compact-button docker-copy-command" data-command="npm run docker:verify" type="button">Copy</button>
+                      </div>
+                    </div>
+                  </div>
+                  <ul class="docker-verifier-notes" id="docker-verifier-notes">
+                    <li>Docker verifier runs produce evidence artifacts only after concrete replayable checks.</li>
+                  </ul>
+                </section>
                 <div class="verification-matrix" id="verification-matrix"></div>
                 <section class="cas-ledger-section" aria-label="Evidence artifacts">
                   <div class="panel-heading">

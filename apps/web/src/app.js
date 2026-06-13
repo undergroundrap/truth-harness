@@ -258,6 +258,9 @@ const matrixSummary = document.querySelector("#matrix-summary");
 const matrixCurrentClaim = document.querySelector("#matrix-current-claim");
 const matrixNextCommand = document.querySelector("#matrix-next-command");
 const verificationMatrix = document.querySelector("#verification-matrix");
+const dockerVerifierPill = document.querySelector("#docker-verifier-pill");
+const dockerVerifierSummary = document.querySelector("#docker-verifier-summary");
+const dockerVerifierNotes = document.querySelector("#docker-verifier-notes");
 const casArtifactList = document.querySelector("#cas-artifact-list");
 const casArtifactCount = document.querySelector("#cas-artifact-count");
 const capabilityLedger = document.querySelector("#capability-ledger");
@@ -2988,6 +2991,7 @@ function renderSafetyStatus() {
 
 function renderEngineReadinessStatus(payload) {
   if (!engineReadinessPill || !engineReadinessDetails || !engineReadinessNotes) {
+    renderDockerVerifierPath(payload);
     return;
   }
 
@@ -2996,6 +3000,7 @@ function renderEngineReadinessStatus(payload) {
     engineReadinessPill.className = "status-pill waiting";
     engineReadinessDetails.innerHTML = `<div><dt>Backends</dt><dd>checking local tools</dd></div>`;
     engineReadinessNotes.innerHTML = `<li>Backend probes report availability only; evidence still requires concrete replayable runs.</li>`;
+    renderDockerVerifierPath(payload);
     return;
   }
 
@@ -3004,6 +3009,7 @@ function renderEngineReadinessStatus(payload) {
     engineReadinessPill.className = "status-pill refuted";
     engineReadinessDetails.innerHTML = `<div><dt>Status</dt><dd>local API unavailable</dd></div>`;
     engineReadinessNotes.innerHTML = `<li>${escapeHtml(payload.error)}</li>`;
+    renderDockerVerifierPath(payload);
     return;
   }
 
@@ -3051,6 +3057,53 @@ function renderEngineReadinessStatus(payload) {
     .slice(0, 5)
     .map((note) => `<li>${escapeHtml(note)}</li>`)
     .join("");
+  renderDockerVerifierPath(payload);
+}
+
+function renderDockerVerifierPath(payload = state.safetyStatus) {
+  if (!dockerVerifierPill || !dockerVerifierSummary || !dockerVerifierNotes) {
+    return;
+  }
+
+  if (!payload) {
+    dockerVerifierPill.textContent = "checking";
+    dockerVerifierPill.className = "status-pill waiting";
+    dockerVerifierSummary.textContent = "Checking local proof, CAS, and SMT engines before recommending the isolated verifier path.";
+    dockerVerifierNotes.innerHTML = `<li>Engine probes are readiness checks only; claim evidence still requires a concrete replayable run.</li>`;
+    return;
+  }
+
+  if (payload.error) {
+    dockerVerifierPill.textContent = "manual";
+    dockerVerifierPill.className = "status-pill waiting";
+    dockerVerifierSummary.textContent = "The local status API is unavailable, so use the Docker commands manually when you are ready to verify engines.";
+    dockerVerifierNotes.innerHTML = `<li>${escapeHtml(payload.error)}</li>`;
+    return;
+  }
+
+  const readiness = payload.verification ?? {};
+  const engines = Array.isArray(readiness.engines) ? readiness.engines : [];
+  const totalCount = Number.isFinite(readiness.totalCount) ? readiness.totalCount : engines.length;
+  const readyCount = Number.isFinite(readiness.readyCount)
+    ? readiness.readyCount
+    : engines.filter((engine) => engine.status === "available").length;
+  const missingEngines = engines
+    .filter((engine) => engine.status !== "available")
+    .map((engine) => engine.displayName ?? engine.id ?? "Backend");
+  const recommended = totalCount === 0 || readyCount < totalCount;
+
+  dockerVerifierPill.textContent = recommended ? "recommended" : "optional";
+  dockerVerifierPill.className = `status-pill ${recommended ? "waiting" : "exact"}`;
+  dockerVerifierSummary.textContent = recommended
+    ? `Local host engines are incomplete${missingEngines.length > 0 ? `: ${missingEngines.join(", ")}` : ""}. Use Docker to run the pinned verifier suite without installing these tools directly on the PC.`
+    : "Local engines are available; Docker remains the reproducible verifier route for clean-room replay.";
+
+  const notes = [
+    "npm run docker:proof runs the theorem service with no external network route and records engine outputs only through normal receipts.",
+    "npm run docker:verify builds and tests the verification image; builds may fetch dependencies if the image is not already cached.",
+    "Docker status does not prove a claim. Only accepted Lean, Z3, or Maxima artifacts can satisfy their matching obligations."
+  ];
+  dockerVerifierNotes.innerHTML = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
 }
 
 function safetyStatusSummary(payload) {
@@ -4695,6 +4748,27 @@ casArtifactList.addEventListener("click", (event) => {
       ref: attachButton.dataset.evidenceRef,
       trust: attachButton.dataset.evidenceTrust,
       summary: attachButton.dataset.evidenceSummary
+    }
+  });
+});
+
+document.querySelectorAll(".docker-copy-command").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const command = button.dataset.command;
+    if (!command) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(command);
+      addActivity("human", "Copied Docker verifier command", command, "passed");
+      const originalText = button.textContent;
+      button.textContent = "Copied";
+      setTimeout(() => {
+        button.textContent = originalText;
+      }, 1200);
+    } catch (error) {
+      addActivity("web-ui", "Docker command copy failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
     }
   });
 });
