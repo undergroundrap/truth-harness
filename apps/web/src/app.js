@@ -2576,6 +2576,7 @@ function createRunbookPacket(receipt) {
       report: routes.report,
       next: nextAction?.command ?? receipt.replay
     },
+    environment: verificationEnvironmentRunbookModel(),
     satisfiedGates: satisfiedGates.map((row) => row.label),
     openGates: openGates.map((row) => ({
       label: row.label,
@@ -2597,6 +2598,9 @@ function formatRunbookPacket(packet) {
   const openGateLines = packet.openGates.length > 0
     ? packet.openGates.map((gate) => `- ${gate.label}: ${gate.status}; run ${gate.command}; ${gate.nextCheck}`).join("\n")
     : "- No open gates. Prepare narrow reviewer packet.";
+  const environmentFacts = Object.entries(packet.environment?.facts ?? {});
+  const environmentCommands = Object.entries(packet.environment?.commands ?? {});
+  const environmentNotes = packet.environment?.notes ?? [];
   return [
     "# Theorem Workbench Agent Runbook",
     "",
@@ -2634,6 +2638,15 @@ function formatRunbookPacket(packet) {
     `- Replay: ${packet.commands.replay}`,
     `- Report: ${packet.commands.report}`,
     `- Next: ${packet.commands.next}`,
+    "",
+    "## Verification Environment",
+    ...(environmentFacts.length > 0 ? environmentFacts.map(([label, value]) => `- ${label}: ${value}`) : ["- Status: not loaded"]),
+    "",
+    "Verifier commands:",
+    ...(environmentCommands.length > 0 ? environmentCommands.map(([label, command]) => `- ${label}: ${command}`) : ["- none loaded"]),
+    "",
+    "Environment notes:",
+    ...(environmentNotes.length > 0 ? environmentNotes.map((note) => `- ${note}`) : ["- none loaded"]),
     "",
     "## Open Gates",
     openGateLines,
@@ -2911,6 +2924,7 @@ async function refreshSafetyStatus() {
 
     state.safetyStatus = payload;
     renderSafetyStatus();
+    renderRunbook(receiptStore.get(state.receiptKey));
     renderReport(receiptStore.get(state.receiptKey));
     addActivity(
       "local-api",
@@ -2929,6 +2943,7 @@ async function refreshSafetyStatus() {
       error: error instanceof Error ? error.message : "Unknown local status failure."
     };
     renderSafetyStatus();
+    renderRunbook(receiptStore.get(state.receiptKey));
     renderReport(receiptStore.get(state.receiptKey));
     addActivity("local-api", "Safety center unavailable", state.safetyStatus.error, "refuted");
   }
@@ -4192,6 +4207,15 @@ function verificationEnvironmentReportModel() {
       ...(Array.isArray(docker.notes) ? docker.notes : []),
       "Environment status is not evidence. Trust labels require concrete replayable artifacts."
     ].slice(0, 6)
+  };
+}
+
+function verificationEnvironmentRunbookModel() {
+  const environment = verificationEnvironmentReportModel();
+  return {
+    facts: Object.fromEntries(environment.facts),
+    commands: Object.fromEntries(environment.commands),
+    notes: environment.notes
   };
 }
 
