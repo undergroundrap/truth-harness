@@ -248,6 +248,8 @@ const state = {
   routeHistoryQuery: "",
   selectedResearchMapSnapshotId: undefined,
   selectedResearchMapNodeId: undefined,
+  visualDetailCollapsed: false,
+  visualFocus: false,
   sidebarCollapsed: false,
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE,
@@ -393,6 +395,8 @@ const researchMapList = document.querySelector("#research-map-list");
 const copyPlotDataButton = document.querySelector("#copy-plot-data");
 const downloadPlotDataButton = document.querySelector("#download-plot-data");
 const downloadPlotSvgButton = document.querySelector("#download-plot-svg");
+const toggleVisualFocusButton = document.querySelector("#toggle-visual-focus");
+const toggleVisualDetailButton = document.querySelector("#toggle-visual-detail");
 const visualModeButtons = document.querySelectorAll(".visual-mode-button");
 const taskDockState = document.querySelector("#task-dock-state");
 const taskDockSummary = document.querySelector("#task-dock-summary");
@@ -4385,6 +4389,18 @@ function linkedClaimLabel(key) {
 
 function renderSurface() {
   document.body.dataset.surface = state.surface;
+  document.body.classList.toggle("visual-focus-active", state.visualFocus);
+  document.body.classList.toggle("visual-detail-collapsed", state.visualDetailCollapsed);
+  if (toggleVisualFocusButton) {
+    toggleVisualFocusButton.classList.toggle("active", state.visualFocus);
+    toggleVisualFocusButton.setAttribute("aria-pressed", String(state.visualFocus));
+    toggleVisualFocusButton.textContent = state.visualFocus ? "Exit focus" : "Focus";
+  }
+  if (toggleVisualDetailButton) {
+    toggleVisualDetailButton.classList.toggle("active", state.visualDetailCollapsed);
+    toggleVisualDetailButton.setAttribute("aria-pressed", String(state.visualDetailCollapsed));
+    toggleVisualDetailButton.textContent = state.visualDetailCollapsed ? "Show detail" : "Hide detail";
+  }
   surfaceTabs.forEach((button) => {
     const active = button.dataset.surface === state.surface;
     button.classList.toggle("active", active);
@@ -7488,6 +7504,36 @@ visualModeButtons.forEach((button) => {
     render();
     resetActiveSurfaceScroll();
   });
+});
+
+toggleVisualFocusButton.addEventListener("click", () => {
+  state.visualFocus = !state.visualFocus;
+  state.surface = "plot";
+  addActivity(
+    "human",
+    state.visualFocus ? "Entered visual focus" : "Exited visual focus",
+    state.visualFocus
+      ? "Receipt inspector hidden so the research map can use the full workspace."
+      : "Receipt inspector restored beside the workspace.",
+    "passed"
+  );
+  render();
+  resetActiveSurfaceScroll();
+});
+
+toggleVisualDetailButton.addEventListener("click", () => {
+  state.visualDetailCollapsed = !state.visualDetailCollapsed;
+  state.surface = "plot";
+  addActivity(
+    "human",
+    state.visualDetailCollapsed ? "Collapsed visual detail" : "Expanded visual detail",
+    state.visualDetailCollapsed
+      ? "Visual detail rail hidden so the map canvas can expand."
+      : "Visual detail rail restored with node inspector, data, and saved maps.",
+    "passed"
+  );
+  render();
+  resetActiveSurfaceScroll();
 });
 
 activityShowMore.addEventListener("click", showOlderActivity);

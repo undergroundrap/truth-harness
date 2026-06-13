@@ -195,6 +195,7 @@ button {
 
 .icon-button:hover,
 .text-button:hover,
+.text-button.active,
 .nav-item:hover,
 .project-row:hover,
 .claim-row:hover,
@@ -866,6 +867,23 @@ body[data-surface="graph"] .project-start-panel {
 body[data-surface="plot"] .work-surface,
 body[data-surface="graph"] .work-surface {
   height: clamp(540px, 76vh, 860px);
+}
+
+body.visual-focus-active[data-surface="plot"] .session-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.visual-focus-active[data-surface="plot"] .inspector,
+body.visual-focus-active[data-surface="plot"] .session-title {
+  display: none;
+}
+
+body.visual-focus-active[data-surface="plot"] .thread-panel {
+  padding: 12px clamp(14px, 2vw, 28px) 128px;
+}
+
+body.visual-focus-active[data-surface="plot"] .work-surface {
+  height: calc(100vh - 84px);
 }
 
 .thread-panel > .user-message,
@@ -1931,12 +1949,13 @@ dd {
 
 .plot-layout {
   display: grid;
-  grid-template-columns: minmax(560px, 1fr) minmax(300px, 360px);
-  align-items: start;
+  grid-template-columns: minmax(620px, 1fr) minmax(280px, 340px);
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
   gap: 10px;
   flex: 1 1 auto;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
   padding-bottom: 6px;
   padding-right: 2px;
   scrollbar-gutter: stable;
@@ -1991,8 +2010,8 @@ dd {
   flex: 0 0 auto;
   min-width: 0;
   min-height: 0;
-  height: auto;
-  max-height: min(64vh, 720px);
+  height: 100%;
+  max-height: min(68vh, 760px);
   overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid var(--line-soft);
@@ -2006,7 +2025,7 @@ dd {
   display: block;
   width: 100%;
   min-width: 0;
-  min-height: clamp(260px, 36vh, 390px);
+  min-height: clamp(320px, 46vh, 520px);
   height: auto;
 }
 
@@ -2033,13 +2052,43 @@ dd {
   gap: 12px 16px;
   flex: 0 0 auto;
   min-width: 0;
-  max-height: min(64vh, 720px);
+  height: 100%;
+  max-height: min(68vh, 760px);
   overflow: auto;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background: #101010;
   padding: 12px;
   scrollbar-gutter: stable;
+}
+
+body.visual-focus-active[data-surface="plot"] .plot-layout {
+  grid-template-columns: minmax(760px, 1fr) minmax(290px, 350px);
+}
+
+body.visual-focus-active[data-surface="plot"] .plot-canvas,
+body.visual-focus-active[data-surface="plot"] .plot-detail {
+  max-height: 100%;
+}
+
+body.visual-focus-active[data-surface="plot"] .plot-canvas svg {
+  min-height: clamp(420px, 62vh, 760px);
+}
+
+body.visual-detail-collapsed[data-surface="plot"] .plot-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.visual-detail-collapsed[data-surface="plot"] .plot-detail {
+  display: none;
+}
+
+body.visual-detail-collapsed[data-surface="plot"] .plot-canvas {
+  max-height: 100%;
+}
+
+body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
+  min-height: clamp(480px, 70vh, 900px);
 }
 
 .plot-detail h4 {
