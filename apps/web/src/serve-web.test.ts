@@ -43,6 +43,13 @@ describe("local web route ledger API", () => {
     expect(statusPayload.localOnly).toBe(true);
     expect(statusPayload.externalCalls).toBe(false);
     expect(statusPayload.capabilities).toContain("docker-verifier-guidance");
+    expect(statusPayload.safety.webServer).toMatchObject({
+      localHostGuard: true,
+      sameOriginWritesOnly: true,
+      securityHeaders: true,
+      maxJsonBodyBytes: 16 * 1024,
+      apiErrorFormat: "json"
+    });
     expect(statusPayload.dockerVerifier).toMatchObject({
       schemaVersion: "theorem.docker-verifier-guidance.v0",
       localOnly: true,

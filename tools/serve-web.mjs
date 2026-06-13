@@ -687,6 +687,8 @@ function webServerSafetyStatus() {
     localHostGuard: !allowNonLocalWeb,
     sameOriginWritesOnly: true,
     securityHeaders: true,
+    maxJsonBodyBytes: MAX_JSON_BODY_BYTES,
+    apiErrorFormat: "json",
     recommendation: allowNonLocalWeb
       ? "Non-local web access was explicitly enabled; do not expose this server to untrusted networks."
       : "The local API rejects non-local Host headers and cross-origin browser writes."

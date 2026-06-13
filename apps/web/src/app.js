@@ -2984,10 +2984,14 @@ function renderSafetyStatus() {
   const unsandboxedAllowed = mcp.unsandboxedAllowed === true;
   const mcpState = !exposed ? "disabled by default" : unsandboxedAllowed ? "unsandboxed opt-in" : "sandbox gated";
   const webGuardState = webServer.localHostGuard === false ? "non-local opt-in" : "local host + same-origin";
+  const bodyLimit = Number.isFinite(webServer.maxJsonBodyBytes)
+    ? `${Math.round(webServer.maxJsonBodyBytes / 1024)} KiB JSON`
+    : "not reported";
   const modelCallState = payload.externalCalls ? "external calls possible" : "none from local API";
   const rows = [
     ["Local API", payload.localOnly ? "local only" : "check config"],
     ["Browser guard", webGuardState],
+    ["API body limit", bodyLimit],
     ["Code run", `${formatSafetyPhrase(sandbox.provider)} / ${formatSafetyPhrase(sandbox.processSandbox)}`],
     ["Network", attested ? "none attested" : formatSafetyPhrase(sandbox.networkIsolation)],
     ["MCP tool", mcpState],
