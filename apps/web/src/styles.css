@@ -237,6 +237,95 @@ button {
   color: var(--faint);
 }
 
+.catalog-search-panel {
+  display: grid;
+  gap: 7px;
+  margin-top: 8px;
+  padding: 0 6px;
+}
+
+.catalog-search-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.catalog-search-header .mini-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalog-result-list {
+  display: grid;
+  gap: 5px;
+  max-height: min(22vh, 220px);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+
+.catalog-result-row {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #111111;
+  color: var(--text);
+  cursor: pointer;
+  padding: 8px;
+  text-align: left;
+}
+
+.catalog-result-row:hover,
+.catalog-result-row:focus-visible {
+  border-color: rgba(122, 207, 165, 0.42);
+  background: #151814;
+}
+
+.catalog-result-row strong,
+.catalog-result-row small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalog-result-row strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.catalog-result-row small {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 10.5px;
+}
+
+.catalog-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.catalog-result-meta span {
+  max-width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: #1b1a18;
+  color: var(--muted);
+  overflow: hidden;
+  padding: 1px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-shell.sidebar-collapsed .sidebar {
   visibility: hidden;
   width: 0;
@@ -271,6 +360,7 @@ button {
 .app-shell.sidebar-collapsed .project-row,
 .app-shell.sidebar-collapsed .lane-list,
 .app-shell.sidebar-collapsed .sidebar-search,
+.app-shell.sidebar-collapsed .catalog-search-panel,
 .app-shell.sidebar-collapsed .claim-row span:last-child,
 .app-shell.sidebar-collapsed .section-label,
 .app-shell.sidebar-collapsed .sidebar-footer,

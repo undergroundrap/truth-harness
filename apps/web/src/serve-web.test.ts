@@ -54,6 +54,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("docker-verifier-guidance");
     expect(statusPayload.capabilities).toContain("research-map");
     expect(statusPayload.capabilities).toContain("visual-artifacts");
+    expect(statusPayload.capabilities).toContain("catalog-search");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
       sameOriginWritesOnly: true,
@@ -160,6 +161,41 @@ describe("local web route ledger API", () => {
     });
     expect(listPayload.routes[0].readinessSummary).toContain("Ready only as a narrow exact-computed claim");
     expect(listPayload.routes[0].routePaths.json).toBe(receiptPayload.routePaths.json);
+
+    const catalogStatusBeforeResponse = await fetch(`${baseUrl}/api/catalog/status`);
+    expect(catalogStatusBeforeResponse.status).toBe(200);
+    const catalogStatusBeforePayload = await catalogStatusBeforeResponse.json();
+    expectLocalApiSuccess(catalogStatusBeforeResponse, catalogStatusBeforePayload);
+    expect(catalogStatusBeforePayload.catalog.exists).toBe(false);
+    expect(catalogStatusBeforePayload.catalog.networkAccess).toBe("none");
+
+    const catalogRebuildResponse = await fetch(`${baseUrl}/api/catalog/rebuild`, {
+      method: "POST"
+    });
+    expect(catalogRebuildResponse.status).toBe(200);
+    const catalogRebuildPayload = await catalogRebuildResponse.json();
+    expectLocalApiSuccess(catalogRebuildResponse, catalogRebuildPayload);
+    expect(catalogRebuildPayload.rebuild.schemaVersion).toBe("truth-harness.catalog-rebuild.v0");
+    expect(catalogRebuildPayload.rebuild.localOnly).toBe(true);
+    expect(catalogRebuildPayload.rebuild.networkAccess).toBe("none");
+    expect(catalogRebuildPayload.rebuild.claimCount).toBe(1);
+    expect(catalogRebuildPayload.rebuild.routeCount).toBe(1);
+    expect(catalogRebuildPayload.catalog.exists).toBe(true);
+
+    const catalogSearchResponse = await fetch(`${baseUrl}/api/catalog/search?kind=claims&trust=exact-computed&limit=5`);
+    expect(catalogSearchResponse.status).toBe(200);
+    const catalogSearchPayload = await catalogSearchResponse.json();
+    expectLocalApiSuccess(catalogSearchResponse, catalogSearchPayload);
+    expect(catalogSearchPayload.search.schemaVersion).toBe("truth-harness.catalog-search.v0");
+    expect(catalogSearchPayload.search.localOnly).toBe(true);
+    expect(catalogSearchPayload.search.networkAccess).toBe("none");
+    expect(catalogSearchPayload.search.results).toContainEqual(
+      expect.objectContaining({
+        artifactId: receiptClaimPayload.claim.claimId,
+        kind: "claims",
+        trust: "exact-computed"
+      })
+    );
 
     const reviewResponse = await fetch(`${baseUrl}/api/workspace-review`);
     expect(reviewResponse.status).toBe(200);

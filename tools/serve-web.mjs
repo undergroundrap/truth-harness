@@ -196,6 +196,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "research-session",
         "research-map",
         "visual-artifacts",
+        "catalog-search",
         "validation-plan",
         "engine-manifest",
         "verification-readiness",
@@ -205,6 +206,77 @@ async function handleApiRequest(request, response, requestUrl) {
         "safety-center"
       ]
     });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/catalog/status" && request.method === "GET") {
+    const { getWorkspaceCatalogStatus } = await loadCoreModule();
+    await ensureLocalWorkspace();
+    const catalog = await getWorkspaceCatalogStatus(projectRoot);
+    writeJson(response, 200, {
+      schemaVersion: "truth-harness.web-catalog-status-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      catalog
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/catalog/rebuild" && request.method === "POST") {
+    try {
+      const { getWorkspaceCatalogStatus, rebuildWorkspaceCatalog } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const rebuild = await rebuildWorkspaceCatalog({ rootPath: projectRoot });
+      const catalog = await getWorkspaceCatalogStatus(projectRoot);
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-catalog-rebuild-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        rebuild,
+        catalog,
+        activity: [
+          {
+            actor: "local-api",
+            action: "rebuilt-catalog",
+            detail: `${rebuild.artifactCount} artifacts indexed into .truth-harness/indexes/catalog.db. Canonical JSON remains the source of truth.`,
+            at: rebuild.rebuiltAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Catalog rebuild failed.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/catalog/search" && request.method === "GET") {
+    try {
+      const { searchWorkspaceCatalog } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const query = optionalText(requestUrl.searchParams.get("query"));
+      const kind = optionalText(requestUrl.searchParams.get("kind"));
+      const trust = optionalText(requestUrl.searchParams.get("trust"));
+      const domain = optionalText(requestUrl.searchParams.get("domain"));
+      const tag = optionalText(requestUrl.searchParams.get("tag"));
+      const limit = boundedPositiveNumberOrUndefined(requestUrl.searchParams.get("limit"), 200);
+      const search = await searchWorkspaceCatalog({
+        rootPath: projectRoot,
+        query,
+        kind,
+        trust,
+        domain,
+        tag,
+        limit
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-catalog-search-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        search
+      });
+    } catch (error) {
+      writeApiError(response, 409, error instanceof Error ? error.message : "Catalog search failed.", request);
+    }
     return;
   }
 

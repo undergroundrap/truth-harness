@@ -63,6 +63,27 @@ describe("web UI action contracts", () => {
     expect(source).toContain('data-testid="copy-engine-readiness-command"');
   });
 
+  it("keeps catalog search local, rebuildable, and visible in the sidebar", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('id="catalog-search-panel"');
+    expect(html).toContain('id="catalog-rebuild"');
+    expect(html).toContain('id="catalog-result-list"');
+    expect(source).toContain('fetch("/api/catalog/status"');
+    expect(source).toContain('fetch("/api/catalog/rebuild"');
+    expect(source).toContain('fetch(`/api/catalog/search?${params.toString()}`');
+    expect(source).toContain("function renderCatalogSearchPanel()");
+    expect(source).toContain("function openCatalogResult(button)");
+    expect(source).toContain("scheduleCatalogSearch();");
+    expect(styles).toContain(".catalog-search-panel");
+    expect(styles).toContain(".catalog-result-row");
+    expect(styles).toContain("overflow-wrap: anywhere;");
+  });
+
   it("keeps the bottom dock as a readable command console instead of a cramped strip", async () => {
     const [html, source, styles] = await Promise.all([
       readFile(appHtmlPath, "utf8"),

@@ -292,6 +292,11 @@ const state = {
   replayLimit: REPLAY_PAGE_SIZE,
   safetyStatus: undefined,
   workspaceReadiness: undefined,
+  catalogStatus: undefined,
+  catalogSearch: undefined,
+  catalogSearchLoading: false,
+  catalogError: undefined,
+  catalogRebuildLoading: false,
   selectedWorkspaceReviewItemId: undefined,
   selectedWorkspaceObligationId: undefined
 };
@@ -306,6 +311,9 @@ const researcherNameSummary = document.querySelector("#researcher-name-summary")
 const claimList = document.querySelector("#claim-list");
 const sidebarSearch = document.querySelector("#sidebar-search");
 const sidebarSearchCount = document.querySelector("#sidebar-search-count");
+const catalogSearchStatus = document.querySelector("#catalog-search-status");
+const catalogRebuildButton = document.querySelector("#catalog-rebuild");
+const catalogResultList = document.querySelector("#catalog-result-list");
 const laneButtons = document.querySelectorAll(".lane-row");
 const laneStatus = document.querySelector("#lane-status");
 const projectStartLane = document.querySelector("#project-start-lane");
@@ -1042,6 +1050,7 @@ const laneProtocols = {
   }
 };
 let replayTimer;
+let catalogSearchTimer;
 let sidebarResizeActive = false;
 let sidebarResizePointerId = null;
 let sidebarResizeStartX = 0;
@@ -1057,6 +1066,7 @@ addActivity("system", "Local API ready", "UI will submit prompts only to local r
 render();
 void refreshSafetyStatus();
 void refreshWorkspaceReadiness();
+void refreshCatalogStatus();
 void refreshClaimLedger();
 void refreshRouteLedger();
 void refreshResearchMap();
@@ -1146,6 +1156,7 @@ function render() {
   renderReplay(receipt);
   renderReport(receipt);
   updateClaimRecordButtons(receipt);
+  renderCatalogSearchPanel();
   applySidebarSearch();
   document.querySelectorAll(".segment").forEach((button) => {
     button.classList.toggle("active", button.dataset.level === state.level);
@@ -7502,6 +7513,241 @@ async function refreshWorkspaceReadiness({ announce = true } = {}) {
   }
 }
 
+async function refreshCatalogStatus({ announce = false } = {}) {
+  if (!catalogSearchStatus) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/catalog/status", {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local catalog status API failed.");
+    state.catalogStatus = payload.catalog;
+    state.catalogError = undefined;
+    renderCatalogSearchPanel();
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded catalog status",
+        localApiSuccessMessage(payload, catalogStatusSummary(payload.catalog)),
+        payload.catalog?.readable ? "passed" : "waiting"
+      );
+    }
+  } catch (error) {
+    state.catalogStatus = undefined;
+    state.catalogError = error instanceof Error ? error.message : "Unknown catalog status failure.";
+    renderCatalogSearchPanel();
+    addActivity("local-api", "Catalog status unavailable", state.catalogError, "waiting");
+  }
+}
+
+async function rebuildCatalogIndex() {
+  if (!catalogRebuildButton || state.catalogRebuildLoading) {
+    return;
+  }
+
+  state.catalogRebuildLoading = true;
+  state.catalogError = undefined;
+  renderCatalogSearchPanel();
+  addActivity("human", "Rebuilding catalog", "Local SQLite catalog is being rebuilt from canonical .truth-harness JSON artifacts.", "waiting");
+
+  try {
+    const response = await fetch("/api/catalog/rebuild", {
+      method: "POST",
+      headers: {
+        Accept: "application/json"
+      }
+    });
+    const payload = await readLocalApiJson(response, "Local catalog rebuild failed.");
+    state.catalogStatus = payload.catalog;
+    state.catalogSearch = undefined;
+    updateLatestActivity(
+      "Rebuilding catalog",
+      "passed",
+      localApiSuccessMessage(payload, `${payload.rebuild?.artifactCount ?? 0} artifacts indexed; canonical JSON remains authoritative.`)
+    );
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, "passed", item.at);
+    }
+    await refreshCatalogSearch({ force: true, announce: false });
+  } catch (error) {
+    state.catalogError = error instanceof Error ? error.message : "Unknown catalog rebuild failure.";
+    updateLatestActivity("Rebuilding catalog", "refuted", state.catalogError);
+  } finally {
+    state.catalogRebuildLoading = false;
+    renderCatalogSearchPanel();
+  }
+}
+
+function scheduleCatalogSearch() {
+  window.clearTimeout(catalogSearchTimer);
+  catalogSearchTimer = window.setTimeout(() => {
+    void refreshCatalogSearch();
+  }, 220);
+}
+
+async function refreshCatalogSearch({ force = false, announce = false } = {}) {
+  if (!catalogResultList) {
+    return;
+  }
+
+  const query = state.sidebarQuery.trim();
+  if (!force && query.length < 2) {
+    state.catalogSearch = undefined;
+    state.catalogError = undefined;
+    renderCatalogSearchPanel();
+    return;
+  }
+
+  if (!state.catalogStatus?.readable && !force) {
+    renderCatalogSearchPanel();
+    return;
+  }
+
+  state.catalogSearchLoading = true;
+  state.catalogError = undefined;
+  renderCatalogSearchPanel();
+
+  try {
+    const params = new URLSearchParams();
+    if (query) {
+      params.set("query", query);
+    }
+    params.set("limit", "8");
+    const response = await fetch(`/api/catalog/search?${params.toString()}`, {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local catalog search failed.");
+    state.catalogSearch = payload.search;
+    state.catalogError = undefined;
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Searched catalog",
+        localApiSuccessMessage(payload, `${payload.search?.total ?? 0} catalog rows matched ${query || "all indexed artifacts"}.`),
+        "passed"
+      );
+    }
+  } catch (error) {
+    state.catalogSearch = undefined;
+    state.catalogError = error instanceof Error ? error.message : "Unknown catalog search failure.";
+  } finally {
+    state.catalogSearchLoading = false;
+    renderCatalogSearchPanel();
+    applySidebarSearch();
+  }
+}
+
+function renderCatalogSearchPanel() {
+  if (!catalogSearchStatus || !catalogRebuildButton || !catalogResultList) {
+    return;
+  }
+
+  const query = state.sidebarQuery.trim();
+  const catalog = state.catalogStatus;
+  const results = state.catalogSearch?.results ?? [];
+  catalogRebuildButton.disabled = state.catalogRebuildLoading;
+  catalogRebuildButton.textContent = state.catalogRebuildLoading ? "Rebuilding" : "Rebuild";
+  catalogSearchStatus.textContent = state.catalogSearchLoading
+    ? "catalog searching"
+    : state.catalogError
+      ? "catalog needs attention"
+      : catalogStatusSummary(catalog);
+
+  if (state.catalogError) {
+    catalogResultList.innerHTML = `<div class="sidebar-empty">${escapeHtml(state.catalogError)}</div>`;
+    return;
+  }
+
+  if (!catalog) {
+    catalogResultList.innerHTML = `<div class="sidebar-empty">Checking local catalog status.</div>`;
+    return;
+  }
+
+  if (!catalog.readable) {
+    catalogResultList.innerHTML = `<div class="sidebar-empty">Rebuild the local catalog to search receipts, routes, claims, visuals, and reviews.</div>`;
+    return;
+  }
+
+  if (query.length < 2) {
+    catalogResultList.innerHTML = `<div class="sidebar-empty">Type 2+ characters to search ${catalog.artifactCount ?? 0} indexed artifacts.</div>`;
+    return;
+  }
+
+  if (state.catalogSearchLoading) {
+    catalogResultList.innerHTML = `<div class="sidebar-empty">Searching local catalog.</div>`;
+    return;
+  }
+
+  catalogResultList.innerHTML = results.length === 0
+    ? `<div class="sidebar-empty">No catalog rows match this search.</div>`
+    : results.map(catalogResultHtml).join("");
+}
+
+function catalogResultHtml(row) {
+  const title = row.title || row.summary || row.artifactId || row.path;
+  const subtitle = [row.path, row.summary].filter(Boolean).join(" - ");
+  return `<button class="catalog-result-row" data-catalog-kind="${escapeHtml(row.kind)}" data-catalog-artifact-id="${escapeHtml(row.artifactId ?? "")}" data-catalog-path="${escapeHtml(row.path)}" type="button">
+    <strong>${escapeHtml(title)}</strong>
+    <small>${escapeHtml(subtitle || row.kind)}</small>
+    <span class="catalog-result-meta">
+      <span>${escapeHtml(row.kind)}</span>
+      ${row.trust ? `<span>${escapeHtml(row.trust)}</span>` : ""}
+      ${row.domain ? `<span>${escapeHtml(row.domain)}</span>` : ""}
+    </span>
+  </button>`;
+}
+
+function catalogStatusSummary(catalog) {
+  if (!catalog) {
+    return "catalog checking";
+  }
+  if (!catalog.exists) {
+    return "catalog missing";
+  }
+  if (!catalog.readable) {
+    return "catalog unreadable";
+  }
+  if (catalog.stale) {
+    return "catalog stale";
+  }
+  return `${catalog.artifactCount ?? 0} indexed`;
+}
+
+function openCatalogResult(button) {
+  const kind = button.dataset.catalogKind;
+  const artifactId = button.dataset.catalogArtifactId;
+  const path = button.dataset.catalogPath;
+
+  if (kind === "routes" && artifactId) {
+    void openSavedRoute(artifactId);
+    return;
+  }
+
+  if (kind === "claims" && artifactId) {
+    const key = receiptKeyForClaimId(artifactId);
+    if (key) {
+      setReplayPlaying(false);
+      state.receiptKey = key;
+      state.level = "middle";
+      state.selectedGraphIndex = 0;
+      state.replayIndex = 0;
+      promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
+      render();
+      return;
+    }
+  }
+
+  addActivity("human", "Opened catalog row", `${artifactId || path || kind} is indexed locally; open the matching artifact from its ledger or CLI path.`, "waiting");
+}
+
 function renderSafetyStatus() {
   if (!safetyStatusPill || !safetyDetails || !safetyNotes) {
     return;
@@ -8177,6 +8423,11 @@ function applySidebarSearch() {
   });
 
   matched += claimList.querySelectorAll(".claim-row").length;
+  const catalogResults = state.catalogSearch?.results?.length ?? 0;
+  if (query && catalogResults > 0) {
+    matched += catalogResults;
+    total += catalogResults;
+  }
   sidebarSearchCount.textContent = query ? `${matched} of ${total}` : "all items";
 }
 
@@ -10260,6 +10511,19 @@ claimList.addEventListener("click", (event) => {
   document.querySelector("#surface-checks").scrollTop = 0;
 });
 
+catalogRebuildButton?.addEventListener("click", () => {
+  void rebuildCatalogIndex();
+});
+
+catalogResultList?.addEventListener("click", (event) => {
+  const button = event.target.closest(".catalog-result-row");
+  if (!button) {
+    return;
+  }
+
+  openCatalogResult(button);
+});
+
 claimLedgerList.addEventListener("click", (event) => {
   const button = event.target.closest(".ledger-record");
   if (!button) {
@@ -10371,6 +10635,7 @@ sidebarSearch.addEventListener("input", () => {
   state.sidebarQuery = sidebarSearch.value;
   renderClaimList();
   applySidebarSearch();
+  scheduleCatalogSearch();
 });
 
 claimLedgerSearch.addEventListener("input", () => {

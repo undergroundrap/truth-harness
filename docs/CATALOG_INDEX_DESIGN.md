@@ -218,7 +218,7 @@ All outputs should be structured JSON-first and include whether the response cam
 1. Add `packages/core/src/workspace-catalog.ts` with schema, rebuild, status, and search. Done.
 2. Add CLI `catalog` commands. Done.
 3. Add tests proving rebuild determinism, search behavior, corrupt status, FTS escaping, and vault plaintext exclusion. Done.
-4. Route web search through catalog if available, fallback to existing APIs.
+4. Route web search through catalog if available, fallback to existing APIs. Done for sidebar workspace search with explicit rebuild/status prompts.
 5. Route `claim list`, `route list`, and visual/artifact search through catalog for large workspaces.
 6. Add MCP catalog tools for agents. Done.
 7. Add incremental refresh and stale detection.
