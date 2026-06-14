@@ -716,21 +716,38 @@
             <span>Verification checks</span>
             <strong id="task-dock-summary">local gates loading</strong>
           </summary>
-          <div class="task-list" id="task-list">
-            <div class="task-row">
-              <span class="task-state passed"></span>
-              <span>Receipt envelope</span>
-              <strong>passed</strong>
-            </div>
-            <div class="task-row">
-              <span class="task-state waiting"></span>
-              <span>Symbolic / CAS cross-check</span>
-              <strong>waiting</strong>
-            </div>
-            <div class="task-row">
-              <span class="task-state waiting"></span>
-              <span>Paper-ready packet</span>
-              <strong>waiting</strong>
+          <div class="task-dock-body">
+            <section class="task-console" aria-label="Agent command console">
+              <div class="task-console-head">
+                <span>Agent console</span>
+                <button class="text-button compact-button" id="copy-task-console" type="button">Copy</button>
+              </div>
+              <div class="task-console-list" id="task-console-list">
+                <div class="task-console-row">
+                  <span class="task-state waiting"></span>
+                  <div>
+                    <strong>Loading local command surface</strong>
+                    <code>truth-harness ask "compute 3 / 4 + 5 / 8" --json</code>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <div class="task-list" id="task-list">
+              <div class="task-row">
+                <span class="task-state passed"></span>
+                <span>Receipt envelope</span>
+                <strong>passed</strong>
+              </div>
+              <div class="task-row">
+                <span class="task-state waiting"></span>
+                <span>Symbolic / CAS cross-check</span>
+                <strong>waiting</strong>
+              </div>
+              <div class="task-row">
+                <span class="task-state waiting"></span>
+                <span>Paper-ready packet</span>
+                <strong>waiting</strong>
+              </div>
             </div>
           </div>
         </details>

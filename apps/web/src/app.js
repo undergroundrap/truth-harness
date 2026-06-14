@@ -443,6 +443,8 @@ const visualModeButtons = document.querySelectorAll(".visual-mode-button");
 const taskDockState = document.querySelector("#task-dock-state");
 const taskDockSummary = document.querySelector("#task-dock-summary");
 const taskList = document.querySelector("#task-list");
+const taskConsoleList = document.querySelector("#task-console-list");
+const copyTaskConsoleButton = document.querySelector("#copy-task-console");
 const surfaceStatusText = {
   trace: "math workspace",
   plot: "visual modes",
@@ -6052,6 +6054,61 @@ function renderTaskDock(receipt) {
       <strong>${escapeHtml(statusLabel(row.status))}</strong>
     </div>`)
     .join("");
+  if (taskConsoleList) {
+    const consoleItems = taskConsoleItems(receipt, rows);
+    taskConsoleList.innerHTML = consoleItems.length === 0
+      ? `<div class="task-console-row">
+        <span class="task-state skipped"></span>
+        <div>
+          <strong>No command surface yet</strong>
+          <code>Submit or open a route to expose replayable local commands.</code>
+        </div>
+      </div>`
+      : consoleItems
+        .map((item) => `<div class="task-console-row">
+          <span class="task-state ${escapeHtml(item.status)}"></span>
+          <div>
+            <strong>${escapeHtml(item.label)}</strong>
+            <code>${escapeHtml(item.command)}</code>
+          </div>
+        </div>`)
+        .join("");
+  }
+}
+
+function taskConsoleItems(receipt, rows = []) {
+  const items = [];
+  const seenCommands = new Set();
+  const pushCommand = (label, command, status = "waiting") => {
+    const normalizedCommand = String(command ?? "").trim();
+    if (!normalizedCommand || seenCommands.has(normalizedCommand)) {
+      return;
+    }
+
+    seenCommands.add(normalizedCommand);
+    items.push({
+      label,
+      command: normalizedCommand,
+      status
+    });
+  };
+
+  pushCommand("Replay current receipt", receipt?.replay, receipt?.trust === "refuted" ? "refuted" : "passed");
+  for (const row of rows.filter((candidate) => ["missing", "waiting"].includes(candidate.status))) {
+    pushCommand(row.label, row.command, row.status);
+  }
+  for (const row of rows.filter((candidate) => candidate.status === "passed")) {
+    pushCommand(row.label, row.command, row.status);
+  }
+
+  return items.slice(0, 5);
+}
+
+function formatTaskConsoleCommands(receipt) {
+  const rows = receipt ? verificationRows(receipt) : [];
+  return taskConsoleItems(receipt, rows)
+    .map((item, index) => `${index + 1}. ${item.label}\n   ${item.command}`)
+    .join("\n");
 }
 
 async function refreshSafetyStatus() {
@@ -7584,6 +7641,25 @@ async function copyActivityLog() {
     copiedDetail: `${activityEvents.length} events copied to clipboard.`,
     fallbackTitle: "Downloaded activity log",
     fallbackDetail: `${activityEvents.length} events were saved as plain text instead.`
+  });
+}
+
+async function copyTaskConsoleCommands() {
+  const receipt = receiptStore.get(state.receiptKey);
+  const text = formatTaskConsoleCommands(receipt);
+  if (!text) {
+    return;
+  }
+
+  await copyOrDownloadText({
+    text: `${text}\n`,
+    filename: `truth-harness-agent-console-${safeFilenameTimestamp()}.txt`,
+    type: "text/plain",
+    button: copyTaskConsoleButton,
+    copiedTitle: "Copied agent console commands",
+    copiedDetail: `${taskConsoleItems(receipt, verificationRows(receipt)).length} current commands copied.`,
+    fallbackTitle: "Downloaded agent console commands",
+    fallbackDetail: "the current command surface was saved as plain text instead."
   });
 }
 
@@ -9169,6 +9245,12 @@ activityLog.addEventListener("scroll", () => {
 copyActivityButton.addEventListener("click", () => {
   copyActivityLog().catch((error) => {
     addActivity("web-ui", "Copy failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+  });
+});
+
+copyTaskConsoleButton?.addEventListener("click", () => {
+  copyTaskConsoleCommands().catch((error) => {
+    addActivity("web-ui", "Copy agent console failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
   });
 });
 

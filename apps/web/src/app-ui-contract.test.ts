@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const appSourcePath = resolve("apps/web/src/app.js");
+const appHtmlPath = resolve("apps/web/index.html");
+const appStylesPath = resolve("apps/web/src/styles.css");
 
 describe("web UI action contracts", () => {
   it("opens project queue actions directly into the focused checks work order", async () => {
@@ -59,5 +61,24 @@ describe("web UI action contracts", () => {
     expect(source).toContain('data-testid="workspace-action-route"');
     expect(source).toContain('data-testid="checks-work-open-route"');
     expect(source).toContain('data-testid="copy-engine-readiness-command"');
+  });
+
+  it("keeps the bottom dock as a readable command console instead of a cramped strip", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('class="task-dock-body"');
+    expect(html).toContain('id="task-console-list"');
+    expect(html).toContain('id="copy-task-console"');
+    expect(source).toContain("function taskConsoleItems(receipt, rows = [])");
+    expect(source).toContain("function formatTaskConsoleCommands(receipt)");
+    expect(source).toContain("copyTaskConsoleButton?.addEventListener");
+    expect(styles).toContain("width: min(1120px, calc(100% - 36px));");
+    expect(styles).toContain("grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.45fr);");
+    expect(styles).toContain("grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));");
+    expect(styles).toContain("overflow-wrap: anywhere;");
   });
 });
