@@ -5346,6 +5346,7 @@ function renderChecksWorkOrder(receipt, rows) {
   const slot = Array.isArray(item.evidenceSlots) ? item.evidenceSlots[0] : undefined;
   const runAction = routeMatches ? checksWorkRunActionHtml(focusedRow) : "";
   const existingEvidence = routeMatches ? focusedEvidenceSuggestion(focusedRow) : undefined;
+  const heldBackEvidence = routeMatches && !existingEvidence ? focusedHeldBackEvidence(focusedRow) : undefined;
   checksWorkOrder.hidden = false;
   checksWorkOrder.className = `checks-work-order ${routeMatches ? "route-ready" : "route-mismatch"}`;
   checksWorkOrder.innerHTML = `<div class="checks-work-head">
@@ -5364,6 +5365,12 @@ function renderChecksWorkOrder(receipt, rows) {
     <button class="text-button compact-button clear-checks-work-order" type="button">Clear focus</button>
   </div>
   <p>${escapeHtml(item.summary ?? "")}</p>
+  ${heldBackEvidence ? `<div class="checks-work-note warning">
+    <span class="mini-label">Evidence held back</span>
+    <strong>${escapeHtml(heldBackEvidence.kind.toUpperCase())} record cannot close this obligation yet.</strong>
+    <small>${escapeHtml(`Found ${heldBackEvidence.trust}/${heldBackEvidence.status}; requires ${heldBackEvidence.expectedTrust}.`)}</small>
+    <small>${escapeHtml(heldBackEvidence.path)}</small>
+  </div>` : ""}
   <div class="checks-work-grid">
     <section>
       <span class="mini-label">Evidence slot</span>
@@ -5472,10 +5479,7 @@ function focusedEvidenceSuggestion(row) {
     return undefined;
   }
 
-  const artifacts = [
-    ...[...casCheckStore.values()].map((check) => normalizeCasAttachment(check)),
-    ...[...smtCheckStore.values()].map((check) => normalizeSmtAttachment(check))
-  ].sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")));
+  const artifacts = focusedEvidenceArtifacts();
 
   return artifacts.find((artifact) => {
     if (row.obligationKind === "solver-encoding") {
@@ -5489,6 +5493,42 @@ function focusedEvidenceSuggestion(row) {
 
     return false;
   });
+}
+
+function focusedHeldBackEvidence(row) {
+  if (!row || row.status === "passed" || !row.obligationId) {
+    return undefined;
+  }
+
+  const artifacts = focusedEvidenceArtifacts();
+  const candidate = artifacts.find((artifact) => {
+    if (row.obligationKind === "solver-encoding") {
+      return artifact.kind === "smt";
+    }
+
+    if (row.obligationKind === "independent-check") {
+      return artifact.kind === "cas" || artifact.kind === "smt";
+    }
+
+    return false;
+  });
+  if (!candidate) {
+    return undefined;
+  }
+
+  return {
+    ...candidate,
+    expectedTrust: row.obligationKind === "solver-encoding"
+      ? "smt-checked or proved evidence"
+      : "cross-checked, smt-checked, or proved evidence"
+  };
+}
+
+function focusedEvidenceArtifacts() {
+  return [
+    ...[...casCheckStore.values()].map((check) => normalizeCasAttachment(check)),
+    ...[...smtCheckStore.values()].map((check) => normalizeSmtAttachment(check))
+  ].sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")));
 }
 
 function selectedWorkspaceReviewItem() {

@@ -3485,6 +3485,22 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   overflow-wrap: anywhere;
 }
 
+.checks-work-note {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 1px solid rgba(230, 195, 106, 0.25);
+  border-radius: 8px;
+  background: rgba(45, 35, 12, 0.34);
+  padding: 9px;
+}
+
+.checks-work-note strong {
+  color: #f3ead7;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .checks-work-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
