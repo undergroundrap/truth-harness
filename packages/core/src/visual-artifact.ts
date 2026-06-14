@@ -49,6 +49,7 @@ export type VisualArtifactRendererSourceLanguage =
   | "text";
 
 export type VisualArtifactSourceKind =
+  | "visual"
   | "receipt"
   | "claim"
   | "route"

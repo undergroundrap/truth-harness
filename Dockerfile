@@ -12,7 +12,7 @@ ENV CI=true \
     PATH="/opt/truth-harness-python/bin:${PATH}"
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates maxima-sage maxima-sage-share python3 python3-pip python3-venv tini z3 \
+  && apt-get install -y --no-install-recommends ca-certificates graphviz maxima-sage maxima-sage-share python3 python3-pip python3-venv tini z3 \
   && python3 -m venv /opt/truth-harness-python \
   && /opt/truth-harness-python/bin/python -m pip install sympy==1.14.0 \
   && useradd --create-home --uid 10001 truth \

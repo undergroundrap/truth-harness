@@ -221,6 +221,7 @@ export {
   writeResearchCanvasVisualArtifact,
   writeWorkspaceGraphVisualArtifact
 } from "./visual-adapters.js";
+export { renderGraphvizVisualArtifact } from "./visual-renderer.js";
 export { runWorkspaceStress } from "./workspace-stress.js";
 export { getEngineManifest } from "./engine-manifest.js";
 export {
@@ -551,6 +552,12 @@ export type {
   ResearchCanvasVisualInput,
   WorkspaceGraphVisualInput
 } from "./visual-adapters.js";
+export type {
+  GraphvizVisualRenderInput,
+  GraphvizVisualRenderResult,
+  VisualRendererCommandResult,
+  VisualRendererCommandRunner
+} from "./visual-renderer.js";
 export type {
   WorkspaceStressInput,
   WorkspaceStressResult

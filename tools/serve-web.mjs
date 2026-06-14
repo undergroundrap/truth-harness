@@ -40,6 +40,7 @@ const VISUAL_PAYLOAD_FORMATS = new Set([
   "table-json"
 ]);
 const VISUAL_SOURCE_KINDS = new Set([
+  "visual",
   "receipt",
   "claim",
   "route",

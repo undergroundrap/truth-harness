@@ -215,6 +215,7 @@
     },
     "sourceKind": {
       "enum": [
+        "visual",
         "receipt",
         "claim",
         "route",

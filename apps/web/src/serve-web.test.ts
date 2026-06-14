@@ -375,6 +375,44 @@ describe("local web route ledger API", () => {
     expectLocalApiSuccess(visualReadResponse, visualReadPayload);
     expect(visualReadPayload.visual.visualId).toBe(visualPayload.visual.visualId);
 
+    const visualLinkedResponse = await fetch(`${baseUrl}/api/visuals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: "Rendered concept map",
+        kind: "concept-map",
+        renderer: {
+          engine: "graphviz"
+        },
+        sourceRefs: [
+          {
+            kind: "visual",
+            ref: visualPayload.visual.visualId,
+            label: "Source visual artifact"
+          }
+        ],
+        replayCommand: `truth-harness visual render ${visualPayload.visual.visualId} --engine graphviz`,
+        payload: {
+          format: "svg",
+          content: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 120 80\"><text x=\"10\" y=\"40\">rendered</text></svg>",
+          width: 120,
+          height: 80
+        },
+        tags: ["visual-render"]
+      })
+    });
+    expect(visualLinkedResponse.status).toBe(200);
+    const visualLinkedPayload = await visualLinkedResponse.json();
+    expectLocalApiSuccess(visualLinkedResponse, visualLinkedPayload);
+    expect(visualLinkedPayload.visual.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        kind: "visual",
+        ref: visualPayload.visual.visualId
+      })
+    );
+
     const routeResponse = await fetch(`${baseUrl}/api/routes/${receiptPayload.route.routeId}`);
     expect(routeResponse.status).toBe(200);
     const routePayload = await routeResponse.json();

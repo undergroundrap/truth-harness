@@ -92,6 +92,7 @@ import {
   readWorkspaceReview,
   readVerifierRoute,
   renderReceipt,
+  renderGraphvizVisualArtifact,
   renderTeachingPacketMarkdown,
   repairLocalWorkspace,
   replayReceipt,
@@ -587,6 +588,50 @@ visual
 
     printVisualArtifactWrite(result);
   });
+
+visual
+  .command("render")
+  .description("Render a saved renderer source into a new local visual artifact.")
+  .argument("<visual>", "Visual id or workspace-local visual JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--engine <engine>", "Renderer engine. Currently: graphviz", "graphviz")
+  .option("--dot-command <command>", "Override Graphviz dot executable")
+  .option("--timeout-ms <ms>", "Renderer timeout in milliseconds", parsePositiveInteger, 5000)
+  .option("--title <title>", "Optional title for the rendered visual artifact")
+  .option("--json", "Print the full visual render result JSON")
+  .action(
+    async (
+      visualRef: string,
+      options: {
+        workspace: string;
+        engine: string;
+        dotCommand?: string;
+        timeoutMs: number;
+        title?: string;
+        json?: boolean;
+      }
+    ) => {
+      if (options.engine !== "graphviz") {
+        throw new Error(`Unsupported visual render engine ${JSON.stringify(options.engine)}. Expected "graphviz".`);
+      }
+
+      const result = await renderGraphvizVisualArtifact({
+        rootPath: options.workspace,
+        visualRef,
+        dotCommand: options.dotCommand,
+        timeoutMs: options.timeoutMs,
+        title: options.title
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      console.log(`Rendered ${result.sourceVisual.visualId} with ${result.renderer}`);
+      printVisualArtifactWrite(result);
+    }
+  );
 
 visual
   .command("list")
@@ -6734,6 +6779,7 @@ const VISUAL_PAYLOAD_FORMATS: VisualArtifactPayloadFormat[] = [
 ];
 
 const VISUAL_SOURCE_KINDS: VisualArtifactSourceKind[] = [
+  "visual",
   "receipt",
   "claim",
   "route",
