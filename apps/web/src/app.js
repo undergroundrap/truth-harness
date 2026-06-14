@@ -282,7 +282,8 @@ const state = {
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE,
   safetyStatus: undefined,
-  workspaceReadiness: undefined
+  workspaceReadiness: undefined,
+  selectedWorkspaceReviewItemId: undefined
 };
 
 const appShell = document.querySelector("#app-shell");
@@ -313,6 +314,7 @@ const routeHistoryCount = document.querySelector("#route-history-count");
 const routeHistorySearch = document.querySelector("#route-history-search");
 const workspaceReviewList = document.querySelector("#workspace-review-list");
 const workspaceReviewCount = document.querySelector("#workspace-review-count");
+const workspaceReviewAction = document.querySelector("#workspace-review-action");
 const mainGraphList = document.querySelector("#main-graph-list");
 const graphDetail = document.querySelector("#graph-detail");
 const branchMap = document.querySelector("#branch-map");
@@ -3517,6 +3519,9 @@ function renderWorkspaceReview() {
   workspaceReviewCount.textContent = workspaceReviewCountText(summary);
   const visibleItems = items.slice(0, 8);
   const hiddenCount = Math.max(0, items.length - visibleItems.length);
+  if (state.selectedWorkspaceReviewItemId && !items.some((item) => item.itemId === state.selectedWorkspaceReviewItemId)) {
+    state.selectedWorkspaceReviewItemId = undefined;
+  }
 
   workspaceReviewList.innerHTML = visibleItems.length === 0
     ? `<div class="activity-empty">No project queue items yet. Saved verifier routes and claim blockers will appear here.</div>`
@@ -3526,7 +3531,8 @@ function renderWorkspaceReview() {
         const source = workspaceReviewSourceText(item);
         const acceptance = workspaceReviewAcceptanceHtml(item);
         const canOpenRoute = Boolean(item.routeId);
-        return `<article class="queue-item queue-${escapeHtml(item.priority ?? "medium")}">
+        const active = item.itemId === state.selectedWorkspaceReviewItemId;
+        return `<article class="queue-item queue-${escapeHtml(item.priority ?? "medium")} ${active ? "active" : ""}">
           <div class="queue-main">
             <span class="queue-priority">${escapeHtml(item.priority ?? "medium")}</span>
             <div>
@@ -3542,6 +3548,7 @@ function renderWorkspaceReview() {
             <code class="queue-command">${escapeHtml(item.command ?? "")}</code>
           </details>
           <div class="queue-actions">
+            <button class="text-button compact-button open-workspace-action" data-review-index="${index}" type="button">${active ? "Viewing" : "Open action"}</button>
             ${canOpenRoute ? `<button class="text-button compact-button open-workspace-route" data-route-id="${escapeHtml(item.routeId)}" type="button">Open route</button>` : ""}
             <button class="text-button compact-button copy-workspace-packet" data-review-index="${index}" type="button">Copy packet</button>
             <button class="text-button compact-button copy-workspace-command" data-review-index="${index}" type="button">Copy command</button>
@@ -3553,6 +3560,20 @@ function renderWorkspaceReview() {
         ? `<div class="queue-footer">${hiddenCount} more local action${hiddenCount === 1 ? "" : "s"} available in the CLI workspace review.</div>`
         : "");
 
+  renderWorkspaceReviewAction(items);
+
+  workspaceReviewList.querySelectorAll(".open-workspace-action").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = visibleItems[Number(button.dataset.reviewIndex)];
+      if (!item?.itemId) {
+        return;
+      }
+
+      state.selectedWorkspaceReviewItemId = item.itemId;
+      addActivity("human", "Opened project queue action", item.title ?? item.itemId, "waiting");
+      renderWorkspaceReview();
+    });
+  });
   workspaceReviewList.querySelectorAll(".open-workspace-route").forEach((button) => {
     button.addEventListener("click", () => {
       void openSavedRoute(button.dataset.routeId);
@@ -3600,6 +3621,93 @@ function renderWorkspaceReview() {
   });
 }
 
+function renderWorkspaceReviewAction(items) {
+  if (!workspaceReviewAction) {
+    return;
+  }
+
+  const item = items.find((candidate) => candidate.itemId === state.selectedWorkspaceReviewItemId);
+  if (!item) {
+    workspaceReviewAction.hidden = true;
+    workspaceReviewAction.innerHTML = "";
+    return;
+  }
+
+  workspaceReviewAction.hidden = false;
+  workspaceReviewAction.innerHTML = `<div class="queue-action-head">
+    <div>
+      <span class="mini-label">${escapeHtml(item.kind ?? "workspace action")}</span>
+      <h4>${escapeHtml(item.title ?? "Project queue action")}</h4>
+    </div>
+    <button class="icon-button close-workspace-action" type="button" aria-label="Close project queue action">x</button>
+  </div>
+  <p>${escapeHtml(item.summary ?? "")}</p>
+  <dl class="queue-action-facts">${workspaceReviewActionFactsHtml(item)}</dl>
+  <section class="queue-action-slots">
+    <div class="queue-action-subhead">
+      <strong>Evidence slots</strong>
+      <span class="mini-label">${escapeHtml(workspaceReviewSlotCountText(item))}</span>
+    </div>
+    ${workspaceReviewEvidenceSlotsHtml(item)}
+  </section>
+  <details class="queue-packet-preview">
+    <summary>Agent packet preview</summary>
+    <pre>${escapeHtml(item.agentPacket ?? "")}</pre>
+  </details>
+  <div class="queue-action-actions">
+    ${item.routeId ? `<button class="text-button compact-button open-workspace-action-route" data-route-id="${escapeHtml(item.routeId)}" type="button">Open route + checks</button>` : ""}
+    <button class="text-button compact-button copy-workspace-action-packet" type="button">Copy packet</button>
+    <button class="text-button compact-button copy-workspace-action-command" type="button">Copy command</button>
+  </div>`;
+
+  workspaceReviewAction.querySelector(".close-workspace-action")?.addEventListener("click", () => {
+    state.selectedWorkspaceReviewItemId = undefined;
+    renderWorkspaceReview();
+  });
+  workspaceReviewAction.querySelector(".open-workspace-action-route")?.addEventListener("click", async (event) => {
+    const routeId = event.currentTarget.dataset.routeId;
+    if (!routeId) {
+      return;
+    }
+
+    await openSavedRoute(routeId);
+    state.surface = "checks";
+    render();
+  });
+  workspaceReviewAction.querySelector(".copy-workspace-action-packet")?.addEventListener("click", (event) => {
+    if (!item.agentPacket) {
+      return;
+    }
+
+    copyOrDownloadText({
+      text: `${item.agentPacket.trim()}\n`,
+      filename: `truth-harness-agent-packet-${safeFilenameTimestamp()}.md`,
+      type: "text/markdown",
+      button: event.currentTarget,
+      copiedTitle: "Copied project queue packet",
+      copiedDetail: item.title ?? "workspace action",
+      fallbackTitle: "Downloaded project queue packet",
+      fallbackDetail: "the agent handoff packet was saved as markdown instead."
+    });
+  });
+  workspaceReviewAction.querySelector(".copy-workspace-action-command")?.addEventListener("click", (event) => {
+    if (!item.command) {
+      return;
+    }
+
+    copyOrDownloadText({
+      text: `${item.command}\n`,
+      filename: `truth-harness-project-queue-command-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      button: event.currentTarget,
+      copiedTitle: "Copied project queue command",
+      copiedDetail: item.command,
+      fallbackTitle: "Downloaded project queue command",
+      fallbackDetail: "the project queue command was saved as plain text instead."
+    });
+  });
+}
+
 function workspaceReviewCountText(summary) {
   const total = Number(summary?.totalItems ?? 0);
   if (total === 0) {
@@ -3617,6 +3725,63 @@ function workspaceReviewCountText(summary) {
   }
 
   return `${total} items`;
+}
+
+function workspaceReviewActionFactsHtml(item) {
+  return [
+    ["Priority", item.priority],
+    ["Trust", item.trust],
+    ["Source", workspaceReviewSourceText(item)],
+    ["Route", item.routeId],
+    ["Obligation", item.obligationId],
+    ["Claim", item.claimId],
+    ["Session", item.sessionId]
+  ]
+    .filter(([, value]) => value)
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
+    .join("");
+}
+
+function workspaceReviewSlotCountText(item) {
+  const slots = Array.isArray(item.evidenceSlots) ? item.evidenceSlots : [];
+  if (slots.length === 0) {
+    return "no slots";
+  }
+
+  const required = slots.filter((slot) => slot.required).length;
+  return `${slots.length} slot${slots.length === 1 ? "" : "s"} / ${required} required`;
+}
+
+function workspaceReviewEvidenceSlotsHtml(item) {
+  const slots = Array.isArray(item.evidenceSlots) ? item.evidenceSlots : [];
+  if (slots.length === 0) {
+    return `<div class="activity-empty">No explicit evidence slots recorded for this action.</div>`;
+  }
+
+  return slots.map((slot) => `<article class="queue-evidence-slot">
+    <div class="slot-head">
+      <strong>${escapeHtml(slot.label ?? "Evidence slot")}</strong>
+      <span class="mini-label">${escapeHtml(slot.status ?? "open")}${slot.required ? " / required" : ""}</span>
+    </div>
+    <p>${escapeHtml(slot.description ?? "")}</p>
+    <small>Accepts: ${escapeHtml((slot.acceptedArtifacts ?? []).join("; ") || "local replayable artifact")}</small>
+    <small>Attach to: ${escapeHtml(workspaceReviewSlotTargetText(slot))}</small>
+    ${slot.suggestedCommand ? `<code>${escapeHtml(slot.suggestedCommand)}</code>` : ""}
+  </article>`).join("");
+}
+
+function workspaceReviewSlotTargetText(slot) {
+  const target = slot?.attachTo;
+  if (!target) {
+    return "local workspace artifact";
+  }
+
+  return [
+    target.routeId ? `route:${target.routeId}` : undefined,
+    target.obligationId ? `obligation:${target.obligationId}` : undefined,
+    target.claimId ? `claim:${target.claimId}` : undefined,
+    target.sessionId ? `session:${target.sessionId}` : undefined
+  ].filter(Boolean).join(" ") || "local workspace artifact";
 }
 
 function workspaceReviewItemMeta(item) {

@@ -25,6 +25,23 @@ export type WorkspaceReviewItemKind =
   | "session-task"
   | "session-next-check";
 export type WorkspaceReviewPriority = "critical" | "high" | "medium" | "low";
+export type WorkspaceReviewEvidenceSlotStatus = "open" | "satisfied" | "not-required";
+
+export interface WorkspaceReviewEvidenceSlot {
+  slotId: string;
+  label: string;
+  required: boolean;
+  status: WorkspaceReviewEvidenceSlotStatus;
+  description: string;
+  acceptedArtifacts: string[];
+  suggestedCommand?: string;
+  attachTo?: {
+    routeId?: string;
+    obligationId?: string;
+    claimId?: string;
+    sessionId?: string;
+  };
+}
 
 export interface WorkspaceReviewItem {
   itemId: string;
@@ -35,6 +52,7 @@ export interface WorkspaceReviewItem {
   command: string;
   routeId?: string;
   obligationId?: string;
+  obligationKind?: ProofObligation["kind"];
   claimId?: string;
   sessionId?: string;
   taskId?: string;
@@ -42,6 +60,7 @@ export interface WorkspaceReviewItem {
   domain?: string;
   trust?: TrustLabel;
   createdAt?: string;
+  evidenceSlots?: WorkspaceReviewEvidenceSlot[];
   acceptanceCriteria?: string[];
   agentPacket?: string;
   source: {
@@ -415,6 +434,7 @@ function routeObligationItem(workspacePath: string, route: VerifierRoute, obliga
     command: obligation.command ?? `truth-harness route show ${quoteCommandArg(route.routeId)} --workspace ${quoteCommandArg(workspacePath)} --json`,
     routeId: route.routeId,
     obligationId: obligation.obligationId,
+    obligationKind: obligation.kind,
     trust: route.finalTrust,
     createdAt: route.createdAt,
     source: {
@@ -621,13 +641,137 @@ function sortReviewItems(items: WorkspaceReviewItem[]): WorkspaceReviewItem[] {
 function attachAgentPackets(items: WorkspaceReviewItem[]): WorkspaceReviewItem[] {
   return items.map((item) => {
     const acceptanceCriteria = workspaceReviewAcceptanceCriteria(item);
+    const evidenceSlots = workspaceReviewEvidenceSlots(item);
 
     return {
       ...item,
+      evidenceSlots,
       acceptanceCriteria,
-      agentPacket: workspaceReviewAgentPacket(item, acceptanceCriteria)
+      agentPacket: workspaceReviewAgentPacket(item, acceptanceCriteria, evidenceSlots)
     };
   });
+}
+
+function workspaceReviewEvidenceSlots(item: WorkspaceReviewItem): WorkspaceReviewEvidenceSlot[] {
+  if (item.kind === "route-obligation") {
+    return [routeObligationEvidenceSlot(item)];
+  }
+
+  if (item.kind === "route-ready-claim") {
+    return [
+      {
+        slotId: "claim-ledger-record",
+        label: "Claim ledger record",
+        required: true,
+        status: "open",
+        description: "A narrow local claim must cite the ready verifier route without upgrading its trust label.",
+        acceptedArtifacts: ["truth-harness claim add", ".truth-harness/claims/*.json"],
+        suggestedCommand: item.command,
+        attachTo: {
+          routeId: item.routeId
+        }
+      }
+    ];
+  }
+
+  if (item.kind === "claim-blocker") {
+    return [
+      {
+        slotId: "claim-supporting-evidence",
+        label: "Supporting evidence",
+        required: true,
+        status: "open",
+        description: "Attach receipts, verifier routes, source citations, expert review, or a validation plan that resolves the open check.",
+        acceptedArtifacts: [
+          ".truth-harness/receipts/*.json",
+          ".truth-harness/routes/*.json",
+          ".truth-harness/literature/*.json",
+          ".truth-harness/reviews/*.json",
+          ".truth-harness/validation/*.json"
+        ],
+        suggestedCommand: item.command,
+        attachTo: {
+          claimId: item.claimId
+        }
+      }
+    ];
+  }
+
+  if (item.kind === "session-task" || item.kind === "session-next-check") {
+    return [
+      {
+        slotId: "research-checkpoint",
+        label: "Research checkpoint",
+        required: true,
+        status: "open",
+        description: "Update the research session with linked receipts, routes, notes, or unresolved blockers so future agents can resume.",
+        acceptedArtifacts: [".truth-harness/sessions/*.json", ".truth-harness/findings/*workspace-review*.json"],
+        suggestedCommand: item.command,
+        attachTo: {
+          sessionId: item.sessionId
+        }
+      }
+    ];
+  }
+
+  return [];
+}
+
+function routeObligationEvidenceSlot(item: WorkspaceReviewItem): WorkspaceReviewEvidenceSlot {
+  const attachTo = {
+    routeId: item.routeId,
+    obligationId: item.obligationId
+  };
+
+  if (item.obligationKind === "formal-proof") {
+    return {
+      slotId: "accepted-proof-check",
+      label: "Accepted proof-check artifact",
+      required: true,
+      status: "open",
+      description: "Close this only with an accepted proof-checking backend record or a proof-checker-backed route/receipt.",
+      acceptedArtifacts: ["truth-harness proof check", ".truth-harness/proofs/*.json", "proved receipt/route"],
+      suggestedCommand: item.command,
+      attachTo
+    };
+  }
+
+  if (item.obligationKind === "solver-encoding") {
+    return {
+      slotId: "smt-solver-check",
+      label: "SMT solver artifact",
+      required: true,
+      status: "open",
+      description: "Close this with a replayable SMT record that encodes the exact scoped claim and earns smt-checked or stronger.",
+      acceptedArtifacts: ["truth-harness smt check", "truth-harness smt solve", ".truth-harness/smt/*.json"],
+      suggestedCommand: item.command,
+      attachTo
+    };
+  }
+
+  if (item.obligationKind === "independent-check") {
+    return {
+      slotId: "independent-cross-check",
+      label: "Independent cross-check artifact",
+      required: true,
+      status: "open",
+      description: "Close this with an independent CAS, SMT, or proof artifact that agrees with the current route result.",
+      acceptedArtifacts: ["truth-harness cas check", "truth-harness smt check", ".truth-harness/cas/*.json", ".truth-harness/smt/*.json"],
+      suggestedCommand: item.command,
+      attachTo
+    };
+  }
+
+  return {
+    slotId: "route-evidence-artifact",
+    label: "Route evidence artifact",
+    required: true,
+    status: "open",
+    description: "Attach replayable local evidence that satisfies this obligation without widening the claim.",
+    acceptedArtifacts: [".truth-harness/**/*.json", "proof/CAS/SMT/source/review artifact"],
+    suggestedCommand: item.command,
+    attachTo
+  };
 }
 
 function workspaceReviewAcceptanceCriteria(item: WorkspaceReviewItem): string[] {
@@ -673,7 +817,11 @@ function workspaceReviewAcceptanceCriteria(item: WorkspaceReviewItem): string[] 
   return criteria;
 }
 
-function workspaceReviewAgentPacket(item: WorkspaceReviewItem, acceptanceCriteria: string[]): string {
+function workspaceReviewAgentPacket(
+  item: WorkspaceReviewItem,
+  acceptanceCriteria: string[],
+  evidenceSlots: WorkspaceReviewEvidenceSlot[]
+): string {
   const lines = [
     "# Truth Harness Workspace Action",
     "",
@@ -697,6 +845,15 @@ function workspaceReviewAgentPacket(item: WorkspaceReviewItem, acceptanceCriteri
     "Acceptance criteria:",
     ...acceptanceCriteria.map((criterion) => `- ${criterion}`),
     "",
+    "Evidence slots:",
+    ...(evidenceSlots.length === 0
+      ? ["- No explicit evidence slot recorded for this action."]
+      : evidenceSlots.flatMap((slot) => [
+        `- ${slot.label} (${slot.status}${slot.required ? ", required" : ""})`,
+        `  - Accepts: ${slot.acceptedArtifacts.join("; ")}`,
+        `  - Attach to: ${formatEvidenceSlotTarget(slot)}`
+      ])),
+    "",
     "Trust boundary:",
     "- Local-only packet; no network access is required by this action.",
     "- This packet is a plan, not evidence. Trust only changes after a replayable artifact/check is attached.",
@@ -704,6 +861,20 @@ function workspaceReviewAgentPacket(item: WorkspaceReviewItem, acceptanceCriteri
   ];
 
   return lines.join("\n");
+}
+
+function formatEvidenceSlotTarget(slot: WorkspaceReviewEvidenceSlot): string {
+  const target = slot.attachTo;
+  if (!target) {
+    return "local workspace artifact";
+  }
+
+  return [
+    target.routeId ? `route:${target.routeId}` : undefined,
+    target.obligationId ? `obligation:${target.obligationId}` : undefined,
+    target.claimId ? `claim:${target.claimId}` : undefined,
+    target.sessionId ? `session:${target.sessionId}` : undefined
+  ].filter(Boolean).join(" ") || "local workspace artifact";
 }
 
 function itemIdFor(value: unknown): string {

@@ -76,9 +76,20 @@ describe("workspace review", () => {
         "Open the source route and satisfy this exact obligation before upgrading trust.",
         "Run this only inside the local workspace boundary."
       ]),
+      evidenceSlots: expect.arrayContaining([
+        expect.objectContaining({
+          required: true,
+          status: "open",
+          suggestedCommand: expect.any(String),
+          attachTo: expect.objectContaining({
+            routeId: blockedRoute.route.routeId
+          })
+        })
+      ]),
       agentPacket: expect.stringContaining("# Truth Harness Workspace Action")
     });
     expect(review.items[0].agentPacket).toContain(`Route: ${blockedRoute.route.routeId}`);
+    expect(review.items[0].agentPacket).toContain("Evidence slots:");
     expect(review.items[0].agentPacket).toContain("This packet is a plan, not evidence.");
     expect(review.items).toContainEqual(
       expect.objectContaining({
@@ -88,6 +99,12 @@ describe("workspace review", () => {
         acceptanceCriteria: expect.arrayContaining([
           "Record a narrow claim that cites this route as evidence.",
           "Use the route's strongest trust label without upgrading it."
+        ]),
+        evidenceSlots: expect.arrayContaining([
+          expect.objectContaining({
+            slotId: "claim-ledger-record",
+            acceptedArtifacts: expect.arrayContaining(["truth-harness claim add"])
+          })
         ]),
         agentPacket: expect.stringContaining("Acceptance criteria:")
       })
@@ -101,6 +118,14 @@ describe("workspace review", () => {
         acceptanceCriteria: expect.arrayContaining([
           "Run the claim review and resolve the named open check.",
           "Do not finalize the claim until open blockers are represented in the ledger."
+        ]),
+        evidenceSlots: expect.arrayContaining([
+          expect.objectContaining({
+            slotId: "claim-supporting-evidence",
+            attachTo: expect.objectContaining({
+              claimId: expect.stringMatching(/^claim_/u)
+            })
+          })
         ]),
         agentPacket: expect.stringContaining("Claim:")
       })
@@ -238,6 +263,14 @@ describe("workspace review", () => {
         command: expect.stringContaining("truth-harness research show"),
         acceptanceCriteria: expect.arrayContaining([
           "Open the research session and update only this task or its attached evidence."
+        ]),
+        evidenceSlots: expect.arrayContaining([
+          expect.objectContaining({
+            slotId: "research-checkpoint",
+            attachTo: expect.objectContaining({
+              sessionId: start.session.sessionId
+            })
+          })
         ]),
         agentPacket: expect.stringContaining(`Session: ${start.session.sessionId}`)
       })
