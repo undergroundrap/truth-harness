@@ -457,6 +457,8 @@ const visualZoomOutButton = document.querySelector("#visual-zoom-out");
 const visualZoomResetButton = document.querySelector("#visual-zoom-reset");
 const visualZoomInButton = document.querySelector("#visual-zoom-in");
 const visualZoomFitButton = document.querySelector("#visual-zoom-fit");
+const visualArtifactBanner = document.querySelector("#visual-artifact-banner");
+const visualModeBar = document.querySelector("#visual-mode-bar");
 const visualModeButtons = document.querySelectorAll(".visual-mode-button");
 const taskDockState = document.querySelector("#task-dock-state");
 const taskDockSummary = document.querySelector("#task-dock-summary");
@@ -1365,16 +1367,26 @@ function renderMathPlot(receipt) {
   }
   if (researchMapStatus) {
     researchMapStatus.textContent = selectedVisualArtifact
-      ? `${selectedVisualArtifact.visualId} opened from visuals ledger`
+      ? `${selectedVisualArtifact.kind ?? "visual"} artifact from visuals ledger`
       : selectedMapSnapshot
       ? `${selectedMapSnapshot.snapshotId} opened from local map`
       : `${plot.kind} can be saved locally`;
   }
+  if (visualArtifactBanner) {
+    visualArtifactBanner.hidden = !selectedVisualArtifact;
+    visualArtifactBanner.innerHTML = selectedVisualArtifact
+      ? savedVisualArtifactBannerHtml(selectedVisualArtifact)
+      : "";
+  }
+  if (visualModeBar) {
+    visualModeBar.hidden = Boolean(selectedVisualArtifact);
+  }
   plotTitle.textContent = plot.title;
   plotCaption.textContent = plot.caption;
   plotCanvas.innerHTML = plot.svg;
-  plotCanvas.dataset.visualMode = state.visualMode;
+  plotCanvas.dataset.visualMode = plot.sourceVisualMode ?? state.visualMode;
   plotCanvas.dataset.visualArtifact = selectedVisualArtifact?.visualId ?? "";
+  plotCanvas.dataset.visualArtifactKind = selectedVisualArtifact?.kind ?? "";
   plotCanvas.dataset.savedMapSnapshot = selectedMapSnapshot?.snapshotId ?? "";
   if (state.surface === "plot" && state.visualFitPending) {
     fitVisualToCanvas({ activity: false });
@@ -1388,13 +1400,32 @@ function renderMathPlot(receipt) {
   plotData.innerHTML = renderPlotDataTable(plot);
   renderResearchMapNodeInspector(selectedMapSnapshot, plot);
   visualModeButtons.forEach((button) => {
-    const activeMode = selectedMapSnapshot?.visualMode ?? state.visualMode;
+    const activeMode = selectedVisualArtifact ? undefined : selectedMapSnapshot?.visualMode ?? state.visualMode;
     const active = button.dataset.visualMode === activeMode;
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
+    button.disabled = Boolean(selectedVisualArtifact);
   });
   renderVisualArtifactHistory();
   renderResearchMapHistory();
+}
+
+function savedVisualArtifactBannerHtml(artifact) {
+  const sourceCount = Array.isArray(artifact.sourceRefs) ? artifact.sourceRefs.length : 0;
+  const renderer = artifact.renderer?.engine ?? artifact.renderer ?? "unknown renderer";
+  const format = artifact.payload?.format ?? "unknown payload";
+  const replay = artifact.replayCommand ?? "recorded visual artifact";
+  const title = artifact.title ?? artifact.visualId ?? "Saved visual artifact";
+  return `<div>
+    <strong>${escapeHtml(title)}</strong>
+    <span>${escapeHtml(artifact.kind ?? "visual")} - ${escapeHtml(renderer)} - ${escapeHtml(format)}</span>
+  </div>
+  <div class="visual-artifact-meta">
+    <span>${escapeHtml(artifact.visualId ?? "unknown visual")}</span>
+    <span>${sourceCount} source ref${sourceCount === 1 ? "" : "s"}</span>
+    <span>${escapeHtml(artifact.privacy?.networkAccess ?? "network: none")}</span>
+    <code>${escapeHtml(replay)}</code>
+  </div>`;
 }
 
 function visualZoomPercent() {
@@ -2849,29 +2880,49 @@ function savedGraphVisualArtifactSvg(artifact) {
     return savedVisualArtifactPlaceholderSvg(artifact);
   }
 
-  const layoutNodes = layoutArtifactGraphNodes(nodes);
+  const layoutNodes = layoutArtifactGraphNodes(nodes, edges);
   const byId = new Map(layoutNodes.map((node) => [node.id, node]));
-  const width = Math.max(1180, Math.min(1800, 280 + Math.ceil(Math.sqrt(layoutNodes.length)) * 260));
-  const height = Math.max(620, 184 + Math.ceil(layoutNodes.length / Math.max(1, Math.ceil(Math.sqrt(layoutNodes.length)))) * 164);
+  const bounds = visualNodeBounds(layoutNodes);
+  const width = Math.max(1080, bounds.maxX + 58);
+  const height = Math.max(560, bounds.maxY + 72);
   const edgeSvg = edges.slice(0, 120).map((edge) => {
     const from = byId.get(edge.from);
     const to = byId.get(edge.to);
     if (!from || !to) {
       return "";
     }
-    return `<g>
-      <line x1="${from.x + from.width / 2}" y1="${from.y + from.height / 2}" x2="${to.x + to.width / 2}" y2="${to.y + to.height / 2}" stroke="#32302d" stroke-width="2" />
-      ${edge.kind ? `<text x="${(from.x + to.x) / 2}" y="${(from.y + to.y) / 2 - 6}" fill="#8f8a83" font-size="10">${escapeXml(truncateForImage(edge.kind, 22))}</text>` : ""}
-    </g>`;
+    const forward = to.x >= from.x;
+    const x1 = forward ? from.x + from.width : from.x;
+    const y1 = from.y + from.height / 2;
+    const x2 = forward ? to.x : to.x + to.width;
+    const y2 = to.y + to.height / 2;
+    const tension = Math.max(54, Math.min(130, Math.abs(x2 - x1) * 0.42));
+    const c1 = forward ? x1 + tension : x1 - tension;
+    const c2 = forward ? x2 - tension : x2 + tension;
+    return `<path d="M ${x1} ${y1} C ${c1} ${y1}, ${c2} ${y2}, ${x2} ${y2}" fill="none" stroke="${artifactGraphEdgeColor(to)}" stroke-width="2" stroke-linecap="round" opacity="0.72" marker-end="url(#artifact-arrow)" />`;
   }).join("");
   const source = artifact.payload?.content?.source;
   const sourceLabel = typeof source === "string" ? `${source.split("\n")[0] ?? "graph source"} (${source.split("\n").length} lines)` : "graph source recorded";
   const truncated = Boolean(artifact.payload?.content?.truncated ?? graph.truncated);
+  const columns = artifactGraphColumnLabels(layoutNodes);
+  const metrics = [
+    ["Nodes", String(nodes.length)],
+    ["Edges", String(edges.length)],
+    ["Renderer", artifact.renderer?.engine ?? "unknown"],
+    ["Network", artifact.privacy?.networkAccess ?? "none"]
+  ];
 
   return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Saved lineage graph visual artifact">
+    <defs>
+      <marker id="artifact-arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#69655f" />
+      </marker>
+    </defs>
     <rect width="${width}" height="${height}" rx="16" fill="#101010" />
-    <text x="48" y="48" fill="#f2f2ee" font-size="23" font-weight="780">${escapeXml(artifact.title ?? "Workspace Lineage Graph")}</text>
-    <text x="48" y="76" fill="#aaa59d" font-size="13">${escapeXml(sourceLabel)}${truncated ? " - preview truncated" : ""}</text>
+    <text x="46" y="44" fill="#f2f2ee" font-size="24" font-weight="780">${escapeXml(artifact.title ?? "Workspace Lineage Graph")}</text>
+    <text x="46" y="72" fill="#aaa59d" font-size="13">${escapeXml(sourceLabel)}${truncated ? " - preview truncated" : ""}</text>
+    ${metrics.map((metric, index) => artifactGraphMetricSvg(metric[0], metric[1], 46 + index * 142, 94)).join("")}
+    ${columns}
     ${edgeSvg}
     ${layoutNodes.map((node) => conceptNodeSvg(node, { interactive: true, active: isActiveVisualMapNode(node, layoutNodes) })).join("")}
   </svg>`;
@@ -2940,6 +2991,9 @@ function savedVisualArtifactMapNodes(artifact) {
       detail: [node.kind, node.trust, node.path].filter(Boolean).join(" | ") || "workspace graph node",
       kind: node.kind ?? "workspace-graph-node",
       sourceRef: node.path ?? node.nodeId ?? "",
+      trust: node.trust ?? "",
+      missing: Boolean(node.missing),
+      valid: node.valid,
       tone: node.missing ? "danger" : node.valid === false ? "warn" : node.trust ? "good" : "muted"
     }));
   }
@@ -3009,16 +3063,141 @@ function canvasShapeToVisualNode(shape, index, offsetX, offsetY) {
   };
 }
 
-function layoutArtifactGraphNodes(nodes) {
-  const columns = Math.max(2, Math.ceil(Math.sqrt(nodes.length)));
-  return nodes.map((node, index) => ({
-    ...node,
-    x: 64 + (index % columns) * 260,
-    y: 128 + Math.floor(index / columns) * 152,
-    width: 220,
-    height: 92,
-    maxLines: 2
-  }));
+const ARTIFACT_GRAPH_COLUMNS = [
+  ["workspace", "Workspace"],
+  ["reasoning", "Routes & Claims"],
+  ["evidence", "Receipts & Checks"],
+  ["artifacts", "Artifacts"],
+  ["gaps", "Gaps"]
+];
+
+function layoutArtifactGraphNodes(nodes, edges = []) {
+  const grouped = new Map(ARTIFACT_GRAPH_COLUMNS.map(([key]) => [key, []]));
+  nodes.forEach((node, index) => {
+    const column = artifactGraphColumnKey(node);
+    grouped.get(column)?.push({ ...node, originalIndex: index });
+  });
+
+  const activeColumns = ARTIFACT_GRAPH_COLUMNS.filter(([key]) => (grouped.get(key)?.length ?? 0) > 0);
+  const columnGap = 34;
+  const nodeWidth = 220;
+  const nodeHeight = 88;
+  const rowGap = 28;
+  const left = 52;
+  const top = 182;
+  const edgeWeight = new Map();
+  edges.forEach((edge) => {
+    edgeWeight.set(edge.from, (edgeWeight.get(edge.from) ?? 0) + 1);
+    edgeWeight.set(edge.to, (edgeWeight.get(edge.to) ?? 0) + 1);
+  });
+
+  return activeColumns.flatMap(([key], columnIndex) => {
+    const columnNodes = grouped.get(key) ?? [];
+    return columnNodes
+      .slice()
+      .sort((a, b) => {
+        const weightDiff = (edgeWeight.get(b.id) ?? 0) - (edgeWeight.get(a.id) ?? 0);
+        return weightDiff || a.originalIndex - b.originalIndex;
+      })
+      .map((node, rowIndex) => ({
+        ...node,
+        label: artifactGraphKindLabel(node),
+        detail: artifactGraphNodeDetail(node),
+        x: left + columnIndex * (nodeWidth + columnGap),
+        y: top + rowIndex * (nodeHeight + rowGap),
+        width: nodeWidth,
+        height: nodeHeight,
+        maxChars: 24,
+        maxLines: 2,
+        detailFontSize: 14,
+        detailLineHeight: 18
+      }));
+  });
+}
+
+function artifactGraphColumnKey(node) {
+  const text = `${node.kind ?? ""} ${node.label ?? ""} ${node.detail ?? ""} ${node.sourceRef ?? ""}`.toLowerCase();
+  if (node.missing || node.tone === "danger" || text.includes("missing")) {
+    return "gaps";
+  }
+  if (text.includes("manifest") || text.includes("project") || text.includes("workspace")) {
+    return "workspace";
+  }
+  if (text.includes("route") || text.includes("claim") || text.includes("obligation")) {
+    return "reasoning";
+  }
+  if (text.includes("receipt") || text.includes("proof") || text.includes("smt") || text.includes("cas") || text.includes("check")) {
+    return "evidence";
+  }
+  if (text.includes("visual") || text.includes("artifact") || text.includes("report") || text.includes("benchmark")) {
+    return "artifacts";
+  }
+  return "artifacts";
+}
+
+function artifactGraphKindLabel(node) {
+  const value = String(node.kind ?? "artifact")
+    .replace(/[-_]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const label = value
+    ? value.replace(/\b\w/gu, (match) => match.toUpperCase())
+    : "Artifact";
+  return node.trust ? `${label} | ${node.trust}` : label;
+}
+
+function artifactGraphNodeDetail(node) {
+  const detail = String(node.label ?? node.detail ?? node.sourceRef ?? "workspace node").trim();
+  if (detail) {
+    return detail;
+  }
+  return String(node.sourceRef ?? "workspace node");
+}
+
+function artifactGraphEdgeColor(node) {
+  if (node.tone === "danger") {
+    return "#8a4c4c";
+  }
+  if (node.tone === "warn") {
+    return "#8d7431";
+  }
+  if (node.tone === "good") {
+    return "#4e9673";
+  }
+  return "#4a4844";
+}
+
+function visualNodeBounds(nodes) {
+  return nodes.reduce((bounds, node) => ({
+    maxX: Math.max(bounds.maxX, node.x + node.width),
+    maxY: Math.max(bounds.maxY, node.y + node.height)
+  }), { maxX: 0, maxY: 0 });
+}
+
+function artifactGraphMetricSvg(label, value, x, y) {
+  return `<g transform="translate(${x} ${y})">
+    <rect width="122" height="34" rx="9" fill="#171614" stroke="#2f2c28" />
+    <text x="12" y="14" fill="#8f8a83" font-size="10" font-weight="650">${escapeXml(label)}</text>
+    <text x="12" y="27" fill="#f2f2ee" font-size="13" font-weight="780">${escapeXml(value)}</text>
+  </g>`;
+}
+
+function artifactGraphColumnLabels(nodes) {
+  const occupied = new Map();
+  nodes.forEach((node) => {
+    const key = artifactGraphColumnKey(node);
+    if (!occupied.has(key)) {
+      occupied.set(key, node.x);
+    }
+  });
+
+  return ARTIFACT_GRAPH_COLUMNS
+    .filter(([key]) => occupied.has(key))
+    .map(([key, label]) => `<g transform="translate(${occupied.get(key)} 150)">
+      <text x="0" y="0" fill="#aaa59d" font-size="12" font-weight="720">${escapeXml(label)}</text>
+      <line x1="0" y1="11" x2="220" y2="11" stroke="#2f2c28" />
+    </g>`)
+    .join("");
 }
 
 function safeSvgColor(value, fallback) {
@@ -5690,6 +5869,12 @@ function surfaceStatusLabel() {
   }
 
   if (state.surface === "plot") {
+    if (state.selectedVisualArtifactId) {
+      return `${selectedVisualArtifactRecord?.kind ?? "visual"} artifact`;
+    }
+    if (state.selectedResearchMapSnapshotId) {
+      return "saved visual map";
+    }
     return visualModeLabel(state.visualMode);
   }
 

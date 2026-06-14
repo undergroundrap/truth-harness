@@ -128,9 +128,15 @@ describe("web UI action contracts", () => {
     expect(listPagerStyles).toContain("padding: 6px 8px;");
   });
 
-  it("renders saved adapter visual artifacts instead of placeholder-only cards", async () => {
-    const source = await readFile(appSourcePath, "utf8");
+  it("renders saved adapter visual artifacts as a distinct viewer state", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
 
+    expect(html).toContain('id="visual-artifact-banner"');
+    expect(html).toContain('id="visual-mode-bar"');
     expect(source).toContain("function renderSavedVisualArtifactSvg(artifact)");
     expect(source).toContain('payload.format === "plotly-json"');
     expect(source).toContain('payload.format === "graph-json"');
@@ -140,5 +146,13 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function savedCanvasVisualArtifactSvg(artifact)");
     expect(source).toContain("selectedVisualArtifactRecord?.visualId === state.selectedVisualArtifactId");
     expect(source).toContain("safeSvgColor(row.color");
+    expect(source).toContain("savedVisualArtifactBannerHtml(selectedVisualArtifact)");
+    expect(source).toContain('return `${selectedVisualArtifactRecord?.kind ?? "visual"} artifact`;');
+    expect(source).toContain("visualModeBar.hidden = Boolean(selectedVisualArtifact);");
+    expect(source).toContain("const activeMode = selectedVisualArtifact ? undefined : selectedMapSnapshot?.visualMode ?? state.visualMode;");
+    expect(source).toContain("button.disabled = Boolean(selectedVisualArtifact);");
+    expect(source).toContain("layoutArtifactGraphNodes(nodes, edges)");
+    expect(styles).toContain(".visual-artifact-banner");
+    expect(styles).toContain(".visual-mode-bar[hidden]");
   });
 });
