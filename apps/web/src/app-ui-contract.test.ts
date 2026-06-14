@@ -162,6 +162,10 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function sourceVisualSummaryForRenderedArtifact(artifact)");
     expect(source).toContain("function selectedVisualRenderEngine(artifact)");
     expect(source).toContain('renderEngine === "plotly" ? "Render plot SVG" : "Render SVG"');
+    expect(source).toContain("function reportFigureArtifactForReceipt(receipt)");
+    expect(source).toContain("function reportFigureCitationHtml(figure)");
+    expect(source).toContain("function reportFigureCitationMarkdown(figure)");
+    expect(source).toContain("Saved Figure Artifact");
     expect(source).toContain("data-open-rendered-visual-id");
     expect(source).toContain("data-open-source-visual-id");
     expect(source).toContain("preferRendered !== false");
@@ -175,5 +179,6 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".visual-artifact-link");
     expect(styles).toContain(".visual-mode-bar[hidden]");
     expect(styles).toContain(".visual-renderer-source");
+    expect(styles).toContain(".report-figure-citation");
   });
 });

@@ -4481,6 +4481,23 @@ textarea:focus-visible {
   padding-left: 16px;
 }
 
+.report-figure-citation {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(125, 211, 168, 0.24);
+  border-radius: 8px;
+  background: rgba(125, 211, 168, 0.045);
+  padding: 12px;
+  min-width: 0;
+}
+
+.report-figure-citation p {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .report-tags {
   display: flex;
   flex-wrap: wrap;
@@ -5278,5 +5295,11 @@ textarea:focus-visible {
     border: 0;
     background: #ffffff;
     padding: 2pt 0;
+  }
+
+  .report-figure-citation {
+    border: 1px solid #cccccc;
+    background: #ffffff;
+    padding: 8pt;
   }
 }

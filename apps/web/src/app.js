@@ -1503,6 +1503,93 @@ function visualRefMentionsVisualId(ref, visualId) {
   return value === visualId || value.includes(visualId);
 }
 
+function reportFigureArtifactForReceipt(receipt) {
+  const selected = selectedVisualArtifactRecord?.visualId === state.selectedVisualArtifactId
+    ? selectedVisualArtifactRecord
+    : undefined;
+  if (selected && visualArtifactMatchesReceipt(selected, receipt)) {
+    return selected;
+  }
+
+  const candidates = visualArtifacts
+    .filter((artifact) => visualArtifactMatchesReceipt(artifact, receipt))
+    .sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")));
+  return candidates.find((artifact) => isRenderedSvgVisualSummary(artifact)) ?? candidates[0];
+}
+
+function visualArtifactMatchesReceipt(artifact, receipt) {
+  const refs = artifact?.sourceRefs ?? [];
+  const promptRef = `prompt:${receipt.title}`;
+  return refs.some((ref) => {
+    if (!ref?.ref) {
+      return false;
+    }
+    return evidenceRefMatchesReceipt(ref, receipt)
+      || String(ref.ref) === promptRef
+      || String(ref.ref).includes(receipt.runId);
+  });
+}
+
+function reportFigureCitationHtml(figure) {
+  if (!figure) {
+    return `<section class="report-figure-citation">
+      <h4>Saved Figure Artifact</h4>
+      <p>No saved figure artifact is attached to this receipt yet. Use <strong>Make figure</strong> in Visuals to write a Plotly source artifact and linked SVG figure before exporting the report.</p>
+    </section>`;
+  }
+
+  const renderer = figure.renderer?.engine ?? figure.renderer ?? "unknown";
+  const replay = figure.replayCommand ?? `truth-harness visual show ${figure.visualId}`;
+  const path = figure.path ?? "selected visual artifact";
+  const sourceRefs = figure.sourceRefs ?? [];
+  const sourceItems = sourceRefs.length > 0
+    ? sourceRefs.map((ref) => `<li><code>${escapeHtml(ref.kind)}:${escapeHtml(ref.ref)}</code>${ref.label ? ` - ${escapeHtml(ref.label)}` : ""}</li>`).join("")
+    : "<li>No source refs recorded.</li>";
+  const boundary = figure.warnings?.[0] ?? "Visual artifacts are evidence views and do not upgrade source trust labels.";
+  return `<section class="report-figure-citation">
+    <h4>Saved Figure Artifact</h4>
+    <dl class="report-facts">
+      <div><dt>Figure</dt><dd><code>${escapeHtml(figure.visualId)}</code></dd></div>
+      <div><dt>Title</dt><dd>${escapeHtml(figure.title ?? figure.visualId)}</dd></div>
+      <div><dt>Kind</dt><dd>${escapeHtml(figure.kind ?? "visual")}</dd></div>
+      <div><dt>Renderer</dt><dd>${escapeHtml(renderer)}</dd></div>
+      <div><dt>Path</dt><dd><code>${escapeHtml(path)}</code></dd></div>
+      <div><dt>Replay</dt><dd><code>${escapeHtml(replay)}</code></dd></div>
+    </dl>
+    <h5>Figure Source Refs</h5>
+    <ul class="report-sublist">${sourceItems}</ul>
+    <p>${escapeHtml(boundary)}</p>
+  </section>`;
+}
+
+function reportFigureCitationMarkdown(figure) {
+  if (!figure) {
+    return [
+      "- Saved figure artifact: not recorded",
+      "- Figure action: Use `Make figure` in the Visuals tab to write a Plotly source artifact and linked SVG figure before exporting."
+    ];
+  }
+
+  const renderer = figure.renderer?.engine ?? figure.renderer ?? "unknown";
+  const replay = figure.replayCommand ?? `truth-harness visual show ${figure.visualId}`;
+  const path = figure.path ?? "selected visual artifact";
+  const boundary = figure.warnings?.[0] ?? "Visual artifacts are evidence views and do not upgrade source trust labels.";
+  const refs = figure.sourceRefs?.length
+    ? figure.sourceRefs.map((ref) => `  - \`${ref.kind}:${ref.ref}\`${ref.label ? ` - ${ref.label}` : ""}`)
+    : ["  - none recorded"];
+  return [
+    `- Saved figure artifact: \`${figure.visualId}\``,
+    `- Figure title: ${figure.title ?? figure.visualId}`,
+    `- Figure kind: ${figure.kind ?? "visual"}`,
+    `- Figure renderer: ${renderer}`,
+    `- Figure path: \`${path}\``,
+    `- Figure replay: \`${replay}\``,
+    `- Figure trust boundary: ${boundary}`,
+    "- Figure source refs:",
+    ...refs
+  ];
+}
+
 function visualZoomPercent() {
   return `${Math.round(state.visualZoom * 100)}%`;
 }
@@ -9529,6 +9616,7 @@ function renderReport(receipt) {
     .join("");
   const notes = researchNotes.value.trim();
   const plot = createPlotModel(receipt);
+  const reportFigure = reportFigureArtifactForReceipt(receipt);
   const teachingPacket = createTeachingPacket(receipt);
   const mathInput = receipt.math?.input;
   const mathOutput = receipt.math?.output;
@@ -9604,6 +9692,7 @@ function renderReport(receipt) {
       <div><dt>Title</dt><dd>${escapeHtml(plot.title)}</dd></div>
       <div><dt>Boundary</dt><dd>${escapeHtml(plot.caption)}</dd></div>
     </dl>
+    ${reportFigureCitationHtml(reportFigure)}
     <table class="report-table">
       <thead><tr>${plot.dataColumns.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr></thead>
       <tbody>${plotRows}</tbody>
@@ -9682,6 +9771,7 @@ function generateReportMarkdown(receipt) {
   const matrix = verificationRows(receipt);
   const notes = researchNotes.value.trim() || "No local notes added yet.";
   const plot = createPlotModel(receipt);
+  const reportFigure = reportFigureArtifactForReceipt(receipt);
   const teachingPacket = createTeachingPacket(receipt);
   const mathInput = receipt.math?.input ?? receipt.title;
   const mathOutput = receipt.math?.output ?? receipt.output;
@@ -9738,6 +9828,7 @@ function generateReportMarkdown(receipt) {
     `- Kind: ${plot.kind}`,
     `- Title: ${plot.title}`,
     `- Boundary: ${plot.caption}`,
+    ...reportFigureCitationMarkdown(reportFigure),
     "",
     "Visual data CSV:",
     "",
