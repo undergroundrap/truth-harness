@@ -949,6 +949,69 @@ describe("benchmark CLI", () => {
     expect(graphText.stdout).toContain("Nodes:");
   });
 
+  it("generates a synthetic workspace stress report from the CLI", async () => {
+    const root = await tempRoot();
+    const result = await runCli([
+      "workspace",
+      "stress",
+      root,
+      "--receipts",
+      "10",
+      "--claims",
+      "5",
+      "--routes",
+      "2",
+      "--json",
+      "--fail-on-validation"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      schemaVersion: string;
+      localOnly: boolean;
+      networkAccess: string;
+      requested: { receipts: number; claims: number; routes: number };
+      written: { receipts: number; claims: number; routes: number };
+      validation: { passed: boolean; errors: number; checkedFiles: number };
+      graph: { nodes: number; edges: number; missingRefs: number };
+      claimGraph: { nodes: number; edges: number };
+      sampleCommands: { validate: string; review: string; graph: string; snapshot: string };
+    };
+    const text = await runCli([
+      "workspace",
+      "stress",
+      await tempRoot(),
+      "--receipts",
+      "4",
+      "--claims",
+      "2",
+      "--routes",
+      "1"
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(json.schemaVersion).toBe("truth-harness.workspace-stress.v0");
+    expect(json.localOnly).toBe(true);
+    expect(json.networkAccess).toBe("none");
+    expect(json.requested).toEqual({ receipts: 10, claims: 5, routes: 2 });
+    expect(json.written.receipts).toBe(10);
+    expect(json.written.claims).toBe(5);
+    expect(json.written.routes).toBe(2);
+    expect(json.validation.passed).toBe(true);
+    expect(json.validation.errors).toBe(0);
+    expect(json.validation.checkedFiles).toBeGreaterThanOrEqual(17);
+    expect(json.graph.nodes).toBeGreaterThanOrEqual(17);
+    expect(json.graph.missingRefs).toBe(0);
+    expect(json.claimGraph.nodes).toBe(5);
+    expect(json.claimGraph.edges).toBe(4);
+    expect(json.sampleCommands.validate).toContain("truth-harness workspace validate");
+    expect(json.sampleCommands.review).toContain("truth-harness workspace review");
+    expect(json.sampleCommands.graph).toContain("truth-harness workspace graph");
+    expect(json.sampleCommands.snapshot).toContain("truth-harness workspace snapshot");
+    expect(text.exitCode).toBe(0);
+    expect(text.stdout).toContain("Truth Harness workspace stress");
+    expect(text.stdout).toContain("Validation: passed");
+    expect(text.stdout).toContain("Stress boundary:");
+  });
+
   it("writes, lists, compares, and gates benchmark artifacts", async () => {
     const root = await tempRoot();
     const passingSuite = join(root, "passing-suite.json");

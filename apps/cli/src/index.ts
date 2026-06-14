@@ -92,6 +92,7 @@ import {
   renderTeachingPacketMarkdown,
   repairLocalWorkspace,
   replayReceipt,
+  runWorkspaceStress,
   searchLocalCorpus,
   sealVaultFile,
   satisfyVerifierRouteObligation,
@@ -238,6 +239,7 @@ import {
   type WorkspaceReview,
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
+  type WorkspaceStressResult,
   type SympyOperation
 } from "@truth-harness/core";
 
@@ -2404,6 +2406,48 @@ workspace
       process.exitCode = 1;
     }
   });
+
+workspace
+  .command("stress")
+  .description("Generate a synthetic local workspace and measure validation, review, and graph health.")
+  .argument("<path>", "Project root path to create or reuse for synthetic stress artifacts")
+  .option("--receipts <count>", "Number of synthetic receipts to write", parseNonNegativeInteger, 100)
+  .option("--claims <count>", "Number of linked synthetic claims to write", parseNonNegativeInteger, 50)
+  .option("--routes <count>", "Number of synthetic verifier routes to write", parseNonNegativeInteger, 20)
+  .option("--json", "Print the full workspace stress JSON")
+  .option("--fail-on-validation", "Exit non-zero if generated workspace validation fails")
+  .action(
+    async (
+      path: string,
+      options: {
+        receipts: number;
+        claims: number;
+        routes: number;
+        json?: boolean;
+        failOnValidation?: boolean;
+      }
+    ) => {
+      const result = await runWorkspaceStress({
+        rootPath: path,
+        receipts: options.receipts,
+        claims: options.claims,
+        routes: options.routes
+      });
+
+      if (options.json) {
+        printJson(result);
+        if (options.failOnValidation && !result.validation.passed) {
+          process.exitCode = 1;
+        }
+        return;
+      }
+
+      printWorkspaceStress(result);
+      if (options.failOnValidation && !result.validation.passed) {
+        process.exitCode = 1;
+      }
+    }
+  );
 
 workspace
   .command("review")
@@ -4619,6 +4663,58 @@ function printWorkspaceValidation(validation: WorkspaceValidation): void {
     console.log("");
     console.log("Validation boundary:");
     for (const warning of validation.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printWorkspaceStress(result: WorkspaceStressResult): void {
+  console.log("Truth Harness workspace stress");
+  console.log(`Stress: ${result.stressId}`);
+  console.log(`Workspace: ${result.workspacePath}`);
+  console.log(`Local only: ${String(result.localOnly)} (network: ${result.networkAccess})`);
+  console.log(
+    `Generated: ${result.written.receipts}/${result.requested.receipts} receipts, ` +
+      `${result.written.claims}/${result.requested.claims} claims, ` +
+      `${result.written.routes}/${result.requested.routes} routes`
+  );
+  console.log(
+    `Validation: ${result.validation.passed ? "passed" : "failed"} ` +
+      `(${result.validation.errors} errors, ${result.validation.warnings} warnings, ${result.validation.checkedFiles} files)`
+  );
+  console.log(`Review queue: ${result.review.totalItems} items (${result.review.criticalItems} critical)`);
+  console.log(`Graph: ${result.graph.nodes} nodes, ${result.graph.edges} edges, ${result.graph.missingRefs} missing refs`);
+  console.log(`Claim graph: ${result.claimGraph.nodes} claims, ${result.claimGraph.edges} links`);
+  console.log(
+    `Timings ms: total ${result.timingsMs.total}, write ${result.timingsMs.writeReceipts + result.timingsMs.writeClaims + result.timingsMs.writeRoutes}, ` +
+      `validate ${result.timingsMs.validate}, review ${result.timingsMs.review}, graph ${result.timingsMs.graph}`
+  );
+
+  if (result.sampleRefs.receipts.length > 0 || result.sampleRefs.claims.length > 0 || result.sampleRefs.routes.length > 0) {
+    console.log("");
+    console.log("Sample refs:");
+    for (const receipt of result.sampleRefs.receipts) {
+      console.log(`  receipt:${receipt}`);
+    }
+    for (const claim of result.sampleRefs.claims) {
+      console.log(`  claim:${claim}`);
+    }
+    for (const route of result.sampleRefs.routes) {
+      console.log(`  route:${route}`);
+    }
+  }
+
+  console.log("");
+  console.log("Next commands:");
+  console.log(`  ${result.sampleCommands.validate}`);
+  console.log(`  ${result.sampleCommands.review}`);
+  console.log(`  ${result.sampleCommands.graph}`);
+  console.log(`  ${result.sampleCommands.snapshot}`);
+
+  if (result.warnings.length > 0) {
+    console.log("");
+    console.log("Stress boundary:");
+    for (const warning of result.warnings) {
       console.log(`  ${warning}`);
     }
   }

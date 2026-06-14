@@ -206,6 +206,7 @@ export {
   renderWorkspaceReviewMarkdown,
   writeWorkspaceReview
 } from "./workspace-review.js";
+export { runWorkspaceStress } from "./workspace-stress.js";
 export { getEngineManifest } from "./engine-manifest.js";
 export {
   createVerifierRoute,
@@ -504,6 +505,10 @@ export type {
   WorkspaceReviewSummary,
   WorkspaceReviewWriteResult
 } from "./workspace-review.js";
+export type {
+  WorkspaceStressInput,
+  WorkspaceStressResult
+} from "./workspace-stress.js";
 export type {
   EngineCapability,
   EngineCapabilityKind,

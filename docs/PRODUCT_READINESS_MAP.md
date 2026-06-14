@@ -85,6 +85,8 @@ Do not publicly launch or record the main hype demo until these are true:
 - Simulate duplicate ids, missing refs, stale routes, superseded claims, and forged trust labels.
 - Confirm writes are atomic enough for agent loops or document the current limitation.
 
+First harness: `truth-harness workspace stress <path> --receipts 100 --claims 50 --routes 20 --fail-on-validation` now generates a synthetic linked workspace with the real writer APIs, then records validation, review, graph, missing-ref, and timing summaries. Use throwaway paths until the UI and storage scale work are ready.
+
 ### UI Stress
 
 - Desktop widths: 1280, 1440, 1920, ultrawide.
@@ -113,7 +115,7 @@ Do not publicly launch or record the main hype demo until these are true:
 
 1. **UI usability pass:** make the app feel like a serious desktop research IDE, not a demo dashboard.
 2. **Readiness dashboard:** add a visible local readiness panel that separates engine readiness, workspace health, and launch-recording gates.
-3. **Workspace scale fixtures:** add a script/test that generates and validates a large local workspace.
+3. **Workspace scale fixtures:** expand `workspace stress` beyond the first receipts/claims/routes harness into large mixed-artifact runs, performance budgets, and web API latency checks.
 4. **Claim search and dependency UX:** make tags, lineage, supersession, and linked claims obvious in UI and CLI.
 5. **Report hardening:** make reports printable, cite run ids, show author identity, and export a complete session packet.
 6. **Agent session log:** unified timeline for human actions, agent actions, CLI commands, API calls, receipts, notes, and reports.
