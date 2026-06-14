@@ -3638,6 +3638,9 @@ function renderWorkspaceReviewAction(items) {
     return;
   }
 
+  const receipt = receiptStore.get(state.receiptKey);
+  const routeLoaded = Boolean(item.routeId && receipt?.verifierRoute?.routeId === item.routeId);
+  const routeActionLabel = routeLoaded ? "Show work order" : "Open route + checks";
   workspaceReviewAction.hidden = false;
   workspaceReviewAction.innerHTML = `<div class="queue-action-head">
     <div>
@@ -3660,7 +3663,7 @@ function renderWorkspaceReviewAction(items) {
     <pre>${escapeHtml(item.agentPacket ?? "")}</pre>
   </details>
   <div class="queue-action-actions">
-    ${item.routeId ? `<button class="text-button compact-button open-workspace-action-route" data-route-id="${escapeHtml(item.routeId)}" type="button">Open route + checks</button>` : ""}
+    ${item.routeId ? `<button class="text-button compact-button open-workspace-action-route" data-route-id="${escapeHtml(item.routeId)}" type="button">${escapeHtml(routeActionLabel)}</button>` : ""}
     <button class="text-button compact-button copy-workspace-action-packet" type="button">Copy packet</button>
     <button class="text-button compact-button copy-workspace-action-command" type="button">Copy command</button>
   </div>`;
@@ -3677,6 +3680,12 @@ function renderWorkspaceReviewAction(items) {
     }
 
     state.selectedWorkspaceObligationId = item.obligationId;
+    if (receiptStore.get(state.receiptKey)?.verifierRoute?.routeId === routeId) {
+      state.surface = "checks";
+      render();
+      return;
+    }
+
     await openSavedRoute(routeId);
     state.surface = "checks";
     render();

@@ -37,4 +37,16 @@ describe("web UI action contracts", () => {
     expect(handler).toContain("render();");
     expect(handler).not.toContain("renderWorkspaceReview();");
   });
+
+  it("does not reload a verifier route when the selected queue action is already loaded", async () => {
+    const source = await readFile(appSourcePath, "utf8");
+    const actionRenderer = source.match(/function renderWorkspaceReviewAction\(items\) \{[\s\S]*?function workspaceReviewCountText/u)?.[0];
+
+    expect(actionRenderer).toBeTruthy();
+    expect(actionRenderer).toContain('const routeActionLabel = routeLoaded ? "Show work order" : "Open route + checks";');
+    expect(actionRenderer).toContain("receiptStore.get(state.receiptKey)?.verifierRoute?.routeId === routeId");
+    expect(actionRenderer).toContain('state.surface = "checks";');
+    expect(actionRenderer).toContain("return;");
+    expect(actionRenderer).toContain("await openSavedRoute(routeId);");
+  });
 });
