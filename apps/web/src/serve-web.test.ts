@@ -421,6 +421,99 @@ describe("local web route ledger API", () => {
       })
     );
 
+    const plotlyVisualResponse = await fetch(`${baseUrl}/api/visuals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: "Plotly source visual",
+        kind: "plot",
+        renderer: {
+          engine: "plotly"
+        },
+        sourceRefs: [
+          {
+            kind: "receipt",
+            ref: receiptPayload.receiptPaths.ref,
+            label: "Exact arithmetic receipt"
+          }
+        ],
+        replayCommand: "truth-harness visual plot .truth-harness/receipts/fraction.json --renderer plotly",
+        payload: {
+          format: "plotly-json",
+          content: {
+            data: [
+              {
+                type: "bar",
+                orientation: "h",
+                x: [0.75, 0.625, 1.375],
+                y: ["3/4", "5/8", "11/8"],
+                text: ["3/4", "5/8", "11/8"],
+                marker: {
+                  color: ["#b8ad92", "#b8ad92", "#70d6a1"]
+                }
+              }
+            ],
+            layout: {
+              title: "3 / 4 + 5 / 8",
+              xaxis: {
+                title: "decimal value"
+              }
+            }
+          },
+          rendererSource: {
+            language: "plotly-json",
+            content: JSON.stringify({
+              data: [{ type: "bar", x: [0.75, 0.625, 1.375], y: ["3/4", "5/8", "11/8"] }],
+              layout: { title: "3 / 4 + 5 / 8" }
+            }),
+            filename: "fraction.plotly.json"
+          }
+        },
+        tags: ["plotly", "renderer-source"]
+      })
+    });
+    expect(plotlyVisualResponse.status).toBe(200);
+    const plotlyVisualPayload = await plotlyVisualResponse.json();
+    expectLocalApiSuccess(plotlyVisualResponse, plotlyVisualPayload);
+    expect(plotlyVisualPayload.visual.payload.rendererSource).toMatchObject({
+      language: "plotly-json",
+      filename: "fraction.plotly.json"
+    });
+
+    const renderPlotlyResponse = await fetch(`${baseUrl}/api/visuals/render`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        visualRef: plotlyVisualPayload.visual.visualId,
+        engine: "plotly"
+      })
+    });
+    expect(renderPlotlyResponse.status).toBe(200);
+    const renderPlotlyPayload = await renderPlotlyResponse.json();
+    expectLocalApiSuccess(renderPlotlyResponse, renderPlotlyPayload);
+    expect(renderPlotlyPayload.renderer).toBe("plotly");
+    expect(renderPlotlyPayload.visual).toMatchObject({
+      kind: "plot",
+      renderer: {
+        engine: "truth-harness-native",
+        adapter: "plotly-json-svg-renderer"
+      },
+      payload: {
+        format: "svg"
+      }
+    });
+    expect(renderPlotlyPayload.visual.payload.content).toContain("<svg");
+    expect(renderPlotlyPayload.visual.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        kind: "visual",
+        ref: expect.stringContaining(plotlyVisualPayload.visual.visualId)
+      })
+    );
+
     const graphvizVisualResponse = await fetch(`${baseUrl}/api/visuals`, {
       method: "POST",
       headers: {

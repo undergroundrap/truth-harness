@@ -1381,9 +1381,11 @@ function renderMathPlot(receipt) {
       : "";
   }
   if (renderVisualArtifactButton) {
-    const canRender = selectedVisualCanRenderWithGraphviz(selectedVisualArtifact);
+    const renderEngine = selectedVisualRenderEngine(selectedVisualArtifact);
+    const canRender = Boolean(renderEngine);
     renderVisualArtifactButton.hidden = !canRender;
     renderVisualArtifactButton.disabled = !canRender;
+    renderVisualArtifactButton.textContent = renderEngine === "plotly" ? "Render plot SVG" : "Render SVG";
   }
   if (visualModeBar) {
     visualModeBar.hidden = Boolean(selectedVisualArtifact);
@@ -1440,12 +1442,16 @@ function savedVisualArtifactBannerHtml(artifact) {
   </div>`;
 }
 
-function selectedVisualCanRenderWithGraphviz(artifact) {
+function selectedVisualRenderEngine(artifact) {
   if (!artifact || artifact.payload?.format === "svg") {
-    return false;
+    return undefined;
   }
 
-  return savedVisualArtifactRendererSource(artifact)?.language === "dot";
+  if (artifact.payload?.format === "plotly-json" || savedVisualArtifactRendererSource(artifact)?.language === "plotly-json") {
+    return "plotly";
+  }
+
+  return savedVisualArtifactRendererSource(artifact)?.language === "dot" ? "graphviz" : undefined;
 }
 
 function renderedVisualSummaryForSourceArtifact(artifact) {
@@ -1475,7 +1481,7 @@ function sourceVisualSummaryForRenderedArtifact(artifact) {
 
 function isRenderedSvgVisualSummary(summary) {
   const tags = new Set((summary?.tags ?? []).map((tag) => String(tag).toLowerCase()));
-  return summary?.renderer === "graphviz" && tags.has("rendered") && tags.has("svg");
+  return tags.has("rendered") && tags.has("svg");
 }
 
 function visualSummaryReferencesVisual(summary, visualId) {
@@ -3508,6 +3514,9 @@ function renderVisualArtifactHistory() {
 function visualArtifactSummaryTypeLabel(artifact) {
   if (isRenderedSvgVisualSummary(artifact)) {
     return "rendered SVG";
+  }
+  if (artifact?.renderer === "plotly") {
+    return "Plotly source";
   }
   if (artifact?.renderer === "graphviz") {
     return "Graphviz source";
@@ -5652,11 +5661,17 @@ async function renderSelectedVisualArtifact() {
     return;
   }
 
+  const engine = selectedVisualRenderEngine(selectedVisualArtifactRecord);
+  if (!engine) {
+    addActivity("web-ui", "Visual render unavailable", `${visualRef} does not expose a supported renderer source.`, "waiting");
+    return;
+  }
+
   if (renderVisualArtifactButton) {
     renderVisualArtifactButton.disabled = true;
     renderVisualArtifactButton.textContent = "Rendering";
   }
-  addActivity("web-ui", "Rendering visual artifact", `POST /api/visuals/render for ${visualRef}`, "waiting");
+  addActivity("web-ui", "Rendering visual artifact", `POST /api/visuals/render for ${visualRef} with ${engine}`, "waiting");
 
   try {
     const response = await fetch("/api/visuals/render", {
@@ -5666,7 +5681,7 @@ async function renderSelectedVisualArtifact() {
       },
       body: JSON.stringify({
         visualRef,
-        engine: "graphviz"
+        engine
       })
     });
     const payload = await readLocalApiJson(response, "Local visual render API failed.");
@@ -5687,7 +5702,9 @@ async function renderSelectedVisualArtifact() {
   } finally {
     if (renderVisualArtifactButton) {
       renderVisualArtifactButton.disabled = false;
-      renderVisualArtifactButton.textContent = "Render SVG";
+      renderVisualArtifactButton.textContent = selectedVisualRenderEngine(selectedVisualArtifactRecord) === "plotly"
+        ? "Render plot SVG"
+        : "Render SVG";
     }
   }
 }

@@ -154,6 +154,8 @@ describe("web UI action contracts", () => {
     expect(source).toContain("[data-visual-source-copy]");
     expect(source).toContain("function renderedVisualSummaryForSourceArtifact(artifact)");
     expect(source).toContain("function sourceVisualSummaryForRenderedArtifact(artifact)");
+    expect(source).toContain("function selectedVisualRenderEngine(artifact)");
+    expect(source).toContain('renderEngine === "plotly" ? "Render plot SVG" : "Render SVG"');
     expect(source).toContain("data-open-rendered-visual-id");
     expect(source).toContain("data-open-source-visual-id");
     expect(source).toContain("preferRendered !== false");

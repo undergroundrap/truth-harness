@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { createReceipt } from "./receipt.js";
 import { writeVisualArtifact } from "./visual-artifact.js";
-import { writeWorkspaceGraphVisualArtifact } from "./visual-adapters.js";
-import { renderGraphvizVisualArtifact, type VisualRendererCommandRunner } from "./visual-renderer.js";
+import { writeReceiptPlotVisualArtifact, writeWorkspaceGraphVisualArtifact } from "./visual-adapters.js";
+import { renderGraphvizVisualArtifact, renderPlotlyVisualArtifact, type VisualRendererCommandRunner } from "./visual-renderer.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 
 const roots: string[] = [];
@@ -134,6 +134,65 @@ describe("visual renderer", () => {
         runner: () => ({ status: 0, stdout: "", stderr: "" })
       })
     ).rejects.toThrow(/requires DOT/u);
+  });
+
+  it("renders a Plotly JSON visual source into a replayable SVG artifact", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Plotly Render Lab" });
+    const receipt = createReceipt("compute 3 / 4 + 5 / 8");
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
+    await writeFile(join(root, ".truth-harness", "receipts", "fraction.json"), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+    const source = await writeReceiptPlotVisualArtifact({
+      rootPath: root,
+      receiptPath: ".truth-harness/receipts/fraction.json",
+      renderer: "plotly",
+      now: "2026-06-14T01:00:00.000Z"
+    });
+
+    const rendered = await renderPlotlyVisualArtifact({
+      rootPath: root,
+      visualRef: source.visual.visualId,
+      now: "2026-06-14T01:00:01.000Z"
+    });
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(rendered.sourceVisual.visualId).toBe(source.visual.visualId);
+    expect(rendered.renderer).toBe("plotly");
+    expect(rendered.visual.renderer).toMatchObject({
+      engine: "truth-harness-native",
+      adapter: "plotly-json-svg-renderer"
+    });
+    expect(rendered.visual.payload.format).toBe("svg");
+    expect(rendered.visual.payload.content).toContain("<svg");
+    expect(rendered.visual.payload.content).toContain("3 / 4 + 5 / 8");
+    expect(rendered.visual.sourceRefs[0]).toMatchObject({
+      kind: "visual",
+      ref: expect.stringContaining(source.visual.visualId)
+    });
+    expect(rendered.visual.payload.rendererSource).toMatchObject({
+      language: "plotly-json",
+      contentHash: source.visual.payload.rendererSource?.contentHash
+    });
+    expect(rendered.visual.tags).toEqual(expect.arrayContaining(["rendered", "plotly-json", "svg"]));
+    expect(validation.passed).toBe(true);
+    expect(validation.summary.byKind.visuals).toBe(2);
+  });
+
+  it("requires plotly-json payload for Plotly rendering", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Plotly Render Boundary Lab" });
+    const source = await writeWorkspaceGraphVisualArtifact({
+      rootPath: root,
+      renderer: "mermaid",
+      now: "2026-06-14T01:00:00.000Z"
+    });
+
+    await expect(
+      renderPlotlyVisualArtifact({
+        rootPath: root,
+        visualRef: source.visual.visualId
+      })
+    ).rejects.toThrow(/requires plotly-json/u);
   });
 });
 

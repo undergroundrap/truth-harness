@@ -108,7 +108,10 @@ describe("benchmark CLI", () => {
     ) as { visual: { kind: string; renderer: { engine: string }; payload: { format: string; content: unknown; rendererSource?: { language: string; content: string; contentHash: string } } } };
     const plot = JSON.parse(
       (await runCli(["visual", "plot", ".truth-harness/receipts/fraction.json", "--workspace", root, "--renderer", "plotly", "--json"])).stdout
-    ) as { visual: { kind: string; renderer: { engine: string }; payload: { format: string }; data?: { rows: string[][] } } };
+    ) as { visual: { visualId: string; kind: string; renderer: { engine: string }; payload: { format: string }; data?: { rows: string[][] } } };
+    const renderedPlot = JSON.parse(
+      (await runCli(["visual", "render", plot.visual.visualId, "--workspace", root, "--engine", "plotly", "--json"])).stdout
+    ) as { renderer: string; sourceVisual: { visualId: string }; visual: { kind: string; renderer: { engine: string; adapter: string }; payload: { format: string; content: string }; sourceRefs: Array<{ kind: string; ref: string }> } };
     const canvas = JSON.parse(
       (await runCli(["visual", "canvas", "--workspace", root, "--json"])).stdout
     ) as { visual: { kind: string; renderer: { engine: string }; payload: { format: string } } };
@@ -134,16 +137,38 @@ describe("benchmark CLI", () => {
       payload: { format: "plotly-json" }
     });
     expect(plot.visual.data?.rows.some((row) => row.includes("11/8"))).toBe(true);
+    expect(renderedPlot).toMatchObject({
+      renderer: "plotly",
+      sourceVisual: {
+        visualId: plot.visual.visualId
+      },
+      visual: {
+        kind: "plot",
+        renderer: {
+          engine: "truth-harness-native",
+          adapter: "plotly-json-svg-renderer"
+        },
+        payload: {
+          format: "svg"
+        }
+      }
+    });
+    expect(renderedPlot.visual.payload.content).toContain("<svg");
+    expect(renderedPlot.visual.sourceRefs[0]).toMatchObject({
+      kind: "visual",
+      ref: expect.stringContaining(plot.visual.visualId)
+    });
     expect(canvas.visual).toMatchObject({
       kind: "mind-map",
       renderer: { engine: "tldraw" },
       payload: { format: "canvas-json" }
     });
-    expect(list.total).toBe(3);
+    expect(list.total).toBe(4);
     expect(list.visuals.map((visual) => `${visual.kind}/${visual.renderer}`).sort()).toEqual([
       "lineage-graph/graphviz",
       "mind-map/tldraw",
-      "plot/plotly"
+      "plot/plotly",
+      "plot/truth-harness-native"
     ]);
   });
 

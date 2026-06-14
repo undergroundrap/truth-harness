@@ -93,6 +93,7 @@ import {
   readVerifierRoute,
   renderReceipt,
   renderGraphvizVisualArtifact,
+  renderPlotlyVisualArtifact,
   renderTeachingPacketMarkdown,
   repairLocalWorkspace,
   replayReceipt,
@@ -594,7 +595,7 @@ visual
   .description("Render a saved renderer source into a new local visual artifact.")
   .argument("<visual>", "Visual id or workspace-local visual JSON path")
   .option("--workspace <path>", "Project root path", ".")
-  .option("--engine <engine>", "Renderer engine. Currently: graphviz", "graphviz")
+  .option("--engine <engine>", "Renderer engine: graphviz or plotly", "graphviz")
   .option("--dot-command <command>", "Override Graphviz dot executable")
   .option("--timeout-ms <ms>", "Renderer timeout in milliseconds", parsePositiveInteger, 5000)
   .option("--title <title>", "Optional title for the rendered visual artifact")
@@ -611,17 +612,20 @@ visual
         json?: boolean;
       }
     ) => {
-      if (options.engine !== "graphviz") {
-        throw new Error(`Unsupported visual render engine ${JSON.stringify(options.engine)}. Expected "graphviz".`);
-      }
-
-      const result = await renderGraphvizVisualArtifact({
-        rootPath: options.workspace,
-        visualRef,
-        dotCommand: options.dotCommand,
-        timeoutMs: options.timeoutMs,
-        title: options.title
-      });
+      const engine = parseVisualRenderEngine(options.engine);
+      const result = engine === "graphviz"
+        ? await renderGraphvizVisualArtifact({
+            rootPath: options.workspace,
+            visualRef,
+            dotCommand: options.dotCommand,
+            timeoutMs: options.timeoutMs,
+            title: options.title
+          })
+        : await renderPlotlyVisualArtifact({
+            rootPath: options.workspace,
+            visualRef,
+            title: options.title
+          });
 
       if (options.json) {
         printJson(result);
@@ -6825,6 +6829,14 @@ function parsePlotVisualRenderer(value: string): "plotly" | "matplotlib" | "sage
   }
 
   throw new Error(`Unsupported plot visual renderer ${JSON.stringify(value)}. Expected "plotly", "matplotlib", or "sage".`);
+}
+
+function parseVisualRenderEngine(value: string): "graphviz" | "plotly" {
+  if (value === "graphviz" || value === "plotly") {
+    return value;
+  }
+
+  throw new Error(`Unsupported visual render engine ${JSON.stringify(value)}. Expected "graphviz" or "plotly".`);
 }
 
 function parseVisualPayloadFormat(value: string): VisualArtifactPayloadFormat {

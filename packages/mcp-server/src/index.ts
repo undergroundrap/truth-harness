@@ -1072,17 +1072,17 @@ export function createTruthHarnessMcpServer(): McpServer {
     {
       title: "Render Visual Artifact",
       description:
-        "Render a saved DOT visual artifact through the configured local Graphviz renderer and write a linked SVG visual artifact. The rendered SVG remains evidence, not proof.",
+        "Render a saved DOT or Plotly JSON visual artifact into a linked SVG visual artifact. Rendered SVGs remain evidence views, not proof.",
       inputSchema: {
         workspacePath: z
           .string()
           .optional()
           .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
-        visualRef: z.string().min(1).describe("Visual id or workspace-local visual JSON path containing DOT renderer source."),
+        visualRef: z.string().min(1).describe("Visual id or workspace-local visual JSON path containing DOT or plotly-json renderer source."),
         engine: z
-          .enum(["graphviz"])
+          .enum(["graphviz", "plotly"])
           .optional()
-          .describe("Render engine. Currently only graphviz is exposed to MCP."),
+          .describe("Render engine. graphviz renders DOT sources; plotly renders saved plotly-json artifacts with the constrained local SVG renderer."),
         title: z.string().optional().describe("Optional title for the rendered visual artifact."),
         timeoutMs: z
           .number()
@@ -1090,7 +1090,7 @@ export function createTruthHarnessMcpServer(): McpServer {
           .positive()
           .max(10000)
           .optional()
-          .describe("Local Graphviz render timeout in milliseconds. Defaults to 5000.")
+          .describe("Local Graphviz render timeout in milliseconds. Ignored for plotly-json rendering. Defaults to 5000.")
       },
       annotations: {
         readOnlyHint: false,

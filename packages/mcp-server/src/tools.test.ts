@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createReceipt } from "@truth-harness/core";
+import { createReceipt, writeReceiptPlotVisualArtifact } from "@truth-harness/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   handleTruthHarnessAsk,
@@ -763,6 +763,47 @@ describe("MCP tool handlers", () => {
     expect(shown.visualId).toBe(graph.visual.visualId);
     expect(render.error).toBe(true);
     expect(render.message).toContain("Graphviz renderer unavailable");
+  });
+
+  it("renders saved Plotly visual artifacts for agents without external engines", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Plot Render Lab" });
+    const receipt = createReceipt("compute 3 / 4 + 5 / 8");
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
+    await writeFile(join(root, ".truth-harness", "receipts", "fraction.json"), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+    const plot = await writeReceiptPlotVisualArtifact({
+      rootPath: root,
+      receiptPath: ".truth-harness/receipts/fraction.json",
+      renderer: "plotly"
+    });
+
+    const render = await handleTruthHarnessVisualRender({
+      visualRef: plot.visual.visualId,
+      engine: "plotly"
+    });
+    const list = await handleTruthHarnessVisualList({});
+
+    expect(render.error).toBe(false);
+    if (!render.error) {
+      expect(render.renderer).toBe("plotly");
+      expect(render.sourceVisual.visualId).toBe(plot.visual.visualId);
+      expect(render.result.visual).toMatchObject({
+        kind: "plot",
+        renderer: {
+          engine: "truth-harness-native",
+          adapter: "plotly-json-svg-renderer"
+        },
+        payload: {
+          format: "svg"
+        }
+      });
+      expect(render.result.visual.sourceRefs[0]).toMatchObject({
+        kind: "visual",
+        ref: expect.stringContaining(plot.visual.visualId)
+      });
+    }
+    expect(list.total).toBe(2);
   });
 
   it("repairs old local workspace manifests for agents", async () => {

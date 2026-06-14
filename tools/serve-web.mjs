@@ -360,28 +360,34 @@ async function handleApiRequest(request, response, requestUrl) {
   if (requestUrl.pathname === "/api/visuals/render" && request.method === "POST") {
     const input = await readJsonBody(request);
     try {
-      const { renderGraphvizVisualArtifact } = await loadCoreModule();
+      const { renderGraphvizVisualArtifact, renderPlotlyVisualArtifact } = await loadCoreModule();
       await ensureLocalWorkspace();
       const engine = optionalText(input?.engine) ?? "graphviz";
-      if (engine !== "graphviz") {
+      if (engine !== "graphviz" && engine !== "plotly") {
         throw new Error(`Unsupported visual render engine: ${engine}`);
       }
       const visualRef = boundedText(input?.visualRef, "", 240);
       if (!visualRef) {
         throw new Error("visualRef is required.");
       }
-      const result = await renderGraphvizVisualArtifact({
-        rootPath: projectRoot,
-        visualRef,
-        title: optionalText(input?.title),
-        timeoutMs: positiveNumberOrUndefined(input?.timeoutMs)
-      });
+      const result = engine === "graphviz"
+        ? await renderGraphvizVisualArtifact({
+            rootPath: projectRoot,
+            visualRef,
+            title: optionalText(input?.title),
+            timeoutMs: positiveNumberOrUndefined(input?.timeoutMs)
+          })
+        : await renderPlotlyVisualArtifact({
+            rootPath: projectRoot,
+            visualRef,
+            title: optionalText(input?.title)
+          });
       const visuals = await listVisualArtifactsSafe();
       writeJson(response, 200, {
         schemaVersion: "truth-harness.web-visual-render-response.v0",
         localOnly: true,
         externalCalls: [],
-        renderer: "graphviz",
+        renderer: engine,
         visual: result.visual,
         sourceVisual: result.sourceVisual,
         sourceVisualRef: result.sourceVisualRef,
@@ -394,7 +400,7 @@ async function handleApiRequest(request, response, requestUrl) {
           {
             actor: "local-api",
             action: "rendered-visual-artifact",
-            detail: `${result.sourceVisual.visualId} rendered into ${result.visual.visualId} with local Graphviz.`,
+            detail: `${result.sourceVisual.visualId} rendered into ${result.visual.visualId} with local ${engine}.`,
             at: result.visual.createdAt
           }
         ]

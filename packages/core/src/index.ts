@@ -221,7 +221,7 @@ export {
   writeResearchCanvasVisualArtifact,
   writeWorkspaceGraphVisualArtifact
 } from "./visual-adapters.js";
-export { renderGraphvizVisualArtifact } from "./visual-renderer.js";
+export { renderGraphvizVisualArtifact, renderPlotlyVisualArtifact } from "./visual-renderer.js";
 export { runWorkspaceStress } from "./workspace-stress.js";
 export { getEngineManifest } from "./engine-manifest.js";
 export {
@@ -555,6 +555,8 @@ export type {
 export type {
   GraphvizVisualRenderInput,
   GraphvizVisualRenderResult,
+  PlotlyVisualRenderInput,
+  PlotlyVisualRenderResult,
   VisualRendererCommandResult,
   VisualRendererCommandRunner
 } from "./visual-renderer.js";

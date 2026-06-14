@@ -72,6 +72,7 @@ import {
   readVerifierRoute,
   renderEvidenceAuditMarkdown,
   renderGraphvizVisualArtifact,
+  renderPlotlyVisualArtifact,
   sealVaultFile,
   solveSmtProblem,
   updateResearchSessionTask,
@@ -490,15 +491,17 @@ export interface TruthHarnessVisualShowInput {
 export interface TruthHarnessVisualRenderInput {
   workspacePath?: string;
   visualRef: string;
-  engine?: "graphviz";
+  engine?: "graphviz" | "plotly";
   title?: string;
   timeoutMs?: number;
 }
 
+type TruthHarnessVisualRenderEngine = "graphviz" | "plotly";
+
 export type TruthHarnessVisualRenderOutput =
   | {
       error: false;
-      renderer: "graphviz";
+      renderer: TruthHarnessVisualRenderEngine;
       result: VisualArtifactWriteResult;
       sourceVisual: VisualArtifact;
       sourceVisualRef: string;
@@ -506,7 +509,7 @@ export type TruthHarnessVisualRenderOutput =
     }
   | {
       error: true;
-      renderer: "graphviz";
+      renderer: TruthHarnessVisualRenderEngine;
       visualRef: string;
       message: string;
     };
@@ -1454,25 +1457,33 @@ export async function handleTruthHarnessVisualShow(input: TruthHarnessVisualShow
 export async function handleTruthHarnessVisualRender(
   input: TruthHarnessVisualRenderInput
 ): Promise<TruthHarnessVisualRenderOutput> {
-  if (input.engine && input.engine !== "graphviz") {
+  const engine = input.engine ?? "graphviz";
+  if (engine !== "graphviz" && engine !== "plotly") {
     return {
       error: true,
       renderer: "graphviz",
       visualRef: input.visualRef,
-      message: `Unsupported visual render engine ${JSON.stringify(input.engine)}. Expected "graphviz".`
+      message: `Unsupported visual render engine ${JSON.stringify(input.engine)}. Expected "graphviz" or "plotly".`
     };
   }
 
   try {
-    const rendered = await renderGraphvizVisualArtifact({
-      rootPath: resolveWorkspaceRoot(input.workspacePath),
-      visualRef: input.visualRef,
-      title: input.title,
-      timeoutMs: input.timeoutMs
-    });
+    const rootPath = resolveWorkspaceRoot(input.workspacePath);
+    const rendered = engine === "graphviz"
+      ? await renderGraphvizVisualArtifact({
+          rootPath,
+          visualRef: input.visualRef,
+          title: input.title,
+          timeoutMs: input.timeoutMs
+        })
+      : await renderPlotlyVisualArtifact({
+          rootPath,
+          visualRef: input.visualRef,
+          title: input.title
+        });
     return {
       error: false,
-      renderer: "graphviz",
+      renderer: engine,
       result: {
         visual: rendered.visual,
         jsonPath: rendered.jsonPath,
@@ -1480,14 +1491,14 @@ export async function handleTruthHarnessVisualRender(
       },
       sourceVisual: rendered.sourceVisual,
       sourceVisualRef: rendered.sourceVisualRef,
-      message: `Rendered ${rendered.sourceVisual.visualId} into ${rendered.visual.visualId} with local Graphviz.`
+      message: `Rendered ${rendered.sourceVisual.visualId} into ${rendered.visual.visualId} with local ${engine}.`
     };
   } catch (error) {
     return {
       error: true,
-      renderer: "graphviz",
+      renderer: engine,
       visualRef: input.visualRef,
-      message: error instanceof Error ? error.message : "Graphviz visual render failed."
+      message: error instanceof Error ? error.message : `${engine} visual render failed.`
     };
   }
 }
