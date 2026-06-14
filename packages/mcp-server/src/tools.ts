@@ -58,6 +58,7 @@ import {
   listSmtChecks,
   listValidationPlans,
   listVerifierRoutes,
+  listVisualArtifacts,
   listWorkspaceReviews,
   listWorkspaceSnapshots,
   listVaultEntries,
@@ -66,9 +67,11 @@ import {
   repairLocalWorkspace,
   readClaimRecord,
   readResearchSession,
+  readVisualArtifact,
   readWorkspaceReview,
   readVerifierRoute,
   renderEvidenceAuditMarkdown,
+  renderGraphvizVisualArtifact,
   sealVaultFile,
   solveSmtProblem,
   updateResearchSessionTask,
@@ -97,6 +100,7 @@ import {
   writeResearchSession,
   writeValidationPlan,
   writeVerifierRoute,
+  writeWorkspaceGraphVisualArtifact,
   writeWorkspaceReview,
   writeWorkspaceSnapshot,
   type BenchmarkArtifactSummary,
@@ -201,6 +205,9 @@ import {
   type VerifierRouteSummary,
   type SatisfyVerifierRouteObligationResult,
   type VerifierRouteWriteResult,
+  type VisualArtifact,
+  type VisualArtifactSummary,
+  type VisualArtifactWriteResult,
   type WorkspaceSnapshotSummary,
   type WorkspaceSnapshotVerification,
   type WorkspaceSnapshotWriteResult,
@@ -463,6 +470,46 @@ export interface TruthHarnessWorkspaceSnapshotInput {
 export interface TruthHarnessWorkspaceGraphInput {
   workspacePath?: string;
 }
+
+export interface TruthHarnessVisualGraphInput {
+  workspacePath?: string;
+  renderer?: "mermaid" | "graphviz";
+  title?: string;
+  maxNodes?: number;
+}
+
+export interface TruthHarnessVisualListInput {
+  workspacePath?: string;
+}
+
+export interface TruthHarnessVisualShowInput {
+  workspacePath?: string;
+  visualRef: string;
+}
+
+export interface TruthHarnessVisualRenderInput {
+  workspacePath?: string;
+  visualRef: string;
+  engine?: "graphviz";
+  title?: string;
+  timeoutMs?: number;
+}
+
+export type TruthHarnessVisualRenderOutput =
+  | {
+      error: false;
+      renderer: "graphviz";
+      result: VisualArtifactWriteResult;
+      sourceVisual: VisualArtifact;
+      sourceVisualRef: string;
+      message: string;
+    }
+  | {
+      error: true;
+      renderer: "graphviz";
+      visualRef: string;
+      message: string;
+    };
 
 export interface TruthHarnessWorkspaceReviewInput {
   workspacePath?: string;
@@ -1378,6 +1425,71 @@ export async function handleTruthHarnessWorkspaceGraph(input: TruthHarnessWorksp
   return createWorkspaceGraph({
     rootPath: resolveWorkspaceRoot(input.workspacePath)
   });
+}
+
+export async function handleTruthHarnessVisualGraph(input: TruthHarnessVisualGraphInput): Promise<VisualArtifactWriteResult> {
+  return writeWorkspaceGraphVisualArtifact({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    renderer: input.renderer ?? "graphviz",
+    title: input.title,
+    maxNodes: input.maxNodes
+  });
+}
+
+export async function handleTruthHarnessVisualList(input: TruthHarnessVisualListInput): Promise<{
+  total: number;
+  visuals: VisualArtifactSummary[];
+}> {
+  const visuals = await listVisualArtifacts(resolveWorkspaceRoot(input.workspacePath));
+  return {
+    total: visuals.length,
+    visuals
+  };
+}
+
+export async function handleTruthHarnessVisualShow(input: TruthHarnessVisualShowInput): Promise<VisualArtifact> {
+  return readVisualArtifact(resolveWorkspaceRoot(input.workspacePath), input.visualRef);
+}
+
+export async function handleTruthHarnessVisualRender(
+  input: TruthHarnessVisualRenderInput
+): Promise<TruthHarnessVisualRenderOutput> {
+  if (input.engine && input.engine !== "graphviz") {
+    return {
+      error: true,
+      renderer: "graphviz",
+      visualRef: input.visualRef,
+      message: `Unsupported visual render engine ${JSON.stringify(input.engine)}. Expected "graphviz".`
+    };
+  }
+
+  try {
+    const rendered = await renderGraphvizVisualArtifact({
+      rootPath: resolveWorkspaceRoot(input.workspacePath),
+      visualRef: input.visualRef,
+      title: input.title,
+      timeoutMs: input.timeoutMs
+    });
+    return {
+      error: false,
+      renderer: "graphviz",
+      result: {
+        visual: rendered.visual,
+        jsonPath: rendered.jsonPath,
+        markdownPath: rendered.markdownPath
+      },
+      sourceVisual: rendered.sourceVisual,
+      sourceVisualRef: rendered.sourceVisualRef,
+      message: `Rendered ${rendered.sourceVisual.visualId} into ${rendered.visual.visualId} with local Graphviz.`
+    };
+  } catch (error) {
+    return {
+      error: true,
+      renderer: "graphviz",
+      visualRef: input.visualRef,
+      message: error instanceof Error ? error.message : "Graphviz visual render failed."
+    };
+  }
 }
 
 export async function handleTruthHarnessWorkspaceReview(

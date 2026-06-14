@@ -12,6 +12,7 @@ const webServerScript = resolve(repoRoot, "tools/serve-web.mjs");
 
 let runningServer: ChildProcessWithoutNullStreams | undefined;
 let tempProjectRoot: string | undefined;
+const originalGraphvizDot = process.env.TRUTH_HARNESS_GRAPHVIZ_DOT;
 
 afterEach(async () => {
   if (runningServer) {
@@ -28,11 +29,18 @@ afterEach(async () => {
     await rm(tempProjectRoot, { recursive: true, force: true });
     tempProjectRoot = undefined;
   }
+
+  if (originalGraphvizDot === undefined) {
+    delete process.env.TRUTH_HARNESS_GRAPHVIZ_DOT;
+  } else {
+    process.env.TRUTH_HARNESS_GRAPHVIZ_DOT = originalGraphvizDot;
+  }
 });
 
 describe("local web route ledger API", () => {
   it("persists verifier routes and reads them through local-only API endpoints", async () => {
     tempProjectRoot = await mkdtemp(join(tmpdir(), "truth-harness-web-api-"));
+    process.env.TRUTH_HARNESS_GRAPHVIZ_DOT = "truth-harness-missing-graphviz-dot";
     const port = await getFreePort();
     runningServer = await startWebServer(port, tempProjectRoot);
     const baseUrl = `http://127.0.0.1:${port}`;
@@ -412,6 +420,72 @@ describe("local web route ledger API", () => {
         ref: visualPayload.visual.visualId
       })
     );
+
+    const graphvizVisualResponse = await fetch(`${baseUrl}/api/visuals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: "Graphviz source visual",
+        kind: "lineage-graph",
+        renderer: {
+          engine: "graphviz"
+        },
+        sourceRefs: [
+          {
+            kind: "workspace-graph",
+            ref: ".",
+            label: "Workspace graph"
+          }
+        ],
+        replayCommand: "truth-harness visual graph --renderer graphviz",
+        payload: {
+          format: "graph-json",
+          content: {
+            source: "digraph G { a -> b; }",
+            nodes: ["a", "b"]
+          },
+          rendererSource: {
+            language: "dot",
+            content: "digraph G { a -> b; }",
+            filename: "graphviz-source.dot"
+          }
+        },
+        tags: ["graphviz", "renderer-source"]
+      })
+    });
+    expect(graphvizVisualResponse.status).toBe(200);
+    const graphvizVisualPayload = await graphvizVisualResponse.json();
+    expectLocalApiSuccess(graphvizVisualResponse, graphvizVisualPayload);
+    expect(graphvizVisualPayload.visual.payload.rendererSource).toMatchObject({
+      language: "dot",
+      filename: "graphviz-source.dot"
+    });
+
+    const renderVisualResponse = await fetch(`${baseUrl}/api/visuals/render`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        visualRef: graphvizVisualPayload.visual.visualId,
+        timeoutMs: 50
+      })
+    });
+    expect(renderVisualResponse.status).toBe(400);
+    const renderVisualPayload = await renderVisualResponse.json();
+    expect(renderVisualPayload.requestId).toMatch(/^web_err_[0-9a-f-]{36}$/u);
+    expect(renderVisualResponse.headers.get("x-truth-harness-request-id")).toBe(renderVisualPayload.requestId);
+    expect(renderVisualPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-error.v0",
+      localOnly: true,
+      externalCalls: [],
+      method: "POST",
+      path: "/api/visuals/render",
+      status: 400
+    });
+    expect(renderVisualPayload.error).toContain("Graphviz renderer unavailable");
 
     const routeResponse = await fetch(`${baseUrl}/api/routes/${receiptPayload.route.routeId}`);
     expect(routeResponse.status).toBe(200);

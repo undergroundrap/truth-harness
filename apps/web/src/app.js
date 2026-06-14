@@ -452,6 +452,7 @@ const visualArtifactList = document.querySelector("#visual-artifact-list");
 const copyPlotDataButton = document.querySelector("#copy-plot-data");
 const downloadPlotDataButton = document.querySelector("#download-plot-data");
 const downloadPlotSvgButton = document.querySelector("#download-plot-svg");
+const renderVisualArtifactButton = document.querySelector("#render-visual-artifact");
 const toggleVisualFocusButton = document.querySelector("#toggle-visual-focus");
 const toggleVisualDetailButton = document.querySelector("#toggle-visual-detail");
 const visualZoomOutButton = document.querySelector("#visual-zoom-out");
@@ -1379,6 +1380,11 @@ function renderMathPlot(receipt) {
       ? savedVisualArtifactBannerHtml(selectedVisualArtifact)
       : "";
   }
+  if (renderVisualArtifactButton) {
+    const canRender = selectedVisualCanRenderWithGraphviz(selectedVisualArtifact);
+    renderVisualArtifactButton.hidden = !canRender;
+    renderVisualArtifactButton.disabled = !canRender;
+  }
   if (visualModeBar) {
     visualModeBar.hidden = Boolean(selectedVisualArtifact);
   }
@@ -1428,6 +1434,14 @@ function savedVisualArtifactBannerHtml(artifact) {
     <span>${escapeHtml(artifact.privacy?.networkAccess ?? "network: none")}</span>
     <code>${escapeHtml(replay)}</code>
   </div>`;
+}
+
+function selectedVisualCanRenderWithGraphviz(artifact) {
+  if (!artifact || artifact.payload?.format === "svg") {
+    return false;
+  }
+
+  return savedVisualArtifactRendererSource(artifact)?.language === "dot";
 }
 
 function visualZoomPercent() {
@@ -5546,6 +5560,52 @@ async function openVisualArtifact(visualId) {
   addActivity("human", "Opened visual artifact", `${payload.visual?.visualId ?? visualId} loaded from .truth-harness/visuals.`, "passed");
   render();
   resetActiveSurfaceScroll();
+}
+
+async function renderSelectedVisualArtifact() {
+  const visualRef = state.selectedVisualArtifactId;
+  if (!visualRef) {
+    return;
+  }
+
+  if (renderVisualArtifactButton) {
+    renderVisualArtifactButton.disabled = true;
+    renderVisualArtifactButton.textContent = "Rendering";
+  }
+  addActivity("web-ui", "Rendering visual artifact", `POST /api/visuals/render for ${visualRef}`, "waiting");
+
+  try {
+    const response = await fetch("/api/visuals/render", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        visualRef,
+        engine: "graphviz"
+      })
+    });
+    const payload = await readLocalApiJson(response, "Local visual render API failed.");
+    applyVisualArtifactsPayload(payload);
+    state.selectedVisualArtifactId = payload.visual?.visualId;
+    state.selectedResearchMapSnapshotId = undefined;
+    state.selectedResearchMapNodeId = undefined;
+    requestVisualFit();
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, "passed", item.at);
+    }
+    updateLatestActivity("Rendering visual artifact", "passed", `${visualRef} rendered into ${payload.visual?.visualId ?? "new SVG visual"}.`);
+    render();
+    resetActiveSurfaceScroll();
+  } catch (error) {
+    updateLatestActivity("Rendering visual artifact", "refuted", "POST /api/visuals/render failed");
+    addActivity("local-api", "Visual render failed", error instanceof Error ? error.message : "Unknown visual render failure.", "refuted");
+  } finally {
+    if (renderVisualArtifactButton) {
+      renderVisualArtifactButton.disabled = false;
+      renderVisualArtifactButton.textContent = "Render SVG";
+    }
+  }
 }
 
 function applyResearchMapPayload(payload) {
@@ -10456,6 +10516,12 @@ copyPlotDataButton.addEventListener("click", () => {
 downloadPlotDataButton.addEventListener("click", downloadCurrentPlotData);
 
 downloadPlotSvgButton.addEventListener("click", downloadCurrentPlotSvg);
+
+renderVisualArtifactButton?.addEventListener("click", () => {
+  renderSelectedVisualArtifact().catch((error) => {
+    addActivity("web-ui", "Visual render failed", error instanceof Error ? error.message : "Unknown visual render failure.", "refuted");
+  });
+});
 
 visualRendererSourcePanel?.addEventListener("click", (event) => {
   const copyButton = event.target.closest("[data-visual-source-copy]");

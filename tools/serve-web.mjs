@@ -39,6 +39,16 @@ const VISUAL_PAYLOAD_FORMATS = new Set([
   "png-ref",
   "table-json"
 ]);
+const VISUAL_RENDERER_SOURCE_LANGUAGES = new Set([
+  "mermaid",
+  "dot",
+  "plotly-json",
+  "python",
+  "tldraw-json",
+  "svg",
+  "html",
+  "text"
+]);
 const VISUAL_SOURCE_KINDS = new Set([
   "visual",
   "receipt",
@@ -343,6 +353,54 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, 400, error instanceof Error ? error.message : "Visual artifact save failed.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/visuals/render" && request.method === "POST") {
+    const input = await readJsonBody(request);
+    try {
+      const { renderGraphvizVisualArtifact } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const engine = optionalText(input?.engine) ?? "graphviz";
+      if (engine !== "graphviz") {
+        throw new Error(`Unsupported visual render engine: ${engine}`);
+      }
+      const visualRef = boundedText(input?.visualRef, "", 240);
+      if (!visualRef) {
+        throw new Error("visualRef is required.");
+      }
+      const result = await renderGraphvizVisualArtifact({
+        rootPath: projectRoot,
+        visualRef,
+        title: optionalText(input?.title),
+        timeoutMs: positiveNumberOrUndefined(input?.timeoutMs)
+      });
+      const visuals = await listVisualArtifactsSafe();
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-visual-render-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        renderer: "graphviz",
+        visual: result.visual,
+        sourceVisual: result.sourceVisual,
+        sourceVisualRef: result.sourceVisualRef,
+        paths: {
+          json: result.jsonPath,
+          markdown: result.markdownPath
+        },
+        visuals,
+        activity: [
+          {
+            actor: "local-api",
+            action: "rendered-visual-artifact",
+            detail: `${result.sourceVisual.visualId} rendered into ${result.visual.visualId} with local Graphviz.`,
+            at: result.visual.createdAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Visual artifact render failed.", request);
     }
     return;
   }
@@ -961,8 +1019,28 @@ function normalizeVisualPayload(value) {
     format: parseVisualPayloadFormat(optionalText(value.format) ?? "svg"),
     content: value.content,
     contentRef: optionalText(value.contentRef),
+    rendererSource: normalizeVisualRendererSource(value.rendererSource),
     width: positiveNumberOrUndefined(value.width),
     height: positiveNumberOrUndefined(value.height)
+  };
+}
+
+function normalizeVisualRendererSource(value) {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const language = parseVisualRendererSourceLanguage(optionalText(value.language) ?? "text");
+  const content = boundedText(value.content, "", 200_000);
+  if (!content) {
+    throw new Error("rendererSource.content is required when rendererSource is provided");
+  }
+
+  return {
+    language,
+    content,
+    filename: optionalText(value.filename),
+    contentHash: optionalText(value.contentHash)
   };
 }
 
@@ -1021,6 +1099,14 @@ function parseVisualPayloadFormat(value) {
   }
 
   throw new Error(`Unsupported visual payload format: ${value}`);
+}
+
+function parseVisualRendererSourceLanguage(value) {
+  if (VISUAL_RENDERER_SOURCE_LANGUAGES.has(value)) {
+    return value;
+  }
+
+  throw new Error(`Unsupported visual renderer source language: ${value}`);
 }
 
 function parseVisualSourceKind(value) {

@@ -135,6 +135,10 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_vault_seal",
         "truth_harness_vault_verify",
         "truth_harness_verify",
+        "truth_harness_visual_graph",
+        "truth_harness_visual_list",
+        "truth_harness_visual_render",
+        "truth_harness_visual_show",
         "truth_harness_workspace_graph",
         "truth_harness_workspace_init",
         "truth_harness_workspace_repair",
@@ -547,6 +551,33 @@ describe("Truth Harness MCP server", () => {
       expect(workspaceGraphResult.isError).not.toBe(true);
       expect(workspaceGraphText).toContain("\"schemaVersion\": \"truth-harness.workspace-graph.v0\"");
       expect(workspaceGraphText).toContain(JSON.parse(snapshotText).snapshot.snapshotId);
+
+      const visualGraphResult = await client.callTool({
+        name: "truth_harness_visual_graph",
+        arguments: {
+          renderer: "graphviz",
+          maxNodes: 24
+        }
+      });
+      const visualGraphText = firstText(visualGraphResult.content);
+      const visualGraphJson = JSON.parse(visualGraphText);
+      expect(visualGraphResult.isError).not.toBe(true);
+      expect(visualGraphText).toContain("\"schemaVersion\": \"truth-harness.visual-artifact.v0\"");
+      expect(visualGraphText).toContain("\"language\": \"dot\"");
+
+      const visualListResult = await client.callTool({
+        name: "truth_harness_visual_list",
+        arguments: {}
+      });
+      expect(firstText(visualListResult.content)).toContain("\"total\": 1");
+
+      const visualShowResult = await client.callTool({
+        name: "truth_harness_visual_show",
+        arguments: {
+          visualRef: visualGraphJson.visual.visualId
+        }
+      });
+      expect(firstText(visualShowResult.content)).toContain(visualGraphJson.visual.visualId);
 
       const expertReviewResult = await client.callTool({
         name: "truth_harness_expert_review_log",

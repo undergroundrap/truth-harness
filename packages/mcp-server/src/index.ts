@@ -66,6 +66,10 @@ import {
   handleTruthHarnessVaultList,
   handleTruthHarnessVaultSeal,
   handleTruthHarnessVaultVerify,
+  handleTruthHarnessVisualGraph,
+  handleTruthHarnessVisualList,
+  handleTruthHarnessVisualRender,
+  handleTruthHarnessVisualShow,
   handleTruthHarnessVerify,
   handleTruthHarnessWorkspaceInit,
   handleTruthHarnessWorkspaceGraph,
@@ -987,6 +991,116 @@ export function createTruthHarnessMcpServer(): McpServer {
       }
     },
     async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceGraph({ workspacePath }))
+  );
+
+  server.registerTool(
+    "truth_harness_visual_graph",
+    {
+      title: "Write Workspace Visual Graph",
+      description:
+        "Write a replayable visual artifact from the local workspace evidence graph. Graphviz/Mermaid source is saved with hashes; this does not upgrade any source trust label.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        renderer: z
+          .enum(["graphviz", "mermaid"])
+          .optional()
+          .describe("Renderer source language to save. Defaults to graphviz so it can be rendered later."),
+        title: z.string().optional().describe("Optional title for the visual artifact."),
+        maxNodes: z
+          .number()
+          .int()
+          .positive()
+          .max(500)
+          .optional()
+          .describe("Maximum workspace graph nodes to include. Defaults to 80.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, renderer, title, maxNodes }) =>
+      toolJson(await handleTruthHarnessVisualGraph({ workspacePath, renderer, title, maxNodes }))
+  );
+
+  server.registerTool(
+    "truth_harness_visual_list",
+    {
+      title: "List Visual Artifacts",
+      description:
+        "List saved truth-harness.visual-artifact.v0 records from .truth-harness/visuals for agents to inspect, cite, or render.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessVisualList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "truth_harness_visual_show",
+    {
+      title: "Show Visual Artifact",
+      description:
+        "Read a saved visual artifact by visual id or workspace-local JSON path, including renderer source, source refs, trust boundary, and replay command.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        visualRef: z.string().min(1).describe("Visual id such as vis_<hash> or workspace-local visual JSON path.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, visualRef }) => toolJson(await handleTruthHarnessVisualShow({ workspacePath, visualRef }))
+  );
+
+  server.registerTool(
+    "truth_harness_visual_render",
+    {
+      title: "Render Visual Artifact",
+      description:
+        "Render a saved DOT visual artifact through the configured local Graphviz renderer and write a linked SVG visual artifact. The rendered SVG remains evidence, not proof.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        visualRef: z.string().min(1).describe("Visual id or workspace-local visual JSON path containing DOT renderer source."),
+        engine: z
+          .enum(["graphviz"])
+          .optional()
+          .describe("Render engine. Currently only graphviz is exposed to MCP."),
+        title: z.string().optional().describe("Optional title for the rendered visual artifact."),
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .max(10000)
+          .optional()
+          .describe("Local Graphviz render timeout in milliseconds. Defaults to 5000.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, visualRef, engine, title, timeoutMs }) => {
+      const result = await handleTruthHarnessVisualRender({ workspacePath, visualRef, engine, title, timeoutMs });
+      return toolJson(result, { isError: result.error });
+    }
   );
 
   server.registerTool(

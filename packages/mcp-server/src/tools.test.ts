@@ -65,6 +65,10 @@ import {
   handleTruthHarnessVaultList,
   handleTruthHarnessVaultSeal,
   handleTruthHarnessVaultVerify,
+  handleTruthHarnessVisualGraph,
+  handleTruthHarnessVisualList,
+  handleTruthHarnessVisualRender,
+  handleTruthHarnessVisualShow,
   handleTruthHarnessVerify,
   handleTruthHarnessWorkspaceInit,
   handleTruthHarnessWorkspaceGraph,
@@ -89,6 +93,7 @@ const originalWorkspaceRoot = process.env.TRUTH_HARNESS_ROOT;
 const originalLeanCommand = process.env.TRUTH_HARNESS_LEAN;
 const originalCodeRunOptIn = process.env.TRUTH_HARNESS_ALLOW_CODE_RUN;
 const originalUnsandboxedCodeRunOptIn = process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN;
+const originalGraphvizDot = process.env.TRUTH_HARNESS_GRAPHVIZ_DOT;
 const vaultKeyEnv = "TRUTH_HARNESS_MCP_TEST_VAULT_KEY";
 const originalVaultKey = process.env[vaultKeyEnv];
 
@@ -98,6 +103,7 @@ afterEach(async () => {
   restoreLeanCommand();
   restoreCodeRunOptIn();
   restoreUnsandboxedCodeRunOptIn();
+  restoreGraphvizDot();
   restoreVaultKey();
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
   tempRoots.length = 0;
@@ -715,6 +721,48 @@ describe("MCP tool handlers", () => {
     expect(status.exists).toBe(true);
     expect(status.missingDirectories).toEqual([]);
     expect(status.manifest?.privacy.networkAccess).toBe("none");
+  });
+
+  it("writes, lists, shows, and honestly fails to render visual artifacts for agents when Graphviz is missing", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    process.env.TRUTH_HARNESS_GRAPHVIZ_DOT = "truth-harness-missing-graphviz-dot";
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Visual Lab" });
+    await handleTruthHarnessVerify({
+      write: true,
+      problem: "compute 3 / 4 + 5 / 8",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    const graph = await handleTruthHarnessVisualGraph({
+      renderer: "graphviz",
+      maxNodes: 24
+    });
+    const list = await handleTruthHarnessVisualList({});
+    const shown = await handleTruthHarnessVisualShow({
+      visualRef: graph.visual.visualId
+    });
+    const render = await handleTruthHarnessVisualRender({
+      visualRef: graph.visual.visualId,
+      timeoutMs: 50
+    });
+
+    expect(graph.visual.schemaVersion).toBe("truth-harness.visual-artifact.v0");
+    expect(graph.visual.renderer.engine).toBe("graphviz");
+    expect(graph.visual.payload.rendererSource).toMatchObject({
+      language: "dot"
+    });
+    expect(list.total).toBe(1);
+    expect(list.visuals[0]).toMatchObject({
+      visualId: graph.visual.visualId,
+      renderer: "graphviz"
+    });
+    expect(shown.visualId).toBe(graph.visual.visualId);
+    expect(render.error).toBe(true);
+    expect(render.message).toContain("Graphviz renderer unavailable");
   });
 
   it("repairs old local workspace manifests for agents", async () => {
@@ -1688,6 +1736,15 @@ function restoreUnsandboxedCodeRunOptIn(): void {
   }
 
   process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN = originalUnsandboxedCodeRunOptIn;
+}
+
+function restoreGraphvizDot(): void {
+  if (originalGraphvizDot === undefined) {
+    delete process.env.TRUTH_HARNESS_GRAPHVIZ_DOT;
+    return;
+  }
+
+  process.env.TRUTH_HARNESS_GRAPHVIZ_DOT = originalGraphvizDot;
 }
 
 function restoreVaultKey(): void {
