@@ -452,6 +452,7 @@ const visualArtifactList = document.querySelector("#visual-artifact-list");
 const copyPlotDataButton = document.querySelector("#copy-plot-data");
 const downloadPlotDataButton = document.querySelector("#download-plot-data");
 const downloadPlotSvgButton = document.querySelector("#download-plot-svg");
+const savePlotSourceButton = document.querySelector("#save-plot-source");
 const renderVisualArtifactButton = document.querySelector("#render-visual-artifact");
 const toggleVisualFocusButton = document.querySelector("#toggle-visual-focus");
 const toggleVisualDetailButton = document.querySelector("#toggle-visual-detail");
@@ -1386,6 +1387,10 @@ function renderMathPlot(receipt) {
     renderVisualArtifactButton.hidden = !canRender;
     renderVisualArtifactButton.disabled = !canRender;
     renderVisualArtifactButton.textContent = renderEngine === "plotly" ? "Render plot SVG" : "Render SVG";
+  }
+  if (savePlotSourceButton) {
+    savePlotSourceButton.hidden = Boolean(selectedVisualArtifact);
+    savePlotSourceButton.disabled = Boolean(selectedVisualArtifact) || !receipt;
   }
   if (visualModeBar) {
     visualModeBar.hidden = Boolean(selectedVisualArtifact);
@@ -4131,6 +4136,65 @@ async function saveCurrentVisualArtifactRecord(receipt, plot) {
   const payload = await readLocalApiJson(response, "Local visual artifact API failed.");
   applyVisualArtifactsPayload(payload);
   return payload;
+}
+
+async function saveCurrentPlotSourceArtifact() {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt) {
+    return;
+  }
+
+  const workspaceReceipt = await ensureWorkspaceReceiptRef(receipt);
+  const receiptPath = workspaceReceipt.receiptPaths?.ref ?? workspaceReceipt.receiptPaths?.json;
+  const previousText = savePlotSourceButton?.textContent;
+  if (savePlotSourceButton) {
+    savePlotSourceButton.disabled = true;
+    savePlotSourceButton.textContent = "Sourcing";
+  }
+  addActivity("web-ui", "Sourcing plot visual", "POST /api/visuals/plot from the current receipt.", "waiting");
+
+  try {
+    const response = await fetch("/api/visuals/plot", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        receiptPath,
+        problem: receiptPath ? undefined : receipt.title,
+        renderer: "plotly",
+        title: `Plot source for ${workspaceReceipt.title ?? receipt.title}`
+      })
+    });
+    const payload = await readLocalApiJson(response, "Local plot visual API failed.");
+    applyVisualArtifactsPayload(payload);
+    state.selectedVisualArtifactId = payload.visual?.visualId;
+    state.selectedResearchMapSnapshotId = undefined;
+    state.selectedResearchMapNodeId = undefined;
+    state.surface = "plot";
+    requestVisualFit();
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, "passed", item.at);
+    }
+    updateLatestActivity(
+      "Sourcing plot visual",
+      "passed",
+      localApiSuccessMessage(payload, `${payload.visual?.visualId ?? "plot visual"} saved as renderer-ready Plotly JSON.`)
+    );
+    render();
+    resetActiveSurfaceScroll();
+  } catch (error) {
+    updateLatestActivity("Sourcing plot visual", "refuted", error instanceof Error ? error.message : "POST /api/visuals/plot failed");
+    addActivity("local-api", "Plot visual source failed", error instanceof Error ? error.message : "Unknown plot visual failure.", "refuted");
+  } finally {
+    if (savePlotSourceButton) {
+      savePlotSourceButton.disabled = false;
+      savePlotSourceButton.textContent = previousText ?? "Source plot";
+      if (state.selectedVisualArtifactId) {
+        flashButtonText(savePlotSourceButton, "Saved");
+      }
+    }
+  }
 }
 
 function createVisualArtifactRequest(receipt, plot) {
@@ -10622,6 +10686,12 @@ visualArtifactList?.addEventListener("click", (event) => {
 saveResearchMapButton.addEventListener("click", () => {
   saveCurrentResearchMap().catch((error) => {
     addActivity("web-ui", "Visual save failed", error instanceof Error ? error.message : "Unknown visual save failure.", "refuted");
+  });
+});
+
+savePlotSourceButton?.addEventListener("click", () => {
+  saveCurrentPlotSourceArtifact().catch((error) => {
+    addActivity("web-ui", "Plot visual source failed", error instanceof Error ? error.message : "Unknown plot visual failure.", "refuted");
   });
 });
 

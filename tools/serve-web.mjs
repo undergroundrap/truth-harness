@@ -357,6 +357,122 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/visuals/graph" && request.method === "POST") {
+    const input = await readJsonBody(request);
+    try {
+      const { writeWorkspaceGraphVisualArtifact } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const renderer = parseGraphVisualRenderer(optionalText(input?.renderer) ?? "graphviz");
+      const result = await writeWorkspaceGraphVisualArtifact({
+        rootPath: projectRoot,
+        renderer,
+        title: optionalText(input?.title),
+        maxNodes: boundedPositiveNumberOrUndefined(input?.maxNodes, 500)
+      });
+      const visuals = await listVisualArtifactsSafe();
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-visual-graph-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        renderer,
+        visual: result.visual,
+        paths: {
+          json: result.jsonPath,
+          markdown: result.markdownPath
+        },
+        visuals,
+        activity: [
+          {
+            actor: "local-api",
+            action: "saved-workspace-graph-visual",
+            detail: `${result.visual.visualId} saved a ${renderer} workspace graph visual from the local evidence graph.`,
+            at: result.visual.createdAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Visual graph artifact save failed.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/visuals/plot" && request.method === "POST") {
+    const input = await readJsonBody(request);
+    try {
+      const { writeReceiptPlotVisualArtifact } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const renderer = parsePlotVisualRenderer(optionalText(input?.renderer) ?? "plotly");
+      const result = await writeReceiptPlotVisualArtifact({
+        rootPath: projectRoot,
+        receiptPath: optionalText(input?.receiptPath),
+        problem: optionalText(input?.problem),
+        renderer,
+        title: optionalText(input?.title)
+      });
+      const visuals = await listVisualArtifactsSafe();
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-visual-plot-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        renderer,
+        visual: result.visual,
+        paths: {
+          json: result.jsonPath,
+          markdown: result.markdownPath
+        },
+        visuals,
+        activity: [
+          {
+            actor: "local-api",
+            action: "saved-receipt-plot-visual",
+            detail: `${result.visual.visualId} saved a ${renderer} plot source visual from receipt data.`,
+            at: result.visual.createdAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Visual plot artifact save failed.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/visuals/canvas" && request.method === "POST") {
+    const input = await readJsonBody(request);
+    try {
+      const { writeResearchCanvasVisualArtifact } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const result = await writeResearchCanvasVisualArtifact({
+        rootPath: projectRoot,
+        title: optionalText(input?.title),
+        maxNodes: boundedPositiveNumberOrUndefined(input?.maxNodes, 500)
+      });
+      const visuals = await listVisualArtifactsSafe();
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-visual-canvas-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        renderer: "tldraw",
+        visual: result.visual,
+        paths: {
+          json: result.jsonPath,
+          markdown: result.markdownPath
+        },
+        visuals,
+        activity: [
+          {
+            actor: "local-api",
+            action: "saved-research-canvas-visual",
+            detail: `${result.visual.visualId} saved an editable research canvas seed from the local evidence graph.`,
+            at: result.visual.createdAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Visual canvas artifact save failed.", request);
+    }
+    return;
+  }
+
   if (requestUrl.pathname === "/api/visuals/render" && request.method === "POST") {
     const input = await readJsonBody(request);
     try {
@@ -1099,6 +1215,22 @@ function parseVisualArtifactRenderer(value) {
   throw new Error(`Unsupported visual renderer: ${value}`);
 }
 
+function parseGraphVisualRenderer(value) {
+  if (value === "graphviz" || value === "mermaid") {
+    return value;
+  }
+
+  throw new Error(`Unsupported graph visual renderer: ${value}`);
+}
+
+function parsePlotVisualRenderer(value) {
+  if (value === "plotly" || value === "matplotlib" || value === "sage") {
+    return value;
+  }
+
+  throw new Error(`Unsupported plot visual renderer: ${value}`);
+}
+
 function parseVisualPayloadFormat(value) {
   if (VISUAL_PAYLOAD_FORMATS.has(value)) {
     return value;
@@ -1126,6 +1258,11 @@ function parseVisualSourceKind(value) {
 function positiveNumberOrUndefined(value) {
   const number = Number(value);
   return Number.isFinite(number) && number > 0 ? Math.round(number) : undefined;
+}
+
+function boundedPositiveNumberOrUndefined(value, max) {
+  const number = positiveNumberOrUndefined(value);
+  return number === undefined ? undefined : Math.min(max, number);
 }
 
 function normalizeResearchMapSnapshot(value) {

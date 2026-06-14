@@ -366,6 +366,116 @@ describe("local web route ledger API", () => {
       })
     );
 
+    const graphAdapterResponse = await fetch(`${baseUrl}/api/visuals/graph`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        renderer: "mermaid",
+        title: "Workspace graph adapter visual",
+        maxNodes: 40
+      })
+    });
+    expect(graphAdapterResponse.status).toBe(200);
+    const graphAdapterPayload = await graphAdapterResponse.json();
+    expectLocalApiSuccess(graphAdapterResponse, graphAdapterPayload);
+    expect(graphAdapterPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-visual-graph-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      renderer: "mermaid"
+    });
+    expect(graphAdapterPayload.visual).toMatchObject({
+      kind: "lineage-graph",
+      renderer: {
+        engine: "mermaid",
+        adapter: "workspace-graph-adapter"
+      },
+      payload: {
+        format: "graph-json"
+      }
+    });
+    expect(graphAdapterPayload.visual.payload.rendererSource).toMatchObject({
+      language: "mermaid",
+      filename: "workspace-lineage.mmd"
+    });
+
+    const plotAdapterResponse = await fetch(`${baseUrl}/api/visuals/plot`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        receiptPath: receiptPayload.receiptPaths.ref,
+        renderer: "plotly",
+        title: "Receipt plot adapter visual"
+      })
+    });
+    expect(plotAdapterResponse.status).toBe(200);
+    const plotAdapterPayload = await plotAdapterResponse.json();
+    expectLocalApiSuccess(plotAdapterResponse, plotAdapterPayload);
+    expect(plotAdapterPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-visual-plot-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      renderer: "plotly"
+    });
+    expect(plotAdapterPayload.visual).toMatchObject({
+      kind: "plot",
+      renderer: {
+        engine: "plotly",
+        adapter: "receipt-plot-adapter"
+      },
+      payload: {
+        format: "plotly-json"
+      }
+    });
+    expect(plotAdapterPayload.visual.payload.rendererSource).toMatchObject({
+      language: "plotly-json",
+      filename: "receipt-plot.plotly.json"
+    });
+    expect(plotAdapterPayload.visual.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        kind: "receipt",
+        ref: receiptPayload.receiptPaths.ref
+      })
+    );
+
+    const canvasAdapterResponse = await fetch(`${baseUrl}/api/visuals/canvas`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: "Research canvas adapter visual",
+        maxNodes: 24
+      })
+    });
+    expect(canvasAdapterResponse.status).toBe(200);
+    const canvasAdapterPayload = await canvasAdapterResponse.json();
+    expectLocalApiSuccess(canvasAdapterResponse, canvasAdapterPayload);
+    expect(canvasAdapterPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-visual-canvas-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      renderer: "tldraw"
+    });
+    expect(canvasAdapterPayload.visual).toMatchObject({
+      kind: "mind-map",
+      renderer: {
+        engine: "tldraw",
+        adapter: "research-canvas-adapter"
+      },
+      payload: {
+        format: "canvas-json"
+      }
+    });
+    expect(canvasAdapterPayload.visual.payload.rendererSource).toMatchObject({
+      language: "tldraw-json",
+      filename: "research-canvas.tldraw.json"
+    });
+
     const visualListResponse = await fetch(`${baseUrl}/api/visuals`);
     expect(visualListResponse.status).toBe(200);
     const visualListPayload = await visualListResponse.json();
