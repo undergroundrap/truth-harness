@@ -5345,6 +5345,7 @@ function renderChecksWorkOrder(receipt, rows) {
   const focusedRow = rows.find((row) => row.obligationId && row.obligationId === item.obligationId);
   const slot = Array.isArray(item.evidenceSlots) ? item.evidenceSlots[0] : undefined;
   const runAction = routeMatches ? checksWorkRunActionHtml(focusedRow) : "";
+  const existingEvidence = routeMatches ? focusedEvidenceSuggestion(focusedRow) : undefined;
   checksWorkOrder.hidden = false;
   checksWorkOrder.className = `checks-work-order ${routeMatches ? "route-ready" : "route-mismatch"}`;
   checksWorkOrder.innerHTML = `<div class="checks-work-head">
@@ -5356,6 +5357,7 @@ function renderChecksWorkOrder(receipt, rows) {
   </div>
   <div class="checks-work-actions">
     ${runAction}
+    ${existingEvidence ? `<button class="text-button compact-button checks-work-primary attach-focused-evidence-artifact" data-route-id="${escapeHtml(focusedRow.routeId)}" data-obligation-id="${escapeHtml(focusedRow.obligationId)}" data-evidence-kind="${escapeHtml(existingEvidence.kind)}" data-evidence-ref="${escapeHtml(existingEvidence.path)}" data-evidence-trust="${escapeHtml(existingEvidence.trust)}" data-evidence-summary="${escapeHtml(existingEvidence.summary)}" type="button">Attach existing ${escapeHtml(existingEvidence.kind.toUpperCase())}</button>` : ""}
     ${item.routeId && !routeMatches ? `<button class="text-button compact-button open-checks-work-route" data-route-id="${escapeHtml(item.routeId)}" type="button">Open route</button>` : ""}
     <button class="text-button compact-button copy-checks-work-packet" type="button">Copy packet</button>
     <button class="text-button compact-button copy-checks-work-command" type="button">Copy command</button>
@@ -5396,6 +5398,19 @@ function renderChecksWorkOrder(receipt, rows) {
   });
   checksWorkOrder.querySelector(".run-smt-obligation")?.addEventListener("click", (event) => {
     void runSmtForObligation(event.currentTarget);
+  });
+  checksWorkOrder.querySelector(".attach-focused-evidence-artifact")?.addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    void attachEvidenceToRoute({
+      routeId: button.dataset.routeId,
+      obligationId: button.dataset.obligationId,
+      evidenceRef: {
+        kind: button.dataset.evidenceKind,
+        ref: button.dataset.evidenceRef,
+        trust: button.dataset.evidenceTrust,
+        summary: button.dataset.evidenceSummary
+      }
+    });
   });
   checksWorkOrder.querySelector(".copy-checks-work-packet")?.addEventListener("click", (event) => {
     if (!item.agentPacket) {
@@ -5450,6 +5465,30 @@ function checksWorkRunActionHtml(row) {
   }
 
   return "";
+}
+
+function focusedEvidenceSuggestion(row) {
+  if (!row || row.status === "passed" || !row.obligationId) {
+    return undefined;
+  }
+
+  const artifacts = [
+    ...[...casCheckStore.values()].map((check) => normalizeCasAttachment(check)),
+    ...[...smtCheckStore.values()].map((check) => normalizeSmtAttachment(check))
+  ].sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")));
+
+  return artifacts.find((artifact) => {
+    if (row.obligationKind === "solver-encoding") {
+      return artifact.kind === "smt" && artifact.trust === "smt-checked";
+    }
+
+    if (row.obligationKind === "independent-check") {
+      return (artifact.kind === "cas" && artifact.trust === "cross-checked")
+        || (artifact.kind === "smt" && artifact.trust === "smt-checked");
+    }
+
+    return false;
+  });
 }
 
 function selectedWorkspaceReviewItem() {
