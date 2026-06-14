@@ -5370,6 +5370,7 @@ function renderChecksWorkOrder(receipt, rows) {
     <strong>${escapeHtml(heldBackEvidence.kind.toUpperCase())} record cannot close this obligation yet.</strong>
     <small>${escapeHtml(`Found ${heldBackEvidence.trust}/${heldBackEvidence.status}; requires ${heldBackEvidence.expectedTrust}.`)}</small>
     <small>${escapeHtml(heldBackEvidence.path)}</small>
+    <code>${escapeHtml(heldBackEvidence.nextCommand)}</code>
   </div>` : ""}
   <div class="checks-work-grid">
     <section>
@@ -5520,7 +5521,8 @@ function focusedHeldBackEvidence(row) {
     ...candidate,
     expectedTrust: row.obligationKind === "solver-encoding"
       ? "smt-checked or proved evidence"
-      : "cross-checked, smt-checked, or proved evidence"
+      : "cross-checked, smt-checked, or proved evidence",
+    nextCommand: heldBackEvidenceNextCommand(candidate)
   };
 }
 
@@ -5529,6 +5531,18 @@ function focusedEvidenceArtifacts() {
     ...[...casCheckStore.values()].map((check) => normalizeCasAttachment(check)),
     ...[...smtCheckStore.values()].map((check) => normalizeSmtAttachment(check))
   ].sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")));
+}
+
+function heldBackEvidenceNextCommand(artifact) {
+  if (artifact.status === "solver-unavailable" && artifact.kind === "smt") {
+    return `npm run docker:cli -- smt check ${artifact.sourcePath ?? "<source.smt2>"} --write`;
+  }
+
+  if (artifact.status === "solver-unavailable" && artifact.kind === "cas") {
+    return `npm run docker:cli -- cas check --operation ${artifact.operation ?? "simplify"} --expression "${truncateForCommand(artifact.expression ?? "<expression>", 48)}" --result "${truncateForCommand(artifact.result ?? "<result>", 32)}" --write`;
+  }
+
+  return "Review the mismatch or rerun with an independent checker before attaching evidence.";
 }
 
 function selectedWorkspaceReviewItem() {
@@ -5744,6 +5758,9 @@ function normalizeCasAttachment(check) {
     kind: "cas",
     checkId: check.checkId,
     createdAt: check.createdAt,
+    operation: check.operation,
+    expression: check.expression,
+    result: check.result,
     status: check.status,
     trust: check.trust,
     summary,
@@ -5758,6 +5775,7 @@ function normalizeSmtAttachment(check) {
     kind: "smt",
     checkId: check.checkId,
     createdAt: check.createdAt,
+    sourcePath,
     status: check.status,
     trust: check.trust,
     summary: `${sourcePath} -> ${check.status}`,
