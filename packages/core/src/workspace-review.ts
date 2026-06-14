@@ -26,6 +26,7 @@ export type WorkspaceReviewItemKind =
   | "session-next-check";
 export type WorkspaceReviewPriority = "critical" | "high" | "medium" | "low";
 export type WorkspaceReviewEvidenceSlotStatus = "open" | "satisfied" | "not-required";
+export type WorkspaceReviewAutonomyMode = "idle" | "local-verifier-loop" | "human-review-gated";
 
 export interface WorkspaceReviewEvidenceSlot {
   slotId: string;
@@ -69,6 +70,20 @@ export interface WorkspaceReviewItem {
   };
 }
 
+export interface WorkspaceReviewAutonomyContract {
+  mode: WorkspaceReviewAutonomyMode;
+  canRunUnattended: boolean;
+  suggestedBatchSize: number;
+  nextItemId?: string;
+  nextCommand?: string;
+  allowedActions: string[];
+  blockedActions: string[];
+  stopConditions: string[];
+  requiredArtifacts: string[];
+  humanReviewRequiredFor: string[];
+  agentPacket: string;
+}
+
 export interface WorkspaceReview {
   schemaVersion: "truth-harness.workspace-review.v0";
   reviewId: string;
@@ -93,6 +108,7 @@ export interface WorkspaceReview {
     mediumItems: number;
     lowItems: number;
   };
+  autonomy: WorkspaceReviewAutonomyContract;
   items: WorkspaceReviewItem[];
   warnings: string[];
   markdown: string;
@@ -145,6 +161,7 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
     ...claims.flatMap((claim) => claimReviewItems(status.root, claim)),
     ...sessions.flatMap((session) => sessionReviewItems(status.root, session))
   ]));
+  const autonomy = createAutonomyContract(items);
   const reviewWithoutMarkdown = {
     schemaVersion: WORKSPACE_REVIEW_SCHEMA_VERSION,
     projectId: status.manifest.projectId,
@@ -159,6 +176,7 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
       sessions: sessions.length,
       items
     }),
+    autonomy,
     items,
     warnings: [
       "Workspace review is a local planning queue. It does not upgrade trust or prove claims by itself.",
@@ -289,6 +307,25 @@ export function renderWorkspaceReviewMarkdown(review: Omit<WorkspaceReview, "mar
     `| Claims | \`${review.summary.claims}\` |`,
     `| Sessions | \`${review.summary.sessions ?? 0}\` |`,
     `| Queue items | \`${review.summary.totalItems}\` |`,
+    `| Autonomy mode | \`${review.autonomy.mode}\` |`,
+    `| Unattended local work | \`${String(review.autonomy.canRunUnattended)}\` |`,
+    "",
+    "## Autonomy Contract",
+    "",
+    `- Mode: \`${review.autonomy.mode}\``,
+    `- Can run unattended: \`${String(review.autonomy.canRunUnattended)}\``,
+    `- Suggested batch size: \`${review.autonomy.suggestedBatchSize}\``,
+    `- Next item: \`${review.autonomy.nextItemId ?? "n/a"}\``,
+    `- Next command: \`${escapeMarkdownText(review.autonomy.nextCommand ?? "No open local work item.")}\``,
+    "",
+    "Allowed actions:",
+    ...review.autonomy.allowedActions.map((action) => `- ${escapeMarkdownText(action)}`),
+    "",
+    "Blocked actions:",
+    ...review.autonomy.blockedActions.map((action) => `- ${escapeMarkdownText(action)}`),
+    "",
+    "Stop conditions:",
+    ...review.autonomy.stopConditions.map((condition) => `- ${escapeMarkdownText(condition)}`),
     "",
     "## Ordered Work Queue",
     ""
@@ -586,6 +623,145 @@ function summarizeItems(input: {
     mediumItems: input.items.filter((item) => item.priority === "medium").length,
     lowItems: input.items.filter((item) => item.priority === "low").length
   };
+}
+
+function createAutonomyContract(items: WorkspaceReviewItem[]): WorkspaceReviewAutonomyContract {
+  const nextItem = items[0];
+  const highStakeItems = items.filter((item) => itemRequiresHumanReview(item));
+  const mode: WorkspaceReviewAutonomyMode = items.length === 0
+    ? "idle"
+    : highStakeItems.length > 0 ? "human-review-gated" : "local-verifier-loop";
+  const requiredArtifacts = uniqueSorted(
+    items
+      .slice(0, 5)
+      .flatMap((item) => item.evidenceSlots ?? [])
+      .flatMap((slot) => slot.acceptedArtifacts)
+  );
+  const humanReviewRequiredFor = uniqueSorted([
+    ...highStakeItems.map((item) => `${item.kind}:${item.claimId ?? item.sessionId ?? item.routeId ?? item.itemId}`),
+    "any final medical, patent, finance, safety, or real-world scientific claim",
+    "any claim whose strongest evidence is only a model answer, simulation, notebook output, or CAS output"
+  ]);
+  const contractWithoutPacket = {
+    mode,
+    canRunUnattended: items.length > 0,
+    suggestedBatchSize: Math.min(3, items.length),
+    nextItemId: nextItem?.itemId,
+    nextCommand: nextItem?.command,
+    allowedActions: autonomyAllowedActions(mode),
+    blockedActions: autonomyBlockedActions(),
+    stopConditions: autonomyStopConditions(mode),
+    requiredArtifacts,
+    humanReviewRequiredFor
+  };
+
+  return {
+    ...contractWithoutPacket,
+    agentPacket: renderAutonomyAgentPacket(contractWithoutPacket)
+  };
+}
+
+function itemRequiresHumanReview(item: WorkspaceReviewItem): boolean {
+  if (item.kind === "claim-blocker") {
+    return true;
+  }
+
+  return item.domain === "biology"
+    || item.domain === "biomedical"
+    || item.domain === "finance"
+    || item.domain === "security"
+    || item.domain === "patent"
+    || item.domain === "climate"
+    || item.domain === "energy";
+}
+
+function autonomyAllowedActions(mode: WorkspaceReviewAutonomyMode): string[] {
+  const actions = [
+    "Read local Truth Harness receipts, routes, claims, sessions, reviews, and snapshots.",
+    "Run only the exact local truth-harness commands listed in the ordered work queue.",
+    "Write replayable local receipts, CAS checks, SMT checks, proof checks, research checkpoints, workspace reviews, and snapshots.",
+    "Prepare model-context packets without sending them to a hosted model."
+  ];
+
+  if (mode === "local-verifier-loop") {
+    actions.push("Batch up to the suggested number of verifier tasks before pausing for review.");
+  }
+
+  if (mode === "human-review-gated") {
+    actions.push("Gather local evidence and draft review packets, but leave final interpretation to a human expert.");
+  }
+
+  return actions;
+}
+
+function autonomyBlockedActions(): string[] {
+  return [
+    "Do not use network access, hosted models, package installs, or external services unless a user-approved model-context and disclosure log already exists.",
+    "Do not run arbitrary code or unsandboxed commands outside the explicit Truth Harness command surface.",
+    "Do not mark tasks done without attached evidence refs.",
+    "Do not upgrade a trust label unless an accepted local artifact satisfies the exact matching obligation.",
+    "Do not make final medical, legal, patent, finance, safety, or scientific claims from AI output alone."
+  ];
+}
+
+function autonomyStopConditions(mode: WorkspaceReviewAutonomyMode): string[] {
+  const conditions = [
+    "A required verifier is unavailable, returns unknown, disagrees, or produces malformed evidence.",
+    "A command would require network, package installation, credentials, private data export, or unsandboxed execution.",
+    "The next step would broaden the claim beyond the current receipt, route, source, or validation boundary.",
+    "Workspace validation fails or a referenced artifact is missing.",
+    "The suggested batch size is exhausted; write a checkpoint or workspace review before continuing."
+  ];
+
+  if (mode === "human-review-gated") {
+    conditions.push("A high-stakes interpretation, final claim, treatment, patentability, or real-world recommendation is requested.");
+  }
+
+  return conditions;
+}
+
+function renderAutonomyAgentPacket(contract: Omit<WorkspaceReviewAutonomyContract, "agentPacket">): string {
+  const lines = [
+    "# Truth Harness Autonomy Contract",
+    "",
+    `Mode: ${contract.mode}`,
+    `Can run unattended: ${String(contract.canRunUnattended)}`,
+    `Suggested batch size: ${contract.suggestedBatchSize}`,
+    `Next item: ${contract.nextItemId ?? "n/a"}`,
+    "",
+    "Next command:",
+    "```sh",
+    contract.nextCommand ?? "No open local work item.",
+    "```",
+    "",
+    "Allowed actions:",
+    ...contract.allowedActions.map((action) => `- ${action}`),
+    "",
+    "Blocked actions:",
+    ...contract.blockedActions.map((action) => `- ${action}`),
+    "",
+    "Stop conditions:",
+    ...contract.stopConditions.map((condition) => `- ${condition}`),
+    "",
+    "Required artifacts:",
+    ...(contract.requiredArtifacts.length === 0
+      ? ["- No open artifacts required right now."]
+      : contract.requiredArtifacts.map((artifact) => `- ${artifact}`)),
+    "",
+    "Human review required for:",
+    ...contract.humanReviewRequiredFor.map((boundary) => `- ${boundary}`),
+    "",
+    "Truth boundary:",
+    "- This contract can authorize local work. It cannot certify truth.",
+    "- Truth labels move only when replayable evidence satisfies explicit gates.",
+    ""
+  ];
+
+  return lines.join("\n");
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))].sort((left, right) => left.localeCompare(right));
 }
 
 function priorityForRouteObligation(obligation: ProofObligation): WorkspaceReviewPriority {

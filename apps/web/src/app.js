@@ -199,6 +199,7 @@ const casCheckStore = new Map();
 const smtCheckStore = new Map();
 let workspaceReview = {
   schemaVersion: "truth-harness.workspace-review.v0",
+  autonomy: emptyAutonomyContract(),
   summary: {
     totalItems: 0,
     criticalItems: 0,
@@ -324,6 +325,7 @@ const routeHistoryPage = document.querySelector("#route-history-page");
 const routeHistoryMore = document.querySelector("#route-history-more");
 const workspaceReviewList = document.querySelector("#workspace-review-list");
 const workspaceReviewCount = document.querySelector("#workspace-review-count");
+const workspaceReviewAutonomy = document.querySelector("#workspace-review-autonomy");
 const workspaceReviewAction = document.querySelector("#workspace-review-action");
 const mainGraphList = document.querySelector("#main-graph-list");
 const graphDetail = document.querySelector("#graph-detail");
@@ -3386,6 +3388,20 @@ function pagerSummary(shown, total, singular) {
   return `${shown} of ${total} ${plural} shown`;
 }
 
+function emptyAutonomyContract() {
+  return {
+    mode: "idle",
+    canRunUnattended: false,
+    suggestedBatchSize: 0,
+    allowedActions: ["Read local workspace state only."],
+    blockedActions: ["Do not make final claims without evidence."],
+    stopConditions: ["No open local work item."],
+    requiredArtifacts: [],
+    humanReviewRequiredFor: ["any final claim whose evidence has not been independently checked"],
+    agentPacket: "# Truth Harness Autonomy Contract\n\nMode: idle\n"
+  };
+}
+
 function renderClaimLedger() {
   if (!claimLedgerList || !claimLedgerCount) {
     return;
@@ -3558,6 +3574,7 @@ function renderWorkspaceReview() {
 
   const items = Array.isArray(workspaceReview.items) ? workspaceReview.items : [];
   const summary = workspaceReview.summary ?? {};
+  renderWorkspaceReviewAutonomy(workspaceReview.autonomy ?? emptyAutonomyContract());
   workspaceReviewCount.textContent = workspaceReviewCountText(summary);
   const visibleItems = items.slice(0, 8);
   const hiddenCount = Math.max(0, items.length - visibleItems.length);
@@ -3663,6 +3680,41 @@ function renderWorkspaceReview() {
       });
     });
   });
+}
+
+function renderWorkspaceReviewAutonomy(autonomy) {
+  if (!workspaceReviewAutonomy) {
+    return;
+  }
+
+  const mode = autonomy.mode ?? "idle";
+  const canRun = Boolean(autonomy.canRunUnattended);
+  const stopCondition = autonomy.stopConditions?.[0] ?? "Stop when evidence, safety, or review boundaries are unclear.";
+  const nextCommand = autonomy.nextCommand ?? "No open local work item.";
+  workspaceReviewAutonomy.className = `autonomy-contract-card autonomy-${escapeHtml(mode)}`;
+  workspaceReviewAutonomy.innerHTML = `<div class="autonomy-card-head">
+    <span class="task-state ${canRun ? "waiting" : "skipped"}"></span>
+    <div>
+      <strong>${escapeHtml(autonomyModeLabel(mode))}</strong>
+      <small>${escapeHtml(canRun ? `local batch up to ${autonomy.suggestedBatchSize ?? 0}` : "waiting for verified local work")}</small>
+    </div>
+  </div>
+  <dl>
+    <div><dt>Next</dt><dd><code>${escapeHtml(nextCommand)}</code></dd></div>
+    <div><dt>Stop</dt><dd>${escapeHtml(stopCondition)}</dd></div>
+  </dl>`;
+}
+
+function autonomyModeLabel(mode) {
+  if (mode === "local-verifier-loop") {
+    return "Local verifier loop";
+  }
+
+  if (mode === "human-review-gated") {
+    return "Human-review gated";
+  }
+
+  return "Idle";
 }
 
 function renderWorkspaceReviewAction(items) {
@@ -4178,8 +4230,9 @@ async function refreshWorkspaceReview({ announce = true } = {}) {
 }
 
 function applyWorkspaceReviewPayload(payload) {
-  workspaceReview = payload.review ?? {
+  const fallback = {
     schemaVersion: "truth-harness.workspace-review.v0",
+    autonomy: emptyAutonomyContract(),
     summary: {
       totalItems: 0,
       criticalItems: 0,
@@ -4188,6 +4241,11 @@ function applyWorkspaceReviewPayload(payload) {
       lowItems: 0
     },
     items: []
+  };
+  workspaceReview = {
+    ...fallback,
+    ...(payload.review ?? {}),
+    autonomy: payload.review?.autonomy ?? fallback.autonomy
   };
 }
 

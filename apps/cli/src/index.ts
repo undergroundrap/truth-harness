@@ -4730,6 +4730,11 @@ function printWorkspaceReview(review: WorkspaceReview, writeResult?: WorkspaceRe
   console.log(`Queue items: ${review.summary.totalItems}`);
   console.log(`Critical/high/medium/low: ${review.summary.criticalItems}/${review.summary.highItems}/${review.summary.mediumItems}/${review.summary.lowItems}`);
   console.log(`Privacy: ${review.privacy.mode} (network: ${review.networkAccess})`);
+  console.log(`Autonomy: ${review.autonomy.mode} (unattended local work: ${review.autonomy.canRunUnattended ? "yes" : "no"})`);
+  console.log(`Suggested batch: ${review.autonomy.suggestedBatchSize}`);
+  if (review.autonomy.nextCommand) {
+    console.log(`Next command: ${review.autonomy.nextCommand}`);
+  }
 
   if (review.items.length === 0) {
     console.log("");
@@ -4744,6 +4749,12 @@ function printWorkspaceReview(review: WorkspaceReview, writeResult?: WorkspaceRe
       console.log(`    Source: ${item.source.label} ${item.source.ref}`);
       console.log(`    Command: ${item.command}`);
     }
+  }
+
+  console.log("");
+  console.log("Autonomy stop conditions:");
+  for (const condition of review.autonomy.stopConditions) {
+    console.log(`  ${condition}`);
   }
 
   if (review.warnings.length > 0) {

@@ -1475,6 +1475,79 @@ h4 {
   margin-bottom: 9px;
 }
 
+.autonomy-contract-card {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(230, 195, 106, 0.28);
+  border-radius: 8px;
+  background: rgba(230, 195, 106, 0.045);
+  padding: 10px;
+}
+
+.autonomy-contract-card.autonomy-local-verifier-loop {
+  border-color: rgba(125, 211, 168, 0.28);
+  background: rgba(125, 211, 168, 0.045);
+}
+
+.autonomy-contract-card.autonomy-idle {
+  border-color: var(--line-soft);
+  background: #101010;
+}
+
+.autonomy-card-head {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+}
+
+.autonomy-card-head strong,
+.autonomy-card-head small,
+.autonomy-contract-card dd {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.autonomy-card-head strong {
+  color: #f2eadc;
+  font-size: 12px;
+}
+
+.autonomy-card-head small,
+.autonomy-contract-card dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.autonomy-contract-card dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.autonomy-contract-card div {
+  min-width: 0;
+}
+
+.autonomy-contract-card dt {
+  margin-bottom: 3px;
+}
+
+.autonomy-contract-card dd {
+  margin: 0;
+  color: #e8e0d2;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.autonomy-contract-card code {
+  color: #f4e7c7;
+  font-size: 10.5px;
+  word-break: break-word;
+}
+
 .queue-item {
   display: grid;
   gap: 10px;

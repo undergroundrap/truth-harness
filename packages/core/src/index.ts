@@ -499,6 +499,8 @@ export type {
 export type {
   CreateWorkspaceReviewInput,
   WorkspaceReview,
+  WorkspaceReviewAutonomyContract,
+  WorkspaceReviewAutonomyMode,
   WorkspaceReviewItem,
   WorkspaceReviewItemKind,
   WorkspaceReviewPriority,

@@ -68,6 +68,18 @@ describe("workspace review", () => {
     expect(review.summary.routeObligations).toBeGreaterThanOrEqual(3);
     expect(review.summary.readyRoutesWithoutClaims).toBe(1);
     expect(review.summary.blockedClaims).toBe(1);
+    expect(review.autonomy).toMatchObject({
+      mode: "human-review-gated",
+      canRunUnattended: true,
+      nextItemId: review.items[0]?.itemId,
+      nextCommand: review.items[0]?.command
+    });
+    expect(review.autonomy.suggestedBatchSize).toBe(3);
+    expect(review.autonomy.blockedActions).toContain("Do not upgrade a trust label unless an accepted local artifact satisfies the exact matching obligation.");
+    expect(review.autonomy.stopConditions).toContain("A high-stakes interpretation, final claim, treatment, patentability, or real-world recommendation is requested.");
+    expect(review.autonomy.humanReviewRequiredFor).toEqual(expect.arrayContaining([expect.stringMatching(/^claim-blocker:claim_/u)]));
+    expect(review.autonomy.agentPacket).toContain("# Truth Harness Autonomy Contract");
+    expect(review.autonomy.agentPacket).toContain("This contract can authorize local work. It cannot certify truth.");
     expect(review.items[0]).toMatchObject({
       kind: "route-obligation",
       priority: "critical",
@@ -131,6 +143,8 @@ describe("workspace review", () => {
       })
     );
     expect(review.markdown).toContain("## Ordered Work Queue");
+    expect(review.markdown).toContain("## Autonomy Contract");
+    expect(review.markdown).toContain("| Autonomy mode | `human-review-gated` |");
     expect(review.markdown).toContain("  - Acceptance:");
     expect(review.markdown).toContain("Workspace review is a local planning queue");
   });
@@ -170,6 +184,40 @@ describe("workspace review", () => {
       })
     );
     expect(review.summary.readyRoutesWithoutClaims).toBe(0);
+  });
+
+  it("creates a local verifier autonomy contract for non-high-stakes work", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "compute 1 / 2 + 1 / 4",
+      now: new Date("2026-06-13T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-13T00:02:00.000Z"
+    });
+
+    expect(review.items.length).toBeGreaterThan(0);
+    expect(review.autonomy.mode).toBe("local-verifier-loop");
+    expect(review.autonomy.canRunUnattended).toBe(true);
+    expect(review.autonomy.nextItemId).toBe(review.items[0]?.itemId);
+    expect(review.autonomy.nextCommand).toBe(review.items[0]?.command);
+    expect(review.autonomy.humanReviewRequiredFor).not.toContain(`route-ready-claim:${route.route.routeId}`);
+    expect(review.autonomy.allowedActions).toContain("Batch up to the suggested number of verifier tasks before pausing for review.");
+    expect(review.autonomy.blockedActions).toContain("Do not make final medical, legal, patent, finance, safety, or scientific claims from AI output alone.");
+    expect(review.autonomy.agentPacket).toContain("Mode: local-verifier-loop");
   });
 
   it("honors route and claim limits for bounded agent handoffs", async () => {
