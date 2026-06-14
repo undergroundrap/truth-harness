@@ -5574,8 +5574,9 @@ function focusSelectedVerificationRow() {
   }
 
   requestAnimationFrame(() => {
-    row.scrollIntoView({
-      block: "center",
+    const target = checksWorkOrder && !checksWorkOrder.hidden ? checksWorkOrder : row;
+    target.scrollIntoView({
+      block: "start",
       inline: "nearest",
       behavior: "smooth"
     });
