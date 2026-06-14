@@ -1433,10 +1433,19 @@ h4 {
 .route-history-list {
   display: grid;
   gap: 8px;
-  max-height: min(52vh, 460px);
-  overflow: auto;
-  padding-right: 2px;
-  scrollbar-gutter: stable;
+  overflow: visible;
+}
+
+.list-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.list-pager .text-button[hidden] {
+  display: none;
 }
 
 .workspace-review-list {
@@ -4189,11 +4198,9 @@ textarea:focus-visible {
 
 .replay-list {
   display: grid;
-  flex: 1 1 auto;
   gap: 7px;
   min-height: 0;
-  overflow: auto;
-  scrollbar-gutter: stable;
+  overflow: visible;
 }
 
 .replay-step {

@@ -526,6 +526,10 @@
                 <div class="replay-frame" id="replay-frame"></div>
                 <div class="replay-progress" aria-hidden="true"><span id="replay-progress-bar"></span></div>
                 <div class="replay-list" id="replay-list"></div>
+                <div class="list-pager replay-pager">
+                  <span class="mini-label" id="replay-page">0 frames</span>
+                  <button class="text-button compact-button" id="replay-show-more" type="button">Show more frames</button>
+                </div>
               </section>
 
               <section class="surface-panel" id="surface-report" role="tabpanel" aria-labelledby="tab-report" data-surface-panel="report" tabindex="0" aria-label="Final report" hidden>
@@ -584,6 +588,10 @@
                 <input id="route-history-search" type="search" autocomplete="off" placeholder="Search routes, trust, gaps, replay" aria-label="Search saved verifier routes">
               </div>
               <div class="route-history-list" id="route-history-list"></div>
+              <div class="list-pager ledger-pager">
+                <span class="mini-label" id="route-history-page">0 shown</span>
+                <button class="text-button compact-button" id="route-history-more" type="button">Show more routes</button>
+              </div>
             </section>
 
             <section class="inspector-section workspace-review-section">
@@ -610,6 +618,10 @@
                 <input id="claim-ledger-search" type="search" autocomplete="off" placeholder="Filter claim ids, #tags, trust, links" aria-label="Search local claim ledger">
               </div>
               <div class="claim-ledger-list" id="claim-ledger-list"></div>
+              <div class="list-pager ledger-pager">
+                <span class="mini-label" id="claim-ledger-page">0 shown</span>
+                <button class="text-button compact-button" id="claim-ledger-more" type="button">Show more claims</button>
+              </div>
             </section>
 
             <section class="inspector-section">

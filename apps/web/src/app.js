@@ -242,6 +242,8 @@ let researchMap = {
 };
 const recentReceiptKeys = ["rational", "denominator", "parity", "dimension"];
 const ACTIVITY_PAGE_SIZE = 12;
+const LEDGER_PAGE_SIZE = 8;
+const REPLAY_PAGE_SIZE = 8;
 const NOTES_STORAGE_KEY = "truth-harness.session-notes.v0";
 const RESEARCHER_NAME_STORAGE_KEY = "truth-harness.researcher-name.v0";
 const SIDEBAR_WIDTH_STORAGE_KEY = "truth-harness.sidebar-width.v0";
@@ -281,6 +283,9 @@ const state = {
   sidebarCollapsed: false,
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE,
+  claimLedgerLimit: LEDGER_PAGE_SIZE,
+  routeHistoryLimit: LEDGER_PAGE_SIZE,
+  replayLimit: REPLAY_PAGE_SIZE,
   safetyStatus: undefined,
   workspaceReadiness: undefined,
   selectedWorkspaceReviewItemId: undefined,
@@ -310,9 +315,13 @@ const graphList = document.querySelector("#graph-list");
 const claimLedgerList = document.querySelector("#claim-ledger-list");
 const claimLedgerCount = document.querySelector("#claim-ledger-count");
 const claimLedgerSearch = document.querySelector("#claim-ledger-search");
+const claimLedgerPage = document.querySelector("#claim-ledger-page");
+const claimLedgerMore = document.querySelector("#claim-ledger-more");
 const routeHistoryList = document.querySelector("#route-history-list");
 const routeHistoryCount = document.querySelector("#route-history-count");
 const routeHistorySearch = document.querySelector("#route-history-search");
+const routeHistoryPage = document.querySelector("#route-history-page");
+const routeHistoryMore = document.querySelector("#route-history-more");
 const workspaceReviewList = document.querySelector("#workspace-review-list");
 const workspaceReviewCount = document.querySelector("#workspace-review-count");
 const workspaceReviewAction = document.querySelector("#workspace-review-action");
@@ -400,6 +409,8 @@ const resetReplayButton = document.querySelector("#reset-replay");
 const exportReplayButton = document.querySelector("#export-replay");
 const replayFrame = document.querySelector("#replay-frame");
 const replayList = document.querySelector("#replay-list");
+const replayPage = document.querySelector("#replay-page");
+const replayShowMoreButton = document.querySelector("#replay-show-more");
 const replayProgressBar = document.querySelector("#replay-progress-bar");
 const inspectorTrust = document.querySelector("#inspector-trust");
 const routeLedgerStatus = document.querySelector("#route-ledger-status");
@@ -3370,11 +3381,20 @@ function renderClaimLedger() {
   const query = state.claimLedgerQuery.trim().toLowerCase();
   const claims = [...claimLedgerStore.values()];
   const filteredClaims = claims.filter((claim) => matchesClaimLedgerSearch(claim, query));
-  const visibleClaims = filteredClaims.slice(0, 8);
+  const visibleClaims = filteredClaims.slice(0, state.claimLedgerLimit);
   const edgeCount = Array.isArray(claimLedgerGraph.edges) ? claimLedgerGraph.edges.length : 0;
   claimLedgerCount.textContent = query
     ? `${filteredClaims.length} of ${claims.length} records / ${edgeCount} links`
     : `${claims.length} records / ${edgeCount} links`;
+  if (claimLedgerPage) {
+    const shown = Math.min(state.claimLedgerLimit, filteredClaims.length);
+    claimLedgerPage.textContent = filteredClaims.length === 0
+      ? "0 shown"
+      : `${shown} of ${filteredClaims.length} shown`;
+  }
+  if (claimLedgerMore) {
+    claimLedgerMore.hidden = state.claimLedgerLimit >= filteredClaims.length;
+  }
 
   claimLedgerList.innerHTML = visibleClaims.length === 0
     ? `<div class="activity-empty">${claims.length === 0 ? "No local claim records yet. Record the current receipt to create the first project claim." : "No claim records match this filter."}</div>`
@@ -3475,10 +3495,19 @@ function renderRouteHistory() {
   const currentRouteId = receiptStore.get(state.receiptKey)?.verifierRoute?.routeId;
   const routes = [...routeLedgerStore.values()];
   const filteredRoutes = routes.filter((route) => matchesRouteHistorySearch(route, query));
-  const visibleRoutes = filteredRoutes.slice(0, 10);
+  const visibleRoutes = filteredRoutes.slice(0, state.routeHistoryLimit);
   routeHistoryCount.textContent = query
     ? `${filteredRoutes.length} of ${routes.length} routes`
     : `${routes.length} routes`;
+  if (routeHistoryPage) {
+    const shown = Math.min(state.routeHistoryLimit, filteredRoutes.length);
+    routeHistoryPage.textContent = filteredRoutes.length === 0
+      ? "0 shown"
+      : `${shown} of ${filteredRoutes.length} shown`;
+  }
+  if (routeHistoryMore) {
+    routeHistoryMore.hidden = state.routeHistoryLimit >= filteredRoutes.length;
+  }
 
   routeHistoryList.innerHTML = visibleRoutes.length === 0
     ? `<div class="activity-empty">${routes.length === 0 ? "No persisted verifier routes yet. Submit a prompt to create the first local route." : "No saved routes match this filter."}</div>`
@@ -6885,18 +6914,26 @@ function renderReplay(receipt) {
   const frames = replayFrames(receipt);
   const activeIndex = Math.min(state.replayIndex, frames.length - 1);
   state.replayIndex = activeIndex;
+  state.replayLimit = Math.max(state.replayLimit, activeIndex + 1);
   const activeFrame = frames[activeIndex];
+  const visibleFrames = frames.slice(0, state.replayLimit);
   const percent = frames.length <= 1 ? 100 : (activeIndex / (frames.length - 1)) * 100;
 
   playReplayButton.textContent = state.replayPlaying ? "Pause" : "Play";
   replayProgressBar.style.width = `${percent}%`;
+  if (replayPage) {
+    replayPage.textContent = `${visibleFrames.length} of ${frames.length} frames`;
+  }
+  if (replayShowMoreButton) {
+    replayShowMoreButton.hidden = visibleFrames.length >= frames.length;
+  }
   replayFrame.innerHTML = `<span class="task-state ${activeFrame.status}"></span>
     <div>
       <strong>${escapeHtml(activeFrame.title)}</strong>
       <p>${escapeHtml(activeFrame.detail)}</p>
       <small>${escapeHtml(activeFrame.actor)} - ${escapeHtml(activeFrame.kind)}</small>
     </div>`;
-  replayList.innerHTML = frames
+  replayList.innerHTML = visibleFrames
     .map((frame, index) => `<button class="replay-step ${index === activeIndex ? "active" : ""}" data-replay-index="${index}" type="button">
       <span class="task-state ${frame.status}"></span>
       <span>
@@ -6969,6 +7006,7 @@ function setReplayPlaying(playing) {
 function resetReplay() {
   setReplayPlaying(false);
   state.replayIndex = 0;
+  state.replayLimit = REPLAY_PAGE_SIZE;
   renderReplay(receiptStore.get(state.receiptKey));
 }
 
@@ -9044,11 +9082,23 @@ sidebarSearch.addEventListener("input", () => {
 
 claimLedgerSearch.addEventListener("input", () => {
   state.claimLedgerQuery = claimLedgerSearch.value;
+  state.claimLedgerLimit = LEDGER_PAGE_SIZE;
   renderClaimLedger();
 });
 
 routeHistorySearch.addEventListener("input", () => {
   state.routeHistoryQuery = routeHistorySearch.value;
+  state.routeHistoryLimit = LEDGER_PAGE_SIZE;
+  renderRouteHistory();
+});
+
+claimLedgerMore?.addEventListener("click", () => {
+  state.claimLedgerLimit += LEDGER_PAGE_SIZE;
+  renderClaimLedger();
+});
+
+routeHistoryMore?.addEventListener("click", () => {
+  state.routeHistoryLimit += LEDGER_PAGE_SIZE;
   renderRouteHistory();
 });
 
@@ -9138,6 +9188,11 @@ replayList.addEventListener("click", (event) => {
 
   setReplayPlaying(false);
   state.replayIndex = Number(button.dataset.replayIndex);
+  renderReplay(receiptStore.get(state.receiptKey));
+});
+
+replayShowMoreButton?.addEventListener("click", () => {
+  state.replayLimit += REPLAY_PAGE_SIZE;
   renderReplay(receiptStore.get(state.receiptKey));
 });
 
