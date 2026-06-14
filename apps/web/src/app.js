@@ -5347,6 +5347,7 @@ function renderChecksWorkOrder(receipt, rows) {
   const runAction = routeMatches ? checksWorkRunActionHtml(focusedRow) : "";
   const existingEvidence = routeMatches ? focusedEvidenceSuggestion(focusedRow) : undefined;
   const heldBackEvidence = routeMatches && !existingEvidence ? focusedHeldBackEvidence(focusedRow) : undefined;
+  const engineReadiness = routeMatches ? focusedEngineReadiness(focusedRow) : undefined;
   checksWorkOrder.hidden = false;
   checksWorkOrder.className = `checks-work-order ${routeMatches ? "route-ready" : "route-mismatch"}`;
   checksWorkOrder.innerHTML = `<div class="checks-work-head">
@@ -5365,6 +5366,12 @@ function renderChecksWorkOrder(receipt, rows) {
     <button class="text-button compact-button clear-checks-work-order" type="button">Clear focus</button>
   </div>
   <p>${escapeHtml(item.summary ?? "")}</p>
+  ${engineReadiness ? `<div class="checks-work-engine ${escapeHtml(engineReadiness.statusClass)}">
+    <span class="mini-label">Engine readiness</span>
+    <strong>${escapeHtml(engineReadiness.title)}</strong>
+    <small>${escapeHtml(engineReadiness.detail)}</small>
+    <code>${escapeHtml(engineReadiness.command)}</code>
+  </div>` : ""}
   ${heldBackEvidence ? `<div class="checks-work-note warning">
     <span class="mini-label">Evidence held back</span>
     <strong>${escapeHtml(heldBackEvidence.kind.toUpperCase())} record cannot close this obligation yet.</strong>
@@ -5556,6 +5563,108 @@ function heldBackEvidenceNextCommand(artifact) {
   }
 
   return "Review the mismatch or rerun with an independent checker before attaching evidence.";
+}
+
+function focusedEngineReadiness(row) {
+  if (!row || row.status === "passed" || !row.obligationId) {
+    return undefined;
+  }
+
+  const target = focusedEngineTarget(row);
+  if (!target) {
+    return undefined;
+  }
+
+  const payload = state.safetyStatus;
+  if (!payload) {
+    return {
+      statusClass: "waiting",
+      title: `${target.displayName} status loading`,
+      detail: "Backend probes report readiness only; a concrete replayable run is still required.",
+      command: target.fallbackCommand
+    };
+  }
+
+  if (payload.error) {
+    return {
+      statusClass: "waiting",
+      title: `${target.displayName} status unavailable`,
+      detail: "The local status API is unavailable, so use the Docker verifier path before relying on this obligation.",
+      command: target.fallbackCommand
+    };
+  }
+
+  const engine = focusedEngineStatus(target);
+  const available = engine?.status === "available";
+  const displayName = engine?.displayName ?? target.displayName;
+  return {
+    statusClass: available ? "ready" : "missing",
+    title: `${displayName} ${available ? "available on host" : "missing on host"}`,
+    detail: available
+      ? `${target.trustLabel} still requires a concrete replayable run; a status probe is not evidence.`
+      : `Use the Docker verifier path instead of installing or trusting ad hoc host tools; ${target.trustLabel} remains blocked until a concrete accepted run succeeds.`,
+    command: available ? (engine?.command ?? target.hostCommand) : target.fallbackCommand
+  };
+}
+
+function focusedEngineTarget(row) {
+  if (row.obligationKind === "solver-encoding") {
+    return {
+      ids: ["z3", "z3-smt-solver"],
+      displayName: "Z3 SMT solver",
+      hostCommand: row.command ?? "truth-harness smt check <constraints.smt2> --write",
+      fallbackCommand: dockerizeFocusedCommand(row.command ?? "truth-harness smt check <constraints.smt2> --write"),
+      trustLabel: "smt-checked"
+    };
+  }
+
+  if (row.obligationKind === "independent-check") {
+    return {
+      ids: ["maxima", "maxima-cas"],
+      displayName: "Maxima CAS",
+      hostCommand: row.command ?? "truth-harness cas check --write",
+      fallbackCommand: dockerizeFocusedCommand(row.command ?? "truth-harness cas check --write"),
+      trustLabel: "cross-checked"
+    };
+  }
+
+  if (row.obligationKind === "formal-proof") {
+    return {
+      ids: ["lean", "lean-proof-checker"],
+      displayName: "Lean proof checker",
+      hostCommand: row.command ?? "truth-harness proof check <proof.lean> --write",
+      fallbackCommand: "npm run docker:proof",
+      trustLabel: "proved"
+    };
+  }
+
+  return undefined;
+}
+
+function focusedEngineStatus(target) {
+  const engines = Array.isArray(state.safetyStatus?.verification?.engines)
+    ? state.safetyStatus.verification.engines
+    : [];
+  const normalizedIds = new Set(target.ids.map((id) => id.toLowerCase()));
+  return engines.find((engine) => {
+    const candidates = [
+      engine.id,
+      engine.backendId,
+      engine.displayName,
+      engine.adapter,
+      engine.role
+    ].filter(Boolean).map((value) => String(value).toLowerCase());
+    return candidates.some((value) =>
+      normalizedIds.has(value)
+      || target.ids.some((id) => value.includes(id.toLowerCase()))
+    );
+  });
+}
+
+function dockerizeFocusedCommand(command) {
+  return command.startsWith("truth-harness ")
+    ? `npm run docker:cli -- ${command.slice("truth-harness ".length)}`
+    : "npm run docker:proof";
 }
 
 function selectedWorkspaceReviewItem() {
