@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeResearchSession } from "./research-session.js";
+import { writeVisualArtifact } from "./visual-artifact.js";
 import { createWorkspaceGraph } from "./workspace-graph.js";
 import { writeWorkspaceSnapshot } from "./workspace-snapshot.js";
 
@@ -47,6 +48,36 @@ describe("workspace graph", () => {
       tasks: ["Attach a formal proof if the claim is promoted."],
       now: "2026-06-13T00:04:00.000Z"
     });
+    const sourceVisual = await writeVisualArtifact({
+      rootPath: root,
+      title: "Claim figure source",
+      kind: "plot",
+      renderer: { engine: "plotly", adapter: "test-plot-adapter" },
+      sourceRefs: [{ kind: "claim", ref: derived.claim.claimId, label: "Derived claim" }],
+      replayCommand: "truth-harness visual show <visual-id>",
+      payload: {
+        format: "plotly-json",
+        content: { data: [], layout: { title: "Claim figure source" } }
+      },
+      now: "2026-06-13T00:04:10.000Z"
+    });
+    const renderedVisual = await writeVisualArtifact({
+      rootPath: root,
+      title: "Rendered claim figure",
+      kind: "plot",
+      renderer: { engine: "truth-harness-native", adapter: "plotly-json-svg-renderer" },
+      sourceRefs: [
+        { kind: "visual", ref: sourceVisual.visual.visualId, label: "Source visual" },
+        { kind: "claim", ref: derived.claim.claimId, label: "Derived claim" },
+        { kind: "manual", ref: "not-a-local-artifact", label: "Manual note" }
+      ],
+      replayCommand: `truth-harness visual render ${sourceVisual.visual.visualId} --engine plotly`,
+      payload: {
+        format: "svg",
+        content: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 50\"></svg>"
+      },
+      now: "2026-06-13T00:04:20.000Z"
+    });
 
     const graph = await createWorkspaceGraph({
       rootPath: root,
@@ -86,6 +117,31 @@ describe("workspace graph", () => {
         kind: "snapshot-ref",
         ref: snapshot.snapshot.snapshotId,
         resolved: true
+      })
+    );
+    expect(graph.edges).toContainEqual(
+      expect.objectContaining({
+        kind: "source-ref",
+        refKind: "claim",
+        ref: derived.claim.claimId,
+        sourcePath: expect.stringContaining(sourceVisual.visual.visualId),
+        resolved: true
+      })
+    );
+    expect(graph.edges).toContainEqual(
+      expect.objectContaining({
+        kind: "source-ref",
+        refKind: "visual",
+        ref: sourceVisual.visual.visualId,
+        sourcePath: expect.stringContaining(renderedVisual.visual.visualId),
+        resolved: true
+      })
+    );
+    expect(graph.edges).not.toContainEqual(
+      expect.objectContaining({
+        kind: "source-ref",
+        refKind: "manual",
+        ref: "not-a-local-artifact"
       })
     );
     expect(graph.warnings).toContain("Workspace graph is a local provenance map. It does not upgrade trust or prove claims by itself.");

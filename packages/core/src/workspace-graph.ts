@@ -17,6 +17,7 @@ export type WorkspaceGraphEdgeKind =
   | "evidence-ref"
   | "task-evidence-ref"
   | "checkpoint-evidence-ref"
+  | "source-ref"
   | "depends-on"
   | "supersedes"
   | "snapshot-ref"
@@ -268,6 +269,11 @@ function collectWorkspaceReferences(value: unknown, sourcePath: string): Workspa
         continue;
       }
 
+      if (key === "sourceRefs" && Array.isArray(entry)) {
+        collectSourceRefs(entry, sourcePath, entryPath, refs);
+        continue;
+      }
+
       if (key === "snapshotRefs" && Array.isArray(entry)) {
         collectStringRefs(entry, sourcePath, entryPath, "snapshot-ref", "snapshot", refs);
         continue;
@@ -294,6 +300,33 @@ function collectWorkspaceReferences(value: unknown, sourcePath: string): Workspa
 
   walk(value, "$");
   return refs.filter((ref) => ref.ref.trim().length > 0);
+}
+
+function collectSourceRefs(
+  values: unknown[],
+  sourcePath: string,
+  fieldPath: string,
+  refs: WorkspaceReference[]
+): void {
+  values.forEach((entry, index) => {
+    if (!isRecord(entry) || typeof entry.ref !== "string") {
+      return;
+    }
+
+    const kind = typeof entry.kind === "string" ? entry.kind : undefined;
+    const ref = entry.ref;
+    if (!referenceKindToArtifactKind(kind)) {
+      return;
+    }
+
+    refs.push({
+      sourcePath,
+      fieldPath: `${fieldPath}[${index}]`,
+      edgeKind: "source-ref",
+      kind,
+      ref
+    });
+  });
 }
 
 function collectEvidenceRefs(
@@ -381,6 +414,7 @@ function referenceKindToArtifactKind(kind: string | undefined): WorkspaceValidat
     case "claim":
       return "claims";
     case "route":
+    case "verifier-route":
       return "routes";
     case "snapshot":
       return "snapshots";
@@ -393,14 +427,18 @@ function referenceKindToArtifactKind(kind: string | undefined): WorkspaceValidat
     case "literature":
       return "literature";
     case "notebook-run":
+    case "notebook":
       return "notebook-runs";
     case "code-run":
       return "code-runs";
     case "cas":
+    case "cas-check":
       return "cas";
     case "proof":
+    case "proof-check":
       return "proofs";
     case "smt":
+    case "smt-check":
       return "smt";
     case "simulation":
       return "simulations";
@@ -420,6 +458,9 @@ function referenceKindToArtifactKind(kind: string | undefined): WorkspaceValidat
       return "disclosures";
     case "invention":
       return "inventions";
+    case "visual":
+    case "visual-artifact":
+      return "visuals";
     default:
       return undefined;
   }
