@@ -21,6 +21,7 @@ describe("web UI action contracts", () => {
     const source = await readFile(appSourcePath, "utf8");
 
     expect(source).toContain("copy-engine-readiness-command");
+    expect(source).toContain('data-testid="copy-engine-readiness-command"');
     expect(source).toContain('data-command="${escapeHtml(engineReadiness.command)}"');
     expect(source).toContain('filename: `truth-harness-engine-command-${safeFilenameTimestamp()}.txt`');
     expect(source).toContain('copiedTitle: "Copied engine command"');
@@ -48,5 +49,15 @@ describe("web UI action contracts", () => {
     expect(actionRenderer).toContain('state.surface = "checks";');
     expect(actionRenderer).toContain("return;");
     expect(actionRenderer).toContain("await openSavedRoute(routeId);");
+  });
+
+  it("keeps stable selectors for browser agents and future UI tests", async () => {
+    const source = await readFile(appSourcePath, "utf8");
+
+    expect(source).toContain('data-testid="workspace-open-action"');
+    expect(source).toContain('data-testid="workspace-open-route"');
+    expect(source).toContain('data-testid="workspace-action-route"');
+    expect(source).toContain('data-testid="checks-work-open-route"');
+    expect(source).toContain('data-testid="copy-engine-readiness-command"');
   });
 });

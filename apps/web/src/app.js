@@ -3550,8 +3550,8 @@ function renderWorkspaceReview() {
             <code class="queue-command">${escapeHtml(item.command ?? "")}</code>
           </details>
           <div class="queue-actions">
-            <button class="text-button compact-button open-workspace-action" data-review-index="${index}" type="button">${active ? "Viewing" : "Open action"}</button>
-            ${canOpenRoute ? `<button class="text-button compact-button open-workspace-route" data-route-id="${escapeHtml(item.routeId)}" type="button">Open route</button>` : ""}
+            <button class="text-button compact-button open-workspace-action" data-testid="workspace-open-action" data-review-index="${index}" type="button">${active ? "Viewing" : "Open action"}</button>
+            ${canOpenRoute ? `<button class="text-button compact-button open-workspace-route" data-testid="workspace-open-route" data-route-id="${escapeHtml(item.routeId)}" type="button">Open route</button>` : ""}
             <button class="text-button compact-button copy-workspace-packet" data-review-index="${index}" type="button">Copy packet</button>
             <button class="text-button compact-button copy-workspace-command" data-review-index="${index}" type="button">Copy command</button>
           </div>
@@ -3663,7 +3663,7 @@ function renderWorkspaceReviewAction(items) {
     <pre>${escapeHtml(item.agentPacket ?? "")}</pre>
   </details>
   <div class="queue-action-actions">
-    ${item.routeId ? `<button class="text-button compact-button open-workspace-action-route" data-route-id="${escapeHtml(item.routeId)}" type="button">${escapeHtml(routeActionLabel)}</button>` : ""}
+    ${item.routeId ? `<button class="text-button compact-button open-workspace-action-route" data-testid="workspace-action-route" data-route-id="${escapeHtml(item.routeId)}" type="button">${escapeHtml(routeActionLabel)}</button>` : ""}
     <button class="text-button compact-button copy-workspace-action-packet" type="button">Copy packet</button>
     <button class="text-button compact-button copy-workspace-action-command" type="button">Copy command</button>
   </div>`;
@@ -5371,7 +5371,7 @@ function renderChecksWorkOrder(receipt, rows) {
   <div class="checks-work-actions">
     ${runAction}
     ${existingEvidence ? `<button class="text-button compact-button checks-work-primary attach-focused-evidence-artifact" data-route-id="${escapeHtml(focusedRow.routeId)}" data-obligation-id="${escapeHtml(focusedRow.obligationId)}" data-evidence-kind="${escapeHtml(existingEvidence.kind)}" data-evidence-ref="${escapeHtml(existingEvidence.path)}" data-evidence-trust="${escapeHtml(existingEvidence.trust)}" data-evidence-summary="${escapeHtml(existingEvidence.summary)}" type="button">Attach existing ${escapeHtml(existingEvidence.kind.toUpperCase())}</button>` : ""}
-    ${item.routeId && !routeMatches ? `<button class="text-button compact-button open-checks-work-route" data-route-id="${escapeHtml(item.routeId)}" type="button">Open route</button>` : ""}
+    ${item.routeId && !routeMatches ? `<button class="text-button compact-button open-checks-work-route" data-testid="checks-work-open-route" data-route-id="${escapeHtml(item.routeId)}" type="button">Open route</button>` : ""}
     <button class="text-button compact-button copy-checks-work-packet" type="button">Copy packet</button>
     <button class="text-button compact-button copy-checks-work-command" type="button">Copy command</button>
     <button class="text-button compact-button clear-checks-work-order" type="button">Clear focus</button>
@@ -5382,7 +5382,7 @@ function renderChecksWorkOrder(receipt, rows) {
     <strong>${escapeHtml(engineReadiness.title)}</strong>
     <small>${escapeHtml(engineReadiness.detail)}</small>
     <code>${escapeHtml(engineReadiness.command)}</code>
-    <button class="text-button compact-button copy-engine-readiness-command" data-command="${escapeHtml(engineReadiness.command)}" type="button">Copy engine command</button>
+    <button class="text-button compact-button copy-engine-readiness-command" data-testid="copy-engine-readiness-command" data-command="${escapeHtml(engineReadiness.command)}" type="button">Copy engine command</button>
   </div>` : ""}
   ${heldBackEvidence ? `<div class="checks-work-note warning">
     <span class="mini-label">Evidence held back</span>
