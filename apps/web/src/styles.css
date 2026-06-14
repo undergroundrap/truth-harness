@@ -3429,6 +3429,105 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   padding: 12px;
 }
 
+.checks-work-order {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid rgba(125, 211, 168, 0.32);
+  border-radius: 8px;
+  background: rgba(14, 18, 16, 0.98);
+  margin-bottom: 10px;
+  padding: 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.checks-work-order[hidden] {
+  display: none;
+}
+
+.checks-work-order.route-mismatch {
+  border-color: rgba(230, 195, 106, 0.34);
+}
+
+.checks-work-head,
+.checks-work-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.checks-work-head h4 {
+  margin: 3px 0 0;
+  color: #f4eee2;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.checks-work-order p,
+.checks-work-order small {
+  color: #d9d1c2;
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.checks-work-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.checks-work-grid section {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0d0f0e;
+  padding: 9px;
+}
+
+.checks-work-grid strong {
+  color: #f1eadc;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.checks-work-command {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0c0c0c;
+}
+
+.checks-work-command summary {
+  cursor: pointer;
+  color: #d8d0c1;
+  font-size: 11px;
+  font-weight: 650;
+  list-style-position: inside;
+  padding: 7px;
+}
+
+.checks-work-command code {
+  display: block;
+  min-width: 0;
+  border-top: 1px solid var(--line-soft);
+  color: #e7decd;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+  padding: 7px;
+  white-space: normal;
+}
+
 .docker-verifier-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);

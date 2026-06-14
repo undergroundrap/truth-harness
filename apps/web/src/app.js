@@ -323,6 +323,7 @@ const branchMapStatus = document.querySelector("#branch-map-status");
 const matrixSummary = document.querySelector("#matrix-summary");
 const matrixCurrentClaim = document.querySelector("#matrix-current-claim");
 const matrixNextCommand = document.querySelector("#matrix-next-command");
+const checksWorkOrder = document.querySelector("#checks-work-order");
 const verificationMatrix = document.querySelector("#verification-matrix");
 const claimReviewGate = document.querySelector("#claim-review-gate");
 const claimReviewStatus = document.querySelector("#claim-review-status");
@@ -5294,6 +5295,7 @@ function renderVerificationMatrix(receipt) {
   matrixCurrentClaim.textContent = receipt.title;
   matrixNextCommand.textContent = claimReview.nextCommand ?? nextAction?.command ?? receipt.replay;
   matrixSummary.textContent = `${claimReview.label} / ${counts.passed ?? 0} passed / ${counts.waiting ?? 0} waiting / ${counts.missing ?? 0} missing`;
+  renderChecksWorkOrder(receipt, rows);
   renderClaimReviewGate(claimReview);
 
   verificationMatrix.innerHTML = rows
@@ -5325,6 +5327,110 @@ function renderVerificationMatrix(receipt) {
       <small>${escapeHtml(statusLabel(row.status))}</small>
     </div>`)
     .join("");
+}
+
+function renderChecksWorkOrder(receipt, rows) {
+  if (!checksWorkOrder) {
+    return;
+  }
+
+  const item = selectedWorkspaceReviewItem();
+  if (!item) {
+    checksWorkOrder.hidden = true;
+    checksWorkOrder.innerHTML = "";
+    return;
+  }
+
+  const routeMatches = !item.routeId || receipt?.verifierRoute?.routeId === item.routeId;
+  const focusedRow = rows.find((row) => row.obligationId && row.obligationId === item.obligationId);
+  const slot = Array.isArray(item.evidenceSlots) ? item.evidenceSlots[0] : undefined;
+  checksWorkOrder.hidden = false;
+  checksWorkOrder.className = `checks-work-order ${routeMatches ? "route-ready" : "route-mismatch"}`;
+  checksWorkOrder.innerHTML = `<div class="checks-work-head">
+    <div>
+      <span class="mini-label">Queue work order</span>
+      <h4>${escapeHtml(item.title ?? "Focused workspace action")}</h4>
+    </div>
+    <span class="status-pill ${routeMatches ? "exact" : "waiting"}">${escapeHtml(routeMatches ? "route loaded" : "route needed")}</span>
+  </div>
+  <div class="checks-work-actions">
+    ${item.routeId && !routeMatches ? `<button class="text-button compact-button open-checks-work-route" data-route-id="${escapeHtml(item.routeId)}" type="button">Open route</button>` : ""}
+    <button class="text-button compact-button copy-checks-work-packet" type="button">Copy packet</button>
+    <button class="text-button compact-button copy-checks-work-command" type="button">Copy command</button>
+    <button class="text-button compact-button clear-checks-work-order" type="button">Clear focus</button>
+  </div>
+  <p>${escapeHtml(item.summary ?? "")}</p>
+  <div class="checks-work-grid">
+    <section>
+      <span class="mini-label">Evidence slot</span>
+      <strong>${escapeHtml(slot?.label ?? "Local evidence artifact")}</strong>
+      <small>${escapeHtml(slot?.description ?? "Attach replayable evidence before upgrading trust.")}</small>
+      <small>${escapeHtml(slot ? `Accepts: ${(slot.acceptedArtifacts ?? []).join("; ")}` : "Accepts: replayable local artifact")}</small>
+    </section>
+    <section>
+      <span class="mini-label">Focused row</span>
+      <strong>${escapeHtml(focusedRow?.label ?? item.obligationId ?? item.kind ?? "workspace item")}</strong>
+      <small>${escapeHtml(focusedRow ? `${statusLabel(focusedRow.status)} / ${focusedRow.obligationKind ?? "evidence"}` : routeMatches ? "No matching matrix row is visible." : "Open the route before working this item.")}</small>
+      <small>${escapeHtml(workspaceReviewSlotTargetText(slot ?? { attachTo: { routeId: item.routeId, obligationId: item.obligationId, claimId: item.claimId, sessionId: item.sessionId } }))}</small>
+    </section>
+  </div>
+  <details class="checks-work-command">
+    <summary>Command</summary>
+    <code>${escapeHtml(item.command ?? "")}</code>
+  </details>`;
+
+  checksWorkOrder.querySelector(".open-checks-work-route")?.addEventListener("click", async (event) => {
+    const routeId = event.currentTarget.dataset.routeId;
+    if (!routeId) {
+      return;
+    }
+
+    await openSavedRoute(routeId);
+    state.surface = "checks";
+    render();
+  });
+  checksWorkOrder.querySelector(".copy-checks-work-packet")?.addEventListener("click", (event) => {
+    if (!item.agentPacket) {
+      return;
+    }
+
+    copyOrDownloadText({
+      text: `${item.agentPacket.trim()}\n`,
+      filename: `truth-harness-agent-packet-${safeFilenameTimestamp()}.md`,
+      type: "text/markdown",
+      button: event.currentTarget,
+      copiedTitle: "Copied focused work packet",
+      copiedDetail: item.title ?? "workspace action",
+      fallbackTitle: "Downloaded focused work packet",
+      fallbackDetail: "the focused work packet was saved as markdown instead."
+    });
+  });
+  checksWorkOrder.querySelector(".copy-checks-work-command")?.addEventListener("click", (event) => {
+    if (!item.command) {
+      return;
+    }
+
+    copyOrDownloadText({
+      text: `${item.command}\n`,
+      filename: `truth-harness-focused-command-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      button: event.currentTarget,
+      copiedTitle: "Copied focused command",
+      copiedDetail: item.command,
+      fallbackTitle: "Downloaded focused command",
+      fallbackDetail: "the focused work command was saved as plain text instead."
+    });
+  });
+  checksWorkOrder.querySelector(".clear-checks-work-order")?.addEventListener("click", () => {
+    state.selectedWorkspaceReviewItemId = undefined;
+    state.selectedWorkspaceObligationId = undefined;
+    render();
+  });
+}
+
+function selectedWorkspaceReviewItem() {
+  const items = Array.isArray(workspaceReview.items) ? workspaceReview.items : [];
+  return items.find((item) => item.itemId === state.selectedWorkspaceReviewItemId);
 }
 
 function focusSelectedVerificationRow() {
