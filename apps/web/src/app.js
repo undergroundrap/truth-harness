@@ -1424,6 +1424,8 @@ function savedVisualArtifactBannerHtml(artifact) {
   const format = artifact.payload?.format ?? "unknown payload";
   const replay = artifact.replayCommand ?? "recorded visual artifact";
   const title = artifact.title ?? artifact.visualId ?? "Saved visual artifact";
+  const renderedSummary = renderedVisualSummaryForSourceArtifact(artifact);
+  const sourceSummary = sourceVisualSummaryForRenderedArtifact(artifact);
   return `<div>
     <strong>${escapeHtml(title)}</strong>
     <span>${escapeHtml(artifact.kind ?? "visual")} - ${escapeHtml(renderer)} - ${escapeHtml(format)}</span>
@@ -1432,6 +1434,8 @@ function savedVisualArtifactBannerHtml(artifact) {
     <span>${escapeHtml(artifact.visualId ?? "unknown visual")}</span>
     <span>${sourceCount} source ref${sourceCount === 1 ? "" : "s"}</span>
     <span>${escapeHtml(artifact.privacy?.networkAccess ?? "network: none")}</span>
+    ${renderedSummary?.visualId ? `<button class="text-button compact-button visual-artifact-link" data-open-rendered-visual-id="${escapeHtml(renderedSummary.visualId)}" type="button">Open rendered SVG</button>` : ""}
+    ${sourceSummary?.visualId ? `<button class="text-button compact-button visual-artifact-link" data-open-source-visual-id="${escapeHtml(sourceSummary.visualId)}" type="button">Open source</button>` : ""}
     <code>${escapeHtml(replay)}</code>
   </div>`;
 }
@@ -1442,6 +1446,50 @@ function selectedVisualCanRenderWithGraphviz(artifact) {
   }
 
   return savedVisualArtifactRendererSource(artifact)?.language === "dot";
+}
+
+function renderedVisualSummaryForSourceArtifact(artifact) {
+  if (!artifact?.visualId || artifact.payload?.format === "svg") {
+    return undefined;
+  }
+
+  const rendered = visualArtifacts
+    .filter((summary) => isRenderedSvgVisualSummary(summary) && visualSummaryReferencesVisual(summary, artifact.visualId))
+    .sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")));
+
+  return rendered[0];
+}
+
+function sourceVisualSummaryForRenderedArtifact(artifact) {
+  if (!artifact?.visualId || artifact.payload?.format !== "svg") {
+    return undefined;
+  }
+
+  const visualRef = (artifact.sourceRefs ?? []).find((ref) => ref?.kind === "visual" && typeof ref.ref === "string");
+  if (!visualRef) {
+    return undefined;
+  }
+
+  return visualArtifacts.find((summary) => visualRefMatchesSummary(visualRef.ref, summary));
+}
+
+function isRenderedSvgVisualSummary(summary) {
+  const tags = new Set((summary?.tags ?? []).map((tag) => String(tag).toLowerCase()));
+  return summary?.renderer === "graphviz" && tags.has("rendered") && tags.has("svg");
+}
+
+function visualSummaryReferencesVisual(summary, visualId) {
+  return (summary?.sourceRefs ?? []).some((ref) => ref?.kind === "visual" && visualRefMentionsVisualId(ref.ref, visualId));
+}
+
+function visualRefMatchesSummary(ref, summary) {
+  return Boolean(summary?.visualId)
+    && (visualRefMentionsVisualId(ref, summary.visualId) || String(ref ?? "") === summary.path);
+}
+
+function visualRefMentionsVisualId(ref, visualId) {
+  const value = String(ref ?? "");
+  return value === visualId || value.includes(visualId);
 }
 
 function visualZoomPercent() {
@@ -3445,15 +3493,29 @@ function renderVisualArtifactHistory() {
     .map((artifact) => {
       const active = artifact.visualId === state.selectedVisualArtifactId;
       const sources = Array.isArray(artifact.sourceRefs) ? artifact.sourceRefs.length : 0;
+      const typeLabel = visualArtifactSummaryTypeLabel(artifact);
       return `<button class="research-map-row ${active ? "active" : ""}" data-visual-artifact-id="${escapeHtml(artifact.visualId)}" type="button">
         <span>
           <strong>${escapeHtml(artifact.title ?? artifact.visualId)}</strong>
-          <small>${escapeHtml(artifact.kind ?? "visual")} - ${escapeHtml(artifact.renderer ?? "renderer")} - ${escapeHtml(formatActivityTime(artifact.createdAt))}</small>
+          <small>${escapeHtml(typeLabel)} - ${escapeHtml(artifact.kind ?? "visual")} - ${escapeHtml(formatActivityTime(artifact.createdAt))}</small>
           <small>${sources} source ref${sources === 1 ? "" : "s"} - ${escapeHtml((artifact.tags ?? []).map((tag) => `#${tag}`).join(" ") || "no tags")}</small>
         </span>
       </button>`;
     })
     .join("");
+}
+
+function visualArtifactSummaryTypeLabel(artifact) {
+  if (isRenderedSvgVisualSummary(artifact)) {
+    return "rendered SVG";
+  }
+  if (artifact?.renderer === "graphviz") {
+    return "Graphviz source";
+  }
+  if (artifact?.renderer === "mermaid") {
+    return "Mermaid source";
+  }
+  return artifact?.renderer ?? "visual artifact";
 }
 
 function renderResearchMapNodeInspector(snapshot, plot) {
@@ -5545,19 +5607,41 @@ async function refreshVisualArtifacts({ announce = true } = {}) {
   }
 }
 
-async function openVisualArtifact(visualId) {
+async function openVisualArtifact(visualId, options = {}) {
   const response = await fetch(`/api/visuals/${encodeURIComponent(visualId)}`, {
     method: "GET",
     cache: "no-store"
   });
   const payload = await readLocalApiJson(response, "Local visual artifact API failed.");
   applyVisualArtifactsPayload(payload);
-  state.selectedVisualArtifactId = payload.visual?.visualId;
+  let selectedPayload = payload;
+  let preferredSourceVisualId;
+  if (options.preferRendered !== false) {
+    const renderedSummary = renderedVisualSummaryForSourceArtifact(payload.visual);
+    if (renderedSummary?.visualId) {
+      preferredSourceVisualId = payload.visual?.visualId;
+      const renderedResponse = await fetch(`/api/visuals/${encodeURIComponent(renderedSummary.visualId)}`, {
+        method: "GET",
+        cache: "no-store"
+      });
+      selectedPayload = await readLocalApiJson(renderedResponse, "Local rendered visual artifact API failed.");
+      applyVisualArtifactsPayload(selectedPayload);
+    }
+  }
+
+  state.selectedVisualArtifactId = selectedPayload.visual?.visualId;
   state.selectedResearchMapSnapshotId = undefined;
   state.selectedResearchMapNodeId = undefined;
   state.surface = "plot";
   requestVisualFit();
-  addActivity("human", "Opened visual artifact", `${payload.visual?.visualId ?? visualId} loaded from .truth-harness/visuals.`, "passed");
+  addActivity(
+    "human",
+    "Opened visual artifact",
+    preferredSourceVisualId
+      ? `${preferredSourceVisualId} has rendered SVG ${selectedPayload.visual?.visualId ?? "available"}; opened the engine-rendered artifact.`
+      : `${selectedPayload.visual?.visualId ?? visualId} loaded from .truth-harness/visuals.`,
+    "passed"
+  );
   render();
   resetActiveSurfaceScroll();
 }
@@ -10471,6 +10555,23 @@ plotNodeInspector.addEventListener("submit", (event) => {
   saveResearchMapThought(form).catch((error) => {
     addActivity("web-ui", "Save map thought failed", error instanceof Error ? error.message : "Unknown research map failure.", "refuted");
   });
+});
+
+visualArtifactBanner?.addEventListener("click", (event) => {
+  const renderedButton = event.target.closest("[data-open-rendered-visual-id]");
+  if (renderedButton?.dataset.openRenderedVisualId) {
+    openVisualArtifact(renderedButton.dataset.openRenderedVisualId, { preferRendered: false }).catch((error) => {
+      addActivity("web-ui", "Open rendered visual failed", error instanceof Error ? error.message : "Unknown visual artifact failure.", "refuted");
+    });
+    return;
+  }
+
+  const sourceButton = event.target.closest("[data-open-source-visual-id]");
+  if (sourceButton?.dataset.openSourceVisualId) {
+    openVisualArtifact(sourceButton.dataset.openSourceVisualId, { preferRendered: false }).catch((error) => {
+      addActivity("web-ui", "Open source visual failed", error instanceof Error ? error.message : "Unknown visual artifact failure.", "refuted");
+    });
+  }
 });
 
 researchMapList.addEventListener("click", (event) => {

@@ -2375,7 +2375,8 @@ dd {
 }
 
 .visual-artifact-meta span,
-.visual-artifact-meta code {
+.visual-artifact-meta code,
+.visual-artifact-link {
   min-width: 0;
   max-width: 100%;
   border: 1px solid var(--line-soft);
@@ -2388,6 +2389,17 @@ dd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.visual-artifact-link {
+  border-color: rgba(125, 211, 168, 0.36);
+  color: #dff4e8;
+  cursor: pointer;
+}
+
+.visual-artifact-link:hover {
+  border-color: rgba(125, 211, 168, 0.66);
+  background: rgba(125, 211, 168, 0.1);
 }
 
 .visual-artifact-meta code {
