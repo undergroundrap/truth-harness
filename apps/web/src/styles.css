@@ -3514,6 +3514,10 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   white-space: normal;
 }
 
+.checks-work-note .text-button {
+  justify-self: flex-start;
+}
+
 .checks-work-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

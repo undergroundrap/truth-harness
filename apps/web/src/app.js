@@ -5371,6 +5371,7 @@ function renderChecksWorkOrder(receipt, rows) {
     <small>${escapeHtml(`Found ${heldBackEvidence.trust}/${heldBackEvidence.status}; requires ${heldBackEvidence.expectedTrust}.`)}</small>
     <small>${escapeHtml(heldBackEvidence.path)}</small>
     <code>${escapeHtml(heldBackEvidence.nextCommand)}</code>
+    <button class="text-button compact-button copy-held-back-command" data-command="${escapeHtml(heldBackEvidence.nextCommand)}" type="button">Copy rerun command</button>
   </div>` : ""}
   <div class="checks-work-grid">
     <section>
@@ -5418,6 +5419,18 @@ function renderChecksWorkOrder(receipt, rows) {
         trust: button.dataset.evidenceTrust,
         summary: button.dataset.evidenceSummary
       }
+    });
+  });
+  checksWorkOrder.querySelector(".copy-held-back-command")?.addEventListener("click", (event) => {
+    copyOrDownloadText({
+      text: `${event.currentTarget.dataset.command ?? ""}\n`,
+      filename: `truth-harness-held-back-rerun-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      button: event.currentTarget,
+      copiedTitle: "Copied rerun command",
+      copiedDetail: "Use Docker to rerun the held-back evidence path.",
+      fallbackTitle: "Downloaded rerun command",
+      fallbackDetail: "the held-back evidence rerun command was saved as plain text instead."
     });
   });
   checksWorkOrder.querySelector(".copy-checks-work-packet")?.addEventListener("click", (event) => {
