@@ -5344,6 +5344,7 @@ function renderChecksWorkOrder(receipt, rows) {
   const routeMatches = !item.routeId || receipt?.verifierRoute?.routeId === item.routeId;
   const focusedRow = rows.find((row) => row.obligationId && row.obligationId === item.obligationId);
   const slot = Array.isArray(item.evidenceSlots) ? item.evidenceSlots[0] : undefined;
+  const runAction = routeMatches ? checksWorkRunActionHtml(focusedRow) : "";
   checksWorkOrder.hidden = false;
   checksWorkOrder.className = `checks-work-order ${routeMatches ? "route-ready" : "route-mismatch"}`;
   checksWorkOrder.innerHTML = `<div class="checks-work-head">
@@ -5354,6 +5355,7 @@ function renderChecksWorkOrder(receipt, rows) {
     <span class="status-pill ${routeMatches ? "exact" : "waiting"}">${escapeHtml(routeMatches ? "route loaded" : "route needed")}</span>
   </div>
   <div class="checks-work-actions">
+    ${runAction}
     ${item.routeId && !routeMatches ? `<button class="text-button compact-button open-checks-work-route" data-route-id="${escapeHtml(item.routeId)}" type="button">Open route</button>` : ""}
     <button class="text-button compact-button copy-checks-work-packet" type="button">Copy packet</button>
     <button class="text-button compact-button copy-checks-work-command" type="button">Copy command</button>
@@ -5388,6 +5390,12 @@ function renderChecksWorkOrder(receipt, rows) {
     await openSavedRoute(routeId);
     state.surface = "checks";
     render();
+  });
+  checksWorkOrder.querySelector(".run-cas-obligation")?.addEventListener("click", (event) => {
+    void runCasForObligation(event.currentTarget);
+  });
+  checksWorkOrder.querySelector(".run-smt-obligation")?.addEventListener("click", (event) => {
+    void runSmtForObligation(event.currentTarget);
   });
   checksWorkOrder.querySelector(".copy-checks-work-packet")?.addEventListener("click", (event) => {
     if (!item.agentPacket) {
@@ -5426,6 +5434,22 @@ function renderChecksWorkOrder(receipt, rows) {
     state.selectedWorkspaceObligationId = undefined;
     render();
   });
+}
+
+function checksWorkRunActionHtml(row) {
+  if (!row || row.status === "passed" || !row.obligationId) {
+    return "";
+  }
+
+  if (row.canRunCas) {
+    return `<button class="text-button compact-button checks-work-primary run-cas-obligation" data-route-id="${escapeHtml(row.routeId)}" data-obligation-id="${escapeHtml(row.obligationId)}" type="button">Run CAS + attach</button>`;
+  }
+
+  if (row.canRunSmt) {
+    return `<button class="text-button compact-button checks-work-primary run-smt-obligation" data-route-id="${escapeHtml(row.routeId)}" data-obligation-id="${escapeHtml(row.obligationId)}" type="button">Run Z3 + attach</button>`;
+  }
+
+  return "";
 }
 
 function selectedWorkspaceReviewItem() {

@@ -3452,6 +3452,13 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   border-color: rgba(230, 195, 106, 0.34);
 }
 
+.checks-work-primary {
+  border-color: rgba(125, 211, 168, 0.42);
+  background: rgba(44, 93, 68, 0.52);
+  color: #ecfff5;
+  font-weight: 650;
+}
+
 .checks-work-head,
 .checks-work-actions {
   display: flex;
