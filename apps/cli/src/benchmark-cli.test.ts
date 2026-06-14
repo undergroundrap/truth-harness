@@ -359,6 +359,50 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.provedRequiresAcceptedProofCheckerRun).toBe(true);
   });
 
+  it("rebuilds and searches the workspace catalog from the CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    const receipt = createReceipt("compute 3 / 4 + 5 / 8");
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
+    await writeFile(join(root, ".truth-harness", "receipts", "fraction.json"), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+
+    const missingStatus = JSON.parse((await runCli(["catalog", "status", root, "--json"])).stdout) as {
+      readable: boolean;
+      stale: boolean;
+    };
+    const rebuild = JSON.parse((await runCli(["catalog", "rebuild", root, "--json"])).stdout) as {
+      schemaVersion: string;
+      artifactCount: number;
+      validation: { passed: boolean };
+    };
+    const search = JSON.parse(
+      (await runCli(["catalog", "search", "11/8", "--workspace", root, "--kind", "receipts", "--trust", "exact-computed", "--json"])).stdout
+    ) as {
+      schemaVersion: string;
+      total: number;
+      results: Array<{ kind: string; trust: string; path: string }>;
+      warnings: string[];
+    };
+    const human = await runCli(["catalog", "search", "11/8", "--workspace", root, "--kind", "receipts"]);
+
+    expect(missingStatus.readable).toBe(false);
+    expect(missingStatus.stale).toBe(true);
+    expect(rebuild.schemaVersion).toBe("truth-harness.catalog-rebuild.v0");
+    expect(rebuild.validation.passed).toBe(true);
+    expect(rebuild.artifactCount).toBeGreaterThanOrEqual(2);
+    expect(search.schemaVersion).toBe("truth-harness.catalog-search.v0");
+    expect(search.results).toContainEqual(
+      expect.objectContaining({
+        kind: "receipts",
+        trust: "exact-computed",
+        path: ".truth-harness/receipts/fraction.json"
+      })
+    );
+    expect(search.warnings.join("\n")).toContain("do not upgrade trust labels");
+    expect(human.stdout).toContain("Truth Harness catalog search");
+    expect(human.stdout).toContain(".truth-harness/receipts/fraction.json");
+  });
+
   it("renders teaching packets from saved receipts", async () => {
     const root = await tempRoot();
     const receipt = createReceipt("compute 3 / 4 + 5 / 8");

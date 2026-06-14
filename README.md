@@ -131,6 +131,9 @@ npm run cli -- code list
 npm run cli -- model-context prepare "Ask a frontier model to critique a selected proof plan" --service OpenAI --model frontier-reasoning-model --data "selected formal statement" --data "selected proof sketch" --section "Selected proof plan=Only critique this selected proof plan; local notes stay local." --approval "prompt:explicit-user-request"
 npm run cli -- disclosure log "Ask a frontier model to critique a selected proof plan" --service OpenAI --model frontier-reasoning-model --data "selected formal statement" --data "selected proof sketch" --context "Only the formal statement and proof sketch are sent; local notes stay local." --approval "prompt:explicit-user-request"
 npm run cli -- workspace validate
+npm run cli -- catalog rebuild
+npm run cli -- catalog status
+npm run cli -- catalog search "fractions exact-computed" --kind claims --trust exact-computed
 npm run cli -- workspace snapshot
 ```
 
@@ -149,6 +152,8 @@ On Windows during UI iteration, prefer `npm run web:restart`. It stops the Node 
 Local workspace commands create a private `.truth-harness/` project store for receipts, claim ledger records, visual artifacts, artifacts, indexes, findings, research sessions, expert reviews, validation plans, literature records, notebook-run records, code-run records, invention logs, simulation logs, experiment logs, evidence audits, model-context packets, disclosure logs, encrypted vault envelopes, provenance snapshots, patent claim charts, CAS-check records, proof-check records, SMT-check records, and benchmark run/comparison records. The directory is git-ignored by default. `workspace status` reports missing private directories and manifest defaults added by newer releases; `workspace repair` creates missing directories and persists newly added defaults without leaving the local project.
 
 Workspace validation commands write no files; they scan local evidence artifacts and return `truth-harness.workspace-validation.v0` reports. Validation checks the root `project.json` manifest against a private-by-default schema, then checks receipt JSON deeply, including local-first privacy metadata, backend-aware trust boundaries, and forged `proved` labels. Other known workspace JSON records are checked against their checked-in JSON Schema contracts, artifact ids, local evidence refs, and trust-boundary policies before humans or agents rely on the workspace.
+
+Catalog commands create and query a rebuildable local SQLite index at `.truth-harness/indexes/catalog.db`. `truth-harness catalog rebuild` scans canonical workspace JSON artifacts through the existing validation/parsing layer, then writes typed artifact, claim, route, tag, reference, and FTS rows for fast local search. `truth-harness catalog status` reports missing, stale, corrupt, or readable cache state. `truth-harness catalog search` filters by text, artifact kind, trust, domain, and tag. The catalog is a cache only: it can be deleted and rebuilt, never satisfies proof obligations, never upgrades trust labels, and never replaces the JSON receipts, claims, routes, proofs, SMT checks, CAS checks, visuals, or other canonical evidence files.
 
 Workspace graph commands write no files; they scan the same local artifact set and return a `truth-harness.workspace-graph.v0` provenance map. `truth-harness workspace graph` and MCP `truth_harness_workspace_graph` expose nodes for local artifacts, edges for evidence refs, visual/source refs, task evidence, checkpoints, claim dependencies, supersession, snapshots, and selected-context refs, plus explicit missing-reference nodes when links are broken. This is the backend data model for lineage views, visual maps, report figures, and agent planning; it is not proof by itself.
 

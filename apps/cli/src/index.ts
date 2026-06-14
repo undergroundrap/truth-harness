@@ -31,6 +31,7 @@ import {
   getCodeRunSandboxStatus,
   getEngineManifest,
   getLocalWorkspaceStatus,
+  getWorkspaceCatalogStatus,
   getProofBackendStatus,
   getSmtBackendStatus,
   ingestLocalCorpus,
@@ -96,9 +97,11 @@ import {
   renderPlotlyVisualArtifact,
   renderTeachingPacketMarkdown,
   repairLocalWorkspace,
+  rebuildWorkspaceCatalog,
   replayReceipt,
   runWorkspaceStress,
   searchLocalCorpus,
+  searchWorkspaceCatalog,
   sealVaultFile,
   satisfyVerifierRouteObligation,
   verifierRouteReadiness,
@@ -155,6 +158,9 @@ import {
   type SymbolicCasCheckRecord,
   type SymbolicCasCheckSummary,
   type SymbolicCasCheckWriteResult,
+  type WorkspaceCatalogRebuildResult,
+  type WorkspaceCatalogSearchResult,
+  type WorkspaceCatalogStatus,
   type CodeRunSummary,
   type EngineManifest,
   type CodeRunPolicyInput,
@@ -2575,6 +2581,97 @@ disclosure
 const workspace = program
   .command("workspace")
   .description("Manage a local-first private Truth Harness project store.");
+
+const catalog = program
+  .command("catalog")
+  .description("Manage the rebuildable local SQLite query index for workspace artifacts.");
+
+catalog
+  .command("rebuild")
+  .description("Rebuild .truth-harness/indexes/catalog.db from canonical local JSON artifacts.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full catalog rebuild JSON")
+  .action(async (path: string, options: { json?: boolean }) => {
+    const result = await rebuildWorkspaceCatalog({ rootPath: path });
+
+    if (options.json) {
+      printJson(result);
+      if (!result.validation.passed) {
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    printWorkspaceCatalogRebuild(result);
+    if (!result.validation.passed) {
+      process.exitCode = 1;
+    }
+  });
+
+catalog
+  .command("status")
+  .description("Show whether the local workspace catalog exists, is readable, and matches the current schema.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full catalog status JSON")
+  .action(async (path: string, options: { json?: boolean }) => {
+    const status = await getWorkspaceCatalogStatus(path);
+
+    if (options.json) {
+      printJson(status);
+      if (!status.readable) {
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    printWorkspaceCatalogStatus(status);
+    if (!status.readable) {
+      process.exitCode = 1;
+    }
+  });
+
+catalog
+  .command("search")
+  .description("Search the local workspace catalog by text and artifact filters.")
+  .argument("[query]", "Search query; omit to list recent indexed artifacts")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--kind <kind>", "Filter by workspace artifact kind, such as claims, routes, receipts, visuals")
+  .option("--trust <trust>", "Filter by trust label", parseTrustLabel)
+  .option("--domain <domain>", "Filter by domain")
+  .option("--tag <tag>", "Filter by tag, with or without #")
+  .option("--limit <count>", "Maximum results to return", parsePositiveInteger, 25)
+  .option("--json", "Print the full catalog search JSON")
+  .action(
+    async (
+      query: string | undefined,
+      options: {
+        workspace: string;
+        kind?: string;
+        trust?: TrustLabel;
+        domain?: string;
+        tag?: string;
+        limit: number;
+        json?: boolean;
+      }
+    ) => {
+      const result = await searchWorkspaceCatalog({
+        rootPath: options.workspace,
+        query,
+        kind: options.kind,
+        trust: options.trust,
+        domain: options.domain,
+        tag: options.tag,
+        limit: options.limit
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printWorkspaceCatalogSearch(result);
+    }
+  );
 
 workspace
   .command("init")
@@ -5073,6 +5170,87 @@ function printWorkspaceValidation(validation: WorkspaceValidation): void {
   }
 }
 
+function printWorkspaceCatalogRebuild(result: WorkspaceCatalogRebuildResult): void {
+  console.log("Truth Harness catalog rebuild");
+  console.log(`Status: ${result.validation.passed ? "indexed with valid workspace" : "indexed with validation issues"}`);
+  console.log(`Workspace: ${result.workspacePath}`);
+  console.log(`Catalog: ${result.catalogPath}`);
+  console.log(`Schema: ${result.catalogSchemaVersion}`);
+  console.log(`Artifacts: ${result.artifactCount} (${result.validArtifacts} valid, ${result.invalidArtifacts} invalid)`);
+  console.log(`Claims/routes: ${result.claimCount}/${result.routeCount}`);
+  console.log(`Tags/refs/FTS rows: ${result.tagCount}/${result.refCount}/${result.ftsRows}`);
+  console.log(`Validation: ${result.validation.errors} errors, ${result.validation.warnings} warnings`);
+
+  console.log("");
+  console.log("Catalog boundary:");
+  for (const warning of result.warnings) {
+    console.log(`  ${warning}`);
+  }
+}
+
+function printWorkspaceCatalogStatus(status: WorkspaceCatalogStatus): void {
+  console.log("Truth Harness catalog status");
+  console.log(`Workspace: ${status.workspacePath}`);
+  console.log(`Catalog: ${status.catalogPath}`);
+  console.log(`Exists: ${String(status.exists)}`);
+  console.log(`Readable: ${String(status.readable)}`);
+  console.log(`Stale: ${String(status.stale)}`);
+  if (status.catalogSchemaVersion) {
+    console.log(`Schema: ${status.catalogSchemaVersion}`);
+  }
+  if (status.lastRebuiltAt) {
+    console.log(`Last rebuilt: ${status.lastRebuiltAt}`);
+  }
+  console.log(`Artifacts: ${status.artifactCount}`);
+  console.log(`Claims/routes: ${status.claimCount}/${status.routeCount}`);
+
+  if (status.warnings.length > 0) {
+    console.log("");
+    console.log("Catalog boundary:");
+    for (const warning of status.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printWorkspaceCatalogSearch(result: WorkspaceCatalogSearchResult): void {
+  console.log("Truth Harness catalog search");
+  console.log(`Workspace: ${result.workspacePath}`);
+  console.log(`Query: ${result.query?.trim() || "(recent indexed artifacts)"}`);
+  console.log(`Filters: ${formatDefinedRecord(result.filters)}`);
+  console.log(`Results: ${result.total}`);
+
+  if (result.results.length === 0) {
+    console.log("");
+    console.log("No catalog rows matched.");
+  }
+
+  for (const row of result.results) {
+    console.log("");
+    console.log(`${row.kind} ${row.artifactId ?? row.path}`);
+    console.log(`  ${row.title ?? "(untitled)"}`);
+    console.log(`  Path: ${row.path}`);
+    console.log(`  Trust/status: ${row.trust ?? "none"}/${row.status ?? "unknown"}`);
+    if (row.domain) {
+      console.log(`  Domain: ${row.domain}`);
+    }
+    if (row.tags.length > 0) {
+      console.log(`  Tags: ${row.tags.join(" ")}`);
+    }
+    if (!row.valid || row.issueCount > 0) {
+      console.log(`  Validation: ${row.valid ? "valid" : "invalid"} (${row.issueCount} issues)`);
+    }
+  }
+
+  if (result.warnings.length > 0) {
+    console.log("");
+    console.log("Catalog boundary:");
+    for (const warning of result.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
 function printWorkspaceStress(result: WorkspaceStressResult): void {
   console.log("Truth Harness workspace stress");
   console.log(`Stress: ${result.stressId}`);
@@ -6928,6 +7106,13 @@ function singleLineSnippet(value: string): string {
 function formatRecordCounts(value: Record<string, number>): string {
   const entries = Object.entries(value).sort(([left], [right]) => left.localeCompare(right));
   return entries.length > 0 ? entries.map(([key, count]) => `${key}=${count}`).join(", ") : "none";
+}
+
+function formatDefinedRecord(value: Record<string, unknown>): string {
+  const entries = Object.entries(value)
+    .filter(([, entry]) => entry !== undefined && entry !== "")
+    .sort(([left], [right]) => left.localeCompare(right));
+  return entries.length > 0 ? entries.map(([key, entry]) => `${key}=${String(entry)}`).join(", ") : "none";
 }
 
 function formatSigned(value: number): string {

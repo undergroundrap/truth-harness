@@ -41,13 +41,13 @@ interface CatalogDatabase {
 
 First implementation:
 
-- Prefer `better-sqlite3` behind the boundary for clean CLI output and mature transaction ergonomics.
+- Use `better-sqlite3` behind the boundary for clean CLI output and mature transaction ergonomics.
 - Do not expose arbitrary SQL to users or agents.
 - Do not load SQLite extensions.
-- Keep a JSON-scan fallback for machines without the catalog driver.
+- Keep existing JSON-scan commands (`workspace validate`, `workspace graph`, `claim list`, `route list`) independent from the catalog so missing or stale indexes never hide evidence.
 - Keep the catalog rebuildable so switching to stable `node:sqlite` later is a local driver change, not an architecture change.
 
-This is a better fit than making `node:sqlite` the public dependency today because the current runtime prints an experimental warning as soon as the module is imported.
+This is a better fit than making `node:sqlite` the public dependency today because the current runtime prints an experimental warning as soon as the module is imported. `npm audit --json` reported 0 vulnerabilities after adding `better-sqlite3`; the driver remains isolated so dependency policy can change later without rewriting catalog callers.
 
 ## Catalog File
 
@@ -166,7 +166,7 @@ CREATE INDEX refs_to_ref_idx ON artifact_refs(to_ref);
 6. Escape or parameterize FTS queries; never concatenate raw user input into `MATCH`.
 7. Catalog rebuilds must not contact the network.
 8. Catalog rows do not upgrade trust labels.
-9. A missing or stale catalog must fail toward JSON scanning, not missing evidence.
+9. A missing or stale catalog must never make evidence disappear; catalog-specific search can require rebuild, while canonical JSON-scan commands remain available.
 
 ## Rebuild Algorithm
 
@@ -211,13 +211,13 @@ Initial MCP:
 - `truth_harness_catalog_rebuild`
 - `truth_harness_catalog_search`
 
-All outputs should be structured JSON-first and include whether the response came from the catalog or the fallback JSON scan.
+All outputs should be structured JSON-first and include whether the response came from the catalog, a rebuild requirement, or a catalog error. Canonical JSON-scan commands remain separate fallback workflows.
 
 ## Integration Order
 
-1. Add `packages/core/src/workspace-catalog.ts` with schema, rebuild, status, and search.
-2. Add CLI `catalog` commands.
-3. Add tests proving delete/rebuild determinism and search behavior.
+1. Add `packages/core/src/workspace-catalog.ts` with schema, rebuild, status, and search. Done.
+2. Add CLI `catalog` commands. Done.
+3. Add tests proving rebuild determinism, search behavior, corrupt status, FTS escaping, and vault plaintext exclusion. Done.
 4. Route web search through catalog if available, fallback to existing APIs.
 5. Route `claim list`, `route list`, and visual/artifact search through catalog for large workspaces.
 6. Add MCP catalog tools for agents.
@@ -239,7 +239,6 @@ Required tests:
 
 ## Open Decisions
 
-- Whether to commit `better-sqlite3` now or keep the first catalog prototype behind an optional dependency.
 - Whether the web server should auto-refresh the catalog on startup or only show "catalog stale" until the user/agent runs rebuild.
 - Whether route/claim writer APIs should eventually update the catalog synchronously or enqueue a refresh marker.
 - Whether FTS should include Markdown reports or only canonical JSON summaries.

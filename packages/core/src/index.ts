@@ -564,6 +564,21 @@ export type {
   WorkspaceStressInput,
   WorkspaceStressResult
 } from "./workspace-stress.js";
+export {
+  WORKSPACE_CATALOG_FILE,
+  WORKSPACE_CATALOG_SCHEMA_VERSION,
+  getWorkspaceCatalogStatus,
+  rebuildWorkspaceCatalog,
+  searchWorkspaceCatalog
+} from "./workspace-catalog.js";
+export type {
+  WorkspaceCatalogRebuildInput,
+  WorkspaceCatalogRebuildResult,
+  WorkspaceCatalogSearchInput,
+  WorkspaceCatalogSearchResult,
+  WorkspaceCatalogSearchRow,
+  WorkspaceCatalogStatus
+} from "./workspace-catalog.js";
 export type {
   EngineCapability,
   EngineCapabilityKind,
