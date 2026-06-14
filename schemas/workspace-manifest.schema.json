@@ -82,6 +82,7 @@
         "notebook-runs",
         "code-runs",
         "model-contexts",
+        "visuals",
         "routes"
       ],
       "properties": {
@@ -156,6 +157,9 @@
         },
         "model-contexts": {
           "const": ".truth-harness/model-contexts"
+        },
+        "visuals": {
+          "const": ".truth-harness/visuals"
         },
         "routes": {
           "const": ".truth-harness/routes"

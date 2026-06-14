@@ -6,8 +6,54 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 
-const MAX_JSON_BODY_BYTES = 16 * 1024;
+const MAX_JSON_BODY_BYTES = 128 * 1024;
 const MAX_RESEARCH_MAP_SNAPSHOTS = 100;
+const VISUAL_ARTIFACT_KINDS = new Set([
+  "plot",
+  "proof-tree",
+  "lineage-graph",
+  "mind-map",
+  "concept-map",
+  "simulation-view",
+  "notebook-output",
+  "teaching-animation",
+  "report-figure"
+]);
+const VISUAL_ARTIFACT_RENDERERS = new Set([
+  "truth-harness-native",
+  "plotly",
+  "graphviz",
+  "mermaid",
+  "tldraw",
+  "manim",
+  "sage",
+  "matplotlib",
+  "external-file"
+]);
+const VISUAL_PAYLOAD_FORMATS = new Set([
+  "svg",
+  "plotly-json",
+  "graph-json",
+  "canvas-json",
+  "html",
+  "png-ref",
+  "table-json"
+]);
+const VISUAL_SOURCE_KINDS = new Set([
+  "receipt",
+  "claim",
+  "route",
+  "proof",
+  "smt",
+  "cas",
+  "notebook",
+  "simulation",
+  "experiment",
+  "source",
+  "workspace-graph",
+  "workspace-review",
+  "manual"
+]);
 let coreModulePromise;
 const args = new Map(
   process.argv.slice(2).flatMap((arg, index, values) => {
@@ -138,6 +184,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "agent-runbook",
         "research-session",
         "research-map",
+        "visual-artifacts",
         "validation-plan",
         "engine-manifest",
         "verification-readiness",
@@ -250,6 +297,69 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, 400, error instanceof Error ? error.message : "Research map save failed.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/visuals" && request.method === "GET") {
+    const { listVisualArtifacts } = await loadCoreModule();
+    await ensureLocalWorkspace();
+    const visuals = await listVisualArtifacts(projectRoot);
+    writeJson(response, 200, {
+      schemaVersion: "truth-harness.web-visual-artifacts-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      visuals
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/visuals" && request.method === "POST") {
+    const input = await readJsonBody(request);
+    try {
+      const { writeVisualArtifact } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const result = await writeVisualArtifact(normalizeVisualArtifactInput(input));
+      const visuals = await listVisualArtifactsSafe();
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-visual-artifact-write-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        visual: result.visual,
+        paths: {
+          json: result.jsonPath,
+          markdown: result.markdownPath
+        },
+        visuals,
+        activity: [
+          {
+            actor: "local-api",
+            action: "saved-visual-artifact",
+            detail: `${result.visual.visualId} saved ${result.visual.kind} visual to .truth-harness/visuals without changing any trust label.`,
+            at: result.visual.createdAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Visual artifact save failed.", request);
+    }
+    return;
+  }
+
+  const visualReadMatch = requestUrl.pathname.match(/^\/api\/visuals\/([^/]+)$/u);
+  if (visualReadMatch && request.method === "GET") {
+    try {
+      const { readVisualArtifact } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const visual = await readVisualArtifact(projectRoot, decodeURIComponent(visualReadMatch[1]));
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-visual-artifact-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        visual
+      });
+    } catch (error) {
+      writeApiError(response, 404, error instanceof Error ? error.message : "Visual artifact not found.", request);
     }
     return;
   }
@@ -802,6 +912,127 @@ async function appendResearchMapSnapshot(snapshot) {
   await mkdir(resolve(projectRoot, ".truth-harness", "artifacts"), { recursive: true });
   await writeFile(path, `${JSON.stringify(map, null, 2)}\n`, "utf8");
   return map;
+}
+
+async function listVisualArtifactsSafe() {
+  const { listVisualArtifacts } = await loadCoreModule();
+  try {
+    return await listVisualArtifacts(projectRoot);
+  } catch {
+    return [];
+  }
+}
+
+function normalizeVisualArtifactInput(value) {
+  if (!value || typeof value !== "object") {
+    throw new Error("visual artifact body is required");
+  }
+
+  const renderer = value.renderer && typeof value.renderer === "object" ? value.renderer : {};
+  return {
+    rootPath: projectRoot,
+    title: boundedText(value.title, "Untitled visual artifact", 180),
+    kind: parseVisualArtifactKind(optionalText(value.kind) ?? "plot"),
+    renderer: {
+      engine: parseVisualArtifactRenderer(optionalText(renderer.engine) ?? optionalText(value.renderer) ?? "truth-harness-native"),
+      engineVersion: optionalText(renderer.engineVersion),
+      adapter: optionalText(renderer.adapter) ?? "truth-harness-web",
+      adapterVersion: optionalText(renderer.adapterVersion)
+    },
+    sourceRefs: visualSourceRefList(value.sourceRefs),
+    replayCommand: optionalText(value.replayCommand),
+    payload: normalizeVisualPayload(value.payload),
+    data: normalizeVisualDataTable(value.data),
+    tags: stringList(value.tags).slice(0, 32),
+    warnings: stringList(value.warnings).slice(0, 16)
+  };
+}
+
+function normalizeVisualPayload(value) {
+  if (!value || typeof value !== "object") {
+    throw new Error("payload is required");
+  }
+  if (!("content" in value)) {
+    throw new Error("payload.content is required");
+  }
+
+  return {
+    format: parseVisualPayloadFormat(optionalText(value.format) ?? "svg"),
+    content: value.content,
+    contentRef: optionalText(value.contentRef),
+    width: positiveNumberOrUndefined(value.width),
+    height: positiveNumberOrUndefined(value.height)
+  };
+}
+
+function normalizeVisualDataTable(value) {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const columns = stringList(value.columns).slice(0, 32);
+  const rows = tupleRows(value.rows, 400, 32, 260);
+  if (columns.length === 0 && rows.length === 0) {
+    return undefined;
+  }
+
+  return {
+    columns,
+    rows
+  };
+}
+
+function visualSourceRefList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .slice(0, 64)
+    .filter((item) => item && typeof item === "object")
+    .map((item) => ({
+      kind: parseVisualSourceKind(optionalText(item.kind) ?? "manual"),
+      ref: boundedText(item.ref, "", 260),
+      label: optionalText(item.label)
+    }))
+    .filter((item) => item.ref);
+}
+
+function parseVisualArtifactKind(value) {
+  if (VISUAL_ARTIFACT_KINDS.has(value)) {
+    return value;
+  }
+
+  throw new Error(`Unsupported visual artifact kind: ${value}`);
+}
+
+function parseVisualArtifactRenderer(value) {
+  if (VISUAL_ARTIFACT_RENDERERS.has(value)) {
+    return value;
+  }
+
+  throw new Error(`Unsupported visual renderer: ${value}`);
+}
+
+function parseVisualPayloadFormat(value) {
+  if (VISUAL_PAYLOAD_FORMATS.has(value)) {
+    return value;
+  }
+
+  throw new Error(`Unsupported visual payload format: ${value}`);
+}
+
+function parseVisualSourceKind(value) {
+  if (VISUAL_SOURCE_KINDS.has(value)) {
+    return value;
+  }
+
+  throw new Error(`Unsupported visual source kind: ${value}`);
+}
+
+function positiveNumberOrUndefined(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : undefined;
 }
 
 function normalizeResearchMapSnapshot(value) {

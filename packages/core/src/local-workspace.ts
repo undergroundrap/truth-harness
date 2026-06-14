@@ -32,6 +32,7 @@ export type LocalWorkspaceDirectory =
   | "notebook-runs"
   | "code-runs"
   | "model-contexts"
+  | "visuals"
   | "routes";
 
 export interface LocalWorkspaceManifest {
@@ -75,6 +76,7 @@ const DEFAULT_WORKSPACE_DIRECTORIES: Record<LocalWorkspaceDirectory, string> = {
   "notebook-runs": ".truth-harness/notebook-runs",
   "code-runs": ".truth-harness/code-runs",
   "model-contexts": ".truth-harness/model-contexts",
+  visuals: ".truth-harness/visuals",
   routes: ".truth-harness/routes"
 };
 

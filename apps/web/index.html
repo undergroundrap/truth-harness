@@ -275,7 +275,7 @@
                     <button class="text-button compact-button" id="visual-zoom-reset" type="button">100%</button>
                     <button class="text-button compact-button icon-button" id="visual-zoom-in" type="button" aria-label="Zoom in">+</button>
                     <button class="text-button compact-button" id="visual-zoom-fit" type="button">Fit</button>
-                    <button class="text-button compact-button" id="save-research-map" type="button">Save map</button>
+                    <button class="text-button compact-button" id="save-research-map" type="button">Save visual</button>
                     <button class="text-button compact-button" id="copy-plot-data" type="button">Copy data</button>
                     <button class="text-button compact-button" id="download-plot-data" type="button">Download CSV</button>
                     <button class="text-button compact-button" id="download-plot-svg" type="button">Download SVG</button>
@@ -300,6 +300,13 @@
                     <dl class="plot-facts" id="plot-facts"></dl>
                     <section class="plot-node-inspector" id="plot-node-inspector" aria-label="Selected research map node"></section>
                     <div class="plot-data" id="plot-data" aria-label="Exact visual data"></div>
+                    <section class="research-map-history" aria-label="Saved visual artifacts">
+                      <div class="research-map-history-header">
+                        <h5>Visual Artifacts</h5>
+                        <button class="text-button compact-button" id="refresh-visual-artifacts" type="button">Refresh</button>
+                      </div>
+                      <div class="research-map-list" id="visual-artifact-list"></div>
+                    </section>
                     <section class="research-map-history" aria-label="Saved research maps">
                       <div class="research-map-history-header">
                         <h5>Saved Maps</h5>

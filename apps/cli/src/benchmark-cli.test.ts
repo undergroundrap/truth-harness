@@ -39,6 +39,63 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.crossCheckedRequiresIndependentRun).toBe(true);
   });
 
+  it("writes and reopens visual artifacts from the CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--name", "Visual CLI Lab"]);
+
+    const created = JSON.parse(
+      (
+        await runCli([
+          "visual",
+          "create",
+          "Exact fraction visual",
+          "--workspace",
+          root,
+          "--kind",
+          "concept-map",
+          "--renderer",
+          "truth-harness-native",
+          "--source",
+          "manual:cli-visual-test",
+          "--payload-format",
+          "svg",
+          "--payload-text",
+          "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 320 180\"><text x=\"20\" y=\"40\">3/4 + 5/8 = 11/8</text></svg>",
+          "--tag",
+          "fractions",
+          "--json"
+        ])
+      ).stdout
+    ) as {
+      visual: { schemaVersion: string; visualId: string; kind: string; trustBoundary: { visualDoesNotUpgradeTrust: boolean } };
+      jsonPath: string;
+      markdownPath: string;
+    };
+    const listed = JSON.parse((await runCli(["visual", "list", root, "--json"])).stdout) as {
+      total: number;
+      visuals: Array<{ visualId: string; kind: string; renderer: string }>;
+    };
+    const shown = JSON.parse(
+      (await runCli(["visual", "show", created.visual.visualId, "--workspace", root, "--json"])).stdout
+    ) as { visualId: string; payload: { format: string }; warnings: string[] };
+
+    expect(created.visual.schemaVersion).toBe("truth-harness.visual-artifact.v0");
+    expect(created.visual.visualId).toMatch(/^vis_[a-f0-9]{16}$/u);
+    expect(created.visual.kind).toBe("concept-map");
+    expect(created.visual.trustBoundary.visualDoesNotUpgradeTrust).toBe(true);
+    expect(created.jsonPath).toContain(".truth-harness");
+    expect(created.markdownPath).toContain(".truth-harness");
+    expect(listed.total).toBe(1);
+    expect(listed.visuals[0]).toMatchObject({
+      visualId: created.visual.visualId,
+      kind: "concept-map",
+      renderer: "truth-harness-native"
+    });
+    expect(shown.visualId).toBe(created.visual.visualId);
+    expect(shown.payload.format).toBe("svg");
+    expect(shown.warnings.join("\n")).toContain("not proof by themselves");
+  });
+
   it("runs the demo gauntlet and writes a shareable HTML report", async () => {
     const root = await tempRoot();
     const reportPath = join(root, "truth-harness-demo-report.html");

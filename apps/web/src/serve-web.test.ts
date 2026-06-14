@@ -45,11 +45,12 @@ describe("local web route ledger API", () => {
     expect(statusPayload.externalCalls).toBe(false);
     expect(statusPayload.capabilities).toContain("docker-verifier-guidance");
     expect(statusPayload.capabilities).toContain("research-map");
+    expect(statusPayload.capabilities).toContain("visual-artifacts");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
       sameOriginWritesOnly: true,
       securityHeaders: true,
-      maxJsonBodyBytes: 16 * 1024,
+      maxJsonBodyBytes: 128 * 1024,
       apiErrorFormat: "json"
     });
     expect(statusPayload.dockerVerifier).toMatchObject({
@@ -290,6 +291,89 @@ describe("local web route ledger API", () => {
     expect(mapReadPayload.externalCalls).toEqual([]);
     expect(mapReadPayload.map.snapshots).toHaveLength(1);
     expect(mapReadPayload.map.snapshots[0].snapshotId).toBe(mapPayload.snapshot.snapshotId);
+
+    const visualResponse = await fetch(`${baseUrl}/api/visuals`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: "Exact fraction concept map",
+        kind: "concept-map",
+        renderer: {
+          engine: "truth-harness-native"
+        },
+        sourceRefs: [
+          {
+            kind: "receipt",
+            ref: receiptPayload.receiptPaths.ref,
+            label: "Exact arithmetic receipt"
+          }
+        ],
+        replayCommand: "truth-harness visual list .",
+        payload: {
+          format: "svg",
+          content: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 320 180\"><text x=\"20\" y=\"40\">3/4 + 5/8 = 11/8</text></svg>",
+          width: 320,
+          height: 180
+        },
+        data: {
+          columns: ["node", "value"],
+          rows: [["verified-output", "11/8"]]
+        },
+        tags: ["math", "visuals"]
+      })
+    });
+    expect(visualResponse.status).toBe(200);
+    const visualPayload = await visualResponse.json();
+    expectLocalApiSuccess(visualResponse, visualPayload);
+    expect(visualPayload.localOnly).toBe(true);
+    expect(visualPayload.externalCalls).toEqual([]);
+    expect(visualPayload.visual).toMatchObject({
+      schemaVersion: "truth-harness.visual-artifact.v0",
+      kind: "concept-map",
+      renderer: {
+        engine: "truth-harness-native"
+      },
+      trustBoundary: {
+        visualIsEvidence: true,
+        visualDoesNotUpgradeTrust: true,
+        sourceArtifactsRemainAuthoritative: true
+      }
+    });
+    expect(visualPayload.visual.visualId).toMatch(/^vis_[a-f0-9]{16}$/u);
+    expect(visualPayload.visual.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        kind: "receipt",
+        ref: receiptPayload.receiptPaths.ref
+      })
+    );
+    expect(visualPayload.paths.json).toContain(".truth-harness");
+    expect(existsSync(visualPayload.paths.json)).toBe(true);
+    expect(existsSync(visualPayload.paths.markdown)).toBe(true);
+    expect(visualPayload.visuals).toContainEqual(
+      expect.objectContaining({
+        visualId: visualPayload.visual.visualId,
+        kind: "concept-map"
+      })
+    );
+
+    const visualListResponse = await fetch(`${baseUrl}/api/visuals`);
+    expect(visualListResponse.status).toBe(200);
+    const visualListPayload = await visualListResponse.json();
+    expectLocalApiSuccess(visualListResponse, visualListPayload);
+    expect(visualListPayload.visuals).toContainEqual(
+      expect.objectContaining({
+        visualId: visualPayload.visual.visualId,
+        renderer: "truth-harness-native"
+      })
+    );
+
+    const visualReadResponse = await fetch(`${baseUrl}/api/visuals/${visualPayload.visual.visualId}`);
+    expect(visualReadResponse.status).toBe(200);
+    const visualReadPayload = await visualReadResponse.json();
+    expectLocalApiSuccess(visualReadResponse, visualReadPayload);
+    expect(visualReadPayload.visual.visualId).toBe(visualPayload.visual.visualId);
 
     const routeResponse = await fetch(`${baseUrl}/api/routes/${receiptPayload.route.routeId}`);
     expect(routeResponse.status).toBe(200);
@@ -612,7 +696,7 @@ describe("local web safety guard", () => {
         Origin: `http://127.0.0.1:${port}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ problem: "x".repeat(17_000) })
+      body: JSON.stringify({ problem: "x".repeat(132_000) })
     });
     expectLocalApiError(oversizedJson, 413, "JSON body too large", {
       method: "POST",

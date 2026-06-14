@@ -49,6 +49,7 @@ describe("local workspace", () => {
     expect(manifest.directories["notebook-runs"]).toBe(".truth-harness/notebook-runs");
     expect(manifest.directories["code-runs"]).toBe(".truth-harness/code-runs");
     expect(manifest.directories["model-contexts"]).toBe(".truth-harness/model-contexts");
+    expect(manifest.directories.visuals).toBe(".truth-harness/visuals");
     expect(manifest.directories.routes).toBe(".truth-harness/routes");
     expect(manifest.policies.externalCalls).toBe("disabled-by-default");
     expect(manifest.policies.disclosure).toBe("required-for-external-calls");

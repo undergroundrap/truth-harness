@@ -241,6 +241,8 @@ let researchMap = {
   snapshots: [],
   warnings: []
 };
+let visualArtifacts = [];
+let selectedVisualArtifactRecord;
 const recentReceiptKeys = ["rational", "denominator", "parity", "dimension"];
 const ACTIVITY_PAGE_SIZE = 12;
 const LEDGER_PAGE_SIZE = 8;
@@ -277,6 +279,7 @@ const state = {
   routeHistoryQuery: "",
   selectedResearchMapSnapshotId: undefined,
   selectedResearchMapNodeId: undefined,
+  selectedVisualArtifactId: undefined,
   visualDetailCollapsed: true,
   visualFocus: false,
   visualZoom: 1,
@@ -443,6 +446,8 @@ const researchMapStatus = document.querySelector("#research-map-status");
 const saveResearchMapButton = document.querySelector("#save-research-map");
 const refreshResearchMapButton = document.querySelector("#refresh-research-map");
 const researchMapList = document.querySelector("#research-map-list");
+const refreshVisualArtifactsButton = document.querySelector("#refresh-visual-artifacts");
+const visualArtifactList = document.querySelector("#visual-artifact-list");
 const copyPlotDataButton = document.querySelector("#copy-plot-data");
 const downloadPlotDataButton = document.querySelector("#download-plot-data");
 const downloadPlotSvgButton = document.querySelector("#download-plot-svg");
@@ -1050,6 +1055,7 @@ void refreshWorkspaceReadiness();
 void refreshClaimLedger();
 void refreshRouteLedger();
 void refreshResearchMap();
+void refreshVisualArtifacts();
 void refreshWorkspaceReview();
 void refreshWorkspaceGraph();
 void refreshCasChecks();
@@ -1346,12 +1352,21 @@ function renderMathPlot(receipt) {
   }
 
   const selectedMapSnapshot = selectedResearchMapSnapshot();
-  const plot = selectedMapSnapshot ? createSavedResearchMapVisualModel(selectedMapSnapshot) : createVisualModel(receipt, state.visualMode);
+  const selectedVisualArtifact = selectedVisualArtifactRecord?.visualId === state.selectedVisualArtifactId
+    ? selectedVisualArtifactRecord
+    : undefined;
+  const plot = selectedVisualArtifact
+    ? createSavedVisualArtifactModel(selectedVisualArtifact)
+    : selectedMapSnapshot
+      ? createSavedResearchMapVisualModel(selectedMapSnapshot)
+      : createVisualModel(receipt, state.visualMode);
   if (plotKind) {
     plotKind.textContent = plot.kind;
   }
   if (researchMapStatus) {
-    researchMapStatus.textContent = selectedMapSnapshot
+    researchMapStatus.textContent = selectedVisualArtifact
+      ? `${selectedVisualArtifact.visualId} opened from visuals ledger`
+      : selectedMapSnapshot
       ? `${selectedMapSnapshot.snapshotId} opened from local map`
       : `${plot.kind} can be saved locally`;
   }
@@ -1359,6 +1374,7 @@ function renderMathPlot(receipt) {
   plotCaption.textContent = plot.caption;
   plotCanvas.innerHTML = plot.svg;
   plotCanvas.dataset.visualMode = state.visualMode;
+  plotCanvas.dataset.visualArtifact = selectedVisualArtifact?.visualId ?? "";
   plotCanvas.dataset.savedMapSnapshot = selectedMapSnapshot?.snapshotId ?? "";
   if (state.surface === "plot" && state.visualFitPending) {
     fitVisualToCanvas({ activity: false });
@@ -1377,6 +1393,7 @@ function renderMathPlot(receipt) {
     button.classList.toggle("active", active);
     button.setAttribute("aria-selected", String(active));
   });
+  renderVisualArtifactHistory();
   renderResearchMapHistory();
 }
 
@@ -2695,6 +2712,70 @@ function createSavedResearchMapVisualModel(snapshot) {
   };
 }
 
+function createSavedVisualArtifactModel(artifact) {
+  const payload = artifact.payload ?? {};
+  const content = payload.content;
+  const svg = payload.format === "svg" && typeof content === "string" && isSafeLocalSvg(content)
+    ? content
+    : savedVisualArtifactPlaceholderSvg(artifact);
+  const sourceRows = (artifact.sourceRefs ?? []).map((ref) => [
+    `${ref.kind}:${ref.ref}`,
+    ref.label ?? "source ref",
+    "sourceRefs"
+  ]);
+
+  return {
+    kind: `saved ${artifact.kind ?? "visual"}`,
+    title: artifact.title ?? "Saved Visual Artifact",
+    caption: `Saved visual artifact ${artifact.visualId ?? "unknown"} loaded from .truth-harness/visuals. Visuals are evidence views and do not upgrade source trust labels.`,
+    svg,
+    facts: [
+      ["Visual", artifact.visualId ?? "unknown"],
+      ["Kind", artifact.kind ?? "visual"],
+      ["Renderer", artifact.renderer?.engine ?? "unknown"],
+      ["Payload", payload.format ?? "unknown"],
+      ["Sources", String((artifact.sourceRefs ?? []).length)],
+      ["Network", artifact.privacy?.networkAccess ?? "none"]
+    ],
+    dataColumns: artifact.data?.columns?.length ? artifact.data.columns : ["field", "value", "source"],
+    dataRows: artifact.data?.rows?.length
+      ? artifact.data.rows
+      : [
+        ["title", artifact.title ?? "Saved Visual Artifact", "visual.title"],
+        ["renderer", artifact.renderer?.engine ?? "unknown", "visual.renderer"],
+        ["payload", payload.format ?? "unknown", "visual.payload"],
+        ...sourceRows
+      ],
+    mapNodes: [],
+    mapEdges: [],
+    sourceVisualMode: "visual-artifact"
+  };
+}
+
+function isSafeLocalSvg(value) {
+  const trimmed = value.trim();
+  return trimmed.startsWith("<svg")
+    && !/<script[\s>]/iu.test(trimmed)
+    && !/\son[a-z]+\s*=/iu.test(trimmed)
+    && !/javascript:/iu.test(trimmed);
+}
+
+function savedVisualArtifactPlaceholderSvg(artifact) {
+  const width = 980;
+  const height = 540;
+  const payload = artifact.payload ?? {};
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Saved visual artifact placeholder">
+    <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+    <rect x="64" y="82" width="852" height="324" rx="14" fill="#141312" stroke="#2d2b28" />
+    <text x="96" y="136" fill="#f2f2ee" font-size="26" font-weight="760">${escapeXml(artifact.title ?? "Saved Visual Artifact")}</text>
+    <text x="96" y="176" fill="#aaa59d" font-size="15">${escapeXml(artifact.visualId ?? "visual artifact")} - ${escapeXml(artifact.kind ?? "visual")}</text>
+    <text x="96" y="236" fill="#dfd7ca" font-size="18" font-weight="700">Renderer: ${escapeXml(artifact.renderer?.engine ?? "unknown")}</text>
+    <text x="96" y="278" fill="#dfd7ca" font-size="18" font-weight="700">Payload: ${escapeXml(payload.format ?? "unknown")}</text>
+    <text x="96" y="334" fill="#aaa59d" font-size="14">This payload is saved and replayable, but the web viewer needs a dedicated renderer before drawing it.</text>
+    <text x="96" y="366" fill="#aaa59d" font-size="14">The source artifact remains authoritative; this visual does not upgrade any trust label.</text>
+  </svg>`;
+}
+
 function layoutResearchMapNodes(nodes) {
   const safeNodes = nodes.length > 0
     ? nodes
@@ -2765,6 +2846,32 @@ function renderResearchMapHistory() {
           <strong>${escapeHtml(title)}</strong>
           <small>${escapeHtml(snapshot.kind ?? "map")} - ${escapeHtml(formatActivityTime(snapshot.createdAt))}</small>
           <small>${escapeHtml(receipt)} - ${nodeCount} nodes / ${edgeCount} edges</small>
+        </span>
+      </button>`;
+    })
+    .join("");
+}
+
+function renderVisualArtifactHistory() {
+  if (!visualArtifactList) {
+    return;
+  }
+
+  if (visualArtifacts.length === 0) {
+    visualArtifactList.innerHTML = `<div class="activity-empty">No saved visual artifacts yet. Save a visual to create a replayable .truth-harness/visuals record.</div>`;
+    return;
+  }
+
+  visualArtifactList.innerHTML = visualArtifacts
+    .slice(0, 8)
+    .map((artifact) => {
+      const active = artifact.visualId === state.selectedVisualArtifactId;
+      const sources = Array.isArray(artifact.sourceRefs) ? artifact.sourceRefs.length : 0;
+      return `<button class="research-map-row ${active ? "active" : ""}" data-visual-artifact-id="${escapeHtml(artifact.visualId)}" type="button">
+        <span>
+          <strong>${escapeHtml(artifact.title ?? artifact.visualId)}</strong>
+          <small>${escapeHtml(artifact.kind ?? "visual")} - ${escapeHtml(artifact.renderer ?? "renderer")} - ${escapeHtml(formatActivityTime(artifact.createdAt))}</small>
+          <small>${sources} source ref${sources === 1 ? "" : "s"} - ${escapeHtml((artifact.tags ?? []).map((tag) => `#${tag}`).join(" ") || "no tags")}</small>
         </span>
       </button>`;
     })
@@ -3229,10 +3336,20 @@ async function saveCurrentResearchMap() {
     const payload = await readLocalApiJson(response, "Local research map API failed.");
     const savedSnapshot = payload.snapshot ?? snapshot;
     applyResearchMapPayload(payload);
+    let visualSavedMessage = "";
+    try {
+      const visualPayload = await saveCurrentVisualArtifactRecord(receipt, plot);
+      visualSavedMessage = `; visual artifact ${visualPayload.visual?.visualId ?? "saved"} also written`;
+      for (const item of visualPayload.activity ?? []) {
+        addActivity(item.actor, item.action, item.detail, "passed", item.at);
+      }
+    } catch (error) {
+      addActivity("web-ui", "Visual artifact save failed", error instanceof Error ? error.message : "Unknown visual artifact failure.", "waiting");
+    }
     updateLatestActivity(
       "Saving research map",
       "passed",
-      localApiSuccessMessage(payload, `${savedSnapshot.snapshotId ?? "map snapshot"} saved to ${payload.paths?.json ?? ".truth-harness/artifacts/research-map.json"}`)
+      localApiSuccessMessage(payload, `${savedSnapshot.snapshotId ?? "map snapshot"} saved to ${payload.paths?.json ?? ".truth-harness/artifacts/research-map.json"}${visualSavedMessage}`)
     );
     for (const item of payload.activity ?? []) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
@@ -3242,6 +3359,7 @@ async function saveCurrentResearchMap() {
       researchMapStatus.textContent = `${snapshotCount} saved map snapshot${snapshotCount === 1 ? "" : "s"}`;
     }
     renderResearchMapHistory();
+    renderVisualArtifactHistory();
     saved = true;
   } catch (error) {
     updateLatestActivity("Saving research map", "refuted", error instanceof Error ? error.message : "Unknown research map failure.");
@@ -3251,7 +3369,7 @@ async function saveCurrentResearchMap() {
   } finally {
     if (saveResearchMapButton) {
       saveResearchMapButton.disabled = false;
-      saveResearchMapButton.textContent = previousText ?? "Save map";
+      saveResearchMapButton.textContent = previousText ?? "Save visual";
       if (saved) {
         flashButtonText(saveResearchMapButton, "Saved");
       }
@@ -3288,6 +3406,81 @@ function createResearchMapSnapshot(receipt, plot) {
     tags: receiptTags(receipt),
     localOnly: true,
     networkAccess: "none"
+  };
+}
+
+async function saveCurrentVisualArtifactRecord(receipt, plot) {
+  const response = await fetch("/api/visuals", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(createVisualArtifactRequest(receipt, plot))
+  });
+  const payload = await readLocalApiJson(response, "Local visual artifact API failed.");
+  applyVisualArtifactsPayload(payload);
+  return payload;
+}
+
+function createVisualArtifactRequest(receipt, plot) {
+  const dimensions = visualSvgDimensions(plot.svg);
+  return {
+    title: `${receipt.title} - ${plot.kind}`,
+    kind: visualArtifactKindForMode(state.visualMode),
+    renderer: {
+      engine: "truth-harness-native"
+    },
+    sourceRefs: visualSourceRefsForReceipt(receipt),
+    replayCommand: `truth-harness visual list .`,
+    payload: {
+      format: "svg",
+      content: plot.svg,
+      width: dimensions.width,
+      height: dimensions.height
+    },
+    data: {
+      columns: plot.dataColumns ?? [],
+      rows: plot.dataRows ?? []
+    },
+    tags: [...receiptTags(receipt), "visual", state.visualMode]
+  };
+}
+
+function visualArtifactKindForMode(mode) {
+  if (mode === "mind-map") {
+    return "mind-map";
+  }
+  if (mode === "concept-map" || mode === "equation-map") {
+    return "concept-map";
+  }
+  if (mode === "step-flow") {
+    return "lineage-graph";
+  }
+  if (mode === "trust-ladder") {
+    return "proof-tree";
+  }
+  return "plot";
+}
+
+function visualSourceRefsForReceipt(receipt) {
+  if (receipt.receiptPaths?.ref) {
+    return [{ kind: "receipt", ref: receipt.receiptPaths.ref, label: "Local receipt JSON" }];
+  }
+  if (receipt.receiptPaths?.json) {
+    return [{ kind: "receipt", ref: receipt.receiptPaths.json, label: "Local receipt JSON" }];
+  }
+  if (receipt.verifierRoute?.routeId) {
+    return [{ kind: "route", ref: receipt.verifierRoute.routeId, label: "Verifier route" }];
+  }
+  return [{ kind: "manual", ref: `built-in-demo:${receipt.runId}`, label: "Built-in demo receipt" }];
+}
+
+function visualSvgDimensions(svg) {
+  const match = String(svg).match(/viewBox="([^"]+)"/u);
+  const parts = match?.[1]?.split(/\s+/u).map(Number) ?? [];
+  return {
+    width: Number.isFinite(parts[2]) && parts[2] > 0 ? Math.round(parts[2]) : 980,
+    height: Number.isFinite(parts[3]) && parts[3] > 0 ? Math.round(parts[3]) : 560
   };
 }
 
@@ -4687,12 +4880,65 @@ async function refreshResearchMap({ announce = true } = {}) {
   }
 }
 
+async function refreshVisualArtifacts({ announce = true } = {}) {
+  try {
+    const response = await fetch("/api/visuals", {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local visual artifact API failed.");
+    applyVisualArtifactsPayload(payload);
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded visual artifacts",
+        localApiSuccessMessage(payload, `${visualArtifacts.length} saved visual artifact${visualArtifacts.length === 1 ? "" : "s"} available.`),
+        "passed"
+      );
+    }
+    render();
+  } catch (error) {
+    if (visualArtifactList) {
+      visualArtifactList.innerHTML = `<div class="activity-empty">Saved visual artifacts unavailable from the local API.</div>`;
+    }
+    addActivity("local-api", "Visual artifacts unavailable", error instanceof Error ? error.message : "Unknown visual artifact failure.", "waiting");
+  }
+}
+
+async function openVisualArtifact(visualId) {
+  const response = await fetch(`/api/visuals/${encodeURIComponent(visualId)}`, {
+    method: "GET",
+    cache: "no-store"
+  });
+  const payload = await readLocalApiJson(response, "Local visual artifact API failed.");
+  applyVisualArtifactsPayload(payload);
+  state.selectedVisualArtifactId = payload.visual?.visualId;
+  state.selectedResearchMapSnapshotId = undefined;
+  state.selectedResearchMapNodeId = undefined;
+  state.surface = "plot";
+  requestVisualFit();
+  addActivity("human", "Opened visual artifact", `${payload.visual?.visualId ?? visualId} loaded from .truth-harness/visuals.`, "passed");
+  render();
+  resetActiveSurfaceScroll();
+}
+
 function applyResearchMapPayload(payload) {
   researchMap = payload.map ?? researchMap;
   const snapshots = researchMap.snapshots ?? [];
   if (state.selectedResearchMapSnapshotId && !snapshots.some((snapshot) => snapshot.snapshotId === state.selectedResearchMapSnapshotId)) {
     state.selectedResearchMapSnapshotId = undefined;
     state.selectedResearchMapNodeId = undefined;
+  }
+}
+
+function applyVisualArtifactsPayload(payload) {
+  visualArtifacts = Array.isArray(payload.visuals) ? payload.visuals : visualArtifacts;
+  if (payload.visual?.visualId) {
+    selectedVisualArtifactRecord = payload.visual;
+  }
+  if (state.selectedVisualArtifactId && !visualArtifacts.some((artifact) => artifact.visualId === state.selectedVisualArtifactId)) {
+    state.selectedVisualArtifactId = undefined;
+    selectedVisualArtifactRecord = undefined;
   }
 }
 
@@ -9299,6 +9545,8 @@ visualModeButtons.forEach((button) => {
 
     state.selectedResearchMapSnapshotId = undefined;
     state.selectedResearchMapNodeId = undefined;
+    state.selectedVisualArtifactId = undefined;
+    selectedVisualArtifactRecord = undefined;
     requestVisualFit();
     state.visualMode = nextMode;
     state.surface = "plot";
@@ -9396,6 +9644,10 @@ downloadRouteLedgerButton.addEventListener("click", downloadRouteLedgerPacket);
 
 refreshResearchMapButton.addEventListener("click", () => {
   void refreshResearchMap();
+});
+
+refreshVisualArtifactsButton?.addEventListener("click", () => {
+  void refreshVisualArtifacts();
 });
 
 plotCanvas.addEventListener(
@@ -9537,6 +9789,8 @@ researchMapList.addEventListener("click", (event) => {
 
   state.selectedResearchMapSnapshotId = button.dataset.mapSnapshotId;
   state.selectedResearchMapNodeId = undefined;
+  state.selectedVisualArtifactId = undefined;
+  selectedVisualArtifactRecord = undefined;
   state.surface = "plot";
   requestVisualFit();
   addActivity("human", "Opened saved research map", `${button.dataset.mapSnapshotId} loaded from local map history.`, "passed");
@@ -9544,9 +9798,20 @@ researchMapList.addEventListener("click", (event) => {
   resetActiveSurfaceScroll();
 });
 
+visualArtifactList?.addEventListener("click", (event) => {
+  const button = event.target.closest(".research-map-row");
+  if (!button?.dataset.visualArtifactId) {
+    return;
+  }
+
+  openVisualArtifact(button.dataset.visualArtifactId).catch((error) => {
+    addActivity("web-ui", "Open visual artifact failed", error instanceof Error ? error.message : "Unknown visual artifact failure.", "refuted");
+  });
+});
+
 saveResearchMapButton.addEventListener("click", () => {
   saveCurrentResearchMap().catch((error) => {
-    addActivity("web-ui", "Research map save failed", error instanceof Error ? error.message : "Unknown research map failure.", "refuted");
+    addActivity("web-ui", "Visual save failed", error instanceof Error ? error.message : "Unknown visual save failure.", "refuted");
   });
 });
 

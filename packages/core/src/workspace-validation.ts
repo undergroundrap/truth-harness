@@ -267,6 +267,13 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
     idKey: "routeId",
     required: true
   },
+  visuals: {
+    kind: "visuals",
+    schemaVersion: "truth-harness.visual-artifact.v0",
+    schemaFile: "visual-artifact.schema.json",
+    idKey: "visualId",
+    required: true
+  },
   artifacts: {
     kind: "artifacts"
   },
@@ -843,6 +850,11 @@ function collectWorkspaceReferences(value: unknown, sourcePath: string): Workspa
         continue;
       }
 
+      if (key === "sourceRefs" && Array.isArray(entry)) {
+        collectSourceRefArray(entry, sourcePath, entryPath, refs);
+        continue;
+      }
+
       if (key === "snapshotRefs" && Array.isArray(entry)) {
         collectStringRefs(entry, sourcePath, entryPath, "snapshot", refs);
         continue;
@@ -887,6 +899,26 @@ function collectEvidenceRefArray(
     if (typeof entry === "string") {
       refs.push(parseStringReference(entry, sourcePath, entryPath));
     }
+  });
+}
+
+function collectSourceRefArray(
+  values: unknown[],
+  sourcePath: string,
+  fieldPath: string,
+  refs: WorkspaceReference[]
+): void {
+  values.forEach((entry, index) => {
+    if (!isRecord(entry) || typeof entry.ref !== "string") {
+      return;
+    }
+
+    refs.push({
+      sourcePath,
+      fieldPath: `${fieldPath}[${index}]`,
+      kind: typeof entry.kind === "string" ? entry.kind : undefined,
+      ref: entry.ref
+    });
   });
 }
 
@@ -1007,6 +1039,9 @@ function kindToArtifactKind(kind: string | undefined): WorkspaceValidationArtifa
       return "patents";
     case "model-context":
       return "model-contexts";
+    case "visual":
+    case "visual-artifact":
+      return "visuals";
     case "route":
     case "verifier-route":
       return "routes";

@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/visual-artifact.schema.json",
+  "title": "Truth Harness Visual Artifact",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "visualId",
+    "projectId",
+    "createdAt",
+    "updatedAt",
+    "title",
+    "kind",
+    "renderer",
+    "sourceRefs",
+    "replayCommand",
+    "payload",
+    "tags",
+    "privacy",
+    "trustBoundary",
+    "warnings",
+    "markdown"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.visual-artifact.v0"
+    },
+    "visualId": {
+      "type": "string",
+      "pattern": "^vis_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^(?:tw|th)_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "$ref": "#/$defs/kind"
+    },
+    "renderer": {
+      "$ref": "#/$defs/renderer"
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      }
+    },
+    "replayCommand": {
+      "type": "string",
+      "minLength": 1
+    },
+    "payload": {
+      "$ref": "#/$defs/payload"
+    },
+    "data": {
+      "$ref": "#/$defs/dataTable"
+    },
+    "tags": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "trustBoundary": {
+      "type": "object",
+      "required": ["visualIsEvidence", "visualDoesNotUpgradeTrust", "sourceArtifactsRemainAuthoritative"],
+      "properties": {
+        "visualIsEvidence": {
+          "const": true
+        },
+        "visualDoesNotUpgradeTrust": {
+          "const": true
+        },
+        "sourceArtifactsRemainAuthoritative": {
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "markdown": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "kind": {
+      "enum": [
+        "plot",
+        "proof-tree",
+        "lineage-graph",
+        "mind-map",
+        "concept-map",
+        "simulation-view",
+        "notebook-output",
+        "teaching-animation",
+        "report-figure"
+      ]
+    },
+    "rendererEngine": {
+      "enum": [
+        "truth-harness-native",
+        "plotly",
+        "graphviz",
+        "mermaid",
+        "tldraw",
+        "manim",
+        "sage",
+        "matplotlib",
+        "external-file"
+      ]
+    },
+    "renderer": {
+      "type": "object",
+      "required": ["engine"],
+      "properties": {
+        "engine": {
+          "$ref": "#/$defs/rendererEngine"
+        },
+        "engineVersion": {
+          "type": "string"
+        },
+        "adapter": {
+          "type": "string"
+        },
+        "adapterVersion": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "payloadFormat": {
+      "enum": [
+        "svg",
+        "plotly-json",
+        "graph-json",
+        "canvas-json",
+        "html",
+        "png-ref",
+        "table-json"
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "required": ["format", "content"],
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/payloadFormat"
+        },
+        "content": true,
+        "contentRef": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "sourceKind": {
+      "enum": [
+        "receipt",
+        "claim",
+        "route",
+        "proof",
+        "smt",
+        "cas",
+        "notebook",
+        "simulation",
+        "experiment",
+        "source",
+        "workspace-graph",
+        "workspace-review",
+        "manual"
+      ]
+    },
+    "sourceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/sourceKind"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dataTable": {
+      "type": "object",
+      "required": ["columns", "rows"],
+      "properties": {
+        "columns": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "const": "local-only"
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "const": "none"
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "const": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

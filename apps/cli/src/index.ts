@@ -78,6 +78,7 @@ import {
   listSmtChecks,
   listValidationPlans,
   listVerifierRoutes,
+  listVisualArtifacts,
   listWorkspaceReviews,
   listWorkspaceSnapshots,
   listVaultEntries,
@@ -86,6 +87,7 @@ import {
   parseBenchmarkRunRecordJson,
   readClaimRecord,
   readResearchSession,
+  readVisualArtifact,
   readWorkspaceReview,
   readVerifierRoute,
   renderReceipt,
@@ -102,6 +104,7 @@ import {
   createWorkspaceReview,
   createWorkspaceRunNextPlan,
   createWorkspaceGraph,
+  writeVisualArtifact,
   updateResearchSessionTask,
   validateWorkspaceArtifacts,
   verifyVaultEntry,
@@ -241,6 +244,14 @@ import {
   type WorkspaceReview,
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
+  type VisualArtifact,
+  type VisualArtifactKind,
+  type VisualArtifactPayloadFormat,
+  type VisualArtifactRenderer,
+  type VisualArtifactSourceKind,
+  type VisualArtifactSourceRef,
+  type VisualArtifactSummary,
+  type VisualArtifactWriteResult,
   type WorkspaceStressResult,
   type SympyOperation
 } from "@truth-harness/core";
@@ -419,6 +430,112 @@ route
       printVerifierRouteSatisfaction(result);
     }
   );
+
+const visual = program.command("visual").description("Manage replayable visual artifacts in the local workspace.");
+
+visual
+  .command("create")
+  .description("Write a saved visual artifact from engine output, SVG, graph JSON, or report figure data.")
+  .argument("<title...>", "Visual title")
+  .option("--workspace <path>", "Project root path", ".")
+  .option(
+    "--kind <kind>",
+    "plot, proof-tree, lineage-graph, mind-map, concept-map, simulation-view, notebook-output, teaching-animation, or report-figure",
+    "plot"
+  )
+  .option(
+    "--renderer <renderer>",
+    "truth-harness-native, plotly, graphviz, mermaid, tldraw, manim, sage, matplotlib, or external-file",
+    "truth-harness-native"
+  )
+  .option(
+    "--source <kind:ref>",
+    "Source ref such as receipt:path, route:id, claim:id, proof:path, smt:path, cas:path, or manual:note. Repeatable",
+    collectRepeated,
+    []
+  )
+  .option("--tag <tag>", "Search/filter tag. Repeatable", collectRepeated, [])
+  .option("--payload-format <format>", "svg, plotly-json, graph-json, canvas-json, html, png-ref, or table-json", "svg")
+  .option("--payload-json <json>", "Inline JSON payload content")
+  .option("--payload-text <text>", "Inline text payload content")
+  .option("--payload-file <path>", "Read payload content from a local file")
+  .option("--replay <command>", "Replay command that regenerates the visual")
+  .option("--json", "Print the full visual write JSON")
+  .action(
+    async (
+      titleTokens: string[],
+      options: {
+        workspace: string;
+        kind: string;
+        renderer: string;
+        source: string[];
+        tag: string[];
+        payloadFormat: string;
+        payloadJson?: string;
+        payloadText?: string;
+        payloadFile?: string;
+        replay?: string;
+        json?: boolean;
+      }
+    ) => {
+      const result = await writeVisualArtifact({
+        rootPath: options.workspace,
+        title: titleTokens.join(" "),
+        kind: parseVisualArtifactKind(options.kind),
+        renderer: {
+          engine: parseVisualArtifactRenderer(options.renderer),
+          adapter: "truth-harness-cli"
+        },
+        sourceRefs: options.source.map(parseVisualSourceRef),
+        replayCommand: options.replay,
+        payload: {
+          format: parseVisualPayloadFormat(options.payloadFormat),
+          content: await readVisualPayloadContent(options)
+        },
+        tags: options.tag
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printVisualArtifactWrite(result);
+    }
+  );
+
+visual
+  .command("list")
+  .description("List local visual artifacts.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full visual artifact list JSON")
+  .action(async (path: string, options: { json?: boolean }) => {
+    const visuals = await listVisualArtifacts(path);
+
+    if (options.json) {
+      printJson({ total: visuals.length, visuals });
+      return;
+    }
+
+    printVisualArtifactList(visuals);
+  });
+
+visual
+  .command("show")
+  .description("Show a visual artifact by visual id or workspace-local JSON path.")
+  .argument("<visual>", "Visual id or workspace-local visual JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--json", "Print the full visual artifact JSON")
+  .action(async (visualRef: string, options: { workspace: string; json?: boolean }) => {
+    const artifact = await readVisualArtifact(options.workspace, visualRef);
+
+    if (options.json) {
+      printJson(artifact);
+      return;
+    }
+
+    printVisualArtifact(artifact);
+  });
 
 const claim = program.command("claim").description("Manage git-like local claim ledger records.");
 
@@ -4897,6 +5014,52 @@ function printWorkspaceReviewList(reviews: WorkspaceReviewSummary[]): void {
   }
 }
 
+function printVisualArtifactWrite(result: VisualArtifactWriteResult): void {
+  console.log(`Wrote visual artifact ${result.visual.visualId}`);
+  console.log(`${result.visual.title}`);
+  console.log(`Kind/renderer/payload: ${result.visual.kind}/${result.visual.renderer.engine}/${result.visual.payload.format}`);
+  console.log(`Sources: ${formatVisualSources(result.visual.sourceRefs)}`);
+  console.log(`Tags: ${result.visual.tags.map((tag) => `#${tag}`).join(", ") || "none"}`);
+  console.log(`Replay: ${result.visual.replayCommand}`);
+  console.log("Trust boundary: visual evidence does not upgrade source trust labels.");
+  console.log(`Wrote visual JSON: ${result.jsonPath}`);
+  console.log(`Wrote visual Markdown: ${result.markdownPath}`);
+}
+
+function printVisualArtifactList(visuals: VisualArtifactSummary[]): void {
+  console.log(`Truth Harness visual artifacts: ${visuals.length}`);
+
+  for (const visual of visuals) {
+    console.log("");
+    console.log(`${visual.visualId} ${visual.createdAt}`);
+    console.log(`  ${visual.title}`);
+    console.log(`  Kind/renderer: ${visual.kind}/${visual.renderer}; path: ${visual.path}`);
+    console.log(`  Sources: ${formatVisualSources(visual.sourceRefs)}`);
+    console.log(`  Tags: ${visual.tags.map((tag) => `#${tag}`).join(", ") || "none"}`);
+  }
+}
+
+function printVisualArtifact(visual: VisualArtifact): void {
+  console.log(`${visual.visualId} ${visual.createdAt}`);
+  console.log(visual.title);
+  console.log(`Kind/renderer/payload: ${visual.kind}/${visual.renderer.engine}/${visual.payload.format}`);
+  console.log(`Sources: ${formatVisualSources(visual.sourceRefs)}`);
+  console.log(`Replay: ${visual.replayCommand}`);
+  if (visual.data) {
+    console.log(`Data rows: ${visual.data.rows.length}; columns: ${visual.data.columns.join(", ")}`);
+  }
+
+  console.log("");
+  console.log("Trust boundary:");
+  for (const warning of visual.warnings) {
+    console.log(`  - ${warning}`);
+  }
+}
+
+function formatVisualSources(refs: VisualArtifactSourceRef[]): string {
+  return refs.length > 0 ? refs.map((ref) => `${ref.kind}:${ref.ref}`).join(", ") : "none";
+}
+
 function printWorkspaceSnapshotWrite(result: WorkspaceSnapshotWriteResult): void {
   console.log(`Wrote workspace snapshot ${result.snapshot.snapshotId}`);
   console.log(`Path: ${result.path}`);
@@ -6350,6 +6513,128 @@ function parseValidationEvidenceRef(value: string): ValidationEvidenceRef {
 
 function collectRepeated(value: string, previous: string[]): string[] {
   return [...previous, value];
+}
+
+const VISUAL_ARTIFACT_KINDS: VisualArtifactKind[] = [
+  "plot",
+  "proof-tree",
+  "lineage-graph",
+  "mind-map",
+  "concept-map",
+  "simulation-view",
+  "notebook-output",
+  "teaching-animation",
+  "report-figure"
+];
+
+const VISUAL_ARTIFACT_RENDERERS: VisualArtifactRenderer[] = [
+  "truth-harness-native",
+  "plotly",
+  "graphviz",
+  "mermaid",
+  "tldraw",
+  "manim",
+  "sage",
+  "matplotlib",
+  "external-file"
+];
+
+const VISUAL_PAYLOAD_FORMATS: VisualArtifactPayloadFormat[] = [
+  "svg",
+  "plotly-json",
+  "graph-json",
+  "canvas-json",
+  "html",
+  "png-ref",
+  "table-json"
+];
+
+const VISUAL_SOURCE_KINDS: VisualArtifactSourceKind[] = [
+  "receipt",
+  "claim",
+  "route",
+  "proof",
+  "smt",
+  "cas",
+  "notebook",
+  "simulation",
+  "experiment",
+  "source",
+  "workspace-graph",
+  "workspace-review",
+  "manual"
+];
+
+function parseVisualArtifactKind(value: string): VisualArtifactKind {
+  if ((VISUAL_ARTIFACT_KINDS as string[]).includes(value)) {
+    return value as VisualArtifactKind;
+  }
+
+  throw new Error(`Unsupported visual artifact kind ${JSON.stringify(value)}.`);
+}
+
+function parseVisualArtifactRenderer(value: string): VisualArtifactRenderer {
+  if ((VISUAL_ARTIFACT_RENDERERS as string[]).includes(value)) {
+    return value as VisualArtifactRenderer;
+  }
+
+  throw new Error(`Unsupported visual renderer ${JSON.stringify(value)}.`);
+}
+
+function parseVisualPayloadFormat(value: string): VisualArtifactPayloadFormat {
+  if ((VISUAL_PAYLOAD_FORMATS as string[]).includes(value)) {
+    return value as VisualArtifactPayloadFormat;
+  }
+
+  throw new Error(`Unsupported visual payload format ${JSON.stringify(value)}.`);
+}
+
+function parseVisualSourceKind(value: string): VisualArtifactSourceKind {
+  if ((VISUAL_SOURCE_KINDS as string[]).includes(value)) {
+    return value as VisualArtifactSourceKind;
+  }
+
+  throw new Error(`Unsupported visual source kind ${JSON.stringify(value)}.`);
+}
+
+function parseVisualSourceRef(value: string): VisualArtifactSourceRef {
+  const match = /^([a-z][a-z0-9-]*):(.+)$/iu.exec(value);
+  if (!match) {
+    return {
+      kind: "manual",
+      ref: value
+    };
+  }
+
+  return {
+    kind: parseVisualSourceKind(match[1] ?? ""),
+    ref: match[2] ?? ""
+  };
+}
+
+async function readVisualPayloadContent(options: {
+  payloadFormat: string;
+  payloadJson?: string;
+  payloadText?: string;
+  payloadFile?: string;
+}): Promise<unknown> {
+  const provided = [options.payloadJson, options.payloadText, options.payloadFile].filter((value) => value !== undefined);
+  if (provided.length !== 1) {
+    throw new Error("Provide exactly one of --payload-json, --payload-text, or --payload-file.");
+  }
+
+  if (options.payloadJson !== undefined) {
+    return JSON.parse(options.payloadJson) as unknown;
+  }
+
+  const text = options.payloadFile
+    ? await readFile(resolve(options.payloadFile), "utf8")
+    : options.payloadText ?? "";
+  return visualPayloadFormatIsJson(parseVisualPayloadFormat(options.payloadFormat)) ? JSON.parse(text) as unknown : text;
+}
+
+function visualPayloadFormatIsJson(format: VisualArtifactPayloadFormat): boolean {
+  return format === "plotly-json" || format === "graph-json" || format === "canvas-json" || format === "table-json";
 }
 
 function parsePositiveInteger(value: string): number {

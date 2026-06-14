@@ -208,6 +208,14 @@ export {
 } from "./workspace-review.js";
 export { createWorkspaceRunNextPlan } from "./workspace-run-next.js";
 export type { WorkspaceRunNextPlan, WorkspaceRunNextStatus } from "./workspace-run-next.js";
+export {
+  createVisualArtifact,
+  listVisualArtifacts,
+  parseVisualArtifactJson,
+  readVisualArtifact,
+  renderVisualArtifactMarkdown,
+  writeVisualArtifact
+} from "./visual-artifact.js";
 export { runWorkspaceStress } from "./workspace-stress.js";
 export { getEngineManifest } from "./engine-manifest.js";
 export {
@@ -509,6 +517,20 @@ export type {
   WorkspaceReviewSummary,
   WorkspaceReviewWriteResult
 } from "./workspace-review.js";
+export type {
+  CreateVisualArtifactInput,
+  VisualArtifact,
+  VisualArtifactDataTable,
+  VisualArtifactKind,
+  VisualArtifactPayload,
+  VisualArtifactPayloadFormat,
+  VisualArtifactRenderer,
+  VisualArtifactRendererInfo,
+  VisualArtifactSourceKind,
+  VisualArtifactSourceRef,
+  VisualArtifactSummary,
+  VisualArtifactWriteResult
+} from "./visual-artifact.js";
 export type {
   WorkspaceStressInput,
   WorkspaceStressResult
