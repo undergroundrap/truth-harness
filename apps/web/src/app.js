@@ -283,7 +283,8 @@ const state = {
   activityLimit: ACTIVITY_PAGE_SIZE,
   safetyStatus: undefined,
   workspaceReadiness: undefined,
-  selectedWorkspaceReviewItemId: undefined
+  selectedWorkspaceReviewItemId: undefined,
+  selectedWorkspaceObligationId: undefined
 };
 
 const appShell = document.querySelector("#app-shell");
@@ -3570,6 +3571,7 @@ function renderWorkspaceReview() {
       }
 
       state.selectedWorkspaceReviewItemId = item.itemId;
+      state.selectedWorkspaceObligationId = item.obligationId;
       addActivity("human", "Opened project queue action", item.title ?? item.itemId, "waiting");
       renderWorkspaceReview();
     });
@@ -3630,6 +3632,7 @@ function renderWorkspaceReviewAction(items) {
   if (!item) {
     workspaceReviewAction.hidden = true;
     workspaceReviewAction.innerHTML = "";
+    state.selectedWorkspaceObligationId = undefined;
     return;
   }
 
@@ -3670,6 +3673,7 @@ function renderWorkspaceReviewAction(items) {
       return;
     }
 
+    state.selectedWorkspaceObligationId = item.obligationId;
     await openSavedRoute(routeId);
     state.surface = "checks";
     render();
@@ -5293,20 +5297,24 @@ function renderVerificationMatrix(receipt) {
   renderClaimReviewGate(claimReview);
 
   verificationMatrix.innerHTML = rows
-    .map((row) => `<article class="matrix-row ${row.status}">
+    .map((row) => {
+      const focused = row.obligationId && row.obligationId === state.selectedWorkspaceObligationId;
+      return `<article class="matrix-row ${row.status} ${focused ? "focused" : ""}" data-obligation-id="${escapeHtml(row.obligationId ?? "")}">
       <span class="task-state ${row.status}"></span>
       <div>
         <div class="matrix-row-head">
           <strong>${escapeHtml(row.label)}</strong>
-          <span>${escapeHtml(statusLabel(row.status))}</span>
+          <span>${escapeHtml(focused ? `${statusLabel(row.status)} / queue focus` : statusLabel(row.status))}</span>
         </div>
         <p>${escapeHtml(row.description)}</p>
         ${verificationRowObligationHtml(row)}
         <code class="matrix-command">${escapeHtml(row.command)}</code>
         ${verificationRowActionHtml(row)}
       </div>
-    </article>`)
+    </article>`;
+    })
     .join("");
+  focusSelectedVerificationRow();
   renderEvidenceArtifactList(receipt);
 
   mathCoreList.innerHTML = rows
@@ -5317,6 +5325,25 @@ function renderVerificationMatrix(receipt) {
       <small>${escapeHtml(statusLabel(row.status))}</small>
     </div>`)
     .join("");
+}
+
+function focusSelectedVerificationRow() {
+  if (state.surface !== "checks" || !state.selectedWorkspaceObligationId || !verificationMatrix) {
+    return;
+  }
+
+  const row = verificationMatrix.querySelector(".matrix-row.focused");
+  if (!row) {
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    row.scrollIntoView({
+      block: "center",
+      inline: "nearest",
+      behavior: "smooth"
+    });
+  });
 }
 
 function claimReviewGateModel(receipt) {
