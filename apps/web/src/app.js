@@ -5371,6 +5371,7 @@ function renderChecksWorkOrder(receipt, rows) {
     <strong>${escapeHtml(engineReadiness.title)}</strong>
     <small>${escapeHtml(engineReadiness.detail)}</small>
     <code>${escapeHtml(engineReadiness.command)}</code>
+    <button class="text-button compact-button copy-engine-readiness-command" data-command="${escapeHtml(engineReadiness.command)}" type="button">Copy engine command</button>
   </div>` : ""}
   ${heldBackEvidence ? `<div class="checks-work-note warning">
     <span class="mini-label">Evidence held back</span>
@@ -5438,6 +5439,18 @@ function renderChecksWorkOrder(receipt, rows) {
       copiedDetail: "Use Docker to rerun the held-back evidence path.",
       fallbackTitle: "Downloaded rerun command",
       fallbackDetail: "the held-back evidence rerun command was saved as plain text instead."
+    });
+  });
+  checksWorkOrder.querySelector(".copy-engine-readiness-command")?.addEventListener("click", (event) => {
+    copyOrDownloadText({
+      text: `${event.currentTarget.dataset.command ?? ""}\n`,
+      filename: `truth-harness-engine-command-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      button: event.currentTarget,
+      copiedTitle: "Copied engine command",
+      copiedDetail: "Use this command to run the focused verifier path.",
+      fallbackTitle: "Downloaded engine command",
+      fallbackDetail: "the focused engine command was saved as plain text instead."
     });
   });
   checksWorkOrder.querySelector(".copy-checks-work-packet")?.addEventListener("click", (event) => {
