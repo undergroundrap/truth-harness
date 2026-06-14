@@ -63,7 +63,7 @@ The web workbench uses one canonical local URL: `http://127.0.0.1:4180/`.
 
 See [SECURITY.md](SECURITY.md) and [docs/DOCKER.md](docs/DOCKER.md) for the safety boundaries. Docker is the recommended baseline, but a compose dev container bind-mounts this repo and can still change files inside it. Code-run receipts report `networkAccess: none` only when the measured Docker no-network provider is active; otherwise they correctly stay at `unknown`.
 
-Use `npm run docker:demo` for launch recording. It runs the 15-case demo with a stricter gate that fails unless the symbolic CAS cases earn real `cross-checked` labels from the Docker-provisioned engine path. The plain `npm run cli -- demo` remains useful on machines where optional engines are missing; it will honestly show those cases as `unverified` instead of faking readiness.
+Use `npm run docker:demo` for launch recording. It runs the 16-case demo with a stricter gate that fails unless the symbolic CAS cases earn real `cross-checked` labels and the SMT case earns `smt-checked` from the Docker-provisioned engine path. The plain `npm run cli -- demo` remains useful on machines where optional engines are missing; it will honestly show those cases as `unverified` instead of faking readiness.
 
 ## Native Quickstart
 
@@ -235,6 +235,8 @@ See [docs/MOAT.md](docs/MOAT.md) for the product moat: claim ledger plus verifie
 See [docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md](docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md) for the recommended private-prototype -> closed-alpha -> open-source technical-preview path and AGPL-3.0 visible-attribution posture. The short version: keep the trust-critical core open-source long term, keep the rough prototype private until credibility gates pass, and preserve visible credit to Truth Harness by Ocean Bennett.
 
 See [docs/LAUNCH_PLAN.md](docs/LAUNCH_PLAN.md) for the first Hacker News-ready demo path.
+
+See [docs/PRODUCT_READINESS_MAP.md](docs/PRODUCT_READINESS_MAP.md) for the sober pre-launch readiness map, stress-test plan, and the reasons Truth Harness should stay private-prototype until the product and UI are harder to fool.
 
 See [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) for Claude Code and Codex MCP setup.
 
