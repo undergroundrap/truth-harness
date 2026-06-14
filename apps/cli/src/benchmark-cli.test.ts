@@ -68,6 +68,26 @@ describe("benchmark CLI", () => {
     expect(report).toContain("Receipt JSON");
   });
 
+  it("fails the recording demo gate when symbolic cross-checks are unavailable", async () => {
+    const root = await tempRoot();
+    const reportPath = join(root, "truth-harness-demo-report.html");
+    const result = await runCli([
+      "demo",
+      "--no-color",
+      "--require-symbolic-cross-check",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--report",
+      reportPath
+    ]);
+    const report = await readFile(reportPath, "utf8");
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain("Recording gate failures:");
+    expect(result.stdout).toContain("recording gate requires cross-checked");
+    expect(report).toContain("Recording Gate Failures");
+  });
+
   it("checks symbolic CAS results without minting trust when Maxima is unavailable", async () => {
     const result = await runCli([
       "cas",

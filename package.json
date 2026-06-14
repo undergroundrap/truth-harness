@@ -24,6 +24,8 @@
     "web:serve": "node tools/serve-web.mjs",
     "web:restart": "powershell -ExecutionPolicy Bypass -File tools/restart-web.ps1",
     "demo": "npm run cli -- demo",
+    "demo:recording": "node apps/cli/dist/index.js demo --require-symbolic-cross-check",
+    "docker:demo": "docker compose run --rm truth-harness node apps/cli/dist/index.js demo --require-symbolic-cross-check",
     "demo:bench": "npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json",
     "demo:check": "npm run cli -- check docs/examples/strict-claims.md",
     "demo:physics": "npm run cli -- bench run packages/benchmarks/suites/physics-seed.json",

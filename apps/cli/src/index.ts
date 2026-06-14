@@ -2965,15 +2965,17 @@ program
   .description("Run the self-contained Truth Harness launch gauntlet and write a shareable HTML report.")
   .option("--report <path>", "Write the HTML report to this path", "truth-harness-demo-report.html")
   .option("--maxima-command <command>", "Override Maxima executable for symbolic cross-check receipts")
+  .option("--require-symbolic-cross-check", "Exit non-zero unless the symbolic demo cases earn cross-checked")
   .option("--no-color", "Disable ANSI colors in terminal output")
-  .action(async (options: { report: string; maximaCommand?: string; color?: boolean }) => {
+  .action(async (options: { report: string; maximaCommand?: string; requireSymbolicCrossCheck?: boolean; color?: boolean }) => {
     const result = await runDemoGauntlet({
       reportPath: options.report,
       maximaCommand: options.maximaCommand,
+      requireSymbolicCrossCheck: Boolean(options.requireSymbolicCrossCheck),
       color: options.color !== false
     });
 
-    if (result.unexpectedLabels.length > 0) {
+    if (result.unexpectedLabels.length > 0 || result.recordingGateFailures.length > 0) {
       process.exitCode = 1;
     }
   });
@@ -3098,6 +3100,7 @@ interface DemoGauntletResult {
   tally: Record<DemoTrustBucket, number>;
   reportPath: string;
   unexpectedLabels: string[];
+  recordingGateFailures: string[];
 }
 
 function createDemoCases(): DemoCase[] {
@@ -3230,6 +3233,7 @@ function createDemoCases(): DemoCase[] {
 async function runDemoGauntlet(options: {
   reportPath: string;
   maximaCommand?: string;
+  requireSymbolicCrossCheck: boolean;
   color: boolean;
 }): Promise<DemoGauntletResult> {
   const color = createDemoColorizer(options.color);
@@ -3238,6 +3242,7 @@ async function runDemoGauntlet(options: {
   const tally: Record<DemoTrustBucket, number> = { verified: 0, refuted: 0, unverified: 0 };
   const results: DemoCaseResult[] = [];
   const unexpectedLabels: string[] = [];
+  const recordingGateFailures: string[] = [];
 
   console.log(color.bold("Truth Harness demo gauntlet"));
   console.log("15 local receipts. No network. No model answers promoted to truth.");
@@ -3254,6 +3259,11 @@ async function runDemoGauntlet(options: {
     if (!expected) {
       unexpectedLabels.push(
         `${index + 1}. ${demoCase.title}: expected ${demoCase.allowedTrust.join(" or ")}, got ${receipt.trust}`
+      );
+    }
+    if (options.requireSymbolicCrossCheck && demoCase.preferredTrust && receipt.trust !== demoCase.preferredTrust) {
+      recordingGateFailures.push(
+        `${index + 1}. ${demoCase.title}: recording gate requires ${demoCase.preferredTrust}, got ${receipt.trust}`
       );
     }
 
@@ -3290,7 +3300,7 @@ async function runDemoGauntlet(options: {
     console.log("");
   }
 
-  const html = renderDemoReport(results, tally, unexpectedLabels);
+  const html = renderDemoReport(results, tally, unexpectedLabels, recordingGateFailures);
   await mkdir(dirname(resolvedReportPath), { recursive: true });
   await writeFile(resolvedReportPath, html, "utf8");
 
@@ -3308,11 +3318,21 @@ async function runDemoGauntlet(options: {
     }
   }
 
+  if (recordingGateFailures.length > 0) {
+    console.log("");
+    console.log(color.yellow("Recording gate failures:"));
+    for (const failure of recordingGateFailures) {
+      console.log(`  ${failure}`);
+    }
+    console.log("  Use the Docker engine path before recording: npm run docker:demo");
+  }
+
   return {
     cases: results,
     tally,
     reportPath: resolvedReportPath,
-    unexpectedLabels
+    unexpectedLabels,
+    recordingGateFailures
   };
 }
 
@@ -3397,7 +3417,8 @@ function demoEvidenceLines(receipt: Receipt): string[] {
 function renderDemoReport(
   results: DemoCaseResult[],
   tally: Record<DemoTrustBucket, number>,
-  unexpectedLabels: string[]
+  unexpectedLabels: string[],
+  recordingGateFailures: string[]
 ): string {
   const generatedAt = new Date().toISOString();
   const caseCards = results
@@ -3436,6 +3457,12 @@ function renderDemoReport(
   const unexpectedBlock =
     unexpectedLabels.length > 0
       ? `<section class="warning"><h2>Unexpected Labels</h2><ul>${unexpectedLabels
+          .map((label) => `<li>${escapeHtml(label)}</li>`)
+          .join("")}</ul></section>`
+      : "";
+  const recordingGateBlock =
+    recordingGateFailures.length > 0
+      ? `<section class="warning"><h2>Recording Gate Failures</h2><p class="muted">Do not record the launch GIF until the Docker engine path clears these gates.</p><ul>${recordingGateFailures
           .map((label) => `<li>${escapeHtml(label)}</li>`)
           .join("")}</ul></section>`
       : "";
@@ -3574,6 +3601,7 @@ function renderDemoReport(
       </div>
     </header>
     ${unexpectedBlock}
+    ${recordingGateBlock}
     ${caseCards}
   </main>
 </body>

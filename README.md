@@ -46,6 +46,7 @@ Day-to-day container workflow:
 docker compose build
 docker compose run --rm truth-harness npm run check
 docker compose run --rm truth-harness npm run cli -- demo
+npm run docker:demo
 docker compose run --rm truth-harness npm run proof:launch:engines
 docker compose run --rm truth-harness npm run cli -- workspace init --name "Local Math Lab"
 docker compose run --rm truth-harness npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
@@ -61,6 +62,8 @@ docker compose run --rm -i mcp
 The web workbench uses one canonical local URL: `http://127.0.0.1:4180/`.
 
 See [SECURITY.md](SECURITY.md) and [docs/DOCKER.md](docs/DOCKER.md) for the safety boundaries. Docker is the recommended baseline, but a compose dev container bind-mounts this repo and can still change files inside it. Code-run receipts report `networkAccess: none` only when the measured Docker no-network provider is active; otherwise they correctly stay at `unknown`.
+
+Use `npm run docker:demo` for launch recording. It runs the 15-case demo with a stricter gate that fails unless the symbolic CAS cases earn real `cross-checked` labels from the Docker-provisioned engine path. The plain `npm run cli -- demo` remains useful on machines where optional engines are missing; it will honestly show those cases as `unverified` instead of faking readiness.
 
 ## Native Quickstart
 
