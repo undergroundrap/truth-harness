@@ -11,6 +11,9 @@ import {
   handleTruthHarnessCasBackends,
   handleTruthHarnessCasCheck,
   handleTruthHarnessCasList,
+  handleTruthHarnessCatalogRebuild,
+  handleTruthHarnessCatalogSearch,
+  handleTruthHarnessCatalogStatus,
   handleTruthHarnessClaimAdd,
   handleTruthHarnessClaimChart,
   handleTruthHarnessClaimChartList,
@@ -448,6 +451,60 @@ describe("MCP tool handlers", () => {
     expect(review.markdown).toContain("## Agent Next Actions");
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.claims).toBe(2);
+  });
+
+  it("rebuilds and searches the workspace catalog for agents", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Catalog Lab" });
+
+    const before = await handleTruthHarnessCatalogStatus({});
+    expect(before.exists).toBe(false);
+    expect(before.warnings.join(" ")).toContain("rebuild");
+
+    const claim = await handleTruthHarnessClaimAdd({
+      statement: "3 / 4 + 5 / 8 equals 11 / 8.",
+      domain: "math",
+      trust: "exact-computed",
+      tags: ["fractions", "catalog-test"]
+    });
+    const route = await handleTruthHarnessVerify({
+      write: true,
+      problem: "compute 3 / 4 + 5 / 8",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const rebuild = await handleTruthHarnessCatalogRebuild({});
+    const after = await handleTruthHarnessCatalogStatus({});
+    const claimSearch = await handleTruthHarnessCatalogSearch({
+      kind: "claims",
+      tag: "catalog-test"
+    });
+    const routeSearch = await handleTruthHarnessCatalogSearch({
+      query: "compute",
+      kind: "routes",
+      trust: "exact-computed",
+      limit: 5
+    });
+
+    expect(rebuild.localOnly).toBe(true);
+    expect(rebuild.networkAccess).toBe("none");
+    expect(rebuild.claimCount).toBe(1);
+    expect(rebuild.routeCount).toBe(1);
+    expect(after.exists).toBe(true);
+    expect(after.readable).toBe(true);
+    expect(after.stale).toBe(false);
+    expect(claimSearch.total).toBe(1);
+    expect(claimSearch.results[0]?.artifactId).toBe(claim.claim.claimId);
+    expect(claimSearch.results[0]?.trust).toBe(claim.claim.trust);
+    expect(routeSearch.results).toContainEqual(
+      expect.objectContaining({
+        artifactId: route.route.routeId,
+        trust: "exact-computed"
+      })
+    );
   });
 
   it("reports local proof backend readiness for agents", () => {

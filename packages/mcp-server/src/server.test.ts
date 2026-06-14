@@ -80,6 +80,9 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_cas_backends",
         "truth_harness_cas_check",
         "truth_harness_cas_list",
+        "truth_harness_catalog_rebuild",
+        "truth_harness_catalog_search",
+        "truth_harness_catalog_status",
         "truth_harness_claim_add",
         "truth_harness_claim_chart",
         "truth_harness_claim_chart_list",
@@ -329,6 +332,33 @@ describe("Truth Harness MCP server", () => {
         arguments: {}
       });
       expect(firstText(routeList.content)).toContain("\"total\": 1");
+
+      const catalogStatusBefore = await client.callTool({
+        name: "truth_harness_catalog_status",
+        arguments: {}
+      });
+      expect(firstText(catalogStatusBefore.content)).toContain("\"exists\": false");
+
+      const catalogRebuild = await client.callTool({
+        name: "truth_harness_catalog_rebuild",
+        arguments: {}
+      });
+      const catalogRebuildText = firstText(catalogRebuild.content);
+      expect(catalogRebuildText).toContain("\"schemaVersion\": \"truth-harness.catalog-rebuild.v0\"");
+      expect(catalogRebuildText).toContain("\"networkAccess\": \"none\"");
+      expect(catalogRebuildText).toContain("\"routeCount\": 1");
+
+      const catalogSearch = await client.callTool({
+        name: "truth_harness_catalog_search",
+        arguments: {
+          query: "compute",
+          kind: "routes",
+          trust: "exact-computed"
+        }
+      });
+      const catalogSearchText = firstText(catalogSearch.content);
+      expect(catalogSearchText).toContain("\"schemaVersion\": \"truth-harness.catalog-search.v0\"");
+      expect(catalogSearchText).toContain(routeWriteJson.route.routeId);
 
       const routeShow = await client.callTool({
         name: "truth_harness_route_show",

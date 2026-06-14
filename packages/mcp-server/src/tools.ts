@@ -36,6 +36,7 @@ import {
   getLocalWorkspaceStatus,
   getProofBackendStatus,
   getSmtBackendStatus,
+  getWorkspaceCatalogStatus,
   ingestLocalCorpus,
   initLocalWorkspace,
   addResearchSessionCheckpoint,
@@ -65,6 +66,7 @@ import {
   parseReceiptJson,
   parseBenchmarkRunRecordJson,
   repairLocalWorkspace,
+  rebuildWorkspaceCatalog,
   readClaimRecord,
   readResearchSession,
   readVisualArtifact,
@@ -82,6 +84,7 @@ import {
   renderReceipt,
   replayReceipt,
   searchLocalCorpus,
+  searchWorkspaceCatalog,
   satisfyVerifierRouteObligation,
   writeExpertReview,
   writeClaimChart,
@@ -214,6 +217,9 @@ import {
   type WorkspaceSnapshotSummary,
   type WorkspaceSnapshotVerification,
   type WorkspaceSnapshotWriteResult,
+  type WorkspaceCatalogRebuildResult,
+  type WorkspaceCatalogSearchResult,
+  type WorkspaceCatalogStatus,
   type TrustLabel,
   type WorkspaceValidation,
   type WorkspaceGraph,
@@ -317,6 +323,24 @@ export interface TruthHarnessClaimShowInput {
 export interface TruthHarnessClaimReviewInput {
   workspacePath?: string;
   claimRef: string;
+}
+
+export interface TruthHarnessCatalogStatusInput {
+  workspacePath?: string;
+}
+
+export interface TruthHarnessCatalogRebuildInput {
+  workspacePath?: string;
+}
+
+export interface TruthHarnessCatalogSearchInput {
+  workspacePath?: string;
+  query?: string;
+  kind?: string;
+  trust?: TrustLabel;
+  domain?: string;
+  tag?: string;
+  limit?: number;
 }
 
 export interface TruthHarnessBenchmarkRunInput {
@@ -1157,6 +1181,34 @@ export async function handleTruthHarnessClaimReview(input: TruthHarnessClaimRevi
   return createClaimReviewPacket({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     claimRef: input.claimRef
+  });
+}
+
+export async function handleTruthHarnessCatalogStatus(
+  input: TruthHarnessCatalogStatusInput
+): Promise<WorkspaceCatalogStatus> {
+  return getWorkspaceCatalogStatus(resolveWorkspaceRoot(input.workspacePath));
+}
+
+export async function handleTruthHarnessCatalogRebuild(
+  input: TruthHarnessCatalogRebuildInput
+): Promise<WorkspaceCatalogRebuildResult> {
+  return rebuildWorkspaceCatalog({
+    rootPath: resolveWorkspaceRoot(input.workspacePath)
+  });
+}
+
+export async function handleTruthHarnessCatalogSearch(
+  input: TruthHarnessCatalogSearchInput
+): Promise<WorkspaceCatalogSearchResult> {
+  return searchWorkspaceCatalog({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    query: input.query,
+    kind: input.kind,
+    trust: input.trust,
+    domain: input.domain,
+    tag: input.tag,
+    limit: input.limit
   });
 }
 

@@ -10,6 +10,9 @@ import {
   handleTruthHarnessCasBackends,
   handleTruthHarnessCasCheck,
   handleTruthHarnessCasList,
+  handleTruthHarnessCatalogRebuild,
+  handleTruthHarnessCatalogSearch,
+  handleTruthHarnessCatalogStatus,
   truthHarnessBenchmarkCompareOutputFailsGate,
   truthHarnessBenchmarkRunOutputFailsGate,
   handleTruthHarnessClaimAdd,
@@ -311,6 +314,72 @@ export function createTruthHarnessMcpServer(): McpServer {
     trust: claimTrustSchema.optional(),
     summary: z.string().optional()
   });
+
+  server.registerTool(
+    "truth_harness_catalog_status",
+    {
+      title: "Check Workspace Catalog Status",
+      description:
+        "Inspect the rebuildable local SQLite catalog cache without scanning external services or changing trust labels.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTruthHarnessCatalogStatus(input))
+  );
+
+  server.registerTool(
+    "truth_harness_catalog_rebuild",
+    {
+      title: "Rebuild Workspace Catalog",
+      description:
+        "Rebuild the local SQLite catalog cache from canonical workspace JSON artifacts. This writes only cache files under .truth-harness/indexes and does not upgrade evidence trust.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTruthHarnessCatalogRebuild(input))
+  );
+
+  server.registerTool(
+    "truth_harness_catalog_search",
+    {
+      title: "Search Workspace Catalog",
+      description:
+        "Search the local catalog cache by text, artifact kind, trust label, domain, tag, and limit. Requires a prior catalog rebuild if the cache is missing or stale.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        query: z.string().optional().describe("Full-text search over local artifact titles, summaries, paths, tags, and capped evidence text."),
+        kind: z.string().optional().describe("Artifact kind filter, such as claims, routes, receipts, visuals, cas, smt, or proofs."),
+        trust: claimTrustSchema.optional().describe("Trust label filter. Catalog rows do not upgrade trust labels."),
+        domain: z.string().optional().describe("Domain/lane filter when the artifact records one."),
+        tag: z.string().optional().describe("Tag filter, with or without # prefix."),
+        limit: z.number().int().positive().max(200).optional().describe("Maximum rows to return. Defaults to 25.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTruthHarnessCatalogSearch(input))
+  );
 
   server.registerTool(
     "truth_harness_claim_add",
