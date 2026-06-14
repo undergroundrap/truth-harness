@@ -67,6 +67,8 @@ Truth Harness should adapt mature engines when they are already world-class:
 
 Adapters must be boring, typed, replayable, and replaceable. Truth Harness should never depend on one external engine as an oracle.
 
+For Lean specifically, the adapter path is staged: inspect the local Lean/Lake project layout without execution, run concrete proof checks only on workspace-local source artifacts, write proof-check records, and generate proof visuals from those records. A Lean project inspection or visual artifact is useful evidence context, but only an accepted proof-check record can support `proved`.
+
 ## Native Kernels We Should Build
 
 We should build small native kernels when they are:

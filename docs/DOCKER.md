@@ -47,6 +47,7 @@ docker compose run --rm truth-harness npm run cli -- cas backends
 docker compose run --rm truth-harness npm run cli -- cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write
 docker compose run --rm truth-harness npm run cli -- smt backends
 docker compose run --rm truth-harness npm run cli -- proof backends
+docker compose run --rm truth-harness npm run cli -- proof project .
 docker compose run --rm truth-harness npm run cli -- code sandbox-status --json
 ```
 
@@ -58,7 +59,7 @@ docker compose up web
 
 Then open `http://127.0.0.1:4180`. The web service publishes only to localhost. The browser calls localhost `/api/receipt` and `/api/claims` endpoints backed by `@truth-harness/core`; it does not call a hosted model or external service. The web server also rejects non-local Host headers by default and accepts browser API writes only from the same origin.
 
-The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima and Z3 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; set `TRUTH_HARNESS_LEAN` or build a derived image once that project layout is chosen.
+The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima and Z3 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; use `truth-harness proof project <path>` to inspect that local layout without executing Lean, then set `TRUTH_HARNESS_LEAN` or build a derived image once that project layout is chosen.
 
 ## Web UI Safe Verifier Path
 

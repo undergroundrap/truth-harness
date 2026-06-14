@@ -589,6 +589,36 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.statusProbeIsNotProof).toBe(true);
   });
 
+  it("inspects Lean project readiness without running Lean", async () => {
+    const root = await tempRoot();
+    await mkdir(join(root, "Proofs"), { recursive: true });
+    await writeFile(join(root, "lean-toolchain"), "leanprover/lean4:v4.12.0\n", "utf8");
+    await writeFile(join(root, "lakefile.lean"), "import Lake\nopen Lake DSL\n", "utf8");
+    await writeFile(join(root, "lake-manifest.json"), "{}\n", "utf8");
+    await writeFile(join(root, "Proofs", "Trivial.lean"), "example : True := by trivial\n", "utf8");
+
+    const result = await runCli(["proof", "project", ".", "--workspace", root, "--json"]);
+    const human = await runCli(["proof", "project", ".", "--workspace", root]);
+    const json = JSON.parse(result.stdout) as {
+      schemaVersion: string;
+      readiness: string;
+      toolchain: { pinned: boolean };
+      files: { leanFiles: { total: number } };
+      trustBoundary: { noLeanExecution: boolean; provedRequiresProofCheckRecord: boolean };
+    };
+
+    expect(result.exitCode).toBe(0);
+    expect(json.schemaVersion).toBe("truth-harness.lean-project-inspection.v0");
+    expect(json.readiness).toBe("ready");
+    expect(json.toolchain.pinned).toBe(true);
+    expect(json.files.leanFiles.total).toBe(1);
+    expect(json.trustBoundary.noLeanExecution).toBe(true);
+    expect(json.trustBoundary.provedRequiresProofCheckRecord).toBe(true);
+    expect(human.stdout).toContain("Truth Harness Lean project inspection");
+    expect(human.stdout).toContain("Readiness: ready");
+    expect(human.stdout).toContain("This inspection does not run Lean or prove a claim.");
+  });
+
   it("checks Lean proof artifacts without minting proved when Lean is unavailable", async () => {
     const root = await tempRoot();
     const proofPath = join(root, "example.lean");

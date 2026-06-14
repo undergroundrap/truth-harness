@@ -59,6 +59,7 @@ import {
   isSimulationStage,
   isValidationGateKind,
   isValidationPlanDomain,
+  inspectLeanProject,
   listBenchmarkArtifacts,
   listSymbolicCasChecks,
   listClaimCharts,
@@ -199,6 +200,7 @@ import {
   type LeanProofCheckRecord,
   type LeanProofCheckSummary,
   type LeanProofCheckWriteResult,
+  type LeanProjectInspection,
   type ProofBackendStatusReport,
   type Receipt,
   type ReceiptRenderFormat,
@@ -2901,6 +2903,28 @@ proof
   });
 
 proof
+  .command("project")
+  .description("Inspect a local Lean/Lake project layout without running Lean, Lake, or network commands.")
+  .argument("[path]", "Workspace-local Lean project path", ".")
+  .option("--workspace <path>", "Workspace root path", ".")
+  .option("--max-lean-files <count>", "Maximum .lean file samples to include", parsePositiveInteger, 40)
+  .option("--json", "Print the full Lean project inspection JSON")
+  .action(async (path: string, options: { workspace: string; maxLeanFiles: number; json?: boolean }) => {
+    const inspection = await inspectLeanProject({
+      rootPath: options.workspace,
+      projectPath: path,
+      maxLeanFiles: options.maxLeanFiles
+    });
+
+    if (options.json) {
+      printJson(inspection);
+      return;
+    }
+
+    printLeanProjectInspection(inspection);
+  });
+
+proof
   .command("check")
   .description("Check a local Lean proof artifact and produce a proof-check record.")
   .argument("<source>", "Lean source file to check")
@@ -4186,6 +4210,62 @@ function printProofBackendStatus(status: ProofBackendStatusReport): void {
   console.log("Trust boundary:");
   for (const warning of status.warnings) {
     console.log(`  ${warning}`);
+  }
+}
+
+function printLeanProjectInspection(inspection: LeanProjectInspection): void {
+  console.log("Truth Harness Lean project inspection");
+  console.log(`Path: ${inspection.projectPath}`);
+  console.log(`Readiness: ${inspection.readiness}`);
+  console.log("Local-only: true (network: none)");
+
+  console.log("");
+  console.log("Project files:");
+  console.log(`  lean-toolchain: ${inspection.files.leanToolchain?.path ?? "missing"}`);
+  console.log(`  lakefile.lean: ${inspection.files.lakefileLean?.path ?? "missing"}`);
+  console.log(`  lakefile.toml: ${inspection.files.lakefileToml?.path ?? "missing"}`);
+  console.log(`  lake-manifest.json: ${inspection.files.lakeManifest?.path ?? "missing"}`);
+  console.log(`  .lean files: ${inspection.files.leanFiles.total}${inspection.files.leanFiles.truncated ? " (sample truncated)" : ""}`);
+
+  if (inspection.toolchain) {
+    console.log("");
+    console.log("Toolchain:");
+    console.log(`  Channel: ${inspection.toolchain.channel}`);
+    console.log(`  Pinned: ${String(inspection.toolchain.pinned)}`);
+  }
+
+  if (inspection.mathlib.likelyUsesMathlib) {
+    console.log("");
+    console.log(`Mathlib: likely (${inspection.mathlib.evidence.join(", ")})`);
+  }
+
+  if (inspection.files.leanFiles.sample.length > 0) {
+    console.log("");
+    console.log("Lean file sample:");
+    for (const file of inspection.files.leanFiles.sample.slice(0, 8)) {
+      console.log(`  ${file.path} (${file.byteLength} bytes)`);
+    }
+  }
+
+  console.log("");
+  console.log("Trust boundary:");
+  console.log("  This inspection does not run Lean or prove a claim.");
+  console.log("  `proved` still requires a concrete accepted proof-check record.");
+
+  if (inspection.warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const warning of inspection.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+
+  if (inspection.nextActions.length > 0) {
+    console.log("");
+    console.log("Next actions:");
+    for (const action of inspection.nextActions) {
+      console.log(`  ${action}`);
+    }
   }
 }
 

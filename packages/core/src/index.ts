@@ -229,6 +229,9 @@ export {
 } from "./verifier-route.js";
 export { proveUniversalParity } from "./parity-proof.js";
 export {
+  inspectLeanProject
+} from "./lean-project.js";
+export {
   checkSymbolicWithMaximaSync,
   createSymbolicCasCheckRecord,
   getCasBackendStatus,
@@ -602,6 +605,12 @@ export type {
   SymbolicCasCheckWriteResult,
   WriteSymbolicCasCheckInput
 } from "./cas-backend.js";
+export type {
+  LeanProjectFileSummary,
+  LeanProjectInspection,
+  LeanProjectInspectionInput,
+  LeanProjectReadiness
+} from "./lean-project.js";
 export type {
   ProofBackendCommandResult,
   ProofBackendCommandRunner,
