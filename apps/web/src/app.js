@@ -3373,6 +3373,19 @@ function lcmMany(values) {
   return values.reduce((accumulator, value) => lcm(accumulator, value), 1);
 }
 
+function pagerSummary(shown, total, singular) {
+  const plural = `${singular}s`;
+  if (total === 0) {
+    return `0 ${plural}`;
+  }
+
+  if (shown >= total) {
+    return `All ${total} ${total === 1 ? singular : plural} shown`;
+  }
+
+  return `${shown} of ${total} ${plural} shown`;
+}
+
 function renderClaimLedger() {
   if (!claimLedgerList || !claimLedgerCount) {
     return;
@@ -3388,9 +3401,7 @@ function renderClaimLedger() {
     : `${claims.length} records / ${edgeCount} links`;
   if (claimLedgerPage) {
     const shown = Math.min(state.claimLedgerLimit, filteredClaims.length);
-    claimLedgerPage.textContent = filteredClaims.length === 0
-      ? "0 shown"
-      : `${shown} of ${filteredClaims.length} shown`;
+    claimLedgerPage.textContent = pagerSummary(shown, filteredClaims.length, "claim");
   }
   if (claimLedgerMore) {
     claimLedgerMore.hidden = state.claimLedgerLimit >= filteredClaims.length;
@@ -3501,9 +3512,7 @@ function renderRouteHistory() {
     : `${routes.length} routes`;
   if (routeHistoryPage) {
     const shown = Math.min(state.routeHistoryLimit, filteredRoutes.length);
-    routeHistoryPage.textContent = filteredRoutes.length === 0
-      ? "0 shown"
-      : `${shown} of ${filteredRoutes.length} shown`;
+    routeHistoryPage.textContent = pagerSummary(shown, filteredRoutes.length, "route");
   }
   if (routeHistoryMore) {
     routeHistoryMore.hidden = state.routeHistoryLimit >= filteredRoutes.length;
@@ -6922,7 +6931,7 @@ function renderReplay(receipt) {
   playReplayButton.textContent = state.replayPlaying ? "Pause" : "Play";
   replayProgressBar.style.width = `${percent}%`;
   if (replayPage) {
-    replayPage.textContent = `${visibleFrames.length} of ${frames.length} frames`;
+    replayPage.textContent = pagerSummary(visibleFrames.length, frames.length, "frame");
   }
   if (replayShowMoreButton) {
     replayShowMoreButton.hidden = visibleFrames.length >= frames.length;

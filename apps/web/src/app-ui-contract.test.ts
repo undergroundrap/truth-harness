@@ -104,10 +104,13 @@ describe("web UI action contracts", () => {
     ]);
     const ledgerListStyles = styles.match(/\.claim-ledger-list,\r?\n\.route-history-list \{[\s\S]*?\r?\n\}/u)?.[0];
     const replayListStyles = styles.match(/\.replay-list \{[\s\S]*?\r?\n\}/u)?.[0];
+    const listPagerStyles = styles.match(/\.list-pager \{[\s\S]*?\r?\n\}/u)?.[0];
 
     expect(html).toContain('id="route-history-more"');
     expect(html).toContain('id="claim-ledger-more"');
     expect(html).toContain('id="replay-show-more"');
+    expect(source).toContain("function pagerSummary(shown, total, singular)");
+    expect(source).toContain("return `All ${total} ${total === 1 ? singular : plural} shown`;");
     expect(source).toContain("const LEDGER_PAGE_SIZE = 8;");
     expect(source).toContain("const REPLAY_PAGE_SIZE = 8;");
     expect(source).toContain("state.claimLedgerLimit += LEDGER_PAGE_SIZE;");
@@ -120,5 +123,8 @@ describe("web UI action contracts", () => {
     expect(replayListStyles).toBeTruthy();
     expect(replayListStyles).toContain("overflow: visible;");
     expect(replayListStyles).not.toContain("overflow: auto;");
+    expect(listPagerStyles).toBeTruthy();
+    expect(listPagerStyles).toContain("min-height: 36px;");
+    expect(listPagerStyles).toContain("padding: 6px 8px;");
   });
 });

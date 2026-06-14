@@ -878,8 +878,8 @@ body[data-surface="plot"] .task-dock {
 
 body[data-surface="plot"] .work-surface,
 body[data-surface="graph"] .work-surface {
-  height: clamp(1040px, 128vh, 1540px);
-  min-height: 960px;
+  height: auto;
+  min-height: clamp(1120px, 136vh, 1680px);
 }
 
 body.visual-focus-active[data-surface="plot"] .session-grid {
@@ -1038,10 +1038,10 @@ body.visual-focus-active[data-surface="plot"] .work-surface {
   container-type: inline-size;
   display: flex;
   flex-direction: column;
-  height: clamp(860px, 104vh, 1280px);
-  min-height: 760px;
-  overflow: hidden;
-  padding: 16px;
+  height: auto;
+  min-height: clamp(1040px, 124vh, 1520px);
+  overflow: visible;
+  padding: 18px;
 }
 
 .surface-header {
@@ -1199,7 +1199,8 @@ body.visual-focus-active[data-surface="plot"] .work-surface {
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
+  padding-bottom: 14px;
   scrollbar-gutter: stable;
 }
 
@@ -1212,22 +1213,22 @@ body.visual-focus-active[data-surface="plot"] .work-surface {
 }
 
 #surface-protocol.active {
-  overflow: auto;
+  overflow: visible;
   padding-right: 2px;
 }
 
 #surface-checks.active {
-  overflow: auto;
+  overflow: visible;
   padding-right: 2px;
 }
 
 #surface-runbook.active {
-  overflow: auto;
+  overflow: visible;
   padding-right: 2px;
 }
 
 #surface-plot.active {
-  overflow: auto;
+  overflow: visible;
   padding-right: 2px;
 }
 
@@ -1441,7 +1442,21 @@ h4 {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 9px;
+  min-height: 36px;
+  margin-top: 12px;
+  margin-bottom: 2px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  padding: 6px 8px;
+}
+
+.list-pager .mini-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .list-pager .text-button[hidden] {
