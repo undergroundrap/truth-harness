@@ -949,6 +949,93 @@ describe("benchmark CLI", () => {
     expect(graphText.stdout).toContain("Nodes:");
   });
 
+  it("plans and executes one workspace autonomy action without shell execution", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    const claim = await runCli([
+      "claim",
+      "add",
+      "A blocked finance claim needs audited evidence before use.",
+      "--workspace",
+      root,
+      "--domain",
+      "finance",
+      "--next-check",
+      "Attach audited source data before using this claim.",
+      "--json"
+    ]);
+    const writtenClaim = JSON.parse(claim.stdout) as { claim: { claimId: string } };
+    const dryRun = await runCli([
+      "workspace",
+      "run-next",
+      root,
+      "--max-routes",
+      "0",
+      "--max-sessions",
+      "0",
+      "--json"
+    ]);
+    const dryPlan = JSON.parse(dryRun.stdout) as {
+      dryRun: boolean;
+      status: string;
+      mode: string;
+      item?: { kind: string; claimId?: string; command: string };
+      execution: { status: string; kind: string; summary: string };
+    };
+    const executed = await runCli([
+      "workspace",
+      "run-next",
+      root,
+      "--max-routes",
+      "0",
+      "--max-sessions",
+      "0",
+      "--execute-local",
+      "--json"
+    ]);
+    const executedPlan = JSON.parse(executed.stdout) as {
+      dryRun: boolean;
+      status: string;
+      mode: string;
+      item?: { kind: string; claimId?: string };
+      execution: { status: string; kind: string; summary: string; result: { claimId: string } };
+      networkAccess: string;
+    };
+    const human = await runCli([
+      "workspace",
+      "run-next",
+      root,
+      "--max-routes",
+      "0",
+      "--max-sessions",
+      "0"
+    ]);
+
+    expect(dryRun.exitCode).toBe(0);
+    expect(dryPlan.dryRun).toBe(true);
+    expect(dryPlan.status).toBe("planned");
+    expect(dryPlan.mode).toBe("human-review-gated");
+    expect(dryPlan.item).toMatchObject({
+      kind: "claim-blocker",
+      claimId: writtenClaim.claim.claimId
+    });
+    expect(dryPlan.item?.command).toContain("truth-harness claim review");
+    expect(dryPlan.execution).toMatchObject({
+      status: "planned",
+      kind: "dry-run"
+    });
+    expect(executed.exitCode).toBe(0);
+    expect(executedPlan.dryRun).toBe(false);
+    expect(executedPlan.status).toBe("executed");
+    expect(executedPlan.networkAccess).toBe("none");
+    expect(executedPlan.execution.status).toBe("executed");
+    expect(executedPlan.execution.kind).toBe("claim-review");
+    expect(executedPlan.execution.result.claimId).toBe(writtenClaim.claim.claimId);
+    expect(human.stdout).toContain("Truth Harness workspace run-next");
+    expect(human.stdout).toContain("Dry run: true");
+    expect(human.stdout).toContain("Execution: planned (dry-run)");
+  });
+
   it("generates a synthetic workspace stress report from the CLI", async () => {
     const root = await tempRoot();
     const result = await runCli([
