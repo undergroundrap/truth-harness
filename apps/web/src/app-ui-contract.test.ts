@@ -137,6 +137,7 @@ describe("web UI action contracts", () => {
 
     expect(html).toContain('id="visual-artifact-banner"');
     expect(html).toContain('id="visual-mode-bar"');
+    expect(html).toContain('id="visual-renderer-source"');
     expect(source).toContain("function renderSavedVisualArtifactSvg(artifact)");
     expect(source).toContain('payload.format === "plotly-json"');
     expect(source).toContain('payload.format === "graph-json"');
@@ -147,6 +148,10 @@ describe("web UI action contracts", () => {
     expect(source).toContain("selectedVisualArtifactRecord?.visualId === state.selectedVisualArtifactId");
     expect(source).toContain("safeSvgColor(row.color");
     expect(source).toContain("savedVisualArtifactBannerHtml(selectedVisualArtifact)");
+    expect(source).toContain("function savedVisualArtifactRendererSource(artifact)");
+    expect(source).toContain("function renderVisualRendererSource(rendererSource)");
+    expect(source).toContain("copyCurrentVisualRendererSource");
+    expect(source).toContain("[data-visual-source-copy]");
     expect(source).toContain('return `${selectedVisualArtifactRecord?.kind ?? "visual"} artifact`;');
     expect(source).toContain("visualModeBar.hidden = Boolean(selectedVisualArtifact);");
     expect(source).toContain("const activeMode = selectedVisualArtifact ? undefined : selectedMapSnapshot?.visualMode ?? state.visualMode;");
@@ -154,5 +159,6 @@ describe("web UI action contracts", () => {
     expect(source).toContain("layoutArtifactGraphNodes(nodes, edges)");
     expect(styles).toContain(".visual-artifact-banner");
     expect(styles).toContain(".visual-mode-bar[hidden]");
+    expect(styles).toContain(".visual-renderer-source");
   });
 });

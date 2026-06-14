@@ -62,6 +62,11 @@ describe("visual artifacts", () => {
       replayCommand: "truth-harness visual show <visual-id>",
       payload: {
         format: "plotly-json",
+        rendererSource: {
+          language: "plotly-json",
+          content: JSON.stringify({ data: [{ x: [0.75, 0.625, 1.375], y: [1, 1, 1], type: "scatter" }] }, null, 2),
+          filename: "exact-rational-number-line.plotly.json"
+        },
         content: {
           data: [{ x: [0.75, 0.625, 1.375], y: [1, 1, 1], type: "scatter" }],
           layout: { title: "3/4 + 5/8" }
@@ -88,12 +93,18 @@ describe("visual artifacts", () => {
 
     expect(result.visual.schemaVersion).toBe("truth-harness.visual-artifact.v0");
     expect(result.visual.visualId).toMatch(/^vis_[a-f0-9]{16}$/u);
+    expect(result.visual.payload.rendererSource).toMatchObject({
+      language: "plotly-json",
+      filename: "exact-rational-number-line.plotly.json"
+    });
+    expect(result.visual.payload.rendererSource?.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/u);
     expect(result.visual.trustBoundary.visualDoesNotUpgradeTrust).toBe(true);
     expect(result.visual.warnings.join("\n")).toContain("not proof by themselves");
     expect(result.visual.tags).toEqual(["math", "visuals"]);
     expect(result.jsonPath).toContain(join(".truth-harness", "visuals"));
     expect(result.markdownPath).toContain(join(".truth-harness", "visuals"));
     expect(markdown).toContain("## Trust Boundary");
+    expect(markdown).toContain("Renderer source hash");
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({
       visualId: result.visual.visualId,

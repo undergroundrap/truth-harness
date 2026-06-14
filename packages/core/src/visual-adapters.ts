@@ -63,6 +63,11 @@ export async function writeWorkspaceGraphVisualArtifact(
     replayCommand: `truth-harness visual graph --renderer ${input.renderer} --workspace ${quoteArg(input.rootPath)}`,
     payload: {
       format: "graph-json",
+      rendererSource: {
+        language: input.renderer === "mermaid" ? "mermaid" : "dot",
+        content: source,
+        filename: input.renderer === "mermaid" ? "workspace-lineage.mmd" : "workspace-lineage.dot"
+      },
       content: {
         schemaVersion: "truth-harness.visual.graph-adapter.v0",
         language: input.renderer === "mermaid" ? "mermaid" : "dot",
@@ -125,6 +130,7 @@ export async function writeReceiptPlotVisualArtifact(input: ReceiptPlotVisualInp
       responsive: true
     }
   };
+  const rendererSource = receiptPlotRendererSource(input.renderer, receipt.problem, points, plotSpec);
 
   return writeVisualArtifact({
     rootPath: input.rootPath,
@@ -143,6 +149,7 @@ export async function writeReceiptPlotVisualArtifact(input: ReceiptPlotVisualInp
       : `truth-harness visual plot ${quoteArg(receiptRef)} --renderer ${input.renderer} --workspace ${quoteArg(input.rootPath)}`,
     payload: {
       format: "plotly-json",
+      rendererSource,
       content: plotSpec,
       width: 960,
       height: 540
@@ -171,6 +178,15 @@ export async function writeResearchCanvasVisualArtifact(
   const nodeIds = new Set(nodes.map((node) => node.nodeId));
   const edges = graph.edges.filter((edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to));
   const shapes = workspaceGraphToCanvasShapes(nodes, edges);
+  const canvasSource = {
+    schemaVersion: "truth-harness.visual.canvas-adapter.v0",
+    format: "tldraw-like-json",
+    shapes,
+    notes: [
+      "This is an editable canvas seed generated from the local evidence graph.",
+      "Canvas edits should be saved as visual artifacts; source receipts remain authoritative."
+    ]
+  };
 
   return writeVisualArtifact({
     rootPath: input.rootPath,
@@ -187,15 +203,12 @@ export async function writeResearchCanvasVisualArtifact(
     replayCommand: `truth-harness visual canvas --workspace ${quoteArg(input.rootPath)}`,
     payload: {
       format: "canvas-json",
-      content: {
-        schemaVersion: "truth-harness.visual.canvas-adapter.v0",
-        format: "tldraw-like-json",
-        shapes,
-        notes: [
-          "This is an editable canvas seed generated from the local evidence graph.",
-          "Canvas edits should be saved as visual artifacts; source receipts remain authoritative."
-        ]
-      }
+      rendererSource: {
+        language: "tldraw-json",
+        content: JSON.stringify(canvasSource, null, 2),
+        filename: "research-canvas.tldraw.json"
+      },
+      content: canvasSource
     },
     data: {
       columns: ["metric", "value"],
@@ -361,6 +374,73 @@ function receiptToPlotPoints(receipt: ReturnType<typeof createReceipt>) {
   }
 
   return [...values.values()].slice(0, 24);
+}
+
+function receiptPlotRendererSource(
+  renderer: PlotVisualRenderer,
+  problem: string,
+  points: Array<{ label: string; role: string; exact: string; decimal: number }>,
+  plotSpec: unknown
+) {
+  if (renderer === "plotly") {
+    return {
+      language: "plotly-json" as const,
+      content: JSON.stringify(plotSpec, null, 2),
+      filename: "receipt-plot.plotly.json"
+    };
+  }
+
+  const labels = points.map((point) => point.label);
+  const values = points.map((point) => point.decimal);
+  const exact = points.map((point) => point.exact);
+  const colors = points.map((point) => (point.role === "verified-output" ? "#70d6a1" : "#b8ad92"));
+  if (renderer === "matplotlib") {
+    return {
+      language: "python" as const,
+      content: [
+        "# Generated locally by Truth Harness. Source receipts remain authoritative.",
+        "import matplotlib.pyplot as plt",
+        "",
+        `title = ${JSON.stringify(problem)}`,
+        `labels = ${JSON.stringify(labels)}`,
+        `values = ${JSON.stringify(values)}`,
+        `exact = ${JSON.stringify(exact)}`,
+        `colors = ${JSON.stringify(colors)}`,
+        "",
+        "fig, ax = plt.subplots(figsize=(9.6, 5.4), facecolor='#0f0f0f')",
+        "ax.set_facecolor('#0f0f0f')",
+        "bars = ax.barh(labels, values, color=colors)",
+        "ax.set_title(title, color='#f5f2ea')",
+        "ax.set_xlabel('decimal value', color='#d8d2c8')",
+        "ax.tick_params(colors='#d8d2c8')",
+        "for bar, label in zip(bars, exact):",
+        "    ax.text(bar.get_width(), bar.get_y() + bar.get_height() / 2, f' {label}', va='center', color='#f5f2ea')",
+        "fig.tight_layout()",
+        "fig.savefig('truth-harness-plot.svg', format='svg')"
+      ].join("\n"),
+      filename: "receipt-plot.matplotlib.py"
+    };
+  }
+
+  return {
+    language: "python" as const,
+    content: [
+      "# Generated locally by Truth Harness for SageMath. Source receipts remain authoritative.",
+      "from sage.all import bar_chart",
+      "",
+      `title = ${JSON.stringify(problem)}`,
+      `labels = ${JSON.stringify(labels)}`,
+      `values = ${JSON.stringify(values)}`,
+      `exact = ${JSON.stringify(exact)}`,
+      "",
+      "chart = bar_chart(values, color='#70d6a1')",
+      "chart.set_legend_options(back_color='#0f0f0f')",
+      "chart.axes_labels(['index', 'decimal value'])",
+      "chart.save('truth-harness-sage-plot.svg')",
+      "print({'title': title, 'labels': labels, 'exact': exact, 'values': values})"
+    ].join("\n"),
+    filename: "receipt-plot.sage.py"
+  };
 }
 
 function parseRationalFromText(text: string): { exact: string; decimal: number } | undefined {

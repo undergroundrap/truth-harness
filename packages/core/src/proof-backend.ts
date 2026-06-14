@@ -433,6 +433,7 @@ export async function readLeanProofCheckRecord(rootPath: string, proofRef: strin
 export async function writeLeanProofCheckVisualArtifact(input: LeanProofVisualInput): Promise<VisualArtifactWriteResult> {
   const { record, path } = await readLeanProofCheckRecordWithPath(input.rootPath, input.proofRef);
   const title = input.title?.trim() || `Lean proof check ${record.checkId}`;
+  const svg = renderLeanProofCheckVisualSvg(record);
 
   return writeVisualArtifact({
     rootPath: input.rootPath,
@@ -458,7 +459,12 @@ export async function writeLeanProofCheckVisualArtifact(input: LeanProofVisualIn
     replayCommand: `truth-harness proof visual ${quoteCommandArg(path)} --workspace ${quoteCommandArg(input.rootPath)} --json`,
     payload: {
       format: "svg",
-      content: renderLeanProofCheckVisualSvg(record),
+      rendererSource: {
+        language: "svg",
+        content: svg,
+        filename: `${record.checkId}.proof-tree.svg`
+      },
+      content: svg,
       width: 960,
       height: 540
     },

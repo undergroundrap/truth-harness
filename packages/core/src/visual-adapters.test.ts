@@ -52,14 +52,28 @@ describe("visual adapters", () => {
     expect(graphVisual.kind).toBe("lineage-graph");
     expect(graphVisual.renderer.engine).toBe("mermaid");
     expect(graphVisual.payload.format).toBe("graph-json");
+    expect(graphVisual.payload.rendererSource).toMatchObject({
+      language: "mermaid",
+      filename: "workspace-lineage.mmd"
+    });
+    expect(graphVisual.payload.rendererSource?.content).toContain("flowchart LR");
+    expect(graphVisual.payload.rendererSource?.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/u);
     expect(JSON.stringify(graphVisual.payload.content)).toContain("flowchart LR");
     expect(plotVisual.kind).toBe("plot");
     expect(plotVisual.renderer.engine).toBe("plotly");
     expect(plotVisual.payload.format).toBe("plotly-json");
+    expect(plotVisual.payload.rendererSource).toMatchObject({
+      language: "plotly-json",
+      filename: "receipt-plot.plotly.json"
+    });
     expect(plotVisual.data?.rows.some((row) => row.includes("11/8"))).toBe(true);
     expect(canvasVisual.kind).toBe("mind-map");
     expect(canvasVisual.renderer.engine).toBe("tldraw");
     expect(canvasVisual.payload.format).toBe("canvas-json");
+    expect(canvasVisual.payload.rendererSource).toMatchObject({
+      language: "tldraw-json",
+      filename: "research-canvas.tldraw.json"
+    });
     expect(visuals).toHaveLength(3);
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.visuals).toBe(3);

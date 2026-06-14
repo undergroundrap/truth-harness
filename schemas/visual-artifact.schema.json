@@ -165,6 +165,9 @@
         "contentRef": {
           "type": "string"
         },
+        "rendererSource": {
+          "$ref": "#/$defs/rendererSource"
+        },
         "width": {
           "type": "integer",
           "minimum": 1
@@ -172,6 +175,40 @@
         "height": {
           "type": "integer",
           "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "rendererSourceLanguage": {
+      "enum": [
+        "mermaid",
+        "dot",
+        "plotly-json",
+        "python",
+        "tldraw-json",
+        "svg",
+        "html",
+        "text"
+      ]
+    },
+    "rendererSource": {
+      "type": "object",
+      "required": ["language", "content", "contentHash"],
+      "properties": {
+        "language": {
+          "$ref": "#/$defs/rendererSourceLanguage"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1
+        },
+        "filename": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contentHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{16,64}$"
         }
       },
       "additionalProperties": false

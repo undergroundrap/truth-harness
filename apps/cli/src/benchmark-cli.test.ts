@@ -105,7 +105,7 @@ describe("benchmark CLI", () => {
 
     const graph = JSON.parse(
       (await runCli(["visual", "graph", "--workspace", root, "--renderer", "graphviz", "--json"])).stdout
-    ) as { visual: { kind: string; renderer: { engine: string }; payload: { format: string; content: unknown } } };
+    ) as { visual: { kind: string; renderer: { engine: string }; payload: { format: string; content: unknown; rendererSource?: { language: string; content: string; contentHash: string } } } };
     const plot = JSON.parse(
       (await runCli(["visual", "plot", ".truth-harness/receipts/fraction.json", "--workspace", root, "--renderer", "plotly", "--json"])).stdout
     ) as { visual: { kind: string; renderer: { engine: string }; payload: { format: string }; data?: { rows: string[][] } } };
@@ -120,9 +120,14 @@ describe("benchmark CLI", () => {
     expect(graph.visual).toMatchObject({
       kind: "lineage-graph",
       renderer: { engine: "graphviz" },
-      payload: { format: "graph-json" }
+      payload: {
+        format: "graph-json",
+        rendererSource: { language: "dot" }
+      }
     });
     expect(JSON.stringify(graph.visual.payload.content)).toContain("digraph TruthHarnessWorkspace");
+    expect(graph.visual.payload.rendererSource?.content).toContain("digraph TruthHarnessWorkspace");
+    expect(graph.visual.payload.rendererSource?.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/u);
     expect(plot.visual).toMatchObject({
       kind: "plot",
       renderer: { engine: "plotly" },

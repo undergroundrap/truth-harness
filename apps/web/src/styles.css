@@ -2618,6 +2618,58 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   border-bottom: 0;
 }
 
+.visual-renderer-source {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #121212;
+  padding: 12px;
+}
+
+.visual-renderer-source[hidden] {
+  display: none;
+}
+
+.visual-renderer-source-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.visual-renderer-source h5 {
+  color: #f1eadc;
+  font-size: 13px;
+  margin: 0 0 4px;
+}
+
+.visual-renderer-source span {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.visual-renderer-source pre {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0c0c0c;
+  color: #d8d2c8;
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 9px;
+  scrollbar-gutter: stable;
+}
+
+.visual-renderer-source code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  white-space: pre;
+}
+
 .plot-node-inspector {
   grid-column: 1 / -1;
   min-width: 0;

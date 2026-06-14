@@ -537,6 +537,8 @@ export type {
   VisualArtifactPayloadFormat,
   VisualArtifactRenderer,
   VisualArtifactRendererInfo,
+  VisualArtifactRendererSource,
+  VisualArtifactRendererSourceLanguage,
   VisualArtifactSourceKind,
   VisualArtifactSourceRef,
   VisualArtifactSummary,

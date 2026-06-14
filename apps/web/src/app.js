@@ -441,6 +441,7 @@ const plotTitle = document.querySelector("#plot-title");
 const plotCaption = document.querySelector("#plot-caption");
 const plotFacts = document.querySelector("#plot-facts");
 const plotData = document.querySelector("#plot-data");
+const visualRendererSourcePanel = document.querySelector("#visual-renderer-source");
 const plotNodeInspector = document.querySelector("#plot-node-inspector");
 const researchMapStatus = document.querySelector("#research-map-status");
 const saveResearchMapButton = document.querySelector("#save-research-map");
@@ -1398,6 +1399,7 @@ function renderMathPlot(receipt) {
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join("");
   plotData.innerHTML = renderPlotDataTable(plot);
+  renderVisualRendererSource(plot.rendererSource);
   renderResearchMapNodeInspector(selectedMapSnapshot, plot);
   visualModeButtons.forEach((button) => {
     const activeMode = selectedVisualArtifact ? undefined : selectedMapSnapshot?.visualMode ?? state.visualMode;
@@ -2591,6 +2593,34 @@ function renderPlotDataTable(plot) {
   </section>`;
 }
 
+function renderVisualRendererSource(rendererSource) {
+  if (!visualRendererSourcePanel) {
+    return;
+  }
+
+  if (!rendererSource?.content) {
+    visualRendererSourcePanel.hidden = true;
+    visualRendererSourcePanel.innerHTML = "";
+    return;
+  }
+
+  const preview = rendererSource.content.length > 3000
+    ? `${rendererSource.content.slice(0, 3000)}\n...`
+    : rendererSource.content;
+  visualRendererSourcePanel.hidden = false;
+  visualRendererSourcePanel.innerHTML = `<div class="visual-renderer-source-header">
+    <div>
+      <h5>Renderer Source</h5>
+      <span>${escapeHtml(rendererSource.language ?? "text")} - ${escapeHtml(rendererSource.contentHash ?? "hash not recorded")}</span>
+    </div>
+    <div class="activity-actions">
+      <button class="text-button compact-button" data-visual-source-copy type="button">Copy source</button>
+      <button class="text-button compact-button" data-visual-source-download type="button">Download source</button>
+    </div>
+  </div>
+  <pre><code>${escapeHtml(preview)}</code></pre>`;
+}
+
 function formatPlotDataCsv(plot) {
   const rows = [
     plot.dataColumns,
@@ -2754,6 +2784,7 @@ function createSavedVisualArtifactModel(artifact) {
   const svg = renderSavedVisualArtifactSvg(artifact);
   const mapNodes = savedVisualArtifactMapNodes(artifact);
   const mapEdges = savedVisualArtifactMapEdges(artifact, mapNodes);
+  const rendererSource = savedVisualArtifactRendererSource(artifact);
   const sourceRows = (artifact.sourceRefs ?? []).map((ref) => [
     `${ref.kind}:${ref.ref}`,
     ref.label ?? "source ref",
@@ -2770,6 +2801,7 @@ function createSavedVisualArtifactModel(artifact) {
       ["Kind", artifact.kind ?? "visual"],
       ["Renderer", artifact.renderer?.engine ?? "unknown"],
       ["Payload", payload.format ?? "unknown"],
+      ["Renderer source", rendererSource?.language ?? "not recorded"],
       ["Sources", String((artifact.sourceRefs ?? []).length)],
       ["Network", artifact.privacy?.networkAccess ?? "none"]
     ],
@@ -2782,6 +2814,7 @@ function createSavedVisualArtifactModel(artifact) {
         ["payload", payload.format ?? "unknown", "visual.payload"],
         ...sourceRows
     ],
+    rendererSource,
     mapNodes,
     mapEdges,
     sourceVisualMode: artifact.kind === "plot" ? "number-line" : artifact.kind === "lineage-graph" ? "concept-map" : "mind-map",
@@ -2793,6 +2826,86 @@ function createSavedVisualArtifactModel(artifact) {
       sourceRefs: artifact.sourceRefs ?? []
     }
   };
+}
+
+function savedVisualArtifactRendererSource(artifact) {
+  const payload = artifact.payload ?? {};
+  const explicit = payload.rendererSource;
+  if (explicit && typeof explicit.content === "string") {
+    return {
+      language: explicit.language ?? sourceLanguageForPayload(payload, artifact),
+      content: explicit.content,
+      filename: explicit.filename ?? rendererSourceFilename(artifact, explicit.language),
+      contentHash: explicit.contentHash ?? "hash not recorded"
+    };
+  }
+
+  const content = payload.content;
+  if (content && typeof content === "object" && typeof content.source === "string") {
+    return {
+      language: content.language ?? sourceLanguageForPayload(payload, artifact),
+      content: content.source,
+      filename: rendererSourceFilename(artifact, content.language),
+      contentHash: "legacy source, hash not recorded"
+    };
+  }
+
+  if (payload.format === "plotly-json" && content) {
+    return {
+      language: "plotly-json",
+      content: JSON.stringify(content, null, 2),
+      filename: rendererSourceFilename(artifact, "plotly-json"),
+      contentHash: "legacy source, hash not recorded"
+    };
+  }
+
+  if (payload.format === "canvas-json" && content) {
+    return {
+      language: "tldraw-json",
+      content: JSON.stringify(content, null, 2),
+      filename: rendererSourceFilename(artifact, "tldraw-json"),
+      contentHash: "legacy source, hash not recorded"
+    };
+  }
+
+  if (payload.format === "svg" && typeof content === "string") {
+    return {
+      language: "svg",
+      content,
+      filename: rendererSourceFilename(artifact, "svg"),
+      contentHash: "legacy source, hash not recorded"
+    };
+  }
+
+  return undefined;
+}
+
+function sourceLanguageForPayload(payload, artifact) {
+  if (payload.format === "graph-json") {
+    return artifact.renderer?.engine === "graphviz" ? "dot" : "mermaid";
+  }
+  if (payload.format === "plotly-json") {
+    return "plotly-json";
+  }
+  if (payload.format === "canvas-json") {
+    return "tldraw-json";
+  }
+  return payload.format ?? "text";
+}
+
+function rendererSourceFilename(artifact, language) {
+  const base = String(artifact.visualId ?? artifact.kind ?? "visual").replace(/[^A-Za-z0-9_.-]/gu, "_");
+  const extension = {
+    mermaid: "mmd",
+    dot: "dot",
+    "plotly-json": "plotly.json",
+    python: "py",
+    "tldraw-json": "tldraw.json",
+    svg: "svg",
+    html: "html",
+    text: "txt"
+  }[language] ?? "txt";
+  return `${base}.${extension}`;
 }
 
 function renderSavedVisualArtifactSvg(artifact) {
@@ -3767,6 +3880,56 @@ function downloadCurrentPlotSvg() {
 
   downloadTextFile(`${receipt.runId}-plot.svg`, plot.svg, "image/svg+xml");
   addActivity("human", "Downloaded visual SVG", `${receipt.runId} ${plot.kind} visualization saved as SVG.`, "passed");
+}
+
+async function copyCurrentVisualRendererSource(button) {
+  const plot = currentPlotModel();
+  const rendererSource = plot?.rendererSource;
+  if (!rendererSource?.content) {
+    return;
+  }
+
+  await copyOrDownloadText({
+    text: `${rendererSource.content.trimEnd()}\n`,
+    filename: rendererSource.filename ?? `truth-harness-renderer-source-${safeFilenameTimestamp()}.txt`,
+    type: rendererSourceMimeType(rendererSource.language),
+    button,
+    copiedTitle: "Copied renderer source",
+    copiedDetail: `${rendererSource.language ?? "text"} source copied from the visual artifact.`,
+    fallbackTitle: "Downloaded renderer source",
+    fallbackDetail: "the renderer source was saved as a local file instead."
+  });
+}
+
+function downloadCurrentVisualRendererSource() {
+  const plot = currentPlotModel();
+  const rendererSource = plot?.rendererSource;
+  if (!rendererSource?.content) {
+    return;
+  }
+
+  downloadTextFile(
+    rendererSource.filename ?? `truth-harness-renderer-source-${safeFilenameTimestamp()}.txt`,
+    `${rendererSource.content.trimEnd()}\n`,
+    rendererSourceMimeType(rendererSource.language)
+  );
+  addActivity("human", "Downloaded renderer source", `${rendererSource.language ?? "text"} visual renderer source saved locally.`, "passed");
+}
+
+function rendererSourceMimeType(language) {
+  if (language === "plotly-json" || language === "tldraw-json") {
+    return "application/json";
+  }
+  if (language === "svg") {
+    return "image/svg+xml";
+  }
+  if (language === "html") {
+    return "text/html";
+  }
+  if (language === "python") {
+    return "text/x-python";
+  }
+  return "text/plain";
 }
 
 async function saveCurrentResearchMap() {
@@ -10293,6 +10456,21 @@ copyPlotDataButton.addEventListener("click", () => {
 downloadPlotDataButton.addEventListener("click", downloadCurrentPlotData);
 
 downloadPlotSvgButton.addEventListener("click", downloadCurrentPlotSvg);
+
+visualRendererSourcePanel?.addEventListener("click", (event) => {
+  const copyButton = event.target.closest("[data-visual-source-copy]");
+  if (copyButton) {
+    copyCurrentVisualRendererSource(copyButton).catch((error) => {
+      addActivity("web-ui", "Copy renderer source failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+    });
+    return;
+  }
+
+  const downloadButton = event.target.closest("[data-visual-source-download]");
+  if (downloadButton) {
+    downloadCurrentVisualRendererSource();
+  }
+});
 
 researchNotes.addEventListener("input", saveNotes);
 

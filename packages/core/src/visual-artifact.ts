@@ -38,6 +38,16 @@ export type VisualArtifactPayloadFormat =
   | "png-ref"
   | "table-json";
 
+export type VisualArtifactRendererSourceLanguage =
+  | "mermaid"
+  | "dot"
+  | "plotly-json"
+  | "python"
+  | "tldraw-json"
+  | "svg"
+  | "html"
+  | "text";
+
 export type VisualArtifactSourceKind =
   | "receipt"
   | "claim"
@@ -70,8 +80,16 @@ export interface VisualArtifactPayload {
   format: VisualArtifactPayloadFormat;
   content: unknown;
   contentRef?: string;
+  rendererSource?: VisualArtifactRendererSource;
   width?: number;
   height?: number;
+}
+
+export interface VisualArtifactRendererSource {
+  language: VisualArtifactRendererSourceLanguage;
+  content: string;
+  filename?: string;
+  contentHash?: string;
 }
 
 export interface VisualArtifactDataTable {
@@ -268,6 +286,12 @@ export function renderVisualArtifactMarkdown(visual: Omit<VisualArtifact, "markd
     `| Kind | \`${visual.kind}\` |`,
     `| Renderer | \`${visual.renderer.engine}\` |`,
     `| Payload | \`${visual.payload.format}\` |`,
+    ...(visual.payload.rendererSource
+      ? [
+        `| Renderer source | \`${visual.payload.rendererSource.language}\` |`,
+        `| Renderer source hash | \`${visual.payload.rendererSource.contentHash ?? "not recorded"}\` |`
+      ]
+      : []),
     `| Replay | \`${escapeMarkdownTable(visual.replayCommand)}\` |`,
     "",
     "## Source Refs",
@@ -323,8 +347,20 @@ function normalizePayload(payload: VisualArtifactPayload): VisualArtifactPayload
     format: payload.format,
     content: payload.content,
     ...(normalizeOptionalText(payload.contentRef) ? { contentRef: normalizeOptionalText(payload.contentRef) } : {}),
+    ...(payload.rendererSource ? { rendererSource: normalizeRendererSource(payload.rendererSource) } : {}),
     ...(typeof payload.width === "number" ? { width: Math.round(payload.width) } : {}),
     ...(typeof payload.height === "number" ? { height: Math.round(payload.height) } : {})
+  };
+}
+
+function normalizeRendererSource(source: VisualArtifactRendererSource): VisualArtifactRendererSource {
+  const language = source.language;
+  const content = normalizeRequiredText(source.content, "renderer source content");
+  return {
+    language,
+    content,
+    ...(normalizeOptionalText(source.filename) ? { filename: normalizeOptionalText(source.filename) } : {}),
+    contentHash: source.contentHash?.trim() || `sha256:${stableHash(content)}`
   };
 }
 
