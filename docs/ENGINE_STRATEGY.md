@@ -71,6 +71,26 @@ For Lean specifically, the adapter path is staged: inspect the local Lean/Lake p
 
 For visual systems, the adapter path is also staged. Truth Harness should not keep hand-drawing fake canvases as the source of truth. Engine-backed visuals should be written as `truth-harness.visual-artifact.v0` records: Mermaid/Graphviz specs from workspace lineage, Plotly/Matplotlib/Sage-ready plot specs from receipts, tldraw-style canvas JSON from workspace graphs, and later renderer output from real theorem prover, notebook, simulation, or plotting engines. The artifact records carry the renderer, payload, renderer source with a hash, source refs, exact data table where available, replay command, and trust boundary. Renderer output is a second artifact, not a mutation of the source: `truth-harness visual render <visual_id> --engine graphviz` currently accepts only saved DOT source, rejects external refs, runs local `dot -Tsvg` without a shell, sanitizes SVG output, and writes a linked SVG artifact. The UI may render a native preview, but the reusable renderer source, renderer output, and source refs are the professional handoff for papers, reports, agents, and future renderer containers.
 
+## Future Simulation And Rust Bridge
+
+Truth Harness is not a graphics engine, robotics engine, or physics simulator today. The credible long-term path is to make the current verification layer strict enough that future Rust simulation kernels, robotics math, neural-rendering pipelines, and AI-generated optimization code can plug into it without weakening the trust model.
+
+The engine manifest is the first machine-readable contract for that path. Every capability now reports:
+
+- a determinism class: strict deterministic, replay deterministic, environment measured, provenance only, or planned,
+- primitive semantics: exact rational, bounded search, dimension vector, SMT-LIB, formal proof, symbolic expression, sandbox measurement, simulation provenance, and similar narrow meanings,
+- replay requirements,
+- drift risks,
+- an agent-friendly JSON contract with stable ids and structured diagnostics.
+
+This keeps three future guardrails visible in the current product:
+
+1. **Strict determinism first.** Exact local primitives and proof/smt/cas records must be replayable before an agent is allowed to build on them. Floating-point, simulation, notebook, or neural output must record version, seed, environment, parameters, precision, and uncertainty before it becomes evidence.
+2. **AI-parser-friendly failures.** A code-generation model should be able to read the JSON route, understand which primitive failed, generate a narrower fix, and rerun the verifier without relying on prose chat memory.
+3. **Primitive modularity.** The same contract that handles exact fractions should later handle vectors, matrices, geometry, units, intervals, solver encodings, proof artifacts, and simulation states as composable evidence nodes.
+
+Future Rust work should follow the same ladder: prove or specify critical math where possible, generate or hand-write Rust kernels, run differential fuzzing against trusted engines, record replayable benchmark artifacts, and refuse to label stochastic or simulation output as truth. A differential fuzzing oracle is evidence of agreement over a domain, not formal proof. A Lean proof artifact can support `proved` only for the encoded theorem. A Rust benchmark can support performance and replay claims, not scientific validity by itself.
+
 ## Native Kernels We Should Build
 
 We should build small native kernels when they are:

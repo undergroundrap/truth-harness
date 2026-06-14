@@ -111,7 +111,10 @@
         "totalCount",
         "nativeCount",
         "adapterCount",
-        "plannedCount"
+        "plannedCount",
+        "deterministicCount",
+        "replayDeterministicCount",
+        "machineContract"
       ],
       "properties": {
         "schemaVersion": {
@@ -139,6 +142,46 @@
         "plannedCount": {
           "type": "integer",
           "minimum": 0
+        },
+        "deterministicCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "replayDeterministicCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "machineContract": {
+          "type": "object",
+          "required": [
+            "jsonFirst",
+            "diagnosticsAreStructured",
+            "stableCapabilityIds",
+            "replayCommandsRequiredForEvidence",
+            "deterministicTrustRequiresReplayableArtifact",
+            "primitivesRemainComposable"
+          ],
+          "properties": {
+            "jsonFirst": {
+              "const": true
+            },
+            "diagnosticsAreStructured": {
+              "const": true
+            },
+            "stableCapabilityIds": {
+              "const": true
+            },
+            "replayCommandsRequiredForEvidence": {
+              "const": true
+            },
+            "deterministicTrustRequiresReplayableArtifact": {
+              "const": true
+            },
+            "primitivesRemainComposable": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

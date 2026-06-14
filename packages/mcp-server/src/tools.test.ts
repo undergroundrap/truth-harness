@@ -354,12 +354,20 @@ describe("MCP tool handlers", () => {
     expect(result.schemaVersion).toBe("truth-harness.engine-manifest.v0");
     expect(result.localOnly).toBe(true);
     expect(result.networkAccess).toBe("none");
+    expect(result.machineContract.jsonFirst).toBe(true);
+    expect(result.machineContract.diagnosticsAreStructured).toBe(true);
+    expect(result.deterministicCount).toBeGreaterThan(0);
+    expect(result.replayDeterministicCount).toBeGreaterThan(0);
     expect(result.capabilities).toContainEqual(
       expect.objectContaining({
         id: "local-rational-arithmetic",
         kind: "native-kernel",
         status: "ready",
-        canMintTrust: true
+        canMintTrust: true,
+        determinism: expect.objectContaining({
+          determinismClass: "strict-deterministic",
+          primitiveSemantics: "exact-rational"
+        })
       })
     );
     expect(result.capabilities).toContainEqual(
@@ -367,7 +375,11 @@ describe("MCP tool handlers", () => {
         id: "z3-smt-solver",
         kind: "adapter",
         status: "missing",
-        canMintTrust: false
+        canMintTrust: false,
+        determinism: expect.objectContaining({
+          determinismClass: "replay-deterministic",
+          primitiveSemantics: "smt-lib"
+        })
       })
     );
     expect(result.capabilities).toContainEqual(

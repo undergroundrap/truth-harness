@@ -6,6 +6,38 @@ import type { TrustLabel } from "./types.js";
 
 export type EngineCapabilityKind = "native-kernel" | "adapter" | "workspace-service" | "safety-boundary" | "planned-adapter";
 export type EngineCapabilityStatus = "ready" | "available" | "missing" | "error" | "planned";
+export type EngineDeterminismClass =
+  | "strict-deterministic"
+  | "replay-deterministic"
+  | "environment-measured"
+  | "provenance-only"
+  | "planned";
+export type EnginePrimitiveSemantics =
+  | "exact-rational"
+  | "bounded-integer-search"
+  | "modular-integer"
+  | "dimension-vector"
+  | "rational-interval"
+  | "symbolic-expression"
+  | "formal-proof"
+  | "smt-lib"
+  | "local-source-index"
+  | "workspace-artifact"
+  | "privacy-disclosure"
+  | "sandbox-measurement"
+  | "rigorous-numeric"
+  | "simulation-provenance"
+  | "not-implemented";
+
+export interface EngineDeterminismProfile {
+  determinismClass: EngineDeterminismClass;
+  deterministic: boolean;
+  replayable: boolean;
+  primitiveSemantics: EnginePrimitiveSemantics;
+  aiParserFriendly: true;
+  replayRequirements: string[];
+  driftRisks: string[];
+}
 
 export interface EngineCapability {
   id: string;
@@ -24,8 +56,11 @@ export interface EngineCapability {
   statusProbeMintedEvidence: false;
   trustBoundary: string;
   limitations: string[];
+  determinism: EngineDeterminismProfile;
   nextStep?: string;
 }
+
+type RawEngineCapability = Omit<EngineCapability, "determinism">;
 
 export interface EngineManifestOptions {
   timeoutMs?: number;
@@ -47,7 +82,17 @@ export interface EngineManifest {
   nativeCount: number;
   adapterCount: number;
   plannedCount: number;
+  deterministicCount: number;
+  replayDeterministicCount: number;
   capabilities: EngineCapability[];
+  machineContract: {
+    jsonFirst: true;
+    diagnosticsAreStructured: true;
+    stableCapabilityIds: true;
+    replayCommandsRequiredForEvidence: true;
+    deterministicTrustRequiresReplayableArtifact: true;
+    primitivesRemainComposable: true;
+  };
   trustBoundary: {
     aiOutputIsNotEvidence: true;
     statusProbeIsNotEvidence: true;
@@ -88,7 +133,7 @@ export function getEngineManifest(options: EngineManifestOptions = {}): EngineMa
     proofCapability(proof.backends[0]),
     smtCapability(smt.backends[0]),
     ...plannedCapabilities()
-  ];
+  ].map(withDeterminism);
   const countedCapabilities = capabilities.filter((capability) => capability.kind !== "planned-adapter");
   const readyCount = countedCapabilities.filter((capability) => capability.status === "ready" || capability.status === "available").length;
   const totalCount = countedCapabilities.length;
@@ -104,7 +149,17 @@ export function getEngineManifest(options: EngineManifestOptions = {}): EngineMa
     nativeCount: capabilities.filter((capability) => capability.kind === "native-kernel").length,
     adapterCount: capabilities.filter((capability) => capability.kind === "adapter").length,
     plannedCount: capabilities.filter((capability) => capability.kind === "planned-adapter").length,
+    deterministicCount: capabilities.filter((capability) => capability.determinism.determinismClass === "strict-deterministic").length,
+    replayDeterministicCount: capabilities.filter((capability) => capability.determinism.determinismClass === "replay-deterministic").length,
     capabilities,
+    machineContract: {
+      jsonFirst: true,
+      diagnosticsAreStructured: true,
+      stableCapabilityIds: true,
+      replayCommandsRequiredForEvidence: true,
+      deterministicTrustRequiresReplayableArtifact: true,
+      primitivesRemainComposable: true
+    },
     trustBoundary: {
       aiOutputIsNotEvidence: true,
       statusProbeIsNotEvidence: true,
@@ -122,7 +177,7 @@ export function getEngineManifest(options: EngineManifestOptions = {}): EngineMa
   };
 }
 
-function nativeCapabilities(): EngineCapability[] {
+function nativeCapabilities(): RawEngineCapability[] {
   return [
     {
       id: "local-rational-arithmetic",
@@ -240,7 +295,7 @@ function nativeCapabilities(): EngineCapability[] {
   ];
 }
 
-function workspaceCapabilities(): EngineCapability[] {
+function workspaceCapabilities(): RawEngineCapability[] {
   return [
     {
       id: "claim-ledger",
@@ -293,7 +348,7 @@ function workspaceCapabilities(): EngineCapability[] {
   ];
 }
 
-function codeRunSandboxCapability(status: CodeRunSandboxStatus): EngineCapability {
+function codeRunSandboxCapability(status: CodeRunSandboxStatus): RawEngineCapability {
   return {
     id: "code-run-sandbox",
     displayName: "Code-run sandbox boundary",
@@ -313,7 +368,7 @@ function codeRunSandboxCapability(status: CodeRunSandboxStatus): EngineCapabilit
   };
 }
 
-function maximaCapability(probe: ReturnType<typeof getCasBackendStatus>["backends"][number] | undefined): EngineCapability {
+function maximaCapability(probe: ReturnType<typeof getCasBackendStatus>["backends"][number] | undefined): RawEngineCapability {
   return {
     id: "maxima-cas",
     displayName: "Maxima independent CAS",
@@ -335,7 +390,7 @@ function maximaCapability(probe: ReturnType<typeof getCasBackendStatus>["backend
   };
 }
 
-function sageCapability(probe: ReturnType<typeof getCasBackendStatus>["backends"][number] | undefined): EngineCapability {
+function sageCapability(probe: ReturnType<typeof getCasBackendStatus>["backends"][number] | undefined): RawEngineCapability {
   return {
     id: "sage-cas",
     displayName: "SageMath CAS breadth adapter",
@@ -360,7 +415,7 @@ function sageCapability(probe: ReturnType<typeof getCasBackendStatus>["backends"
   };
 }
 
-function proofCapability(probe: ReturnType<typeof getProofBackendStatus>["backends"][number] | undefined): EngineCapability {
+function proofCapability(probe: ReturnType<typeof getProofBackendStatus>["backends"][number] | undefined): RawEngineCapability {
   return {
     id: "lean-proof-checker",
     displayName: "Lean proof checker",
@@ -382,7 +437,7 @@ function proofCapability(probe: ReturnType<typeof getProofBackendStatus>["backen
   };
 }
 
-function smtCapability(probe: ReturnType<typeof getSmtBackendStatus>["backends"][number] | undefined): EngineCapability {
+function smtCapability(probe: ReturnType<typeof getSmtBackendStatus>["backends"][number] | undefined): RawEngineCapability {
   return {
     id: "z3-smt-solver",
     displayName: "Z3 SMT solver",
@@ -404,7 +459,7 @@ function smtCapability(probe: ReturnType<typeof getSmtBackendStatus>["backends"]
   };
 }
 
-function plannedCapabilities(): EngineCapability[] {
+function plannedCapabilities(): RawEngineCapability[] {
   return [
     plannedCapability("cvc5-smt-solver", "cvc5 SMT solver", "math", "Second SMT solver for cross-solver confidence and regressions."),
     plannedCapability("lean-lsp-router", "Lean LSP proof workflow", "math", "Goals, diagnostics, formal library search, and interactive proof repair."),
@@ -414,7 +469,7 @@ function plannedCapabilities(): EngineCapability[] {
   ];
 }
 
-function plannedCapability(id: string, displayName: string, lane: string, nextStep: string): EngineCapability {
+function plannedCapability(id: string, displayName: string, lane: string, nextStep: string): RawEngineCapability {
   return {
     id,
     displayName,
@@ -437,4 +492,130 @@ function adapterStatus(status: "available" | "missing" | "error" | undefined): E
   if (status === "available") return "available";
   if (status === "error") return "error";
   return "missing";
+}
+
+function withDeterminism(capability: RawEngineCapability): EngineCapability {
+  return {
+    ...capability,
+    determinism: determinismForCapability(capability)
+  };
+}
+
+function determinismForCapability(capability: RawEngineCapability): EngineDeterminismProfile {
+  if (capability.kind === "planned-adapter") {
+    return determinismProfile({
+      determinismClass: "planned",
+      deterministic: false,
+      replayable: false,
+      primitiveSemantics: plannedPrimitiveSemantics(capability.id),
+      replayRequirements: ["No replay contract exists until this adapter is implemented."],
+      driftRisks: ["Planned capability; trust labels must not depend on it."]
+    });
+  }
+
+  if (capability.kind === "native-kernel") {
+    return determinismProfile({
+      determinismClass: "strict-deterministic",
+      deterministic: true,
+      replayable: true,
+      primitiveSemantics: nativePrimitiveSemantics(capability.id),
+      replayRequirements: ["Use the recorded Truth Harness command and receipt JSON."],
+      driftRisks: ["Parser or native-kernel implementation changes can intentionally change outputs across versions."]
+    });
+  }
+
+  if (capability.kind === "adapter") {
+    return determinismProfile({
+      determinismClass: "replay-deterministic",
+      deterministic: true,
+      replayable: true,
+      primitiveSemantics: adapterPrimitiveSemantics(capability.id),
+      replayRequirements: [
+        "Record the concrete command, input artifact, backend id, backend version when available, stdout/stderr or accepted output, and replay command.",
+        "Treat backend availability probes as readiness only; require a concrete check artifact before trust changes."
+      ],
+      driftRisks: [
+        "Backend version, library path, solver settings, timeout, platform, or translation adapter changes can alter results.",
+        "Adapters cannot upgrade informal surrounding claims beyond the encoded or checked artifact."
+      ]
+    });
+  }
+
+  if (capability.kind === "safety-boundary") {
+    return determinismProfile({
+      determinismClass: "environment-measured",
+      deterministic: false,
+      replayable: true,
+      primitiveSemantics: "sandbox-measurement",
+      replayRequirements: ["Re-run the sandbox status command inside the same execution environment."],
+      driftRisks: ["Host/container networking, process isolation, filesystem mounts, or runtime policy can change between runs."]
+    });
+  }
+
+  return determinismProfile({
+    determinismClass: "provenance-only",
+    deterministic: true,
+    replayable: true,
+    primitiveSemantics: workspacePrimitiveSemantics(capability.id),
+    replayRequirements: ["Read the recorded local workspace artifacts and validate their schemas before relying on them."],
+    driftRisks: ["Workspace files can change; use snapshots and validation to detect drift."]
+  });
+}
+
+function determinismProfile(input: Omit<EngineDeterminismProfile, "aiParserFriendly">): EngineDeterminismProfile {
+  return {
+    ...input,
+    aiParserFriendly: true
+  };
+}
+
+function nativePrimitiveSemantics(id: string): EnginePrimitiveSemantics {
+  switch (id) {
+    case "local-rational-arithmetic":
+      return "exact-rational";
+    case "finite-counterexample-search":
+      return "bounded-integer-search";
+    case "local-mod2-parity-kernel":
+      return "modular-integer";
+    case "local-dimensional-analysis":
+      return "dimension-vector";
+    case "rational-interval-bounds":
+      return "rational-interval";
+    case "sympy-symbolic-adapter":
+      return "symbolic-expression";
+    case "local-corpus-lexical-search":
+      return "local-source-index";
+    default:
+      return "workspace-artifact";
+  }
+}
+
+function adapterPrimitiveSemantics(id: string): EnginePrimitiveSemantics {
+  switch (id) {
+    case "lean-proof-checker":
+      return "formal-proof";
+    case "z3-smt-solver":
+      return "smt-lib";
+    case "maxima-cas":
+    case "sage-cas":
+      return "symbolic-expression";
+    default:
+      return "workspace-artifact";
+  }
+}
+
+function workspacePrimitiveSemantics(id: string): EnginePrimitiveSemantics {
+  switch (id) {
+    case "model-context-disclosure":
+      return "privacy-disclosure";
+    default:
+      return "workspace-artifact";
+  }
+}
+
+function plannedPrimitiveSemantics(id: string): EnginePrimitiveSemantics {
+  if (id.includes("smt")) return "smt-lib";
+  if (id.includes("numerics")) return "rigorous-numeric";
+  if (id.includes("simulation")) return "simulation-provenance";
+  return "not-implemented";
 }

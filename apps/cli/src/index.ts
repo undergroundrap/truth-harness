@@ -4165,6 +4165,9 @@ function printEngineManifest(manifest: EngineManifest): void {
   console.log(
     `Native kernels: ${manifest.nativeCount}; adapters: ${manifest.adapterCount}; planned adapters: ${manifest.plannedCount}`
   );
+  console.log(
+    `Deterministic kernels: ${manifest.deterministicCount}; replay-deterministic adapters: ${manifest.replayDeterministicCount}`
+  );
   console.log(`Network: ${manifest.networkAccess}`);
 
   printEngineCapabilityGroup(
@@ -4192,6 +4195,7 @@ function printEngineManifest(manifest: EngineManifest): void {
   console.log("  `proved` requires an accepted proof-checker run.");
   console.log("  `smt-checked` requires a concrete SMT solver run.");
   console.log("  `cross-checked` requires independent agreement.");
+  console.log("  Machine contract is JSON-first, structured, stable-id, replay-required, and primitive-composable.");
 
   if (manifest.warnings.length > 0) {
     console.log("");
@@ -4216,6 +4220,9 @@ function printEngineCapabilityGroup(
     const trust = capability.canMintTrust ? capability.strongestTrust : "no direct trust";
     console.log(`  ${capability.displayName}`);
     console.log(`    Status: ${capability.status}; lane: ${capability.lane}; role: ${capability.role}; strongest: ${trust}`);
+    console.log(
+      `    Determinism: ${capability.determinism.determinismClass}; primitive: ${capability.determinism.primitiveSemantics}`
+    );
     if (capability.command) {
       console.log(`    Route: ${capability.command}`);
     }

@@ -41,6 +41,8 @@ Truth Harness adapts mature engines such as SymPy, Z3, Lean, SageMath, Maxima, n
 
 Native kernels should stay small and auditable: exact rational arithmetic, expression normalization, counterexample search, dimensions, intervals, evidence-reference resolution, and trust-label gates. Large domain engines should be adapters until there is a clear reason to own a narrow kernel ourselves.
 
+The engine manifest is part of the moat. It is not only a readiness page; it is a machine-readable contract that tells agents which capabilities are strict deterministic primitives, which are replay-deterministic adapters, which are environment measurements, and which are only planned. That makes future self-correcting agent loops and Rust/simulation kernels safer because every next step can be routed through stable JSON, replay requirements, primitive semantics, and drift risks instead of vague chat confidence.
+
 See [ENGINE_STRATEGY.md](ENGINE_STRATEGY.md) for the full boundary.
 
 ## Why This Is Different

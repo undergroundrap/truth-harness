@@ -106,6 +106,9 @@ export interface VerifierRoute {
     nativeCount: number;
     adapterCount: number;
     plannedCount: number;
+    deterministicCount: number;
+    replayDeterministicCount: number;
+    machineContract: EngineManifest["machineContract"];
   };
   usedCapabilities: VerifierRouteStep[];
   blockedCapabilities: VerifierRouteStep[];
@@ -237,7 +240,10 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
       totalCount: manifest.totalCount,
       nativeCount: manifest.nativeCount,
       adapterCount: manifest.adapterCount,
-      plannedCount: manifest.plannedCount
+      plannedCount: manifest.plannedCount,
+      deterministicCount: manifest.deterministicCount,
+      replayDeterministicCount: manifest.replayDeterministicCount,
+      machineContract: manifest.machineContract
     },
     usedCapabilities,
     blockedCapabilities,
@@ -858,7 +864,16 @@ function missingCapability(capabilityId: string): EngineCapability {
     canMintTrust: false,
     statusProbeMintedEvidence: false,
     trustBoundary: "Capability was referenced by a route but is not present in the manifest.",
-    limitations: ["Missing from engine manifest."]
+    limitations: ["Missing from engine manifest."],
+    determinism: {
+      determinismClass: "planned",
+      deterministic: false,
+      replayable: false,
+      primitiveSemantics: "not-implemented",
+      aiParserFriendly: true,
+      replayRequirements: ["No replay contract exists because the capability is missing from the manifest."],
+      driftRisks: ["Unknown capability; no trust label may depend on this fallback."]
+    }
   };
 }
 

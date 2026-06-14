@@ -323,7 +323,15 @@ describe("benchmark CLI", () => {
       nativeCount: number;
       adapterCount: number;
       plannedCount: number;
-      capabilities: Array<{ id: string; status: string; canMintTrust: boolean }>;
+      deterministicCount: number;
+      replayDeterministicCount: number;
+      machineContract: { jsonFirst: boolean; deterministicTrustRequiresReplayableArtifact: boolean };
+      capabilities: Array<{
+        id: string;
+        status: string;
+        canMintTrust: boolean;
+        determinism?: { determinismClass: string; primitiveSemantics: string };
+      }>;
       trustBoundary: { statusProbeIsNotEvidence: boolean; provedRequiresAcceptedProofCheckerRun: boolean };
     };
 
@@ -332,11 +340,19 @@ describe("benchmark CLI", () => {
     expect(json.nativeCount).toBeGreaterThan(0);
     expect(json.adapterCount).toBeGreaterThan(0);
     expect(json.plannedCount).toBeGreaterThan(0);
+    expect(json.deterministicCount).toBeGreaterThan(0);
+    expect(json.replayDeterministicCount).toBeGreaterThan(0);
+    expect(json.machineContract.jsonFirst).toBe(true);
+    expect(json.machineContract.deterministicTrustRequiresReplayableArtifact).toBe(true);
     expect(json.capabilities).toContainEqual(
       expect.objectContaining({
         id: "lean-proof-checker",
         status: "missing",
-        canMintTrust: false
+        canMintTrust: false,
+        determinism: expect.objectContaining({
+          determinismClass: "replay-deterministic",
+          primitiveSemantics: "formal-proof"
+        })
       })
     );
     expect(json.trustBoundary.statusProbeIsNotEvidence).toBe(true);

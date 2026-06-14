@@ -568,6 +568,9 @@ export type {
   EngineCapability,
   EngineCapabilityKind,
   EngineCapabilityStatus,
+  EngineDeterminismClass,
+  EngineDeterminismProfile,
+  EnginePrimitiveSemantics,
   EngineManifest,
   EngineManifestOptions
 } from "./engine-manifest.js";

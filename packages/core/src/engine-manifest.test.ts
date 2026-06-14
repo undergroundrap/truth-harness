@@ -18,8 +18,18 @@ describe("engine manifest", () => {
     expect(manifest.nativeCount).toBeGreaterThan(0);
     expect(manifest.adapterCount).toBeGreaterThan(0);
     expect(manifest.plannedCount).toBeGreaterThan(0);
+    expect(manifest.deterministicCount).toBeGreaterThan(0);
+    expect(manifest.replayDeterministicCount).toBeGreaterThan(0);
+    expect(manifest.machineContract).toMatchObject({
+      jsonFirst: true,
+      diagnosticsAreStructured: true,
+      stableCapabilityIds: true,
+      deterministicTrustRequiresReplayableArtifact: true,
+      primitivesRemainComposable: true
+    });
     expect(manifest.trustBoundary.statusProbeIsNotEvidence).toBe(true);
     expect(manifest.trustBoundary.claimTrustRequiresResolvableEvidence).toBe(true);
+    expect(manifest.capabilities.every((capability) => capability.determinism.aiParserFriendly)).toBe(true);
 
     expect(manifest.capabilities).toContainEqual(
       expect.objectContaining({
@@ -27,7 +37,13 @@ describe("engine manifest", () => {
         kind: "native-kernel",
         status: "ready",
         strongestTrust: "exact-computed",
-        canMintTrust: true
+        canMintTrust: true,
+        determinism: expect.objectContaining({
+          determinismClass: "strict-deterministic",
+          deterministic: true,
+          replayable: true,
+          primitiveSemantics: "exact-rational"
+        })
       })
     );
     expect(manifest.capabilities).toContainEqual(
@@ -37,7 +53,20 @@ describe("engine manifest", () => {
         status: "missing",
         strongestTrust: "proved",
         canMintTrust: false,
-        statusProbeMintedEvidence: false
+        statusProbeMintedEvidence: false,
+        determinism: expect.objectContaining({
+          determinismClass: "replay-deterministic",
+          primitiveSemantics: "formal-proof"
+        })
+      })
+    );
+    expect(manifest.capabilities).toContainEqual(
+      expect.objectContaining({
+        id: "z3-smt-solver",
+        determinism: expect.objectContaining({
+          determinismClass: "replay-deterministic",
+          primitiveSemantics: "smt-lib"
+        })
       })
     );
     expect(manifest.capabilities).toContainEqual(
@@ -46,7 +75,30 @@ describe("engine manifest", () => {
         kind: "adapter",
         status: "missing",
         strongestTrust: "provenance-only",
-        canMintTrust: false
+        canMintTrust: false,
+        determinism: expect.objectContaining({
+          determinismClass: "replay-deterministic",
+          primitiveSemantics: "symbolic-expression"
+        })
+      })
+    );
+    expect(manifest.capabilities).toContainEqual(
+      expect.objectContaining({
+        id: "code-run-sandbox",
+        determinism: expect.objectContaining({
+          determinismClass: "environment-measured",
+          deterministic: false,
+          primitiveSemantics: "sandbox-measurement"
+        })
+      })
+    );
+    expect(manifest.capabilities).toContainEqual(
+      expect.objectContaining({
+        id: "domain-simulation-adapters",
+        determinism: expect.objectContaining({
+          determinismClass: "planned",
+          primitiveSemantics: "simulation-provenance"
+        })
       })
     );
   });
