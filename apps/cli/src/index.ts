@@ -2965,12 +2965,21 @@ program
   .description("Run the self-contained Truth Harness launch gauntlet and write a shareable HTML report.")
   .option("--report <path>", "Write the HTML report to this path", "truth-harness-demo-report.html")
   .option("--maxima-command <command>", "Override Maxima executable for symbolic cross-check receipts")
+  .option("--z3-command <command>", "Override Z3 executable for SMT demo checks")
   .option("--require-symbolic-cross-check", "Exit non-zero unless the symbolic demo cases earn cross-checked")
   .option("--no-color", "Disable ANSI colors in terminal output")
-  .action(async (options: { report: string; maximaCommand?: string; requireSymbolicCrossCheck?: boolean; color?: boolean }) => {
+  .action(
+    async (options: {
+      report: string;
+      maximaCommand?: string;
+      z3Command?: string;
+      requireSymbolicCrossCheck?: boolean;
+      color?: boolean;
+    }) => {
     const result = await runDemoGauntlet({
       reportPath: options.report,
       maximaCommand: options.maximaCommand,
+      z3Command: options.z3Command,
       requireSymbolicCrossCheck: Boolean(options.requireSymbolicCrossCheck),
       color: options.color !== false
     });
@@ -2978,7 +2987,8 @@ program
     if (result.unexpectedLabels.length > 0 || result.recordingGateFailures.length > 0) {
       process.exitCode = 1;
     }
-  });
+    }
+  );
 
 program
   .command("doctor")
@@ -3079,17 +3089,23 @@ type DemoTrustBucket = "verified" | "refuted" | "unverified";
 interface DemoCase {
   title: string;
   category: string;
+  kind: "receipt" | "smt";
   problem: string;
   chatbotClaim: string;
   lesson: string;
   allowedTrust: TrustLabel[];
   preferredTrust?: TrustLabel;
+  smtSourceRef?: string;
+  smtQueryName?: string;
 }
 
 interface DemoCaseResult {
   index: number;
   demoCase: DemoCase;
-  receipt: Receipt;
+  trust: TrustLabel;
+  summary: string;
+  replay: string;
+  artifact: Receipt | SmtCheckRecord;
   bucket: DemoTrustBucket;
   expected: boolean;
   evidenceLines: string[];
@@ -3103,11 +3119,20 @@ interface DemoGauntletResult {
   recordingGateFailures: string[];
 }
 
+interface DemoEvaluation {
+  trust: TrustLabel;
+  summary: string;
+  replay: string;
+  artifact: Receipt | SmtCheckRecord;
+  evidenceLines: string[];
+}
+
 function createDemoCases(): DemoCase[] {
   return [
     {
       title: "False universal parity claim",
-      category: "false universal",
+      category: "Refutation",
+      kind: "receipt",
       problem: "for all integers n, n^2+n+1 is even",
       chatbotClaim: "Sure: n^2+n is even, so adding 1 keeps the pattern simple.",
       lesson: "A single exact counterexample is enough to refute the universal claim.",
@@ -3115,7 +3140,8 @@ function createDemoCases(): DemoCase[] {
     },
     {
       title: "False oddness claim",
-      category: "false universal",
+      category: "Refutation",
+      kind: "receipt",
       problem: "for all integers n, n^2+n is odd",
       chatbotClaim: "Consecutive products alternate, so the expression is odd.",
       lesson: "The finite counterexample search checks exact integer values before explaining.",
@@ -3123,15 +3149,26 @@ function createDemoCases(): DemoCase[] {
     },
     {
       title: "False square-plus-one claim",
-      category: "false universal",
+      category: "Refutation",
+      kind: "receipt",
       problem: "for all integers n, n^2+1 is even",
       chatbotClaim: "A square plus one should be even for all integers.",
       lesson: "Truth Harness records the counterexample route instead of smoothing over it.",
       allowedTrust: ["refuted"]
     },
     {
+      title: "Popular AI trap: parity handwave",
+      category: "Refutation",
+      kind: "receipt",
+      problem: "for all integers n, n^2+n+2 is odd",
+      chatbotClaim: "Since n^2+n is even, adding 2 flips it to odd.",
+      lesson: "The model-sounding explanation is subtly wrong; exact arithmetic catches it.",
+      allowedTrust: ["refuted"]
+    },
+    {
       title: "Exact fraction addition",
-      category: "exact computation",
+      category: "Exact Computation",
+      kind: "receipt",
       problem: "compute 3 / 4 + 5 / 8",
       chatbotClaim: "The answer is 11/8.",
       lesson: "The answer is not trusted because it sounds right; it has a machine trace.",
@@ -3139,7 +3176,8 @@ function createDemoCases(): DemoCase[] {
     },
     {
       title: "Exact common-denominator trace",
-      category: "exact computation",
+      category: "Exact Computation",
+      kind: "receipt",
       problem: "compute 1 / 3 + 1 / 6",
       chatbotClaim: "Just convert thirds and sixths mentally.",
       lesson: "The receipt stores replayable exact rational arithmetic and lesson views.",
@@ -3147,31 +3185,17 @@ function createDemoCases(): DemoCase[] {
     },
     {
       title: "Narrow modular parity check",
-      category: "exact computation",
+      category: "Exact Computation",
+      kind: "receipt",
       problem: "for all integers n, n^2+n is even",
       chatbotClaim: "This is obviously true, so call it proved.",
       lesson: "The system says exact-computed, not proved, because Lean did not check it.",
       allowedTrust: ["exact-computed"]
     },
     {
-      title: "Boundary: famous conjecture",
-      category: "honest limit",
-      problem: "prove the twin prime conjecture",
-      chatbotClaim: "Here is a confident proof sketch in a few paragraphs.",
-      lesson: "Unsupported high-stakes claims stay unverified until a real checker route exists.",
-      allowedTrust: ["unverified"]
-    },
-    {
-      title: "Boundary: unsupported discovery request",
-      category: "honest limit",
-      problem: "derive a room-temperature superconductor formula from scratch",
-      chatbotClaim: "A plausible formula can be proposed directly from theory.",
-      lesson: "The harness can organize future evidence, but it refuses fake certainty.",
-      allowedTrust: ["unverified"]
-    },
-    {
       title: "Symbolic identity cross-check",
-      category: "symbolic CAS",
+      category: "Cross-Check",
+      kind: "receipt",
       problem: "symbolic simplify sin(x)^2 + cos(x)^2",
       chatbotClaim: "This simplifies to 1, no need to show work.",
       lesson: "In Docker, SymPy plus Maxima can earn cross-checked; otherwise it stays honest.",
@@ -3180,7 +3204,8 @@ function createDemoCases(): DemoCase[] {
     },
     {
       title: "Symbolic expansion cross-check",
-      category: "symbolic CAS",
+      category: "Cross-Check",
+      kind: "receipt",
       problem: "symbolic expand (x + 1)^2",
       chatbotClaim: "The expanded form is x^2 + 2x + 1.",
       lesson: "Independent CAS agreement is evidence, but still not a formal proof.",
@@ -3188,8 +3213,39 @@ function createDemoCases(): DemoCase[] {
       preferredTrust: "cross-checked"
     },
     {
+      title: "Z3 integer constraint check",
+      category: "SMT Solver",
+      kind: "smt",
+      problem: "there exists an integer x with 0 < x < 3",
+      chatbotClaim: "The answer is yes; x = 1 or x = 2.",
+      lesson: "Z3 checks the concrete SMT-LIB encoding and records the model boundary.",
+      allowedTrust: ["smt-checked", "unverified"],
+      preferredTrust: "smt-checked",
+      smtSourceRef: "docs/examples/constraints.smt2",
+      smtQueryName: "demo-bounded-integer-witness"
+    },
+    {
+      title: "Boundary: famous conjecture",
+      category: "Honest Uncertainty",
+      kind: "receipt",
+      problem: "prove the twin prime conjecture",
+      chatbotClaim: "Here is a confident proof sketch in a few paragraphs.",
+      lesson: "Unsupported high-stakes claims stay unverified until a real checker route exists.",
+      allowedTrust: ["unverified"]
+    },
+    {
+      title: "Boundary: unsupported discovery request",
+      category: "Honest Uncertainty",
+      kind: "receipt",
+      problem: "derive a room-temperature superconductor formula from scratch",
+      chatbotClaim: "A plausible formula can be proposed directly from theory.",
+      lesson: "The harness can organize future evidence, but it refuses fake certainty.",
+      allowedTrust: ["unverified"]
+    },
+    {
       title: "Dimensional sanity pass",
-      category: "dimension analysis",
+      category: "Dimensional Analysis",
+      kind: "receipt",
       problem: "dimension check force = mass * acceleration",
       chatbotClaim: "Newton's equation is dimensionally valid.",
       lesson: "The checker verifies units and records that this is not full physical truth.",
@@ -3197,7 +3253,8 @@ function createDemoCases(): DemoCase[] {
     },
     {
       title: "Dimensional mistake caught",
-      category: "dimension analysis",
+      category: "Dimensional Analysis",
+      kind: "receipt",
       problem: "dimension check force = mass * velocity",
       chatbotClaim: "Force can be described as mass times velocity.",
       lesson: "The receipt refutes the equation under the local SI dimension table.",
@@ -3205,7 +3262,8 @@ function createDemoCases(): DemoCase[] {
     },
     {
       title: "Conservative interval bound",
-      category: "interval bound",
+      category: "Bounds",
+      kind: "receipt",
       problem: "bound x^2 for x in [-2, 3]",
       chatbotClaim: "The value should sit somewhere between 0 and 9.",
       lesson: "The interval adapter produces a replayable bound with assumptions.",
@@ -3213,19 +3271,12 @@ function createDemoCases(): DemoCase[] {
     },
     {
       title: "Reciprocal interval bound",
-      category: "interval bound",
+      category: "Bounds",
+      kind: "receipt",
       problem: "bound 1 / x for x in [2, 4]",
       chatbotClaim: "The reciprocal is between one fourth and one half.",
       lesson: "Bounds are evidence for the stated interval, not a broader theorem.",
       allowedTrust: ["bounded-numeric"]
-    },
-    {
-      title: "Popular AI trap: parity handwave",
-      category: "AI trap",
-      problem: "for all integers n, n^2+n+2 is odd",
-      chatbotClaim: "Since n^2+n is even, adding 2 flips it to odd.",
-      lesson: "The model-sounding explanation is subtly wrong; exact arithmetic catches it.",
-      allowedTrust: ["refuted"]
     }
   ];
 }
@@ -3233,6 +3284,7 @@ function createDemoCases(): DemoCase[] {
 async function runDemoGauntlet(options: {
   reportPath: string;
   maximaCommand?: string;
+  z3Command?: string;
   requireSymbolicCrossCheck: boolean;
   color: boolean;
 }): Promise<DemoGauntletResult> {
@@ -3244,59 +3296,57 @@ async function runDemoGauntlet(options: {
   const unexpectedLabels: string[] = [];
   const recordingGateFailures: string[] = [];
 
-  console.log(color.bold("Truth Harness demo gauntlet"));
-  console.log("15 local receipts. No network. No model answers promoted to truth.");
-  console.log("The goal is not confidence. The goal is receipts, replay, and honest boundaries.");
+  console.log(color.bold("Truth Harness — Verified Math for AI Agents"));
+  console.log(color.dim("Local engines catch false claims, verify bounded truths, and admit uncertainty."));
   console.log("");
 
+  let currentCategory = "";
   for (const [index, demoCase] of cases.entries()) {
-    const receipt = createReceipt(demoCase.problem, { maximaCommand: options.maximaCommand });
-    const bucket = demoTrustBucket(receipt.trust);
-    const expected = demoCase.allowedTrust.includes(receipt.trust);
-    const evidenceLines = demoEvidenceLines(receipt);
+    if (demoCase.category !== currentCategory) {
+      currentCategory = demoCase.category;
+      console.log(color.dim(`── ${currentCategory} ─────────────────────────────────────────`));
+    }
+
+    const evaluation = await evaluateDemoCase(demoCase, options);
+    const bucket = demoTrustBucket(evaluation.trust);
+    const expected = demoCase.allowedTrust.includes(evaluation.trust);
+    const evidenceLines = evaluation.evidenceLines;
     tally[bucket] += 1;
 
     if (!expected) {
       unexpectedLabels.push(
-        `${index + 1}. ${demoCase.title}: expected ${demoCase.allowedTrust.join(" or ")}, got ${receipt.trust}`
+        `${index + 1}. ${demoCase.title}: expected ${demoCase.allowedTrust.join(" or ")}, got ${evaluation.trust}`
       );
     }
-    if (options.requireSymbolicCrossCheck && demoCase.preferredTrust && receipt.trust !== demoCase.preferredTrust) {
+    if (options.requireSymbolicCrossCheck && demoCase.preferredTrust && evaluation.trust !== demoCase.preferredTrust) {
       recordingGateFailures.push(
-        `${index + 1}. ${demoCase.title}: recording gate requires ${demoCase.preferredTrust}, got ${receipt.trust}`
+        `${index + 1}. ${demoCase.title}: recording gate requires ${demoCase.preferredTrust}, got ${evaluation.trust}`
       );
     }
 
     results.push({
       index: index + 1,
       demoCase,
-      receipt,
+      trust: evaluation.trust,
+      summary: evaluation.summary,
+      replay: evaluation.replay,
+      artifact: evaluation.artifact,
       bucket,
       expected,
       evidenceLines
     });
 
-    const trust = colorTrustLabel(receipt.trust, color);
-    const marker = expected ? color.dim("ok") : color.red("unexpected");
+    const trust = colorTrustLabel(evaluation.trust, color);
+    const marker = expected ? "" : ` ${color.red("unexpected")}`;
     const preferred =
-      demoCase.preferredTrust && demoCase.preferredTrust !== receipt.trust
+      demoCase.preferredTrust && demoCase.preferredTrust !== evaluation.trust
         ? color.yellow(` preferred ${demoCase.preferredTrust}`)
         : "";
 
-    console.log(
-      `${color.dim(`[${String(index + 1).padStart(2, "0")}/${cases.length}]`)} ${color.bold(demoCase.title)} ${color.dim(`(${demoCase.category})`)}`
-    );
-    console.log(`  Problem: ${demoCase.problem}`);
-    console.log(`  A fluent chatbot might say: ${demoCase.chatbotClaim}`);
-    console.log(`  Truth Harness: ${trust} ${marker}${preferred}`);
-    console.log(`  Evidence: ${evidenceLines[0] ?? receipt.summary}`);
-    for (const line of evidenceLines.slice(1, 3)) {
-      console.log(`            ${line}`);
-    }
-    console.log(`  Replay: ${receipt.replay}`);
-    console.log(
-      `  Tally: ${color.green(`${tally.verified} verified`)} | ${color.red(`${tally.refuted} refuted`)} | ${color.yellow(`${tally.unverified} unverified`)}`
-    );
+    console.log(`${color.dim(`[${String(index + 1).padStart(2, "0")}]`)} ${color.bold(demoCase.problem)}`);
+    console.log(`     ${color.dimItalic(`AI chatbot says: ${demoCase.chatbotClaim}`)}`);
+    console.log(`     ${trust}${marker}${preferred}  ${evidenceLines[0] ?? evaluation.summary}`);
+    console.log(`     ${color.dim(`replay: ${evaluation.replay}`)}`);
     console.log("");
   }
 
@@ -3304,11 +3354,12 @@ async function runDemoGauntlet(options: {
   await mkdir(dirname(resolvedReportPath), { recursive: true });
   await writeFile(resolvedReportPath, html, "utf8");
 
-  console.log(color.bold("Scorecard"));
-  console.log(`  Verified or computed: ${color.green(String(tally.verified))}`);
-  console.log(`  Refuted: ${color.red(String(tally.refuted))}`);
-  console.log(`  Honestly unverified: ${color.yellow(String(tally.unverified))}`);
-  console.log(`  Report: ${resolvedReportPath}`);
+  printDemoScorecard({
+    tally,
+    total: results.length,
+    reportPath: resolvedReportPath,
+    color
+  });
 
   if (unexpectedLabels.length > 0) {
     console.log("");
@@ -3336,6 +3387,42 @@ async function runDemoGauntlet(options: {
   };
 }
 
+async function evaluateDemoCase(
+  demoCase: DemoCase,
+  options: { maximaCommand?: string; z3Command?: string }
+): Promise<DemoEvaluation> {
+  if (demoCase.kind === "smt") {
+    const sourceRef = demoCase.smtSourceRef ?? "docs/examples/constraints.smt2";
+    const sourcePath = resolve(sourceRef);
+    const sourceText = await readFile(sourcePath, "utf8");
+    const record = checkSmtLibArtifact({
+      sourcePath,
+      sourceRef,
+      sourceText,
+      queryName: demoCase.smtQueryName,
+      z3Command: options.z3Command,
+      replayCommand: `truth-harness smt check ${sourceRef} --json`
+    });
+
+    return {
+      trust: record.trust,
+      summary: smtDemoSummary(record),
+      replay: record.replay,
+      artifact: record,
+      evidenceLines: demoEvidenceLinesForSmt(record)
+    };
+  }
+
+  const receipt = createReceipt(demoCase.problem, { maximaCommand: options.maximaCommand });
+  return {
+    trust: receipt.trust,
+    summary: receipt.summary,
+    replay: receipt.replay,
+    artifact: receipt,
+    evidenceLines: demoEvidenceLinesForReceipt(receipt)
+  };
+}
+
 function createDemoColorizer(enabled: boolean): {
   green: (value: string) => string;
   red: (value: string) => string;
@@ -3343,6 +3430,7 @@ function createDemoColorizer(enabled: boolean): {
   cyan: (value: string) => string;
   bold: (value: string) => string;
   dim: (value: string) => string;
+  dimItalic: (value: string) => string;
 } {
   const wrap = (open: string, value: string) => (enabled ? `${open}${value}\x1b[0m` : value);
   return {
@@ -3351,20 +3439,21 @@ function createDemoColorizer(enabled: boolean): {
     yellow: (value) => wrap("\x1b[33m", value),
     cyan: (value) => wrap("\x1b[36m", value),
     bold: (value) => wrap("\x1b[1m", value),
-    dim: (value) => wrap("\x1b[2m", value)
+    dim: (value) => wrap("\x1b[2m", value),
+    dimItalic: (value) => wrap("\x1b[2m\x1b[3m", value)
   };
 }
 
 function colorTrustLabel(trust: TrustLabel, color: ReturnType<typeof createDemoColorizer>): string {
   if (trust === "refuted") {
-    return color.red(trust);
+    return color.red(`✗ ${trust}`);
   }
 
   if (trust === "unverified") {
-    return color.yellow(trust);
+    return color.yellow(`? ${trust}`);
   }
 
-  return color.green(trust);
+  return color.green(`✓ ${trust}`);
 }
 
 function demoTrustBucket(trust: TrustLabel): DemoTrustBucket {
@@ -3379,7 +3468,7 @@ function demoTrustBucket(trust: TrustLabel): DemoTrustBucket {
   return "verified";
 }
 
-function demoEvidenceLines(receipt: Receipt): string[] {
+function demoEvidenceLinesForReceipt(receipt: Receipt): string[] {
   const lines: string[] = [receipt.summary];
   const counterexample = receipt.graph.nodes.find((node) => node.kind === "counterexample");
   const certificate = receipt.graph.nodes.find(
@@ -3414,6 +3503,68 @@ function demoEvidenceLines(receipt: Receipt): string[] {
   return dedupeStrings(lines).slice(0, 5);
 }
 
+function demoEvidenceLinesForSmt(record: SmtCheckRecord): string[] {
+  const lines = [smtDemoSummary(record)];
+  const model = record.model?.bindings.map((binding) => `${binding.name}=${binding.value}`).join(", ");
+
+  if (model) {
+    lines.push(`Model: ${model}`);
+  }
+
+  lines.push(`Backends: ${record.backend.id}${record.backend.version ? `@${record.backend.version}` : ""}`);
+
+  if (record.limitations.length > 0) {
+    lines.push(`Boundary: ${record.limitations[0]}`);
+  }
+
+  if (record.error) {
+    lines.push(`Error: ${record.error}`);
+  }
+
+  return dedupeStrings(lines).slice(0, 5);
+}
+
+function smtDemoSummary(record: SmtCheckRecord): string {
+  if (record.trust === "smt-checked") {
+    const model = record.model?.bindings.map((binding) => `${binding.name}=${binding.value}`).join(", ");
+    return `Z3 returned ${record.status}${model ? ` with model ${model}` : ""}.`;
+  }
+
+  if (record.status === "solver-unavailable") {
+    return "Z3 was unavailable, so the SMT claim remains unverified.";
+  }
+
+  return `SMT check returned ${record.status}; claim remains ${record.trust}.`;
+}
+
+function printDemoScorecard(args: {
+  tally: Record<DemoTrustBucket, number>;
+  total: number;
+  reportPath: string;
+  color: ReturnType<typeof createDemoColorizer>;
+}): void {
+  const lines = [
+    "Truth Harness Demo Results",
+    `✓ Verified:    ${String(args.tally.verified).padStart(2, " ")}`,
+    `✗ Refuted:     ${String(args.tally.refuted).padStart(2, " ")}`,
+    `? Unverified:  ${String(args.tally.unverified).padStart(2, " ")}  (honest limits)`,
+    `Total:        ${String(args.total).padStart(2, " ")}`,
+    "",
+    "Every result is replayable.",
+    "No result claims more than earned."
+  ];
+  const width = Math.max(...lines.map((line) => line.length)) + 4;
+  const border = "─".repeat(width);
+
+  console.log(args.color.dim(`┌${border}┐`));
+  for (const line of lines) {
+    const padded = `  ${line}`.padEnd(width, " ");
+    console.log(args.color.dim("│") + padded + args.color.dim("│"));
+  }
+  console.log(args.color.dim(`└${border}┘`));
+  console.log(`Report: ${args.reportPath}`);
+}
+
 function renderDemoReport(
   results: DemoCaseResult[],
   tally: Record<DemoTrustBucket, number>,
@@ -3423,11 +3574,10 @@ function renderDemoReport(
   const generatedAt = new Date().toISOString();
   const caseCards = results
     .map((result) => {
-      const receipt = result.receipt;
       const evidenceList = result.evidenceLines.map((line) => `<li>${escapeHtml(line)}</li>`).join("");
-      const statusClass = `trust-${demoTrustBucket(receipt.trust)}`;
+      const statusClass = `trust-${demoTrustBucket(result.trust)}`;
       const preferred =
-        result.demoCase.preferredTrust && result.demoCase.preferredTrust !== receipt.trust
+        result.demoCase.preferredTrust && result.demoCase.preferredTrust !== result.trust
           ? `<p class="note">Preferred label for a fully provisioned Docker demo: <code>${escapeHtml(result.demoCase.preferredTrust)}</code>.</p>`
           : "";
       return `
@@ -3437,18 +3587,18 @@ function renderDemoReport(
               <p class="eyebrow">${String(result.index).padStart(2, "0")} / ${results.length} - ${escapeHtml(result.demoCase.category)}</p>
               <h2>${escapeHtml(result.demoCase.title)}</h2>
             </div>
-            <span class="trust ${statusClass}">${escapeHtml(receipt.trust)}</span>
+            <span class="trust ${statusClass}">${escapeHtml(result.trust)}</span>
           </div>
           <p><strong>Problem:</strong> <code>${escapeHtml(result.demoCase.problem)}</code></p>
-          <p><strong>A fluent chatbot might say:</strong> ${escapeHtml(result.demoCase.chatbotClaim)}</p>
+          <p><strong>AI chatbot says:</strong> ${escapeHtml(result.demoCase.chatbotClaim)}</p>
           <p><strong>Truth Harness lesson:</strong> ${escapeHtml(result.demoCase.lesson)}</p>
           ${preferred}
           <h3>Evidence</h3>
           <ul>${evidenceList}</ul>
-          <p><strong>Replay:</strong> <code>${escapeHtml(receipt.replay)}</code></p>
+          <p><strong>Replay:</strong> <code>${escapeHtml(result.replay)}</code></p>
           <details>
-            <summary>Receipt JSON</summary>
-            <pre>${escapeHtml(JSON.stringify(receipt, null, 2))}</pre>
+            <summary>Evidence JSON</summary>
+            <pre>${escapeHtml(JSON.stringify(result.artifact, null, 2))}</pre>
           </details>
         </section>`;
     })
@@ -3472,7 +3622,7 @@ function renderDemoReport(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Truth Harness Demo Report</title>
+  <title>Truth Harness Demo Report — generated locally, zero network access, every result replayable</title>
   <style>
     :root {
       color-scheme: dark;
@@ -3592,8 +3742,8 @@ function renderDemoReport(
   <main>
     <header>
       <p class="eyebrow">Generated ${escapeHtml(generatedAt)}</p>
-      <h1>Truth Harness Demo Report</h1>
-      <p class="muted">A self-contained local gauntlet showing refutations, exact computation, honest uncertainty, symbolic CAS boundaries, dimensional analysis, interval bounds, replay commands, and receipt JSON.</p>
+      <h1>Truth Harness Demo Report — generated locally, zero network access, every result replayable.</h1>
+      <p class="muted">Generated locally, zero network access, every result replayable. This report shows refutations, exact computation, cross-checks, SMT checks, honest uncertainty, dimensional analysis, interval bounds, replay commands, and evidence JSON.</p>
       <div class="scorecard">
         <div class="score"><span class="muted">Verified/computed</span><strong>${tally.verified}</strong></div>
         <div class="score"><span class="muted">Refuted</span><strong>${tally.refuted}</strong></div>

@@ -47,6 +47,8 @@ describe("benchmark CLI", () => {
       "--no-color",
       "--maxima-command",
       "truth-harness-missing-maxima-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
       "--report",
       reportPath
     ]);
@@ -54,18 +56,20 @@ describe("benchmark CLI", () => {
     const caseCards = report.match(/<section class="case-card">/g) ?? [];
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("Truth Harness demo gauntlet");
-    expect(result.stdout).toContain("[15/15]");
+    expect(result.stdout).toContain("Truth Harness — Verified Math for AI Agents");
+    expect(result.stdout).toContain("[16]");
     expect(result.stdout).toContain("refuted");
     expect(result.stdout).toContain("exact-computed");
     expect(result.stdout).toContain("unverified");
     expect(result.stdout).toContain("dimension-checked");
     expect(result.stdout).toContain("bounded-numeric");
+    expect(result.stdout).toContain("SMT Solver");
     expect(result.stdout).toContain("Report:");
     expect(report).toContain("Truth Harness Demo Report");
-    expect(caseCards).toHaveLength(15);
+    expect(caseCards).toHaveLength(16);
     expect(report).toContain("truth-harness ask");
-    expect(report).toContain("Receipt JSON");
+    expect(report).toContain("truth-harness smt check");
+    expect(report).toContain("Evidence JSON");
   });
 
   it("fails the recording demo gate when symbolic cross-checks are unavailable", async () => {
@@ -77,6 +81,8 @@ describe("benchmark CLI", () => {
       "--require-symbolic-cross-check",
       "--maxima-command",
       "truth-harness-missing-maxima-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
       "--report",
       reportPath
     ]);
@@ -85,6 +91,7 @@ describe("benchmark CLI", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stdout).toContain("Recording gate failures:");
     expect(result.stdout).toContain("recording gate requires cross-checked");
+    expect(result.stdout).toContain("recording gate requires smt-checked");
     expect(report).toContain("Recording Gate Failures");
   });
 
