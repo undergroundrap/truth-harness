@@ -45,6 +45,8 @@ The engine manifest is part of the moat. It is not only a readiness page; it is 
 
 See [ENGINE_STRATEGY.md](ENGINE_STRATEGY.md) for the full boundary.
 
+See [CATALOG_INDEX_DESIGN.md](CATALOG_INDEX_DESIGN.md) for the researched SQLite catalog plan that keeps JSON artifacts canonical while making large workspaces fast to search and filter.
+
 ## Why This Is Different
 
 Existing tools are excellent at parts of the workflow:
