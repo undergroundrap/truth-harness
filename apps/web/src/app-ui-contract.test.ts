@@ -127,4 +127,18 @@ describe("web UI action contracts", () => {
     expect(listPagerStyles).toContain("min-height: 36px;");
     expect(listPagerStyles).toContain("padding: 6px 8px;");
   });
+
+  it("renders saved adapter visual artifacts instead of placeholder-only cards", async () => {
+    const source = await readFile(appSourcePath, "utf8");
+
+    expect(source).toContain("function renderSavedVisualArtifactSvg(artifact)");
+    expect(source).toContain('payload.format === "plotly-json"');
+    expect(source).toContain('payload.format === "graph-json"');
+    expect(source).toContain('payload.format === "canvas-json"');
+    expect(source).toContain("function savedPlotlyVisualArtifactSvg(artifact)");
+    expect(source).toContain("function savedGraphVisualArtifactSvg(artifact)");
+    expect(source).toContain("function savedCanvasVisualArtifactSvg(artifact)");
+    expect(source).toContain("selectedVisualArtifactRecord?.visualId === state.selectedVisualArtifactId");
+    expect(source).toContain("safeSvgColor(row.color");
+  });
 });

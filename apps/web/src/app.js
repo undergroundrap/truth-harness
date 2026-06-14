@@ -2574,6 +2574,10 @@ function csvCell(value) {
 }
 
 function currentPlotModel() {
+  if (selectedVisualArtifactRecord?.visualId === state.selectedVisualArtifactId) {
+    return createSavedVisualArtifactModel(selectedVisualArtifactRecord);
+  }
+
   const receipt = receiptStore.get(state.receiptKey);
   const savedSnapshot = selectedResearchMapSnapshot();
   if (savedSnapshot) {
@@ -2630,14 +2634,15 @@ function createLiveResearchMapSnapshot(plot) {
   }
 
   const receipt = receiptStore.get(state.receiptKey);
+  const visualArtifactRef = plot.visualArtifactRef;
   return {
     schemaVersion: "truth-harness.research-map-snapshot.v0",
-    snapshotId: "live-visual-map",
+    snapshotId: visualArtifactRef?.visualId ? `visual-${visualArtifactRef.visualId}` : "live-visual-map",
     createdAt: receipt?.createdAt ?? new Date(0).toISOString(),
-    visualMode: state.visualMode,
+    visualMode: plot.sourceVisualMode ?? state.visualMode,
     kind: plot.kind ?? "visual map",
     title: plot.title ?? "Live Visual Map",
-    caption: plot.caption ?? "Live local visual map generated from the current receipt.",
+    caption: plot.caption ?? (visualArtifactRef ? "Saved local visual artifact opened for inspection." : "Live local visual map generated from the current receipt."),
     receiptRef: receipt
       ? {
         runId: receipt.runId,
@@ -2655,7 +2660,8 @@ function createLiveResearchMapSnapshot(plot) {
     tags: receipt ? receiptTags(receipt) : [],
     localOnly: true,
     networkAccess: "none",
-    live: true
+    live: true,
+    ...(visualArtifactRef ? { visualArtifactRef } : {})
   };
 }
 
@@ -2714,10 +2720,9 @@ function createSavedResearchMapVisualModel(snapshot) {
 
 function createSavedVisualArtifactModel(artifact) {
   const payload = artifact.payload ?? {};
-  const content = payload.content;
-  const svg = payload.format === "svg" && typeof content === "string" && isSafeLocalSvg(content)
-    ? content
-    : savedVisualArtifactPlaceholderSvg(artifact);
+  const svg = renderSavedVisualArtifactSvg(artifact);
+  const mapNodes = savedVisualArtifactMapNodes(artifact);
+  const mapEdges = savedVisualArtifactMapEdges(artifact, mapNodes);
   const sourceRows = (artifact.sourceRefs ?? []).map((ref) => [
     `${ref.kind}:${ref.ref}`,
     ref.label ?? "source ref",
@@ -2745,11 +2750,37 @@ function createSavedVisualArtifactModel(artifact) {
         ["renderer", artifact.renderer?.engine ?? "unknown", "visual.renderer"],
         ["payload", payload.format ?? "unknown", "visual.payload"],
         ...sourceRows
-      ],
-    mapNodes: [],
-    mapEdges: [],
-    sourceVisualMode: "visual-artifact"
+    ],
+    mapNodes,
+    mapEdges,
+    sourceVisualMode: artifact.kind === "plot" ? "number-line" : artifact.kind === "lineage-graph" ? "concept-map" : "mind-map",
+    visualArtifactRef: {
+      visualId: artifact.visualId,
+      title: artifact.title,
+      kind: artifact.kind,
+      renderer: artifact.renderer?.engine,
+      sourceRefs: artifact.sourceRefs ?? []
+    }
   };
+}
+
+function renderSavedVisualArtifactSvg(artifact) {
+  const payload = artifact.payload ?? {};
+  const content = payload.content;
+  if (payload.format === "svg" && typeof content === "string" && isSafeLocalSvg(content)) {
+    return content;
+  }
+  if (payload.format === "plotly-json") {
+    return savedPlotlyVisualArtifactSvg(artifact);
+  }
+  if (payload.format === "graph-json") {
+    return savedGraphVisualArtifactSvg(artifact);
+  }
+  if (payload.format === "canvas-json") {
+    return savedCanvasVisualArtifactSvg(artifact);
+  }
+
+  return savedVisualArtifactPlaceholderSvg(artifact);
 }
 
 function isSafeLocalSvg(value) {
@@ -2758,6 +2789,247 @@ function isSafeLocalSvg(value) {
     && !/<script[\s>]/iu.test(trimmed)
     && !/\son[a-z]+\s*=/iu.test(trimmed)
     && !/javascript:/iu.test(trimmed);
+}
+
+function savedPlotlyVisualArtifactSvg(artifact) {
+  const content = artifact.payload?.content ?? {};
+  const series = Array.isArray(content.data) ? content.data[0] ?? {} : {};
+  const labels = Array.isArray(series.y) ? series.y.map((value) => String(value)) : [];
+  const values = Array.isArray(series.x) ? series.x.map((value) => Number(value)).filter((value) => Number.isFinite(value)) : [];
+  const texts = Array.isArray(series.text) ? series.text.map((value) => String(value)) : [];
+  const colors = Array.isArray(series.marker?.color) ? series.marker.color.map((value) => String(value)) : [];
+  const rows = values.map((value, index) => ({
+    label: labels[index] ?? `value ${index + 1}`,
+    value,
+    text: texts[index] ?? String(value),
+    color: colors[index] ?? (index === values.length - 1 ? "#7dd3a8" : "#b7a98a")
+  }));
+  if (rows.length === 0) {
+    return savedVisualArtifactPlaceholderSvg(artifact);
+  }
+
+  const width = Math.max(980, Number(artifact.payload?.width) || 980);
+  const rowHeight = 58;
+  const top = 144;
+  const left = 238;
+  const right = 86;
+  const bottom = 72;
+  const height = Math.max(520, top + rows.length * rowHeight + bottom);
+  const maxValue = Math.max(1, ...rows.map((row) => Math.abs(row.value)));
+  const barWidth = width - left - right;
+  const title = content.layout?.title?.text ?? content.layout?.title ?? artifact.title ?? "Saved Plot";
+  const axisTitle = content.layout?.xaxis?.title?.text ?? content.layout?.xaxis?.title ?? "value";
+  const bars = rows.map((row, index) => {
+    const y = top + index * rowHeight;
+    const fillWidth = Math.max(6, (Math.abs(row.value) / maxValue) * barWidth);
+    const fill = safeSvgColor(row.color, index === values.length - 1 ? "#7dd3a8" : "#b7a98a");
+    return `<g>
+      <text x="${left - 18}" y="${y + 21}" text-anchor="end" fill="#dfd8cb" font-size="14" font-weight="720">${escapeXml(truncateForImage(row.label, 28))}</text>
+      <rect x="${left}" y="${y}" width="${barWidth}" height="30" rx="8" fill="#151515" stroke="#2e2e2d" />
+      <rect x="${left}" y="${y}" width="${fillWidth}" height="30" rx="8" fill="${fill}" opacity="0.78" />
+      <text x="${Math.min(left + fillWidth + 14, width - right - 96)}" y="${y + 20}" fill="#f2f2ee" font-size="13" font-weight="750">${escapeXml(row.text)}</text>
+    </g>`;
+  }).join("");
+
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Saved Plotly visual artifact">
+    <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+    <text x="64" y="58" fill="#f2f2ee" font-size="24" font-weight="780">${escapeXml(title)}</text>
+    <text x="64" y="88" fill="#aaa59d" font-size="13">rendered locally from saved Plotly JSON; source receipt remains authoritative</text>
+    <line x1="${left}" y1="${top - 20}" x2="${width - right}" y2="${top - 20}" stroke="#403d38" />
+    ${bars}
+    <text x="${left}" y="${height - 30}" fill="#aaa59d" font-size="13">${escapeXml(axisTitle)} - max ${maxValue.toFixed(3).replace(/0+$/u, "").replace(/\.$/u, "")}</text>
+  </svg>`;
+}
+
+function savedGraphVisualArtifactSvg(artifact) {
+  const graph = artifact.payload?.content?.graph ?? {};
+  const nodes = savedVisualArtifactMapNodes(artifact).slice(0, 60);
+  const edges = savedVisualArtifactMapEdges(artifact, nodes);
+  if (nodes.length === 0) {
+    return savedVisualArtifactPlaceholderSvg(artifact);
+  }
+
+  const layoutNodes = layoutArtifactGraphNodes(nodes);
+  const byId = new Map(layoutNodes.map((node) => [node.id, node]));
+  const width = Math.max(1180, Math.min(1800, 280 + Math.ceil(Math.sqrt(layoutNodes.length)) * 260));
+  const height = Math.max(620, 184 + Math.ceil(layoutNodes.length / Math.max(1, Math.ceil(Math.sqrt(layoutNodes.length)))) * 164);
+  const edgeSvg = edges.slice(0, 120).map((edge) => {
+    const from = byId.get(edge.from);
+    const to = byId.get(edge.to);
+    if (!from || !to) {
+      return "";
+    }
+    return `<g>
+      <line x1="${from.x + from.width / 2}" y1="${from.y + from.height / 2}" x2="${to.x + to.width / 2}" y2="${to.y + to.height / 2}" stroke="#32302d" stroke-width="2" />
+      ${edge.kind ? `<text x="${(from.x + to.x) / 2}" y="${(from.y + to.y) / 2 - 6}" fill="#8f8a83" font-size="10">${escapeXml(truncateForImage(edge.kind, 22))}</text>` : ""}
+    </g>`;
+  }).join("");
+  const source = artifact.payload?.content?.source;
+  const sourceLabel = typeof source === "string" ? `${source.split("\n")[0] ?? "graph source"} (${source.split("\n").length} lines)` : "graph source recorded";
+  const truncated = Boolean(artifact.payload?.content?.truncated ?? graph.truncated);
+
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Saved lineage graph visual artifact">
+    <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+    <text x="48" y="48" fill="#f2f2ee" font-size="23" font-weight="780">${escapeXml(artifact.title ?? "Workspace Lineage Graph")}</text>
+    <text x="48" y="76" fill="#aaa59d" font-size="13">${escapeXml(sourceLabel)}${truncated ? " - preview truncated" : ""}</text>
+    ${edgeSvg}
+    ${layoutNodes.map((node) => conceptNodeSvg(node, { interactive: true, active: isActiveVisualMapNode(node, layoutNodes) })).join("")}
+  </svg>`;
+}
+
+function savedCanvasVisualArtifactSvg(artifact) {
+  const shapes = Array.isArray(artifact.payload?.content?.shapes) ? artifact.payload.content.shapes : [];
+  const noteShapes = shapes.filter((shape) => shape?.type === "note");
+  const connectorShapes = shapes.filter((shape) => shape?.type === "connector");
+  if (noteShapes.length === 0) {
+    return savedVisualArtifactPlaceholderSvg(artifact);
+  }
+
+  const bounds = noteShapes.reduce((accumulator, shape) => {
+    const x = Number(shape.x) || 0;
+    const y = Number(shape.y) || 0;
+    const width = Number(shape.width) || 240;
+    const height = Number(shape.height) || 110;
+    return {
+      minX: Math.min(accumulator.minX, x),
+      minY: Math.min(accumulator.minY, y),
+      maxX: Math.max(accumulator.maxX, x + width),
+      maxY: Math.max(accumulator.maxY, y + height)
+    };
+  }, { minX: Infinity, minY: Infinity, maxX: 0, maxY: 0 });
+  const pad = 72;
+  const width = Math.max(1100, bounds.maxX - bounds.minX + pad * 2);
+  const height = Math.max(620, bounds.maxY - bounds.minY + pad * 2 + 72);
+  const offsetX = pad - bounds.minX;
+  const offsetY = pad + 58 - bounds.minY;
+  const noteById = new Map(noteShapes.map((shape) => [shape.id, shape]));
+  const connectorSvg = connectorShapes.map((shape) => {
+    const from = noteById.get(shape.from);
+    const to = noteById.get(shape.to);
+    if (!from || !to) {
+      return "";
+    }
+    const x1 = (Number(from.x) || 0) + (Number(from.width) || 240) / 2 + offsetX;
+    const y1 = (Number(from.y) || 0) + (Number(from.height) || 110) / 2 + offsetY;
+    const x2 = (Number(to.x) || 0) + (Number(to.width) || 240) / 2 + offsetX;
+    const y2 = (Number(to.y) || 0) + (Number(to.height) || 110) / 2 + offsetY;
+    return `<g>
+      <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#34302b" stroke-width="2" />
+      ${shape.props?.label ? `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 - 6}" fill="#8f8a83" font-size="10">${escapeXml(truncateForImage(shape.props.label, 24))}</text>` : ""}
+    </g>`;
+  }).join("");
+  const nodes = noteShapes.map((shape, index) => canvasShapeToVisualNode(shape, index, offsetX, offsetY));
+
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Saved editable canvas visual artifact">
+    <rect width="${width}" height="${height}" rx="16" fill="#101010" />
+    <text x="48" y="48" fill="#f2f2ee" font-size="23" font-weight="780">${escapeXml(artifact.title ?? "Research Canvas")}</text>
+    <text x="48" y="76" fill="#aaa59d" font-size="13">rendered from saved canvas-json; editable canvas source remains replayable</text>
+    ${connectorSvg}
+    ${nodes.map((node) => conceptNodeSvg(node, { interactive: true, active: isActiveVisualMapNode(node, nodes) })).join("")}
+  </svg>`;
+}
+
+function savedVisualArtifactMapNodes(artifact) {
+  const payload = artifact.payload ?? {};
+  const content = payload.content ?? {};
+  if (payload.format === "graph-json") {
+    const graphNodes = Array.isArray(content.graph?.nodes) ? content.graph.nodes : [];
+    return graphNodes.slice(0, 120).map((node, index) => ({
+      id: safeMapNodeId(node.nodeId ?? node.id ?? node.path ?? `graph-${index}`, index + 1),
+      label: node.label ?? node.path ?? node.nodeId ?? `Graph node ${index + 1}`,
+      detail: [node.kind, node.trust, node.path].filter(Boolean).join(" | ") || "workspace graph node",
+      kind: node.kind ?? "workspace-graph-node",
+      sourceRef: node.path ?? node.nodeId ?? "",
+      tone: node.missing ? "danger" : node.valid === false ? "warn" : node.trust ? "good" : "muted"
+    }));
+  }
+  if (payload.format === "canvas-json") {
+    const shapes = Array.isArray(content.shapes) ? content.shapes : [];
+    return shapes
+      .filter((shape) => shape?.type === "note")
+      .slice(0, 120)
+      .map((shape, index) => canvasShapeToMapNode(shape, index));
+  }
+
+  return [];
+}
+
+function savedVisualArtifactMapEdges(artifact, nodes = savedVisualArtifactMapNodes(artifact)) {
+  const payload = artifact.payload ?? {};
+  const content = payload.content ?? {};
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  if (payload.format === "graph-json") {
+    const graphEdges = Array.isArray(content.graph?.edges) ? content.graph.edges : [];
+    return graphEdges.map((edge, index) => ({
+      id: safeMapNodeId(edge.edgeId ?? `graph-edge-${index}`, index + 1),
+      from: safeMapNodeId(edge.from ?? "", index + 1),
+      to: safeMapNodeId(edge.to ?? "", index + 2),
+      kind: edge.kind ?? "linked",
+      label: edge.kind ?? "linked"
+    })).filter((edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to));
+  }
+  if (payload.format === "canvas-json") {
+    const shapes = Array.isArray(content.shapes) ? content.shapes : [];
+    return shapes
+      .filter((shape) => shape?.type === "connector")
+      .map((shape, index) => ({
+        id: safeMapNodeId(shape.id ?? `canvas-edge-${index}`, index + 1),
+        from: safeMapNodeId(String(shape.from ?? "").replace(/^shape:/u, ""), index + 1),
+        to: safeMapNodeId(String(shape.to ?? "").replace(/^shape:/u, ""), index + 2),
+        kind: shape.props?.label ?? "canvas-link",
+        label: shape.props?.label ?? "canvas-link"
+      }))
+      .filter((edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to));
+  }
+
+  return [];
+}
+
+function canvasShapeToMapNode(shape, index) {
+  const props = shape.props ?? {};
+  return {
+    id: safeMapNodeId(String(shape.id ?? `canvas-${index}`).replace(/^shape:/u, ""), index + 1),
+    label: props.title ?? props.text ?? `Canvas note ${index + 1}`,
+    detail: props.text ?? props.sourcePath ?? "canvas note",
+    kind: "canvas-note",
+    sourceRef: props.sourcePath ?? shape.id ?? "",
+    tone: props.status === "missing" ? "danger" : props.status === "invalid" ? "warn" : props.trust ? "good" : "muted"
+  };
+}
+
+function canvasShapeToVisualNode(shape, index, offsetX, offsetY) {
+  const node = canvasShapeToMapNode(shape, index);
+  return {
+    ...node,
+    x: (Number(shape.x) || 0) + offsetX,
+    y: (Number(shape.y) || 0) + offsetY,
+    width: Math.max(180, Number(shape.width) || 240),
+    height: Math.max(92, Number(shape.height) || 110),
+    maxLines: 3
+  };
+}
+
+function layoutArtifactGraphNodes(nodes) {
+  const columns = Math.max(2, Math.ceil(Math.sqrt(nodes.length)));
+  return nodes.map((node, index) => ({
+    ...node,
+    x: 64 + (index % columns) * 260,
+    y: 128 + Math.floor(index / columns) * 152,
+    width: 220,
+    height: 92,
+    maxLines: 2
+  }));
+}
+
+function safeSvgColor(value, fallback) {
+  const text = String(value ?? "").trim();
+  if (/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/iu.test(text)) {
+    return text;
+  }
+  if (/^rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\)$/iu.test(text)) {
+    return text;
+  }
+  return fallback;
 }
 
 function savedVisualArtifactPlaceholderSvg(artifact) {
@@ -2885,6 +3157,12 @@ function renderResearchMapNodeInspector(snapshot, plot) {
 
   const inspectorSnapshot = snapshot ?? createLiveResearchMapSnapshot(plot);
   const liveMap = Boolean(inspectorSnapshot?.live);
+  const visualArtifactRef = inspectorSnapshot?.visualArtifactRef;
+  const snapshotLabel = visualArtifactRef?.visualId
+    ? `visual artifact ${visualArtifactRef.visualId}`
+    : liveMap
+      ? "live unsaved map"
+      : inspectorSnapshot?.snapshotId ?? "unknown";
 
   if (!inspectorSnapshot) {
     const mapNodeCount = Array.isArray(plot?.mapNodes) ? plot.mapNodes.length : 0;
@@ -2931,7 +3209,7 @@ function renderResearchMapNodeInspector(snapshot, plot) {
       <div><dt>Source</dt><dd>${escapeHtml(nodeSource.source)}</dd></div>
       <div><dt>Value</dt><dd>${escapeHtml(nodeSource.value)}</dd></div>
       <div><dt>Edges</dt><dd>${escapeHtml(String(edges.length))}</dd></div>
-      <div><dt>Snapshot</dt><dd><code>${escapeHtml(liveMap ? "live unsaved map" : inspectorSnapshot.snapshotId ?? "unknown")}</code></dd></div>
+      <div><dt>Snapshot</dt><dd><code>${escapeHtml(snapshotLabel)}</code></dd></div>
       <div><dt>Receipt</dt><dd>${inspectorSnapshot.receiptRef?.runId ? `<code>${escapeHtml(inspectorSnapshot.receiptRef.runId)}</code>` : "not linked"}</dd></div>
     </dl>
     ${edgeHtml}
@@ -2939,7 +3217,13 @@ function renderResearchMapNodeInspector(snapshot, plot) {
       <button class="text-button compact-button" data-map-copy-node="${escapeHtml(node.id)}" type="button">Copy node</button>
       ${receiptKey ? `<button class="text-button compact-button" data-map-open-receipt="${escapeHtml(receiptKey)}" type="button">Open receipt</button>` : ""}
     </div>
-    ${liveMap
+    ${visualArtifactRef
+      ? `<div class="map-node-live-note">
+        <strong>Saved visual artifact</strong>
+        <p>This node comes from ${escapeHtml(visualArtifactRef.visualId)}. Save it as a research map before attaching new thoughts to the visual workspace.</p>
+        <button class="text-button compact-button" data-map-save-current type="button">Save as research map</button>
+      </div>`
+      : liveMap
       ? `<div class="map-node-live-note">
         <strong>Live map</strong>
         <p>Save this map before attaching linked thoughts so future agents can replay the exact snapshot.</p>
