@@ -66,8 +66,10 @@ import {
   handleTruthHarnessVaultList,
   handleTruthHarnessVaultSeal,
   handleTruthHarnessVaultVerify,
+  handleTruthHarnessVisualCanvas,
   handleTruthHarnessVisualGraph,
   handleTruthHarnessVisualList,
+  handleTruthHarnessVisualPlot,
   handleTruthHarnessVisualRender,
   handleTruthHarnessVisualShow,
   handleTruthHarnessVerify,
@@ -1024,6 +1026,69 @@ export function createTruthHarnessMcpServer(): McpServer {
     },
     async ({ workspacePath, renderer, title, maxNodes }) =>
       toolJson(await handleTruthHarnessVisualGraph({ workspacePath, renderer, title, maxNodes }))
+  );
+
+  server.registerTool(
+    "truth_harness_visual_plot",
+    {
+      title: "Write Receipt Plot Visual",
+      description:
+        "Write a replayable Plotly/Matplotlib/Sage-ready visual artifact from a saved receipt or a new local prompt. The plot is an evidence view and does not upgrade trust labels.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        receiptPath: z
+          .string()
+          .optional()
+          .describe("Workspace-local receipt JSON path. Provide either receiptPath or problem."),
+        problem: z
+          .string()
+          .optional()
+          .describe("Local prompt to compute into a receipt for plotting when receiptPath is not supplied."),
+        renderer: z
+          .enum(["plotly", "matplotlib", "sage"])
+          .optional()
+          .describe("Renderer source to save. Defaults to plotly so it can be rendered to SVG locally."),
+        title: z.string().optional().describe("Optional title for the visual artifact.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, receiptPath, problem, renderer, title }) =>
+      toolJson(await handleTruthHarnessVisualPlot({ workspacePath, receiptPath, problem, renderer, title }))
+  );
+
+  server.registerTool(
+    "truth_harness_visual_canvas",
+    {
+      title: "Write Research Canvas Visual",
+      description:
+        "Write an editable tldraw-style research canvas seed from the local workspace graph so agents and humans can map evidence without changing trust labels.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().optional().describe("Optional title for the visual artifact."),
+        maxNodes: z
+          .number()
+          .int()
+          .positive()
+          .max(500)
+          .optional()
+          .describe("Maximum workspace graph nodes to include. Defaults to 36.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, title, maxNodes }) =>
+      toolJson(await handleTruthHarnessVisualCanvas({ workspacePath, title, maxNodes }))
   );
 
   server.registerTool(

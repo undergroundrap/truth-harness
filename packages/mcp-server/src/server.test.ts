@@ -135,8 +135,10 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_vault_seal",
         "truth_harness_vault_verify",
         "truth_harness_verify",
+        "truth_harness_visual_canvas",
         "truth_harness_visual_graph",
         "truth_harness_visual_list",
+        "truth_harness_visual_plot",
         "truth_harness_visual_render",
         "truth_harness_visual_show",
         "truth_harness_workspace_graph",
@@ -565,11 +567,46 @@ describe("Truth Harness MCP server", () => {
       expect(visualGraphText).toContain("\"schemaVersion\": \"truth-harness.visual-artifact.v0\"");
       expect(visualGraphText).toContain("\"language\": \"dot\"");
 
+      const visualPlotResult = await client.callTool({
+        name: "truth_harness_visual_plot",
+        arguments: {
+          problem: "compute 3 / 4 + 5 / 8",
+          renderer: "plotly"
+        }
+      });
+      const visualPlotText = firstText(visualPlotResult.content);
+      const visualPlotJson = JSON.parse(visualPlotText);
+      expect(visualPlotResult.isError).not.toBe(true);
+      expect(visualPlotText).toContain("\"format\": \"plotly-json\"");
+
+      const visualPlotRenderResult = await client.callTool({
+        name: "truth_harness_visual_render",
+        arguments: {
+          visualRef: visualPlotJson.visual.visualId,
+          engine: "plotly"
+        }
+      });
+      const visualPlotRenderText = firstText(visualPlotRenderResult.content);
+      expect(visualPlotRenderResult.isError).not.toBe(true);
+      expect(visualPlotRenderText).toContain("\"renderer\": \"plotly\"");
+      expect(visualPlotRenderText).toContain("\"format\": \"svg\"");
+
+      const visualCanvasResult = await client.callTool({
+        name: "truth_harness_visual_canvas",
+        arguments: {
+          title: "MCP research canvas",
+          maxNodes: 20
+        }
+      });
+      const visualCanvasText = firstText(visualCanvasResult.content);
+      expect(visualCanvasResult.isError).not.toBe(true);
+      expect(visualCanvasText).toContain("\"format\": \"canvas-json\"");
+
       const visualListResult = await client.callTool({
         name: "truth_harness_visual_list",
         arguments: {}
       });
-      expect(firstText(visualListResult.content)).toContain("\"total\": 1");
+      expect(firstText(visualListResult.content)).toContain("\"total\": 4");
 
       const visualShowResult = await client.callTool({
         name: "truth_harness_visual_show",

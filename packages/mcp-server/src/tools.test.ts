@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createReceipt, writeReceiptPlotVisualArtifact } from "@truth-harness/core";
+import { createReceipt } from "@truth-harness/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   handleTruthHarnessAsk,
@@ -65,8 +65,10 @@ import {
   handleTruthHarnessVaultList,
   handleTruthHarnessVaultSeal,
   handleTruthHarnessVaultVerify,
+  handleTruthHarnessVisualCanvas,
   handleTruthHarnessVisualGraph,
   handleTruthHarnessVisualList,
+  handleTruthHarnessVisualPlot,
   handleTruthHarnessVisualRender,
   handleTruthHarnessVisualShow,
   handleTruthHarnessVerify,
@@ -769,13 +771,13 @@ describe("MCP tool handlers", () => {
     const root = await tempRoot();
     process.env.TRUTH_HARNESS_ROOT = root;
     await handleTruthHarnessWorkspaceInit({ name: "MCP Plot Render Lab" });
-    const receipt = createReceipt("compute 3 / 4 + 5 / 8");
-    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
-    await writeFile(join(root, ".truth-harness", "receipts", "fraction.json"), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
-    const plot = await writeReceiptPlotVisualArtifact({
-      rootPath: root,
-      receiptPath: ".truth-harness/receipts/fraction.json",
+    const plot = await handleTruthHarnessVisualPlot({
+      problem: "compute 3 / 4 + 5 / 8",
       renderer: "plotly"
+    });
+    const canvas = await handleTruthHarnessVisualCanvas({
+      title: "Agent research canvas",
+      maxNodes: 20
     });
 
     const render = await handleTruthHarnessVisualRender({
@@ -803,7 +805,16 @@ describe("MCP tool handlers", () => {
         ref: expect.stringContaining(plot.visual.visualId)
       });
     }
-    expect(list.total).toBe(2);
+    expect(canvas.visual).toMatchObject({
+      kind: "mind-map",
+      renderer: {
+        engine: "tldraw"
+      },
+      payload: {
+        format: "canvas-json"
+      }
+    });
+    expect(list.total).toBe(3);
   });
 
   it("repairs old local workspace manifests for agents", async () => {

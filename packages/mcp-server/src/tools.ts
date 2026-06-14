@@ -101,6 +101,8 @@ import {
   writeResearchSession,
   writeValidationPlan,
   writeVerifierRoute,
+  writeReceiptPlotVisualArtifact,
+  writeResearchCanvasVisualArtifact,
   writeWorkspaceGraphVisualArtifact,
   writeWorkspaceReview,
   writeWorkspaceSnapshot,
@@ -475,6 +477,20 @@ export interface TruthHarnessWorkspaceGraphInput {
 export interface TruthHarnessVisualGraphInput {
   workspacePath?: string;
   renderer?: "mermaid" | "graphviz";
+  title?: string;
+  maxNodes?: number;
+}
+
+export interface TruthHarnessVisualPlotInput {
+  workspacePath?: string;
+  receiptPath?: string;
+  problem?: string;
+  renderer?: "plotly" | "matplotlib" | "sage";
+  title?: string;
+}
+
+export interface TruthHarnessVisualCanvasInput {
+  workspacePath?: string;
   title?: string;
   maxNodes?: number;
 }
@@ -1434,6 +1450,24 @@ export async function handleTruthHarnessVisualGraph(input: TruthHarnessVisualGra
   return writeWorkspaceGraphVisualArtifact({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     renderer: input.renderer ?? "graphviz",
+    title: input.title,
+    maxNodes: input.maxNodes
+  });
+}
+
+export async function handleTruthHarnessVisualPlot(input: TruthHarnessVisualPlotInput): Promise<VisualArtifactWriteResult> {
+  return writeReceiptPlotVisualArtifact({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    receiptPath: input.receiptPath,
+    problem: input.problem,
+    renderer: input.renderer ?? "plotly",
+    title: input.title
+  });
+}
+
+export async function handleTruthHarnessVisualCanvas(input: TruthHarnessVisualCanvasInput): Promise<VisualArtifactWriteResult> {
+  return writeResearchCanvasVisualArtifact({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
     maxNodes: input.maxNodes
   });
