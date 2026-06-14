@@ -4138,7 +4138,7 @@ async function saveCurrentVisualArtifactRecord(receipt, plot) {
   return payload;
 }
 
-async function saveCurrentPlotSourceArtifact() {
+async function saveCurrentPlotFigureArtifact() {
   const receipt = receiptStore.get(state.receiptKey);
   if (!receipt) {
     return;
@@ -4149,12 +4149,14 @@ async function saveCurrentPlotSourceArtifact() {
   const previousText = savePlotSourceButton?.textContent;
   if (savePlotSourceButton) {
     savePlotSourceButton.disabled = true;
-    savePlotSourceButton.textContent = "Sourcing";
+    savePlotSourceButton.textContent = "Making";
   }
-  addActivity("web-ui", "Sourcing plot visual", "POST /api/visuals/plot from the current receipt.", "waiting");
+  addActivity("web-ui", "Making plot figure", "POST /api/visuals/plot then POST /api/visuals/render from the current receipt.", "waiting");
+  let figureSaved = false;
+  let sourceVisualId;
 
   try {
-    const response = await fetch("/api/visuals/plot", {
+    const sourceResponse = await fetch("/api/visuals/plot", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -4166,32 +4168,62 @@ async function saveCurrentPlotSourceArtifact() {
         title: `Plot source for ${workspaceReceipt.title ?? receipt.title}`
       })
     });
-    const payload = await readLocalApiJson(response, "Local plot visual API failed.");
-    applyVisualArtifactsPayload(payload);
-    state.selectedVisualArtifactId = payload.visual?.visualId;
+    const sourcePayload = await readLocalApiJson(sourceResponse, "Local plot visual API failed.");
+    applyVisualArtifactsPayload(sourcePayload);
+    sourceVisualId = sourcePayload.visual?.visualId;
+    if (!sourceVisualId) {
+      throw new Error("Local plot visual API did not return a visual id.");
+    }
+
+    state.selectedVisualArtifactId = sourceVisualId;
     state.selectedResearchMapSnapshotId = undefined;
     state.selectedResearchMapNodeId = undefined;
     state.surface = "plot";
+    for (const item of sourcePayload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, "passed", item.at);
+    }
+
+    const renderResponse = await fetch("/api/visuals/render", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        visualRef: sourceVisualId,
+        engine: "plotly",
+        title: `Figure for ${workspaceReceipt.title ?? receipt.title}`
+      })
+    });
+    const renderPayload = await readLocalApiJson(renderResponse, "Local plot figure render API failed.");
+    applyVisualArtifactsPayload(renderPayload);
+    state.selectedVisualArtifactId = renderPayload.visual?.visualId ?? sourceVisualId;
     requestVisualFit();
-    for (const item of payload.activity ?? []) {
+    for (const item of renderPayload.activity ?? []) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }
     updateLatestActivity(
-      "Sourcing plot visual",
+      "Making plot figure",
       "passed",
-      localApiSuccessMessage(payload, `${payload.visual?.visualId ?? "plot visual"} saved as renderer-ready Plotly JSON.`)
+      localApiSuccessMessage(renderPayload, `${sourceVisualId} rendered into ${renderPayload.visual?.visualId ?? "SVG figure"} with the source artifact preserved.`)
     );
+    figureSaved = true;
     render();
     resetActiveSurfaceScroll();
   } catch (error) {
-    updateLatestActivity("Sourcing plot visual", "refuted", error instanceof Error ? error.message : "POST /api/visuals/plot failed");
-    addActivity("local-api", "Plot visual source failed", error instanceof Error ? error.message : "Unknown plot visual failure.", "refuted");
+    updateLatestActivity("Making plot figure", "refuted", error instanceof Error ? error.message : "POST /api/visuals/plot or /api/visuals/render failed");
+    addActivity("local-api", "Plot figure failed", error instanceof Error ? error.message : "Unknown plot figure failure.", "refuted");
+    if (sourceVisualId) {
+      state.selectedVisualArtifactId = sourceVisualId;
+      requestVisualFit();
+      render();
+      resetActiveSurfaceScroll();
+    }
   } finally {
     if (savePlotSourceButton) {
       savePlotSourceButton.disabled = false;
-      savePlotSourceButton.textContent = previousText ?? "Source plot";
-      if (state.selectedVisualArtifactId) {
-        flashButtonText(savePlotSourceButton, "Saved");
+      savePlotSourceButton.textContent = previousText ?? "Make figure";
+      if (figureSaved) {
+        flashButtonText(savePlotSourceButton, "Figure saved");
       }
     }
   }
@@ -10690,8 +10722,8 @@ saveResearchMapButton.addEventListener("click", () => {
 });
 
 savePlotSourceButton?.addEventListener("click", () => {
-  saveCurrentPlotSourceArtifact().catch((error) => {
-    addActivity("web-ui", "Plot visual source failed", error instanceof Error ? error.message : "Unknown plot visual failure.", "refuted");
+  saveCurrentPlotFigureArtifact().catch((error) => {
+    addActivity("web-ui", "Plot figure failed", error instanceof Error ? error.message : "Unknown plot figure failure.", "refuted");
   });
 });
 

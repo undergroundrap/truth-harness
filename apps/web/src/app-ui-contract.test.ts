@@ -139,12 +139,15 @@ describe("web UI action contracts", () => {
     expect(html).toContain('id="visual-mode-bar"');
     expect(html).toContain('id="visual-renderer-source"');
     expect(html).toContain('id="save-plot-source"');
+    expect(html).toContain("Make figure");
     expect(source).toContain("function renderSavedVisualArtifactSvg(artifact)");
     expect(source).toContain('payload.format === "plotly-json"');
     expect(source).toContain('payload.format === "graph-json"');
     expect(source).toContain('payload.format === "canvas-json"');
-    expect(source).toContain("async function saveCurrentPlotSourceArtifact()");
+    expect(source).toContain("async function saveCurrentPlotFigureArtifact()");
     expect(source).toContain('fetch("/api/visuals/plot"');
+    expect(source).toContain('fetch("/api/visuals/render"');
+    expect(source).toContain('"Making plot figure"');
     expect(source).toContain("function savedPlotlyVisualArtifactSvg(artifact)");
     expect(source).toContain("function savedGraphVisualArtifactSvg(artifact)");
     expect(source).toContain("function savedCanvasVisualArtifactSvg(artifact)");
