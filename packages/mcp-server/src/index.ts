@@ -73,6 +73,7 @@ import {
   handleTruthHarnessWorkspaceReview,
   handleTruthHarnessWorkspaceReviewList,
   handleTruthHarnessWorkspaceReviewShow,
+  handleTruthHarnessWorkspaceRunNext,
   handleTruthHarnessWorkspaceSnapshot,
   handleTruthHarnessWorkspaceSnapshotList,
   handleTruthHarnessWorkspaceSnapshotVerify,
@@ -89,7 +90,7 @@ export function createTruthHarnessMcpServer(): McpServer {
     },
     {
       instructions:
-        "Use Truth Harness to create replayable proof receipts, search local sources, and maintain local discovery logs. Do not treat unverified outputs, retrieved chunks, or computational hypotheses as proved."
+        "Use Truth Harness to create replayable proof receipts, search local sources, inspect workspace reviews, and follow run-next autonomy contracts. Do not treat unverified outputs, retrieved chunks, or computational hypotheses as proved."
     }
   );
 
@@ -1032,6 +1033,60 @@ export function createTruthHarnessMcpServer(): McpServer {
     },
     async ({ workspacePath, maxRoutes, maxClaims, maxSessions, write }) =>
       toolJson(await handleTruthHarnessWorkspaceReview({ workspacePath, maxRoutes, maxClaims, maxSessions, write }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_run_next",
+    {
+      title: "Run Next Workspace Action",
+      description:
+        "Plan or explicitly execute one bounded local action from the workspace autonomy contract. Dry-run by default; executeLocal calls only supported Truth Harness core APIs and never executes a shell string.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        maxRoutes: z
+          .number()
+          .int()
+          .min(0)
+          .max(500)
+          .optional()
+          .describe("Maximum route summaries to inspect. Defaults to 100; use 0 to skip routes."),
+        maxClaims: z
+          .number()
+          .int()
+          .min(0)
+          .max(1000)
+          .optional()
+          .describe("Maximum claim records to inspect. Defaults to 200; use 0 to skip claims."),
+        maxSessions: z
+          .number()
+          .int()
+          .min(0)
+          .max(500)
+          .optional()
+          .describe("Maximum research sessions to inspect. Defaults to 100; use 0 to skip sessions."),
+        executeLocal: z
+          .boolean()
+          .optional()
+          .describe("When true, execute one supported local Truth Harness action in-process. Defaults to false.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, maxRoutes, maxClaims, maxSessions, executeLocal }) =>
+      toolJson(
+        await handleTruthHarnessWorkspaceRunNext({
+          workspacePath,
+          maxRoutes,
+          maxClaims,
+          maxSessions,
+          executeLocal
+        })
+      )
   );
 
   server.registerTool(

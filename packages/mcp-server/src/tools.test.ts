@@ -72,6 +72,7 @@ import {
   handleTruthHarnessWorkspaceReview,
   handleTruthHarnessWorkspaceReviewList,
   handleTruthHarnessWorkspaceReviewShow,
+  handleTruthHarnessWorkspaceRunNext,
   handleTruthHarnessWorkspaceSnapshot,
   handleTruthHarnessWorkspaceSnapshotList,
   handleTruthHarnessWorkspaceSnapshotVerify,
@@ -838,6 +839,49 @@ describe("MCP tool handlers", () => {
         artifactId: review.review.reviewId
       })
     );
+  });
+
+  it("plans and executes the next workspace action through the shared autonomy contract", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Run Next Lab" });
+    const claim = await handleTruthHarnessClaimAdd({
+      statement: "A finance claim needs audited source data before it can be relied on.",
+      domain: "finance",
+      nextChecks: ["Attach audited source data before using this claim."]
+    });
+
+    const dryRun = await handleTruthHarnessWorkspaceRunNext({
+      maxRoutes: 0,
+      maxSessions: 0
+    });
+    const executed = await handleTruthHarnessWorkspaceRunNext({
+      maxRoutes: 0,
+      maxSessions: 0,
+      executeLocal: true
+    });
+
+    expect(dryRun.schemaVersion).toBe("truth-harness.workspace-run-next.v0");
+    expect(dryRun.localOnly).toBe(true);
+    expect(dryRun.networkAccess).toBe("none");
+    expect(dryRun.dryRun).toBe(true);
+    expect(dryRun.status).toBe("planned");
+    expect(dryRun.item).toMatchObject({
+      kind: "claim-blocker",
+      claimId: claim.claim.claimId
+    });
+    expect(dryRun.execution).toMatchObject({
+      status: "planned",
+      kind: "dry-run"
+    });
+    expect(executed.dryRun).toBe(false);
+    expect(executed.status).toBe("executed");
+    expect(executed.execution.status).toBe("executed");
+    expect(executed.execution.kind).toBe("claim-review");
+    expect(executed.execution.result).toMatchObject({
+      claimId: claim.claim.claimId
+    });
+    expect(executed.warnings.join(" ")).toContain("never executes shell strings");
   });
 
   it("writes, lists, and verifies workspace snapshots for agents", async () => {

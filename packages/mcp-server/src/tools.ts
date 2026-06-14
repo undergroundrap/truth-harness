@@ -25,6 +25,7 @@ import {
   createValidationPlan,
   createVerifierRoute,
   createWorkspaceReview,
+  createWorkspaceRunNextPlan,
   createWorkspaceGraph,
   createSymbolicCasCheckRecord,
   getCasBackendStatus,
@@ -206,6 +207,7 @@ import {
   type TrustLabel,
   type WorkspaceValidation,
   type WorkspaceGraph,
+  type WorkspaceRunNextPlan,
   type WorkspaceReview,
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
@@ -470,6 +472,14 @@ export interface TruthHarnessWorkspaceReviewInput {
   write?: boolean;
 }
 
+export interface TruthHarnessWorkspaceRunNextInput {
+  workspacePath?: string;
+  maxRoutes?: number;
+  maxClaims?: number;
+  maxSessions?: number;
+  executeLocal?: boolean;
+}
+
 export interface TruthHarnessWorkspaceReviewListInput {
   workspacePath?: string;
 }
@@ -486,6 +496,8 @@ export interface TruthHarnessWorkspaceReviewWriteOutput {
 }
 
 export type TruthHarnessWorkspaceReviewOutput = WorkspaceReview | TruthHarnessWorkspaceReviewWriteOutput;
+
+export type TruthHarnessWorkspaceRunNextOutput = WorkspaceRunNextPlan;
 
 export interface TruthHarnessWorkspaceSnapshotVerifyInput {
   workspacePath?: string;
@@ -1388,6 +1400,24 @@ export async function handleTruthHarnessWorkspaceReview(
   }
 
   return createWorkspaceReview(reviewInput);
+}
+
+export async function handleTruthHarnessWorkspaceRunNext(
+  input: TruthHarnessWorkspaceRunNextInput
+): Promise<TruthHarnessWorkspaceRunNextOutput> {
+  const rootPath = resolveWorkspaceRoot(input.workspacePath);
+  const review = await createWorkspaceReview({
+    rootPath,
+    maxRoutes: input.maxRoutes,
+    maxClaims: input.maxClaims,
+    maxSessions: input.maxSessions
+  });
+
+  return createWorkspaceRunNextPlan({
+    rootPath,
+    review,
+    executeLocal: input.executeLocal === true
+  });
 }
 
 export async function handleTruthHarnessWorkspaceReviewList(input: TruthHarnessWorkspaceReviewListInput): Promise<{

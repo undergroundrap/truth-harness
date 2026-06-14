@@ -206,6 +206,8 @@ export {
   renderWorkspaceReviewMarkdown,
   writeWorkspaceReview
 } from "./workspace-review.js";
+export { createWorkspaceRunNextPlan } from "./workspace-run-next.js";
+export type { WorkspaceRunNextPlan, WorkspaceRunNextStatus } from "./workspace-run-next.js";
 export { runWorkspaceStress } from "./workspace-stress.js";
 export { getEngineManifest } from "./engine-manifest.js";
 export {

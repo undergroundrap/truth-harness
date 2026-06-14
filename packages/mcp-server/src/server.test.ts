@@ -141,6 +141,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_workspace_review",
         "truth_harness_workspace_review_list",
         "truth_harness_workspace_review_show",
+        "truth_harness_workspace_run_next",
         "truth_harness_workspace_snapshot",
         "truth_harness_workspace_snapshot_list",
         "truth_harness_workspace_snapshot_verify",
@@ -348,6 +349,20 @@ describe("Truth Harness MCP server", () => {
       expect(workspaceReviewText).toContain("\"networkAccess\": \"none\"");
       expect(workspaceReviewText).toContain(routeWriteJson.route.routeId);
       expect(workspaceReviewText).toContain("Workspace review is a local planning queue");
+
+      const workspaceRunNext = await client.callTool({
+        name: "truth_harness_workspace_run_next",
+        arguments: {
+          maxRoutes: 1,
+          maxClaims: 20
+        }
+      });
+      const workspaceRunNextText = firstText(workspaceRunNext.content);
+      expect(workspaceRunNext.isError).not.toBe(true);
+      expect(workspaceRunNextText).toContain("\"schemaVersion\": \"truth-harness.workspace-run-next.v0\"");
+      expect(workspaceRunNextText).toContain("\"dryRun\": true");
+      expect(workspaceRunNextText).toContain("\"networkAccess\": \"none\"");
+      expect(workspaceRunNextText).toContain("never executes shell strings");
 
       const workspaceReviewList = await client.callTool({
         name: "truth_harness_workspace_review_list",
