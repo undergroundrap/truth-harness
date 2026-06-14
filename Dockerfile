@@ -41,3 +41,24 @@ CMD ["npm", "run", "check"]
 FROM dev AS verify
 
 RUN npm run check && npm run proof:launch:engines
+
+FROM dev AS lean-proof
+
+USER root
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl git xz-utils \
+  && rm -rf /var/lib/apt/lists/*
+
+USER truth
+ENV ELAN_HOME="/home/truth/.elan" \
+    PATH="/home/truth/.elan/bin:${PATH}" \
+    TRUTH_HARNESS_LEAN=lean
+
+RUN curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+  | sh -s -- -y --default-toolchain leanprover/lean4:v4.12.0 \
+  && elan toolchain install leanprover/lean4:v4.12.0 \
+  && lean --version
+
+RUN npm run proof:lean-fixture
+
+CMD ["npm", "run", "proof:lean-fixture"]

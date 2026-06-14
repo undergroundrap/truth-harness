@@ -23,12 +23,14 @@ Inspect a project layout without executing Lean, Lake, or any network command:
 ```bash
 truth-harness proof project .
 truth-harness proof project . --json
+truth-harness proof project docs/examples/lean-fixture --json
 ```
 
 Check one concrete Lean source file:
 
 ```bash
 truth-harness proof check docs/examples/trivial.lean --write
+truth-harness proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean --fail-on-unproved
 truth-harness proof list
 ```
 
@@ -68,6 +70,27 @@ For serious mathlib work, the target environment should be:
 
 Lean should not be bundled into the default image until the project has a pinned proof-lane environment. The current Docker image keeps Maxima and Z3 ready for CAS/SMT work; Lean remains opt-in until the proof project layout is chosen.
 
+The repository includes a tiny pinned fixture at `docs/examples/lean-fixture`:
+
+- `lean-toolchain`: `leanprover/lean4:v4.12.0`
+- `lakefile.lean`: minimal Lake package metadata
+- `TruthHarnessFixture/Trivial.lean`: accepted smoke theorems
+
+Run the local script when Lean is installed:
+
+```bash
+npm run proof:lean-fixture
+```
+
+Run the Docker profile when you want the fixture checked in a reproducible image:
+
+```bash
+docker compose build lean-proof
+docker compose run --rm lean-proof
+```
+
+The Docker target installs Lean through elan during image build, then the compose service checks the fixture with no runtime network route. This profile is deliberately separate from the default dev image so the proof lane can become strong without making every user carry a large proof environment.
+
 ## Agent Use
 
 Claude, Codex, and other agents should use Lean through a narrow loop:
@@ -86,6 +109,7 @@ Agents may propose proof repairs, but they should not describe a claim as proved
 The next proof-lane milestones are:
 
 - a pinned Lean/Lake/mathlib Docker profile,
+- fixture promotion from the current tiny Lean project to a mathlib-backed project,
 - proof project fixtures for regression tests,
 - route obligations that point to specific formal statements,
 - proof attempt history records for rejected attempts,

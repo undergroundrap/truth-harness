@@ -216,6 +216,11 @@ export {
   renderVisualArtifactMarkdown,
   writeVisualArtifact
 } from "./visual-artifact.js";
+export {
+  writeReceiptPlotVisualArtifact,
+  writeResearchCanvasVisualArtifact,
+  writeWorkspaceGraphVisualArtifact
+} from "./visual-adapters.js";
 export { runWorkspaceStress } from "./workspace-stress.js";
 export { getEngineManifest } from "./engine-manifest.js";
 export {
@@ -537,6 +542,13 @@ export type {
   VisualArtifactSummary,
   VisualArtifactWriteResult
 } from "./visual-artifact.js";
+export type {
+  GraphVisualRenderer,
+  PlotVisualRenderer,
+  ReceiptPlotVisualInput,
+  ResearchCanvasVisualInput,
+  WorkspaceGraphVisualInput
+} from "./visual-adapters.js";
 export type {
   WorkspaceStressInput,
   WorkspaceStressResult

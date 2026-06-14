@@ -96,6 +96,52 @@ describe("benchmark CLI", () => {
     expect(shown.warnings.join("\n")).toContain("not proof by themselves");
   });
 
+  it("writes graph, plot, and canvas visual artifacts from adapters", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--name", "Visual Adapter CLI Lab"]);
+    const receipt = createReceipt("compute 3 / 4 + 5 / 8");
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
+    await writeFile(join(root, ".truth-harness", "receipts", "fraction.json"), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+
+    const graph = JSON.parse(
+      (await runCli(["visual", "graph", "--workspace", root, "--renderer", "graphviz", "--json"])).stdout
+    ) as { visual: { kind: string; renderer: { engine: string }; payload: { format: string; content: unknown } } };
+    const plot = JSON.parse(
+      (await runCli(["visual", "plot", ".truth-harness/receipts/fraction.json", "--workspace", root, "--renderer", "plotly", "--json"])).stdout
+    ) as { visual: { kind: string; renderer: { engine: string }; payload: { format: string }; data?: { rows: string[][] } } };
+    const canvas = JSON.parse(
+      (await runCli(["visual", "canvas", "--workspace", root, "--json"])).stdout
+    ) as { visual: { kind: string; renderer: { engine: string }; payload: { format: string } } };
+    const list = JSON.parse((await runCli(["visual", "list", root, "--json"])).stdout) as {
+      total: number;
+      visuals: Array<{ kind: string; renderer: string }>;
+    };
+
+    expect(graph.visual).toMatchObject({
+      kind: "lineage-graph",
+      renderer: { engine: "graphviz" },
+      payload: { format: "graph-json" }
+    });
+    expect(JSON.stringify(graph.visual.payload.content)).toContain("digraph TruthHarnessWorkspace");
+    expect(plot.visual).toMatchObject({
+      kind: "plot",
+      renderer: { engine: "plotly" },
+      payload: { format: "plotly-json" }
+    });
+    expect(plot.visual.data?.rows.some((row) => row.includes("11/8"))).toBe(true);
+    expect(canvas.visual).toMatchObject({
+      kind: "mind-map",
+      renderer: { engine: "tldraw" },
+      payload: { format: "canvas-json" }
+    });
+    expect(list.total).toBe(3);
+    expect(list.visuals.map((visual) => `${visual.kind}/${visual.renderer}`).sort()).toEqual([
+      "lineage-graph/graphviz",
+      "mind-map/tldraw",
+      "plot/plotly"
+    ]);
+  });
+
   it("runs the demo gauntlet and writes a shareable HTML report", async () => {
     const root = await tempRoot();
     const reportPath = join(root, "truth-harness-demo-report.html");

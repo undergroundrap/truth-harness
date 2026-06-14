@@ -38,6 +38,15 @@ docker compose run --rm truth-harness npm run proof:launch:engines
 
 The engine-backed gate runs the standard launch suite first, then requires Maxima to independently agree that `sin(x)^2 + cos(x)^2` simplifies to `1`, and checks `docs/examples/constraints.smt2` with `--fail-on-unverified`. If Maxima is missing or disagrees, or if Z3 is missing, returns `unknown`, or fails to produce a concrete `sat`/`unsat` result, the command exits non-zero instead of printing a comforting but unsupported success.
 
+Run the pinned Lean proof fixture in the separate Lean image:
+
+```bash
+docker compose build lean-proof
+docker compose run --rm lean-proof
+```
+
+The `lean-proof` target installs Lean through elan during image build, pins the default toolchain to `leanprover/lean4:v4.12.0`, and runs `npm run proof:lean-fixture`. The compose service then checks the fixture again with `network_mode: "none"`. This is intentionally separate from the default dev image so proof-lane dependencies do not become silent bloat.
+
 Run CLI commands:
 
 ```bash
@@ -59,7 +68,7 @@ docker compose up web
 
 Then open `http://127.0.0.1:4180`. The web service publishes only to localhost. The browser calls localhost `/api/receipt` and `/api/claims` endpoints backed by `@truth-harness/core`; it does not call a hosted model or external service. The web server also rejects non-local Host headers by default and accepts browser API writes only from the same origin.
 
-The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima and Z3 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; use `truth-harness proof project <path>` to inspect that local layout without executing Lean, then set `TRUTH_HARNESS_LEAN` or build a derived image once that project layout is chosen.
+The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima and Z3 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; use `truth-harness proof project <path>` to inspect that local layout without executing Lean, run `docker compose run --rm lean-proof` for the pinned fixture, then set `TRUTH_HARNESS_LEAN` or build a derived image once a real project layout is chosen.
 
 ## Web UI Safe Verifier Path
 

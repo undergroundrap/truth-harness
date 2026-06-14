@@ -106,6 +106,9 @@ import {
   createWorkspaceRunNextPlan,
   createWorkspaceGraph,
   writeVisualArtifact,
+  writeReceiptPlotVisualArtifact,
+  writeResearchCanvasVisualArtifact,
+  writeWorkspaceGraphVisualArtifact,
   updateResearchSessionTask,
   validateWorkspaceArtifacts,
   verifyVaultEntry,
@@ -506,6 +509,84 @@ visual
       printVisualArtifactWrite(result);
     }
   );
+
+visual
+  .command("graph")
+  .description("Write a Mermaid or Graphviz visual artifact from the local workspace graph.")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--renderer <renderer>", "mermaid or graphviz", "mermaid")
+  .option("--title <title>", "Optional visual title")
+  .option("--max-nodes <count>", "Maximum graph nodes to include", parsePositiveInteger, 80)
+  .option("--json", "Print the full visual write JSON")
+  .action(async (options: { workspace: string; renderer: string; title?: string; maxNodes: number; json?: boolean }) => {
+    const renderer = parseGraphVisualRenderer(options.renderer);
+    const result = await writeWorkspaceGraphVisualArtifact({
+      rootPath: options.workspace,
+      renderer,
+      title: options.title,
+      maxNodes: options.maxNodes
+    });
+
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+
+    printVisualArtifactWrite(result);
+  });
+
+visual
+  .command("plot")
+  .description("Write a Plotly/Matplotlib/Sage-ready plot artifact from a receipt or a new local prompt.")
+  .argument("[receipt]", "Workspace-local receipt JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--problem <text>", "Create a local receipt from this prompt when no receipt path is supplied")
+  .option("--renderer <renderer>", "plotly, matplotlib, or sage", "plotly")
+  .option("--title <title>", "Optional visual title")
+  .option("--json", "Print the full visual write JSON")
+  .action(
+    async (
+      receiptPath: string | undefined,
+      options: { workspace: string; problem?: string; renderer: string; title?: string; json?: boolean }
+    ) => {
+      const result = await writeReceiptPlotVisualArtifact({
+        rootPath: options.workspace,
+        receiptPath,
+        problem: options.problem,
+        renderer: parsePlotVisualRenderer(options.renderer),
+        title: options.title
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printVisualArtifactWrite(result);
+    }
+  );
+
+visual
+  .command("canvas")
+  .description("Write an editable tldraw-style research canvas seed from the local workspace graph.")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--title <title>", "Optional visual title")
+  .option("--max-nodes <count>", "Maximum source nodes to include", parsePositiveInteger, 36)
+  .option("--json", "Print the full visual write JSON")
+  .action(async (options: { workspace: string; title?: string; maxNodes: number; json?: boolean }) => {
+    const result = await writeResearchCanvasVisualArtifact({
+      rootPath: options.workspace,
+      title: options.title,
+      maxNodes: options.maxNodes
+    });
+
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+
+    printVisualArtifactWrite(result);
+  });
 
 visual
   .command("list")
@@ -6682,6 +6763,22 @@ function parseVisualArtifactRenderer(value: string): VisualArtifactRenderer {
   }
 
   throw new Error(`Unsupported visual renderer ${JSON.stringify(value)}.`);
+}
+
+function parseGraphVisualRenderer(value: string): "mermaid" | "graphviz" {
+  if (value === "mermaid" || value === "graphviz") {
+    return value;
+  }
+
+  throw new Error(`Unsupported graph visual renderer ${JSON.stringify(value)}. Expected "mermaid" or "graphviz".`);
+}
+
+function parsePlotVisualRenderer(value: string): "plotly" | "matplotlib" | "sage" {
+  if (value === "plotly" || value === "matplotlib" || value === "sage") {
+    return value;
+  }
+
+  throw new Error(`Unsupported plot visual renderer ${JSON.stringify(value)}. Expected "plotly", "matplotlib", or "sage".`);
 }
 
 function parseVisualPayloadFormat(value: string): VisualArtifactPayloadFormat {

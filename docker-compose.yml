@@ -64,6 +64,21 @@ services:
     ports:
       - "127.0.0.1:4180:4180"
 
+  lean-proof:
+    <<: *truth-harness-security
+    build:
+      context: .
+      target: lean-proof
+    image: truth-harness:lean-proof
+    working_dir: /workspace
+    network_mode: "none"
+    environment:
+      CI: "true"
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
+      TRUTH_HARNESS_CONTAINER: "1"
+      TRUTH_HARNESS_LEAN: "lean"
+    command: ["npm", "run", "proof:lean-fixture"]
+
 volumes:
   truth_harness_node_modules:
   truth_harness_npm_cache:
