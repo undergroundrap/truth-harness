@@ -3574,7 +3574,8 @@ function renderWorkspaceReview() {
       state.selectedWorkspaceReviewItemId = item.itemId;
       state.selectedWorkspaceObligationId = item.obligationId;
       addActivity("human", "Opened project queue action", item.title ?? item.itemId, "waiting");
-      renderWorkspaceReview();
+      state.surface = "checks";
+      render();
     });
   });
   workspaceReviewList.querySelectorAll(".open-workspace-route").forEach((button) => {
@@ -3666,7 +3667,8 @@ function renderWorkspaceReviewAction(items) {
 
   workspaceReviewAction.querySelector(".close-workspace-action")?.addEventListener("click", () => {
     state.selectedWorkspaceReviewItemId = undefined;
-    renderWorkspaceReview();
+    state.selectedWorkspaceObligationId = undefined;
+    render();
   });
   workspaceReviewAction.querySelector(".open-workspace-action-route")?.addEventListener("click", async (event) => {
     const routeId = event.currentTarget.dataset.routeId;
