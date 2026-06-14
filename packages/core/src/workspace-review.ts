@@ -42,6 +42,8 @@ export interface WorkspaceReviewItem {
   domain?: string;
   trust?: TrustLabel;
   createdAt?: string;
+  acceptanceCriteria?: string[];
+  agentPacket?: string;
   source: {
     label: string;
     ref: string;
@@ -119,11 +121,11 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const sessions = (await listResearchSessions(status.root)).slice(0, input.maxSessions ?? 100);
   const claimsByRouteRef = claimsByRouteEvidence(claims);
   const routes = await Promise.all(routeSummaries.map((route) => readVerifierRoute(status.root, route.routeId)));
-  const items = sortReviewItems([
+  const items = attachAgentPackets(sortReviewItems([
     ...routes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef)),
     ...claims.flatMap((claim) => claimReviewItems(status.root, claim)),
     ...sessions.flatMap((session) => sessionReviewItems(status.root, session))
-  ]);
+  ]));
   const reviewWithoutMarkdown = {
     schemaVersion: WORKSPACE_REVIEW_SCHEMA_VERSION,
     projectId: status.manifest.projectId,
@@ -281,6 +283,13 @@ export function renderWorkspaceReviewMarkdown(review: Omit<WorkspaceReview, "mar
       lines.push(`  - ${escapeMarkdownText(item.summary)}`);
       lines.push(`  - Source: ${escapeMarkdownText(item.source.label)} \`${escapeMarkdownText(item.source.ref)}\``);
       lines.push(`  - Command: \`${escapeMarkdownText(item.command)}\``);
+      const criteria = item.acceptanceCriteria ?? [];
+      if (criteria.length > 0) {
+        lines.push("  - Acceptance:");
+        for (const criterion of criteria) {
+          lines.push(`    - ${escapeMarkdownText(criterion)}`);
+        }
+      }
     }
   }
 
@@ -607,6 +616,94 @@ function sortReviewItems(items: WorkspaceReviewItem[]): WorkspaceReviewItem[] {
 
     return (right.createdAt ?? "").localeCompare(left.createdAt ?? "");
   });
+}
+
+function attachAgentPackets(items: WorkspaceReviewItem[]): WorkspaceReviewItem[] {
+  return items.map((item) => {
+    const acceptanceCriteria = workspaceReviewAcceptanceCriteria(item);
+
+    return {
+      ...item,
+      acceptanceCriteria,
+      agentPacket: workspaceReviewAgentPacket(item, acceptanceCriteria)
+    };
+  });
+}
+
+function workspaceReviewAcceptanceCriteria(item: WorkspaceReviewItem): string[] {
+  const criteria: string[] = [];
+
+  if (item.kind === "route-obligation") {
+    criteria.push(
+      "Open the source route and satisfy this exact obligation before upgrading trust.",
+      "Attach the resulting proof, solver, CAS, or review artifact to the route.",
+      "Keep any final claim inside the route problem, checker output, and limitations."
+    );
+  } else if (item.kind === "route-ready-claim") {
+    criteria.push(
+      "Record a narrow claim that cites this route as evidence.",
+      "Use the route's strongest trust label without upgrading it.",
+      "Leave broader claims open until independent obligations are satisfied."
+    );
+  } else if (item.kind === "claim-blocker") {
+    criteria.push(
+      "Run the claim review and resolve the named open check.",
+      "Attach citations, receipts, routes, or expert review before finalizing.",
+      "Do not finalize the claim until open blockers are represented in the ledger."
+    );
+  } else if (item.kind === "session-task") {
+    criteria.push(
+      "Open the research session and update only this task or its attached evidence.",
+      "Record a checkpoint when the task changes state.",
+      "Keep generated notes linked to receipts, routes, or sources."
+    );
+  } else if (item.kind === "session-next-check") {
+    criteria.push(
+      "Open the research session and answer this checkpoint check directly.",
+      "Attach any resulting receipt, source, or route before marking it addressed.",
+      "Record a new checkpoint with unresolved questions."
+    );
+  }
+
+  criteria.push(
+    "Run this only inside the local workspace boundary.",
+    "Do not claim more than the attached evidence earns."
+  );
+
+  return criteria;
+}
+
+function workspaceReviewAgentPacket(item: WorkspaceReviewItem, acceptanceCriteria: string[]): string {
+  const lines = [
+    "# Truth Harness Workspace Action",
+    "",
+    `Item: ${item.itemId}`,
+    `Priority: ${item.priority}`,
+    `Kind: ${item.kind}`,
+    `Objective: ${item.title}`,
+    `Summary: ${item.summary}`,
+    `Source: ${item.source.label} ${item.source.ref}`,
+    `Route: ${item.routeId ?? "n/a"}`,
+    `Claim: ${item.claimId ?? "n/a"}`,
+    `Session: ${item.sessionId ?? "n/a"}`,
+    `Obligation: ${item.obligationId ?? "n/a"}`,
+    `Trust: ${item.trust ?? "n/a"}`,
+    "",
+    "Command:",
+    "```sh",
+    item.command,
+    "```",
+    "",
+    "Acceptance criteria:",
+    ...acceptanceCriteria.map((criterion) => `- ${criterion}`),
+    "",
+    "Trust boundary:",
+    "- Local-only packet; no network access is required by this action.",
+    "- This packet is a plan, not evidence. Trust only changes after a replayable artifact/check is attached.",
+    ""
+  ];
+
+  return lines.join("\n");
 }
 
 function itemIdFor(value: unknown): string {

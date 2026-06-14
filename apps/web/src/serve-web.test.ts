@@ -169,7 +169,11 @@ describe("local web route ledger API", () => {
       expect.objectContaining({
         kind: "route-ready-claim",
         routeId: receiptPayload.route.routeId,
-        command: expect.stringContaining("truth-harness claim add")
+        command: expect.stringContaining("truth-harness claim add"),
+        acceptanceCriteria: expect.arrayContaining([
+          "Record a narrow claim that cites this route as evidence."
+        ]),
+        agentPacket: expect.stringContaining("# Truth Harness Workspace Action")
       })
     );
 

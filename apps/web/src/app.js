@@ -3515,13 +3515,16 @@ function renderWorkspaceReview() {
   const items = Array.isArray(workspaceReview.items) ? workspaceReview.items : [];
   const summary = workspaceReview.summary ?? {};
   workspaceReviewCount.textContent = workspaceReviewCountText(summary);
-  const visibleItems = items.slice(0, 6);
+  const visibleItems = items.slice(0, 8);
+  const hiddenCount = Math.max(0, items.length - visibleItems.length);
 
   workspaceReviewList.innerHTML = visibleItems.length === 0
     ? `<div class="activity-empty">No project queue items yet. Saved verifier routes and claim blockers will appear here.</div>`
     : visibleItems
-      .map((item) => {
+      .map((item, index) => {
         const meta = workspaceReviewItemMeta(item);
+        const source = workspaceReviewSourceText(item);
+        const acceptance = workspaceReviewAcceptanceHtml(item);
         const canOpenRoute = Boolean(item.routeId);
         return `<article class="queue-item queue-${escapeHtml(item.priority ?? "medium")}">
           <div class="queue-main">
@@ -3530,16 +3533,25 @@ function renderWorkspaceReview() {
               <strong>${escapeHtml(item.title ?? "Workspace review item")}</strong>
               <small>${escapeHtml(item.summary ?? "")}</small>
               <small>${escapeHtml(meta)}</small>
+              <small class="queue-source">${escapeHtml(source)}</small>
             </div>
           </div>
-          <code class="queue-command">${escapeHtml(item.command ?? "")}</code>
+          ${acceptance}
+          <details class="queue-command-details">
+            <summary>Command</summary>
+            <code class="queue-command">${escapeHtml(item.command ?? "")}</code>
+          </details>
           <div class="queue-actions">
             ${canOpenRoute ? `<button class="text-button compact-button open-workspace-route" data-route-id="${escapeHtml(item.routeId)}" type="button">Open route</button>` : ""}
-            <button class="text-button compact-button copy-workspace-command" data-command="${escapeHtml(item.command ?? "")}" type="button">Copy command</button>
+            <button class="text-button compact-button copy-workspace-packet" data-review-index="${index}" type="button">Copy packet</button>
+            <button class="text-button compact-button copy-workspace-command" data-review-index="${index}" type="button">Copy command</button>
           </div>
         </article>`;
       })
-      .join("");
+      .join("") +
+      (hiddenCount > 0
+        ? `<div class="queue-footer">${hiddenCount} more local action${hiddenCount === 1 ? "" : "s"} available in the CLI workspace review.</div>`
+        : "");
 
   workspaceReviewList.querySelectorAll(".open-workspace-route").forEach((button) => {
     button.addEventListener("click", () => {
@@ -3548,7 +3560,8 @@ function renderWorkspaceReview() {
   });
   workspaceReviewList.querySelectorAll(".copy-workspace-command").forEach((button) => {
     button.addEventListener("click", () => {
-      const command = button.dataset.command;
+      const item = visibleItems[Number(button.dataset.reviewIndex)];
+      const command = item?.command;
       if (!command) {
         return;
       }
@@ -3562,6 +3575,26 @@ function renderWorkspaceReview() {
         copiedDetail: command,
         fallbackTitle: "Downloaded project queue command",
         fallbackDetail: "the project queue command was saved as plain text instead."
+      });
+    });
+  });
+  workspaceReviewList.querySelectorAll(".copy-workspace-packet").forEach((button) => {
+    button.addEventListener("click", () => {
+      const item = visibleItems[Number(button.dataset.reviewIndex)];
+      const packet = item?.agentPacket;
+      if (!packet) {
+        return;
+      }
+
+      copyOrDownloadText({
+        text: `${packet.trim()}\n`,
+        filename: `truth-harness-agent-packet-${safeFilenameTimestamp()}.md`,
+        type: "text/markdown",
+        button,
+        copiedTitle: "Copied project queue packet",
+        copiedDetail: item.title ?? "workspace action",
+        fallbackTitle: "Downloaded project queue packet",
+        fallbackDetail: "the agent handoff packet was saved as markdown instead."
       });
     });
   });
@@ -3590,12 +3623,56 @@ function workspaceReviewItemMeta(item) {
   const parts = [
     item.kind,
     item.trust,
-    item.domain,
-    item.routeId,
-    item.claimId,
-    item.obligationId
+    item.domain
   ].filter(Boolean);
   return parts.join(" - ");
+}
+
+function workspaceReviewSourceText(item) {
+  const label = item?.source?.label;
+  if (!label) {
+    return "Source: local workspace review";
+  }
+
+  return `Source: ${label}`;
+}
+
+function workspaceReviewAcceptanceHtml(item) {
+  const criteria = Array.isArray(item.acceptanceCriteria) ? item.acceptanceCriteria : [];
+  if (criteria.length === 0) {
+    return "";
+  }
+
+  const hiddenCount = Math.max(0, criteria.length - 1);
+  return `<div class="queue-acceptance">
+    <span>Done when</span>
+    <p>${escapeHtml(workspaceReviewDoneWhenText(item))}</p>
+    ${hiddenCount > 0 ? `<small>+${hiddenCount} more criteria in packet</small>` : ""}
+  </div>`;
+}
+
+function workspaceReviewDoneWhenText(item) {
+  if (item.kind === "route-obligation") {
+    return "Obligation satisfied; replayable artifact attached.";
+  }
+
+  if (item.kind === "route-ready-claim") {
+    return "Narrow claim cites this route without trust upgrade.";
+  }
+
+  if (item.kind === "claim-blocker") {
+    return "Open check resolved; supporting evidence attached.";
+  }
+
+  if (item.kind === "session-task") {
+    return "Task updated with linked notes, receipts, or sources.";
+  }
+
+  if (item.kind === "session-next-check") {
+    return "Checkpoint answered with evidence or a new blocker.";
+  }
+
+  return "The local evidence packet satisfies this action.";
 }
 
 function routeObligationSummaryText(route) {

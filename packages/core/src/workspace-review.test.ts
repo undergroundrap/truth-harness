@@ -71,13 +71,25 @@ describe("workspace review", () => {
     expect(review.items[0]).toMatchObject({
       kind: "route-obligation",
       priority: "critical",
-      routeId: blockedRoute.route.routeId
+      routeId: blockedRoute.route.routeId,
+      acceptanceCriteria: expect.arrayContaining([
+        "Open the source route and satisfy this exact obligation before upgrading trust.",
+        "Run this only inside the local workspace boundary."
+      ]),
+      agentPacket: expect.stringContaining("# Truth Harness Workspace Action")
     });
+    expect(review.items[0].agentPacket).toContain(`Route: ${blockedRoute.route.routeId}`);
+    expect(review.items[0].agentPacket).toContain("This packet is a plan, not evidence.");
     expect(review.items).toContainEqual(
       expect.objectContaining({
         kind: "route-ready-claim",
         routeId: readyRoute.route.routeId,
-        command: expect.stringContaining("truth-harness claim add")
+        command: expect.stringContaining("truth-harness claim add"),
+        acceptanceCriteria: expect.arrayContaining([
+          "Record a narrow claim that cites this route as evidence.",
+          "Use the route's strongest trust label without upgrading it."
+        ]),
+        agentPacket: expect.stringContaining("Acceptance criteria:")
       })
     );
     expect(review.items).toContainEqual(
@@ -85,10 +97,16 @@ describe("workspace review", () => {
         kind: "claim-blocker",
         domain: "biology",
         priority: "high",
-        command: expect.stringContaining("truth-harness claim review")
+        command: expect.stringContaining("truth-harness claim review"),
+        acceptanceCriteria: expect.arrayContaining([
+          "Run the claim review and resolve the named open check.",
+          "Do not finalize the claim until open blockers are represented in the ledger."
+        ]),
+        agentPacket: expect.stringContaining("Claim:")
       })
     );
     expect(review.markdown).toContain("## Ordered Work Queue");
+    expect(review.markdown).toContain("  - Acceptance:");
     expect(review.markdown).toContain("Workspace review is a local planning queue");
   });
 
@@ -217,7 +235,11 @@ describe("workspace review", () => {
         kind: "session-task",
         sessionId: start.session.sessionId,
         title: "Research task: Attach a Lean proof attempt",
-        command: expect.stringContaining("truth-harness research show")
+        command: expect.stringContaining("truth-harness research show"),
+        acceptanceCriteria: expect.arrayContaining([
+          "Open the research session and update only this task or its attached evidence."
+        ]),
+        agentPacket: expect.stringContaining(`Session: ${start.session.sessionId}`)
       })
     );
     expect(review.items).toContainEqual(
@@ -225,7 +247,10 @@ describe("workspace review", () => {
         kind: "session-next-check",
         sessionId: start.session.sessionId,
         summary: expect.stringContaining("checkpoint"),
-        command: expect.stringContaining(start.session.sessionId)
+        command: expect.stringContaining(start.session.sessionId),
+        acceptanceCriteria: expect.arrayContaining([
+          "Open the research session and answer this checkpoint check directly."
+        ])
       })
     );
     expect(review.markdown).toContain("| Sessions | `1` |");
