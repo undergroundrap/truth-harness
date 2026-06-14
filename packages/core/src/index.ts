@@ -242,7 +242,10 @@ export {
   getProofBackendStatus,
   listLeanProofChecks,
   parseLeanProofCheckRecord,
+  readLeanProofCheckRecord,
   renderLeanProofCheckMarkdown,
+  renderLeanProofCheckVisualSvg,
+  writeLeanProofCheckVisualArtifact,
   writeLeanProofCheckRecord
 } from "./proof-backend.js";
 export {
@@ -612,6 +615,7 @@ export type {
   LeanProofCheckStatus,
   LeanProofCheckSummary,
   LeanProofCheckWriteResult,
+  LeanProofVisualInput,
   WriteLeanProofCheckInput
 } from "./proof-backend.js";
 export type {

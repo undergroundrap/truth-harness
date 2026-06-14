@@ -659,6 +659,68 @@ describe("benchmark CLI", () => {
     expect(list.checks[0]?.path).toContain(".truth-harness/proofs/");
   });
 
+  it("creates visual artifacts from proof-check workspace records", async () => {
+    const root = await tempRoot();
+    const proofPath = join(root, "example.lean");
+    await writeFile(proofPath, "example : True := by trivial\n", "utf8");
+
+    await runCli(["workspace", "init", root, "--json"]);
+    const write = await runCli([
+      "proof",
+      "check",
+      proofPath,
+      "--workspace",
+      root,
+      "--write",
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--json"
+    ]);
+    const proofWrite = JSON.parse(write.stdout) as {
+      record: { checkId: string; trust: string };
+    };
+    const visual = await runCli([
+      "proof",
+      "visual",
+      proofWrite.record.checkId,
+      "--workspace",
+      root,
+      "--json"
+    ]);
+    const visualJson = JSON.parse(visual.stdout) as {
+      visual: {
+        schemaVersion: string;
+        visualId: string;
+        kind: string;
+        payload: { format: string; content: string };
+        sourceRefs: Array<{ kind: string; ref: string }>;
+        trustBoundary: { visualDoesNotUpgradeTrust: boolean };
+      };
+    };
+    const list = JSON.parse((await runCli(["visual", "list", root, "--json"])).stdout) as {
+      total: number;
+      visuals: Array<{ visualId: string; kind: string }>;
+    };
+
+    expect(visual.exitCode).toBe(0);
+    expect(visualJson.visual.schemaVersion).toBe("truth-harness.visual-artifact.v0");
+    expect(visualJson.visual.kind).toBe("proof-tree");
+    expect(visualJson.visual.payload.format).toBe("svg");
+    expect(visualJson.visual.payload.content).toContain(proofWrite.record.checkId);
+    expect(visualJson.visual.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        kind: "proof",
+        ref: expect.stringContaining(".truth-harness/proofs/")
+      })
+    );
+    expect(visualJson.visual.trustBoundary.visualDoesNotUpgradeTrust).toBe(true);
+    expect(list.total).toBe(1);
+    expect(list.visuals[0]).toMatchObject({
+      visualId: visualJson.visual.visualId,
+      kind: "proof-tree"
+    });
+  });
+
   it("reports SMT backend status without requiring Z3 to be installed", async () => {
     const result = await runCli(["smt", "backends", "--z3-command", "truth-harness-missing-z3-command", "--json"]);
     const json = JSON.parse(result.stdout) as {

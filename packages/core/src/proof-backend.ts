@@ -17,6 +17,7 @@ import {
 } from "./artifact-record-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import type { TrustLabel } from "./types.js";
+import { writeVisualArtifact, type VisualArtifactWriteResult } from "./visual-artifact.js";
 
 export type ProofBackendId = "lean";
 export type ProofBackendStatus = "available" | "missing" | "error";
@@ -144,6 +145,13 @@ export interface LeanProofCheckWriteResult {
   jsonPath: string;
   markdownPath: string;
   markdown: string;
+}
+
+export interface LeanProofVisualInput {
+  rootPath: string;
+  proofRef: string;
+  title?: string;
+  now?: string;
 }
 
 export interface LeanProofCheckSummary {
@@ -418,6 +426,65 @@ export async function listLeanProofChecks(rootPath: string): Promise<LeanProofCh
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
+export async function readLeanProofCheckRecord(rootPath: string, proofRef: string): Promise<LeanProofCheckRecord> {
+  return (await readLeanProofCheckRecordWithPath(rootPath, proofRef)).record;
+}
+
+export async function writeLeanProofCheckVisualArtifact(input: LeanProofVisualInput): Promise<VisualArtifactWriteResult> {
+  const { record, path } = await readLeanProofCheckRecordWithPath(input.rootPath, input.proofRef);
+  const title = input.title?.trim() || `Lean proof check ${record.checkId}`;
+
+  return writeVisualArtifact({
+    rootPath: input.rootPath,
+    title,
+    kind: "proof-tree",
+    renderer: {
+      engine: "truth-harness-native",
+      adapter: "lean-proof-check-visual",
+      adapterVersion: "0"
+    },
+    sourceRefs: [
+      {
+        kind: "proof",
+        ref: path,
+        label: `Lean proof-check record ${record.checkId}`
+      },
+      {
+        kind: "source",
+        ref: record.source.path,
+        label: "Lean source artifact"
+      }
+    ],
+    replayCommand: `truth-harness proof visual ${quoteCommandArg(path)} --workspace ${quoteCommandArg(input.rootPath)} --json`,
+    payload: {
+      format: "svg",
+      content: renderLeanProofCheckVisualSvg(record),
+      width: 960,
+      height: 540
+    },
+    data: {
+      columns: ["field", "value"],
+      rows: [
+        ["checkId", record.checkId],
+        ["source", record.source.path],
+        ["declaration", record.source.declarationName ?? ""],
+        ["backend", record.backend.displayName],
+        ["status", record.status],
+        ["trust", record.trust],
+        ["proofCheckerBacked", String(record.proofCheckerBacked)],
+        ["networkAccess", record.networkAccess],
+        ["replay", record.replay]
+      ]
+    },
+    tags: ["lean", "proof", "proof-tree", record.status, record.trust],
+    warnings: [
+      "This visual summarizes a Lean proof-check record; the proof-check JSON remains the authoritative evidence artifact.",
+      "A visual proof map does not expose Lean kernel internals and never upgrades a trust label by itself."
+    ],
+    now: input.now
+  });
+}
+
 export function parseLeanProofCheckRecord(raw: string, sourcePath = "proof-check record"): LeanProofCheckRecord {
   const parsed = parseJsonObject(raw, sourcePath, "Proof-check");
   const issues: string[] = [];
@@ -545,6 +612,31 @@ export function renderLeanProofCheckMarkdown(record: LeanProofCheckRecord): stri
   return `${lines.join("\n")}\n`;
 }
 
+export function renderLeanProofCheckVisualSvg(record: LeanProofCheckRecord): string {
+  const accepted = record.status === "accepted" && record.proofCheckerBacked;
+  const resultStroke = accepted ? "#70d6a1" : record.status === "rejected" ? "#ff8b7e" : "#e2c766";
+  const resultFill = accepted ? "#0b2518" : record.status === "rejected" ? "#2a1210" : "#241f0d";
+  const proofBacked = record.proofCheckerBacked ? "accepted proof checker run" : "no accepted proof checker run";
+  const declaration = record.source.declarationName ?? "not recorded";
+  const version = record.backend.version ?? "version not recorded";
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-label="Lean proof check visualization">
+  <rect width="960" height="540" rx="20" fill="#0f0f0f"/>
+  <text x="56" y="58" fill="#f5f2ea" font-size="26" font-family="Inter, system-ui, sans-serif" font-weight="700">Lean Proof Check</text>
+  <text x="56" y="88" fill="#aaa59d" font-size="14" font-family="Inter, system-ui, sans-serif">Visual evidence view generated from a local Truth Harness proof-check record.</text>
+  ${svgBox(58, 136, 250, 120, "Source artifact", [record.source.path, `sha256 ${record.source.sha256.slice(0, 12)}...`, `declaration ${declaration}`], "#d8ca9d", "#19160f")}
+  ${svgBox(356, 136, 250, 120, "Accepted backend", [record.backend.displayName, record.backend.adapter, version], "#7aa2f7", "#101827")}
+  ${svgBox(654, 136, 250, 120, "Check result", [`status ${record.status}`, `trust ${record.trust}`, proofBacked], resultStroke, resultFill)}
+  ${svgLine(308, 196, 356, 196)}
+  ${svgLine(606, 196, 654, 196)}
+  ${svgBox(172, 328, 280, 112, "Replay", [record.replay], "#aaa59d", "#141414")}
+  ${svgBox(508, 328, 280, 112, "Boundary", ["Proves only the formal Lean statement", "Visual does not upgrade trust", "Review imports and statement scope"], "#e2c766", "#211b08")}
+  ${svgLine(779, 256, 648, 328)}
+  ${svgLine(481, 256, 312, 328)}
+  <text x="56" y="500" fill="#77736b" font-size="12" font-family="Inter, system-ui, sans-serif">Authoritative artifact: ${escapeSvg(record.checkId)}. Visual artifacts are evidence views, not proof objects.</text>
+</svg>`;
+}
+
 function probeLeanBackend(args: {
   command: string;
   timeoutMs: number;
@@ -652,6 +744,33 @@ function runCommand(command: string, args: string[], timeoutMs: number): ProofBa
   };
 }
 
+async function readLeanProofCheckRecordWithPath(
+  rootPath: string,
+  proofRef: string
+): Promise<{ record: LeanProofCheckRecord; path: string }> {
+  const status = await requireLocalWorkspace(rootPath);
+
+  if (proofRef.endsWith(".json")) {
+    const directPath = resolveWorkspacePath(status.root, proofRef);
+    return {
+      record: parseLeanProofCheckRecord(await readFile(directPath, "utf8"), directPath),
+      path: toPortablePath(relative(status.root, directPath))
+    };
+  }
+
+  const checks = await listLeanProofChecks(rootPath);
+  const found = checks.find((summary) => summary.checkId === proofRef || summary.path === proofRef);
+  if (!found) {
+    throw new Error(`Lean proof-check record not found: ${proofRef}`);
+  }
+
+  const path = resolve(status.root, found.path);
+  return {
+    record: parseLeanProofCheckRecord(await readFile(path, "utf8"), path),
+    path: found.path
+  };
+}
+
 function withCheckId(record: Omit<LeanProofCheckRecord, "checkId">): LeanProofCheckRecord {
   return {
     ...record,
@@ -689,6 +808,63 @@ function normalizeOptional(value: string | undefined): string | undefined {
 
 function quoteCommandArg(value: string): string {
   return /^[A-Za-z0-9_./\\:-]+$/.test(value) ? value : JSON.stringify(value);
+}
+
+function svgBox(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  title: string,
+  lines: string[],
+  stroke: string,
+  fill: string
+): string {
+  const body = lines.flatMap((line) => wrapSvgLine(line, 32)).slice(0, 4);
+  const titleText = `<text x="${x + 18}" y="${y + 32}" fill="#c8c2b8" font-size="14" font-family="Inter, system-ui, sans-serif" font-weight="700">${escapeSvg(title)}</text>`;
+  const bodyText = body
+    .map(
+      (line, index) =>
+        `<text x="${x + 18}" y="${y + 62 + index * 18}" fill="#f5f2ea" font-size="13" font-family="Inter, system-ui, sans-serif">${escapeSvg(line)}</text>`
+    )
+    .join("");
+
+  return `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="12" fill="${fill}" stroke="${stroke}" stroke-width="1.4"/>${titleText}${bodyText}`;
+}
+
+function svgLine(x1: number, y1: number, x2: number, y2: number): string {
+  return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#35322d" stroke-width="2"/>`;
+}
+
+function wrapSvgLine(value: string, maxChars: number): string[] {
+  const words = value.split(/\s+/u).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > maxChars && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+
+  if (line) {
+    lines.push(line);
+  }
+
+  return lines.length > 0 ? lines : [value];
+}
+
+function escapeSvg(value: string): string {
+  return value
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;")
+    .replace(/'/gu, "&apos;");
 }
 
 async function requireLocalWorkspace(

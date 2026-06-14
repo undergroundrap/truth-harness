@@ -117,6 +117,7 @@ import {
   writeEvidenceAudit,
   writeEvidenceAuditReport,
   writeExpertReview,
+  writeLeanProofCheckVisualArtifact,
   writeLeanProofCheckRecord,
   writeSmtCheckRecord,
   writeDiscoveryPackage,
@@ -2979,6 +2980,28 @@ proof
     }
 
     printLeanProofCheckList(checks);
+  });
+
+proof
+  .command("visual")
+  .description("Create a replayable visual artifact from a local Lean proof-check record.")
+  .argument("<proof>", "Proof-check id or workspace-local proof-check JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--title <title>", "Optional visual artifact title")
+  .option("--json", "Print the full visual artifact write JSON")
+  .action(async (proofRef: string, options: { workspace: string; title?: string; json?: boolean }) => {
+    const result = await writeLeanProofCheckVisualArtifact({
+      rootPath: options.workspace,
+      proofRef,
+      title: options.title
+    });
+
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+
+    printVisualArtifactWrite(result);
   });
 
 const smt = program.command("smt").description("Inspect local SMT solver backends and check SMT-LIB artifacts.");

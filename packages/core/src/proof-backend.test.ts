@@ -8,9 +8,12 @@ import {
   checkLeanProofArtifact,
   getProofBackendStatus,
   listLeanProofChecks,
+  readLeanProofCheckRecord,
   writeLeanProofCheckRecord,
+  writeLeanProofCheckVisualArtifact,
   type ProofBackendCommandRunner
 } from "./proof-backend.js";
+import { readVisualArtifact } from "./visual-artifact.js";
 import { validateJsonSchema } from "./json-schema-validation.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 
@@ -276,6 +279,59 @@ describe("proof backend status", () => {
     });
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.proofs).toBe(1);
+  });
+
+  it("writes visual artifacts from proof-check records without upgrading trust", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Proof Visual Lab" });
+    await writeFile(join(root, "trivial.lean"), "example : True := by trivial\n", "utf8");
+    const runner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Lean (version 4.12.0)\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "",
+        stderr: ""
+      };
+    };
+
+    const proofWrite = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "trivial.lean",
+      declarationName: "trivial_true",
+      runner
+    });
+    const visualWrite = await writeLeanProofCheckVisualArtifact({
+      rootPath: root,
+      proofRef: proofWrite.record.checkId,
+      now: "2026-06-10T00:00:00.000Z"
+    });
+    const visual = await readVisualArtifact(root, visualWrite.visual.visualId);
+    const rereadProof = await readLeanProofCheckRecord(root, proofWrite.record.checkId);
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(rereadProof.checkId).toBe(proofWrite.record.checkId);
+    expect(visual.kind).toBe("proof-tree");
+    expect(visual.renderer.adapter).toBe("lean-proof-check-visual");
+    expect(visual.payload.format).toBe("svg");
+    expect(String(visual.payload.content)).toContain(proofWrite.record.checkId);
+    expect(visual.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        kind: "proof",
+        ref: expect.stringContaining(".truth-harness/proofs/")
+      })
+    );
+    expect(visual.trustBoundary.visualDoesNotUpgradeTrust).toBe(true);
+    expect(visual.warnings.join(" ")).toContain("proof-check JSON remains the authoritative");
+    expect(validation.passed).toBe(true);
+    expect(validation.summary.byKind.proofs).toBe(1);
+    expect(validation.summary.byKind.visuals).toBe(1);
   });
 });
 
