@@ -164,6 +164,29 @@ describe("local web route ledger API", () => {
     expect(Array.isArray(graphPayload.graph.edges)).toBe(true);
     expect(typeof graphPayload.graph.validation.passed).toBe("boolean");
 
+    const readinessResponse = await fetch(`${baseUrl}/api/workspace-readiness`);
+    expect(readinessResponse.status).toBe(200);
+    const readinessPayload = await readinessResponse.json();
+    expectLocalApiSuccess(readinessResponse, readinessPayload);
+    expect(readinessPayload.localOnly).toBe(true);
+    expect(readinessPayload.externalCalls).toEqual([]);
+    expect(readinessPayload.readiness).toMatchObject({
+      schemaVersion: "truth-harness.workspace-readiness.v0",
+      localOnly: true,
+      networkAccess: "none",
+      status: "open-work"
+    });
+    expect(readinessPayload.readiness.summary.validation.passed).toBe(true);
+    expect(readinessPayload.readiness.summary.graph.missingRefs).toBe(0);
+    expect(readinessPayload.readiness.summary.review.totalItems).toBeGreaterThan(0);
+    expect(readinessPayload.readiness.gates).toContainEqual(
+      expect.objectContaining({
+        id: "stress-fixture",
+        status: "waiting",
+        command: expect.stringContaining("truth-harness workspace stress")
+      })
+    );
+
     const mapResponse = await fetch(`${baseUrl}/api/research-map`, {
       method: "POST",
       headers: {

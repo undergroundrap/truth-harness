@@ -1899,6 +1899,10 @@ h4 {
   background: #121212;
 }
 
+.workspace-readiness-section {
+  background: #111514;
+}
+
 .safety-values {
   margin-top: 8px;
 }
@@ -1917,9 +1921,20 @@ h4 {
   gap: 2px;
 }
 
+.engine-values .wide-value {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.engine-values .wide-value dt {
+  margin-bottom: 4px;
+}
+
 .engine-values code {
+  display: block;
   color: var(--text);
   font-size: 11px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .safety-notes {
@@ -1941,6 +1956,10 @@ h4 {
 
 .engine-notes li::marker {
   color: var(--warn);
+}
+
+.workspace-readiness-notes li::marker {
+  color: var(--accent);
 }
 
 dt {

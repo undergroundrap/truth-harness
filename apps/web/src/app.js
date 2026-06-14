@@ -281,7 +281,8 @@ const state = {
   sidebarCollapsed: false,
   activityQuery: "",
   activityLimit: ACTIVITY_PAGE_SIZE,
-  safetyStatus: undefined
+  safetyStatus: undefined,
+  workspaceReadiness: undefined
 };
 
 const appShell = document.querySelector("#app-shell");
@@ -349,6 +350,9 @@ const safetyNotes = document.querySelector("#safety-notes");
 const engineReadinessPill = document.querySelector("#engine-readiness-pill");
 const engineReadinessDetails = document.querySelector("#engine-readiness-details");
 const engineReadinessNotes = document.querySelector("#engine-readiness-notes");
+const workspaceReadinessPill = document.querySelector("#workspace-readiness-pill");
+const workspaceReadinessDetails = document.querySelector("#workspace-readiness-details");
+const workspaceReadinessNotes = document.querySelector("#workspace-readiness-notes");
 const activityLog = document.querySelector("#activity-log");
 const activitySearch = document.querySelector("#activity-search");
 const activityCount = document.querySelector("#activity-count");
@@ -1023,6 +1027,7 @@ addActivity("system", "Workbench opened", "Static shell loaded; no external serv
 addActivity("system", "Local API ready", "UI will submit prompts only to local receipt and claim ledger routes on this machine.", "waiting");
 render();
 void refreshSafetyStatus();
+void refreshWorkspaceReadiness();
 void refreshClaimLedger();
 void refreshRouteLedger();
 void refreshResearchMap();
@@ -1102,6 +1107,7 @@ function render() {
   renderProjectStart();
   renderProtocol();
   renderSafetyStatus();
+  renderWorkspaceReadinessStatus();
   renderAgentRoutes(receipt);
   renderRunbook(receipt);
   renderVerificationMatrix(receipt);
@@ -4201,6 +4207,7 @@ async function attachEvidenceToRoute(input) {
     }
     await refreshWorkspaceReview({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
+    await refreshWorkspaceReadiness({ announce: false });
     render();
   } catch (error) {
     addActivity("local-api", `${label} attach rejected`, error instanceof Error ? error.message : "Unknown route satisfaction failure.", "refuted");
@@ -4452,6 +4459,7 @@ async function recordCurrentClaim() {
     }
     await refreshWorkspaceReview({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
+    await refreshWorkspaceReadiness({ announce: false });
   } catch (error) {
     updateLatestActivity("Recording claim", "refuted", error instanceof Error ? error.message : "Unknown claim ledger failure.");
   } finally {
@@ -4476,6 +4484,7 @@ async function recordCurrentChain() {
     });
     await refreshWorkspaceReview({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
+    await refreshWorkspaceReadiness({ announce: false });
     updateLatestActivity("Recording claim chain", "passed", `${claimId} is now linked to recorded upstream claims.`);
   } catch (error) {
     updateLatestActivity("Recording claim chain", "refuted", error instanceof Error ? error.message : "Unknown claim chain failure.");
@@ -5403,6 +5412,38 @@ async function refreshSafetyStatus() {
   }
 }
 
+async function refreshWorkspaceReadiness({ announce = true } = {}) {
+  if (!workspaceReadinessPill) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/workspace-readiness", {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local workspace readiness API failed.");
+    state.workspaceReadiness = payload;
+    renderWorkspaceReadinessStatus();
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded workspace health",
+        localApiSuccessMessage(payload, workspaceReadinessSummary(payload.readiness)),
+        workspaceReadinessActivityTrust(payload.readiness?.status)
+      );
+    }
+  } catch (error) {
+    state.workspaceReadiness = {
+      error: error instanceof Error ? error.message : "Unknown workspace readiness failure."
+    };
+    renderWorkspaceReadinessStatus();
+    addActivity("local-api", "Workspace health unavailable", state.workspaceReadiness.error, "waiting");
+  }
+}
+
 function renderSafetyStatus() {
   if (!safetyStatusPill || !safetyDetails || !safetyNotes) {
     return;
@@ -5465,6 +5506,64 @@ function renderSafetyStatus() {
   const notes = noteCandidates.length > 0 ? noteCandidates.slice(0, 3) : ["No local safety metadata was returned."];
   safetyNotes.innerHTML = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
   renderEngineReadinessStatus(payload);
+}
+
+function renderWorkspaceReadinessStatus(payload = state.workspaceReadiness) {
+  if (!workspaceReadinessPill || !workspaceReadinessDetails || !workspaceReadinessNotes) {
+    return;
+  }
+
+  if (!payload) {
+    workspaceReadinessPill.textContent = "checking";
+    workspaceReadinessPill.className = "status-pill waiting";
+    workspaceReadinessDetails.innerHTML = `<div><dt>Project</dt><dd>checking local workspace</dd></div>`;
+    workspaceReadinessNotes.innerHTML = `<li>Validation, queue, graph, and stress guidance load from the local API.</li>`;
+    return;
+  }
+
+  if (payload.error) {
+    workspaceReadinessPill.textContent = "unavailable";
+    workspaceReadinessPill.className = "status-pill refuted";
+    workspaceReadinessDetails.innerHTML = `<div><dt>Status</dt><dd>local API unavailable</dd></div>`;
+    workspaceReadinessNotes.innerHTML = `<li>${escapeHtml(payload.error)}</li>`;
+    return;
+  }
+
+  const readiness = payload.readiness ?? payload;
+  const validation = readiness.summary?.validation ?? {};
+  const review = readiness.summary?.review ?? {};
+  const graph = readiness.summary?.graph ?? {};
+  const gates = Array.isArray(readiness.gates) ? readiness.gates : [];
+  const status = readiness.status ?? "unknown";
+  const stressGate = gates.find((gate) => gate.id === "stress-fixture");
+  const rows = [
+    ["Status", workspaceReadinessLabel(status)],
+    ["Validation", `${validation.passed ? "passed" : "failed"} / ${validation.errors ?? 0} errors`],
+    ["Files", `${validation.checkedFiles ?? 0} checked / ${validation.invalidFiles ?? 0} invalid`],
+    ["Graph", `${graph.nodes ?? 0} nodes / ${graph.edges ?? 0} edges / ${graph.missingRefs ?? 0} missing refs`],
+    ["Queue", `${review.totalItems ?? 0} open / ${review.criticalItems ?? 0} critical`],
+    ["Stress", stressGate?.command ?? readiness.commands?.stress ?? "run workspace stress from CLI"]
+  ];
+
+  workspaceReadinessPill.textContent = workspaceReadinessLabel(status);
+  workspaceReadinessPill.className = `status-pill ${workspaceReadinessClass(status)}`;
+  workspaceReadinessDetails.innerHTML = rows
+    .map(([label, value]) => {
+      const rowClass = label === "Stress" ? ` class="wide-value"` : "";
+      return `<div${rowClass}><dt>${escapeHtml(label)}</dt><dd>${workspaceReadinessValueHtml(label, value)}</dd></div>`;
+    })
+    .join("");
+
+  const gateNotes = gates
+    .filter((gate) => gate.status !== "passed")
+    .map((gate) => `${gate.label}: ${gate.detail}`);
+  const notes = [
+    ...gateNotes,
+    ...(Array.isArray(readiness.warnings) ? readiness.warnings : [])
+  ];
+  workspaceReadinessNotes.innerHTML = (notes.length > 0 ? notes.slice(0, 5) : ["No workspace readiness notes returned."])
+    .map((note) => `<li>${escapeHtml(note)}</li>`)
+    .join("");
 }
 
 function renderEngineReadinessStatus(payload) {
@@ -5644,6 +5743,62 @@ function engineReadinessSummary(payload) {
   }
 
   return `${readyCount}/${totalCount} local verification engines available, with ${nativeCount}/${activeCapabilities} native/workspace capabilities active. Missing: ${missing.join(", ") || "unknown"}.`;
+}
+
+function workspaceReadinessSummary(readiness) {
+  if (!readiness) {
+    return "Workspace health unavailable.";
+  }
+
+  const validation = readiness.summary?.validation ?? {};
+  const review = readiness.summary?.review ?? {};
+  const graph = readiness.summary?.graph ?? {};
+  return `Workspace ${workspaceReadinessLabel(readiness.status)}; ${validation.checkedFiles ?? 0} files checked, ${graph.missingRefs ?? 0} missing refs, ${review.totalItems ?? 0} queue items.`;
+}
+
+function workspaceReadinessActivityTrust(status) {
+  if (status === "healthy" || status === "open-work") return "passed";
+  if (status === "blocked") return "refuted";
+  return "waiting";
+}
+
+function workspaceReadinessLabel(status) {
+  switch (status) {
+    case "healthy":
+      return "healthy";
+    case "open-work":
+      return "open work";
+    case "critical-work":
+      return "critical work";
+    case "missing-refs":
+      return "missing refs";
+    case "blocked":
+      return "blocked";
+    default:
+      return "checking";
+  }
+}
+
+function workspaceReadinessClass(status) {
+  switch (status) {
+    case "healthy":
+      return "exact";
+    case "open-work":
+      return "checked";
+    case "blocked":
+      return "refuted";
+    case "critical-work":
+    case "missing-refs":
+    default:
+      return "waiting";
+  }
+}
+
+function workspaceReadinessValueHtml(label, value) {
+  if (label === "Stress") {
+    return `<code>${escapeHtml(value)}</code>`;
+  }
+  return escapeHtml(value);
 }
 
 function engineReadinessValue(engine) {
@@ -8635,6 +8790,7 @@ composer.addEventListener("submit", async (event) => {
     await refreshRouteLedger({ announce: false });
     await refreshWorkspaceReview({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
+    await refreshWorkspaceReadiness({ announce: false });
     addActivity("web-ui", "Rendered receipt", `${payload.receipt.runId} displayed with trace and evidence graph.`, "passed");
   } catch (error) {
     updateLatestActivity("Calling local API", "refuted", "POST /api/receipt failed");

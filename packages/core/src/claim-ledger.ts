@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
@@ -348,7 +349,7 @@ export async function listClaimRecords(rootPath: string): Promise<ClaimLedgerRec
   const claims = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => JSON.parse(await readFile(join(claimsDir, file), "utf8")) as ClaimLedgerRecord)
+      .map(async (file) => parseJsonWithOptionalBom(await readFile(join(claimsDir, file), "utf8")) as ClaimLedgerRecord)
   );
 
   return claims
@@ -616,7 +617,7 @@ async function readClaimRecordRef(
     const files = await readdir(claimsDir);
     for (const file of files.filter((candidate) => candidate.endsWith(".json"))) {
       const path = join(claimsDir, file);
-      const claim = JSON.parse(await readFile(path, "utf8")) as ClaimLedgerRecord;
+      const claim = parseJsonWithOptionalBom(await readFile(path, "utf8")) as ClaimLedgerRecord;
       if (claim.schemaVersion === "truth-harness.claim.v0" && claim.claimId === ref) {
         return { claim, path };
       }
@@ -627,7 +628,7 @@ async function readClaimRecordRef(
 
   const path = resolveUnderRoot(status.root, ref);
   return {
-    claim: JSON.parse(await readFile(path, "utf8")) as ClaimLedgerRecord,
+    claim: parseJsonWithOptionalBom(await readFile(path, "utf8")) as ClaimLedgerRecord,
     path
   };
 }
@@ -1032,7 +1033,7 @@ async function readEvidenceArtifactJson(root: string, ref: string): Promise<{ ra
   }
 
   try {
-    return { raw, parsed: JSON.parse(raw) as unknown };
+    return { raw, parsed: parseJsonWithOptionalBom(raw) as unknown };
   } catch {
     return { raw, parsed: undefined };
   }

@@ -3,6 +3,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { extname, join, normalize, resolve, sep } from "node:path";
+import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 
 const MAX_JSON_BODY_BYTES = 16 * 1024;
@@ -193,6 +194,17 @@ async function handleApiRequest(request, response, requestUrl) {
       localOnly: true,
       externalCalls: [],
       graph
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/workspace-readiness" && request.method === "GET") {
+    const readiness = await readWorkspaceReadiness();
+    writeJson(response, 200, {
+      schemaVersion: "truth-harness.web-workspace-readiness-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      readiness
     });
     return;
   }
@@ -560,6 +572,140 @@ async function readRouteLedgerSnapshot() {
     ...route,
     routePaths: routePathsFor(route.path)
   }));
+}
+
+async function readWorkspaceReadiness() {
+  const {
+    createWorkspaceGraph,
+    createWorkspaceReview,
+    validateWorkspaceArtifacts
+  } = await loadCoreModule();
+  await ensureLocalWorkspace();
+  const startedAt = performance.now();
+  const checkedAt = new Date().toISOString();
+  const [validation, review, graph] = await Promise.all([
+    validateWorkspaceArtifacts({ rootPath: projectRoot, now: checkedAt }),
+    createWorkspaceReview({ rootPath: projectRoot, now: checkedAt }),
+    createWorkspaceGraph({ rootPath: projectRoot, now: checkedAt })
+  ]);
+  const validationErrors = validation.summary?.errors ?? 0;
+  const validationWarnings = validation.summary?.warnings ?? 0;
+  const missingRefs = graph.summary?.missingRefs ?? 0;
+  const criticalItems = review.summary?.criticalItems ?? 0;
+  const totalItems = review.summary?.totalItems ?? 0;
+  const status = workspaceReadinessStatus({
+    validationPassed: validation.passed === true,
+    validationErrors,
+    missingRefs,
+    criticalItems,
+    totalItems
+  });
+
+  return {
+    schemaVersion: "truth-harness.workspace-readiness.v0",
+    checkedAt,
+    workspacePath: projectRoot,
+    localOnly: true,
+    networkAccess: "none",
+    status,
+    elapsedMs: Math.round((performance.now() - startedAt) * 100) / 100,
+    summary: {
+      validation: {
+        passed: validation.passed === true,
+        checkedFiles: validation.summary?.checkedFiles ?? 0,
+        validFiles: validation.summary?.validFiles ?? 0,
+        invalidFiles: validation.summary?.invalidFiles ?? 0,
+        errors: validationErrors,
+        warnings: validationWarnings
+      },
+      review: {
+        totalItems,
+        criticalItems,
+        highItems: review.summary?.highItems ?? 0,
+        mediumItems: review.summary?.mediumItems ?? 0,
+        lowItems: review.summary?.lowItems ?? 0,
+        routeObligations: review.summary?.routeObligations ?? 0,
+        blockedClaims: review.summary?.blockedClaims ?? 0
+      },
+      graph: {
+        nodes: graph.summary?.nodes ?? 0,
+        edges: graph.summary?.edges ?? 0,
+        missingRefs
+      }
+    },
+    gates: [
+      readinessGate({
+        id: "workspace-validation",
+        label: "Workspace validation",
+        status: validation.passed === true ? "passed" : "blocked",
+        detail: `${validationErrors} errors, ${validationWarnings} warnings across ${validation.summary?.checkedFiles ?? 0} checked JSON files.`,
+        command: `truth-harness workspace validate ${quoteCommandArg(projectRoot)} --json`
+      }),
+      readinessGate({
+        id: "missing-refs",
+        label: "Missing refs",
+        status: missingRefs === 0 ? "passed" : "blocked",
+        detail: missingRefs === 0 ? "No missing local evidence refs in the workspace graph." : `${missingRefs} missing local evidence refs need repair.`,
+        command: `truth-harness workspace graph ${quoteCommandArg(projectRoot)} --json`
+      }),
+      readinessGate({
+        id: "project-queue",
+        label: "Project queue",
+        status: criticalItems > 0 ? "blocked" : totalItems > 0 ? "waiting" : "passed",
+        detail: `${totalItems} open local next actions, including ${criticalItems} critical items.`,
+        command: `truth-harness workspace review ${quoteCommandArg(projectRoot)} --json`
+      }),
+      readinessGate({
+        id: "stress-fixture",
+        label: "Scale fixture",
+        status: "waiting",
+        detail: "Run this in a throwaway path before trusting large-workspace UX or performance.",
+        command: `truth-harness workspace stress ${quoteCommandArg(resolve(projectRoot, "..", "truth-harness-stress"))} --receipts 100 --claims 50 --routes 20 --fail-on-validation`
+      })
+    ],
+    commands: {
+      validate: `truth-harness workspace validate ${quoteCommandArg(projectRoot)} --json`,
+      review: `truth-harness workspace review ${quoteCommandArg(projectRoot)} --json`,
+      graph: `truth-harness workspace graph ${quoteCommandArg(projectRoot)} --json`,
+      stress: `truth-harness workspace stress ${quoteCommandArg(resolve(projectRoot, "..", "truth-harness-stress"))} --receipts 100 --claims 50 --routes 20 --fail-on-validation`
+    },
+    warnings: [
+      "Workspace readiness is a local product-health check. It does not prove any mathematical, scientific, medical, financial, safety, or patent claim.",
+      "The web UI does not run workspace stress automatically because stress fixtures can write many local files.",
+      ...(validation.warnings ?? []),
+      ...(graph.warnings ?? [])
+    ].slice(0, 8)
+  };
+}
+
+function workspaceReadinessStatus(input) {
+  if (!input.validationPassed || input.validationErrors > 0) {
+    return "blocked";
+  }
+  if (input.missingRefs > 0) {
+    return "missing-refs";
+  }
+  if (input.criticalItems > 0) {
+    return "critical-work";
+  }
+  if (input.totalItems > 0) {
+    return "open-work";
+  }
+  return "healthy";
+}
+
+function readinessGate(input) {
+  return {
+    id: input.id,
+    label: input.label,
+    status: input.status,
+    detail: input.detail,
+    command: input.command
+  };
+}
+
+function quoteCommandArg(value) {
+  return JSON.stringify(value);
 }
 
 async function readCasCheckSnapshot() {

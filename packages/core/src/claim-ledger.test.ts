@@ -80,6 +80,29 @@ describe("claim ledger", () => {
     expect(validation.summary.byKind.claims).toBe(2);
   });
 
+  it("reads BOM-prefixed claim records through list, direct read, and review paths", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
+
+    const written = await writeClaimLedgerRecord({
+      rootPath: root,
+      statement: "A locally stored claim can be reviewed even if the JSON file has a UTF-8 BOM.",
+      domain: "math",
+      trust: "unverified",
+      now: "2026-06-12T00:10:00.000Z"
+    });
+    const raw = await readFile(written.jsonPath, "utf8");
+    await writeFile(written.jsonPath, `\ufeff${raw}`, "utf8");
+
+    const listed = await listClaimRecords(root);
+    const read = await readClaimRecord(root, written.claim.claimId);
+    const packet = await createClaimReviewPacket({ rootPath: root, claimRef: written.claim.claimId });
+
+    expect(listed.map((claim) => claim.claimId)).toEqual([written.claim.claimId]);
+    expect(read.claimId).toBe(written.claim.claimId);
+    expect(packet.claimId).toBe(written.claim.claimId);
+  });
+
   it("requires dependency claims to exist before linking", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
