@@ -1127,7 +1127,7 @@ function renderProjectStart() {
     projectStartLane.textContent = laneStatusText[state.lane] ?? "Research lane";
   }
   if (projectStartClaims) {
-    const count = receiptStore.size;
+    const count = claimLedgerStore.size;
     projectStartClaims.textContent = `${count} ${count === 1 ? "claim" : "claims"}`;
   }
 }
@@ -4349,13 +4349,8 @@ function linkClaimLedgerToReceipts() {
 
   for (const claim of claimLedgerStore.values()) {
     for (const ref of claim.evidenceRefs ?? []) {
-      const receiptRunId = receiptRunIdFromEvidenceRef(ref);
-      if (!receiptRunId) {
-        continue;
-      }
-
       for (const receipt of receiptStore.values()) {
-        if (receipt.runId === receiptRunId && !receipt.claimId) {
+        if (evidenceRefMatchesReceipt(ref, receipt) && !receipt.claimId) {
           receipt.claimId = claim.claimId;
         }
       }
@@ -4363,20 +4358,24 @@ function linkClaimLedgerToReceipts() {
   }
 }
 
-function receiptRunIdFromEvidenceRef(ref) {
+function evidenceRefMatchesReceipt(ref, receipt) {
   if (!ref || typeof ref.ref !== "string") {
-    return undefined;
+    return false;
   }
 
   if (ref.ref.startsWith("local-web-receipt:")) {
-    return ref.ref.slice("local-web-receipt:".length);
+    return receipt.runId === ref.ref.slice("local-web-receipt:".length);
   }
 
   if (ref.ref.startsWith("receipt:")) {
-    return ref.ref.slice("receipt:".length);
+    return receipt.runId === ref.ref.slice("receipt:".length);
   }
 
-  return undefined;
+  return receipt.receiptPaths?.ref === ref.ref
+    || receipt.receiptPaths?.json === ref.ref
+    || ref.ref.endsWith(`/${receipt.runId}.json`)
+    || ref.ref.endsWith(`\\${receipt.runId}.json`)
+    || ref.ref.includes(`${receipt.runId}.json`);
 }
 
 function receiptKeyForClaimId(claimId) {
@@ -4438,12 +4437,13 @@ async function recordCurrentClaim() {
   addActivity("human", "Recording claim", `${receipt.title} is being written to the local claim ledger.`, "waiting");
 
   try {
+    const workspaceReceipt = await ensureWorkspaceReceiptRef(receipt);
     const response = await fetch("/api/claims", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(createClaimLedgerPayload(receipt))
+      body: JSON.stringify(createClaimLedgerPayload(workspaceReceipt))
     });
     const payload = await readLocalApiJson(response, "Local claim ledger write failed.");
 
@@ -4530,12 +4530,13 @@ async function recordReceiptChain(key, options) {
 }
 
 async function writeReceiptClaim(receipt, { dependsOn = undefined, supersedes = [], activityTitle = "Recorded claim" } = {}) {
+  const workspaceReceipt = await ensureWorkspaceReceiptRef(receipt);
   const response = await fetch("/api/claims", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(createClaimLedgerPayload(receipt, {
+    body: JSON.stringify(createClaimLedgerPayload(workspaceReceipt, {
       dependsOn,
       supersedes
     }))
@@ -4556,6 +4557,37 @@ async function writeReceiptClaim(receipt, { dependsOn = undefined, supersedes = 
   }
 
   return payload;
+}
+
+async function ensureWorkspaceReceiptRef(receipt) {
+  if (receipt.receiptPaths?.ref) {
+    return receipt;
+  }
+
+  addActivity("local-api", "Persisting receipt evidence", `${receipt.runId} needs a workspace receipt file before it can support a claim.`, "waiting");
+  const response = await fetch("/api/receipt", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ problem: receipt.title })
+  });
+  const payload = await readLocalApiJson(response, "Local receipt persistence failed.");
+
+  receipt.receiptPaths = payload.receiptPaths;
+  receipt.verifierRoute = receipt.verifierRoute ?? payload.route;
+  receipt.routePaths = receipt.routePaths ?? payload.routePaths;
+  addActivity(
+    "local-api",
+    "Persisted receipt evidence",
+    localApiSuccessMessage(payload, `${payload.receipt?.runId ?? receipt.runId} saved to ${payload.receiptPaths?.ref ?? ".truth-harness/receipts"}.`),
+    payload.receipt?.trust === "refuted" ? "refuted" : payload.receipt?.trust === "unverified" ? "waiting" : "passed"
+  );
+  for (const item of payload.activity ?? []) {
+    addActivity(item.actor, item.action, item.detail, "passed", item.at);
+  }
+
+  return receipt;
 }
 
 function claimChainState(receipt) {
@@ -4618,14 +4650,22 @@ function createClaimLedgerPayload(receipt, options = {}) {
 }
 
 function claimEvidenceRefs(receipt) {
-  const refs = [
-      {
-        kind: "other",
-        ref: `local-web-receipt:${receipt.runId}`,
-        trust: receipt.trust,
-        summary: `${receipt.engine}: ${receipt.subtitle}`
-      }
-  ];
+  const refs = [];
+
+  if (receipt.receiptPaths?.ref) {
+    refs.push({
+      kind: "receipt",
+      ref: receipt.receiptPaths.ref,
+      summary: `${receipt.engine}: ${receipt.subtitle}`
+    });
+  } else {
+    refs.push({
+      kind: "other",
+      ref: `local-web-receipt:${receipt.runId}`,
+      trust: receipt.trust,
+      summary: `${receipt.engine}: ${receipt.subtitle}`
+    });
+  }
 
   if (receipt.verifierRoute?.routeId) {
     const readiness = routeReadiness(receipt.verifierRoute);
@@ -7926,7 +7966,7 @@ async function copyTextToClipboard(text) {
   }
 }
 
-function receiptToViewModel(receipt, route, routePaths) {
+function receiptToViewModel(receipt, route, routePaths, receiptPaths) {
   const trace = parseTraceArtifact(receipt);
   const outputs = receipt.evidenceProfile.outputs ?? [];
   const primaryOutput = outputs[0] ?? receipt.summary;
@@ -7958,6 +7998,9 @@ function receiptToViewModel(receipt, route, routePaths) {
   if (independentCasArtifact?.residual) {
     details["CAS residual"] = String(independentCasArtifact.residual);
   }
+  if (receiptPaths?.ref) {
+    details["Receipt JSON"] = receiptPaths.ref;
+  }
   if (route?.routeId) {
     const obligationCounts = routeObligationCounts(route);
     const readiness = routeReadiness(route);
@@ -7985,7 +8028,8 @@ function receiptToViewModel(receipt, route, routePaths) {
     traces,
     limitations: receipt.evidenceProfile.limitations,
     verifierRoute: route,
-    routePaths
+    routePaths,
+    receiptPaths
   };
 }
 
@@ -8772,7 +8816,7 @@ composer.addEventListener("submit", async (event) => {
     const payload = await readLocalApiJson(response, "Local receipt API failed.");
     updateLatestActivity("Calling local API", "passed", localApiSuccessMessage(payload, "POST /api/receipt completed"));
 
-    const viewModel = receiptToViewModel(payload.receipt, payload.route, payload.routePaths);
+    const viewModel = receiptToViewModel(payload.receipt, payload.route, payload.routePaths, payload.receiptPaths);
     viewModel.tags = uniqueTags([...receiptTags(viewModel), ...promptTags]);
     const key = payload.receipt.runId;
     receiptStore.set(key, viewModel);

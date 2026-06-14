@@ -516,6 +516,7 @@ async function handleApiRequest(request, response, requestUrl) {
     });
     const route = routeWrite.route;
     const receipt = route.receipt;
+    const receiptPaths = await writeReceiptArtifact(receipt);
     const completedAt = new Date().toISOString();
     writeJson(response, 200, {
       schemaVersion: "truth-harness.web-receipt-response.v0",
@@ -526,6 +527,7 @@ async function handleApiRequest(request, response, requestUrl) {
         json: routeWrite.jsonPath,
         markdown: routeWrite.markdownPath
       },
+      receiptPaths,
       receipt,
       activity: [
         {
@@ -542,8 +544,8 @@ async function handleApiRequest(request, response, requestUrl) {
         },
         {
           actor: "local-api",
-          action: "created-receipt",
-          detail: "The local API called @truth-harness/core createReceipt without a hosted model or external service.",
+          action: "persisted-receipt",
+          detail: `The local API wrote ${receipt.runId} to ${receiptPaths.ref} without a hosted model or external service.`,
           at: completedAt
         }
       ]
@@ -572,6 +574,22 @@ async function readRouteLedgerSnapshot() {
     ...route,
     routePaths: routePathsFor(route.path)
   }));
+}
+
+async function writeReceiptArtifact(receipt) {
+  const workspace = await ensureLocalWorkspace();
+  const receiptsDirectory = workspace.manifest.directories.receipts ?? ".truth-harness/receipts";
+  const portableDirectory = portablePath(receiptsDirectory).replace(/\/+$/u, "");
+  const fileName = `${receipt.createdAt.slice(0, 10)}-${receipt.runId}.json`;
+  const ref = `${portableDirectory}/${fileName}`;
+  const jsonPath = resolve(workspace.root, ref);
+  await mkdir(resolve(workspace.root, receiptsDirectory), { recursive: true });
+  await writeFile(jsonPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+
+  return {
+    json: jsonPath,
+    ref
+  };
 }
 
 async function readWorkspaceReadiness() {
@@ -916,9 +934,13 @@ function artifactPathsFor(relativeOrAbsoluteJsonPath) {
 
 async function ensureLocalWorkspace() {
   const { initLocalWorkspace } = await loadCoreModule();
-  await initLocalWorkspace(projectRoot, {
+  return initLocalWorkspace(projectRoot, {
     displayName: "Truth Harness Local Web Session"
   });
+}
+
+function portablePath(value) {
+  return String(value).replace(/\\/gu, "/");
 }
 
 function requiredText(value, fieldName) {

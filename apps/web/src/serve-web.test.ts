@@ -93,6 +93,38 @@ describe("local web route ledger API", () => {
     expect(receiptPayload.routePaths.json).toContain(".truth-harness");
     expect(existsSync(receiptPayload.routePaths.json)).toBe(true);
     expect(existsSync(receiptPayload.routePaths.markdown)).toBe(true);
+    expect(receiptPayload.receiptPaths.ref).toMatch(/^\.truth-harness\/receipts\/\d{4}-\d{2}-\d{2}-run_[a-f0-9]+\.json$/u);
+    expect(receiptPayload.receiptPaths.json).toContain(".truth-harness");
+    expect(existsSync(receiptPayload.receiptPaths.json)).toBe(true);
+
+    const receiptClaimResponse = await fetch(`${baseUrl}/api/claims`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        statement: "3 / 4 + 5 / 8 = 11/8",
+        domain: "math",
+        trust: "exact-computed",
+        evidenceRefs: [
+          {
+            kind: "receipt",
+            ref: receiptPayload.receiptPaths.ref
+          }
+        ]
+      })
+    });
+    expect(receiptClaimResponse.status).toBe(200);
+    const receiptClaimPayload = await receiptClaimResponse.json();
+    expectLocalApiSuccess(receiptClaimResponse, receiptClaimPayload);
+    expect(receiptClaimPayload.claim.trust).toBe("exact-computed");
+    expect(receiptClaimPayload.claim.evidenceRefs).toContainEqual(
+      expect.objectContaining({
+        kind: "receipt",
+        ref: receiptPayload.receiptPaths.ref,
+        trust: "exact-computed"
+      })
+    );
 
     const listResponse = await fetch(`${baseUrl}/api/routes`);
     expect(listResponse.status).toBe(200);
