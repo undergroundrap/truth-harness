@@ -23,7 +23,7 @@
     "dev:cli": "tsx apps/cli/src/index.ts",
     "web:serve": "node tools/serve-web.mjs",
     "web:restart": "powershell -ExecutionPolicy Bypass -File tools/restart-web.ps1",
-    "demo": "npm run cli -- ask \"for all integers n, n^2+n+1 is even\"",
+    "demo": "npm run cli -- demo",
     "demo:bench": "npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json",
     "demo:check": "npm run cli -- check docs/examples/strict-claims.md",
     "demo:physics": "npm run cli -- bench run packages/benchmarks/suites/physics-seed.json",

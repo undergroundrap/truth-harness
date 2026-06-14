@@ -39,6 +39,35 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.crossCheckedRequiresIndependentRun).toBe(true);
   });
 
+  it("runs the demo gauntlet and writes a shareable HTML report", async () => {
+    const root = await tempRoot();
+    const reportPath = join(root, "truth-harness-demo-report.html");
+    const result = await runCli([
+      "demo",
+      "--no-color",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--report",
+      reportPath
+    ]);
+    const report = await readFile(reportPath, "utf8");
+    const caseCards = report.match(/<section class="case-card">/g) ?? [];
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Truth Harness demo gauntlet");
+    expect(result.stdout).toContain("[15/15]");
+    expect(result.stdout).toContain("refuted");
+    expect(result.stdout).toContain("exact-computed");
+    expect(result.stdout).toContain("unverified");
+    expect(result.stdout).toContain("dimension-checked");
+    expect(result.stdout).toContain("bounded-numeric");
+    expect(result.stdout).toContain("Report:");
+    expect(report).toContain("Truth Harness Demo Report");
+    expect(caseCards).toHaveLength(15);
+    expect(report).toContain("truth-harness ask");
+    expect(report).toContain("Receipt JSON");
+  });
+
   it("checks symbolic CAS results without minting trust when Maxima is unavailable", async () => {
     const result = await runCli([
       "cas",

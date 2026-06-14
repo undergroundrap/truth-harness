@@ -45,6 +45,7 @@ Day-to-day container workflow:
 ```bash
 docker compose build
 docker compose run --rm truth-harness npm run check
+docker compose run --rm truth-harness npm run cli -- demo
 docker compose run --rm truth-harness npm run proof:launch:engines
 docker compose run --rm truth-harness npm run cli -- workspace init --name "Local Math Lab"
 docker compose run --rm truth-harness npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
@@ -67,6 +68,7 @@ See [SECURITY.md](SECURITY.md) and [docs/DOCKER.md](docs/DOCKER.md) for the safe
 npm install
 npm run build
 python -m pip install sympy==1.14.0
+npm run cli -- demo
 npm run cli -- workspace init --name "Local Math Lab"
 npm run cli -- workspace status
 npm run cli -- workspace repair
