@@ -81,4 +81,18 @@ describe("web UI action contracts", () => {
     expect(styles).toContain("grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));");
     expect(styles).toContain("overflow-wrap: anywhere;");
   });
+
+  it("keeps the activity log inside the parent scroll instead of a nested scroll trap", async () => {
+    const styles = await readFile(appStylesPath, "utf8");
+    const activityListStyles = styles.match(/\.activity-list \{[\s\S]*?\n\}/u)?.[0];
+    const activitySectionStyles = styles.match(/\.activity-section \{[\s\S]*?\n\}/u)?.[0];
+
+    expect(activityListStyles).toBeTruthy();
+    expect(activityListStyles).toContain("overflow: visible;");
+    expect(activityListStyles).not.toContain("overflow: auto;");
+    expect(activityListStyles).not.toContain("max-height:");
+    expect(activitySectionStyles).toBeTruthy();
+    expect(activitySectionStyles).toContain("max-height: none;");
+    expect(activitySectionStyles).not.toContain("overflow: auto;");
+  });
 });

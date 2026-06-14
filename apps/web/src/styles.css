@@ -4410,11 +4410,8 @@ textarea:focus-visible {
 .activity-list {
   display: grid;
   gap: 8px;
-  min-height: 132px;
-  max-height: min(48vh, 520px);
-  overflow: auto;
-  padding-right: 2px;
-  scrollbar-gutter: stable;
+  min-height: 0;
+  overflow: visible;
 }
 
 .activity-row {
@@ -4454,9 +4451,13 @@ textarea:focus-visible {
 }
 
 .activity-row small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   color: var(--muted);
   font-size: 11px;
   margin-top: 2px;
+  overflow: hidden;
 }
 
 .activity-row small span {
@@ -4464,14 +4465,13 @@ textarea:focus-visible {
 }
 
 .activity-section {
-  display: flex;
-  flex-direction: column;
-  max-height: min(70vh, 760px);
-  min-height: 360px;
+  display: block;
+  max-height: none;
+  min-height: 0;
 }
 
 .activity-heading {
-  flex: 0 0 auto;
+  margin-bottom: 8px;
 }
 
 .activity-actions,
@@ -4489,7 +4489,6 @@ textarea:focus-visible {
 }
 
 .activity-tools {
-  flex: 0 0 auto;
   margin-bottom: 8px;
 }
 
@@ -4511,7 +4510,6 @@ textarea:focus-visible {
 
 .activity-footer {
   justify-content: space-between;
-  flex: 0 0 auto;
   margin-top: 8px;
 }
 
