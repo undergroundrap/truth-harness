@@ -51,14 +51,14 @@ describe("verifier route", () => {
         severity: "info"
       })
     );
-    expect(route.proofObligations).toContainEqual(
-      expect.objectContaining({
-        kind: "formal-proof",
-        status: "not-required",
-        sourceCapabilityId: "accepted-proof-checker",
-        title: "Formal proof-checker obligation"
-      })
-    );
+    const formalProofObligation = route.proofObligations.find((obligation) => obligation.kind === "formal-proof");
+    expect(formalProofObligation).toMatchObject({
+      status: "not-required",
+      sourceCapabilityId: "accepted-proof-checker",
+      title: "Formal proof-checker obligation"
+    });
+    expect(formalProofObligation?.command).toContain(`--route ${route.routeId}`);
+    expect(formalProofObligation?.command).toContain(`--obligation ${formalProofObligation?.obligationId}`);
     expect(route.trustBoundary.routeIsNotProof).toBe(true);
     expect(route.trustBoundary.receiptTrustIsUpperBound).toBe(true);
     expect(verifierRouteReadiness(route)).toMatchObject({

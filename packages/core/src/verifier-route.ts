@@ -651,15 +651,16 @@ function proofObligationsForRoute(input: {
     const requiredBefore = requiredTrust
       ? `Before labeling this scoped claim ${requiredTrust}.`
       : "Before making a stronger claim than the current receipt supports.";
+    const obligationId = `obl_${stableHash({
+      routeId: input.routeId,
+      runId: input.receipt.runId,
+      capabilityId: gap.capabilityId,
+      statement,
+      severity: gap.severity
+    }).slice(0, 16)}`;
 
     return {
-      obligationId: `obl_${stableHash({
-        routeId: input.routeId,
-        runId: input.receipt.runId,
-        capabilityId: gap.capabilityId,
-        statement,
-        severity: gap.severity
-      }).slice(0, 16)}`,
+      obligationId,
       kind,
       status: gap.severity === "info" ? "not-required" : "open",
       severity: gap.severity,
@@ -668,10 +669,25 @@ function proofObligationsForRoute(input: {
       statement,
       requiredBefore,
       acceptanceCriteria: obligationAcceptanceCriteria(gap, requiredTrust),
-      command: gap.command,
+      command: routeObligationCommand(gap.command, kind, input.routeId, obligationId),
       nextStep: gap.nextStep
     };
   });
+}
+
+function routeObligationCommand(
+  command: string | undefined,
+  kind: ProofObligationKind,
+  routeId: string,
+  obligationId: string
+): string | undefined {
+  if (kind === "formal-proof" && command?.startsWith("truth-harness proof check ")) {
+    return command.includes("--route ")
+      ? command
+      : `${command} --route ${routeId} --obligation ${obligationId}`;
+  }
+
+  return command;
 }
 
 function obligationKind(gap: VerifierRouteGap): ProofObligationKind {
