@@ -84,6 +84,8 @@ import {
   handleTruthHarnessWorkspaceReviewList,
   handleTruthHarnessWorkspaceReviewShow,
   handleTruthHarnessWorkspaceRunNext,
+  handleTruthHarnessWorkspaceRunNextList,
+  handleTruthHarnessWorkspaceRunNextShow,
   handleTruthHarnessWorkspaceSnapshot,
   handleTruthHarnessWorkspaceSnapshotList,
   handleTruthHarnessWorkspaceSnapshotVerify,
@@ -1362,6 +1364,47 @@ export function createTruthHarnessMcpServer(): McpServer {
           write
         })
       )
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_run_next_list",
+    {
+      title: "List Workspace Run-Next Plans",
+      description:
+        "List persisted truth-harness.workspace-run-next.v0 intent packets from .truth-harness/findings so agents can audit or resume planned local actions.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceRunNextList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_run_next_show",
+    {
+      title: "Show Workspace Run-Next Plan",
+      description:
+        "Read a persisted workspace run-next plan by plan id or workspace-local JSON path, including the selected item, stop conditions, warnings, and execution boundary.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        planRef: z.string().min(1).describe("Plan id such as wrn_<hash> or workspace-local JSON path.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, planRef }) => toolJson(await handleTruthHarnessWorkspaceRunNextShow({ workspacePath, planRef }))
   );
 
   server.registerTool(

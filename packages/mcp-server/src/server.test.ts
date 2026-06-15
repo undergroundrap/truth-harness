@@ -152,6 +152,8 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_workspace_review_list",
         "truth_harness_workspace_review_show",
         "truth_harness_workspace_run_next",
+        "truth_harness_workspace_run_next_list",
+        "truth_harness_workspace_run_next_show",
         "truth_harness_workspace_snapshot",
         "truth_harness_workspace_snapshot_list",
         "truth_harness_workspace_snapshot_verify",
@@ -391,15 +393,34 @@ describe("Truth Harness MCP server", () => {
         name: "truth_harness_workspace_run_next",
         arguments: {
           maxRoutes: 1,
-          maxClaims: 20
+          maxClaims: 20,
+          write: true
         }
       });
       const workspaceRunNextText = firstText(workspaceRunNext.content);
+      const workspaceRunNextJson = JSON.parse(workspaceRunNextText) as {
+        plan: { planId: string };
+      };
       expect(workspaceRunNext.isError).not.toBe(true);
       expect(workspaceRunNextText).toContain("\"schemaVersion\": \"truth-harness.workspace-run-next.v0\"");
       expect(workspaceRunNextText).toContain("\"dryRun\": true");
       expect(workspaceRunNextText).toContain("\"networkAccess\": \"none\"");
+      expect(workspaceRunNextText).toContain("\"written\": true");
       expect(workspaceRunNextText).toContain("never executes shell strings");
+
+      const workspaceRunNextList = await client.callTool({
+        name: "truth_harness_workspace_run_next_list",
+        arguments: {}
+      });
+      expect(firstText(workspaceRunNextList.content)).toContain(workspaceRunNextJson.plan.planId);
+
+      const workspaceRunNextShow = await client.callTool({
+        name: "truth_harness_workspace_run_next_show",
+        arguments: {
+          planRef: workspaceRunNextJson.plan.planId
+        }
+      });
+      expect(firstText(workspaceRunNextShow.content)).toContain("\"schemaVersion\": \"truth-harness.workspace-run-next.v0\"");
 
       const workspaceReviewList = await client.callTool({
         name: "truth_harness_workspace_review_list",

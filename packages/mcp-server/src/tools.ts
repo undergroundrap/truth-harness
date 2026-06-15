@@ -61,6 +61,7 @@ import {
   listVerifierRoutes,
   listVisualArtifacts,
   listWorkspaceEvents,
+  listWorkspaceRunNextPlans,
   listWorkspaceReviews,
   listWorkspaceSnapshots,
   listVaultEntries,
@@ -71,6 +72,7 @@ import {
   readClaimRecord,
   readResearchSession,
   readVisualArtifact,
+  readWorkspaceRunNextPlan,
   readWorkspaceReview,
   readVerifierRoute,
   renderEvidenceAuditMarkdown,
@@ -227,6 +229,7 @@ import {
   type WorkspaceValidation,
   type WorkspaceGraph,
   type WorkspaceRunNextPlan,
+  type WorkspaceRunNextSummary,
   type WorkspaceRunNextWriteResult,
   type WorkspaceReview,
   type WorkspaceReviewSummary,
@@ -578,6 +581,15 @@ export interface TruthHarnessWorkspaceRunNextInput {
   maxSessions?: number;
   executeLocal?: boolean;
   write?: boolean;
+}
+
+export interface TruthHarnessWorkspaceRunNextListInput {
+  workspacePath?: string;
+}
+
+export interface TruthHarnessWorkspaceRunNextShowInput {
+  workspacePath?: string;
+  planRef: string;
 }
 
 export interface TruthHarnessWorkspaceReviewListInput {
@@ -1657,6 +1669,23 @@ export async function handleTruthHarnessWorkspaceRunNext(
   }
 
   return plan;
+}
+
+export async function handleTruthHarnessWorkspaceRunNextList(input: TruthHarnessWorkspaceRunNextListInput): Promise<{
+  total: number;
+  plans: WorkspaceRunNextSummary[];
+}> {
+  const plans = await listWorkspaceRunNextPlans(resolveWorkspaceRoot(input.workspacePath));
+  return {
+    total: plans.length,
+    plans
+  };
+}
+
+export async function handleTruthHarnessWorkspaceRunNextShow(
+  input: TruthHarnessWorkspaceRunNextShowInput
+): Promise<WorkspaceRunNextPlan> {
+  return readWorkspaceRunNextPlan(resolveWorkspaceRoot(input.workspacePath), input.planRef);
 }
 
 export async function handleTruthHarnessWorkspaceReviewList(input: TruthHarnessWorkspaceReviewListInput): Promise<{

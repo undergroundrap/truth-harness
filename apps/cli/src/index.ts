@@ -82,6 +82,7 @@ import {
   listVerifierRoutes,
   listVisualArtifacts,
   listWorkspaceEvents,
+  listWorkspaceRunNextPlans,
   listWorkspaceReviews,
   listWorkspaceSnapshots,
   listVaultEntries,
@@ -91,6 +92,7 @@ import {
   readClaimRecord,
   readResearchSession,
   readVisualArtifact,
+  readWorkspaceRunNextPlan,
   readWorkspaceReview,
   readVerifierRoute,
   renderReceipt,
@@ -258,6 +260,7 @@ import {
   type WorkspaceValidation,
   type WorkspaceGraph,
   type WorkspaceRunNextPlan,
+  type WorkspaceRunNextSummary,
   type WorkspaceReview,
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
@@ -2908,6 +2911,39 @@ workspace
   );
 
 workspace
+  .command("run-nexts")
+  .description("List persisted workspace run-next intent packets.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full workspace run-next list JSON")
+  .action(async (path: string, options: { json?: boolean }) => {
+    const plans = await listWorkspaceRunNextPlans(path);
+
+    if (options.json) {
+      printJson({ total: plans.length, plans });
+      return;
+    }
+
+    printWorkspaceRunNextList(plans);
+  });
+
+workspace
+  .command("show-run-next")
+  .description("Show a persisted workspace run-next plan by plan id or workspace-local JSON path.")
+  .argument("<plan>", "Plan id such as wrn_<hash> or workspace-local JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--json", "Print the full workspace run-next plan JSON")
+  .action(async (planRef: string, options: { workspace: string; json?: boolean }) => {
+    const plan = await readWorkspaceRunNextPlan(options.workspace, planRef);
+
+    if (options.json) {
+      printJson(plan);
+      return;
+    }
+
+    printWorkspaceRunNextPlan(plan);
+  });
+
+workspace
   .command("graph")
   .description("Show the local evidence graph across workspace artifacts and refs.")
   .argument("[path]", "Project root path", ".")
@@ -5435,6 +5471,23 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
   console.log("Stop conditions:");
   for (const condition of plan.stopConditions) {
     console.log(`  ${condition}`);
+  }
+}
+
+function printWorkspaceRunNextList(plans: WorkspaceRunNextSummary[]): void {
+  console.log(`Truth Harness workspace run-next plans: ${plans.length}`);
+
+  for (const plan of plans) {
+    console.log("");
+    console.log(`${plan.planId} ${plan.createdAt}`);
+    console.log(`  Path: ${plan.path}`);
+    console.log(`  Review: ${plan.reviewId}`);
+    console.log(`  Status: ${plan.status} (${plan.executionKind})`);
+    console.log(`  Dry run: ${String(plan.dryRun)}`);
+    console.log(`  Mode: ${plan.mode}`);
+    if (plan.itemTitle) {
+      console.log(`  Item: ${plan.itemPriority ?? "n/a"} ${plan.itemKind ?? "item"} - ${plan.itemTitle}`);
+    }
   }
 }
 

@@ -1377,6 +1377,42 @@ describe("benchmark CLI", () => {
     expect(writtenDryRunPayload.result.markdown).toContain("Truth Harness Run-Next Plan");
     const writtenPlan = JSON.parse(await readFile(writtenDryRunPayload.result.jsonPath, "utf8")) as { planId: string };
     expect(writtenPlan.planId).toBe(writtenDryRunPayload.plan.planId);
+    const planList = await runCli(["workspace", "run-nexts", root, "--json"]);
+    const planListPayload = JSON.parse(planList.stdout) as {
+      total: number;
+      plans: Array<{ planId: string; path: string; dryRun: boolean; executionKind: string }>;
+    };
+    const listedPlan = planListPayload.plans.find((plan) => plan.planId === writtenDryRunPayload.plan.planId);
+    expect(planList.exitCode).toBe(0);
+    expect(planListPayload.total).toBeGreaterThanOrEqual(1);
+    expect(listedPlan).toMatchObject({
+      planId: writtenDryRunPayload.plan.planId,
+      dryRun: true,
+      executionKind: "dry-run"
+    });
+    const shownById = await runCli([
+      "workspace",
+      "show-run-next",
+      writtenDryRunPayload.plan.planId,
+      "--workspace",
+      root,
+      "--json"
+    ]);
+    expect(JSON.parse(shownById.stdout)).toMatchObject({
+      planId: writtenDryRunPayload.plan.planId,
+      dryRun: true
+    });
+    const shownByPath = await runCli([
+      "workspace",
+      "show-run-next",
+      listedPlan?.path ?? "",
+      "--workspace",
+      root,
+      "--json"
+    ]);
+    expect(JSON.parse(shownByPath.stdout)).toMatchObject({
+      planId: writtenDryRunPayload.plan.planId
+    });
     expect(human.stdout).toContain("Truth Harness workspace run-next");
     expect(human.stdout).toContain("Plan:");
     expect(human.stdout).toContain("Dry run: true");

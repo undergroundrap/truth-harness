@@ -83,6 +83,8 @@ import {
   handleTruthHarnessWorkspaceReviewList,
   handleTruthHarnessWorkspaceReviewShow,
   handleTruthHarnessWorkspaceRunNext,
+  handleTruthHarnessWorkspaceRunNextList,
+  handleTruthHarnessWorkspaceRunNextShow,
   handleTruthHarnessWorkspaceSnapshot,
   handleTruthHarnessWorkspaceSnapshotList,
   handleTruthHarnessWorkspaceSnapshotVerify,
@@ -1091,6 +1093,18 @@ describe("MCP tool handlers", () => {
     expect(writtenDryRun.result.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
     expect(writtenDryRun.result.markdown).toContain("Truth Harness Run-Next Plan");
     expect(await readFile(writtenDryRun.result.markdownPath, "utf8")).toContain("not a trust-label upgrade");
+    const runNextList = await handleTruthHarnessWorkspaceRunNextList({});
+    expect(runNextList.total).toBe(1);
+    expect(runNextList.plans[0]).toMatchObject({
+      planId: writtenDryRun.plan.planId,
+      dryRun: true,
+      executionKind: "dry-run"
+    });
+    const shownRunNext = await handleTruthHarnessWorkspaceRunNextShow({
+      planRef: writtenDryRun.plan.planId
+    });
+    expect(shownRunNext.planId).toBe(writtenDryRun.plan.planId);
+    expect(shownRunNext.warnings.join(" ")).toContain("never executes shell strings");
     expect(executed.dryRun).toBe(false);
     expect(executed.status).toBe("executed");
     expect(executed.execution.status).toBe("executed");

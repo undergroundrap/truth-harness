@@ -1,5 +1,5 @@
-import { mkdir } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { mkdir, readdir, readFile } from "node:fs/promises";
+import { join, relative, resolve, sep } from "node:path";
 import { createClaimReviewPacket } from "./claim-ledger.js";
 import { writeSymbolicCasCheckRecord } from "./cas-backend.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
@@ -24,6 +24,24 @@ export interface WorkspaceRunNextWriteResult {
   jsonPath: string;
   markdownPath: string;
   markdown: string;
+}
+
+export interface WorkspaceRunNextSummary {
+  schemaVersion: "truth-harness.workspace-run-next.v0";
+  planId: string;
+  createdAt: string;
+  path: string;
+  localOnly: true;
+  networkAccess: "none";
+  dryRun: boolean;
+  status: WorkspaceRunNextStatus;
+  mode: WorkspaceReview["autonomy"]["mode"];
+  reviewId: string;
+  itemTitle?: string;
+  itemKind?: WorkspaceReviewItem["kind"];
+  itemPriority?: WorkspaceReviewItem["priority"];
+  executionKind: string;
+  executionStatus: WorkspaceRunNextStatus;
 }
 
 export interface WorkspaceRunNextPlan {
@@ -169,6 +187,84 @@ export async function writeWorkspaceRunNextPlan(input: {
   };
 }
 
+export async function listWorkspaceRunNextPlans(rootPath: string): Promise<WorkspaceRunNextSummary[]> {
+  const status = await requireRunNextWorkspace(rootPath);
+  const findingsDir = resolve(status.root, status.manifest.directories.findings);
+
+  let files: string[];
+  try {
+    files = await readdir(findingsDir);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const summaries = await Promise.all(
+    files
+      .filter((file) => file.endsWith(".json"))
+      .map(async (file) => {
+        const path = join(findingsDir, file);
+        const plan = tryParseWorkspaceRunNextJson(await readFile(path, "utf8"));
+        return plan ? summarizeWorkspaceRunNextPlan(plan, toPortablePath(relative(status.root, path))) : undefined;
+      })
+  );
+
+  return summaries
+    .filter((summary): summary is WorkspaceRunNextSummary => summary !== undefined)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export async function readWorkspaceRunNextPlan(rootPath: string, planRef: string): Promise<WorkspaceRunNextPlan> {
+  const status = await requireRunNextWorkspace(rootPath);
+  const ref = requireText(planRef, "Workspace run-next plan ref is required.");
+
+  if (isWorkspaceRunNextPlanId(ref)) {
+    const findingsDir = resolve(status.root, status.manifest.directories.findings);
+    let files: string[];
+    try {
+      files = await readdir(findingsDir);
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code === "ENOENT") {
+        throw new Error(`Workspace run-next plan not found: ${ref}`);
+      }
+
+      throw error;
+    }
+
+    for (const file of files.filter((candidate) => candidate.endsWith(".json"))) {
+      const path = join(findingsDir, file);
+      const plan = tryParseWorkspaceRunNextJson(await readFile(path, "utf8"));
+      if (plan?.planId === ref) {
+        return plan;
+      }
+    }
+
+    throw new Error(`Workspace run-next plan not found: ${ref}`);
+  }
+
+  return parseWorkspaceRunNextJson(await readFile(resolveUnderRoot(status.root, ref), "utf8"));
+}
+
+export function parseWorkspaceRunNextJson(raw: string): WorkspaceRunNextPlan {
+  const plan = JSON.parse(raw) as WorkspaceRunNextPlan;
+  if (plan.schemaVersion !== "truth-harness.workspace-run-next.v0") {
+    throw new Error(`Unsupported workspace run-next schema: ${JSON.stringify(plan.schemaVersion)}`);
+  }
+  if (!isWorkspaceRunNextPlanId(plan.planId)) {
+    throw new Error(`Invalid workspace run-next plan id: ${JSON.stringify(plan.planId)}`);
+  }
+  if (plan.localOnly !== true || plan.networkAccess !== "none") {
+    throw new Error("Workspace run-next plans must be local-only with networkAccess none.");
+  }
+
+  return plan;
+}
+
 export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): string {
   const item = plan.item;
   const lines = [
@@ -222,6 +318,62 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
     ""
   ];
   return lines.join("\n");
+}
+
+function tryParseWorkspaceRunNextJson(raw: string): WorkspaceRunNextPlan | undefined {
+  try {
+    return parseWorkspaceRunNextJson(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+function summarizeWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan, path: string): WorkspaceRunNextSummary {
+  return {
+    schemaVersion: plan.schemaVersion,
+    planId: plan.planId,
+    createdAt: plan.createdAt,
+    path,
+    localOnly: plan.localOnly,
+    networkAccess: plan.networkAccess,
+    dryRun: plan.dryRun,
+    status: plan.status,
+    mode: plan.mode,
+    reviewId: plan.reviewId,
+    itemTitle: plan.item?.title,
+    itemKind: plan.item?.kind,
+    itemPriority: plan.item?.priority,
+    executionKind: plan.execution.kind,
+    executionStatus: plan.execution.status
+  };
+}
+
+function resolveUnderRoot(root: string, path: string): string {
+  const target = resolve(root, path);
+  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
+
+  if (target !== root && !target.startsWith(rootWithSep)) {
+    throw new Error(`Workspace run-next path escapes workspace root: ${JSON.stringify(path)}`);
+  }
+
+  return target;
+}
+
+function requireText(value: string | undefined, message: string): string {
+  const normalized = value?.trim();
+  if (!normalized) {
+    throw new Error(message);
+  }
+
+  return normalized;
+}
+
+function isWorkspaceRunNextPlanId(value: string): boolean {
+  return /^wrn_[a-f0-9]{8}$/u.test(value);
+}
+
+function toPortablePath(value: string): string {
+  return value.split(sep).join("/");
 }
 
 function workspaceRunNextItemSummary(item: WorkspaceReviewItem): WorkspaceRunNextPlan["item"] {

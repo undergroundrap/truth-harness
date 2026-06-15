@@ -5,7 +5,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
-import { createWorkspaceRunNextPlan, writeWorkspaceRunNextPlan } from "./workspace-run-next.js";
+import {
+  createWorkspaceRunNextPlan,
+  listWorkspaceRunNextPlans,
+  readWorkspaceRunNextPlan,
+  writeWorkspaceRunNextPlan
+} from "./workspace-run-next.js";
 import type { WorkspaceReview } from "./workspace-review.js";
 
 const roots: string[] = [];
@@ -98,6 +103,22 @@ describe("workspace run-next", () => {
       schemaVersion: "truth-harness.workspace-run-next.v0",
       planId: result.plan.planId,
       dryRun: true
+    });
+    const list = await listWorkspaceRunNextPlans(root);
+    expect(list).toContainEqual(
+      expect.objectContaining({
+        planId: result.plan.planId,
+        path: expect.stringContaining(`${result.plan.planId}-workspace-run-next.json`),
+        dryRun: true,
+        executionKind: "dry-run"
+      })
+    );
+    expect(await readWorkspaceRunNextPlan(root, result.plan.planId)).toMatchObject({
+      planId: result.plan.planId,
+      reviewId: review.reviewId
+    });
+    expect(await readWorkspaceRunNextPlan(root, list[0]?.path ?? "")).toMatchObject({
+      planId: result.plan.planId
     });
     const events = await listWorkspaceEvents(root, 10);
     expect(events.events).toContainEqual(
