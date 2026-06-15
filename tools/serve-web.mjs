@@ -941,7 +941,7 @@ async function readRouteLedgerSnapshot() {
 
 async function writeReceiptArtifact(receipt) {
   const workspace = await ensureLocalWorkspace();
-  const { markWorkspaceCatalogStale } = await loadCoreModule();
+  const { markWorkspaceCatalogStale, upsertWorkspaceCatalogArtifact } = await loadCoreModule();
   const receiptsDirectory = workspace.manifest.directories.receipts ?? ".truth-harness/receipts";
   const portableDirectory = portablePath(receiptsDirectory).replace(/\/+$/u, "");
   const fileName = `${receipt.createdAt.slice(0, 10)}-${receipt.runId}.json`;
@@ -949,13 +949,21 @@ async function writeReceiptArtifact(receipt) {
   const jsonPath = resolve(workspace.root, ref);
   await mkdir(resolve(workspace.root, receiptsDirectory), { recursive: true });
   await writeFile(jsonPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
-  await markWorkspaceCatalogStale({
+  const catalogUpdate = await upsertWorkspaceCatalogArtifact({
     rootPath: workspace.root,
-    reason: "receipt artifact written",
     path: ref,
     kind: "receipts",
     now: receipt.createdAt
   });
+  if (!catalogUpdate.updated && catalogUpdate.exists) {
+    await markWorkspaceCatalogStale({
+      rootPath: workspace.root,
+      reason: "receipt artifact written",
+      path: ref,
+      kind: "receipts",
+      now: receipt.createdAt
+    });
+  }
 
   return {
     json: jsonPath,

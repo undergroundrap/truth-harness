@@ -21,7 +21,7 @@ import { parseReceiptJson } from "./receipt-validation.js";
 import { parseSmtCheckRecord } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
 import type { Receipt, ReceiptEvidenceProfile, TrustLabel } from "./types.js";
-import { markWorkspaceCatalogStale } from "./workspace-catalog.js";
+import { markWorkspaceCatalogStale, upsertWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export type VerifierRouteStatus = "verified" | "refuted" | "unverified";
 export type VerifierRouteStepStatus = "used" | "blocked" | "planned";
@@ -322,13 +322,21 @@ export async function writeVerifierRoute(input: WriteVerifierRouteInput): Promis
 
   await writeFile(jsonPath, `${JSON.stringify(route, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, markdown, "utf8");
-  await markWorkspaceCatalogStale({
+  const catalogUpdate = await upsertWorkspaceCatalogArtifact({
     rootPath: status.root,
-    reason: "verifier route written",
     path: relative(status.root, jsonPath),
     kind: "routes",
     now: route.createdAt
   });
+  if (!catalogUpdate.updated && catalogUpdate.exists) {
+    await markWorkspaceCatalogStale({
+      rootPath: status.root,
+      reason: "verifier route written",
+      path: relative(status.root, jsonPath),
+      kind: "routes",
+      now: route.createdAt
+    });
+  }
 
   return {
     route,
@@ -425,13 +433,21 @@ export async function satisfyVerifierRouteObligation(
 
   await writeFile(jsonPath, `${JSON.stringify(updatedRoute, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, markdown, "utf8");
-  await markWorkspaceCatalogStale({
+  const catalogUpdate = await upsertWorkspaceCatalogArtifact({
     rootPath: status.root,
-    reason: "verifier route obligation satisfied",
     path: relative(status.root, jsonPath),
     kind: "routes",
     now: satisfiedAt
   });
+  if (!catalogUpdate.updated && catalogUpdate.exists) {
+    await markWorkspaceCatalogStale({
+      rootPath: status.root,
+      reason: "verifier route obligation satisfied",
+      path: relative(status.root, jsonPath),
+      kind: "routes",
+      now: satisfiedAt
+    });
+  }
 
   return {
     route: updatedRoute,

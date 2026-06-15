@@ -570,7 +570,8 @@ export {
   getWorkspaceCatalogStatus,
   markWorkspaceCatalogStale,
   rebuildWorkspaceCatalog,
-  searchWorkspaceCatalog
+  searchWorkspaceCatalog,
+  upsertWorkspaceCatalogArtifact
 } from "./workspace-catalog.js";
 export type {
   WorkspaceCatalogRebuildInput,
@@ -580,7 +581,9 @@ export type {
   WorkspaceCatalogSearchRow,
   WorkspaceCatalogStaleInput,
   WorkspaceCatalogStaleResult,
-  WorkspaceCatalogStatus
+  WorkspaceCatalogStatus,
+  WorkspaceCatalogUpsertInput,
+  WorkspaceCatalogUpsertResult
 } from "./workspace-catalog.js";
 export type {
   EngineCapability,

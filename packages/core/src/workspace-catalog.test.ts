@@ -4,7 +4,13 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createReceipt } from "./receipt.js";
 import { initLocalWorkspace } from "./local-workspace.js";
-import { markWorkspaceCatalogStale, rebuildWorkspaceCatalog, getWorkspaceCatalogStatus, searchWorkspaceCatalog } from "./workspace-catalog.js";
+import {
+  markWorkspaceCatalogStale,
+  rebuildWorkspaceCatalog,
+  getWorkspaceCatalogStatus,
+  searchWorkspaceCatalog,
+  upsertWorkspaceCatalogArtifact
+} from "./workspace-catalog.js";
 import { sealVaultFile } from "./vault.js";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { writeVerifierRoute } from "./verifier-route.js";
@@ -129,7 +135,7 @@ describe("workspace catalog", () => {
     expect(corrupt.warnings.join("\n")).toContain("Rebuild required");
   });
 
-  it("marks readable catalogs stale when canonical workspace JSON changes after rebuild", async () => {
+  it("keeps readable catalogs current when Truth Harness writers add JSON after rebuild", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
     await writeReceipt(root, "fraction.json", createReceipt("compute 3 / 4 + 5 / 8"));
@@ -137,25 +143,54 @@ describe("workspace catalog", () => {
 
     const fastStatus = await getWorkspaceCatalogStatus(root);
     const freshStatus = await getWorkspaceCatalogStatus(root, { checkFiles: true });
-
-    await writeClaimLedgerRecord({
+    const claim = await writeClaimLedgerRecord({
       rootPath: root,
-      statement: "A new claim should make the cache incomplete until rebuild.",
+      statement: "A new claim should be indexed incrementally.",
       domain: "math",
       tags: ["freshness"],
       now: "2026-06-14T00:00:02.000Z"
     });
 
-    const markedStatus = await getWorkspaceCatalogStatus(root);
-    const staleStatus = await getWorkspaceCatalogStatus(root, { checkFiles: true });
+    const updatedStatus = await getWorkspaceCatalogStatus(root);
+    const checkedStatus = await getWorkspaceCatalogStatus(root, { checkFiles: true });
+    const searchAfterWrite = await searchWorkspaceCatalog({ rootPath: root, query: "freshness" });
 
     expect(fastStatus.freshness.checked).toBe(false);
     expect(freshStatus.stale).toBe(false);
-    expect(markedStatus.stale).toBe(true);
-    expect(markedStatus.invalidation).toMatchObject({
-      reason: "claim ledger record written",
-      kind: "claims"
+    expect(updatedStatus).toMatchObject({
+      readable: true,
+      stale: false,
+      invalidatedAt: undefined,
+      artifactCount: fastStatus.artifactCount + 1,
+      claimCount: fastStatus.claimCount + 1
     });
+    expect(checkedStatus.freshness).toMatchObject({
+      checked: true,
+      stale: false,
+      changedArtifacts: 0,
+      missingArtifacts: 0,
+      newArtifacts: 0
+    });
+    expect(searchAfterWrite.results).toContainEqual(
+      expect.objectContaining({
+        path: normalizePath(claim.jsonPath, root),
+        kind: "claims",
+        artifactId: claim.claim.claimId
+      })
+    );
+  });
+
+  it("detects out-of-band JSON changes with an explicit freshness check", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    await writeReceipt(root, "fraction.json", createReceipt("compute 3 / 4 + 5 / 8"));
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-14T00:00:01.000Z" });
+
+    await writeReceipt(root, "out-of-band.json", createReceipt("compute 2 + 2"));
+    const fastStatus = await getWorkspaceCatalogStatus(root);
+    const staleStatus = await getWorkspaceCatalogStatus(root, { checkFiles: true });
+
+    expect(fastStatus.stale).toBe(false);
     expect(staleStatus.readable).toBe(true);
     expect(staleStatus.stale).toBe(true);
     expect(staleStatus.freshness).toMatchObject({
@@ -164,18 +199,51 @@ describe("workspace catalog", () => {
       missingArtifacts: 0,
       newArtifacts: 1
     });
-    expect(staleStatus.freshness.examples.join("\n")).toContain("new:.truth-harness/claims/");
-    expect(staleStatus.warnings.join("\n")).toContain("Catalog is stale");
-    await expect(searchWorkspaceCatalog({ rootPath: root, query: "freshness" })).rejects.toThrow("stale");
+    expect(staleStatus.freshness.examples.join("\n")).toContain("new:.truth-harness/receipts/out-of-band.json");
+  });
 
-    const rebuilt = await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-14T00:00:03.000Z" });
-    const rebuiltStatus = await getWorkspaceCatalogStatus(root, { checkFiles: true });
-    const searchAfterRebuild = await searchWorkspaceCatalog({ rootPath: root, query: "freshness" });
+  it("can incrementally upsert a single canonical artifact without a full rebuild", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    await writeReceipt(root, "fraction.json", createReceipt("compute 3 / 4 + 5 / 8"));
+    const rebuild = await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-14T00:00:01.000Z" });
+    await writeReceipt(root, "incremental.json", createReceipt("compute 2 + 2"));
+    await markWorkspaceCatalogStale({
+      rootPath: root,
+      reason: "receipt artifact written",
+      path: ".truth-harness/receipts/incremental.json",
+      kind: "receipts",
+      now: "2026-06-14T00:00:02.000Z"
+    });
 
-    expect(rebuilt.artifactCount).toBe(rebuiltStatus.artifactCount);
-    expect(rebuiltStatus.stale).toBe(false);
-    expect(rebuiltStatus.invalidatedAt).toBeUndefined();
-    expect(searchAfterRebuild.results).toContainEqual(expect.objectContaining({ kind: "claims" }));
+    const upsert = await upsertWorkspaceCatalogArtifact({
+      rootPath: root,
+      path: ".truth-harness/receipts/incremental.json",
+      kind: "receipts",
+      now: "2026-06-14T00:00:03.000Z"
+    });
+    const status = await getWorkspaceCatalogStatus(root, { checkFiles: true });
+    const search = await searchWorkspaceCatalog({ rootPath: root, query: "2" });
+
+    expect(upsert).toMatchObject({
+      schemaVersion: "truth-harness.catalog-upsert.v0",
+      exists: true,
+      updated: true,
+      stale: false,
+      path: ".truth-harness/receipts/incremental.json",
+      kind: "receipts"
+    });
+    expect(status).toMatchObject({
+      stale: false,
+      artifactCount: rebuild.artifactCount + 1
+    });
+    expect(search.results).toContainEqual(
+      expect.objectContaining({
+        path: ".truth-harness/receipts/incremental.json",
+        kind: "receipts",
+        trust: "exact-computed"
+      })
+    );
   });
 
   it("marks an existing catalog stale without creating a canonical artifact", async () => {

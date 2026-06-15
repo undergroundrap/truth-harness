@@ -4,7 +4,12 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import Database from "better-sqlite3";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
-import { validateWorkspaceArtifacts, type WorkspaceValidation, type WorkspaceValidationArtifact } from "./workspace-validation.js";
+import {
+  validateWorkspaceArtifacts,
+  type WorkspaceValidation,
+  type WorkspaceValidationArtifact,
+  type WorkspaceValidationArtifactKind
+} from "./workspace-validation.js";
 import type { TrustLabel } from "./types.js";
 
 export const WORKSPACE_CATALOG_SCHEMA_VERSION = "truth-harness.catalog.v0";
@@ -40,6 +45,30 @@ export interface WorkspaceCatalogStaleResult {
   reason: string;
   path?: string;
   kind?: string;
+  warnings: string[];
+}
+
+export interface WorkspaceCatalogUpsertInput {
+  rootPath: string;
+  path: string;
+  kind?: string;
+  now?: string;
+}
+
+export interface WorkspaceCatalogUpsertResult {
+  schemaVersion: "truth-harness.catalog-upsert.v0";
+  workspacePath: string;
+  catalogPath: string;
+  localOnly: true;
+  networkAccess: "none";
+  sourceOfTruth: "workspace-json";
+  exists: boolean;
+  updated: boolean;
+  stale: boolean;
+  path: string;
+  kind?: string;
+  artifactId?: string;
+  updatedAt?: string;
   warnings: string[];
 }
 
@@ -230,6 +259,15 @@ interface CatalogSourceSnapshotRow {
   path: string;
   byteLength: number;
   mtimeMs: number;
+}
+
+interface CatalogArtifactBundle {
+  row: CatalogArtifactRow;
+  tags: string[];
+  refs: CatalogReference[];
+  body: string;
+  claim?: Record<string, string | number>;
+  route?: Record<string, string | number>;
 }
 
 export async function rebuildWorkspaceCatalog(input: WorkspaceCatalogRebuildInput): Promise<WorkspaceCatalogRebuildResult> {
@@ -467,6 +505,101 @@ export async function markWorkspaceCatalogStale(input: WorkspaceCatalogStaleInpu
   }
 }
 
+export async function upsertWorkspaceCatalogArtifact(input: WorkspaceCatalogUpsertInput): Promise<WorkspaceCatalogUpsertResult> {
+  const status = await requireLocalWorkspace(input.rootPath);
+  const catalogPath = workspaceCatalogPath(status);
+  const artifactPath = workspaceRelativePath(status.root, input.path);
+
+  let exists = false;
+  try {
+    await stat(catalogPath);
+    exists = true;
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  if (!exists) {
+    return {
+      schemaVersion: "truth-harness.catalog-upsert.v0",
+      workspacePath: status.root,
+      catalogPath,
+      localOnly: true,
+      networkAccess: "none",
+      sourceOfTruth: "workspace-json",
+      exists: false,
+      updated: false,
+      stale: false,
+      path: artifactPath,
+      kind: input.kind,
+      warnings: ["Catalog is missing; no incremental cache update was needed."]
+    };
+  }
+
+  try {
+    const db = openCatalogDatabase(catalogPath, { createSchema: false });
+    try {
+      const row = readCatalogStatusRow(db);
+      if (row.schema_version !== WORKSPACE_CATALOG_SCHEMA_VERSION) {
+        return {
+          schemaVersion: "truth-harness.catalog-upsert.v0",
+          workspacePath: status.root,
+          catalogPath,
+          localOnly: true,
+          networkAccess: "none",
+          sourceOfTruth: "workspace-json",
+          exists: true,
+          updated: false,
+          stale: true,
+          path: artifactPath,
+          kind: input.kind,
+          warnings: [`Catalog schema is ${row.schema_version ?? "unknown"}; expected ${WORKSPACE_CATALOG_SCHEMA_VERSION}. Rebuild required.`]
+        };
+      }
+
+      const artifact = await catalogArtifactFromPath(status, db, artifactPath, input.kind);
+      upsertCatalogArtifact(db, artifact);
+      refreshCatalogCounts(db);
+      clearMatchingCatalogStaleMarker(db, artifactPath);
+      return {
+        schemaVersion: "truth-harness.catalog-upsert.v0",
+        workspacePath: status.root,
+        catalogPath,
+        localOnly: true,
+        networkAccess: "none",
+        sourceOfTruth: "workspace-json",
+        exists: true,
+        updated: true,
+        stale: Boolean(readCatalogStatusRow(db).stale_at),
+        path: artifact.row.path,
+        kind: artifact.row.kind,
+        artifactId: artifact.row.artifact_id,
+        updatedAt: input.now,
+        warnings: ["Catalog row updated from one canonical workspace JSON artifact; full rebuild remains the authoritative cache reset."]
+      };
+    } finally {
+      db.close();
+    }
+  } catch (error) {
+    return {
+      schemaVersion: "truth-harness.catalog-upsert.v0",
+      workspacePath: status.root,
+      catalogPath,
+      localOnly: true,
+      networkAccess: "none",
+      sourceOfTruth: "workspace-json",
+      exists: true,
+      updated: false,
+      stale: true,
+      path: artifactPath,
+      kind: input.kind,
+      warnings: [`Catalog row could not be updated: ${error instanceof Error ? error.message : String(error)}. Rebuild required.`]
+    };
+  }
+}
+
 export async function getWorkspaceCatalogStatus(rootPath: string, input: WorkspaceCatalogStatusInput = {}): Promise<WorkspaceCatalogStatus> {
   const status = await requireLocalWorkspace(rootPath);
   const catalogPath = workspaceCatalogPath(status);
@@ -666,6 +799,120 @@ function openCatalogDatabase(path: string, options: { createSchema?: boolean } =
   }
 }
 
+function upsertCatalogArtifact(db: Database.Database, artifact: CatalogArtifactBundle): void {
+  const upsert = db.transaction(() => {
+    const path = artifact.row.path;
+    db.prepare("DELETE FROM artifact_fts WHERE path = ?").run(path);
+    db.prepare("DELETE FROM artifact_refs WHERE from_path = ?").run(path);
+    db.prepare("DELETE FROM artifact_tags WHERE path = ?").run(path);
+    db.prepare("DELETE FROM claims WHERE path = ?").run(path);
+    db.prepare("DELETE FROM routes WHERE path = ?").run(path);
+    db.prepare(
+      `INSERT INTO artifacts (
+        path, kind, artifact_id, schema_version, trust, title, summary, domain, status,
+        created_at, updated_at, valid, issue_count, sha256, byte_length, mtime_ms
+      ) VALUES (
+        @path, @kind, @artifact_id, @schema_version, @trust, @title, @summary, @domain, @status,
+        @created_at, @updated_at, @valid, @issue_count, @sha256, @byte_length, @mtime_ms
+      )
+      ON CONFLICT(path) DO UPDATE SET
+        kind = excluded.kind,
+        artifact_id = excluded.artifact_id,
+        schema_version = excluded.schema_version,
+        trust = excluded.trust,
+        title = excluded.title,
+        summary = excluded.summary,
+        domain = excluded.domain,
+        status = excluded.status,
+        created_at = excluded.created_at,
+        updated_at = excluded.updated_at,
+        valid = excluded.valid,
+        issue_count = excluded.issue_count,
+        sha256 = excluded.sha256,
+        byte_length = excluded.byte_length,
+        mtime_ms = excluded.mtime_ms`
+    ).run(artifact.row);
+
+    if (artifact.claim) {
+      db.prepare(
+        `INSERT INTO claims (
+          claim_id, path, statement, domain, trust, status, ready_for_narrow_claim,
+          blocking_obligations, created_at, updated_at
+        ) VALUES (
+          @claim_id, @path, @statement, @domain, @trust, @status, @ready_for_narrow_claim,
+          @blocking_obligations, @created_at, @updated_at
+        )`
+      ).run(artifact.claim);
+    }
+
+    if (artifact.route) {
+      db.prepare(
+        `INSERT INTO routes (
+          route_id, path, problem, final_trust, status, evidence_kind, open_obligations,
+          critical_open_obligations, ready_for_narrow_claim, created_at
+        ) VALUES (
+          @route_id, @path, @problem, @final_trust, @status, @evidence_kind, @open_obligations,
+          @critical_open_obligations, @ready_for_narrow_claim, @created_at
+        )`
+      ).run(artifact.route);
+    }
+
+    const insertTag = db.prepare("INSERT OR IGNORE INTO artifact_tags (path, tag) VALUES (?, ?)");
+    for (const tag of artifact.tags) {
+      insertTag.run(path, tag);
+    }
+
+    const insertRef = db.prepare(
+      `INSERT INTO artifact_refs (
+        from_path, to_ref, ref_kind, edge_kind, field_path, resolved
+      ) VALUES (
+        @from_path, @to_ref, @ref_kind, @edge_kind, @field_path, @resolved
+      )`
+    );
+    for (const ref of artifact.refs) {
+      insertRef.run({
+        from_path: ref.fromPath,
+        to_ref: ref.toRef,
+        ref_kind: ref.refKind,
+        edge_kind: ref.edgeKind,
+        field_path: ref.fieldPath,
+        resolved: ref.resolved ? 1 : 0
+      });
+    }
+
+    db.prepare("INSERT INTO artifact_fts (path, title, body, tags) VALUES (?, ?, ?, ?)").run(
+      path,
+      artifact.row.title ?? "",
+      artifact.body,
+      artifact.tags.join(" ")
+    );
+  });
+  upsert();
+}
+
+function refreshCatalogCounts(db: Database.Database): void {
+  writeCatalogMeta(db, "artifactCount", String(scalarCount(db, "artifacts")));
+  writeCatalogMeta(db, "claimCount", String(scalarCount(db, "claims")));
+  writeCatalogMeta(db, "routeCount", String(scalarCount(db, "routes")));
+}
+
+function clearMatchingCatalogStaleMarker(db: Database.Database, path: string): void {
+  const row = readCatalogStatusRow(db);
+  if (!row.stale_at || row.stale_path !== path) {
+    return;
+  }
+
+  writeCatalogMeta(db, "staleAt", "");
+  writeCatalogMeta(db, "staleReason", "");
+  writeCatalogMeta(db, "stalePath", "");
+  writeCatalogMeta(db, "staleKind", "");
+}
+
+function scalarCount(db: Database.Database, tableName: string): number {
+  const row = db.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get() as { count?: number };
+  return row.count ?? 0;
+}
+
 function createCatalogSchema(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS catalog_meta (
@@ -750,18 +997,63 @@ function createCatalogSchema(db: Database.Database): void {
   `);
 }
 
+async function catalogArtifactFromPath(
+  status: LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> },
+  db: Database.Database,
+  path: string,
+  kindHint?: string
+): Promise<CatalogArtifactBundle> {
+  const fullPath = resolveUnderRoot(status.root, path);
+  const raw = await readFile(fullPath, "utf8");
+  const parsed = parseJsonWithOptionalBom(raw);
+  const statResult = await stat(fullPath);
+  const record = isRecord(parsed) ? parsed : {};
+  const kind = inferArtifactKind(status, path, kindHint);
+  const artifact: WorkspaceValidationArtifact = {
+    path,
+    kind,
+    valid: isRecord(parsed),
+    schemaVersion: typeof record.schemaVersion === "string" ? record.schemaVersion : undefined,
+    artifactId: artifactIdForRecord(kind, record),
+    trust: trustForRecord(record),
+    issueCodes: []
+  };
+  const metadata = metadataForRecord(artifact, record);
+  const refs = collectCatalogReferencesFromCatalog(db, artifact, record);
+  const row: CatalogArtifactRow = {
+    path,
+    kind,
+    artifact_id: artifact.artifactId,
+    schema_version: artifact.schemaVersion,
+    trust: artifact.trust ?? trustForRecord(record),
+    title: metadata.title,
+    summary: metadata.summary,
+    domain: metadata.domain,
+    status: metadata.status,
+    created_at: metadata.createdAt,
+    updated_at: metadata.updatedAt ?? metadata.createdAt,
+    valid: artifact.valid ? 1 : 0,
+    issue_count: artifact.issueCodes.length,
+    sha256: sha256Text(raw),
+    byte_length: statResult.size,
+    mtime_ms: Math.round(statResult.mtimeMs)
+  };
+
+  return {
+    row,
+    tags: metadata.tags,
+    refs,
+    body: metadata.body,
+    claim: claimRowForRecord(artifact, record),
+    route: routeRowForRecord(artifact, record)
+  };
+}
+
 async function catalogArtifactFromValidation(
   root: string,
   validation: WorkspaceValidation,
   artifact: WorkspaceValidationArtifact
-): Promise<{
-  row: CatalogArtifactRow;
-  tags: string[];
-  refs: CatalogReference[];
-  body: string;
-  claim?: Record<string, string | number>;
-  route?: Record<string, string | number>;
-}> {
+): Promise<CatalogArtifactBundle> {
   const fullPath = resolveUnderRoot(root, artifact.path);
   let raw = "";
   let parsed: unknown;
@@ -873,16 +1165,107 @@ function routeRowForRecord(artifact: WorkspaceValidationArtifact, record: Record
   };
 }
 
+function inferArtifactKind(
+  status: LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> },
+  path: string,
+  kindHint?: string
+): WorkspaceValidationArtifactKind {
+  if (kindHint?.trim()) {
+    return kindHint.trim() as WorkspaceValidationArtifactKind;
+  }
+
+  const portablePath = normalizePortablePath(path);
+  const manifestPath = toPortableRelativePath(status.root, status.manifestPath);
+  if (portablePath === manifestPath) {
+    return "manifest";
+  }
+
+  for (const [kind, directory] of Object.entries(status.manifest.directories) as Array<[string, string]>) {
+    const portableDirectory = normalizePortablePath(directory).replace(/\/+$/u, "");
+    if (portablePath === portableDirectory || portablePath.startsWith(`${portableDirectory}/`)) {
+      return kind as WorkspaceValidationArtifactKind;
+    }
+  }
+
+  return "artifacts";
+}
+
+function artifactIdForRecord(kind: WorkspaceValidationArtifactKind, record: Record<string, unknown>): string | undefined {
+  const idKeys: Partial<Record<WorkspaceValidationArtifactKind, string[]>> = {
+    manifest: ["projectId"],
+    receipts: ["runId"],
+    claims: ["claimId"],
+    routes: ["routeId"],
+    visuals: ["visualId"],
+    cas: ["checkId"],
+    proofs: ["checkId"],
+    smt: ["checkId"],
+    benchmarks: ["benchmarkRunId", "comparisonId"],
+    disclosures: ["disclosureId"],
+    simulations: ["simulationId"],
+    patents: ["chartId"],
+    experiments: ["experimentId"],
+    vault: ["vaultId"],
+    audits: ["auditId"],
+    snapshots: ["snapshotId"],
+    sessions: ["sessionId"],
+    reviews: ["reviewId"],
+    validation: ["planId"],
+    literature: ["recordId"],
+    "notebook-runs": ["runRecordId"],
+    "code-runs": ["runId"],
+    "model-contexts": ["packetId"],
+    inventions: ["entryId"],
+    indexes: ["projectId"]
+  };
+
+  for (const key of idKeys[kind] ?? []) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 function collectCatalogReferences(
   record: Record<string, unknown>,
   sourcePath: string,
   validation: WorkspaceValidation
 ): CatalogReference[] {
-  const refs: CatalogReference[] = [];
   const pathSet = new Set(validation.artifacts.map((artifact) => artifact.path));
   const idSet = new Set(
     validation.artifacts.flatMap((artifact) => (artifact.artifactId ? [`${artifact.kind}:${artifact.artifactId}`] : []))
   );
+  return collectCatalogReferencesWithSets(record, sourcePath, pathSet, idSet);
+}
+
+function collectCatalogReferencesFromCatalog(
+  db: Database.Database,
+  artifact: WorkspaceValidationArtifact,
+  record: Record<string, unknown>
+): CatalogReference[] {
+  const rows = db.prepare("SELECT path, kind, artifact_id FROM artifacts").all() as Array<{
+    path: string;
+    kind: string;
+    artifact_id: string | null;
+  }>;
+  const pathSet = new Set(rows.map((row) => row.path));
+  const idSet = new Set(rows.flatMap((row) => (row.artifact_id ? [`${row.kind}:${row.artifact_id}`] : [])));
+  pathSet.add(artifact.path);
+  if (artifact.artifactId) {
+    idSet.add(`${artifact.kind}:${artifact.artifactId}`);
+  }
+  return collectCatalogReferencesWithSets(record, artifact.path, pathSet, idSet);
+}
+
+function collectCatalogReferencesWithSets(
+  record: Record<string, unknown>,
+  sourcePath: string,
+  pathSet: Set<string>,
+  idSet: Set<string>
+): CatalogReference[] {
+  const refs: CatalogReference[] = [];
 
   function pushRef(value: string, fieldPath: string, edgeKind: string, refKind?: string): void {
     const parsed = parseReference(value, refKind);
@@ -1364,6 +1747,10 @@ function resolveUnderRoot(root: string, path: string): string {
     throw new Error(`Catalog path escapes workspace root: ${JSON.stringify(path)}`);
   }
   return target;
+}
+
+function workspaceRelativePath(root: string, path: string): string {
+  return toPortableRelativePath(root, resolveUnderRoot(root, path));
 }
 
 function normalizePortablePath(value: string): string {

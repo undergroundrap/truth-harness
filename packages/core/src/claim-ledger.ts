@@ -9,7 +9,7 @@ import { parseSmtCheckRecord } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { readVerifierRoute, verifierRouteReadiness } from "./verifier-route.js";
-import { markWorkspaceCatalogStale } from "./workspace-catalog.js";
+import { markWorkspaceCatalogStale, upsertWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const CLAIM_LEDGER_DOMAINS = [
   "math",
@@ -322,13 +322,21 @@ export async function writeClaimLedgerRecord(input: CreateClaimLedgerRecordInput
 
   await writeFile(jsonPath, `${JSON.stringify(claim, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, claim.markdown, "utf8");
-  await markWorkspaceCatalogStale({
+  const catalogUpdate = await upsertWorkspaceCatalogArtifact({
     rootPath: status.root,
-    reason: "claim ledger record written",
     path: relative(status.root, jsonPath),
     kind: "claims",
     now: claim.createdAt
   });
+  if (!catalogUpdate.updated && catalogUpdate.exists) {
+    await markWorkspaceCatalogStale({
+      rootPath: status.root,
+      reason: "claim ledger record written",
+      path: relative(status.root, jsonPath),
+      kind: "claims",
+      now: claim.createdAt
+    });
+  }
 
   return {
     claim,
