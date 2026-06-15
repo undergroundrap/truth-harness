@@ -1,8 +1,9 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const EXPERT_REVIEW_KINDS = [
   "math",
@@ -209,6 +210,13 @@ export async function writeExpertReview(input: CreateExpertReviewInput): Promise
 
   await writeFile(jsonPath, `${JSON.stringify(review, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, review.markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "reviews",
+    now: review.createdAt,
+    staleReason: "expert review written"
+  });
 
   return {
     review,

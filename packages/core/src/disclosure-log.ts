@@ -1,8 +1,9 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const EXTERNAL_DISCLOSURE_STATUSES = ["planned", "sent", "received", "cancelled"] as const;
 
@@ -120,6 +121,13 @@ export async function createExternalDisclosureLogEntry(
   await mkdir(disclosuresDir, { recursive: true });
   const path = join(disclosuresDir, `${entry.createdAt.slice(0, 10)}-${entry.disclosureId}.json`);
   await writeFile(path, `${JSON.stringify(entry, null, 2)}\n`, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, path),
+    kind: "disclosures",
+    now: entry.createdAt,
+    staleReason: "external disclosure record written"
+  });
 
   return { entry, path };
 }

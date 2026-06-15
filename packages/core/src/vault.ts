@@ -12,6 +12,7 @@ import { promisify } from "node:util";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 const DEFAULT_VAULT_KEY_ENV = "TRUTH_HARNESS_VAULT_KEY";
 const SCRYPT_KEY_LENGTH = 32;
@@ -188,6 +189,13 @@ export async function sealVaultFile(input: SealVaultFileInput): Promise<VaultSea
   await mkdir(vaultDir, { recursive: true });
   const path = join(vaultDir, `${entry.createdAt.slice(0, 10)}-${entry.vaultId}.json`);
   await writeFile(path, `${JSON.stringify(entry, null, 2)}\n`, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, path),
+    kind: "vault",
+    now: entry.createdAt,
+    staleReason: "vault envelope written"
+  });
 
   return { entry, path };
 }

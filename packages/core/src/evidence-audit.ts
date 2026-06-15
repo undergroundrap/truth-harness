@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import type { CodeRunRecord } from "./code-run.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import type { ExperimentLogEntry } from "./experiment-log.js";
@@ -13,6 +13,7 @@ import type { VaultEnvelope, VaultEnvelopeSummary } from "./vault.js";
 import { parseReceiptJson, ReceiptValidationError } from "./receipt-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, Receipt, TrustLabel } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const EVIDENCE_AUDIT_CLAIM_TYPES = [
   "math",
@@ -154,6 +155,13 @@ export async function writeEvidenceAudit(input: CreateEvidenceAuditInput): Promi
   await mkdir(auditsDir, { recursive: true });
   const path = join(auditsDir, `${audit.createdAt.slice(0, 10)}-${audit.auditId}.json`);
   await writeFile(path, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, path),
+    kind: "audits",
+    now: audit.createdAt,
+    staleReason: "evidence audit written"
+  });
 
   return { audit, path };
 }
@@ -170,6 +178,13 @@ export async function writeEvidenceAuditReport(input: CreateEvidenceAuditInput):
 
   await writeFile(jsonPath, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "audits",
+    now: audit.createdAt,
+    staleReason: "evidence audit report written"
+  });
 
   return {
     audit,

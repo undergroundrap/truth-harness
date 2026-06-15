@@ -3,7 +3,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createReceipt } from "./receipt.js";
+import { writeClaimChart } from "./claim-chart.js";
+import { createExternalDisclosureLogEntry } from "./disclosure-log.js";
+import { createExperimentLogEntry } from "./experiment-log.js";
+import { writeEvidenceAuditReport } from "./evidence-audit.js";
+import { writeExpertReview } from "./expert-review.js";
+import { createInventionLogEntry } from "./invention-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { writeModelContext } from "./model-context.js";
+import {
+  addResearchSessionCheckpoint,
+  updateResearchSessionTask,
+  writeResearchSession
+} from "./research-session.js";
+import { createSimulationLogEntry } from "./simulation-log.js";
 import {
   markWorkspaceCatalogStale,
   rebuildWorkspaceCatalog,
@@ -12,6 +25,7 @@ import {
   upsertWorkspaceCatalogArtifact
 } from "./workspace-catalog.js";
 import { sealVaultFile } from "./vault.js";
+import { writeValidationPlan } from "./validation-plan.js";
 import { writeSymbolicCasCheckRecord, type CasBackendCommandRunner } from "./cas-backend.js";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
@@ -19,6 +33,7 @@ import { writeSmtCheckRecord, type SmtBackendCommandRunner } from "./smt-backend
 import { writeVerifierRoute } from "./verifier-route.js";
 import { writeVisualArtifact } from "./visual-artifact.js";
 import { writeWorkspaceReview } from "./workspace-review.js";
+import { writeWorkspaceSnapshot } from "./workspace-snapshot.js";
 
 const roots: string[] = [];
 const originalVaultKey = process.env.TRUTH_HARNESS_CATALOG_TEST_KEY;
@@ -379,6 +394,138 @@ describe("workspace catalog", () => {
     );
   });
 
+  it("keeps readable catalogs current when research artifact writers add JSON after rebuild", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Research Catalog Lab", now: "2026-06-14T00:00:00.000Z" });
+    const rebuild = await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-14T00:00:01.000Z" });
+
+    const disclosure = await createExternalDisclosureLogEntry({
+      rootPath: root,
+      service: "local-model",
+      purpose: "Document local model context handling.",
+      dataClasses: ["notes"],
+      contextSummary: "Only synthetic test data.",
+      now: "2026-06-14T00:00:02.000Z"
+    });
+    const invention = await createInventionLogEntry({
+      rootPath: root,
+      title: "Catalog refresh invariant",
+      problem: "Agent loops need fresh local indexes.",
+      hypothesis: "Durable research writers can keep the catalog searchable without a full rebuild.",
+      now: "2026-06-14T00:00:03.000Z"
+    });
+    const chart = await writeClaimChart({
+      rootPath: root,
+      entryId: invention.entry.entryId,
+      elements: [
+        {
+          text: "Catalog refresh helper is invoked by research artifact writers.",
+          supportRefs: [{ kind: "other", ref: "unit-test" }]
+        }
+      ],
+      now: "2026-06-14T00:00:04.000Z"
+    });
+    const simulation = await createSimulationLogEntry({
+      rootPath: root,
+      question: "Does catalog refresh stay current after simulation logs?",
+      engine: "unit-test",
+      modelName: "catalog-model",
+      now: "2026-06-14T00:00:05.000Z"
+    });
+    const experiment = await createExperimentLogEntry({
+      rootPath: root,
+      question: "Does writer coverage stay searchable?",
+      observations: ["No stale catalog after write."],
+      now: "2026-06-14T00:00:06.000Z"
+    });
+    const audit = await writeEvidenceAuditReport({
+      rootPath: root,
+      claim: "Catalog writer coverage is searchable after writes.",
+      now: "2026-06-14T00:00:07.000Z"
+    });
+    const expert = await writeExpertReview({
+      rootPath: root,
+      subject: "Catalog writer coverage",
+      reviewerRole: "unit-test reviewer",
+      now: "2026-06-14T00:00:08.000Z"
+    });
+    const modelContext = await writeModelContext({
+      rootPath: root,
+      purpose: "Prepare a bounded local packet.",
+      service: "local-model",
+      target: "local-model",
+      selectedContextRefs: ["receipt:test"],
+      sections: [{ title: "Scope", content: "Synthetic local test context.", sourceRefs: ["receipt:test"] }],
+      now: "2026-06-14T00:00:09.000Z"
+    });
+    const validation = await writeValidationPlan({
+      rootPath: root,
+      claim: "Catalog writer coverage should not go stale.",
+      now: "2026-06-14T00:00:10.000Z"
+    });
+    const session = await writeResearchSession({
+      rootPath: root,
+      objective: "Track catalog freshness work.",
+      domains: ["code"],
+      tasks: ["Attach evidence"],
+      now: "2026-06-14T00:00:11.000Z"
+    });
+    await addResearchSessionCheckpoint({
+      rootPath: root,
+      sessionRef: session.session.sessionId,
+      summary: "Writers attached.",
+      now: "2026-06-14T00:00:12.000Z"
+    });
+    const updatedSession = await updateResearchSessionTask({
+      rootPath: root,
+      sessionRef: session.session.sessionId,
+      taskRef: "Attach evidence",
+      status: "blocked",
+      nextChecks: ["Attach evidence ref before done."],
+      now: "2026-06-14T00:00:13.000Z"
+    });
+    await writeFile(join(root, "private-source.json"), "{\"secret\":\"catalog-test\"}\n", "utf8");
+    process.env.TRUTH_HARNESS_CATALOG_TEST_KEY = "catalog-test-passphrase";
+    const vault = await sealVaultFile({
+      rootPath: root,
+      sourcePath: "private-source.json",
+      label: "Catalog test sealed note",
+      keyEnv: "TRUTH_HARNESS_CATALOG_TEST_KEY",
+      now: "2026-06-14T00:00:14.000Z"
+    });
+    const snapshot = await writeWorkspaceSnapshot({
+      rootPath: root,
+      now: "2026-06-14T00:00:15.000Z"
+    });
+
+    const status = await getWorkspaceCatalogStatus(root, { checkFiles: true });
+
+    expect(status).toMatchObject({
+      readable: true,
+      stale: false,
+      artifactCount: rebuild.artifactCount + 12,
+      freshness: {
+        checked: true,
+        stale: false,
+        changedArtifacts: 0,
+        missingArtifacts: 0,
+        newArtifacts: 0
+      }
+    });
+    await expectCatalogHit(root, "disclosures", disclosure.path, disclosure.entry.disclosureId);
+    await expectCatalogHit(root, "inventions", invention.path, invention.entry.entryId);
+    await expectCatalogHit(root, "patents", chart.jsonPath, chart.chart.chartId);
+    await expectCatalogHit(root, "simulations", simulation.path, simulation.entry.simulationId);
+    await expectCatalogHit(root, "experiments", experiment.path, experiment.entry.experimentId);
+    await expectCatalogHit(root, "audits", audit.jsonPath, audit.audit.auditId);
+    await expectCatalogHit(root, "reviews", expert.jsonPath, expert.review.reviewId);
+    await expectCatalogHit(root, "model-contexts", modelContext.jsonPath, modelContext.packet.packetId);
+    await expectCatalogHit(root, "validation", validation.jsonPath, validation.plan.planId);
+    await expectCatalogHit(root, "sessions", updatedSession.jsonPath, updatedSession.session.sessionId);
+    await expectCatalogHit(root, "vault", vault.path, vault.entry.vaultId);
+    await expectCatalogHit(root, "snapshots", snapshot.path, snapshot.snapshot.snapshotId);
+  });
+
   it("marks an existing catalog stale without creating a canonical artifact", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
@@ -461,4 +608,15 @@ async function writeReceipt(root: string, name: string, receipt: unknown): Promi
 
 function normalizePath(path: string, root: string): string {
   return path.slice(root.length + 1).replace(/\\/g, "/");
+}
+
+async function expectCatalogHit(root: string, kind: string, path: string, artifactId: string): Promise<void> {
+  const search = await searchWorkspaceCatalog({ rootPath: root, kind, limit: 50 });
+  expect(search.results).toContainEqual(
+    expect.objectContaining({
+      path: normalizePath(path, root),
+      kind,
+      artifactId
+    })
+  );
 }

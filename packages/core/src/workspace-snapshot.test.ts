@@ -26,6 +26,7 @@ describe("workspace snapshots", () => {
       runId: "run_demo",
       trust: "exact-computed"
     });
+    await writeFile(join(root, initialized.manifest.directories.indexes, "catalog.db"), "rebuildable cache", "utf8");
 
     const snapshot = await createWorkspaceSnapshot({
       rootPath: root,
@@ -41,6 +42,7 @@ describe("workspace snapshots", () => {
     expect(snapshot.summary.bySchema["truth-harness.receipt.v0"]).toBe(1);
     expect(snapshot.entries.map((entry) => entry.path)).toContain(".truth-harness/receipts/demo-receipt.json");
     expect(snapshot.entries.every((entry) => !entry.path.startsWith(".truth-harness/snapshots/"))).toBe(true);
+    expect(snapshot.entries.every((entry) => !entry.path.startsWith(".truth-harness/indexes/"))).toBe(true);
   });
 
   it("writes, lists, and verifies snapshots without self-referencing snapshot files", async () => {

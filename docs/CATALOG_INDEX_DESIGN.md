@@ -191,7 +191,7 @@ Phase 2 includes:
 - Reparse only changed files.
 - Rebuild FTS rows for changed files.
 - Keep `catalog_meta.last_refresh_at`.
-- Writer hooks for claims, verifier routes, route-obligation updates, web receipts, proof checks, SMT checks, CAS checks, visual artifacts, workspace reviews, benchmark runs/comparisons, notebook runs, code runs, and literature records. Each writer calls the shared catalog refresh helper after the canonical JSON write. If row-level upsert fails, the catalog is marked stale instead of blocking evidence writes.
+- Writer hooks for claims, verifier routes, route-obligation updates, web receipts, proof checks, SMT checks, CAS checks, visual artifacts, workspace reviews, benchmark runs/comparisons, notebook runs, code runs, literature records, disclosures, inventions, claim charts, simulations, experiments, audits, expert reviews, model-context packets, validation plans, research sessions, vault envelopes, and workspace snapshots. Each writer calls the shared catalog refresh helper after the canonical JSON write. If row-level upsert fails, the catalog is marked stale instead of blocking evidence writes.
 
 Keep the shared refresh helper small and boring. Artifact writers should still write canonical JSON/Markdown first; catalog updates remain cache maintenance, not evidence creation.
 
@@ -222,7 +222,7 @@ All outputs should be structured JSON-first and include whether the response cam
 4. Route web search through catalog if available, fallback to existing APIs. Done for sidebar workspace search with explicit rebuild/status prompts.
 5. Route `claim list`, `route list`, and visual/artifact search through catalog for large workspaces.
 6. Add MCP catalog tools for agents. Done.
-7. Add incremental refresh and stale detection. File freshness detection is done for status surfaces, and row-level incremental upsert is done for claim, route, route-obligation, web receipt, proof, SMT, CAS, visual, workspace-review, benchmark, notebook-run, code-run, and literature writers.
+7. Add incremental refresh and stale detection. File freshness detection is done for status surfaces, and row-level incremental upsert is done for claim, route, route-obligation, web receipt, proof, SMT, CAS, visual, workspace-review, benchmark, notebook-run, code-run, literature, disclosure, invention, claim-chart, simulation, experiment, audit, expert-review, model-context, validation-plan, research-session, vault, and workspace-snapshot writers.
 
 ## Tests
 

@@ -1,10 +1,11 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { createEvidenceAudit, type EvidenceAudit, type EvidenceAuditClaimType } from "./evidence-audit.js";
 import type { InventionEvidenceRef } from "./invention-log.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const VALIDATION_PLAN_DOMAINS = [
   "math",
@@ -245,6 +246,13 @@ export async function writeValidationPlan(input: CreateValidationPlanInput): Pro
   const markdownPath = join(validationDir, `${baseName}.md`);
   await writeFile(jsonPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, plan.markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "validation",
+    now: plan.createdAt,
+    staleReason: "validation plan written"
+  });
 
   return {
     plan,

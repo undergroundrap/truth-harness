@@ -1,9 +1,10 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { listInventionLogEntries, type InventionEvidenceRef, type InventionLogEntry } from "./invention-log.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export type ClaimChartElementStatus = "unsupported" | "evidence-referenced" | "needs-human-review";
 
@@ -146,6 +147,13 @@ export async function writeClaimChart(input: CreateClaimChartInput): Promise<Cla
   const markdownPath = join(patentsDir, `${baseName}.md`);
   await writeFile(jsonPath, `${JSON.stringify(chart, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, chart.markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "patents",
+    now: chart.createdAt,
+    staleReason: "claim chart written"
+  });
 
   return {
     chart,

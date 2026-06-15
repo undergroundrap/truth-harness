@@ -1,8 +1,9 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const INVENTION_VALIDATION_STAGES = [
   "idea",
@@ -142,6 +143,13 @@ export async function createInventionLogEntry(input: CreateInventionLogInput): P
   await mkdir(inventionsDir, { recursive: true });
   const path = join(inventionsDir, `${entry.createdAt.slice(0, 10)}-${entry.entryId}.json`);
   await writeFile(path, `${JSON.stringify(entry, null, 2)}\n`, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, path),
+    kind: "inventions",
+    now: entry.createdAt,
+    staleReason: "invention log entry written"
+  });
 
   return { entry, path };
 }

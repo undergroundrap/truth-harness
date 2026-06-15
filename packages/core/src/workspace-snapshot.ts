@@ -10,6 +10,7 @@ import {
 } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export type WorkspaceSnapshotEntryKind = LocalWorkspaceDirectory | "manifest" | "unknown";
 
@@ -147,6 +148,13 @@ export async function writeWorkspaceSnapshot(input: CreateWorkspaceSnapshotInput
   await mkdir(snapshotsDir, { recursive: true });
   const path = join(snapshotsDir, `${snapshot.createdAt.slice(0, 10)}-${snapshot.snapshotId}.json`);
   await writeFile(path, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, path),
+    kind: "snapshots",
+    now: snapshot.createdAt,
+    staleReason: "workspace snapshot written"
+  });
 
   return { snapshot, path };
 }
@@ -240,6 +248,7 @@ export async function verifyWorkspaceSnapshot(input: VerifyWorkspaceSnapshotInpu
 async function collectWorkspaceEntries(root: string): Promise<WorkspaceSnapshotEntry[]> {
   const workspaceRoot = resolve(root, LOCAL_WORKSPACE_DIR);
   const snapshotsRoot = resolve(workspaceRoot, "snapshots");
+  const indexesRoot = resolve(workspaceRoot, "indexes");
   const entries: WorkspaceSnapshotEntry[] = [];
 
   async function walk(directory: string): Promise<void> {
@@ -259,7 +268,8 @@ async function collectWorkspaceEntries(root: string): Promise<WorkspaceSnapshotE
       const path = join(directory, dirent.name);
 
       if (dirent.isDirectory()) {
-        if (resolve(path) === snapshotsRoot) {
+        const resolvedPath = resolve(path);
+        if (resolvedPath === snapshotsRoot || resolvedPath === indexesRoot) {
           continue;
         }
 

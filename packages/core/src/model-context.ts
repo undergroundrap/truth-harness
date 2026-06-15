@@ -1,8 +1,9 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const MODEL_CONTEXT_TARGETS = ["hosted-model", "local-model", "external-service"] as const;
 export const MODEL_CONTEXT_APPROVAL_STATUSES = ["not-approved", "approved"] as const;
@@ -183,6 +184,13 @@ export async function writeModelContext(input: CreateModelContextInput): Promise
   const markdownPath = join(contextsDir, `${baseName}.md`);
   await writeFile(jsonPath, `${JSON.stringify(packet, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, packet.markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "model-contexts",
+    now: packet.createdAt,
+    staleReason: "model context packet written"
+  });
 
   return {
     packet,

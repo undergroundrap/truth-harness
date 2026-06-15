@@ -1,8 +1,9 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const RESEARCH_SESSION_DOMAINS = [
   "math",
@@ -270,6 +271,13 @@ export async function addResearchSessionCheckpoint(
 
   await writeFile(path, `${JSON.stringify(sessionWithMarkdown, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, sessionWithMarkdown.markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, path),
+    kind: "sessions",
+    now: sessionWithMarkdown.updatedAt,
+    staleReason: "research session checkpoint written"
+  });
 
   return {
     session: sessionWithMarkdown,
@@ -329,6 +337,13 @@ export async function updateResearchSessionTask(
 
   await writeFile(path, `${JSON.stringify(sessionWithMarkdown, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, sessionWithMarkdown.markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, path),
+    kind: "sessions",
+    now: sessionWithMarkdown.updatedAt,
+    staleReason: "research session task updated"
+  });
 
   return {
     session: sessionWithMarkdown,
@@ -522,6 +537,13 @@ async function writeSessionFiles(
 
   await writeFile(jsonPath, `${JSON.stringify(session, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, session.markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: root,
+    path: relative(root, jsonPath),
+    kind: "sessions",
+    now: session.updatedAt,
+    staleReason: "research session written"
+  });
 
   return {
     session,
