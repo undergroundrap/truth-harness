@@ -20,11 +20,11 @@
           <button class="icon-button sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-pressed="false">&lt;</button>
         </div>
 
-        <nav class="nav-list">
-          <button class="nav-item active" type="button"><span>+</span> New session</button>
-          <button class="nav-item" type="button"><span>?</span> Search receipts</button>
-          <button class="nav-item" type="button"><span>@</span> Agent tools</button>
-          <button class="nav-item" type="button"><span>*</span> Benchmarks</button>
+        <nav class="nav-list" aria-label="Workspace shortcuts">
+          <button class="nav-item active" data-sidebar-action="new-session" type="button"><span>+</span> New session</button>
+          <button class="nav-item" data-sidebar-action="search" type="button"><span>?</span> Search</button>
+          <button class="nav-item" data-sidebar-action="agent-tools" type="button"><span>@</span> Agents</button>
+          <button class="nav-item" data-sidebar-action="benchmarks" type="button"><span>*</span> Checks</button>
         </nav>
 
         <div class="sidebar-search">
@@ -42,17 +42,17 @@
           </div>
         </section>
 
-        <section class="sidebar-section">
+        <section class="sidebar-section projects-section">
           <div class="section-label">Projects</div>
-          <button class="project-row selected" type="button">
+          <button class="project-row selected" data-project-lane="math" type="button">
             <span>Truth Harness</span>
             <span>now</span>
           </button>
-          <button class="project-row" type="button">
+          <button class="project-row" data-project-lane="finance" type="button">
             <span>Finance audit lab</span>
             <span>draft</span>
           </button>
-          <button class="project-row" type="button">
+          <button class="project-row" data-project-lane="physics" type="button">
             <span>Physics notes</span>
             <span>3h</span>
           </button>

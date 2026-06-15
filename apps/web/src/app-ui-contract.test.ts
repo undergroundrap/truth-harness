@@ -79,9 +79,34 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function renderCatalogSearchPanel()");
     expect(source).toContain("function openCatalogResult(button)");
     expect(source).toContain("scheduleCatalogSearch();");
+    expect(source).toContain("catalogResultList.hidden = true;");
     expect(styles).toContain(".catalog-search-panel");
     expect(styles).toContain(".catalog-result-row");
     expect(styles).toContain("overflow-wrap: anywhere;");
+  });
+
+  it("keeps the sidebar shortcuts wired to real workspace surfaces", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('data-sidebar-action="new-session"');
+    expect(html).toContain('data-sidebar-action="search"');
+    expect(html).toContain('data-sidebar-action="agent-tools"');
+    expect(html).toContain('data-sidebar-action="benchmarks"');
+    expect(html).toContain('data-project-lane="finance"');
+    expect(html).toContain('data-project-lane="physics"');
+    expect(source).toContain("function openSidebarAction(action)");
+    expect(source).toContain('state.surface = "runbook";');
+    expect(source).toContain('state.surface = "checks";');
+    expect(source).toContain("function openSidebarProject(row)");
+    expect(source).toContain("sidebarActionButtons.forEach");
+    expect(source).toContain("projectRows.forEach");
+    expect(styles).toContain("grid-template-rows: auto auto auto auto auto auto minmax(150px, 1fr) auto;");
+    expect(styles).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
+    expect(styles).toContain("max-height: min(15vh, 142px);");
   });
 
   it("keeps the bottom dock as a readable command console instead of a cramped strip", async () => {

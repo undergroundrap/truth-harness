@@ -89,13 +89,13 @@ button {
 
 .sidebar {
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto auto auto auto auto auto minmax(150px, 1fr) auto;
   min-width: 0;
   background: #1d1c1a;
   border-right: 1px solid var(--line);
   overflow: hidden;
-  padding: 0 8px 10px;
+  padding: 0 8px 8px;
 }
 
 .sidebar-resizer {
@@ -207,17 +207,23 @@ button {
   color: var(--faint);
 }
 
-.nav-list,
 .sidebar-section {
   display: grid;
   gap: 4px;
   margin-top: 12px;
 }
 
+.nav-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 8px;
+}
+
 .sidebar-search {
   display: grid;
   gap: 5px;
-  margin-top: 12px;
+  margin-top: 9px;
   padding: 0 6px;
 }
 
@@ -240,7 +246,7 @@ button {
 .catalog-search-panel {
   display: grid;
   gap: 7px;
-  margin-top: 8px;
+  margin-top: 7px;
   padding: 0 6px;
 }
 
@@ -260,7 +266,7 @@ button {
 .catalog-result-list {
   display: grid;
   gap: 5px;
-  max-height: min(22vh, 220px);
+  max-height: min(13vh, 128px);
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
@@ -388,9 +394,13 @@ button {
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 32px;
-  padding: 6px 9px;
+  gap: 7px;
+  min-height: 30px;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 13px;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .nav-item span {
@@ -416,8 +426,16 @@ button {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  min-height: 31px;
-  padding: 7px 9px 7px 31px;
+  min-height: 29px;
+  min-width: 0;
+  padding: 6px 9px 6px 24px;
+}
+
+.project-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .project-row span:last-child {
@@ -428,7 +446,8 @@ button {
 .lane-list {
   display: grid;
   gap: 4px;
-  max-height: min(24vh, 230px);
+  max-height: min(15vh, 142px);
+  min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   padding-right: 2px;
@@ -447,7 +466,7 @@ button {
   background: transparent;
   color: var(--text);
   cursor: pointer;
-  padding: 7px 9px 7px 31px;
+  padding: 6px 9px 6px 24px;
   text-align: left;
 }
 
@@ -470,27 +489,28 @@ button {
 
 .grow {
   display: flex;
-  flex: 1 1 180px;
   flex-direction: column;
+  margin-top: 10px;
   min-height: 0;
   overflow: hidden;
 }
 
 #claim-list {
   min-height: 0;
+  flex: 1 1 auto;
   overflow-x: hidden;
   overflow-y: auto;
-  padding-bottom: 28px;
+  padding: 2px 2px 8px 0;
   scrollbar-gutter: stable;
 }
 
 .claim-row {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   gap: 8px;
-  min-height: 52px;
-  padding: 8px 9px;
+  min-height: 44px;
+  padding: 7px 9px;
 }
 
 .claim-row strong,
@@ -509,7 +529,11 @@ button {
 .claim-row small {
   color: var(--muted);
   font-size: 12px;
-  margin-top: 2px;
+  margin-top: 1px;
+}
+
+.claim-row .tag-strip {
+  display: none;
 }
 
 .claim-ledger-id {
@@ -595,8 +619,8 @@ button {
 }
 
 .sidebar-footer {
-  margin-top: auto;
-  padding-top: 10px;
+  min-height: 0;
+  padding-top: 8px;
 }
 
 .identity-panel {

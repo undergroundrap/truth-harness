@@ -316,6 +316,8 @@ const sidebarSearchCount = document.querySelector("#sidebar-search-count");
 const catalogSearchStatus = document.querySelector("#catalog-search-status");
 const catalogRebuildButton = document.querySelector("#catalog-rebuild");
 const catalogResultList = document.querySelector("#catalog-result-list");
+const sidebarActionButtons = document.querySelectorAll("[data-sidebar-action]");
+const projectRows = document.querySelectorAll(".project-row");
 const laneButtons = document.querySelectorAll(".lane-row");
 const laneStatus = document.querySelector("#lane-status");
 const projectStartLane = document.querySelector("#project-start-lane");
@@ -1168,6 +1170,7 @@ function render() {
   renderReport(receipt);
   updateClaimRecordButtons(receipt);
   renderCatalogSearchPanel();
+  renderSidebarActions();
   applySidebarSearch();
   document.querySelectorAll(".segment").forEach((button) => {
     button.classList.toggle("active", button.dataset.level === state.level);
@@ -6455,6 +6458,25 @@ function resetActiveSurfaceScroll() {
   document.querySelector(`[data-surface-panel="${state.surface}"]`)?.scrollTo({ top: 0, left: 0 });
 }
 
+function renderSidebarActions() {
+  sidebarActionButtons.forEach((button) => {
+    const action = button.dataset.sidebarAction;
+    const active =
+      (action === "new-session" && state.surface === "trace") ||
+      (action === "agent-tools" && state.surface === "runbook") ||
+      (action === "benchmarks" && state.surface === "checks") ||
+      (action === "search" && document.activeElement === sidebarSearch);
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  projectRows.forEach((row) => {
+    const active = row.dataset.projectLane === state.lane;
+    row.classList.toggle("selected", active);
+    row.setAttribute("aria-pressed", String(active));
+  });
+}
+
 function renderLane() {
   laneButtons.forEach((button) => {
     const active = button.dataset.lane === state.lane;
@@ -7768,6 +7790,8 @@ function renderCatalogSearchPanel() {
   }
 
   const query = state.sidebarQuery.trim();
+  const searchFocused = document.activeElement === sidebarSearch;
+  const quietStatus = query.length === 0 && !searchFocused && !state.catalogSearchLoading && !state.catalogError;
   const catalog = state.catalogStatus;
   const results = state.catalogSearch?.results ?? [];
   catalogRebuildButton.disabled = state.catalogRebuildLoading;
@@ -7777,6 +7801,13 @@ function renderCatalogSearchPanel() {
     : state.catalogError
       ? "catalog needs attention"
       : catalogStatusSummary(catalog);
+  catalogResultList.hidden = false;
+
+  if (quietStatus) {
+    catalogResultList.hidden = true;
+    catalogResultList.innerHTML = "";
+    return;
+  }
 
   if (state.catalogError) {
     catalogResultList.innerHTML = `<div class="sidebar-empty">${escapeHtml(state.catalogError)}</div>`;
@@ -10685,6 +10716,57 @@ function renderMathInline(value) {
   return `<span class="math-inline">${html}</span>`;
 }
 
+function openSidebarAction(action) {
+  if (action === "new-session") {
+    state.surface = "trace";
+    setReplayPlaying(false);
+    render();
+    promptInput.focus();
+    promptInput.select();
+    composer.scrollIntoView({ block: "nearest" });
+    addActivity("human", "Opened new session composer", "Ready to route a new local claim through Truth Harness.", "waiting");
+    return;
+  }
+
+  if (action === "search") {
+    sidebarSearch.focus();
+    sidebarSearch.select();
+    renderSidebarActions();
+    scheduleCatalogSearch();
+    addActivity("human", "Focused workspace search", "Search filters projects, focus lanes, recent claims, and the local catalog.", "waiting");
+    return;
+  }
+
+  if (action === "agent-tools") {
+    state.surface = "runbook";
+    render();
+    resetActiveSurfaceScroll();
+    addActivity("human", "Opened agent harness", "Runbook, next action, and agent packet are ready for local verification work.", "waiting");
+    return;
+  }
+
+  if (action === "benchmarks") {
+    state.surface = "checks";
+    render();
+    resetActiveSurfaceScroll();
+    addActivity("human", "Opened verification checks", "Route obligations, engine readiness, and benchmark-style gates are visible.", "waiting");
+  }
+}
+
+function openSidebarProject(row) {
+  const lane = row.dataset.projectLane;
+  if (!lane) {
+    return;
+  }
+
+  state.lane = lane;
+  state.surface = lane === "math" ? "trace" : "protocol";
+  render();
+  resetActiveSurfaceScroll();
+  const projectName = row.querySelector("span")?.textContent?.trim() ?? "Project";
+  addActivity("human", `Opened ${projectName}`, `${laneStatusText[lane] ?? "Research lane"} template loaded locally.`, "waiting");
+}
+
 sidebarToggle.addEventListener("click", () => {
   const collapsed = !state.sidebarCollapsed;
   setSidebarCollapsed(collapsed);
@@ -10701,6 +10783,18 @@ sidebarResizer.addEventListener("pointermove", updateSidebarResize);
 sidebarResizer.addEventListener("pointerup", endSidebarResize);
 sidebarResizer.addEventListener("pointercancel", endSidebarResize);
 sidebarResizer.addEventListener("keydown", handleSidebarResizerKey);
+
+sidebarActionButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    openSidebarAction(button.dataset.sidebarAction);
+  });
+});
+
+projectRows.forEach((row) => {
+  row.addEventListener("click", () => {
+    openSidebarProject(row);
+  });
+});
 
 researcherNameInput.addEventListener("input", saveResearcherName);
 
@@ -10860,6 +10954,7 @@ laneButtons.forEach((button) => {
     renderRunbook(receiptStore.get(state.receiptKey));
     renderVerificationMatrix(receiptStore.get(state.receiptKey));
     renderReport(receiptStore.get(state.receiptKey));
+    renderSidebarActions();
   });
 });
 
@@ -10869,6 +10964,9 @@ sidebarSearch.addEventListener("input", () => {
   applySidebarSearch();
   scheduleCatalogSearch();
 });
+
+sidebarSearch.addEventListener("focus", renderSidebarActions);
+sidebarSearch.addEventListener("blur", renderSidebarActions);
 
 claimLedgerSearch.addEventListener("input", () => {
   state.claimLedgerQuery = claimLedgerSearch.value;
