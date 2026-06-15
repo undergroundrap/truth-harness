@@ -1,5 +1,6 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import { withWorkspaceLock, writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
@@ -235,123 +236,127 @@ export async function addResearchSessionCheckpoint(
   input: ResearchSessionCheckpointInput
 ): Promise<ResearchSessionCheckpointWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
-  const { session, path } = await readResearchSessionRef(status, input.sessionRef);
-  const createdAt = input.now ?? new Date().toISOString();
-  const summary = requireText(input.summary, "Research checkpoint summary is required.");
-  const checkpointWithoutId = {
-    sessionId: session.sessionId,
-    createdAt,
-    summary,
-    evidenceRefs: normalizeEvidenceRefs(input.evidenceRefs ?? []),
-    snapshotRefs: normalizeStringList(input.snapshotRefs ?? []),
-    decisions: normalizeStringList(input.decisions ?? []),
-    nextChecks: normalizeStringList(input.nextChecks ?? [])
-  };
-  const checkpoint: ResearchSessionCheckpoint = {
-    checkpointId: `chk_${stableHash(checkpointWithoutId).slice(0, 16)}`,
-    createdAt,
-    summary,
-    evidenceRefs: checkpointWithoutId.evidenceRefs,
-    snapshotRefs: checkpointWithoutId.snapshotRefs,
-    decisions: checkpointWithoutId.decisions,
-    nextChecks: checkpointWithoutId.nextChecks
-  };
-  const updated: ResearchSession = {
-    ...session,
-    updatedAt: createdAt,
-    evidenceRefs: mergeEvidenceRefs(session.evidenceRefs, checkpoint.evidenceRefs),
-    snapshotRefs: mergeStrings(session.snapshotRefs, checkpoint.snapshotRefs),
-    checkpoints: [...session.checkpoints, checkpoint]
-  };
-  const sessionWithMarkdown: ResearchSession = {
-    ...updated,
-    markdown: renderResearchSessionMarkdown(updated)
-  };
-  const markdownPath = path.replace(/\.json$/u, ".md");
+  return withWorkspaceLock(status.root, "research-sessions", async () => {
+    const { session, path } = await readResearchSessionRef(status, input.sessionRef);
+    const createdAt = input.now ?? new Date().toISOString();
+    const summary = requireText(input.summary, "Research checkpoint summary is required.");
+    const checkpointWithoutId = {
+      sessionId: session.sessionId,
+      createdAt,
+      summary,
+      evidenceRefs: normalizeEvidenceRefs(input.evidenceRefs ?? []),
+      snapshotRefs: normalizeStringList(input.snapshotRefs ?? []),
+      decisions: normalizeStringList(input.decisions ?? []),
+      nextChecks: normalizeStringList(input.nextChecks ?? [])
+    };
+    const checkpoint: ResearchSessionCheckpoint = {
+      checkpointId: `chk_${stableHash(checkpointWithoutId).slice(0, 16)}`,
+      createdAt,
+      summary,
+      evidenceRefs: checkpointWithoutId.evidenceRefs,
+      snapshotRefs: checkpointWithoutId.snapshotRefs,
+      decisions: checkpointWithoutId.decisions,
+      nextChecks: checkpointWithoutId.nextChecks
+    };
+    const updated: ResearchSession = {
+      ...session,
+      updatedAt: createdAt,
+      evidenceRefs: mergeEvidenceRefs(session.evidenceRefs, checkpoint.evidenceRefs),
+      snapshotRefs: mergeStrings(session.snapshotRefs, checkpoint.snapshotRefs),
+      checkpoints: [...session.checkpoints, checkpoint]
+    };
+    const sessionWithMarkdown: ResearchSession = {
+      ...updated,
+      markdown: renderResearchSessionMarkdown(updated)
+    };
+    const markdownPath = path.replace(/\.json$/u, ".md");
 
-  await writeFile(path, `${JSON.stringify(sessionWithMarkdown, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, sessionWithMarkdown.markdown, "utf8");
-  await refreshWorkspaceCatalogArtifact({
-    rootPath: status.root,
-    path: relative(status.root, path),
-    kind: "sessions",
-    now: sessionWithMarkdown.updatedAt,
-    staleReason: "research session checkpoint written"
+    await writeJsonFileAtomic(path, sessionWithMarkdown);
+    await writeFileAtomic(markdownPath, sessionWithMarkdown.markdown, "utf8");
+    await refreshWorkspaceCatalogArtifact({
+      rootPath: status.root,
+      path: relative(status.root, path),
+      kind: "sessions",
+      now: sessionWithMarkdown.updatedAt,
+      staleReason: "research session checkpoint written"
+    });
+
+    return {
+      session: sessionWithMarkdown,
+      checkpoint,
+      jsonPath: path,
+      markdownPath,
+      markdown: sessionWithMarkdown.markdown
+    };
   });
-
-  return {
-    session: sessionWithMarkdown,
-    checkpoint,
-    jsonPath: path,
-    markdownPath,
-    markdown: sessionWithMarkdown.markdown
-  };
 }
 
 export async function updateResearchSessionTask(
   input: ResearchSessionTaskUpdateInput
 ): Promise<ResearchSessionTaskUpdateWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
-  const { session, path } = await readResearchSessionRef(status, input.sessionRef);
-  const taskRef = requireText(input.taskRef, "Research session task ref is required.");
-  const evidenceRefs = normalizeEvidenceRefs(input.evidenceRefs ?? []);
-  const nextChecks = normalizeStringList(input.nextChecks ?? []);
-  const updatedAt = input.now ?? new Date().toISOString();
-  let updatedTask: ResearchSessionTask | undefined;
+  return withWorkspaceLock(status.root, "research-sessions", async () => {
+    const { session, path } = await readResearchSessionRef(status, input.sessionRef);
+    const taskRef = requireText(input.taskRef, "Research session task ref is required.");
+    const evidenceRefs = normalizeEvidenceRefs(input.evidenceRefs ?? []);
+    const nextChecks = normalizeStringList(input.nextChecks ?? []);
+    const updatedAt = input.now ?? new Date().toISOString();
+    let updatedTask: ResearchSessionTask | undefined;
 
-  const tasks = session.tasks.map((task) => {
-    if (!taskMatchesRef(task, taskRef)) {
-      return task;
+    const tasks = session.tasks.map((task) => {
+      if (!taskMatchesRef(task, taskRef)) {
+        return task;
+      }
+
+      updatedTask = {
+        ...task,
+        status: input.status ?? task.status,
+        evidenceRefs: mergeEvidenceRefs(task.evidenceRefs, evidenceRefs),
+        nextChecks: mergeStrings(task.nextChecks, nextChecks)
+      };
+      return updatedTask;
+    });
+
+    if (!updatedTask) {
+      throw new Error(`Research session task not found: ${taskRef}`);
+    }
+    if (updatedTask.status === "done" && updatedTask.evidenceRefs.length === 0) {
+      throw new Error("Research session tasks require at least one evidence ref before they can be marked done.");
+    }
+    if (updatedTask.status === "blocked" && updatedTask.nextChecks.length === 0) {
+      throw new Error("Blocked research session tasks require at least one next check.");
     }
 
-    updatedTask = {
-      ...task,
-      status: input.status ?? task.status,
-      evidenceRefs: mergeEvidenceRefs(task.evidenceRefs, evidenceRefs),
-      nextChecks: mergeStrings(task.nextChecks, nextChecks)
+    const updated: ResearchSession = {
+      ...session,
+      updatedAt,
+      evidenceRefs: mergeEvidenceRefs(session.evidenceRefs, evidenceRefs),
+      tasks
     };
-    return updatedTask;
+    const sessionWithMarkdown: ResearchSession = {
+      ...updated,
+      markdown: renderResearchSessionMarkdown(updated)
+    };
+    const markdownPath = path.replace(/\.json$/u, ".md");
+
+    await writeJsonFileAtomic(path, sessionWithMarkdown);
+    await writeFileAtomic(markdownPath, sessionWithMarkdown.markdown, "utf8");
+    await refreshWorkspaceCatalogArtifact({
+      rootPath: status.root,
+      path: relative(status.root, path),
+      kind: "sessions",
+      now: sessionWithMarkdown.updatedAt,
+      staleReason: "research session task updated"
+    });
+
+    return {
+      session: sessionWithMarkdown,
+      task: updatedTask,
+      jsonPath: path,
+      markdownPath,
+      markdown: sessionWithMarkdown.markdown
+    };
   });
-
-  if (!updatedTask) {
-    throw new Error(`Research session task not found: ${taskRef}`);
-  }
-  if (updatedTask.status === "done" && updatedTask.evidenceRefs.length === 0) {
-    throw new Error("Research session tasks require at least one evidence ref before they can be marked done.");
-  }
-  if (updatedTask.status === "blocked" && updatedTask.nextChecks.length === 0) {
-    throw new Error("Blocked research session tasks require at least one next check.");
-  }
-
-  const updated: ResearchSession = {
-    ...session,
-    updatedAt,
-    evidenceRefs: mergeEvidenceRefs(session.evidenceRefs, evidenceRefs),
-    tasks
-  };
-  const sessionWithMarkdown: ResearchSession = {
-    ...updated,
-    markdown: renderResearchSessionMarkdown(updated)
-  };
-  const markdownPath = path.replace(/\.json$/u, ".md");
-
-  await writeFile(path, `${JSON.stringify(sessionWithMarkdown, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, sessionWithMarkdown.markdown, "utf8");
-  await refreshWorkspaceCatalogArtifact({
-    rootPath: status.root,
-    path: relative(status.root, path),
-    kind: "sessions",
-    now: sessionWithMarkdown.updatedAt,
-    staleReason: "research session task updated"
-  });
-
-  return {
-    session: sessionWithMarkdown,
-    task: updatedTask,
-    jsonPath: path,
-    markdownPath,
-    markdown: sessionWithMarkdown.markdown
-  };
 }
 
 export async function listResearchSessions(rootPath: string): Promise<ResearchSession[]> {
@@ -535,8 +540,8 @@ async function writeSessionFiles(
   const jsonPath = join(sessionsDir, `${baseName}.json`);
   const markdownPath = join(sessionsDir, `${baseName}.md`);
 
-  await writeFile(jsonPath, `${JSON.stringify(session, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, session.markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, session);
+  await writeFileAtomic(markdownPath, session.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: root,
     path: relative(root, jsonPath),

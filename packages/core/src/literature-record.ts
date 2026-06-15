@@ -1,5 +1,6 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
@@ -202,8 +203,8 @@ export async function writeLiteratureRecord(input: CreateLiteratureRecordInput):
   const jsonPath = join(literatureDir, `${baseName}.json`);
   const markdownPath = join(literatureDir, `${baseName}.md`);
   const markdown = renderLiteratureRecordMarkdown(record);
-  await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, record);
+  await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),

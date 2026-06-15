@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseExpression, expressionVariables, type Expr } from "./expression.js";
+import { writeFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import {
   writeSmtCheckRecord,
@@ -124,7 +125,7 @@ export async function writeSmtProblemSource(
   await mkdir(sourcesDir, { recursive: true });
   const date = (input.now ?? new Date()).toISOString().slice(0, 10);
   const sourcePath = join(sourcesDir, `${date}-${problem.problemId}.smt2`);
-  await writeFile(sourcePath, problem.sourceText, "utf8");
+  await writeFileAtomic(sourcePath, problem.sourceText, "utf8");
 
   return {
     problem,

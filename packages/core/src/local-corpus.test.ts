@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -92,6 +92,27 @@ describe("local corpus", () => {
     expect(search.hits).toHaveLength(1);
     expect(search.hits[0]?.text).toContain("topology");
     expect(search.hits[0]?.text).not.toContain("algebra");
+  });
+
+  it("serializes concurrent ingests so one agent does not erase another agent's document", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    await writeFile(join(root, "alpha.md"), "# Alpha\n\nAlpha algebra source.", "utf8");
+    await writeFile(join(root, "beta.md"), "# Beta\n\nBeta topology source.", "utf8");
+
+    await Promise.all([
+      ingestLocalCorpus({ rootPath: root, paths: ["alpha.md"], now: "2026-06-14T01:00:00.000Z" }),
+      ingestLocalCorpus({ rootPath: root, paths: ["beta.md"], now: "2026-06-14T01:00:01.000Z" })
+    ]);
+    const rawIndex = JSON.parse(
+      await readFile(join(root, LOCAL_WORKSPACE_DIR, "indexes", LOCAL_CORPUS_INDEX), "utf8")
+    ) as { documents: Array<{ path: string }> };
+    const alpha = await searchLocalCorpus({ rootPath: root, query: "alpha algebra", limit: 5 });
+    const beta = await searchLocalCorpus({ rootPath: root, query: "beta topology", limit: 5 });
+
+    expect(rawIndex.documents.map((document) => document.path).sort()).toEqual(["alpha.md", "beta.md"]);
+    expect(alpha.hits[0]?.path).toBe("alpha.md");
+    expect(beta.hits[0]?.path).toBe("beta.md");
   });
 
   it("rejects corpus paths outside the workspace root", async () => {

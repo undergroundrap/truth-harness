@@ -6,9 +6,10 @@ import {
   scrypt,
   type ScryptOptions
 } from "node:crypto";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
+import { writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
@@ -188,7 +189,7 @@ export async function sealVaultFile(input: SealVaultFileInput): Promise<VaultSea
   const vaultDir = resolve(status.root, manifest.directories.vault);
   await mkdir(vaultDir, { recursive: true });
   const path = join(vaultDir, `${entry.createdAt.slice(0, 10)}-${entry.vaultId}.json`);
-  await writeFile(path, `${JSON.stringify(entry, null, 2)}\n`, "utf8");
+  await writeJsonFileAtomic(path, entry);
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, path),

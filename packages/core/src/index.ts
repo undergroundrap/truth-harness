@@ -295,6 +295,8 @@ export {
 } from "./local-workspace.js";
 export { replayReceipt } from "./replay.js";
 export { stableHash } from "./stable-hash.js";
+export { withWorkspaceLock, writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+export type { WorkspaceLockOptions } from "./fs-util.js";
 export type { BaseDimension, DimensionCheckResult, DimensionVector } from "./dimension.js";
 export type {
   ArithmeticTeachingAudience,

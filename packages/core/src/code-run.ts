@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { arch, platform } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { getCodeRunSandboxStatus, sandboxMeasurementForStatus, type CodeRunSandboxMeasurement } from "./sandbox.js";
 import { stableHash } from "./stable-hash.js";
@@ -325,8 +326,8 @@ export async function writeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRunW
   const markdownPath = join(runsDir, `${baseName}.md`);
   const markdown = renderCodeRunMarkdown(record);
 
-  await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, record);
+  await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),

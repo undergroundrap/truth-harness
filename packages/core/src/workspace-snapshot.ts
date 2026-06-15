@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import { writeJsonFileAtomic } from "./fs-util.js";
 import {
   getLocalWorkspaceStatus,
   initLocalWorkspace,
@@ -147,7 +148,7 @@ export async function writeWorkspaceSnapshot(input: CreateWorkspaceSnapshotInput
   const snapshotsDir = resolve(status.root, status.manifest.directories.snapshots);
   await mkdir(snapshotsDir, { recursive: true });
   const path = join(snapshotsDir, `${snapshot.createdAt.slice(0, 10)}-${snapshot.snapshotId}.json`);
-  await writeFile(path, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+  await writeJsonFileAtomic(path, snapshot);
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, path),

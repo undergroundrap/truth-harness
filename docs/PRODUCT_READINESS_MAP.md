@@ -27,7 +27,7 @@ The product should stay private-prototype until the readiness gates below move f
 | Web UI | Yellow/red | The workbench shell exists and is improving. It is not yet polished enough to be the product's first impression. |
 | Visuals | Yellow/red | Number line, maps, lineage, and visual tabs exist. Needs interaction polish, layout QA, editability, and large-canvas testing. |
 | Teaching/reporting | Yellow | Teaching packets and HTML reports exist. Needs professor/student workflow testing. |
-| Storage scale | Yellow/red | Local workspace artifacts work, but large-workspace indexing, locking, atomicity, and performance need stress tests. |
+| Storage scale | Yellow | Local workspace artifacts work; catalog indexing, same-directory atomic writes, and locks for session/corpus read-modify-write paths are in place. Large-workspace performance and longer multi-agent stress tests still need proof. |
 | Formal proof | Yellow/red | Lean proof-check records exist when Lean is installed. Docker does not yet ship a pinned Lean/Mathlib project. |
 | Sage/Wolfram-like breadth | Red | Sage is only a capability/status direction today, not a constrained trust-minting adapter. |
 | Biology/medicine/patents | Red | Evidence organization patterns exist. No automated medical, patent, or discovery claims should be made. |
@@ -83,7 +83,7 @@ Do not publicly launch or record the main hype demo until these are true:
 - Measure list/search/review latency for CLI and web API.
 - Validate the workspace and record wall-clock time.
 - Simulate duplicate ids, missing refs, stale routes, superseded claims, and forged trust labels.
-- Confirm writes are atomic enough for agent loops or document the current limitation.
+- Confirm atomic writes and read-modify-write locks under concurrent agent loops, including interrupted-run recovery.
 
 First harness: `truth-harness workspace stress <path> --receipts 100 --claims 50 --routes 20 --fail-on-validation` now generates a synthetic linked workspace with the real writer APIs, then records validation, review, graph, missing-ref, and timing summaries. Use throwaway paths until the UI and storage scale work are ready.
 

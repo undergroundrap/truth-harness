@@ -1,6 +1,7 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
@@ -209,8 +210,8 @@ export async function writeVisualArtifact(input: CreateVisualArtifactInput): Pro
   const baseName = `${visual.createdAt.slice(0, 10)}-${visual.visualId}`;
   const jsonPath = join(visualsDir, `${baseName}.json`);
   const markdownPath = join(visualsDir, `${baseName}.md`);
-  await writeFile(jsonPath, `${JSON.stringify(visual, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, visual.markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, visual);
+  await writeFileAtomic(markdownPath, visual.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),

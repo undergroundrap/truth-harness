@@ -1,5 +1,6 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
@@ -182,8 +183,8 @@ export async function writeModelContext(input: CreateModelContextInput): Promise
   const baseName = `${packet.createdAt.slice(0, 10)}-${packet.packetId}`;
   const jsonPath = join(contextsDir, `${baseName}.json`);
   const markdownPath = join(contextsDir, `${baseName}.md`);
-  await writeFile(jsonPath, `${JSON.stringify(packet, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, packet.markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, packet);
+  await writeFileAtomic(markdownPath, packet.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),

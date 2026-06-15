@@ -1,5 +1,6 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, Receipt, TrustLabel } from "./types.js";
@@ -320,8 +321,8 @@ export async function writeBenchmarkRunRecord(input: CreateBenchmarkRunRecordInp
   const jsonPath = join(benchmarksDir, `${baseName}.json`);
   const markdownPath = join(benchmarksDir, `${baseName}.md`);
   const markdown = renderBenchmarkRunMarkdown(record);
-  await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, record);
+  await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),
@@ -414,8 +415,8 @@ export async function writeBenchmarkComparisonRecord(
   const jsonPath = join(benchmarksDir, `${baseName}.json`);
   const markdownPath = join(benchmarksDir, `${baseName}.md`);
   const markdown = renderBenchmarkComparisonMarkdown(record);
-  await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, record);
+  await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),

@@ -1,6 +1,7 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { createEvidenceAudit, type EvidenceAudit, type EvidenceAuditClaimType } from "./evidence-audit.js";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import type { InventionEvidenceRef } from "./invention-log.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
@@ -244,8 +245,8 @@ export async function writeValidationPlan(input: CreateValidationPlanInput): Pro
   const baseName = `${plan.createdAt.slice(0, 10)}-${plan.planId}`;
   const jsonPath = join(validationDir, `${baseName}.json`);
   const markdownPath = join(validationDir, `${baseName}.md`);
-  await writeFile(jsonPath, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, plan.markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, plan);
+  await writeFileAtomic(markdownPath, plan.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),

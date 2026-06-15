@@ -1,5 +1,6 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
+import { writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
@@ -174,7 +175,7 @@ export async function createExperimentLogEntry(input: CreateExperimentLogInput):
   const experimentsDir = resolve(status.root, manifest.directories.experiments);
   await mkdir(experimentsDir, { recursive: true });
   const path = join(experimentsDir, `${entry.createdAt.slice(0, 10)}-${entry.experimentId}.json`);
-  await writeFile(path, `${JSON.stringify(entry, null, 2)}\n`, "utf8");
+  await writeJsonFileAtomic(path, entry);
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, path),

@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
+import { writeFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { listInventionLogEntries, type InventionEvidenceRef, type InventionLogEntry } from "./invention-log.js";
 import { parseReceiptJson, ReceiptValidationError } from "./receipt-validation.js";
@@ -88,7 +89,7 @@ export async function writeDiscoveryPackage(input: DiscoveryPackageInput): Promi
     findingsDir,
     `${discoveryPackage.createdAt.slice(0, 10)}-${discoveryPackage.entry.entryId}-discovery-package.md`
   );
-  await writeFile(path, discoveryPackage.markdown, "utf8");
+  await writeFileAtomic(path, discoveryPackage.markdown, "utf8");
 
   return {
     package: discoveryPackage,

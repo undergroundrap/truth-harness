@@ -1,5 +1,6 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
@@ -208,8 +209,8 @@ export async function writeExpertReview(input: CreateExpertReviewInput): Promise
   const jsonPath = join(reviewsDir, `${baseName}.json`);
   const markdownPath = join(reviewsDir, `${baseName}.md`);
 
-  await writeFile(jsonPath, `${JSON.stringify(review, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, review.markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, review);
+  await writeFileAtomic(markdownPath, review.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),

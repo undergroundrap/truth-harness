@@ -1,7 +1,8 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { createClaimLedgerGraph, listClaimRecords, writeClaimLedgerRecord } from "./claim-ledger.js";
+import { writeJsonFileAtomic } from "./fs-util.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { createReceipt } from "./receipt.js";
 import { stableHash } from "./stable-hash.js";
@@ -124,7 +125,7 @@ export async function runWorkspaceStress(input: WorkspaceStressInput): Promise<W
     const receipt = createReceipt(stressReceiptProblem(index));
     const fileName = `${createdAt.slice(0, 10)}-${stressId}-receipt-${String(index + 1).padStart(5, "0")}-${receipt.runId}.json`;
     const jsonPath = join(receiptsDir, fileName);
-    await writeFile(jsonPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+    await writeJsonFileAtomic(jsonPath, receipt);
     receiptRefs.push(toPortablePath(relative(workspace.root, jsonPath)));
   }
   const writeReceiptsMs = elapsedMs(writeReceiptsStart);

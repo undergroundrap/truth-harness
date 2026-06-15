@@ -1,7 +1,8 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
-import { stableHash } from "./stable-hash.js";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
+import { writeJsonFileAtomic } from "./fs-util.js";
+import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 
 export const LOCAL_WORKSPACE_DIR = ".truth-harness";
@@ -317,7 +318,7 @@ async function repairManifestIfNeeded(
 }
 
 async function writeManifest(path: string, manifest: LocalWorkspaceManifest): Promise<void> {
-  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await writeJsonFileAtomic(path, manifest);
 }
 
 function normalizeWorkspaceManifest(manifest: LocalWorkspaceManifest): LocalWorkspaceManifestReadResult {

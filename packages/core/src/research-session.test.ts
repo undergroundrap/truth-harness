@@ -204,6 +204,40 @@ describe("research sessions", () => {
     expect(checkpoint.markdown).toContain("workspace-review");
     expect(validation.passed).toBe(true);
   });
+
+  it("serializes concurrent checkpoints so parallel agents do not lose session history", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    const write = await writeResearchSession({
+      rootPath: root,
+      objective: "Coordinate two local agents updating the same research session.",
+      domains: ["math"],
+      now: "2026-06-14T00:10:00.000Z"
+    });
+
+    await Promise.all([
+      addResearchSessionCheckpoint({
+        rootPath: root,
+        sessionRef: write.session.sessionId,
+        summary: "Agent A attached the algebra branch.",
+        now: "2026-06-14T00:20:00.000Z"
+      }),
+      addResearchSessionCheckpoint({
+        rootPath: root,
+        sessionRef: write.session.sessionId,
+        summary: "Agent B attached the proof branch.",
+        now: "2026-06-14T00:21:00.000Z"
+      })
+    ]);
+    const shown = await readResearchSession(root, write.session.sessionId);
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(shown.checkpoints.map((checkpoint) => checkpoint.summary).sort()).toEqual([
+      "Agent A attached the algebra branch.",
+      "Agent B attached the proof branch."
+    ]);
+    expect(validation.passed).toBe(true);
+  });
 });
 
 async function tempRoot(): Promise<string> {

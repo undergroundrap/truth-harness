@@ -1,7 +1,8 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
-import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { listClaimRecords, type ClaimLedgerRecord } from "./claim-ledger.js";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import {
   listVerifierRoutes,
   readVerifierRoute,
@@ -207,8 +208,8 @@ export async function writeWorkspaceReview(input: CreateWorkspaceReviewInput): P
   const baseName = `${review.createdAt.slice(0, 10)}-${review.reviewId}-workspace-review`;
   const jsonPath = join(findingsDir, `${baseName}.json`);
   const markdownPath = join(findingsDir, `${baseName}.md`);
-  await writeFile(jsonPath, `${JSON.stringify(review, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, review.markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, review);
+  await writeFileAtomic(markdownPath, review.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),

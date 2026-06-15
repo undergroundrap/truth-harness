@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import {
   expectArray,
@@ -14,6 +14,7 @@ import {
 } from "./artifact-record-validation.js";
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { createReceipt, type CreateReceiptOptions } from "./receipt.js";
@@ -320,8 +321,8 @@ export async function writeVerifierRoute(input: WriteVerifierRouteInput): Promis
   const markdownPath = join(routesDir, `${baseName}.md`);
   const markdown = renderVerifierRouteMarkdown(route);
 
-  await writeFile(jsonPath, `${JSON.stringify(route, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, route);
+  await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),
@@ -423,8 +424,8 @@ export async function satisfyVerifierRouteObligation(
   };
   const markdown = renderVerifierRouteMarkdown(updatedRoute);
 
-  await writeFile(jsonPath, `${JSON.stringify(updatedRoute, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, updatedRoute);
+  await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),

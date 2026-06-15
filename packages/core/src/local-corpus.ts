@@ -1,5 +1,6 @@
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
+import { withWorkspaceLock, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, LOCAL_WORKSPACE_DIR, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
@@ -83,61 +84,63 @@ export async function ingestLocalCorpus(input: LocalCorpusIngestInput): Promise<
   const status = await requireLocalWorkspace(input.rootPath);
   const now = input.now ?? new Date().toISOString();
   const indexPath = localCorpusIndexPath(status);
-  const existing = await readLocalCorpusIndex(status, now);
-  const files = await resolveCorpusFiles(status.root, input.paths);
-  const ingestedDocuments: LocalCorpusDocument[] = [];
-  let documents = existing.documents;
-  let chunks = existing.chunks;
+  return withWorkspaceLock(status.root, "local-corpus-index", async () => {
+    const existing = await readLocalCorpusIndex(status, now);
+    const files = await resolveCorpusFiles(status.root, input.paths);
+    const ingestedDocuments: LocalCorpusDocument[] = [];
+    let documents = existing.documents;
+    let chunks = existing.chunks;
 
-  for (const file of files) {
-    const relativePath = toPortablePath(relative(status.root, file));
-    const content = await readFile(file, "utf8");
-    const documentId = `doc_${stableHash({ path: relativePath }).slice(0, 16)}`;
-    const contentHash = stableHash(content);
-    const chunkTexts = chunkContent(content, input.maxChunkChars ?? 1400);
-    const documentChunks = chunkTexts.map((text, ordinal) => {
-      const chunkId = `chunk_${stableHash({ documentId, ordinal, text }).slice(0, 16)}`;
-      return {
-        chunkId,
+    for (const file of files) {
+      const relativePath = toPortablePath(relative(status.root, file));
+      const content = await readFile(file, "utf8");
+      const documentId = `doc_${stableHash({ path: relativePath }).slice(0, 16)}`;
+      const contentHash = stableHash(content);
+      const chunkTexts = chunkContent(content, input.maxChunkChars ?? 1400);
+      const documentChunks = chunkTexts.map((text, ordinal) => {
+        const chunkId = `chunk_${stableHash({ documentId, ordinal, text }).slice(0, 16)}`;
+        return {
+          chunkId,
+          documentId,
+          ordinal,
+          text,
+          tokenCounts: countTokens(text)
+        };
+      });
+      const document: LocalCorpusDocument = {
         documentId,
-        ordinal,
-        text,
-        tokenCounts: countTokens(text)
+        path: relativePath,
+        title: titleFromContent(content, file),
+        mimeType: mimeTypeFor(file),
+        contentHash,
+        ingestedAt: now,
+        chunkIds: documentChunks.map((chunk) => chunk.chunkId)
       };
-    });
-    const document: LocalCorpusDocument = {
-      documentId,
-      path: relativePath,
-      title: titleFromContent(content, file),
-      mimeType: mimeTypeFor(file),
-      contentHash,
-      ingestedAt: now,
-      chunkIds: documentChunks.map((chunk) => chunk.chunkId)
+
+      documents = documents.filter((candidate) => candidate.documentId !== documentId);
+      chunks = chunks.filter((candidate) => candidate.documentId !== documentId);
+      documents.push(document);
+      chunks.push(...documentChunks);
+      ingestedDocuments.push(document);
+    }
+
+    const nextIndex: LocalCorpusIndex = {
+      ...existing,
+      updatedAt: now,
+      documents: documents.sort((left, right) => left.path.localeCompare(right.path)),
+      chunks: chunks.sort((left, right) => left.documentId.localeCompare(right.documentId) || left.ordinal - right.ordinal)
     };
 
-    documents = documents.filter((candidate) => candidate.documentId !== documentId);
-    chunks = chunks.filter((candidate) => candidate.documentId !== documentId);
-    documents.push(document);
-    chunks.push(...documentChunks);
-    ingestedDocuments.push(document);
-  }
+    await mkdir(resolve(status.root, status.manifest.directories.indexes), { recursive: true });
+    await writeJsonFileAtomic(indexPath, nextIndex);
 
-  const nextIndex: LocalCorpusIndex = {
-    ...existing,
-    updatedAt: now,
-    documents: documents.sort((left, right) => left.path.localeCompare(right.path)),
-    chunks: chunks.sort((left, right) => left.documentId.localeCompare(right.documentId) || left.ordinal - right.ordinal)
-  };
-
-  await mkdir(resolve(status.root, status.manifest.directories.indexes), { recursive: true });
-  await writeFile(indexPath, `${JSON.stringify(nextIndex, null, 2)}\n`, "utf8");
-
-  return {
-    indexPath,
-    ingestedDocuments,
-    totalDocuments: nextIndex.documents.length,
-    totalChunks: nextIndex.chunks.length
-  };
+    return {
+      indexPath,
+      ingestedDocuments,
+      totalDocuments: nextIndex.documents.length,
+      totalChunks: nextIndex.chunks.length
+    };
+  });
 }
 
 export async function searchLocalCorpus(input: LocalCorpusSearchInput): Promise<LocalCorpusSearchResult> {

@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import {
   expectBoolean,
@@ -15,6 +15,7 @@ import {
   formatValidationError,
   parseJsonObject
 } from "./artifact-record-validation.js";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import type { TrustLabel } from "./types.js";
 import { writeVisualArtifact, type VisualArtifactWriteResult } from "./visual-artifact.js";
@@ -386,8 +387,8 @@ export async function writeLeanProofCheckRecord(input: WriteLeanProofCheckInput)
   const markdownPath = join(proofsDir, `${baseName}.md`);
   const markdown = renderLeanProofCheckMarkdown(record);
 
-  await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, record);
+  await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),

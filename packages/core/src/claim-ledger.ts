@@ -1,7 +1,8 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { parseReceiptJson } from "./receipt-validation.js";
@@ -320,8 +321,8 @@ export async function writeClaimLedgerRecord(input: CreateClaimLedgerRecordInput
   const jsonPath = join(claimsDir, `${baseName}.json`);
   const markdownPath = join(claimsDir, `${baseName}.md`);
 
-  await writeFile(jsonPath, `${JSON.stringify(claim, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, claim.markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, claim);
+  await writeFileAtomic(markdownPath, claim.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),

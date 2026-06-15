@@ -1,7 +1,8 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import type { CodeRunRecord } from "./code-run.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import type { ExperimentLogEntry } from "./experiment-log.js";
 import type { ExpertReviewRecord } from "./expert-review.js";
 import type { ExternalDisclosureLogEntry } from "./disclosure-log.js";
@@ -154,7 +155,7 @@ export async function writeEvidenceAudit(input: CreateEvidenceAuditInput): Promi
   const auditsDir = resolve(status.root, status.manifest.directories.audits);
   await mkdir(auditsDir, { recursive: true });
   const path = join(auditsDir, `${audit.createdAt.slice(0, 10)}-${audit.auditId}.json`);
-  await writeFile(path, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
+  await writeJsonFileAtomic(path, audit);
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, path),
@@ -176,8 +177,8 @@ export async function writeEvidenceAuditReport(input: CreateEvidenceAuditInput):
   const markdownPath = join(auditsDir, `${baseName}.md`);
   const markdown = renderEvidenceAuditMarkdown(audit);
 
-  await writeFile(jsonPath, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, markdown, "utf8");
+  await writeJsonFileAtomic(jsonPath, audit);
+  await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
     path: relative(status.root, jsonPath),
