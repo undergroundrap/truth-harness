@@ -236,7 +236,14 @@ export {
 export { renderGraphvizVisualArtifact, renderPlotlyVisualArtifact } from "./visual-renderer.js";
 export { runWorkspaceStress } from "./workspace-stress.js";
 export { getEngineManifest } from "./engine-manifest.js";
-export { verifyEngineEvidence } from "./engine-verification.js";
+export {
+  createEngineVerificationRunRecord,
+  listEngineVerificationRuns,
+  parseEngineVerificationRunJson,
+  renderEngineVerificationRunMarkdown,
+  verifyEngineEvidence,
+  writeEngineVerificationRun
+} from "./engine-verification.js";
 export {
   createVerifierRoute,
   listVerifierRoutes,
@@ -642,8 +649,12 @@ export type {
   EngineVerificationEvidence,
   EngineVerificationInput,
   EngineVerificationReport,
+  EngineVerificationRunRecord,
+  EngineVerificationRunSummary,
+  EngineVerificationRunWriteResult,
   EngineVerificationRequirements,
-  EngineVerificationStatus
+  EngineVerificationStatus,
+  WriteEngineVerificationRunInput
 } from "./engine-verification.js";
 export type {
   CreateVerifierRouteOptions,

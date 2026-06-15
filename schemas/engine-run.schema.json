@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/engine-run.schema.json",
+  "title": "Truth Harness Engine Evidence Run",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "title",
+    "summary",
+    "createdAt",
+    "status",
+    "localOnly",
+    "networkAccess",
+    "replay",
+    "report",
+    "artifacts",
+    "tags",
+    "limitations",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.engine-run.v0"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^engine_run_[a-f0-9]{16}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": ["passed", "partial", "failed"]
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "replay": {
+      "type": "string",
+      "minLength": 1
+    },
+    "report": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "createdAt",
+        "localOnly",
+        "networkAccess",
+        "status",
+        "requiredPassed",
+        "requiredTotal",
+        "concretePassed",
+        "concreteTotal",
+        "evidenceMinted",
+        "cases",
+        "docker",
+        "trustBoundary",
+        "warnings"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "truth-harness.engine-verification.v0"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "localOnly": {
+          "const": true
+        },
+        "networkAccess": {
+          "const": "none"
+        },
+        "status": {
+          "enum": ["passed", "partial", "failed"]
+        },
+        "requiredPassed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requiredTotal": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "concretePassed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "concreteTotal": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidenceMinted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "capabilityId",
+              "displayName",
+              "lane",
+              "required",
+              "status",
+              "trust",
+              "evidenceMinted",
+              "summary",
+              "command",
+              "limitations",
+              "warnings"
+            ],
+            "properties": {
+              "id": {
+                "enum": [
+                  "maxima-symbolic-cross-check",
+                  "z3-smt-check",
+                  "lean-proof-fixture",
+                  "sage-status-only"
+                ]
+              },
+              "capabilityId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "displayName": {
+                "type": "string",
+                "minLength": 1
+              },
+              "lane": {
+                "type": "string",
+                "minLength": 1
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "status": {
+                "enum": ["passed", "failed", "missing", "not-implemented"]
+              },
+              "trust": {
+                "enum": [
+                  "proved",
+                  "exact-computed",
+                  "bounded-numeric",
+                  "dimension-checked",
+                  "smt-checked",
+                  "cross-checked",
+                  "source-cited",
+                  "refuted",
+                  "unverified",
+                  "provenance-only",
+                  "none"
+                ]
+              },
+              "evidenceMinted": {
+                "type": "boolean"
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1
+              },
+              "command": {
+                "type": "string",
+                "minLength": 1
+              },
+              "replay": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidence": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "limitations": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "docker": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "trustBoundary": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "object",
+      "required": ["json", "markdown"],
+      "properties": {
+        "json": {
+          "type": "string",
+          "minLength": 1
+        },
+        "markdown": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

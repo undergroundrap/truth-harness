@@ -294,6 +294,9 @@ const state = {
   routeHistoryLimit: LEDGER_PAGE_SIZE,
   replayLimit: REPLAY_PAGE_SIZE,
   safetyStatus: undefined,
+  engineRuns: [],
+  engineRunsError: undefined,
+  engineRunsSaving: false,
   workspaceReadiness: undefined,
   catalogStatus: undefined,
   catalogSearch: undefined,
@@ -1092,6 +1095,7 @@ addActivity("system", "Local API ready", "UI will submit prompts only to local r
 render();
 void refreshWorkspaceEvents({ announce: false });
 void refreshSafetyStatus();
+void refreshEngineRuns({ announce: false });
 void refreshWorkspaceReadiness();
 void refreshWorkspaceMaintenance({ announce: false });
 void refreshCatalogStatus();
@@ -7954,6 +7958,81 @@ async function refreshSafetyStatus() {
   }
 }
 
+async function refreshEngineRuns({ announce = true } = {}) {
+  try {
+    const response = await fetch("/api/engine-runs", {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local engine evidence runs API failed.");
+    state.engineRuns = Array.isArray(payload.runs) ? payload.runs : [];
+    state.engineRunsError = undefined;
+    renderEngineEvidenceGate(state.safetyStatus);
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded engine evidence runs",
+        `${state.engineRuns.length} saved local engine evidence run${state.engineRuns.length === 1 ? "" : "s"} available.`,
+        state.engineRuns.length > 0 ? "passed" : "waiting"
+      );
+    }
+  } catch (error) {
+    state.engineRuns = [];
+    state.engineRunsError = error instanceof Error ? error.message : "Unknown engine evidence run failure.";
+    renderEngineEvidenceGate(state.safetyStatus);
+    if (announce) {
+      addActivity("local-api", "Engine evidence runs unavailable", state.engineRunsError, "waiting");
+    }
+  }
+}
+
+async function saveEngineEvidenceRun(button) {
+  if (state.engineRunsSaving) {
+    return;
+  }
+
+  state.engineRunsSaving = true;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Saving";
+  }
+
+  try {
+    const response = await fetch("/api/engine-runs", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ timeoutMs: 1500 })
+    });
+    const payload = await readLocalApiJson(response, "Local engine evidence run write failed.");
+    state.engineRuns = Array.isArray(payload.runs) ? payload.runs : [];
+    if (payload.run?.report) {
+      state.safetyStatus = {
+        ...(state.safetyStatus ?? {}),
+        engineVerification: payload.run.report
+      };
+    }
+    state.engineRunsError = undefined;
+    addActivity(
+      "local-api",
+      "Saved engine evidence run",
+      payload.activity?.[0]?.detail ?? `${payload.run?.runId ?? "engine run"} saved under .truth-harness/engine-runs.`,
+      payload.run?.status === "passed" ? "passed" : "waiting",
+      payload.run?.createdAt
+    );
+  } catch (error) {
+    state.engineRunsError = error instanceof Error ? error.message : "Unknown engine evidence run write failure.";
+    addActivity("local-api", "Engine evidence save failed", state.engineRunsError, "refuted");
+  } finally {
+    state.engineRunsSaving = false;
+    renderEngineEvidenceGate(state.safetyStatus);
+  }
+}
+
 async function refreshWorkspaceReadiness({ announce = true } = {}) {
   if (!workspaceReadinessPill) {
     return;
@@ -8851,6 +8930,8 @@ function renderEngineEvidenceGate(payload = state.safetyStatus) {
   const leanCommand = report.docker?.leanCommand ?? "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean";
   const statusClass = report.status === "passed" ? "exact" : report.status === "partial" ? "checked" : "waiting";
   const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+  const savedRun = latestEngineRun();
+  const savedRunCount = Array.isArray(state.engineRuns) ? state.engineRuns.length : 0;
 
   engineEvidenceGate.innerHTML = `<div class="panel-heading compact-heading">
     <div>
@@ -8880,6 +8961,16 @@ function renderEngineEvidenceGate(payload = state.safetyStatus) {
     <code>${escapeHtml(command)}</code>
     <button class="text-button compact-button copy-engine-evidence-command" data-testid="copy-engine-evidence-command" data-command="${escapeHtml(command)}" type="button">Copy smoke</button>
     <button class="text-button compact-button copy-engine-evidence-command" data-command="${escapeHtml(leanCommand)}" type="button">Copy Lean</button>
+    <button class="text-button compact-button save-engine-evidence-run" data-testid="save-engine-evidence-run" type="button" ${state.engineRunsSaving ? "disabled" : ""}>${state.engineRunsSaving ? "Saving" : "Save run"}</button>
+  </div>
+  <div class="engine-evidence-saved-run ${savedRun ? "" : "empty"}">
+    <div>
+      <span class="mini-label">Saved evidence runs</span>
+      <strong>${escapeHtml(savedRun ? `${savedRunCount} saved` : "none saved")}</strong>
+      <small>${escapeHtml(savedRun ? `${savedRun.status} / ${savedRun.path}` : "Save the current engine gate to .truth-harness/engine-runs.")}</small>
+      ${state.engineRunsError ? `<small class="warning-text">${escapeHtml(state.engineRunsError)}</small>` : ""}
+    </div>
+    ${savedRun ? `<code>${escapeHtml(savedRun.runId)}</code>` : `<code>truth-harness engines verify --write</code>`}
   </div>
   <div class="engine-evidence-case-grid">
     ${cases.length > 0 ? cases.map((entry) => engineEvidenceCaseHtml(entry)).join("") : `<article class="engine-evidence-case missing"><strong>No cases returned</strong><p>The local API could not load the engine evidence report.</p></article>`}
@@ -8900,6 +8991,17 @@ function renderEngineEvidenceGate(payload = state.safetyStatus) {
       });
     });
   });
+  engineEvidenceGate.querySelector(".save-engine-evidence-run")?.addEventListener("click", (event) => {
+    void saveEngineEvidenceRun(event.currentTarget);
+  });
+}
+
+function latestEngineRun() {
+  const runs = Array.isArray(state.engineRuns) ? state.engineRuns : [];
+  return runs
+    .filter((run) => run && typeof run.createdAt === "string")
+    .slice()
+    .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))[0];
 }
 
 function engineEvidenceCaseHtml(entry) {

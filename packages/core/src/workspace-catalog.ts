@@ -1217,6 +1217,7 @@ function artifactIdForRecord(kind: WorkspaceValidationArtifactKind, record: Reco
     cas: ["checkId"],
     proofs: ["checkId"],
     smt: ["checkId"],
+    "engine-runs": ["runId"],
     benchmarks: ["benchmarkRunId", "comparisonId"],
     disclosures: ["disclosureId"],
     simulations: ["simulationId"],

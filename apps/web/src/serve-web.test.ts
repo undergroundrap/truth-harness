@@ -61,6 +61,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("workspace-run-next-dry-run");
     expect(statusPayload.capabilities).toContain("workspace-maintenance");
     expect(statusPayload.capabilities).toContain("engine-evidence-verification");
+    expect(statusPayload.capabilities).toContain("engine-evidence-runs");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
       sameOriginWritesOnly: true,
@@ -102,6 +103,36 @@ describe("local web route ledger API", () => {
       }
     });
     expect(Array.isArray(statusPayload.engineVerification.cases)).toBe(true);
+
+    const engineRunsBeforeResponse = await fetch(`${baseUrl}/api/engine-runs`);
+    expect(engineRunsBeforeResponse.status).toBe(200);
+    const engineRunsBeforePayload = await engineRunsBeforeResponse.json();
+    expectLocalApiSuccess(engineRunsBeforeResponse, engineRunsBeforePayload);
+    expect(engineRunsBeforePayload.runs).toEqual([]);
+
+    const engineRunWriteResponse = await fetch(`${baseUrl}/api/engine-runs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ timeoutMs: 50 })
+    });
+    expect(engineRunWriteResponse.status).toBe(200);
+    const engineRunWritePayload = await engineRunWriteResponse.json();
+    expectLocalApiSuccess(engineRunWriteResponse, engineRunWritePayload);
+    expect(engineRunWritePayload.run.schemaVersion).toBe("truth-harness.engine-run.v0");
+    expect(engineRunWritePayload.run.localOnly).toBe(true);
+    expect(engineRunWritePayload.run.networkAccess).toBe("none");
+    expect(engineRunWritePayload.run.report.schemaVersion).toBe("truth-harness.engine-verification.v0");
+    expect(engineRunWritePayload.paths.json).toContain(".truth-harness");
+    expect(existsSync(engineRunWritePayload.paths.json)).toBe(true);
+    expect(existsSync(engineRunWritePayload.paths.markdown)).toBe(true);
+    expect(engineRunWritePayload.runs).toContainEqual(
+      expect.objectContaining({
+        runId: engineRunWritePayload.run.runId,
+        status: engineRunWritePayload.run.status
+      })
+    );
 
     const receiptResponse = await fetch(`${baseUrl}/api/receipt`, {
       method: "POST",

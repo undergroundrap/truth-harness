@@ -4268,7 +4268,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 
 .engine-evidence-command-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 8px;
   align-items: center;
   min-width: 0;
@@ -4276,6 +4276,53 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 
 .engine-evidence-command-row code,
 .engine-evidence-case code {
+  display: block;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0b0b0b;
+  color: #e8dfce;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+  padding: 7px;
+  white-space: normal;
+}
+
+.engine-evidence-saved-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.42fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid rgba(125, 211, 168, 0.2);
+  border-radius: 8px;
+  background: rgba(13, 30, 22, 0.24);
+  padding: 9px 10px;
+}
+
+.engine-evidence-saved-run.empty {
+  border-color: var(--line-soft);
+  background: rgba(12, 12, 12, 0.55);
+}
+
+.engine-evidence-saved-run > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.engine-evidence-saved-run strong {
+  color: #f2eadc;
+  font-size: 13px;
+}
+
+.engine-evidence-saved-run small {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.engine-evidence-saved-run code {
   display: block;
   min-width: 0;
   border: 1px solid var(--line-soft);

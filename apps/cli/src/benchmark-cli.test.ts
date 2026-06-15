@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -357,6 +358,53 @@ describe("benchmark CLI", () => {
     );
     expect(json.trustBoundary.statusProbeIsNotEvidence).toBe(true);
     expect(json.trustBoundary.provedRequiresAcceptedProofCheckerRun).toBe(true);
+  });
+
+  it("writes and lists engine evidence runs from the CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    const write = await runCli([
+      "engines",
+      "verify",
+      "--workspace",
+      root,
+      "--write",
+      "--json",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command"
+    ]);
+    const writeJson = JSON.parse(write.stdout) as {
+      record: { schemaVersion: string; runId: string; localOnly: boolean; networkAccess: string; report: { cases: unknown[] } };
+      jsonPath: string;
+      markdownPath: string;
+    };
+
+    expect(write.exitCode).toBe(0);
+    expect(writeJson.record.schemaVersion).toBe("truth-harness.engine-run.v0");
+    expect(writeJson.record.localOnly).toBe(true);
+    expect(writeJson.record.networkAccess).toBe("none");
+    expect(writeJson.record.report.cases.length).toBeGreaterThan(0);
+    expect(writeJson.jsonPath).toContain(".truth-harness");
+    expect(existsSync(writeJson.jsonPath)).toBe(true);
+    expect(existsSync(writeJson.markdownPath)).toBe(true);
+
+    const list = JSON.parse((await runCli(["engines", "runs", root, "--json"])).stdout) as Array<{
+      runId: string;
+      status: string;
+      path: string;
+    }>;
+    expect(list).toContainEqual(
+      expect.objectContaining({
+        runId: writeJson.record.runId,
+        path: expect.stringContaining(".truth-harness/engine-runs/")
+      })
+    );
   });
 
   it("rebuilds and searches the workspace catalog from the CLI", async () => {

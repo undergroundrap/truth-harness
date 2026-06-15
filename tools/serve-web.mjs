@@ -205,6 +205,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "engine-manifest",
         "verification-readiness",
         "engine-evidence-verification",
+        "engine-evidence-runs",
         "workspace-review-queue",
         "workspace-run-next-dry-run",
         "docker-verifier-guidance",
@@ -213,6 +214,60 @@ async function handleApiRequest(request, response, requestUrl) {
         "workspace-maintenance"
       ]
     });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/engine-runs" && request.method === "GET") {
+    try {
+      const { listEngineVerificationRuns } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const runs = await listEngineVerificationRuns(projectRoot);
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-engine-runs-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        runs
+      });
+    } catch (error) {
+      writeApiError(response, 409, error instanceof Error ? error.message : "Engine evidence runs could not be listed.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/engine-runs" && request.method === "POST") {
+    try {
+      const input = await readJsonBody(request);
+      const { listEngineVerificationRuns, writeEngineVerificationRun } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const timeoutMs = boundedPositiveNumberOrUndefined(input?.timeoutMs, 10_000) ?? 1500;
+      const result = await writeEngineVerificationRun({
+        rootPath: projectRoot,
+        timeoutMs,
+        replayCommand: `truth-harness engines verify --write --timeout-ms ${timeoutMs}`
+      });
+      const runs = await listEngineVerificationRuns(projectRoot);
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-engine-run-write-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        run: result.record,
+        paths: {
+          json: result.jsonPath,
+          markdown: result.markdownPath
+        },
+        runs,
+        activity: [
+          {
+            actor: "local-api",
+            action: "saved-engine-evidence-run",
+            detail: `${result.record.runId} saved local engine evidence status with ${result.record.report.evidenceMinted} evidence records earned.`,
+            at: result.record.createdAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Engine evidence run could not be written.", request);
+    }
     return;
   }
 

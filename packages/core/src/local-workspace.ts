@@ -19,6 +19,7 @@ export type LocalWorkspaceDirectory =
   | "cas"
   | "proofs"
   | "smt"
+  | "engine-runs"
   | "benchmarks"
   | "disclosures"
   | "simulations"
@@ -64,6 +65,7 @@ const DEFAULT_WORKSPACE_DIRECTORIES: Record<LocalWorkspaceDirectory, string> = {
   cas: ".truth-harness/cas",
   proofs: ".truth-harness/proofs",
   smt: ".truth-harness/smt",
+  "engine-runs": ".truth-harness/engine-runs",
   benchmarks: ".truth-harness/benchmarks",
   disclosures: ".truth-harness/disclosures",
   simulations: ".truth-harness/simulations",

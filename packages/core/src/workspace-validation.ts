@@ -155,6 +155,13 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
     idKey: "checkId",
     required: true
   },
+  "engine-runs": {
+    kind: "engine-runs",
+    schemaVersion: "truth-harness.engine-run.v0",
+    schemaFile: "engine-run.schema.json",
+    idKey: "runId",
+    required: true
+  },
   benchmarks: {
     kind: "benchmarks",
     variants: [

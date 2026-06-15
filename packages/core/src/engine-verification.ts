@@ -1,15 +1,31 @@
-import { readFile } from "node:fs/promises";
-import { relative, resolve } from "node:path";
+import { mkdir, readdir, readFile } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
+import {
+  expectArray,
+  expectConst,
+  expectDateTime,
+  expectNonEmptyString,
+  expectOneOf,
+  expectPattern,
+  expectRecord,
+  expectStringArray,
+  formatValidationError,
+  parseJsonObject
+} from "./artifact-record-validation.js";
 import {
   checkSymbolicWithMaximaSync,
   getCasBackendStatus,
   type CasBackendCommandRunner,
   type SymbolicCasCheckResult
 } from "./cas-backend.js";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { checkLeanProofArtifact, type LeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
+import { stableHash } from "./stable-hash.js";
 import { checkSmtLibArtifact, type SmtBackendCommandRunner, type SmtCheckRecord } from "./smt-backend.js";
 import type { SymbolicPrompt } from "./sympy.js";
 import type { TrustLabel } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export type EngineVerificationCaseId =
   | "maxima-symbolic-cross-check"
@@ -108,6 +124,54 @@ export interface EngineVerificationReport {
   warnings: string[];
 }
 
+export interface EngineVerificationRunRecord {
+  schemaVersion: "truth-harness.engine-run.v0";
+  runId: string;
+  title: string;
+  summary: string;
+  createdAt: string;
+  status: EngineVerificationStatus;
+  localOnly: true;
+  networkAccess: "none";
+  replay: string;
+  report: EngineVerificationReport;
+  artifacts: {
+    json: string;
+    markdown: string;
+  };
+  tags: string[];
+  limitations: string[];
+  warnings: string[];
+}
+
+export interface EngineVerificationRunSummary {
+  runId: string;
+  title: string;
+  summary: string;
+  createdAt: string;
+  status: EngineVerificationStatus;
+  concretePassed: number;
+  concreteTotal: number;
+  requiredPassed: number;
+  requiredTotal: number;
+  evidenceMinted: number;
+  path: string;
+  tags: string[];
+  warnings: string[];
+}
+
+export interface WriteEngineVerificationRunInput extends EngineVerificationInput {
+  rootPath: string;
+  replayCommand?: string;
+}
+
+export interface EngineVerificationRunWriteResult {
+  record: EngineVerificationRunRecord;
+  jsonPath: string;
+  markdownPath: string;
+  markdown: string;
+}
+
 const DEFAULT_SYMBOLIC_PROMPT: SymbolicPrompt = {
   operation: "simplify",
   expression: "sin(x)^2 + cos(x)^2",
@@ -171,6 +235,238 @@ export async function verifyEngineEvidence(input: EngineVerificationInput = {}):
   };
 }
 
+export async function createEngineVerificationRunRecord(
+  input: EngineVerificationInput = {}
+): Promise<EngineVerificationRunRecord> {
+  const report = await verifyEngineEvidence(input);
+  const runId = `engine_run_${stableHash({
+    createdAt: report.createdAt,
+    status: report.status,
+    cases: report.cases.map((entry) => ({
+      id: entry.id,
+      status: entry.status,
+      trust: entry.trust,
+      evidenceMinted: entry.evidenceMinted,
+      backend: entry.evidence?.backendId,
+      backendVersion: entry.evidence?.backendVersion
+    }))
+  }).slice(0, 16)}`;
+  const summary = `Engine verification ${report.status}: ${report.concretePassed}/${report.concreteTotal} concrete gates, ${report.requiredPassed}/${report.requiredTotal} required gates, ${report.evidenceMinted} evidence records earned.`;
+
+  return {
+    schemaVersion: "truth-harness.engine-run.v0",
+    runId,
+    title: "Engine Evidence Verification Run",
+    summary,
+    createdAt: report.createdAt,
+    status: report.status,
+    localOnly: true,
+    networkAccess: "none",
+    replay: "truth-harness engines verify --write",
+    report,
+    artifacts: {
+      json: "",
+      markdown: ""
+    },
+    tags: engineRunTags(report),
+    limitations: [
+      "This record verifies local engine availability and concrete smoke evidence only.",
+      "A passing engine run does not prove future claims; each claim still needs its own replayable receipt or accepted checker artifact.",
+      "SageMath status probes remain provenance-only until constrained Sage check records exist."
+    ],
+    warnings: report.warnings
+  };
+}
+
+export async function writeEngineVerificationRun(
+  input: WriteEngineVerificationRunInput
+): Promise<EngineVerificationRunWriteResult> {
+  const status = await requireLocalWorkspace(input.rootPath);
+  const record = await createEngineVerificationRunRecord({
+    ...input,
+    rootPath: status.root
+  });
+  record.replay = input.replayCommand ?? record.replay;
+
+  const engineRunsDir = resolve(status.root, status.manifest.directories["engine-runs"]);
+  await mkdir(engineRunsDir, { recursive: true });
+  const baseName = `${record.createdAt.slice(0, 10)}-${record.runId}`;
+  const jsonPath = join(engineRunsDir, `${baseName}.json`);
+  const markdownPath = join(engineRunsDir, `${baseName}.md`);
+  record.artifacts = {
+    json: toPortablePath(relative(status.root, jsonPath)),
+    markdown: toPortablePath(relative(status.root, markdownPath))
+  };
+  const markdown = renderEngineVerificationRunMarkdown(record);
+
+  await writeJsonFileAtomic(jsonPath, record);
+  await writeFileAtomic(markdownPath, markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "engine-runs",
+    now: record.createdAt,
+    staleReason: "Engine evidence run written"
+  });
+
+  return {
+    record,
+    jsonPath,
+    markdownPath,
+    markdown
+  };
+}
+
+export async function listEngineVerificationRuns(rootPath: string): Promise<EngineVerificationRunSummary[]> {
+  const status = await requireLocalWorkspace(rootPath);
+  const engineRunsDir = resolve(status.root, status.manifest.directories["engine-runs"]);
+
+  let files: string[];
+  try {
+    files = await readdir(engineRunsDir);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+
+  const summaries = await Promise.all(
+    files
+      .filter((file) => file.endsWith(".json"))
+      .map(async (file) => {
+        const path = join(engineRunsDir, file);
+        return summarizeEngineVerificationRun(status.root, path, await readFile(path, "utf8"));
+      })
+  );
+
+  return summaries
+    .filter((summary): summary is EngineVerificationRunSummary => summary !== undefined)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export function parseEngineVerificationRunJson(
+  raw: string,
+  sourcePath = "engine verification run"
+): EngineVerificationRunRecord {
+  const parsed = parseJsonObject(raw, sourcePath, "engine verification run");
+  const issues: string[] = [];
+
+  expectConst(parsed, "schemaVersion", "truth-harness.engine-run.v0", "$.schemaVersion", issues);
+  expectPattern(parsed, "runId", /^engine_run_[a-f0-9]{16}$/u, "$.runId", issues);
+  expectNonEmptyString(parsed, "title", "$.title", issues);
+  expectNonEmptyString(parsed, "summary", "$.summary", issues);
+  expectDateTime(parsed, "createdAt", "$.createdAt", issues);
+  expectOneOf(parsed, "status", ["passed", "partial", "failed"], "$.status", issues);
+  expectConst(parsed, "localOnly", true, "$.localOnly", issues);
+  expectConst(parsed, "networkAccess", "none", "$.networkAccess", issues);
+  expectNonEmptyString(parsed, "replay", "$.replay", issues);
+  expectStringArray(parsed, "tags", "$.tags", issues);
+  expectStringArray(parsed, "limitations", "$.limitations", issues);
+  expectStringArray(parsed, "warnings", "$.warnings", issues);
+
+  const artifacts = expectRecord(parsed, "artifacts", "$.artifacts", issues);
+  if (artifacts) {
+    expectNonEmptyString(artifacts, "json", "$.artifacts.json", issues);
+    expectNonEmptyString(artifacts, "markdown", "$.artifacts.markdown", issues);
+  }
+
+  const report = expectRecord(parsed, "report", "$.report", issues);
+  if (report) {
+    expectConst(report, "schemaVersion", "truth-harness.engine-verification.v0", "$.report.schemaVersion", issues);
+    expectDateTime(report, "createdAt", "$.report.createdAt", issues);
+    expectConst(report, "localOnly", true, "$.report.localOnly", issues);
+    expectConst(report, "networkAccess", "none", "$.report.networkAccess", issues);
+    expectOneOf(report, "status", ["passed", "partial", "failed"], "$.report.status", issues);
+    expectArray(report, "cases", "$.report.cases", issues);
+  }
+
+  if (issues.length > 0) {
+    throw formatValidationError("engine verification run", sourcePath, issues);
+  }
+
+  return parsed as unknown as EngineVerificationRunRecord;
+}
+
+export function renderEngineVerificationRunMarkdown(record: EngineVerificationRunRecord): string {
+  const lines = [
+    `# ${record.title}`,
+    "",
+    `Run: \`${record.runId}\``,
+    `Status: \`${record.status}\``,
+    `Created: ${record.createdAt}`,
+    `Privacy: local-only (network: ${record.networkAccess})`,
+    "",
+    "## Summary",
+    "",
+    record.summary,
+    "",
+    "## Replay",
+    "",
+    `\`${record.replay}\``,
+    "",
+    "## Engine Gates",
+    ""
+  ];
+
+  for (const item of record.report.cases) {
+    lines.push(
+      `### ${item.displayName}`,
+      "",
+      `- Status: \`${item.status}\`${item.required ? " (required)" : ""}`,
+      `- Trust: \`${item.trust}\``,
+      `- Evidence minted: ${String(item.evidenceMinted)}`,
+      `- Command: \`${item.command}\``,
+      `- Summary: ${item.summary}`
+    );
+    if (item.replay) {
+      lines.push(`- Replay: \`${item.replay}\``);
+    }
+    if (item.evidence?.backendVersion) {
+      lines.push(`- Backend: ${item.evidence.backendId} (${item.evidence.backendVersion})`);
+    } else if (item.evidence?.backendId) {
+      lines.push(`- Backend: ${item.evidence.backendId}`);
+    }
+    if (item.limitations.length > 0) {
+      lines.push("- Limitations:");
+      for (const limitation of item.limitations) {
+        lines.push(`  - ${limitation}`);
+      }
+    }
+    if (item.warnings.length > 0) {
+      lines.push("- Warnings:");
+      for (const warning of item.warnings) {
+        lines.push(`  - ${warning}`);
+      }
+    }
+    lines.push("");
+  }
+
+  lines.push(
+    "## Trust Boundary",
+    "",
+    "- Engine readiness probes do not prove claims.",
+    "- Maxima, Z3, and Lean can only mint their scoped trust labels for concrete recorded checks.",
+    "- SageMath is intentionally status-only until constrained Sage check records exist.",
+    "- A future claim must attach its own receipt, proof, SMT, CAS, simulation, source, or review artifact.",
+    "",
+    "## Limitations",
+    ""
+  );
+  for (const limitation of record.limitations) {
+    lines.push(`- ${limitation}`);
+  }
+  if (record.warnings.length > 0) {
+    lines.push("", "## Warnings", "");
+    for (const warning of record.warnings) {
+      lines.push(`- ${warning}`);
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 function maximaCase(
   input: EngineVerificationInput,
   timeoutMs: number,
@@ -217,8 +513,21 @@ async function z3Case(
 ): Promise<EngineVerificationCase> {
   const sourcePath = input.smtSourcePath ?? DEFAULT_SMT_SOURCE;
   const resolvedPath = resolve(rootPath, sourcePath);
-  const sourceText = input.smtSourceText ?? await readFile(resolvedPath, "utf8");
   const sourceRef = toPortablePath(relative(rootPath, resolvedPath));
+  let sourceText: string;
+  try {
+    sourceText = input.smtSourceText ?? await readFile(resolvedPath, "utf8");
+  } catch (error) {
+    return sourceUnavailableCase({
+      id: "z3-smt-check",
+      capabilityId: "z3-smt-solver",
+      displayName: "Z3 SMT-LIB check",
+      sourceRef,
+      command: `truth-harness smt check ${sourceRef} --fail-on-unverified`,
+      required,
+      error
+    });
+  }
   const record = checkSmtLibArtifact({
     sourcePath: resolvedPath,
     sourceRef,
@@ -261,8 +570,21 @@ async function leanCase(
 ): Promise<EngineVerificationCase> {
   const sourcePath = input.leanSourcePath ?? DEFAULT_LEAN_SOURCE;
   const resolvedPath = resolve(rootPath, sourcePath);
-  const sourceText = input.leanSourceText ?? await readFile(resolvedPath, "utf8");
   const sourceRef = toPortablePath(relative(rootPath, resolvedPath));
+  let sourceText: string;
+  try {
+    sourceText = input.leanSourceText ?? await readFile(resolvedPath, "utf8");
+  } catch (error) {
+    return sourceUnavailableCase({
+      id: "lean-proof-fixture",
+      capabilityId: "lean-proof-checker",
+      displayName: "Lean proof fixture",
+      sourceRef,
+      command: `truth-harness proof check ${sourceRef} --fail-on-unproved`,
+      required,
+      error
+    });
+  }
   const record = checkLeanProofArtifact({
     sourcePath: resolvedPath,
     sourceRef,
@@ -349,6 +671,36 @@ function summarizeEvidence(
   };
 }
 
+function sourceUnavailableCase(input: {
+  id: Extract<EngineVerificationCaseId, "z3-smt-check" | "lean-proof-fixture">;
+  capabilityId: string;
+  displayName: string;
+  sourceRef: string;
+  command: string;
+  required: boolean;
+  error: unknown;
+}): EngineVerificationCase {
+  const message = input.error instanceof Error ? input.error.message : String(input.error);
+  return {
+    id: input.id,
+    capabilityId: input.capabilityId,
+    displayName: input.displayName,
+    lane: "math",
+    required: input.required,
+    status: "missing",
+    trust: "unverified",
+    evidenceMinted: false,
+    summary: `${input.displayName} source ${input.sourceRef} could not be read: ${message}`,
+    command: input.command,
+    replay: input.command,
+    limitations: [
+      "The verifier could not read the pinned source artifact, so no checker-backed evidence was minted.",
+      "Create or attach the source file, then rerun the engine evidence gate."
+    ],
+    warnings: [`Missing engine evidence source: ${input.sourceRef}.`]
+  };
+}
+
 function reportStatus(input: {
   requiredTotal: number;
   requiredPassed: number;
@@ -377,6 +729,61 @@ function reportWarnings(cases: EngineVerificationCase[]): string[] {
   }
 
   return warnings;
+}
+
+function engineRunTags(report: EngineVerificationReport): string[] {
+  const tags = new Set<string>(["engine-evidence", "verification", report.status]);
+  for (const item of report.cases) {
+    tags.add(item.capabilityId);
+    tags.add(item.status);
+    if (item.evidenceMinted) {
+      tags.add("evidence-minted");
+    }
+    if (item.required) {
+      tags.add("required-gate");
+    }
+  }
+  return [...tags].sort();
+}
+
+function summarizeEngineVerificationRun(
+  rootPath: string,
+  path: string,
+  raw: string
+): EngineVerificationRunSummary | undefined {
+  try {
+    const record = parseEngineVerificationRunJson(raw, path);
+    return {
+      runId: record.runId,
+      title: record.title,
+      summary: record.summary,
+      createdAt: record.createdAt,
+      status: record.status,
+      concretePassed: record.report.concretePassed,
+      concreteTotal: record.report.concreteTotal,
+      requiredPassed: record.report.requiredPassed,
+      requiredTotal: record.report.requiredTotal,
+      evidenceMinted: record.report.evidenceMinted,
+      path: toPortablePath(relative(rootPath, path)),
+      tags: record.tags,
+      warnings: record.warnings
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+async function requireLocalWorkspace(
+  rootPath: string
+): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
+  const status = await getLocalWorkspaceStatus(rootPath);
+  if (!status.exists || !status.manifest) {
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing engine evidence runs.");
+  }
+  if (status.missingDirectories.length > 0) {
+    throw new Error(`Truth Harness workspace is missing directories: ${status.missingDirectories.join(", ")}. Run \`truth-harness workspace repair\`.`);
+  }
+  return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
 }
 
 function quote(value: string): string {

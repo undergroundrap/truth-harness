@@ -69,6 +69,7 @@ import {
   listClaimCharts,
   listClaimRecords,
   listCodeRuns,
+  listEngineVerificationRuns,
   listEvidenceAudits,
   listExpertReviews,
   listExperimentLogEntries,
@@ -140,6 +141,7 @@ import {
   writeLeanProofCheckRecord,
   writeSmtCheckRecord,
   writeDiscoveryPackage,
+  writeEngineVerificationRun,
   writeLiteratureRecord,
   writeModelContext,
   writeNotebookRun,
@@ -176,6 +178,8 @@ import {
   type CodeRunSummary,
   type EngineManifest,
   type EngineVerificationReport,
+  type EngineVerificationRunSummary,
+  type EngineVerificationRunWriteResult,
   type CodeRunPolicyInput,
   type CodeRunWriteResult,
   type DiscoveryPackage,
@@ -3692,6 +3696,7 @@ engines
   .command("verify")
   .description("Run concrete local engine evidence checks without minting fake trust.")
   .option("--json", "Print the full engine verification JSON")
+  .option("--workspace <path>", "Local workspace root for source files and --write output", ".")
   .option("--timeout-ms <ms>", "Concrete check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
   .option("--sage-command <command>", "Override SageMath executable for the status-only probe")
@@ -3699,6 +3704,7 @@ engines
   .option("--z3-command <command>", "Override Z3 executable for the SMT check")
   .option("--smt-source <path>", "Workspace-local SMT-LIB source for the Z3 check", "docs/examples/constraints.smt2")
   .option("--lean-source <path>", "Workspace-local Lean source for the Lean fixture", "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean")
+  .option("--write", "Write the engine evidence run into .truth-harness/engine-runs")
   .option("--require-maxima", "Fail unless Maxima earns a concrete cross-checked result")
   .option("--require-z3", "Fail unless Z3 earns a concrete smt-checked result")
   .option("--require-lean", "Fail unless Lean accepts the pinned proof fixture")
@@ -3708,6 +3714,7 @@ engines
   .action(
     async (options: {
       json?: boolean;
+      workspace: string;
       timeoutMs: number;
       maximaCommand?: string;
       sageCommand?: string;
@@ -3715,6 +3722,7 @@ engines
       z3Command?: string;
       smtSource: string;
       leanSource: string;
+      write?: boolean;
       requireMaxima?: boolean;
       requireZ3?: boolean;
       requireLean?: boolean;
@@ -3722,8 +3730,30 @@ engines
       requireDockerCore?: boolean;
       requireAllConcrete?: boolean;
     }) => {
-      const report = await verifyEngineEvidence({
-        rootPath: ".",
+      const json = Boolean(options.json || engines.opts<{ json?: boolean }>().json);
+      const requirements = {
+        maxima: Boolean(options.requireMaxima || options.requireDockerCore || options.requireAllConcrete),
+        z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete),
+        lean: Boolean(options.requireLean || options.requireAllConcrete),
+        sage: Boolean(options.requireSage)
+      };
+      const replayCommand = engineVerificationReplayCommand(options);
+      const writeResult = options.write
+        ? await writeEngineVerificationRun({
+            rootPath: options.workspace,
+            timeoutMs: options.timeoutMs,
+            maximaCommand: options.maximaCommand,
+            sageCommand: options.sageCommand,
+            leanCommand: options.leanCommand,
+            z3Command: options.z3Command,
+            smtSourcePath: options.smtSource,
+            leanSourcePath: options.leanSource,
+            requirements,
+            replayCommand
+          })
+        : undefined;
+      const report = writeResult?.record.report ?? await verifyEngineEvidence({
+        rootPath: options.workspace,
         timeoutMs: options.timeoutMs,
         maximaCommand: options.maximaCommand,
         sageCommand: options.sageCommand,
@@ -3731,18 +3761,13 @@ engines
         z3Command: options.z3Command,
         smtSourcePath: options.smtSource,
         leanSourcePath: options.leanSource,
-        requirements: {
-          maxima: Boolean(options.requireMaxima || options.requireDockerCore || options.requireAllConcrete),
-          z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete),
-          lean: Boolean(options.requireLean || options.requireAllConcrete),
-          sage: Boolean(options.requireSage)
-        }
+        requirements
       });
 
-      if (options.json) {
-        printJson(report);
+      if (json) {
+        printJson(writeResult ?? report);
       } else {
-        printEngineVerificationReport(report);
+        printEngineVerificationReport(report, writeResult);
       }
 
       if (report.requiredTotal > 0 && report.requiredPassed !== report.requiredTotal) {
@@ -3750,6 +3775,21 @@ engines
       }
     }
   );
+
+engines
+  .command("runs")
+  .description("List saved engine evidence verification runs from the local workspace.")
+  .argument("[workspace]", "Local workspace root", ".")
+  .option("--json", "Print saved engine runs as JSON")
+  .action(async (workspace: string, options: { json?: boolean }) => {
+    const runs = await listEngineVerificationRuns(workspace);
+    const json = Boolean(options.json || engines.opts<{ json?: boolean }>().json);
+    if (json) {
+      printJson(runs);
+      return;
+    }
+    printEngineVerificationRuns(runs);
+  });
 
 program
   .command("demo")
@@ -4641,13 +4681,21 @@ function printEngineCapabilityGroup(
   }
 }
 
-function printEngineVerificationReport(report: EngineVerificationReport): void {
+function printEngineVerificationReport(
+  report: EngineVerificationReport,
+  writeResult?: EngineVerificationRunWriteResult
+): void {
   console.log("Truth Harness engine verification");
   console.log(`Status: ${report.status}`);
   console.log(`Concrete evidence gates: ${report.concretePassed}/${report.concreteTotal}`);
   console.log(`Required gates: ${report.requiredPassed}/${report.requiredTotal}`);
   console.log(`Evidence records earned in-memory: ${report.evidenceMinted}`);
   console.log(`Network: ${report.networkAccess}`);
+  if (writeResult) {
+    console.log(`Saved run: ${writeResult.record.runId}`);
+    console.log(`Workspace JSON: ${writeResult.jsonPath}`);
+    console.log(`Workspace Markdown: ${writeResult.markdownPath}`);
+  }
 
   console.log("");
   console.log("Engine gates:");
@@ -4685,6 +4733,96 @@ function printEngineVerificationReport(report: EngineVerificationReport): void {
       console.log(`  ${warning}`);
     }
   }
+}
+
+function printEngineVerificationRuns(runs: EngineVerificationRunSummary[]): void {
+  console.log("Truth Harness engine evidence runs");
+  if (runs.length === 0) {
+    console.log("No saved engine evidence runs found.");
+    console.log("Run `truth-harness engines verify --write` from an initialized workspace.");
+    return;
+  }
+
+  for (const run of runs) {
+    console.log("");
+    console.log(`${run.runId} (${run.status})`);
+    console.log(`  Created: ${run.createdAt}`);
+    console.log(`  Concrete gates: ${run.concretePassed}/${run.concreteTotal}; required: ${run.requiredPassed}/${run.requiredTotal}`);
+    console.log(`  Evidence minted: ${run.evidenceMinted}`);
+    console.log(`  Path: ${run.path}`);
+    console.log(`  ${run.summary}`);
+  }
+}
+
+function engineVerificationReplayCommand(options: {
+  workspace: string;
+  timeoutMs: number;
+  maximaCommand?: string;
+  sageCommand?: string;
+  leanCommand?: string;
+  z3Command?: string;
+  smtSource: string;
+  leanSource: string;
+  write?: boolean;
+  requireMaxima?: boolean;
+  requireZ3?: boolean;
+  requireLean?: boolean;
+  requireSage?: boolean;
+  requireDockerCore?: boolean;
+  requireAllConcrete?: boolean;
+}): string {
+  const args = ["truth-harness", "engines", "verify"];
+  if (options.write) {
+    args.push("--write");
+  }
+  if (options.workspace !== ".") {
+    args.push("--workspace", options.workspace);
+  }
+  args.push("--timeout-ms", String(options.timeoutMs));
+  if (options.maximaCommand) {
+    args.push("--maxima-command", options.maximaCommand);
+  }
+  if (options.sageCommand) {
+    args.push("--sage-command", options.sageCommand);
+  }
+  if (options.leanCommand) {
+    args.push("--lean-command", options.leanCommand);
+  }
+  if (options.z3Command) {
+    args.push("--z3-command", options.z3Command);
+  }
+  if (options.smtSource !== "docs/examples/constraints.smt2") {
+    args.push("--smt-source", options.smtSource);
+  }
+  if (options.leanSource !== "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean") {
+    args.push("--lean-source", options.leanSource);
+  }
+  if (options.requireMaxima) {
+    args.push("--require-maxima");
+  }
+  if (options.requireZ3) {
+    args.push("--require-z3");
+  }
+  if (options.requireLean) {
+    args.push("--require-lean");
+  }
+  if (options.requireSage) {
+    args.push("--require-sage");
+  }
+  if (options.requireDockerCore) {
+    args.push("--require-docker-core");
+  }
+  if (options.requireAllConcrete) {
+    args.push("--require-all-concrete");
+  }
+  return args.map(shellQuote).join(" ");
+}
+
+function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_./:=@-]+$/u.test(value)) {
+    return value;
+  }
+  return JSON.stringify(value);
 }
 
 function printCasBackendStatus(status: CasBackendStatusReport): void {

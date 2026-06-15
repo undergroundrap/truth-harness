@@ -1,5 +1,15 @@
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { verifyEngineEvidence, type EngineVerificationCommandRunner } from "./engine-verification.js";
+import {
+  listEngineVerificationRuns,
+  parseEngineVerificationRunJson,
+  verifyEngineEvidence,
+  writeEngineVerificationRun,
+  type EngineVerificationCommandRunner
+} from "./engine-verification.js";
+import { initLocalWorkspace } from "./local-workspace.js";
 
 describe("engine evidence verification", () => {
   it("passes concrete Maxima, Z3, and Lean gates without treating Sage as trust evidence", async () => {
@@ -131,5 +141,64 @@ describe("engine evidence verification", () => {
     });
     expect(report.warnings).toContain("Required engine gate failed: Maxima symbolic cross-check (missing).");
     expect(report.warnings).toContain("Required engine gate failed: Z3 SMT-LIB check (missing).");
+  });
+
+  it("writes, parses, and lists durable local engine evidence runs", async () => {
+    const root = await mkdtemp(join(tmpdir(), "truth-harness-engine-run-"));
+    await initLocalWorkspace(root, { now: "2026-06-15T00:00:00.000Z" });
+    const runner: EngineVerificationCommandRunner = (command, args) => {
+      if (command === "maxima-test" && args[0] === "--version") {
+        return { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" };
+      }
+      if (command === "maxima-test") {
+        return { status: 0, stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n", stderr: "" };
+      }
+      if (command === "z3-test" && args[0] === "-version") {
+        return { status: 0, stdout: "Z3 version 4.13.0\n", stderr: "" };
+      }
+      if (command === "z3-test") {
+        return { status: 0, stdout: "sat\n", stderr: "" };
+      }
+      if (command === "lean-test" && args[0] === "--version") {
+        return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+      }
+      if (command === "lean-test") {
+        return { status: 0, stdout: "", stderr: "" };
+      }
+      return { status: null, stdout: "", stderr: "", error: { name: "Error", message: "missing" } };
+    };
+
+    const result = await writeEngineVerificationRun({
+      rootPath: root,
+      now: new Date("2026-06-15T00:00:00.000Z"),
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      leanCommand: "lean-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      requirements: { maxima: true, z3: true, lean: true },
+      replayCommand: "truth-harness engines verify --write --require-all-concrete",
+      runner
+    });
+
+    const parsed = parseEngineVerificationRunJson(await readFile(result.jsonPath, "utf8"), result.jsonPath);
+    expect(parsed.schemaVersion).toBe("truth-harness.engine-run.v0");
+    expect(parsed.runId).toBe(result.record.runId);
+    expect(parsed.status).toBe("passed");
+    expect(parsed.report.evidenceMinted).toBe(3);
+    expect(parsed.replay).toBe("truth-harness engines verify --write --require-all-concrete");
+    expect(parsed.artifacts.json).toContain(".truth-harness/engine-runs/");
+    expect(result.markdown).toContain("Engine Gates");
+
+    const runs = await listEngineVerificationRuns(root);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      runId: result.record.runId,
+      status: "passed",
+      concretePassed: 3,
+      evidenceMinted: 3
+    });
   });
 });
