@@ -103,6 +103,26 @@ describe("web UI action contracts", () => {
     expect(styles).toContain("overflow-wrap: anywhere;");
   });
 
+  it("shows the browser-safe workspace run-next dry run on the Run tab", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('id="workspace-run-next-card"');
+    expect(html).toContain('id="workspace-run-next-command"');
+    expect(html).toContain('id="refresh-run-next"');
+    expect(html).toContain('id="copy-run-next-command"');
+    expect(source).toContain('fetch("/api/workspace-run-next"');
+    expect(source).toContain("function refreshWorkspaceRunNext({ announce = true } = {})");
+    expect(source).toContain("function renderWorkspaceRunNext()");
+    expect(source).toContain("copyWorkspaceRunNextCommand");
+    expect(source).not.toContain("workspace-run-next?executeLocal=true");
+    expect(styles).toContain(".workspace-run-next-card");
+    expect(styles).toContain("overflow-wrap: anywhere;");
+  });
+
   it("keeps the activity log inside the parent scroll instead of a nested scroll trap", async () => {
     const styles = await readFile(appStylesPath, "utf8");
     const activityListStyles = styles.match(/\.activity-list \{[\s\S]*?\n\}/u)?.[0];

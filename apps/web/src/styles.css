@@ -3465,6 +3465,66 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
+.workspace-run-next-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 14px;
+  align-items: start;
+  border-top: 1px solid var(--line-soft);
+  background: #0f0f0f;
+  padding: 15px 18px;
+}
+
+.workspace-run-next-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.workspace-run-next-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.workspace-run-next-card strong {
+  color: #f1eadc;
+  font-size: 14px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.workspace-run-next-card p {
+  color: #cfc7ba;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  max-width: 92ch;
+}
+
+.workspace-run-next-card code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #0b0b0b;
+  color: #eadfca;
+  padding: 8px 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.workspace-run-next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .runbook-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3570,6 +3630,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 @container (max-width: 560px) {
   .runbook-hero,
   .runbook-next,
+  .workspace-run-next-card,
   .runbook-utility-row {
     grid-template-columns: 1fr;
   }

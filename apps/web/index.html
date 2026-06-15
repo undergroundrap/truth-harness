@@ -365,6 +365,21 @@
                     </div>
                     <code id="runbook-next-command">truth-harness ask --json</code>
                   </section>
+                  <section class="workspace-run-next-card" id="workspace-run-next-card" aria-label="Workspace run-next dry run">
+                    <div class="workspace-run-next-main">
+                      <div class="workspace-run-next-head">
+                        <span class="mini-label">Workspace next action</span>
+                        <span class="status-pill waiting" id="workspace-run-next-status">loading</span>
+                      </div>
+                      <strong id="workspace-run-next-title">Loading local queue plan.</strong>
+                      <p id="workspace-run-next-summary">Truth Harness will ask the local planner for the next safe action without executing it in the browser.</p>
+                      <code id="workspace-run-next-command">GET /api/workspace-run-next</code>
+                    </div>
+                    <div class="workspace-run-next-actions">
+                      <button class="text-button compact-button" id="refresh-run-next" type="button">Refresh plan</button>
+                      <button class="text-button compact-button" id="copy-run-next-command" type="button">Copy command</button>
+                    </div>
+                  </section>
                   <div class="runbook-grid" aria-label="Lane work plan">
                     <section class="runbook-card runbook-card-wide">
                       <h4>Workflow</h4>

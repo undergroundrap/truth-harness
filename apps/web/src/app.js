@@ -209,6 +209,8 @@ let workspaceReview = {
   },
   items: []
 };
+let workspaceRunNextPlan;
+let workspaceRunNextError;
 let claimLedgerGraph = {
   schemaVersion: "truth-harness.claim-graph.v0",
   nodes: [],
@@ -401,6 +403,12 @@ const runbookStopRules = document.querySelector("#runbook-stop-rules");
 const runbookPacket = document.querySelector("#runbook-packet");
 const copyRunbookButton = document.querySelector("#copy-runbook");
 const downloadRunbookButton = document.querySelector("#download-runbook");
+const workspaceRunNextStatus = document.querySelector("#workspace-run-next-status");
+const workspaceRunNextTitle = document.querySelector("#workspace-run-next-title");
+const workspaceRunNextSummary = document.querySelector("#workspace-run-next-summary");
+const workspaceRunNextCommand = document.querySelector("#workspace-run-next-command");
+const refreshRunNextButton = document.querySelector("#refresh-run-next");
+const copyRunNextCommandButton = document.querySelector("#copy-run-next-command");
 const researchNotes = document.querySelector("#research-notes");
 const notesStatus = document.querySelector("#notes-status");
 const reportPreview = document.querySelector("#report-preview");
@@ -1073,6 +1081,7 @@ void refreshRouteLedger();
 void refreshResearchMap();
 void refreshVisualArtifacts();
 void refreshWorkspaceReview();
+void refreshWorkspaceRunNext({ announce: false });
 void refreshWorkspaceGraph();
 void refreshCasChecks();
 void refreshSmtChecks();
@@ -1151,6 +1160,7 @@ function render() {
   renderWorkspaceReadinessStatus();
   renderAgentRoutes(receipt);
   renderRunbook(receipt);
+  renderWorkspaceRunNext();
   renderVerificationMatrix(receipt);
   renderCapabilityLedger();
   renderTaskDock(receipt);
@@ -5348,6 +5358,36 @@ function applyWorkspaceReviewPayload(payload) {
   };
 }
 
+async function refreshWorkspaceRunNext({ announce = true } = {}) {
+  if (!workspaceRunNextTitle) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/workspace-run-next", {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local workspace run-next API failed.");
+    workspaceRunNextPlan = payload.plan;
+    workspaceRunNextError = undefined;
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded next safe action",
+        localApiSuccessMessage(payload, workspaceRunNextActivitySummary(workspaceRunNextPlan)),
+        workspaceRunNextTrust(workspaceRunNextPlan?.status)
+      );
+    }
+    renderWorkspaceRunNext();
+  } catch (error) {
+    workspaceRunNextPlan = undefined;
+    workspaceRunNextError = error instanceof Error ? error.message : "Unknown workspace run-next failure.";
+    renderWorkspaceRunNext();
+    addActivity("local-api", "Next safe action unavailable", workspaceRunNextError, "waiting");
+  }
+}
+
 async function refreshWorkspaceGraph({ announce = true } = {}) {
   try {
     const response = await fetch("/api/workspace-graph", {
@@ -5661,6 +5701,7 @@ async function attachEvidenceToRoute(input) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }
     await refreshWorkspaceReview({ announce: false });
+    await refreshWorkspaceRunNext({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
     await refreshWorkspaceReadiness({ announce: false });
     await refreshWorkspaceEvents({ announce: false });
@@ -6043,6 +6084,7 @@ async function recordCurrentClaim() {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }
     await refreshWorkspaceReview({ announce: false });
+    await refreshWorkspaceRunNext({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
     await refreshWorkspaceReadiness({ announce: false });
     await refreshWorkspaceEvents({ announce: false });
@@ -6069,6 +6111,7 @@ async function recordCurrentChain() {
       visited: new Set()
     });
     await refreshWorkspaceReview({ announce: false });
+    await refreshWorkspaceRunNext({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
     await refreshWorkspaceReadiness({ announce: false });
     await refreshWorkspaceEvents({ announce: false });
@@ -6472,6 +6515,76 @@ function renderRunbook(receipt) {
   runbookLedger.innerHTML = packet.ledger.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   runbookStopRules.innerHTML = packet.stopRules.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   runbookPacket.textContent = formatRunbookPacket(packet);
+}
+
+function renderWorkspaceRunNext() {
+  if (!workspaceRunNextStatus || !workspaceRunNextTitle || !workspaceRunNextSummary || !workspaceRunNextCommand) {
+    return;
+  }
+
+  if (workspaceRunNextError) {
+    workspaceRunNextStatus.textContent = "unavailable";
+    workspaceRunNextStatus.className = "status-pill waiting";
+    workspaceRunNextTitle.textContent = "Local next-action planner unavailable.";
+    workspaceRunNextSummary.textContent = workspaceRunNextError;
+    workspaceRunNextCommand.textContent = "truth-harness workspace run-next . --json";
+    if (copyRunNextCommandButton) {
+      copyRunNextCommandButton.disabled = false;
+    }
+    return;
+  }
+
+  if (!workspaceRunNextPlan) {
+    workspaceRunNextStatus.textContent = "loading";
+    workspaceRunNextStatus.className = "status-pill waiting";
+    workspaceRunNextTitle.textContent = "Loading local queue plan.";
+    workspaceRunNextSummary.textContent = "Truth Harness will ask the local planner for the next safe action without executing it in the browser.";
+    workspaceRunNextCommand.textContent = "GET /api/workspace-run-next";
+    if (copyRunNextCommandButton) {
+      copyRunNextCommandButton.disabled = true;
+    }
+    return;
+  }
+
+  const status = workspaceRunNextPlan.status ?? workspaceRunNextPlan.execution?.status ?? "planned";
+  const item = workspaceRunNextPlan.item;
+  const command = item?.command ?? workspaceRunNextPlan.execution?.command ?? "truth-harness workspace run-next . --json";
+  workspaceRunNextStatus.textContent = workspaceRunNextPlan.dryRun ? `${workspaceRunNextStatusLabel(status)} dry run` : workspaceRunNextStatusLabel(status);
+  workspaceRunNextStatus.className = `status-pill ${workspaceRunNextTrust(status)}`;
+  workspaceRunNextTitle.textContent = item?.title ?? "No open local work item.";
+  workspaceRunNextSummary.textContent = workspaceRunNextPlan.execution?.summary ?? "Browser-visible planning only; use CLI/MCP gates for bounded local execution.";
+  workspaceRunNextCommand.textContent = command;
+  if (copyRunNextCommandButton) {
+    copyRunNextCommandButton.disabled = !command;
+  }
+}
+
+function workspaceRunNextStatusLabel(status) {
+  if (status === "blocked") {
+    return "blocked";
+  }
+  if (status === "executed") {
+    return "executed";
+  }
+  return "planned";
+}
+
+function workspaceRunNextTrust(status) {
+  if (status === "blocked") {
+    return "refuted";
+  }
+  if (status === "executed") {
+    return "passed";
+  }
+  return "waiting";
+}
+
+function workspaceRunNextActivitySummary(plan) {
+  if (!plan?.item) {
+    return "No open local work item is available.";
+  }
+
+  return `Next dry-run item: ${plan.item.title}.`;
 }
 
 function createRunbookPacket(receipt) {
@@ -9342,6 +9455,24 @@ async function copyTaskConsoleCommands() {
   });
 }
 
+async function copyWorkspaceRunNextCommand() {
+  const command = workspaceRunNextCommand?.textContent?.trim();
+  if (!command) {
+    return;
+  }
+
+  await copyOrDownloadText({
+    text: `${command}\n`,
+    filename: `truth-harness-next-action-${safeFilenameTimestamp()}.txt`,
+    type: "text/plain",
+    button: copyRunNextCommandButton,
+    copiedTitle: "Copied next action command",
+    copiedDetail: "Workspace run-next command copied for agent handoff.",
+    fallbackTitle: "Downloaded next action command",
+    fallbackDetail: "Workspace run-next command was saved as plain text instead."
+  });
+}
+
 function downloadActivityLog() {
   const payload = {
     schemaVersion: "truth-harness.web-activity-export.v0",
@@ -10970,6 +11101,16 @@ copyTaskConsoleButton?.addEventListener("click", () => {
   });
 });
 
+refreshRunNextButton?.addEventListener("click", () => {
+  void refreshWorkspaceRunNext();
+});
+
+copyRunNextCommandButton?.addEventListener("click", () => {
+  copyWorkspaceRunNextCommand().catch((error) => {
+    addActivity("web-ui", "Copy next action failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+  });
+});
+
 downloadActivityButton.addEventListener("click", downloadActivityLog);
 
 copyRunbookButton.addEventListener("click", () => {
@@ -11335,6 +11476,7 @@ composer.addEventListener("submit", async (event) => {
     }
     await refreshRouteLedger({ announce: false });
     await refreshWorkspaceReview({ announce: false });
+    await refreshWorkspaceRunNext({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
     await refreshWorkspaceReadiness({ announce: false });
     await refreshWorkspaceEvents({ announce: false });
