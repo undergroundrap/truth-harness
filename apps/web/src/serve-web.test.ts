@@ -56,6 +56,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("visual-artifacts");
     expect(statusPayload.capabilities).toContain("catalog-search");
     expect(statusPayload.capabilities).toContain("workspace-events");
+    expect(statusPayload.capabilities).toContain("workspace-run-next-dry-run");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
       sameOriginWritesOnly: true,
@@ -259,6 +260,42 @@ describe("local web route ledger API", () => {
         agentPacket: expect.stringContaining("# Truth Harness Workspace Action")
       })
     );
+
+    const runNextResponse = await fetch(`${baseUrl}/api/workspace-run-next`);
+    expect(runNextResponse.status).toBe(200);
+    const runNextPayload = await runNextResponse.json();
+    expectLocalApiSuccess(runNextResponse, runNextPayload);
+    expect(runNextPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-run-next-response.v0",
+      localOnly: true,
+      externalCalls: []
+    });
+    expect(runNextPayload.plan).toMatchObject({
+      schemaVersion: "truth-harness.workspace-run-next.v0",
+      localOnly: true,
+      networkAccess: "none",
+      dryRun: true,
+      status: "planned"
+    });
+    expect(runNextPayload.plan.reviewId).toMatch(/^wrev_[a-f0-9]{16}$/u);
+    expect(runNextPayload.plan.execution).toMatchObject({
+      status: "planned",
+      kind: "dry-run"
+    });
+    expect(runNextPayload.plan.warnings).toContain(
+      "Run-next never executes shell strings. Only supported local Truth Harness actions can run."
+    );
+    expect(runNextPayload.plan.item.command).toContain("truth-harness");
+
+    const forbiddenRunNextResponse = await fetch(`${baseUrl}/api/workspace-run-next?executeLocal=true`);
+    expect(forbiddenRunNextResponse.status).toBe(400);
+    const forbiddenRunNextPayload = await forbiddenRunNextResponse.json();
+    expect(forbiddenRunNextPayload.requestId).toMatch(/^web_err_[0-9a-f-]{36}$/u);
+    expect(forbiddenRunNextResponse.headers.get("x-truth-harness-request-id")).toBe(forbiddenRunNextPayload.requestId);
+    expect(forbiddenRunNextPayload.schemaVersion).toBe("truth-harness.web-error.v0");
+    expect(forbiddenRunNextPayload.localOnly).toBe(true);
+    expect(forbiddenRunNextPayload.externalCalls).toEqual([]);
+    expect(forbiddenRunNextPayload.error).toContain("dry-run only");
 
     const graphResponse = await fetch(`${baseUrl}/api/workspace-graph`);
     expect(graphResponse.status).toBe(200);

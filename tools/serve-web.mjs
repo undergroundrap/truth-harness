@@ -202,6 +202,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "engine-manifest",
         "verification-readiness",
         "workspace-review-queue",
+        "workspace-run-next-dry-run",
         "docker-verifier-guidance",
         "sandbox-status",
         "safety-center"
@@ -330,6 +331,34 @@ async function handleApiRequest(request, response, requestUrl) {
       localOnly: true,
       externalCalls: [],
       review
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/workspace-run-next" && request.method === "GET") {
+    if (isTruthyQueryParam(requestUrl.searchParams.get("executeLocal"))) {
+      writeApiError(
+        response,
+        400,
+        "The web run-next endpoint is dry-run only. Use the CLI or MCP executeLocal gate for bounded local execution.",
+        request
+      );
+      return;
+    }
+
+    const { createWorkspaceReview, createWorkspaceRunNextPlan } = await loadCoreModule();
+    await ensureLocalWorkspace();
+    const review = await createWorkspaceReview({ rootPath: projectRoot });
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: projectRoot,
+      review,
+      executeLocal: false
+    });
+    writeJson(response, 200, {
+      schemaVersion: "truth-harness.web-workspace-run-next-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      plan
     });
     return;
   }
@@ -1862,6 +1891,10 @@ function loadCoreModule() {
 }
 
 function isTruthyEnv(value) {
+  return /^(1|true|yes|on)$/iu.test(value ?? "");
+}
+
+function isTruthyQueryParam(value) {
   return /^(1|true|yes|on)$/iu.test(value ?? "");
 }
 
