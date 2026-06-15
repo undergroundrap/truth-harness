@@ -102,6 +102,14 @@ describe("web UI action contracts", () => {
     expect(source).toContain('state.surface = "runbook";');
     expect(source).toContain('state.surface = "checks";');
     expect(source).toContain("function openSidebarProject(row)");
+    expect(source).toContain("function renderSidebarProjects()");
+    expect(source).toContain("function sidebarRecentEntries(query)");
+    expect(source).toContain("function sidebarClaimEntry(claim, index)");
+    expect(source).toContain("function receiptKeyForClaimRecord(claim)");
+    expect(source).toContain("function sidebarEntrySignature(entry)");
+    expect(source).toContain("function openSidebarClaim(claimId)");
+    expect(source).toContain('data-sidebar-entry-kind="${escapeHtml(entry.kind)}"');
+    expect(source).toContain("let total = sidebarRecentEntries(\"\").length;");
     expect(source).toContain("sidebarActionButtons.forEach");
     expect(source).toContain("projectRows.forEach");
     expect(styles).toContain("grid-template-rows: auto auto auto auto auto auto minmax(150px, 1fr) auto;");

@@ -1170,6 +1170,7 @@ function render() {
   renderReport(receipt);
   updateClaimRecordButtons(receipt);
   renderCatalogSearchPanel();
+  renderSidebarProjects();
   renderSidebarActions();
   applySidebarSearch();
   document.querySelectorAll(".segment").forEach((button) => {
@@ -1185,6 +1186,61 @@ function renderProjectStart() {
     const count = claimLedgerStore.size;
     projectStartClaims.textContent = `${count} ${count === 1 ? "claim" : "claims"}`;
   }
+}
+
+function renderSidebarProjects() {
+  projectRows.forEach((row) => {
+    const lane = row.dataset.projectLane;
+    const summary = sidebarProjectSummary(lane);
+    const label = row.querySelector("span:first-child");
+    const meta = row.querySelector("span:last-child");
+
+    if (label) {
+      label.textContent = summary.label;
+    }
+    if (meta) {
+      meta.textContent = summary.meta;
+    }
+    row.title = summary.detail;
+  });
+}
+
+function sidebarProjectSummary(lane) {
+  const totalClaims = claimLedgerStore.size;
+  const totalRoutes = routeLedgerStore.size;
+  const queueItems = Number.isFinite(workspaceReview.summary?.totalItems)
+    ? workspaceReview.summary.totalItems
+    : workspaceReview.items?.length ?? 0;
+
+  if (lane === "math") {
+    const receiptCount = receiptStore.size;
+    return {
+      label: "Truth Harness",
+      meta: totalClaims > 0 ? `${totalClaims} claims` : `${receiptCount} receipts`,
+      detail: `${totalClaims} claim records, ${totalRoutes} verifier routes, ${queueItems} project queue items.`
+    };
+  }
+
+  const claimCount = countClaimsForLane(lane);
+  const receiptCount = countReceiptsForLane(lane);
+  const label = lane === "finance"
+    ? "Finance audit lab"
+    : lane === "physics"
+      ? "Physics notes"
+      : `${laneStatusText[lane] ?? "Research lane"}`;
+  return {
+    label,
+    meta: claimCount > 0 ? `${claimCount} claims` : receiptCount > 0 ? `${receiptCount} receipts` : "template",
+    detail: `${claimCount} claim records and ${receiptCount} visible receipts tagged for the ${lane ?? "research"} lane.`
+  };
+}
+
+function countClaimsForLane(lane) {
+  return [...claimLedgerStore.values()].filter((claim) => claim.domain === lane).length;
+}
+
+function countReceiptsForLane(lane) {
+  return [...receiptStore.values()].filter((receipt) => receiptTags(receipt).includes(lane)).length;
 }
 
 function renderRouteLedger(receipt) {
@@ -1353,27 +1409,179 @@ function routeObligationEvidenceMarkdown(obligation) {
 
 function renderClaimList() {
   const query = state.sidebarQuery.trim().toLowerCase();
-  const visibleKeys = recentReceiptKeys.filter((key) => {
+  const entries = sidebarRecentEntries(query);
+
+  claimList.innerHTML = entries.length === 0
+    ? `<div class="sidebar-empty">No matching claims.</div>`
+    : entries
+    .map(sidebarRecentEntryHtml)
+    .join("");
+}
+
+function sidebarRecentEntries(query) {
+  const seenClaimSignatures = new Set();
+  const claimEntries = [...claimLedgerStore.values()]
+    .sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")))
+    .map((claim, index) => sidebarClaimEntry(claim, index))
+    .filter((entry) => {
+      const signature = sidebarEntrySignature(entry);
+      if (seenClaimSignatures.has(signature)) {
+        return false;
+      }
+      seenClaimSignatures.add(signature);
+      return sidebarEntryMatchesQuery(entry, query);
+    });
+  const claimedReceiptKeys = new Set(claimEntries.map((entry) => entry.receiptKey).filter(Boolean));
+  const receiptEntries = [];
+
+  recentReceiptKeys.forEach((key, index) => {
+    if (claimedReceiptKeys.has(key)) {
+      return;
+    }
     const receipt = receiptStore.get(key);
-    return receipt && matchesReceiptSearch(receipt, query);
+    if (!receipt) {
+      return;
+    }
+    const entry = sidebarReceiptEntry(key, receipt, index);
+    if (sidebarEntryMatchesQuery(entry, query)) {
+      receiptEntries.push(entry);
+    }
   });
 
-  claimList.innerHTML = visibleKeys.length === 0
-    ? `<div class="sidebar-empty">No matching claims.</div>`
-    : visibleKeys
-    .map((key) => {
-      const receipt = receiptStore.get(key);
-      return `<button class="claim-row ${key === state.receiptKey ? "active" : ""}" data-receipt="${escapeHtml(key)}" type="button">
-        <span class="trust-dot ${trustClass(receipt.trust)}"></span>
-        <span>
-          <strong>${escapeHtml(receipt.title)}</strong>
-          <small>${escapeHtml(receipt.subtitle)}</small>
-          ${receipt.claimId ? `<small class="claim-ledger-id">${escapeHtml(receipt.claimId)}</small>` : ""}
-          ${renderTagPills(receiptTags(receipt).slice(0, 3))}
-        </span>
-      </button>`;
-    })
-    .join("");
+  return [...receiptEntries, ...claimEntries]
+    .sort((left, right) => right.sortTime - left.sortTime || left.order - right.order)
+    .slice(0, 12);
+}
+
+function sidebarReceiptEntry(key, receipt, index) {
+  const sortTime = Date.parse(receipt.createdAt ?? "") || 0;
+  return {
+    kind: "receipt",
+    order: index,
+    sortTime,
+    receiptKey: key,
+    claimId: receipt.claimId,
+    trust: receipt.trust,
+    title: receipt.title,
+    subtitle: receipt.subtitle,
+    detail: receipt.claimId ?? receipt.runId,
+    tags: receiptTags(receipt),
+    searchText: [
+      key,
+      receipt.title,
+      receipt.subtitle,
+      receipt.trust,
+      receipt.claimId,
+      receipt.runId,
+      receipt.engine,
+      receipt.output,
+      ...receiptTags(receipt),
+      ...receiptTags(receipt).map((tag) => `#${tag}`)
+    ]
+      .filter(Boolean)
+      .join(" ")
+  };
+}
+
+function sidebarClaimEntry(claim, index) {
+  const finalization = claimFinalizationSummary(claim);
+  const receiptKey = receiptKeyForClaimRecord(claim);
+  const sortTime = Date.parse(claim.createdAt ?? "") || 0;
+  return {
+    kind: "claim",
+    order: 1000 + index,
+    sortTime,
+    receiptKey,
+    claimId: claim.claimId,
+    trust: claim.trust,
+    title: claim.title,
+    subtitle: `${claim.domain} - ${claim.trust} - ${finalization.label}`,
+    detail: finalization.primaryCheck || claim.claimId,
+    tags: claim.tags ?? [],
+    searchText: [
+      claim.claimId,
+      claim.title,
+      claim.statement,
+      claim.normalizedStatement,
+      claim.domain,
+      claim.status,
+      claim.trust,
+      finalization.label,
+      finalization.primaryCheck,
+      ...(claim.tags ?? []),
+      ...(claim.tags ?? []).map((tag) => `#${tag}`),
+      ...(claim.dependsOn ?? []),
+      ...(claim.supersedes ?? []),
+      ...(claim.evidenceRefs ?? []).flatMap((ref) => [ref.kind, ref.ref, ref.trust, ref.summary])
+    ]
+      .filter(Boolean)
+      .join(" ")
+  };
+}
+
+function receiptKeyForClaimRecord(claim) {
+  const directKey = receiptKeyForClaimId(claim.claimId);
+  if (directKey) {
+    return directKey;
+  }
+
+  for (const ref of claim.evidenceRefs ?? []) {
+    for (const [key, receipt] of receiptStore.entries()) {
+      if (evidenceRefMatchesReceipt(ref, receipt)) {
+        return key;
+      }
+    }
+  }
+
+  const claimTitle = normalizeSidebarSignatureText(claim.title);
+  if (!claimTitle) {
+    return undefined;
+  }
+
+  for (const [key, receipt] of receiptStore.entries()) {
+    if (normalizeSidebarSignatureText(receipt.title) === claimTitle && (!claim.trust || claim.trust === receipt.trust)) {
+      return key;
+    }
+  }
+
+  return undefined;
+}
+
+function sidebarEntrySignature(entry) {
+  return `${normalizeSidebarSignatureText(entry.title)}:${entry.trust ?? ""}`;
+}
+
+function normalizeSidebarSignatureText(value) {
+  return String(value ?? "").replace(/\s+/gu, " ").trim().toLowerCase();
+}
+
+function sidebarEntryMatchesQuery(entry, query) {
+  if (!query) {
+    return true;
+  }
+
+  return entry.searchText.toLowerCase().includes(query);
+}
+
+function sidebarRecentEntryHtml(entry) {
+  const activeReceipt = entry.receiptKey && entry.receiptKey === state.receiptKey;
+  const activeClaim = entry.claimId && receiptStore.get(state.receiptKey)?.claimId === entry.claimId;
+  const dataAttrs = [
+    `data-sidebar-entry-kind="${escapeHtml(entry.kind)}"`,
+    entry.receiptKey ? `data-receipt="${escapeHtml(entry.receiptKey)}"` : "",
+    entry.claimId ? `data-claim-id="${escapeHtml(entry.claimId)}"` : ""
+  ].filter(Boolean).join(" ");
+  const detail = entry.detail ? `<small class="claim-ledger-id">${escapeHtml(entry.detail)}</small>` : "";
+
+  return `<button class="claim-row ${activeReceipt || activeClaim ? "active" : ""}" ${dataAttrs} type="button">
+    <span class="trust-dot ${trustClass(entry.trust)}"></span>
+    <span>
+      <strong>${escapeHtml(entry.title)}</strong>
+      <small>${escapeHtml(entry.subtitle)}</small>
+      ${detail}
+      ${renderTagPills((entry.tags ?? []).slice(0, 3))}
+    </span>
+  </button>`;
 }
 
 function renderMathPlot(receipt) {
@@ -8568,7 +8776,7 @@ function quoteCommandArgForUi(value) {
 function applySidebarSearch() {
   const query = state.sidebarQuery.trim().toLowerCase();
   let matched = 0;
-  let total = recentReceiptKeys.length;
+  let total = sidebarRecentEntries("").length;
 
   document.querySelectorAll(".project-row, .lane-row, .task-row, .progress-row").forEach((row) => {
     total += 1;
@@ -10767,6 +10975,48 @@ function openSidebarProject(row) {
   addActivity("human", `Opened ${projectName}`, `${laneStatusText[lane] ?? "Research lane"} template loaded locally.`, "waiting");
 }
 
+function openReceiptKey(key) {
+  if (!key || !receiptStore.has(key)) {
+    return false;
+  }
+
+  setReplayPlaying(false);
+  state.receiptKey = key;
+  state.level = "middle";
+  state.selectedGraphIndex = 0;
+  state.selectedResearchMapSnapshotId = undefined;
+  state.selectedResearchMapNodeId = undefined;
+  state.selectedVisualArtifactId = undefined;
+  selectedVisualArtifactRecord = undefined;
+  requestVisualFit();
+  state.replayIndex = 0;
+  promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
+  render();
+  return true;
+}
+
+function openSidebarClaim(claimId) {
+  if (!claimId) {
+    return;
+  }
+
+  const linkedKey = receiptKeyForClaimId(claimId);
+  if (linkedKey && openReceiptKey(linkedKey)) {
+    return;
+  }
+
+  setReplayPlaying(false);
+  state.surface = "graph";
+  state.claimLedgerQuery = claimId;
+  state.claimLedgerLimit = LEDGER_PAGE_SIZE;
+  if (claimLedgerSearch) {
+    claimLedgerSearch.value = claimId;
+  }
+  addActivity("human", "Opened claim ledger artifact", `${claimId} is stored locally; filtered the claim ledger because no receipt view is loaded for it.`, "waiting");
+  render();
+  resetActiveSurfaceScroll();
+}
+
 sidebarToggle.addEventListener("click", () => {
   const collapsed = !state.sidebarCollapsed;
   setSidebarCollapsed(collapsed);
@@ -10824,17 +11074,12 @@ claimList.addEventListener("click", (event) => {
     return;
   }
 
-    setReplayPlaying(false);
-    state.receiptKey = button.dataset.receipt;
-    state.level = "middle";
-    state.selectedGraphIndex = 0;
-    state.selectedResearchMapSnapshotId = undefined;
-    state.selectedResearchMapNodeId = undefined;
-    requestVisualFit();
-    state.replayIndex = 0;
-  promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
-  render();
-  document.querySelector("#surface-checks").scrollTop = 0;
+  if (button.dataset.receipt && openReceiptKey(button.dataset.receipt)) {
+    document.querySelector("#surface-checks")?.scrollTo({ top: 0, left: 0 });
+    return;
+  }
+
+  openSidebarClaim(button.dataset.claimId);
 });
 
 catalogRebuildButton?.addEventListener("click", () => {
@@ -10856,22 +11101,14 @@ claimLedgerList.addEventListener("click", (event) => {
     return;
   }
 
-  const key = receiptKeyForClaimId(button.dataset.claimId);
+  const claim = claimLedgerStore.get(button.dataset.claimId);
+  const key = claim ? receiptKeyForClaimRecord(claim) : receiptKeyForClaimId(button.dataset.claimId);
   if (!key) {
-    addActivity("human", "Opened claim ledger row", `${button.dataset.claimId} is stored locally but not linked to a visible receipt in this session.`, "waiting");
+    openSidebarClaim(button.dataset.claimId);
     return;
   }
 
-  setReplayPlaying(false);
-  state.receiptKey = key;
-  state.level = "middle";
-  state.selectedGraphIndex = 0;
-  state.selectedResearchMapSnapshotId = undefined;
-  state.selectedResearchMapNodeId = undefined;
-  requestVisualFit();
-  state.replayIndex = 0;
-  promptInput.value = receiptStore.get(state.receiptKey)?.title ?? promptInput.value;
-  render();
+  openReceiptKey(key);
 });
 
 mainGraphList.addEventListener("click", (event) => {
