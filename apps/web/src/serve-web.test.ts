@@ -417,6 +417,32 @@ describe("local web route ledger API", () => {
     });
     expect(archivePayload.activity[0].detail).toContain("no files deleted");
 
+    const archiveListResponse = await fetch(`${baseUrl}/api/workspace-maintenance/archives`);
+    expect(archiveListResponse.status).toBe(200);
+    const archiveListPayload = await archiveListResponse.json();
+    expectLocalApiSuccess(archiveListResponse, archiveListPayload);
+    expect(archiveListPayload.archives).toMatchObject({
+      schemaVersion: "truth-harness.workspace-archive-list.v0",
+      total: 1
+    });
+
+    const restorePreviewResponse = await fetch(`${baseUrl}/api/workspace-maintenance/restore-archive`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ archiveRef: archivePayload.archive.archiveId, targets: ["scratch"] })
+    });
+    expect(restorePreviewResponse.status).toBe(200);
+    const restorePreviewPayload = await restorePreviewResponse.json();
+    expectLocalApiSuccess(restorePreviewResponse, restorePreviewPayload);
+    expect(restorePreviewPayload.restore).toMatchObject({
+      schemaVersion: "truth-harness.workspace-archive-restore.v0",
+      dryRun: true,
+      archiveId: archivePayload.archive.archiveId
+    });
+    expect(restorePreviewPayload.activity[0].detail).toContain("no files restored");
+
     const sessionWrite = await writeResearchSession({
       rootPath: tempProjectRoot,
       title: "Fraction verification thread",

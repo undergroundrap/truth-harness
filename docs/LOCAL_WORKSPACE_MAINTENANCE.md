@@ -24,13 +24,19 @@ node apps/cli/dist/index.js workspace repair-artifacts . --preview
 
 ```bash
 npm run workspace:archive
+npm run workspace:archives
+npm run workspace:restore-preview -- archive_20260615T000500000Z
 npm run cli -- workspace archive . --target evidence --reason "before fresh start"
+npm run cli -- workspace restore-archive archive_20260615T000500000Z . --target receipts
+npm run cli -- workspace restore-archive archive_20260615T000500000Z . --target receipts --confirm-restore
 npm run workspace:clean
 npm run cli -- workspace clean . --target scratch
 npm run cli -- workspace clean . --target generated --confirm-delete
 ```
 
 Use `workspace archive` before destructive cleanup. It copies selected manifest-known `.truth-harness` directories into `.truth-harness/archives/<archive-id>/` and writes an `archive-manifest.json` with targets, copied directories, file counts, byte counts, and the reason. Archives are local backups for maintenance and handoff safety; they are not off-machine backups and should still be committed, exported, or copied elsewhere if the work is important.
+
+Use `workspace archives` to list local archives. Use `workspace restore-archive` to preview copying files from an archive back into live workspace directories. Restore is dry-run by default; `--confirm-restore` is required to write files. Restore copies archive files back but does not delete live files that are not present in the archive.
 
 The default `workspace clean` target is `scratch`, which previews clearing rebuildable caches and generated health files:
 

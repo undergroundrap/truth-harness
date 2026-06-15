@@ -8382,6 +8382,7 @@ function renderMaintenancePanel() {
   const repairActions = maintenance?.artifactRepair?.actions?.length ?? 0;
   const scratchFiles = maintenance?.scratchCleanup?.entries?.reduce((sum, entry) => sum + (entry.files ?? 0), 0) ?? 0;
   const scratchBytes = maintenance?.scratchCleanup?.entries?.reduce((sum, entry) => sum + (entry.bytes ?? 0), 0) ?? 0;
+  const archiveCount = maintenance?.archives?.total ?? 0;
   const validation = maintenance?.validation;
   const buttons = [
     maintenanceRefreshButton,
@@ -8424,8 +8425,8 @@ function renderMaintenancePanel() {
     <strong>${validation?.checkedFiles ?? 0} files / ${scratchFiles} scratch</strong>
   `;
   maintenanceDetail.textContent = repairActions > 0
-    ? `${repairActions} artifact metadata repair action${repairActions === 1 ? "" : "s"} available. Scratch preview: ${formatBytes(scratchBytes)}.`
-    : `No metadata repairs pending. Scratch preview: ${scratchFiles} file${scratchFiles === 1 ? "" : "s"}, ${formatBytes(scratchBytes)}.`;
+    ? `${repairActions} artifact metadata repair action${repairActions === 1 ? "" : "s"} available. Scratch preview: ${formatBytes(scratchBytes)}. Archives: ${archiveCount}.`
+    : `No metadata repairs pending. Scratch preview: ${scratchFiles} file${scratchFiles === 1 ? "" : "s"}, ${formatBytes(scratchBytes)}. Archives: ${archiveCount}.`;
 }
 
 function maintenanceSummary(maintenance) {
@@ -8435,8 +8436,9 @@ function maintenanceSummary(maintenance) {
 
   const repairActions = maintenance.artifactRepair?.actions?.length ?? 0;
   const scratchFiles = maintenance.scratchCleanup?.entries?.reduce((sum, entry) => sum + (entry.files ?? 0), 0) ?? 0;
+  const archiveCount = maintenance.archives?.total ?? 0;
   const validation = maintenance.validation;
-  return `${validation?.passed ? "Validation passed" : "Validation needs attention"} across ${validation?.checkedFiles ?? 0} files; ${repairActions} repair actions pending; ${scratchFiles} scratch files previewed.`;
+  return `${validation?.passed ? "Validation passed" : "Validation needs attention"} across ${validation?.checkedFiles ?? 0} files; ${repairActions} repair actions pending; ${scratchFiles} scratch files previewed; ${archiveCount} local archives.`;
 }
 
 function maintenanceCleanSummary(clean) {

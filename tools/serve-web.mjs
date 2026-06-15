@@ -410,6 +410,61 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/workspace-maintenance/archives" && request.method === "GET") {
+    try {
+      const { listLocalWorkspaceArchives } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const archives = await listLocalWorkspaceArchives({ rootPath: projectRoot });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-archive-list-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        archives
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Workspace archive list failed.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/workspace-maintenance/restore-archive" && request.method === "POST") {
+    try {
+      const input = await readJsonBody(request);
+      if (typeof input.archiveRef !== "string" || !input.archiveRef.trim()) {
+        throw new Error("archiveRef is required.");
+      }
+
+      const { restoreLocalWorkspaceArchive } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const targets = Array.isArray(input.targets) ? normalizeWorkspaceCleanTargets(input.targets) : undefined;
+      const restore = await restoreLocalWorkspaceArchive({
+        rootPath: projectRoot,
+        archiveRef: input.archiveRef,
+        targets,
+        dryRun: input.confirmRestore !== true
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-archive-restore-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        restore,
+        activity: [
+          {
+            actor: "local-api",
+            action: restore.dryRun ? "previewed-workspace-archive-restore" : "restored-workspace-archive",
+            detail: restore.dryRun
+              ? `${restore.entries.length} archive director${restore.entries.length === 1 ? "y" : "ies"} previewed; no files restored.`
+              : `${restore.restoredFiles} file${restore.restoredFiles === 1 ? "" : "s"} restored from ${restore.archiveDir}.`,
+            at: new Date().toISOString()
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Workspace archive restore failed.", request);
+    }
+    return;
+  }
+
   if (requestUrl.pathname === "/api/claims" && request.method === "GET") {
     const snapshot = await readClaimLedgerSnapshot();
     writeJson(response, 200, {
@@ -1262,12 +1317,13 @@ async function readWorkspaceReadiness() {
 async function readWorkspaceMaintenance() {
   const {
     cleanLocalWorkspace,
+    listLocalWorkspaceArchives,
     repairWorkspaceArtifacts,
     validateWorkspaceArtifacts
   } = await loadCoreModule();
   await ensureLocalWorkspace();
   const checkedAt = new Date().toISOString();
-  const [repairPreview, scratchPreview, validation] = await Promise.all([
+  const [repairPreview, scratchPreview, validation, archiveList] = await Promise.all([
     repairWorkspaceArtifacts({
       rootPath: projectRoot,
       dryRun: true,
@@ -1281,6 +1337,9 @@ async function readWorkspaceMaintenance() {
     validateWorkspaceArtifacts({
       rootPath: projectRoot,
       now: checkedAt
+    }),
+    listLocalWorkspaceArchives({
+      rootPath: projectRoot
     })
   ]);
 
@@ -1298,8 +1357,13 @@ async function readWorkspaceMaintenance() {
     },
     artifactRepair: repairPreview,
     scratchCleanup: scratchPreview,
+    archives: {
+      total: archiveList.total,
+      latest: archiveList.archives[0]
+    },
     commands: {
       archiveScratch: `node apps/cli/dist/index.js workspace archive ${quoteCommandArg(projectRoot)} --target scratch --reason ${quoteCommandArg("before scratch cleanup")}`,
+      archiveList: `node apps/cli/dist/index.js workspace archives ${quoteCommandArg(projectRoot)}`,
       repairPreview: "npm run workspace:repair-artifacts:preview",
       repairApply: "npm run workspace:repair-artifacts",
       cleanPreview: "npm run workspace:clean",

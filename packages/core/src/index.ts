@@ -309,6 +309,8 @@ export {
   archiveLocalWorkspace,
   cleanLocalWorkspace,
   isWorkspaceCleanTarget,
+  listLocalWorkspaceArchives,
+  restoreLocalWorkspaceArchive,
   repairWorkspaceArtifacts
 } from "./workspace-maintenance.js";
 export { replayReceipt } from "./replay.js";
@@ -760,7 +762,11 @@ export type {
 } from "./local-workspace.js";
 export type {
   WorkspaceArchiveEntry,
+  WorkspaceArchiveListResult,
+  WorkspaceArchiveRestoreEntry,
+  WorkspaceArchiveRestoreResult,
   WorkspaceArchiveResult,
+  WorkspaceArchiveSummary,
   WorkspaceArtifactRepairAction,
   WorkspaceArtifactRepairResult,
   WorkspaceCleanEntry,

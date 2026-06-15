@@ -84,6 +84,7 @@ import {
   listValidationPlans,
   listVerifierRoutes,
   listVisualArtifacts,
+  listLocalWorkspaceArchives,
   listWorkspaceEvents,
   listWorkspaceRunNextPlans,
   listWorkspaceReviews,
@@ -105,6 +106,7 @@ import {
   repairLocalWorkspace,
   repairWorkspaceArtifacts,
   rebuildWorkspaceCatalog,
+  restoreLocalWorkspaceArchive,
   replayReceipt,
   runWorkspaceStress,
   searchLocalCorpus,
@@ -208,6 +210,8 @@ import {
   type LocalWorkspaceRepairResult,
   type LocalWorkspaceStatus,
   type WorkspaceArchiveResult,
+  type WorkspaceArchiveListResult,
+  type WorkspaceArchiveRestoreResult,
   type WorkspaceArtifactRepairResult,
   type WorkspaceCleanResult,
   type WorkspaceCleanTarget,
@@ -2806,6 +2810,61 @@ workspace
   );
 
 workspace
+  .command("archives")
+  .description("List local .truth-harness archives.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full workspace archive list JSON")
+  .action(async (path: string, options: { json?: boolean }) => {
+    const result = await listLocalWorkspaceArchives({ rootPath: path });
+
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+
+    printWorkspaceArchiveList(result);
+  });
+
+workspace
+  .command("restore-archive")
+  .description("Preview or restore files from a local .truth-harness archive.")
+  .argument("<archive>", "Archive id or workspace-local archive-manifest.json path")
+  .argument("[path]", "Project root path", ".")
+  .option(
+    "--target <target>",
+    "Restore target: scratch, generated, evidence, all, or a workspace directory name. Repeat for multiple targets.",
+    collectWorkspaceCleanTarget,
+    [] as WorkspaceCleanTarget[]
+  )
+  .option("--confirm-restore", "Actually copy archive files back into live workspace directories")
+  .option("--json", "Print the full workspace archive restore JSON")
+  .action(
+    async (
+      archive: string,
+      path: string,
+      options: {
+        target: WorkspaceCleanTarget[];
+        confirmRestore?: boolean;
+        json?: boolean;
+      }
+    ) => {
+      const result = await restoreLocalWorkspaceArchive({
+        rootPath: path,
+        archiveRef: archive,
+        targets: options.target,
+        dryRun: !options.confirmRestore
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printWorkspaceArchiveRestore(result);
+    }
+  );
+
+workspace
   .command("clean")
   .description("Preview or clear selected .truth-harness data directories.")
   .argument("[path]", "Project root path", ".")
@@ -5366,6 +5425,67 @@ function printWorkspaceArchive(result: WorkspaceArchiveResult): void {
   if (result.warnings.length > 0) {
     console.log("");
     console.log("Archive boundary:");
+    for (const warning of result.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printWorkspaceArchiveList(result: WorkspaceArchiveListResult): void {
+  console.log(`Truth Harness workspace archives: ${result.total}`);
+  console.log(`Root: ${result.root}`);
+
+  if (result.archives.length === 0) {
+    console.log("No local archives found.");
+  } else {
+    console.log("");
+    for (const archive of result.archives) {
+      console.log(`${archive.archiveId} ${archive.createdAt}`);
+      console.log(`  Path: ${archive.archiveDir}`);
+      console.log(`  Reason: ${archive.reason}`);
+      console.log(`  Targets: ${archive.targets.join(", ") || "unspecified"}`);
+      console.log(`  Directories: ${archive.resolvedDirectories.join(", ")}`);
+      console.log(`  Files: ${archive.totalFiles}, bytes: ${formatBytes(archive.totalBytes)}`);
+      console.log(`  Restore preview: truth-harness workspace restore-archive ${archive.archiveId}`);
+    }
+  }
+
+  if (result.warnings.length > 0) {
+    console.log("");
+    console.log("Archive boundary:");
+    for (const warning of result.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printWorkspaceArchiveRestore(result: WorkspaceArchiveRestoreResult): void {
+  console.log(result.dryRun ? "Truth Harness workspace archive restore preview" : "Truth Harness workspace archive restore complete");
+  console.log(`Archive: ${result.archiveId}`);
+  console.log(`Root: ${result.root}`);
+  console.log(`Mode: ${result.dryRun ? "dry-run" : "restore confirmed"}`);
+  console.log(`Targets: ${result.targets.join(", ")}`);
+  console.log(`Resolved directories: ${result.resolvedDirectories.join(", ")}`);
+
+  if (result.entries.length > 0) {
+    console.log("");
+    console.log("Restore impact:");
+    for (const entry of result.entries) {
+      const action = result.dryRun ? "would copy" : entry.restored ? "copied" : entry.exists ? "empty" : "missing";
+      console.log(
+        `  ${action.padEnd(10)} ${entry.directory.padEnd(14)} ${entry.files} files, ${formatBytes(entry.bytes)} -> ${entry.targetPath}`
+      );
+    }
+  }
+
+  if (!result.dryRun) {
+    console.log("");
+    console.log(`Restored: ${result.restoredFiles} files, ${formatBytes(result.restoredBytes)}`);
+  }
+
+  if (result.warnings.length > 0) {
+    console.log("");
+    console.log("Restore boundary:");
     for (const warning of result.warnings) {
       console.log(`  ${warning}`);
     }

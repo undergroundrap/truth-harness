@@ -4,7 +4,13 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeJsonFileAtomic } from "./fs-util.js";
 import { initLocalWorkspace } from "./local-workspace.js";
-import { archiveLocalWorkspace, cleanLocalWorkspace, repairWorkspaceArtifacts } from "./workspace-maintenance.js";
+import {
+  archiveLocalWorkspace,
+  cleanLocalWorkspace,
+  listLocalWorkspaceArchives,
+  repairWorkspaceArtifacts,
+  restoreLocalWorkspaceArchive
+} from "./workspace-maintenance.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { writeVerifierRoute } from "./verifier-route.js";
 import { writeVisualArtifact } from "./visual-artifact.js";
@@ -131,11 +137,44 @@ describe("workspace maintenance", () => {
     expect(archive.archivedFiles).toBe(1);
     expect(await pathExists(archivedReceiptFile)).toBe(true);
     expect(await pathExists(archiveManifest)).toBe(true);
+    const archives = await listLocalWorkspaceArchives({ rootPath: root });
+    expect(archives.total).toBe(1);
+    expect(archives.archives[0]).toMatchObject({
+      archiveId: archive.archiveId,
+      totalFiles: 1,
+      totalBytes: expect.any(Number)
+    });
 
     const cleaned = await cleanLocalWorkspace({ rootPath: root, targets: ["evidence"], dryRun: false });
     expect(cleaned.deletedFiles).toBe(1);
     expect(await pathExists(receiptFile)).toBe(false);
     expect(await pathExists(archivedReceiptFile)).toBe(true);
+
+    const restorePreview = await restoreLocalWorkspaceArchive({
+      rootPath: root,
+      archiveRef: archive.archiveId,
+      targets: ["receipts"],
+      dryRun: true
+    });
+    expect(restorePreview.dryRun).toBe(true);
+    expect(restorePreview.restoredFiles).toBe(0);
+    expect(restorePreview.entries).toContainEqual(
+      expect.objectContaining({
+        directory: "receipts",
+        files: 1,
+        restored: false
+      })
+    );
+    expect(await pathExists(receiptFile)).toBe(false);
+
+    const restored = await restoreLocalWorkspaceArchive({
+      rootPath: root,
+      archiveRef: archive.manifestPath,
+      targets: ["receipts"],
+      dryRun: false
+    });
+    expect(restored.restoredFiles).toBe(1);
+    expect(await pathExists(receiptFile)).toBe(true);
   });
 });
 

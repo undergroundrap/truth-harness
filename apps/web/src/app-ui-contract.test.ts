@@ -102,6 +102,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain('fetch("/api/workspace-maintenance/clean"');
     expect(source).toContain('fetch("/api/workspace-maintenance/archive"');
     expect(source).toContain("function maintenanceArchiveSummary");
+    expect(source).toContain("maintenance.archives?.total");
     expect(source).toContain("function renderMaintenancePanel()");
     expect(source).toContain("window.confirm(");
     expect(source).toContain('targets: ["scratch"]');
