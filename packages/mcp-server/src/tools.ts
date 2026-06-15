@@ -1187,7 +1187,7 @@ export async function handleTruthHarnessClaimReview(input: TruthHarnessClaimRevi
 export async function handleTruthHarnessCatalogStatus(
   input: TruthHarnessCatalogStatusInput
 ): Promise<WorkspaceCatalogStatus> {
-  return getWorkspaceCatalogStatus(resolveWorkspaceRoot(input.workspacePath));
+  return getWorkspaceCatalogStatus(resolveWorkspaceRoot(input.workspacePath), { checkFiles: true });
 }
 
 export async function handleTruthHarnessCatalogRebuild(

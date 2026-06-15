@@ -7676,6 +7676,15 @@ function renderCatalogSearchPanel() {
     return;
   }
 
+  if (catalog.stale) {
+    const freshness = catalog.freshness;
+    const detail = freshness?.checked
+      ? `${freshness.changedArtifacts ?? 0} changed, ${freshness.newArtifacts ?? 0} new, ${freshness.missingArtifacts ?? 0} missing.`
+      : "Freshness was not checked.";
+    catalogResultList.innerHTML = `<div class="sidebar-empty">Catalog is stale. Rebuild before relying on search completeness. ${escapeHtml(detail)}</div>`;
+    return;
+  }
+
   if (query.length < 2) {
     catalogResultList.innerHTML = `<div class="sidebar-empty">Type 2+ characters to search ${catalog.artifactCount ?? 0} indexed artifacts.</div>`;
     return;

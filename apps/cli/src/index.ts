@@ -2614,7 +2614,7 @@ catalog
   .argument("[path]", "Project root path", ".")
   .option("--json", "Print the full catalog status JSON")
   .action(async (path: string, options: { json?: boolean }) => {
-    const status = await getWorkspaceCatalogStatus(path);
+    const status = await getWorkspaceCatalogStatus(path, { checkFiles: true });
 
     if (options.json) {
       printJson(status);
@@ -5203,6 +5203,15 @@ function printWorkspaceCatalogStatus(status: WorkspaceCatalogStatus): void {
   }
   console.log(`Artifacts: ${status.artifactCount}`);
   console.log(`Claims/routes: ${status.claimCount}/${status.routeCount}`);
+  console.log(`Freshness checked: ${String(status.freshness.checked)}`);
+  if (status.freshness.checked) {
+    console.log(
+      `Freshness: ${status.freshness.changedArtifacts} changed, ${status.freshness.newArtifacts} new, ${status.freshness.missingArtifacts} missing`
+    );
+    if (status.freshness.examples.length > 0) {
+      console.log(`Examples: ${status.freshness.examples.join(", ")}`);
+    }
+  }
 
   if (status.warnings.length > 0) {
     console.log("");

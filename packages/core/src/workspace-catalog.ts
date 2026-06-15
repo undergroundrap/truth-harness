@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import Database from "better-sqlite3";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
@@ -13,6 +13,10 @@ export const WORKSPACE_CATALOG_FILE = "catalog.db";
 export interface WorkspaceCatalogRebuildInput {
   rootPath: string;
   now?: string;
+}
+
+export interface WorkspaceCatalogStatusInput {
+  checkFiles?: boolean;
 }
 
 export interface WorkspaceCatalogRebuildResult {
@@ -55,7 +59,19 @@ export interface WorkspaceCatalogStatus {
   routeCount: number;
   lastRebuiltAt?: string;
   sourceOfTruth: "workspace-json";
+  freshness: WorkspaceCatalogFreshness;
   warnings: string[];
+}
+
+export interface WorkspaceCatalogFreshness {
+  checked: boolean;
+  stale: boolean;
+  indexedArtifacts: number;
+  workspaceArtifacts?: number;
+  changedArtifacts: number;
+  missingArtifacts: number;
+  newArtifacts: number;
+  examples: string[];
 }
 
 export interface WorkspaceCatalogSearchInput {
@@ -168,6 +184,18 @@ interface CatalogSearchSqlRow {
   valid: 0 | 1;
   issue_count: number;
   tags: string | null;
+}
+
+interface CatalogIndexedSnapshotRow {
+  path: string;
+  byte_length: number;
+  mtime_ms: number;
+}
+
+interface CatalogSourceSnapshotRow {
+  path: string;
+  byteLength: number;
+  mtimeMs: number;
 }
 
 export async function rebuildWorkspaceCatalog(input: WorkspaceCatalogRebuildInput): Promise<WorkspaceCatalogRebuildResult> {
@@ -308,7 +336,7 @@ export async function rebuildWorkspaceCatalog(input: WorkspaceCatalogRebuildInpu
   }
 }
 
-export async function getWorkspaceCatalogStatus(rootPath: string): Promise<WorkspaceCatalogStatus> {
+export async function getWorkspaceCatalogStatus(rootPath: string, input: WorkspaceCatalogStatusInput = {}): Promise<WorkspaceCatalogStatus> {
   const status = await requireLocalWorkspace(rootPath);
   const catalogPath = workspaceCatalogPath(status);
 
@@ -337,6 +365,7 @@ export async function getWorkspaceCatalogStatus(rootPath: string): Promise<Works
       claimCount: 0,
       routeCount: 0,
       sourceOfTruth: "workspace-json",
+      freshness: uncheckedCatalogFreshness(0, true),
       warnings: ["Catalog is missing. Run `truth-harness catalog rebuild` to create the local query index."]
     };
   }
@@ -345,6 +374,12 @@ export async function getWorkspaceCatalogStatus(rootPath: string): Promise<Works
     const db = openCatalogDatabase(catalogPath, { createSchema: false });
     try {
       const row = readCatalogStatusRow(db);
+      const schemaStale = row.schema_version !== WORKSPACE_CATALOG_SCHEMA_VERSION;
+      const freshness =
+        input.checkFiles && !schemaStale
+          ? await compareCatalogFreshness(status, db)
+          : uncheckedCatalogFreshness(row.artifact_count ?? 0, schemaStale);
+      const stale = schemaStale || freshness.stale;
       return {
         schemaVersion: "truth-harness.catalog-status.v0",
         catalogSchemaVersion: row.schema_version,
@@ -354,15 +389,16 @@ export async function getWorkspaceCatalogStatus(rootPath: string): Promise<Works
         networkAccess: "none",
         exists: true,
         readable: row.schema_version === WORKSPACE_CATALOG_SCHEMA_VERSION,
-        stale: row.schema_version !== WORKSPACE_CATALOG_SCHEMA_VERSION,
+        stale,
         artifactCount: row.artifact_count ?? 0,
         claimCount: row.claim_count ?? 0,
         routeCount: row.route_count ?? 0,
         lastRebuiltAt: row.last_rebuilt_at,
         sourceOfTruth: "workspace-json",
+        freshness,
         warnings:
           row.schema_version === WORKSPACE_CATALOG_SCHEMA_VERSION
-            ? catalogWarnings()
+            ? catalogFreshnessWarnings(freshness)
             : [`Catalog schema is ${row.schema_version ?? "unknown"}; expected ${WORKSPACE_CATALOG_SCHEMA_VERSION}. Rebuild required.`]
       };
     } finally {
@@ -382,6 +418,7 @@ export async function getWorkspaceCatalogStatus(rootPath: string): Promise<Works
       claimCount: 0,
       routeCount: 0,
       sourceOfTruth: "workspace-json",
+      freshness: uncheckedCatalogFreshness(0, true),
       warnings: [`Catalog could not be opened: ${error instanceof Error ? error.message : String(error)}. Rebuild required.`]
     };
   }
@@ -851,6 +888,133 @@ function referenceKindToArtifactKind(kind: string | undefined): string | undefin
   }
 }
 
+async function compareCatalogFreshness(
+  status: LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> },
+  db: Database.Database
+): Promise<WorkspaceCatalogFreshness> {
+  const indexedRows = db
+    .prepare("SELECT path, byte_length, mtime_ms FROM artifacts ORDER BY path")
+    .all() as CatalogIndexedSnapshotRow[];
+  const sourceRows = await collectCatalogSourceSnapshot(status);
+  const indexedByPath = new Map(indexedRows.map((row) => [row.path, row]));
+  const sourceByPath = new Map(sourceRows.map((row) => [row.path, row]));
+  const changed: string[] = [];
+  const missing: string[] = [];
+  const added: string[] = [];
+
+  for (const source of sourceRows) {
+    const indexed = indexedByPath.get(source.path);
+    if (!indexed) {
+      added.push(source.path);
+      continue;
+    }
+
+    if (indexed.byte_length !== source.byteLength || indexed.mtime_ms !== source.mtimeMs) {
+      changed.push(source.path);
+    }
+  }
+
+  for (const indexed of indexedRows) {
+    if (!sourceByPath.has(indexed.path)) {
+      missing.push(indexed.path);
+    }
+  }
+
+  const examples = [...changed.map((path) => `changed:${path}`), ...added.map((path) => `new:${path}`), ...missing.map((path) => `missing:${path}`)].slice(0, 8);
+  return {
+    checked: true,
+    stale: changed.length > 0 || missing.length > 0 || added.length > 0,
+    indexedArtifacts: indexedRows.length,
+    workspaceArtifacts: sourceRows.length,
+    changedArtifacts: changed.length,
+    missingArtifacts: missing.length,
+    newArtifacts: added.length,
+    examples
+  };
+}
+
+async function collectCatalogSourceSnapshot(
+  status: LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }
+): Promise<CatalogSourceSnapshotRow[]> {
+  const paths = new Set<string>();
+  paths.add(toPortableRelativePath(status.root, status.manifestPath));
+
+  for (const directory of Object.values(status.manifest.directories)) {
+    for (const file of await listWorkspaceJsonFiles(resolve(status.root, directory))) {
+      paths.add(toPortableRelativePath(status.root, file));
+    }
+  }
+
+  const rows: CatalogSourceSnapshotRow[] = [];
+  for (const path of [...paths].sort()) {
+    const fileStatus = await stat(resolveUnderRoot(status.root, path));
+    rows.push({
+      path,
+      byteLength: fileStatus.size,
+      mtimeMs: Math.round(fileStatus.mtimeMs)
+    });
+  }
+  return rows;
+}
+
+async function listWorkspaceJsonFiles(root: string): Promise<string[]> {
+  const files: string[] = [];
+
+  async function walk(directory: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code === "ENOENT") {
+        return;
+      }
+
+      throw error;
+    }
+
+    for (const entry of entries) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await walk(path);
+        continue;
+      }
+
+      if (entry.isFile() && entry.name.endsWith(".json")) {
+        files.push(path);
+      }
+    }
+  }
+
+  await walk(root);
+  return files.sort();
+}
+
+function uncheckedCatalogFreshness(indexedArtifacts: number, stale: boolean): WorkspaceCatalogFreshness {
+  return {
+    checked: false,
+    stale,
+    indexedArtifacts,
+    changedArtifacts: 0,
+    missingArtifacts: 0,
+    newArtifacts: 0,
+    examples: []
+  };
+}
+
+function catalogFreshnessWarnings(freshness: WorkspaceCatalogFreshness): string[] {
+  const warnings = [...catalogWarnings()];
+  if (freshness.stale) {
+    warnings.unshift(
+      `Catalog is stale: ${freshness.changedArtifacts} changed, ${freshness.newArtifacts} new, ${freshness.missingArtifacts} missing workspace artifacts. Rebuild required before relying on search completeness.`
+    );
+    if (freshness.examples.length > 0) {
+      warnings.unshift(`Catalog freshness examples: ${freshness.examples.join(", ")}.`);
+    }
+  }
+  return warnings;
+}
+
 function readCatalogStatusRow(db: Database.Database): CatalogStatusRow {
   const meta = db.prepare("SELECT key, value FROM catalog_meta").all() as Array<{ key: string; value: string }>;
   const values = new Map(meta.map((row) => [row.key, row.value]));
@@ -1038,6 +1202,10 @@ function resolveUnderRoot(root: string, path: string): string {
 
 function normalizePortablePath(value: string): string {
   return relative("", value).split(sep).join("/");
+}
+
+function toPortableRelativePath(root: string, path: string): string {
+  return relative(root, path).split(sep).join("/");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

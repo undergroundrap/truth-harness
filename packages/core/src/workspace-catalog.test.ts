@@ -74,6 +74,21 @@ describe("workspace catalog", () => {
       claimCount: 1,
       routeCount: 1
     });
+    const checkedStatus = await getWorkspaceCatalogStatus(root, { checkFiles: true });
+    expect(checkedStatus).toMatchObject({
+      exists: true,
+      readable: true,
+      stale: false,
+      freshness: {
+        checked: true,
+        stale: false,
+        indexedArtifacts: rebuild.artifactCount,
+        workspaceArtifacts: rebuild.artifactCount,
+        changedArtifacts: 0,
+        missingArtifacts: 0,
+        newArtifacts: 0
+      }
+    });
     expect(claimSearch.results).toContainEqual(
       expect.objectContaining({
         path: normalizePath(claim.jsonPath, root),
@@ -112,6 +127,39 @@ describe("workspace catalog", () => {
     expect(corrupt.readable).toBe(false);
     expect(corrupt.stale).toBe(true);
     expect(corrupt.warnings.join("\n")).toContain("Rebuild required");
+  });
+
+  it("marks readable catalogs stale when canonical workspace JSON changes after rebuild", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    await writeReceipt(root, "fraction.json", createReceipt("compute 3 / 4 + 5 / 8"));
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-14T00:00:01.000Z" });
+
+    const fastStatus = await getWorkspaceCatalogStatus(root);
+    const freshStatus = await getWorkspaceCatalogStatus(root, { checkFiles: true });
+
+    await writeClaimLedgerRecord({
+      rootPath: root,
+      statement: "A new claim should make the cache incomplete until rebuild.",
+      domain: "math",
+      tags: ["freshness"],
+      now: "2026-06-14T00:00:02.000Z"
+    });
+
+    const staleStatus = await getWorkspaceCatalogStatus(root, { checkFiles: true });
+
+    expect(fastStatus.freshness.checked).toBe(false);
+    expect(freshStatus.stale).toBe(false);
+    expect(staleStatus.readable).toBe(true);
+    expect(staleStatus.stale).toBe(true);
+    expect(staleStatus.freshness).toMatchObject({
+      checked: true,
+      changedArtifacts: 0,
+      missingArtifacts: 0,
+      newArtifacts: 1
+    });
+    expect(staleStatus.freshness.examples.join("\n")).toContain("new:.truth-harness/claims/");
+    expect(staleStatus.warnings.join("\n")).toContain("Catalog is stale");
   });
 
   it("does not index vault plaintext and escapes hostile-looking FTS queries", async () => {

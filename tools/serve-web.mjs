@@ -212,7 +212,7 @@ async function handleApiRequest(request, response, requestUrl) {
   if (requestUrl.pathname === "/api/catalog/status" && request.method === "GET") {
     const { getWorkspaceCatalogStatus } = await loadCoreModule();
     await ensureLocalWorkspace();
-    const catalog = await getWorkspaceCatalogStatus(projectRoot);
+    const catalog = await getWorkspaceCatalogStatus(projectRoot, { checkFiles: true });
     writeJson(response, 200, {
       schemaVersion: "truth-harness.web-catalog-status-response.v0",
       localOnly: true,
@@ -227,7 +227,7 @@ async function handleApiRequest(request, response, requestUrl) {
       const { getWorkspaceCatalogStatus, rebuildWorkspaceCatalog } = await loadCoreModule();
       await ensureLocalWorkspace();
       const rebuild = await rebuildWorkspaceCatalog({ rootPath: projectRoot });
-      const catalog = await getWorkspaceCatalogStatus(projectRoot);
+      const catalog = await getWorkspaceCatalogStatus(projectRoot, { checkFiles: true });
       writeJson(response, 200, {
         schemaVersion: "truth-harness.web-catalog-rebuild-response.v0",
         localOnly: true,
