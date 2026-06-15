@@ -1189,8 +1189,17 @@ async function appendResearchMapSnapshot(snapshot) {
     ]
   };
   const path = researchMapPath();
+  const ref = ".truth-harness/artifacts/research-map.json";
   await mkdir(resolve(projectRoot, ".truth-harness", "artifacts"), { recursive: true });
   await writeFile(path, `${JSON.stringify(map, null, 2)}\n`, "utf8");
+  const { refreshWorkspaceCatalogArtifact } = await loadCoreModule();
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: projectRoot,
+    path: ref,
+    kind: "artifacts",
+    now: snapshot.createdAt,
+    staleReason: "research map snapshot written"
+  });
   return map;
 }
 

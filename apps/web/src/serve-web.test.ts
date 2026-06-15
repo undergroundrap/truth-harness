@@ -359,6 +359,21 @@ describe("local web route ledger API", () => {
     expect(mapPayload.paths.json).toContain(".truth-harness");
     expect(existsSync(mapPayload.paths.json)).toBe(true);
 
+    const mapEventLogResponse = await fetch(`${baseUrl}/api/events?limit=50`);
+    expect(mapEventLogResponse.status).toBe(200);
+    const mapEventLogPayload = await mapEventLogResponse.json();
+    expectLocalApiSuccess(mapEventLogResponse, mapEventLogPayload);
+    expect(mapEventLogPayload.eventLog.events).toContainEqual(
+      expect.objectContaining({
+        action: "artifact-written",
+        kind: "artifacts",
+        artifactId: mapPayload.map.mapId,
+        path: ".truth-harness/artifacts/research-map.json",
+        localOnly: true,
+        networkAccess: "none"
+      })
+    );
+
     const mapReadResponse = await fetch(`${baseUrl}/api/research-map`);
     expect(mapReadResponse.status).toBe(200);
     const mapReadPayload = await mapReadResponse.json();
