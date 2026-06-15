@@ -309,6 +309,87 @@ describe("claim ledger", () => {
     );
   });
 
+  it("requires statement-boundary metadata before direct proof evidence is ready for publication", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
+    const unscopedProofRef = ".truth-harness/proofs/accepted-unscoped-proof.json";
+    const scopedProofRef = ".truth-harness/proofs/accepted-scoped-proof.json";
+    await mkdir(join(root, ".truth-harness", "proofs"), { recursive: true });
+    const acceptedProof = {
+      schemaVersion: "truth-harness.proof-check.v0",
+      checkId: "proof_2222222222222222",
+      createdAt: "2026-06-12T00:05:00.000Z",
+      backend: {
+        id: "lean",
+        displayName: "Lean proof checker",
+        adapter: "local-lean-subprocess",
+        role: "proof-checker",
+        acceptedProofChecker: true,
+        command: "lean",
+        args: ["claim.lean"],
+        exitCode: 0
+      },
+      source: {
+        path: "claim.lean",
+        sha256: "2222222222222222222222222222222222222222222222222222222222222222",
+        byteLength: 32
+      },
+      status: "accepted",
+      trust: "proved",
+      proofCheckerBacked: true,
+      localOnly: true,
+      networkAccess: "none",
+      replay: "truth-harness proof check claim.lean --write --json",
+      limitations: ["Unit-test proof fixture."],
+      warnings: []
+    };
+    await writeFile(join(root, unscopedProofRef), `${JSON.stringify(acceptedProof, null, 2)}\n`, "utf8");
+    await writeFile(
+      join(root, scopedProofRef),
+      `${JSON.stringify(
+        {
+          ...acceptedProof,
+          checkId: "proof_3333333333333333",
+          source: {
+            ...acceptedProof.source,
+            sha256: "3333333333333333333333333333333333333333333333333333333333333333"
+          },
+          scope: {
+            statement: "The Lean theorem in claim.lean states that the tested claim is true."
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const unscopedClaim = await writeClaimLedgerRecord({
+      rootPath: root,
+      statement: "The accepted Lean proof proves the informal claim.",
+      trust: "proved",
+      evidenceRefs: [{ kind: "proof", ref: unscopedProofRef }],
+      now: "2026-06-12T00:10:00.000Z"
+    });
+    const scopedClaim = await writeClaimLedgerRecord({
+      rootPath: root,
+      statement: "The accepted Lean proof proves the informal claim.",
+      trust: "proved",
+      evidenceRefs: [{ kind: "proof", ref: scopedProofRef }],
+      now: "2026-06-12T00:11:00.000Z"
+    });
+
+    const statementBoundary =
+      "Accepted proof-check evidence has no recorded statement boundary; a human must confirm the formal theorem matches the claim before final publication.";
+    expect(unscopedClaim.claim.trust).toBe("proved");
+    expect(unscopedClaim.claim.finalization.readyForNarrowClaim).toBe(false);
+    expect(unscopedClaim.claim.finalization.openChecks).toContain(statementBoundary);
+    expect(unscopedClaim.claim.warnings).toContain(statementBoundary);
+    expect(scopedClaim.claim.trust).toBe("proved");
+    expect(scopedClaim.claim.finalization.readyForNarrowClaim).toBe(true);
+    expect(scopedClaim.claim.warnings).not.toContain(statementBoundary);
+  });
+
   it("does not derive engine claim trust from malformed CAS or SMT JSON", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });

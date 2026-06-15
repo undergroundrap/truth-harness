@@ -1008,7 +1008,15 @@ async function inferEvidenceRefTrust(input: {
   if (input.ref.kind === "proof" && artifact.parsed.schemaVersion === "truth-harness.proof-check.v0") {
     try {
       const record = parseLeanProofCheckRecord(artifact.raw, input.ref.ref);
-      return { trust: record.trust, summary: `Lean proof check status: ${record.status}.` };
+      const missingStatementBoundary =
+        record.trust === "proved" && (!record.scope?.statement || record.scope.statement.trim().length === 0);
+      const statementBoundary =
+        "Accepted proof-check evidence has no recorded statement boundary; a human must confirm the formal theorem matches the claim before final publication.";
+      return {
+        trust: record.trust,
+        summary: `Lean proof check status: ${record.status}.`,
+        ...(missingStatementBoundary ? { warnings: [statementBoundary], finalizationChecks: [statementBoundary] } : {})
+      };
     } catch {
       return undefined;
     }

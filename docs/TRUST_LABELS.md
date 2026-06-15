@@ -30,6 +30,8 @@ The local modular parity checker emits `exact-computed`, not `proved`. It can at
 
 Accepted proof-check records can carry optional route scope (`routeId`, `obligationId`, and statement boundary metadata). A verifier-route formal-proof obligation closes only when the accepted proof-check record is scoped to that exact route id and obligation id. This prevents a generic accepted Lean file, such as a trivial example theorem, from satisfying an unrelated route.
 
+Direct claim-ledger proof evidence can support a `proved` trust label only when the proof-check record itself parses as accepted proof-checker output. If that proof-check record has no statement boundary metadata, the claim remains blocked for final publication until a human confirms the formal theorem matches the informal claim.
+
 `truth-harness proof visual <proof_check_id>` turns a saved Lean proof-check record into a `truth-harness.visual-artifact.v0` proof-tree view under `.truth-harness/visuals/`. This is useful for teaching, review, reports, and UI inspection, but the visual is not the proof object. The source proof-check JSON remains authoritative and the visual artifact's trust boundary explicitly says it cannot upgrade trust labels.
 
 Route obligations and claim-ledger evidence promotion parse proof-check, CAS-check, and SMT-check records strictly before trusting them. A hand-written or malformed JSON file that merely says `trust: proved`, `trust: cross-checked`, or `trust: smt-checked` is unresolved evidence, not proof, independent verification, or solver evidence.
