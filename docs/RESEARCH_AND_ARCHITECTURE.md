@@ -103,6 +103,7 @@ truth-harness/
     receipts/              # Receipt JSON and rendered reports
     claims/                # Claim ledger records with dependencies, supersession, tags, trust, and review gates
     artifacts/             # Tool outputs, plots, notebooks, traces
+    events/                # Append-only local artifact-write event logs for ordering and agent audit trails
     indexes/               # Local RAG/search indexes
     literature/            # Structured local paper, patent, dataset, and database-export records
     notebook-runs/         # Local notebook/script/pipeline provenance records

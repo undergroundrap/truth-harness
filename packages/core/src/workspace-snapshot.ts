@@ -250,6 +250,7 @@ async function collectWorkspaceEntries(root: string): Promise<WorkspaceSnapshotE
   const workspaceRoot = resolve(root, LOCAL_WORKSPACE_DIR);
   const snapshotsRoot = resolve(workspaceRoot, "snapshots");
   const indexesRoot = resolve(workspaceRoot, "indexes");
+  const eventsRoot = resolve(workspaceRoot, "events");
   const entries: WorkspaceSnapshotEntry[] = [];
 
   async function walk(directory: string): Promise<void> {
@@ -270,7 +271,7 @@ async function collectWorkspaceEntries(root: string): Promise<WorkspaceSnapshotE
 
       if (dirent.isDirectory()) {
         const resolvedPath = resolve(path);
-        if (resolvedPath === snapshotsRoot || resolvedPath === indexesRoot) {
+        if (resolvedPath === snapshotsRoot || resolvedPath === indexesRoot || resolvedPath === eventsRoot) {
           continue;
         }
 
@@ -366,6 +367,7 @@ function isWorkspaceDirectory(value: string | undefined): value is LocalWorkspac
   return (
     value === "receipts" ||
     value === "artifacts" ||
+    value === "events" ||
     value === "indexes" ||
     value === "findings" ||
     value === "inventions" ||

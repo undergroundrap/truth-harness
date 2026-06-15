@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createReceipt } from "./receipt.js";
 import { writeClaimChart } from "./claim-chart.js";
 import { createExternalDisclosureLogEntry } from "./disclosure-log.js";
+import { listWorkspaceEvents } from "./event-log.js";
 import { createExperimentLogEntry } from "./experiment-log.js";
 import { writeEvidenceAuditReport } from "./evidence-audit.js";
 import { writeExpertReview } from "./expert-review.js";
@@ -174,6 +175,7 @@ describe("workspace catalog", () => {
     const updatedStatus = await getWorkspaceCatalogStatus(root);
     const checkedStatus = await getWorkspaceCatalogStatus(root, { checkFiles: true });
     const searchAfterWrite = await searchWorkspaceCatalog({ rootPath: root, query: "freshness" });
+    const eventsAfterWrite = await listWorkspaceEvents(root);
 
     expect(fastStatus.freshness.checked).toBe(false);
     expect(freshStatus.stale).toBe(false);
@@ -196,6 +198,18 @@ describe("workspace catalog", () => {
         path: normalizePath(claim.jsonPath, root),
         kind: "claims",
         artifactId: claim.claim.claimId
+      })
+    );
+    expect(eventsAfterWrite.events).toContainEqual(
+      expect.objectContaining({
+        action: "artifact-written",
+        path: normalizePath(claim.jsonPath, root),
+        kind: "claims",
+        artifactId: claim.claim.claimId,
+        artifact: expect.objectContaining({
+          sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+          byteLength: expect.any(Number)
+        })
       })
     );
   });

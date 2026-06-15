@@ -12,6 +12,7 @@ export type LocalWorkspaceDirectory =
   | "receipts"
   | "claims"
   | "artifacts"
+  | "events"
   | "indexes"
   | "findings"
   | "inventions"
@@ -56,6 +57,7 @@ const DEFAULT_WORKSPACE_DIRECTORIES: Record<LocalWorkspaceDirectory, string> = {
   receipts: ".truth-harness/receipts",
   claims: ".truth-harness/claims",
   artifacts: ".truth-harness/artifacts",
+  events: ".truth-harness/events",
   indexes: ".truth-harness/indexes",
   findings: ".truth-harness/findings",
   inventions: ".truth-harness/inventions",

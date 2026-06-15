@@ -102,6 +102,7 @@
           "enum": [
             "receipts",
             "artifacts",
+            "events",
             "indexes",
             "findings",
             "inventions",

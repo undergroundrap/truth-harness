@@ -297,6 +297,22 @@ export { replayReceipt } from "./replay.js";
 export { stableHash } from "./stable-hash.js";
 export { withWorkspaceLock, writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 export type { WorkspaceLockOptions } from "./fs-util.js";
+export {
+  appendArtifactWriteEvent,
+  appendWorkspaceEvent,
+  listWorkspaceEvents,
+  WORKSPACE_EVENT_SCHEMA_VERSION
+} from "./event-log.js";
+export type {
+  WorkspaceArtifactWriteEventInput,
+  WorkspaceEventAction,
+  WorkspaceEventActor,
+  WorkspaceEventActorKind,
+  WorkspaceEventAppendResult,
+  WorkspaceEventInput,
+  WorkspaceEventListResult,
+  WorkspaceEventRecord
+} from "./event-log.js";
 export type { BaseDimension, DimensionCheckResult, DimensionVector } from "./dimension.js";
 export type {
   ArithmeticTeachingAudience,

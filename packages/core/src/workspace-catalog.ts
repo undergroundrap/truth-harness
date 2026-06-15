@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import Database from "better-sqlite3";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
+import { appendArtifactWriteEvent } from "./event-log.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import {
   validateWorkspaceArtifacts,
@@ -603,8 +604,9 @@ export async function upsertWorkspaceCatalogArtifact(input: WorkspaceCatalogUpse
 
 export async function refreshWorkspaceCatalogArtifact(input: WorkspaceCatalogUpsertInput): Promise<WorkspaceCatalogUpsertResult | WorkspaceCatalogStaleResult> {
   const catalogUpdate = await upsertWorkspaceCatalogArtifact(input);
+  let result: WorkspaceCatalogUpsertResult | WorkspaceCatalogStaleResult = catalogUpdate;
   if (!catalogUpdate.updated && catalogUpdate.exists) {
-    return markWorkspaceCatalogStale({
+    result = await markWorkspaceCatalogStale({
       rootPath: input.rootPath,
       reason: input.staleReason ?? "workspace artifact written",
       path: catalogUpdate.path,
@@ -612,7 +614,7 @@ export async function refreshWorkspaceCatalogArtifact(input: WorkspaceCatalogUps
       now: input.now
     });
   }
-  return catalogUpdate;
+  return appendWorkspaceCatalogEvent(input, result);
 }
 
 export async function getWorkspaceCatalogStatus(rootPath: string, input: WorkspaceCatalogStatusInput = {}): Promise<WorkspaceCatalogStatus> {
@@ -1551,6 +1553,31 @@ function uncheckedCatalogFreshness(indexedArtifacts: number, stale: boolean, row
     newArtifacts: 0,
     examples: row?.stale_at ? [`marked:${row.stale_reason ?? "workspace artifact changed"}${row.stale_path ? `:${row.stale_path}` : ""}`] : []
   };
+}
+
+async function appendWorkspaceCatalogEvent<T extends WorkspaceCatalogUpsertResult | WorkspaceCatalogStaleResult>(
+  input: WorkspaceCatalogUpsertInput,
+  result: T
+): Promise<T> {
+  try {
+    await appendArtifactWriteEvent({
+      rootPath: input.rootPath,
+      path: result.path ?? input.path,
+      kind: result.kind ?? input.kind,
+      artifactId: "artifactId" in result ? result.artifactId : undefined,
+      summary: input.staleReason ?? "workspace artifact written",
+      now: input.now
+    });
+    return result;
+  } catch (error) {
+    return {
+      ...result,
+      warnings: [
+        ...result.warnings,
+        `Event log could not be appended: ${error instanceof Error ? error.message : String(error)}. Artifact write remains canonical.`
+      ]
+    };
+  }
 }
 
 function catalogFreshnessWarnings(freshness: WorkspaceCatalogFreshness): string[] {
