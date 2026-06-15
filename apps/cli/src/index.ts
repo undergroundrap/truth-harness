@@ -3230,6 +3230,10 @@ proof
   .option("--write", "Write JSON and Markdown into .truth-harness/proofs")
   .option("--workspace <path>", "Project root path", ".")
   .option("--declaration <name>", "Optional formal declaration name represented by the source")
+  .option("--route <route_id>", "Optional verifier route id this proof-check is intended to support")
+  .option("--obligation <obl_id>", "Optional verifier route obligation id this proof-check is intended to support")
+  .option("--statement-hash <hash>", "Optional hash of the formal/informal statement boundary this proof-check is intended to support")
+  .option("--statement <text>", "Optional statement boundary this proof-check is intended to support")
   .option("--lean-command <path>", "Lean executable path or command. Defaults to TRUTH_HARNESS_LEAN or lean.")
   .option("--timeout-ms <ms>", "Backend probe and proof-check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--fail-on-unproved", "Exit non-zero unless Lean accepts the proof artifact")
@@ -3242,6 +3246,10 @@ proof
         write?: boolean;
         workspace: string;
         declaration?: string;
+        route?: string;
+        obligation?: string;
+        statementHash?: string;
+        statement?: string;
         leanCommand?: string;
         timeoutMs: number;
         failOnUnproved?: boolean;
@@ -3252,6 +3260,7 @@ proof
             rootPath: options.workspace,
             sourcePath,
             declarationName: options.declaration,
+            scope: proofCheckScopeFromOptions(options),
             leanCommand: options.leanCommand,
             timeoutMs: options.timeoutMs
           })
@@ -3263,6 +3272,7 @@ proof
           sourceRef: sourcePath,
           sourceText: await readFile(resolve(sourcePath), "utf8"),
           declarationName: options.declaration,
+          scope: proofCheckScopeFromOptions(options),
           leanCommand: options.leanCommand,
           timeoutMs: options.timeoutMs,
           replayCommand: `truth-harness proof check ${quoteCommandArg(sourcePath)} --json`
@@ -4585,6 +4595,13 @@ function printLeanProofCheck(
   console.log(`Source: ${record.source.path}`);
   if (record.source.declarationName) {
     console.log(`Declaration: ${record.source.declarationName}`);
+  }
+  if (record.scope) {
+    console.log(`Scope route: ${record.scope.routeId ?? "n/a"}`);
+    console.log(`Scope obligation: ${record.scope.obligationId ?? "n/a"}`);
+    if (record.scope.statementHash) {
+      console.log(`Scope statement hash: ${record.scope.statementHash}`);
+    }
   }
   console.log(`Proof-checker backed: ${String(record.proofCheckerBacked)}`);
   console.log(`Replay: ${record.replay}`);
@@ -7259,6 +7276,27 @@ function quoteCommandArg(value: string): string {
 
 function printJson(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
+}
+
+function proofCheckScopeFromOptions(options: {
+  route?: string;
+  obligation?: string;
+  statementHash?: string;
+  statement?: string;
+}): { routeId?: string; obligationId?: string; statementHash?: string; statement?: string } | undefined {
+  const scope = {
+    routeId: normalizeOptionalString(options.route),
+    obligationId: normalizeOptionalString(options.obligation),
+    statementHash: normalizeOptionalString(options.statementHash),
+    statement: normalizeOptionalString(options.statement)
+  };
+
+  return Object.values(scope).some((value) => value !== undefined) ? scope : undefined;
+}
+
+function normalizeOptionalString(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
 }
 
 async function writeJson(path: string, value: unknown): Promise<void> {

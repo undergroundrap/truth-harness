@@ -466,6 +466,7 @@ async function executeWorkspaceRunNextItem(
         rootPath: workspace,
         sourcePath,
         declarationName: typeof options.declaration === "string" ? options.declaration : undefined,
+        scope: proofCheckScopeFromOptions(options),
         leanCommand: typeof options["lean-command"] === "string" ? options["lean-command"] : undefined,
         timeoutMs
       });
@@ -744,6 +745,23 @@ function parseSympyOperation(value: string): SympyOperation {
   throw new Error(
     `Unsupported symbolic operation ${JSON.stringify(value)}. Use simplify, factor, expand, differentiate, or integrate.`
   );
+}
+
+function proofCheckScopeFromOptions(
+  options: Record<string, string | true>
+): { routeId?: string; obligationId?: string; statementHash?: string; statement?: string } | undefined {
+  const scope = {
+    routeId: optionString(options.route),
+    obligationId: optionString(options.obligation),
+    statementHash: optionString(options["statement-hash"]),
+    statement: optionString(options.statement)
+  };
+
+  return Object.values(scope).some((value) => value !== undefined) ? scope : undefined;
+}
+
+function optionString(value: string | true | undefined): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function workspaceLocalRef(rootPath: string, path: string): string {

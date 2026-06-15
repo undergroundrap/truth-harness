@@ -34,6 +34,14 @@ truth-harness proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial
 truth-harness proof list
 ```
 
+When a proof-check is meant to close a verifier-route formal-proof obligation, scope it to the exact route and obligation:
+
+```bash
+truth-harness proof check <workspace-local.lean> --write --route <route_id> --obligation <obl_id>
+```
+
+An accepted proof-check without this route scope is still a useful proof artifact, but it does not automatically satisfy an unrelated route obligation.
+
 Create a visual evidence view from the saved proof-check record:
 
 ```bash
@@ -65,7 +73,7 @@ For serious mathlib work, the target environment should be:
 3. A reviewed `lakefile.lean` or `lakefile.toml`.
 4. A reviewed `lake-manifest.json` for dependency revisions.
 5. A Docker image or dev container that installs exactly that toolchain.
-6. Proof checks that write `.truth-harness/proofs/*.json`.
+6. Proof checks that write `.truth-harness/proofs/*.json`, scoped to route obligations when they are meant to close verifier-route gates.
 7. Visuals and reports generated from proof-check records, not from model claims.
 
 Lean should not be bundled into the default image until the project has a pinned proof-lane environment. The current Docker image keeps Maxima and Z3 ready for CAS/SMT work; Lean remains opt-in until the proof project layout is chosen.

@@ -229,10 +229,20 @@ describe("proof backend status", () => {
     const record = checkLeanProofArtifact({
       sourcePath: "proofs/schema.lean",
       sourceText: "example : True := by trivial\n",
+      scope: {
+        routeId: "route_0123456789abcdef",
+        obligationId: "obl_0123456789abcdef",
+        statementHash: "0123456789abcdef",
+        statement: "example : True"
+      },
       runner
     });
     const schema = JSON.parse(await readFile(resolve(schemasDir, "proof-check.schema.json"), "utf8")) as unknown;
 
+    expect(record.scope).toMatchObject({
+      routeId: "route_0123456789abcdef",
+      obligationId: "obl_0123456789abcdef"
+    });
     expect(validateJsonSchema(record, schema)).toEqual([]);
   });
 

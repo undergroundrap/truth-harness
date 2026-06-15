@@ -423,7 +423,7 @@ function proofCapability(probe: ReturnType<typeof getProofBackendStatus>["backen
     lane: "math",
     status: adapterStatus(probe?.status),
     role: "proof-checker",
-    command: "truth-harness proof check docs/examples/trivial.lean --write",
+    command: "truth-harness proof check <workspace-local.lean> --write",
     executable: probe?.command,
     version: probe?.version,
     localOnly: true,
@@ -433,7 +433,10 @@ function proofCapability(probe: ReturnType<typeof getProofBackendStatus>["backen
     statusProbeMintedEvidence: false,
     trustBoundary: "Can support proved only after Lean accepts a concrete local proof artifact.",
     limitations: probe?.limitations ?? ["Lean has not been probed."],
-    nextStep: probe?.status === "available" ? "Check a concrete Lean proof artifact." : "Install/configure Lean and a pinned proof project."
+    nextStep:
+      probe?.status === "available"
+        ? "Check a concrete Lean proof artifact scoped to the route obligation it is meant to close."
+        : "Install/configure Lean and a pinned proof project."
   };
 }
 

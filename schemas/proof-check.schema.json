@@ -87,6 +87,28 @@
       },
       "additionalProperties": false
     },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "routeId": {
+          "type": "string",
+          "pattern": "^route_[a-f0-9]{16}$"
+        },
+        "obligationId": {
+          "type": "string",
+          "pattern": "^obl_[a-f0-9]{16}$"
+        },
+        "statementHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{16,64}$"
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
     "status": {
       "enum": ["accepted", "rejected", "backend-unavailable", "error"]
     },

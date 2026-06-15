@@ -756,6 +756,22 @@ export function createTruthHarnessMcpServer(): McpServer {
           .optional()
           .describe("Workspace root for writing proof-check records. Defaults to the MCP workspace root."),
         declarationName: z.string().optional().describe("Optional formal declaration name represented by the source file."),
+        routeId: z
+          .string()
+          .regex(/^route_[a-f0-9]{16}$/u)
+          .optional()
+          .describe("Optional verifier route id this proof-check is intended to support."),
+        obligationId: z
+          .string()
+          .regex(/^obl_[a-f0-9]{16}$/u)
+          .optional()
+          .describe("Optional verifier route obligation id this proof-check is intended to support."),
+        statementHash: z
+          .string()
+          .regex(/^[a-f0-9]{16,64}$/u)
+          .optional()
+          .describe("Optional hash of the statement boundary this proof-check is intended to support."),
+        statement: z.string().optional().describe("Optional statement boundary this proof-check is intended to support."),
         timeoutMs: z
           .number()
           .int()
@@ -777,11 +793,26 @@ export function createTruthHarnessMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ sourcePath, workspacePath, declarationName, timeoutMs, write, failOnUnproved }) => {
+    async ({
+      sourcePath,
+      workspacePath,
+      declarationName,
+      routeId,
+      obligationId,
+      statementHash,
+      statement,
+      timeoutMs,
+      write,
+      failOnUnproved
+    }) => {
       const result = await handleTruthHarnessProofCheck({
         sourcePath,
         workspacePath,
         declarationName,
+        routeId,
+        obligationId,
+        statementHash,
+        statement,
         timeoutMs,
         write,
         failOnUnproved

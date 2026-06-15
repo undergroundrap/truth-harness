@@ -407,6 +407,10 @@ export interface TruthHarnessProofCheckInput {
   sourcePath: string;
   workspacePath?: string;
   declarationName?: string;
+  routeId?: string;
+  obligationId?: string;
+  statementHash?: string;
+  statement?: string;
   timeoutMs?: number;
   write?: boolean;
   failOnUnproved?: boolean;
@@ -1389,6 +1393,7 @@ export async function handleTruthHarnessProofCheck(input: TruthHarnessProofCheck
         rootPath: workspaceRoot,
         sourcePath: input.sourcePath,
         declarationName: input.declarationName,
+        scope: proofCheckScopeFromInput(input),
         timeoutMs: input.timeoutMs
       })
     : undefined;
@@ -1400,6 +1405,7 @@ export async function handleTruthHarnessProofCheck(input: TruthHarnessProofCheck
       sourceRef: input.sourcePath,
       sourceText: await readFile(resolvedSourcePath, "utf8"),
       declarationName: input.declarationName,
+      scope: proofCheckScopeFromInput(input),
       timeoutMs: input.timeoutMs,
       replayCommand: `truth-harness proof check ${quoteCommandArg(input.sourcePath)} --json`
     });
@@ -2432,6 +2438,27 @@ function resolvePathUnderRoot(root: string, path: string): string {
 
 function quoteCommandArg(value: string): string {
   return /^[A-Za-z0-9_./\\:-]+$/.test(value) ? value : JSON.stringify(value);
+}
+
+function proofCheckScopeFromInput(input: {
+  routeId?: string;
+  obligationId?: string;
+  statementHash?: string;
+  statement?: string;
+}): { routeId?: string; obligationId?: string; statementHash?: string; statement?: string } | undefined {
+  const scope = {
+    routeId: normalizeOptionalString(input.routeId),
+    obligationId: normalizeOptionalString(input.obligationId),
+    statementHash: normalizeOptionalString(input.statementHash),
+    statement: normalizeOptionalString(input.statement)
+  };
+
+  return Object.values(scope).some((value) => value !== undefined) ? scope : undefined;
+}
+
+function normalizeOptionalString(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
 }
 
 function getWorkspaceRoot(): string {

@@ -465,6 +465,24 @@
         },
         "summary": {
           "type": "string"
+        },
+        "scope": {
+          "type": "object",
+          "properties": {
+            "routeId": {
+              "type": "string",
+              "pattern": "^route_[a-f0-9]{16}$"
+            },
+            "obligationId": {
+              "type": "string",
+              "pattern": "^obl_[a-f0-9]{16}$"
+            },
+            "statementHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{16,64}$"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

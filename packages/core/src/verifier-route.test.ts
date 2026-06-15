@@ -210,7 +210,7 @@ describe("verifier route", () => {
     expect(validation.summary.byKind.routes).toBe(1);
   });
 
-  it("satisfies a formal proof obligation only with accepted proof-check evidence", async () => {
+  it("satisfies a formal proof obligation only with scoped accepted proof-check evidence", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {
       now: "2026-06-12T00:00:00.000Z"
@@ -255,12 +255,36 @@ describe("verifier route", () => {
     });
     const proofRef = relative(root, proofWrite.jsonPath);
 
+    await expect(
+      satisfyVerifierRouteObligation({
+        rootPath: root,
+        routeRef: routeWrite.route.routeId,
+        obligationId: obligation?.obligationId ?? "",
+        evidenceRef: { kind: "proof", ref: proofRef },
+        now: new Date("2026-06-12T00:02:00.000Z")
+      })
+    ).rejects.toThrow("scoped to this exact route and obligation");
+
+    const scopedProofWrite = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "trivial.lean",
+      declarationName: "trivial_true",
+      scope: {
+        routeId: routeWrite.route.routeId,
+        obligationId: obligation?.obligationId,
+        statementHash: "0123456789abcdef"
+      },
+      now: new Date("2026-06-12T00:03:00.000Z"),
+      runner
+    });
+    const scopedProofRef = relative(root, scopedProofWrite.jsonPath);
+
     const satisfied = await satisfyVerifierRouteObligation({
       rootPath: root,
       routeRef: routeWrite.route.routeId,
       obligationId: obligation?.obligationId ?? "",
-      evidenceRef: { kind: "proof", ref: proofRef },
-      now: new Date("2026-06-12T00:02:00.000Z")
+      evidenceRef: { kind: "proof", ref: scopedProofRef },
+      now: new Date("2026-06-12T00:04:00.000Z")
     });
     const readBack = await readVerifierRoute(root, routeWrite.route.routeId);
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
@@ -269,12 +293,16 @@ describe("verifier route", () => {
     expect(satisfied.obligation.satisfiedBy).toEqual([
       expect.objectContaining({
         kind: "proof",
-        ref: proofRef,
-        trust: "proved"
+        ref: scopedProofRef,
+        trust: "proved",
+        scope: expect.objectContaining({
+          routeId: routeWrite.route.routeId,
+          obligationId: obligation?.obligationId
+        })
       })
     ]);
     expect(satisfied.markdown).toContain("Satisfied by:");
-    expect(satisfied.markdown).toContain(`proof:${proofRef}`);
+    expect(satisfied.markdown).toContain(`proof:${scopedProofRef}`);
     const openObligations = satisfied.route.proofObligations.filter((candidate) => candidate.status === "open").length;
     const criticalOpenObligations = satisfied.route.proofObligations.filter(
       (candidate) => candidate.status === "open" && candidate.severity === "critical"
@@ -287,7 +315,7 @@ describe("verifier route", () => {
     });
     expect(readBack.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
       status: "satisfied",
-      satisfactionSummary: "Accepted proof-check record supplies `proved` evidence for this obligation."
+      satisfactionSummary: "Accepted scoped proof-check record supplies `proved` evidence for this obligation."
     });
     expect(validation.passed).toBe(true);
   });
@@ -538,7 +566,7 @@ describe("verifier route", () => {
         evidenceRef: { kind: "route", ref: forgedRouteRef },
         now: new Date("2026-06-12T00:01:00.000Z")
       })
-    ).rejects.toThrow("formal-proof obligations require a proof-check record or proof-backed receipt");
+    ).rejects.toThrow("formal-proof obligations require a scoped proof-check record");
   });
 
   it("refuses malformed proof-check JSON even when it claims proved", async () => {

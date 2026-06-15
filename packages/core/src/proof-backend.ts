@@ -13,6 +13,7 @@ import {
   expectRecord,
   expectStringArray,
   formatValidationError,
+  isRecord,
   parseJsonObject
 } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
@@ -91,6 +92,7 @@ export interface LeanProofCheckInput {
   sourceText: string;
   sourceRef?: string;
   declarationName?: string;
+  scope?: LeanProofCheckScope;
   leanCommand?: string;
   timeoutMs?: number;
   now?: Date;
@@ -119,6 +121,7 @@ export interface LeanProofCheckRecord {
     byteLength: number;
     declarationName?: string;
   };
+  scope?: LeanProofCheckScope;
   status: LeanProofCheckStatus;
   trust: TrustLabel;
   proofCheckerBacked: boolean;
@@ -136,10 +139,18 @@ export interface WriteLeanProofCheckInput {
   rootPath: string;
   sourcePath: string;
   declarationName?: string;
+  scope?: LeanProofCheckScope;
   leanCommand?: string;
   timeoutMs?: number;
   now?: Date;
   runner?: ProofBackendCommandRunner;
+}
+
+export interface LeanProofCheckScope {
+  routeId?: string;
+  obligationId?: string;
+  statementHash?: string;
+  statement?: string;
 }
 
 export interface LeanProofCheckWriteResult {
@@ -217,6 +228,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
   const sourceSha256 = sha256(input.sourceText);
   const sourceByteLength = Buffer.byteLength(input.sourceText, "utf8");
   const declarationName = normalizeOptional(input.declarationName);
+  const scope = normalizeProofCheckScope(input.scope);
   const backendProbe = probeLeanBackend({
     command: leanCommand,
     timeoutMs,
@@ -242,6 +254,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       byteLength: sourceByteLength,
       ...(declarationName ? { declarationName } : {})
     },
+    ...(scope ? { scope } : {}),
     localOnly: true as const,
     networkAccess: "none" as const,
     replay: input.replayCommand ?? `truth-harness proof check ${quoteCommandArg(sourceRef)} --json`
@@ -374,6 +387,7 @@ export async function writeLeanProofCheckRecord(input: WriteLeanProofCheckInput)
     sourceRef,
     sourceText,
     declarationName: input.declarationName,
+    scope: input.scope,
     leanCommand: input.leanCommand,
     timeoutMs: input.timeoutMs,
     now: input.now,
@@ -527,6 +541,12 @@ export function parseLeanProofCheckRecord(raw: string, sourcePath = "proof-check
     expectNonNegativeInteger(source, "byteLength", "$.source.byteLength", issues);
   }
 
+  if (isRecord(parsed.scope)) {
+    validateProofCheckScope(parsed.scope, issues);
+  } else if (parsed.scope !== undefined) {
+    issues.push("$.scope must be an object when present");
+  }
+
   const status = expectOneOf(parsed, "status", ["accepted", "rejected", "backend-unavailable", "error"], "$.status", issues);
   const trust = expectOneOf(parsed, "trust", ["proved", "unverified"], "$.trust", issues);
   const proofCheckerBacked = expectBoolean(parsed, "proofCheckerBacked", "$.proofCheckerBacked", issues);
@@ -569,6 +589,19 @@ export function renderLeanProofCheckMarkdown(record: LeanProofCheckRecord): stri
 
   if (record.source.declarationName) {
     lines.push(`- Declaration: \`${record.source.declarationName}\``);
+  }
+
+  if (record.scope) {
+    lines.push(
+      "",
+      "## Scope",
+      "",
+      ...(record.scope.routeId ? [`- Route: \`${record.scope.routeId}\``] : []),
+      ...(record.scope.obligationId ? [`- Obligation: \`${record.scope.obligationId}\``] : []),
+      ...(record.scope.statementHash ? [`- Statement hash: \`${record.scope.statementHash}\``] : []),
+      ...(record.scope.statement ? [`- Statement: ${record.scope.statement}`] : []),
+      "- Scope links bind this proof-check record to a route obligation for audit; humans must still confirm the Lean statement matches the intended claim."
+    );
   }
 
   lines.push(
@@ -793,6 +826,7 @@ function withCheckId(record: Omit<LeanProofCheckRecord, "checkId">): LeanProofCh
       schemaVersion: record.schemaVersion,
       backend: record.backend,
       source: record.source,
+      scope: record.scope,
       status: record.status,
       trust: record.trust,
       proofCheckerBacked: record.proofCheckerBacked,
@@ -814,6 +848,46 @@ function singleLine(value: string): string {
 function sha256(value: unknown): string {
   const text = typeof value === "string" ? value : JSON.stringify(value);
   return createHash("sha256").update(text).digest("hex");
+}
+
+function normalizeProofCheckScope(scope: LeanProofCheckScope | undefined): LeanProofCheckScope | undefined {
+  if (!scope) {
+    return undefined;
+  }
+
+  const normalized = {
+    routeId: normalizeOptional(scope.routeId),
+    obligationId: normalizeOptional(scope.obligationId),
+    statementHash: normalizeOptional(scope.statementHash),
+    statement: normalizeOptional(scope.statement)
+  };
+
+  return Object.values(normalized).some((value) => value !== undefined) ? normalized : undefined;
+}
+
+function validateProofCheckScope(scope: Record<string, unknown>, issues: string[]): void {
+  validateOptionalPattern(scope, "routeId", /^route_[a-f0-9]{16}$/u, "$.scope.routeId", issues);
+  validateOptionalPattern(scope, "obligationId", /^obl_[a-f0-9]{16}$/u, "$.scope.obligationId", issues);
+  validateOptionalPattern(scope, "statementHash", /^[a-f0-9]{16,64}$/u, "$.scope.statementHash", issues);
+  if (scope.statement !== undefined && (typeof scope.statement !== "string" || scope.statement.trim().length === 0)) {
+    issues.push("$.scope.statement must be a non-empty string when present");
+  }
+}
+
+function validateOptionalPattern(
+  value: Record<string, unknown>,
+  key: string,
+  pattern: RegExp,
+  path: string,
+  issues: string[]
+): void {
+  const entry = value[key];
+  if (entry === undefined) {
+    return;
+  }
+  if (typeof entry !== "string" || !pattern.test(entry)) {
+    issues.push(`${path} must match ${pattern.source}`);
+  }
 }
 
 function normalizeOptional(value: string | undefined): string | undefined {

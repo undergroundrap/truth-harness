@@ -60,6 +60,11 @@ export interface VerifierRouteEvidenceRef {
   ref: string;
   trust?: TrustLabel;
   summary?: string;
+  scope?: {
+    routeId?: string;
+    obligationId?: string;
+    statementHash?: string;
+  };
 }
 
 export interface ResolvedVerifierRouteEvidence extends VerifierRouteEvidenceRef {
@@ -392,7 +397,7 @@ export async function satisfyVerifierRouteObligation(
 
   const obligation = route.proofObligations[obligationIndex];
   const evidence = await resolveVerifierRouteEvidence(status.root, input.evidenceRef);
-  const satisfaction = evidenceSatisfiesObligation(obligation, evidence);
+  const satisfaction = evidenceSatisfiesObligation(route.routeId, obligation, evidence);
 
   if (!satisfaction.satisfied) {
     throw new Error(
@@ -405,7 +410,8 @@ export async function satisfyVerifierRouteObligation(
     kind: input.evidenceRef.kind,
     ref: input.evidenceRef.ref,
     trust: evidence.trust,
-    summary: input.evidenceRef.summary ?? evidence.summary
+    summary: input.evidenceRef.summary ?? evidence.summary,
+    ...(evidence.scope ? { scope: evidence.scope } : {})
   };
   const satisfiedBy = mergeEvidenceRefs(obligation.satisfiedBy ?? [], [satisfiedEvidence]);
   const updatedObligation: ProofObligation = {
@@ -750,6 +756,7 @@ function obligationAcceptanceCriteria(gap: VerifierRouteGap, requiredTrust: Trus
 
   if (requiredTrust === "proved") {
     criteria.unshift("An accepted proof checker returns success for a concrete proof artifact.");
+    criteria.unshift("The proof-check record is scoped to this exact route id and obligation id.");
   } else if (requiredTrust === "smt-checked") {
     criteria.unshift("A concrete SMT solver run returns sat or unsat for the recorded SMT-LIB problem.");
   } else if (requiredTrust === "cross-checked") {
@@ -1034,7 +1041,8 @@ async function resolveVerifierRouteEvidence(
       artifactId: record.checkId,
       status: record.status,
       proofCheckerBacked: record.proofCheckerBacked,
-      acceptedProofChecker: record.backend.acceptedProofChecker
+      acceptedProofChecker: record.backend.acceptedProofChecker,
+      scope: record.scope
     };
   }
 
@@ -1101,6 +1109,7 @@ async function resolveVerifierRouteEvidence(
 }
 
 function evidenceSatisfiesObligation(
+  routeId: string,
   obligation: ProofObligation,
   evidence: ResolvedVerifierRouteEvidence
 ): { satisfied: boolean; reason: string } {
@@ -1116,7 +1125,15 @@ function evidenceSatisfiesObligation(
       evidence.proofCheckerBacked === true &&
       evidence.acceptedProofChecker === true
     ) {
-      return { satisfied: true, reason: "Accepted proof-check record supplies `proved` evidence for this obligation." };
+      if (evidence.scope?.routeId !== routeId || evidence.scope.obligationId !== obligation.obligationId) {
+        return {
+          satisfied: false,
+          reason:
+            "formal-proof obligations require an accepted proof-check record scoped to this exact route and obligation."
+        };
+      }
+
+      return { satisfied: true, reason: "Accepted scoped proof-check record supplies `proved` evidence for this obligation." };
     }
 
     if (
@@ -1125,10 +1142,13 @@ function evidenceSatisfiesObligation(
       evidence.proofCheckerBacked === true &&
       evidence.acceptedProofChecker === true
     ) {
-      return { satisfied: true, reason: "Proof-checker-backed receipt supplies `proved` evidence for this obligation." };
+      return {
+        satisfied: false,
+        reason: "formal-proof route obligations require a scoped proof-check record, not a standalone proof-backed receipt."
+      };
     }
 
-    return { satisfied: false, reason: "formal-proof obligations require a proof-check record or proof-backed receipt." };
+    return { satisfied: false, reason: "formal-proof obligations require a scoped proof-check record." };
   }
 
   if (obligation.kind === "solver-encoding") {

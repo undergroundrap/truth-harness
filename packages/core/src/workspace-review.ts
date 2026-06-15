@@ -914,8 +914,8 @@ function routeObligationEvidenceSlot(item: WorkspaceReviewItem): WorkspaceReview
       label: "Accepted proof-check artifact",
       required: true,
       status: "open",
-      description: "Close this only with an accepted proof-checking backend record or a proof-checker-backed route/receipt.",
-      acceptedArtifacts: ["truth-harness proof check", ".truth-harness/proofs/*.json", "proved receipt/route"],
+      description: "Close this only with an accepted proof-checking backend record scoped to this exact route obligation.",
+      acceptedArtifacts: ["truth-harness proof check --route <route_id> --obligation <obl_id>", ".truth-harness/proofs/*.json"],
       suggestedCommand: item.command,
       attachTo
     };

@@ -265,6 +265,10 @@ describe("MCP tool handlers", () => {
             sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             byteLength: 16
           },
+          scope: {
+            routeId: result.route.routeId,
+            obligationId: obligation?.obligationId
+          },
           status: "accepted",
           trust: "proved",
           proofCheckerBacked: true,
@@ -295,7 +299,11 @@ describe("MCP tool handlers", () => {
       kind: "proof",
       ref: proofRef,
       trust: "proved",
-      schemaVersion: "truth-harness.proof-check.v0"
+      schemaVersion: "truth-harness.proof-check.v0",
+      scope: {
+        routeId: result.route.routeId,
+        obligationId: obligation?.obligationId
+      }
     });
     expect(shown.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
       status: "satisfied"
@@ -582,6 +590,9 @@ describe("MCP tool handlers", () => {
     const result = await handleTruthHarnessProofCheck({
       sourcePath: "example.lean",
       declarationName: "example_true",
+      routeId: "route_0123456789abcdef",
+      obligationId: "obl_0123456789abcdef",
+      statementHash: "0123456789abcdef",
       write: true
     });
     const list = await handleTruthHarnessProofList({});
@@ -591,6 +602,10 @@ describe("MCP tool handlers", () => {
     expect(result.written).toBe(true);
     expect(result.result?.jsonPath).toContain(".truth-harness");
     expect(result.record.trust).toBe("unverified");
+    expect(result.record.scope).toMatchObject({
+      routeId: "route_0123456789abcdef",
+      obligationId: "obl_0123456789abcdef"
+    });
     expect(list.total).toBe(1);
     expect(list.checks[0]?.checkId).toBe(result.record.checkId);
     expect(validation.passed).toBe(true);

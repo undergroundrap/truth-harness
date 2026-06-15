@@ -968,6 +968,10 @@ describe("local web route ledger API", () => {
             sha256: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
             byteLength: 16
           },
+          scope: {
+            routeId: routePayload.route.routeId,
+            obligationId: formalObligation.obligationId
+          },
           status: "accepted",
           trust: "proved",
           proofCheckerBacked: true,

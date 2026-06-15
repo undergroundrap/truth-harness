@@ -635,6 +635,8 @@ describe("benchmark CLI", () => {
         proofObligations: Array<{ obligationId: string; kind: string; status: string }>;
       };
     };
+    const obligation = written.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
+    const obligationId = obligation?.obligationId ?? "obl_0123456789abcdef";
     const proofRef = join(".truth-harness", "proofs", "manual-proof.json");
     await mkdir(join(root, ".truth-harness", "proofs"), { recursive: true });
     await writeFile(
@@ -659,6 +661,11 @@ describe("benchmark CLI", () => {
             sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             byteLength: 16
           },
+          scope: {
+            routeId: written.route.routeId,
+            obligationId,
+            statementHash: "0123456789abcdef"
+          },
           status: "accepted",
           trust: "proved",
           proofCheckerBacked: true,
@@ -673,12 +680,11 @@ describe("benchmark CLI", () => {
       )}\n`,
       "utf8"
     );
-    const obligation = written.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
     const satisfy = await runCli([
       "route",
       "satisfy",
       written.route.routeId,
-      obligation?.obligationId ?? "",
+      obligationId,
       "--workspace",
       root,
       "--evidence",
@@ -697,7 +703,7 @@ describe("benchmark CLI", () => {
       "route",
       "satisfy",
       written.route.routeId,
-      obligation?.obligationId ?? "",
+      obligationId,
       "--workspace",
       root,
       "--evidence",
@@ -713,9 +719,13 @@ describe("benchmark CLI", () => {
     });
     expect(result.evidence).toMatchObject({
       trust: "proved",
-      schemaVersion: "truth-harness.proof-check.v0"
+      schemaVersion: "truth-harness.proof-check.v0",
+      scope: {
+        routeId: written.route.routeId,
+        obligationId
+      }
     });
-    expect(shown.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
+    expect(shown.proofObligations.find((candidate) => candidate.obligationId === obligationId)).toMatchObject({
       status: "satisfied"
     });
     const openObligations = result.route.proofObligations.filter((candidate) => candidate.status === "open").length;
