@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeJsonFileAtomic } from "./fs-util.js";
 import { initLocalWorkspace } from "./local-workspace.js";
-import { cleanLocalWorkspace, repairWorkspaceArtifacts } from "./workspace-maintenance.js";
+import { archiveLocalWorkspace, cleanLocalWorkspace, repairWorkspaceArtifacts } from "./workspace-maintenance.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { writeVerifierRoute } from "./verifier-route.js";
 import { writeVisualArtifact } from "./visual-artifact.js";
@@ -109,6 +109,33 @@ describe("workspace maintenance", () => {
     expect(await pathExists(indexFile)).toBe(false);
     expect(await pathExists(validationFile)).toBe(false);
     expect(await pathExists(receiptFile)).toBe(true);
+  });
+
+  it("archives selected evidence locally before destructive cleanup", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-15T00:00:00.000Z" });
+    const receiptFile = join(root, ".truth-harness", "receipts", "keep.json");
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
+    await writeFile(receiptFile, JSON.stringify({ schemaVersion: "test.receipt.v0", id: "keep" }), "utf8");
+
+    const archive = await archiveLocalWorkspace({
+      rootPath: root,
+      targets: ["evidence"],
+      now: "2026-06-15T00:05:00.000Z",
+      reason: "fresh start test"
+    });
+    const archivedReceiptFile = join(root, ".truth-harness", "archives", archive.archiveId, "receipts", "keep.json");
+    const archiveManifest = join(root, ".truth-harness", "archives", archive.archiveId, "archive-manifest.json");
+    expect(archive.schemaVersion).toBe("truth-harness.workspace-archive.v0");
+    expect(archive.archiveId).toBe("archive_20260615T000500000Z");
+    expect(archive.archivedFiles).toBe(1);
+    expect(await pathExists(archivedReceiptFile)).toBe(true);
+    expect(await pathExists(archiveManifest)).toBe(true);
+
+    const cleaned = await cleanLocalWorkspace({ rootPath: root, targets: ["evidence"], dryRun: false });
+    expect(cleaned.deletedFiles).toBe(1);
+    expect(await pathExists(receiptFile)).toBe(false);
+    expect(await pathExists(archivedReceiptFile)).toBe(true);
   });
 });
 

@@ -26,6 +26,7 @@
     "workspace:repair": "npm run cli -- workspace repair",
     "workspace:repair-artifacts": "npm run cli -- workspace repair-artifacts .",
     "workspace:repair-artifacts:preview": "node apps/cli/dist/index.js workspace repair-artifacts . --preview",
+    "workspace:archive": "npm run cli -- workspace archive .",
     "workspace:clean": "npm run cli -- workspace clean .",
     "demo": "npm run cli -- demo",
     "demo:recording": "node apps/cli/dist/index.js demo --require-symbolic-cross-check",

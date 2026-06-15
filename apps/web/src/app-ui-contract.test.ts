@@ -95,10 +95,13 @@ describe("web UI action contracts", () => {
     expect(html).toContain('id="maintenance-status"');
     expect(html).toContain('id="maintenance-repair-preview"');
     expect(html).toContain('id="maintenance-clean-preview"');
+    expect(html).toContain('id="maintenance-archive-scratch"');
     expect(html).toContain('id="maintenance-clean-scratch"');
     expect(source).toContain('fetch("/api/workspace-maintenance"');
     expect(source).toContain('fetch("/api/workspace-maintenance/repair-artifacts"');
     expect(source).toContain('fetch("/api/workspace-maintenance/clean"');
+    expect(source).toContain('fetch("/api/workspace-maintenance/archive"');
+    expect(source).toContain("function maintenanceArchiveSummary");
     expect(source).toContain("function renderMaintenancePanel()");
     expect(source).toContain("window.confirm(");
     expect(source).toContain('targets: ["scratch"]');

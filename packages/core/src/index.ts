@@ -306,6 +306,7 @@ export {
   repairLocalWorkspace
 } from "./local-workspace.js";
 export {
+  archiveLocalWorkspace,
   cleanLocalWorkspace,
   isWorkspaceCleanTarget,
   repairWorkspaceArtifacts
@@ -758,6 +759,8 @@ export type {
   LocalWorkspaceStatus
 } from "./local-workspace.js";
 export type {
+  WorkspaceArchiveEntry,
+  WorkspaceArchiveResult,
   WorkspaceArtifactRepairAction,
   WorkspaceArtifactRepairResult,
   WorkspaceCleanEntry,

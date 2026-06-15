@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { getEngineManifest } from "./engine-manifest.js";
@@ -51,6 +51,31 @@ export interface WorkspaceCleanResult {
   entries: WorkspaceCleanEntry[];
   deletedFiles: number;
   deletedBytes: number;
+  warnings: string[];
+}
+
+export interface WorkspaceArchiveEntry {
+  directory: LocalWorkspaceDirectory;
+  sourcePath: string;
+  archivePath: string;
+  exists: boolean;
+  files: number;
+  bytes: number;
+  copied: boolean;
+}
+
+export interface WorkspaceArchiveResult {
+  schemaVersion: "truth-harness.workspace-archive.v0";
+  archiveId: string;
+  root: string;
+  workspaceDir: string;
+  archiveDir: string;
+  manifestPath: string;
+  targets: WorkspaceCleanTarget[];
+  resolvedDirectories: LocalWorkspaceDirectory[];
+  entries: WorkspaceArchiveEntry[];
+  archivedFiles: number;
+  archivedBytes: number;
   warnings: string[];
 }
 
@@ -182,6 +207,78 @@ export async function cleanLocalWorkspace(input: {
     entries,
     deletedFiles: dryRun ? 0 : entries.reduce((sum, entry) => sum + (entry.deleted ? entry.files : 0), 0),
     deletedBytes: dryRun ? 0 : entries.reduce((sum, entry) => sum + (entry.deleted ? entry.bytes : 0), 0),
+    warnings
+  };
+}
+
+export async function archiveLocalWorkspace(input: {
+  rootPath: string;
+  targets?: WorkspaceCleanTarget[];
+  now?: string;
+  reason?: string;
+}): Promise<WorkspaceArchiveResult> {
+  const status = await requireWorkspace(input.rootPath);
+  const now = input.now ?? new Date().toISOString();
+  const targets: WorkspaceCleanTarget[] = input.targets && input.targets.length > 0 ? input.targets : ["all"];
+  const directories = resolveCleanTargets(targets);
+  const archiveId = `archive_${compactTimestamp(now)}`;
+  const archiveDir = resolveWorkspaceDirectory(status.root, `${LOCAL_WORKSPACE_DIR}/archives/${archiveId}`);
+  const entries: WorkspaceArchiveEntry[] = [];
+  const warnings = [
+    "Archive copies selected workspace data into .truth-harness/archives; it is local evidence backup, not off-machine backup."
+  ];
+
+  await mkdir(archiveDir, { recursive: true });
+
+  for (const directory of directories) {
+    const sourcePath = resolveWorkspaceDirectory(status.root, status.manifest.directories[directory]);
+    const targetPath = resolveWorkspaceDirectory(status.root, `${LOCAL_WORKSPACE_DIR}/archives/${archiveId}/${directory}`);
+    const exists = await pathExists(sourcePath);
+    const stats = exists ? await collectDirectoryStats(sourcePath, new Set(["archives"])) : { files: 0, bytes: 0 };
+    let copied = false;
+
+    if (exists) {
+      await copyDirectory(sourcePath, targetPath, new Set(["archives"]));
+      copied = stats.files > 0;
+    }
+
+    entries.push({
+      directory,
+      sourcePath: relativeWorkspacePath(status.root, sourcePath),
+      archivePath: relativeWorkspacePath(status.root, targetPath),
+      exists,
+      files: stats.files,
+      bytes: stats.bytes,
+      copied
+    });
+  }
+
+  const manifest = {
+    schemaVersion: "truth-harness.workspace-archive-manifest.v0",
+    archiveId,
+    createdAt: now,
+    root: status.root,
+    workspaceDir: status.workspaceDir,
+    targets,
+    resolvedDirectories: directories,
+    reason: input.reason ?? "local workspace maintenance archive",
+    entries
+  };
+  const manifestPath = join(archiveDir, "archive-manifest.json");
+  await writeJsonFileAtomic(manifestPath, manifest);
+
+  return {
+    schemaVersion: "truth-harness.workspace-archive.v0",
+    archiveId,
+    root: status.root,
+    workspaceDir: status.workspaceDir,
+    archiveDir: relativeWorkspacePath(status.root, archiveDir),
+    manifestPath: relativeWorkspacePath(status.root, manifestPath),
+    targets,
+    resolvedDirectories: directories,
+    entries,
+    archivedFiles: entries.reduce((sum, entry) => sum + (entry.copied ? entry.files : 0), 0),
+    archivedBytes: entries.reduce((sum, entry) => sum + (entry.copied ? entry.bytes : 0), 0),
     warnings
   };
 }
@@ -438,6 +535,26 @@ async function emptyDirectory(directoryPath: string, preservedBaseNames: Set<str
   }
 }
 
+async function copyDirectory(sourcePath: string, targetPath: string, ignoredBaseNames: Set<string>): Promise<void> {
+  await mkdir(targetPath, { recursive: true });
+  const entries = await readdir(sourcePath, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (ignoredBaseNames.has(entry.name)) {
+      continue;
+    }
+
+    const sourceChild = join(sourcePath, entry.name);
+    const targetChild = join(targetPath, entry.name);
+    if (entry.isDirectory()) {
+      await copyDirectory(sourceChild, targetChild, new Set());
+    } else if (entry.isFile()) {
+      await mkdir(dirname(targetChild), { recursive: true });
+      await copyFile(sourceChild, targetChild);
+    }
+  }
+}
+
 async function pathExists(path: string): Promise<boolean> {
   try {
     await stat(path);
@@ -472,6 +589,10 @@ function relativeWorkspacePath(root: string, filePath: string): string {
 
   const rootWithSep = rootPath.endsWith(sep) ? rootPath : `${rootPath}${sep}`;
   return absolutePath.startsWith(rootWithSep) ? absolutePath.slice(rootWithSep.length).split(sep).join("/") : absolutePath;
+}
+
+function compactTimestamp(value: string): string {
+  return value.replace(/[^0-9A-Za-z]/gu, "").slice(0, 24);
 }
 
 function replaceExtension(filePath: string, nextExtension: string): string {

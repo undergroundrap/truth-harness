@@ -23,10 +23,14 @@ node apps/cli/dist/index.js workspace repair-artifacts . --preview
 ## Cleanup
 
 ```bash
+npm run workspace:archive
+npm run cli -- workspace archive . --target evidence --reason "before fresh start"
 npm run workspace:clean
 npm run cli -- workspace clean . --target scratch
 npm run cli -- workspace clean . --target generated --confirm-delete
 ```
+
+Use `workspace archive` before destructive cleanup. It copies selected manifest-known `.truth-harness` directories into `.truth-harness/archives/<archive-id>/` and writes an `archive-manifest.json` with targets, copied directories, file counts, byte counts, and the reason. Archives are local backups for maintenance and handoff safety; they are not off-machine backups and should still be committed, exported, or copied elsewhere if the work is important.
 
 The default `workspace clean` target is `scratch`, which previews clearing rebuildable caches and generated health files:
 
@@ -46,3 +50,5 @@ Deletion requires `--confirm-delete`. Without it, Truth Harness prints the files
 ## Safety Boundary
 
 Cleanup does not accept arbitrary filesystem paths. Targets are resolved from the local workspace manifest and must stay under `.truth-harness/`. Index lock files are preserved so cleanup does not disturb active workspace operations.
+
+Archive and cleanup commands use the same target vocabulary. Archive output is structured JSON with `--json`, so an agent can cite the archive manifest before requesting any destructive cleanup.

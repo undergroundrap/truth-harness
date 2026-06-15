@@ -10,6 +10,7 @@ import {
   checkClaimFile,
   checkLeanProofArtifact,
   checkSmtLibArtifact,
+  archiveLocalWorkspace,
   cleanLocalWorkspace,
   createBenchmarkComparisonRecord,
   createClaimChart,
@@ -206,6 +207,7 @@ import {
   type LocalWorkspaceInitResult,
   type LocalWorkspaceRepairResult,
   type LocalWorkspaceStatus,
+  type WorkspaceArchiveResult,
   type WorkspaceArtifactRepairResult,
   type WorkspaceCleanResult,
   type WorkspaceCleanTarget,
@@ -2768,6 +2770,42 @@ workspace
   });
 
 workspace
+  .command("archive")
+  .description("Copy selected .truth-harness data directories into a local archive before cleanup.")
+  .argument("[path]", "Project root path", ".")
+  .option(
+    "--target <target>",
+    "Archive target: scratch, generated, evidence, all, or a workspace directory name. Repeat for multiple targets.",
+    collectWorkspaceCleanTarget,
+    [] as WorkspaceCleanTarget[]
+  )
+  .option("--reason <reason>", "Human-readable reason recorded in the archive manifest")
+  .option("--json", "Print the full workspace archive JSON")
+  .action(
+    async (
+      path: string,
+      options: {
+        target: WorkspaceCleanTarget[];
+        reason?: string;
+        json?: boolean;
+      }
+    ) => {
+      const result = await archiveLocalWorkspace({
+        rootPath: path,
+        targets: options.target,
+        reason: options.reason
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printWorkspaceArchive(result);
+    }
+  );
+
+workspace
   .command("clean")
   .description("Preview or clear selected .truth-harness data directories.")
   .argument("[path]", "Project root path", ".")
@@ -5297,6 +5335,37 @@ function printWorkspaceArtifactRepair(result: WorkspaceArtifactRepairResult): vo
   if (result.warnings.length > 0) {
     console.log("");
     console.log("Repair boundary:");
+    for (const warning of result.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printWorkspaceArchive(result: WorkspaceArchiveResult): void {
+  console.log("Truth Harness workspace archive complete");
+  console.log(`Root: ${result.root}`);
+  console.log(`Archive: ${result.archiveDir}`);
+  console.log(`Manifest: ${result.manifestPath}`);
+  console.log(`Targets: ${result.targets.join(", ")}`);
+  console.log(`Resolved directories: ${result.resolvedDirectories.join(", ")}`);
+
+  if (result.entries.length > 0) {
+    console.log("");
+    console.log("Archived directories:");
+    for (const entry of result.entries) {
+      const action = entry.exists ? "copied" : "missing";
+      console.log(
+        `  ${action.padEnd(7)} ${entry.directory.padEnd(14)} ${entry.files} files, ${formatBytes(entry.bytes)} -> ${entry.archivePath}`
+      );
+    }
+  }
+
+  console.log("");
+  console.log(`Archived: ${result.archivedFiles} files, ${formatBytes(result.archivedBytes)}`);
+
+  if (result.warnings.length > 0) {
+    console.log("");
+    console.log("Archive boundary:");
     for (const warning of result.warnings) {
       console.log(`  ${warning}`);
     }

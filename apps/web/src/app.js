@@ -328,6 +328,7 @@ const maintenanceRefreshButton = document.querySelector("#maintenance-refresh");
 const maintenanceRepairPreviewButton = document.querySelector("#maintenance-repair-preview");
 const maintenanceRepairApplyButton = document.querySelector("#maintenance-repair-apply");
 const maintenanceCleanPreviewButton = document.querySelector("#maintenance-clean-preview");
+const maintenanceArchiveScratchButton = document.querySelector("#maintenance-archive-scratch");
 const maintenanceCleanScratchButton = document.querySelector("#maintenance-clean-scratch");
 const sessionList = document.querySelector("#session-list");
 const sidebarActionButtons = document.querySelectorAll("[data-sidebar-action]");
@@ -8099,6 +8100,53 @@ async function cleanWorkspaceFromUi({ confirmDelete = false } = {}) {
   }
 }
 
+async function archiveWorkspaceScratchFromUi() {
+  if (state.maintenanceLoading) {
+    return;
+  }
+
+  state.maintenanceLoading = true;
+  state.maintenanceError = undefined;
+  renderMaintenancePanel();
+  addActivity(
+    "human",
+    "Archiving scratch workspace data",
+    "Local API will copy rebuildable scratch directories into .truth-harness/archives before any cleanup.",
+    "waiting"
+  );
+
+  try {
+    const response = await fetch("/api/workspace-maintenance/archive", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        targets: ["scratch"],
+        reason: "web scratch maintenance"
+      })
+    });
+    const payload = await readLocalApiJson(response, "Workspace archive failed.");
+    updateLatestActivity(
+      "Archiving scratch workspace data",
+      "passed",
+      localApiSuccessMessage(payload, maintenanceArchiveSummary(payload.archive))
+    );
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, "passed", item.at);
+    }
+    await refreshWorkspaceMaintenance({ announce: false });
+    await refreshWorkspaceEvents({ announce: false });
+  } catch (error) {
+    state.maintenanceError = error instanceof Error ? error.message : "Unknown workspace archive failure.";
+    updateLatestActivity("Archiving scratch workspace data", "refuted", state.maintenanceError);
+  } finally {
+    state.maintenanceLoading = false;
+    renderMaintenancePanel();
+  }
+}
+
 async function refreshCatalogStatus({ announce = false } = {}) {
   if (!catalogSearchStatus) {
     return;
@@ -8340,6 +8388,7 @@ function renderMaintenancePanel() {
     maintenanceRepairPreviewButton,
     maintenanceRepairApplyButton,
     maintenanceCleanPreviewButton,
+    maintenanceArchiveScratchButton,
     maintenanceCleanScratchButton
   ].filter(Boolean);
 
@@ -8404,6 +8453,17 @@ function maintenanceCleanSummary(clean) {
   return clean.dryRun
     ? `${files} scratch file${files === 1 ? "" : "s"} (${formatBytes(bytes)}) would be cleared; no files deleted.`
     : `${files} scratch file${files === 1 ? "" : "s"} (${formatBytes(bytes)}) deleted from selected .truth-harness directories.`;
+}
+
+function maintenanceArchiveSummary(archive) {
+  if (!archive) {
+    return "Workspace archive result unavailable.";
+  }
+
+  const files = archive.archivedFiles ?? 0;
+  const bytes = archive.archivedBytes ?? 0;
+  const path = archive.archiveDir ?? ".truth-harness/archives";
+  return `${files} file${files === 1 ? "" : "s"} (${formatBytes(bytes)}) archived locally at ${path}; no files deleted.`;
 }
 
 function formatBytes(bytes) {
@@ -11466,6 +11526,10 @@ maintenanceRepairApplyButton?.addEventListener("click", () => {
 
 maintenanceCleanPreviewButton?.addEventListener("click", () => {
   void cleanWorkspaceFromUi({ confirmDelete: false });
+});
+
+maintenanceArchiveScratchButton?.addEventListener("click", () => {
+  void archiveWorkspaceScratchFromUi();
 });
 
 maintenanceCleanScratchButton?.addEventListener("click", () => {

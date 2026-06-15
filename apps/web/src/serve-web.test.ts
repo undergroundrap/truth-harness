@@ -362,6 +362,7 @@ describe("local web route ledger API", () => {
     });
     expect(maintenancePayload.maintenance.artifactRepair.dryRun).toBe(true);
     expect(maintenancePayload.maintenance.scratchCleanup.dryRun).toBe(true);
+    expect(maintenancePayload.maintenance.commands.archiveScratch).toContain("workspace archive");
 
     const repairPreviewResponse = await fetch(`${baseUrl}/api/workspace-maintenance/repair-artifacts`, {
       method: "POST",
@@ -393,6 +394,28 @@ describe("local web route ledger API", () => {
       dryRun: true,
       resolvedDirectories: ["indexes", "validation", "snapshots"]
     });
+
+    const archiveResponse = await fetch(`${baseUrl}/api/workspace-maintenance/archive`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ targets: ["scratch"], reason: "test archive" })
+    });
+    expect(archiveResponse.status).toBe(200);
+    const archivePayload = await archiveResponse.json();
+    expectLocalApiSuccess(archiveResponse, archivePayload);
+    expect(archivePayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-archive-response.v0",
+      localOnly: true,
+      externalCalls: []
+    });
+    expect(archivePayload.archive).toMatchObject({
+      schemaVersion: "truth-harness.workspace-archive.v0",
+      targets: ["scratch"],
+      resolvedDirectories: ["indexes", "validation", "snapshots"]
+    });
+    expect(archivePayload.activity[0].detail).toContain("no files deleted");
 
     const sessionWrite = await writeResearchSession({
       rootPath: tempProjectRoot,

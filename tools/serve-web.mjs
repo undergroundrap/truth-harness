@@ -379,6 +379,37 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/workspace-maintenance/archive" && request.method === "POST") {
+    try {
+      const input = await readJsonBody(request);
+      const { archiveLocalWorkspace } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const targets = normalizeWorkspaceCleanTargets(input.targets);
+      const archive = await archiveLocalWorkspace({
+        rootPath: projectRoot,
+        targets,
+        reason: typeof input.reason === "string" && input.reason.trim() ? input.reason.trim() : "web workspace maintenance"
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-archive-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        archive,
+        activity: [
+          {
+            actor: "local-api",
+            action: "archived-workspace",
+            detail: `${archive.archivedFiles} file${archive.archivedFiles === 1 ? "" : "s"} copied into ${archive.archiveDir}; no files deleted.`,
+            at: new Date().toISOString()
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Workspace archive failed.", request);
+    }
+    return;
+  }
+
   if (requestUrl.pathname === "/api/claims" && request.method === "GET") {
     const snapshot = await readClaimLedgerSnapshot();
     writeJson(response, 200, {
@@ -1268,6 +1299,7 @@ async function readWorkspaceMaintenance() {
     artifactRepair: repairPreview,
     scratchCleanup: scratchPreview,
     commands: {
+      archiveScratch: `node apps/cli/dist/index.js workspace archive ${quoteCommandArg(projectRoot)} --target scratch --reason ${quoteCommandArg("before scratch cleanup")}`,
       repairPreview: "npm run workspace:repair-artifacts:preview",
       repairApply: "npm run workspace:repair-artifacts",
       cleanPreview: "npm run workspace:clean",
