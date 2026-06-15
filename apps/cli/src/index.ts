@@ -5201,6 +5201,13 @@ function printWorkspaceCatalogStatus(status: WorkspaceCatalogStatus): void {
   if (status.lastRebuiltAt) {
     console.log(`Last rebuilt: ${status.lastRebuiltAt}`);
   }
+  if (status.invalidation) {
+    console.log(`Invalidated: ${status.invalidatedAt ?? "(unknown time)"}`);
+    console.log(`Invalidation reason: ${status.invalidation.reason}`);
+    if (status.invalidation.path) {
+      console.log(`Invalidation path: ${status.invalidation.path}`);
+    }
+  }
   console.log(`Artifacts: ${status.artifactCount}`);
   console.log(`Claims/routes: ${status.claimCount}/${status.routeCount}`);
   console.log(`Freshness checked: ${String(status.freshness.checked)}`);

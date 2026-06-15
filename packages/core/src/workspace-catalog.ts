@@ -19,6 +19,30 @@ export interface WorkspaceCatalogStatusInput {
   checkFiles?: boolean;
 }
 
+export interface WorkspaceCatalogStaleInput {
+  rootPath: string;
+  reason: string;
+  path?: string;
+  kind?: string;
+  now?: string;
+}
+
+export interface WorkspaceCatalogStaleResult {
+  schemaVersion: "truth-harness.catalog-stale.v0";
+  workspacePath: string;
+  catalogPath: string;
+  localOnly: true;
+  networkAccess: "none";
+  sourceOfTruth: "workspace-json";
+  exists: boolean;
+  marked: boolean;
+  staleAt?: string;
+  reason: string;
+  path?: string;
+  kind?: string;
+  warnings: string[];
+}
+
 export interface WorkspaceCatalogRebuildResult {
   schemaVersion: "truth-harness.catalog-rebuild.v0";
   catalogSchemaVersion: typeof WORKSPACE_CATALOG_SCHEMA_VERSION;
@@ -58,6 +82,12 @@ export interface WorkspaceCatalogStatus {
   claimCount: number;
   routeCount: number;
   lastRebuiltAt?: string;
+  invalidatedAt?: string;
+  invalidation?: {
+    reason: string;
+    path?: string;
+    kind?: string;
+  };
   sourceOfTruth: "workspace-json";
   freshness: WorkspaceCatalogFreshness;
   warnings: string[];
@@ -164,6 +194,10 @@ interface CatalogRecordMetadata {
 interface CatalogStatusRow {
   schema_version?: string;
   last_rebuilt_at?: string;
+  stale_at?: string;
+  stale_reason?: string;
+  stale_path?: string;
+  stale_kind?: string;
   artifact_count?: number;
   claim_count?: number;
   route_count?: number;
@@ -336,6 +370,103 @@ export async function rebuildWorkspaceCatalog(input: WorkspaceCatalogRebuildInpu
   }
 }
 
+export async function markWorkspaceCatalogStale(input: WorkspaceCatalogStaleInput): Promise<WorkspaceCatalogStaleResult> {
+  const status = await requireLocalWorkspace(input.rootPath);
+  const catalogPath = workspaceCatalogPath(status);
+  const staleAt = input.now ?? new Date().toISOString();
+  const reason = safeText(input.reason || "workspace artifact changed");
+  const path = input.path ? normalizePortablePath(input.path) : undefined;
+  const kind = input.kind ? safeText(input.kind) : undefined;
+
+  let exists = false;
+  try {
+    await stat(catalogPath);
+    exists = true;
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  if (!exists) {
+    return {
+      schemaVersion: "truth-harness.catalog-stale.v0",
+      workspacePath: status.root,
+      catalogPath,
+      localOnly: true,
+      networkAccess: "none",
+      sourceOfTruth: "workspace-json",
+      exists: false,
+      marked: false,
+      reason,
+      path,
+      kind,
+      warnings: ["Catalog is missing; no cache invalidation marker was needed."]
+    };
+  }
+
+  try {
+    const db = openCatalogDatabase(catalogPath, { createSchema: false });
+    try {
+      const row = readCatalogStatusRow(db);
+      if (row.schema_version !== WORKSPACE_CATALOG_SCHEMA_VERSION) {
+        return {
+          schemaVersion: "truth-harness.catalog-stale.v0",
+          workspacePath: status.root,
+          catalogPath,
+          localOnly: true,
+          networkAccess: "none",
+          sourceOfTruth: "workspace-json",
+          exists: true,
+          marked: false,
+          reason,
+          path,
+          kind,
+          warnings: [`Catalog schema is ${row.schema_version ?? "unknown"}; expected ${WORKSPACE_CATALOG_SCHEMA_VERSION}. Rebuild required.`]
+        };
+      }
+
+      writeCatalogMeta(db, "staleAt", staleAt);
+      writeCatalogMeta(db, "staleReason", reason);
+      writeCatalogMeta(db, "stalePath", path ?? "");
+      writeCatalogMeta(db, "staleKind", kind ?? "");
+      return {
+        schemaVersion: "truth-harness.catalog-stale.v0",
+        workspacePath: status.root,
+        catalogPath,
+        localOnly: true,
+        networkAccess: "none",
+        sourceOfTruth: "workspace-json",
+        exists: true,
+        marked: true,
+        staleAt,
+        reason,
+        path,
+        kind,
+        warnings: ["Catalog was marked stale; rebuild before relying on search completeness."]
+      };
+    } finally {
+      db.close();
+    }
+  } catch (error) {
+    return {
+      schemaVersion: "truth-harness.catalog-stale.v0",
+      workspacePath: status.root,
+      catalogPath,
+      localOnly: true,
+      networkAccess: "none",
+      sourceOfTruth: "workspace-json",
+      exists: true,
+      marked: false,
+      reason,
+      path,
+      kind,
+      warnings: [`Catalog could not be marked stale: ${error instanceof Error ? error.message : String(error)}. Rebuild required.`]
+    };
+  }
+}
+
 export async function getWorkspaceCatalogStatus(rootPath: string, input: WorkspaceCatalogStatusInput = {}): Promise<WorkspaceCatalogStatus> {
   const status = await requireLocalWorkspace(rootPath);
   const catalogPath = workspaceCatalogPath(status);
@@ -375,11 +506,12 @@ export async function getWorkspaceCatalogStatus(rootPath: string, input: Workspa
     try {
       const row = readCatalogStatusRow(db);
       const schemaStale = row.schema_version !== WORKSPACE_CATALOG_SCHEMA_VERSION;
+      const markerStale = Boolean(row.stale_at);
       const freshness =
         input.checkFiles && !schemaStale
-          ? await compareCatalogFreshness(status, db)
-          : uncheckedCatalogFreshness(row.artifact_count ?? 0, schemaStale);
-      const stale = schemaStale || freshness.stale;
+          ? markCatalogFreshness(await compareCatalogFreshness(status, db), row)
+          : uncheckedCatalogFreshness(row.artifact_count ?? 0, schemaStale || markerStale, row);
+      const stale = schemaStale || markerStale || freshness.stale;
       return {
         schemaVersion: "truth-harness.catalog-status.v0",
         catalogSchemaVersion: row.schema_version,
@@ -394,6 +526,14 @@ export async function getWorkspaceCatalogStatus(rootPath: string, input: Workspa
         claimCount: row.claim_count ?? 0,
         routeCount: row.route_count ?? 0,
         lastRebuiltAt: row.last_rebuilt_at,
+        invalidatedAt: row.stale_at,
+        invalidation: row.stale_reason
+          ? {
+              reason: row.stale_reason,
+              path: row.stale_path,
+              kind: row.stale_kind
+            }
+          : undefined,
         sourceOfTruth: "workspace-json",
         freshness,
         warnings:
@@ -428,7 +568,7 @@ export async function searchWorkspaceCatalog(input: WorkspaceCatalogSearchInput)
   const status = await requireLocalWorkspace(input.rootPath);
   const catalogPath = workspaceCatalogPath(status);
   const catalogStatus = await getWorkspaceCatalogStatus(status.root);
-  if (!catalogStatus.readable || catalogStatus.catalogSchemaVersion !== WORKSPACE_CATALOG_SCHEMA_VERSION) {
+  if (!catalogStatus.readable || catalogStatus.stale || catalogStatus.catalogSchemaVersion !== WORKSPACE_CATALOG_SCHEMA_VERSION) {
     throw new Error("Workspace catalog is missing, stale, or unreadable. Run `truth-harness catalog rebuild` before searching.");
   }
 
@@ -990,7 +1130,19 @@ async function listWorkspaceJsonFiles(root: string): Promise<string[]> {
   return files.sort();
 }
 
-function uncheckedCatalogFreshness(indexedArtifacts: number, stale: boolean): WorkspaceCatalogFreshness {
+function markCatalogFreshness(freshness: WorkspaceCatalogFreshness, row: CatalogStatusRow): WorkspaceCatalogFreshness {
+  if (!row.stale_at) {
+    return freshness;
+  }
+
+  return {
+    ...freshness,
+    stale: true,
+    examples: [`marked:${row.stale_reason ?? "workspace artifact changed"}${row.stale_path ? `:${row.stale_path}` : ""}`, ...freshness.examples].slice(0, 8)
+  };
+}
+
+function uncheckedCatalogFreshness(indexedArtifacts: number, stale: boolean, row?: CatalogStatusRow): WorkspaceCatalogFreshness {
   return {
     checked: false,
     stale,
@@ -998,7 +1150,7 @@ function uncheckedCatalogFreshness(indexedArtifacts: number, stale: boolean): Wo
     changedArtifacts: 0,
     missingArtifacts: 0,
     newArtifacts: 0,
-    examples: []
+    examples: row?.stale_at ? [`marked:${row.stale_reason ?? "workspace artifact changed"}${row.stale_path ? `:${row.stale_path}` : ""}`] : []
   };
 }
 
@@ -1006,7 +1158,9 @@ function catalogFreshnessWarnings(freshness: WorkspaceCatalogFreshness): string[
   const warnings = [...catalogWarnings()];
   if (freshness.stale) {
     warnings.unshift(
-      `Catalog is stale: ${freshness.changedArtifacts} changed, ${freshness.newArtifacts} new, ${freshness.missingArtifacts} missing workspace artifacts. Rebuild required before relying on search completeness.`
+      freshness.checked
+        ? `Catalog is stale: ${freshness.changedArtifacts} changed, ${freshness.newArtifacts} new, ${freshness.missingArtifacts} missing workspace artifacts. Rebuild required before relying on search completeness.`
+        : "Catalog is stale because a workspace artifact write invalidated the cache. Rebuild required before relying on search completeness."
     );
     if (freshness.examples.length > 0) {
       warnings.unshift(`Catalog freshness examples: ${freshness.examples.join(", ")}.`);
@@ -1021,10 +1175,18 @@ function readCatalogStatusRow(db: Database.Database): CatalogStatusRow {
   return {
     schema_version: values.get("schemaVersion"),
     last_rebuilt_at: values.get("rebuiltAt"),
+    stale_at: optionalMetaValue(values.get("staleAt")),
+    stale_reason: optionalMetaValue(values.get("staleReason")),
+    stale_path: optionalMetaValue(values.get("stalePath")),
+    stale_kind: optionalMetaValue(values.get("staleKind")),
     artifact_count: parseInteger(values.get("artifactCount")),
     claim_count: parseInteger(values.get("claimCount")),
     route_count: parseInteger(values.get("routeCount"))
   };
+}
+
+function writeCatalogMeta(db: Database.Database, key: string, value: string): void {
+  db.prepare("INSERT INTO catalog_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
 }
 
 function searchRowFromSql(row: CatalogSearchSqlRow): WorkspaceCatalogSearchRow {
@@ -1185,6 +1347,10 @@ function parseInteger(value: string | undefined): number | undefined {
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function optionalMetaValue(value: string | undefined): string | undefined {
+  return value && value.trim() ? value : undefined;
 }
 
 function sha256Text(value: string): string {

@@ -221,7 +221,7 @@ All outputs should be structured JSON-first and include whether the response cam
 4. Route web search through catalog if available, fallback to existing APIs. Done for sidebar workspace search with explicit rebuild/status prompts.
 5. Route `claim list`, `route list`, and visual/artifact search through catalog for large workspaces.
 6. Add MCP catalog tools for agents. Done.
-7. Add incremental refresh and stale detection. File freshness detection is done for status surfaces; incremental writer-side refresh remains future work.
+7. Add incremental refresh and stale detection. File freshness detection is done for status surfaces, and writer-side invalidation is done for claim, route, route-obligation, and web receipt writes. Row-level incremental refresh remains future work.
 
 ## Tests
 

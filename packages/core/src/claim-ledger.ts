@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve, sep } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
@@ -9,6 +9,7 @@ import { parseSmtCheckRecord } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { readVerifierRoute, verifierRouteReadiness } from "./verifier-route.js";
+import { markWorkspaceCatalogStale } from "./workspace-catalog.js";
 
 export const CLAIM_LEDGER_DOMAINS = [
   "math",
@@ -321,6 +322,13 @@ export async function writeClaimLedgerRecord(input: CreateClaimLedgerRecordInput
 
   await writeFile(jsonPath, `${JSON.stringify(claim, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, claim.markdown, "utf8");
+  await markWorkspaceCatalogStale({
+    rootPath: status.root,
+    reason: "claim ledger record written",
+    path: relative(status.root, jsonPath),
+    kind: "claims",
+    now: claim.createdAt
+  });
 
   return {
     claim,

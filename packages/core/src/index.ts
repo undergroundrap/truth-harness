@@ -568,6 +568,7 @@ export {
   WORKSPACE_CATALOG_FILE,
   WORKSPACE_CATALOG_SCHEMA_VERSION,
   getWorkspaceCatalogStatus,
+  markWorkspaceCatalogStale,
   rebuildWorkspaceCatalog,
   searchWorkspaceCatalog
 } from "./workspace-catalog.js";
@@ -577,6 +578,8 @@ export type {
   WorkspaceCatalogSearchInput,
   WorkspaceCatalogSearchResult,
   WorkspaceCatalogSearchRow,
+  WorkspaceCatalogStaleInput,
+  WorkspaceCatalogStaleResult,
   WorkspaceCatalogStatus
 } from "./workspace-catalog.js";
 export type {

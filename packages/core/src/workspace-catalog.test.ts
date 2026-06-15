@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createReceipt } from "./receipt.js";
 import { initLocalWorkspace } from "./local-workspace.js";
-import { rebuildWorkspaceCatalog, getWorkspaceCatalogStatus, searchWorkspaceCatalog } from "./workspace-catalog.js";
+import { markWorkspaceCatalogStale, rebuildWorkspaceCatalog, getWorkspaceCatalogStatus, searchWorkspaceCatalog } from "./workspace-catalog.js";
 import { sealVaultFile } from "./vault.js";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { writeVerifierRoute } from "./verifier-route.js";
@@ -146,10 +146,16 @@ describe("workspace catalog", () => {
       now: "2026-06-14T00:00:02.000Z"
     });
 
+    const markedStatus = await getWorkspaceCatalogStatus(root);
     const staleStatus = await getWorkspaceCatalogStatus(root, { checkFiles: true });
 
     expect(fastStatus.freshness.checked).toBe(false);
     expect(freshStatus.stale).toBe(false);
+    expect(markedStatus.stale).toBe(true);
+    expect(markedStatus.invalidation).toMatchObject({
+      reason: "claim ledger record written",
+      kind: "claims"
+    });
     expect(staleStatus.readable).toBe(true);
     expect(staleStatus.stale).toBe(true);
     expect(staleStatus.freshness).toMatchObject({
@@ -160,6 +166,50 @@ describe("workspace catalog", () => {
     });
     expect(staleStatus.freshness.examples.join("\n")).toContain("new:.truth-harness/claims/");
     expect(staleStatus.warnings.join("\n")).toContain("Catalog is stale");
+    await expect(searchWorkspaceCatalog({ rootPath: root, query: "freshness" })).rejects.toThrow("stale");
+
+    const rebuilt = await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-14T00:00:03.000Z" });
+    const rebuiltStatus = await getWorkspaceCatalogStatus(root, { checkFiles: true });
+    const searchAfterRebuild = await searchWorkspaceCatalog({ rootPath: root, query: "freshness" });
+
+    expect(rebuilt.artifactCount).toBe(rebuiltStatus.artifactCount);
+    expect(rebuiltStatus.stale).toBe(false);
+    expect(rebuiltStatus.invalidatedAt).toBeUndefined();
+    expect(searchAfterRebuild.results).toContainEqual(expect.objectContaining({ kind: "claims" }));
+  });
+
+  it("marks an existing catalog stale without creating a canonical artifact", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    await writeReceipt(root, "fraction.json", createReceipt("compute 3 / 4 + 5 / 8"));
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-14T00:00:01.000Z" });
+
+    const mark = await markWorkspaceCatalogStale({
+      rootPath: root,
+      reason: "external agent wrote a receipt",
+      path: ".truth-harness/receipts/fraction.json",
+      kind: "receipts",
+      now: "2026-06-14T00:00:02.000Z"
+    });
+    const status = await getWorkspaceCatalogStatus(root);
+
+    expect(mark).toMatchObject({
+      schemaVersion: "truth-harness.catalog-stale.v0",
+      exists: true,
+      marked: true,
+      staleAt: "2026-06-14T00:00:02.000Z"
+    });
+    expect(status).toMatchObject({
+      readable: true,
+      stale: true,
+      invalidatedAt: "2026-06-14T00:00:02.000Z",
+      invalidation: {
+        reason: "external agent wrote a receipt",
+        path: ".truth-harness/receipts/fraction.json",
+        kind: "receipts"
+      }
+    });
+    await expect(searchWorkspaceCatalog({ rootPath: root, query: "fraction" })).rejects.toThrow("stale");
   });
 
   it("does not index vault plaintext and escapes hostile-looking FTS queries", async () => {
