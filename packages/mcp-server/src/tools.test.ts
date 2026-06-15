@@ -1053,11 +1053,19 @@ describe("MCP tool handlers", () => {
       maxRoutes: 0,
       maxSessions: 0
     });
+    const writtenDryRun = await handleTruthHarnessWorkspaceRunNext({
+      maxRoutes: 0,
+      maxSessions: 0,
+      write: true
+    });
     const executed = await handleTruthHarnessWorkspaceRunNext({
       maxRoutes: 0,
       maxSessions: 0,
       executeLocal: true
     });
+    if ("written" in dryRun || "written" in executed) {
+      throw new Error("Expected plain run-next plans without write=true.");
+    }
 
     expect(dryRun.schemaVersion).toBe("truth-harness.workspace-run-next.v0");
     expect(dryRun.localOnly).toBe(true);
@@ -1072,6 +1080,17 @@ describe("MCP tool handlers", () => {
       status: "planned",
       kind: "dry-run"
     });
+    expect("written" in writtenDryRun ? writtenDryRun.written : false).toBe(true);
+    if (!("written" in writtenDryRun)) {
+      throw new Error("Expected written run-next MCP output.");
+    }
+    expect(writtenDryRun.plan).toMatchObject({
+      schemaVersion: "truth-harness.workspace-run-next.v0",
+      dryRun: true
+    });
+    expect(writtenDryRun.result.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(writtenDryRun.result.markdown).toContain("Truth Harness Run-Next Plan");
+    expect(await readFile(writtenDryRun.result.markdownPath, "utf8")).toContain("not a trust-label upgrade");
     expect(executed.dryRun).toBe(false);
     expect(executed.status).toBe("executed");
     expect(executed.execution.status).toBe("executed");

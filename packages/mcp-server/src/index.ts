@@ -1340,21 +1340,26 @@ export function createTruthHarnessMcpServer(): McpServer {
         executeLocal: z
           .boolean()
           .optional()
-          .describe("When true, execute one supported local Truth Harness action in-process. Defaults to false.")
+          .describe("When true, execute one supported local Truth Harness action in-process. Defaults to false."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write the run-next plan JSON/Markdown into .truth-harness/findings for durable agent intent provenance.")
       },
       annotations: {
         readOnlyHint: false,
         openWorldHint: false
       }
     },
-    async ({ workspacePath, maxRoutes, maxClaims, maxSessions, executeLocal }) =>
+    async ({ workspacePath, maxRoutes, maxClaims, maxSessions, executeLocal, write }) =>
       toolJson(
         await handleTruthHarnessWorkspaceRunNext({
           workspacePath,
           maxRoutes,
           maxClaims,
           maxSessions,
-          executeLocal
+          executeLocal,
+          write
         })
       )
   );

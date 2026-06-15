@@ -109,6 +109,7 @@ import {
   writeResearchCanvasVisualArtifact,
   writeWorkspaceGraphVisualArtifact,
   writeWorkspaceReview,
+  writeWorkspaceRunNextPlan,
   writeWorkspaceSnapshot,
   type BenchmarkArtifactSummary,
   type BenchmarkComparisonRecord,
@@ -226,6 +227,7 @@ import {
   type WorkspaceValidation,
   type WorkspaceGraph,
   type WorkspaceRunNextPlan,
+  type WorkspaceRunNextWriteResult,
   type WorkspaceReview,
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
@@ -575,6 +577,7 @@ export interface TruthHarnessWorkspaceRunNextInput {
   maxClaims?: number;
   maxSessions?: number;
   executeLocal?: boolean;
+  write?: boolean;
 }
 
 export interface TruthHarnessWorkspaceReviewListInput {
@@ -594,7 +597,13 @@ export interface TruthHarnessWorkspaceReviewWriteOutput {
 
 export type TruthHarnessWorkspaceReviewOutput = WorkspaceReview | TruthHarnessWorkspaceReviewWriteOutput;
 
-export type TruthHarnessWorkspaceRunNextOutput = WorkspaceRunNextPlan;
+export interface TruthHarnessWorkspaceRunNextWriteOutput {
+  plan: WorkspaceRunNextPlan;
+  written: true;
+  result: WorkspaceRunNextWriteResult;
+}
+
+export type TruthHarnessWorkspaceRunNextOutput = WorkspaceRunNextPlan | TruthHarnessWorkspaceRunNextWriteOutput;
 
 export interface TruthHarnessWorkspaceSnapshotVerifyInput {
   workspacePath?: string;
@@ -1633,11 +1642,21 @@ export async function handleTruthHarnessWorkspaceRunNext(
     maxSessions: input.maxSessions
   });
 
-  return createWorkspaceRunNextPlan({
+  const plan = await createWorkspaceRunNextPlan({
     rootPath,
     review,
     executeLocal: input.executeLocal === true
   });
+
+  if (input.write) {
+    return {
+      plan,
+      written: true,
+      result: await writeWorkspaceRunNextPlan({ rootPath, plan })
+    };
+  }
+
+  return plan;
 }
 
 export async function handleTruthHarnessWorkspaceReviewList(input: TruthHarnessWorkspaceReviewListInput): Promise<{
