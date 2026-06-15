@@ -206,8 +206,12 @@ export {
   renderWorkspaceReviewMarkdown,
   writeWorkspaceReview
 } from "./workspace-review.js";
-export { createWorkspaceRunNextPlan } from "./workspace-run-next.js";
-export type { WorkspaceRunNextPlan, WorkspaceRunNextStatus } from "./workspace-run-next.js";
+export {
+  createWorkspaceRunNextPlan,
+  renderWorkspaceRunNextMarkdown,
+  writeWorkspaceRunNextPlan
+} from "./workspace-run-next.js";
+export type { WorkspaceRunNextPlan, WorkspaceRunNextStatus, WorkspaceRunNextWriteResult } from "./workspace-run-next.js";
 export {
   createVisualArtifact,
   listVisualArtifacts,

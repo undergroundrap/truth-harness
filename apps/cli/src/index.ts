@@ -138,6 +138,7 @@ import {
   writeValidationPlan,
   writeVerifierRoute,
   writeWorkspaceReview,
+  writeWorkspaceRunNextPlan,
   writeWorkspaceSnapshot,
   writeClaimChart,
   createValidationPlan,
@@ -2852,6 +2853,7 @@ workspace
   .argument("[path]", "Project root path", ".")
   .option("--json", "Print the full run-next plan JSON")
   .option("--execute-local", "Execute one supported local Truth Harness action; dry-run is the default")
+  .option("--write", "Write the run-next plan JSON/Markdown into .truth-harness/findings")
   .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
   .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
   .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
@@ -2862,6 +2864,7 @@ workspace
       options: {
         json?: boolean;
         executeLocal?: boolean;
+        write?: boolean;
         maxRoutes?: number;
         maxClaims?: number;
         maxSessions?: number;
@@ -2879,11 +2882,23 @@ workspace
         review,
         executeLocal: Boolean(options.executeLocal)
       });
+      const writeResult = options.write
+        ? await writeWorkspaceRunNextPlan({
+            rootPath: path,
+            plan
+          })
+        : undefined;
 
       if (options.json) {
-        printJson(plan);
+        printJson(writeResult ? { plan, written: true, result: writeResult } : plan);
       } else {
         printWorkspaceRunNextPlan(plan);
+        if (writeResult) {
+          console.log("");
+          console.log("Written:");
+          console.log(`  JSON: ${writeResult.jsonPath}`);
+          console.log(`  Markdown: ${writeResult.markdownPath}`);
+        }
       }
 
       if (options.failOnBlocked && plan.status === "blocked") {
@@ -5392,6 +5407,7 @@ function printWorkspaceReview(review: WorkspaceReview, writeResult?: WorkspaceRe
 
 function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
   console.log("Truth Harness workspace run-next");
+  console.log(`Plan: ${plan.planId}`);
   console.log(`Review: ${plan.reviewId}`);
   console.log(`Mode: ${plan.mode}`);
   console.log(`Status: ${plan.status}`);

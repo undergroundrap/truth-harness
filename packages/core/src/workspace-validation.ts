@@ -1054,11 +1054,18 @@ function inferLooseArtifactId(
   kind: WorkspaceValidationArtifactKind,
   record: Record<string, unknown> | undefined
 ): string | undefined {
-  if (kind !== "findings" || record?.schemaVersion !== "truth-harness.workspace-review.v0") {
+  if (kind !== "findings") {
     return undefined;
   }
 
-  return typeof record.reviewId === "string" ? record.reviewId : undefined;
+  if (record?.schemaVersion === "truth-harness.workspace-review.v0") {
+    return typeof record.reviewId === "string" ? record.reviewId : undefined;
+  }
+  if (record?.schemaVersion === "truth-harness.workspace-run-next.v0") {
+    return typeof record.planId === "string" ? record.planId : undefined;
+  }
+
+  return undefined;
 }
 
 function looksLikePathReference(ref: string): boolean {

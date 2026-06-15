@@ -1,6 +1,9 @@
-import { relative, resolve } from "node:path";
+import { mkdir } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
 import { createClaimReviewPacket } from "./claim-ledger.js";
 import { writeSymbolicCasCheckRecord } from "./cas-backend.js";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { writeLeanProofCheckRecord } from "./proof-backend.js";
 import { readResearchSession } from "./research-session.js";
 import { writeSmtCheckRecord } from "./smt-backend.js";
@@ -11,12 +14,21 @@ import {
   type SatisfyVerifierRouteObligationResult,
   type VerifierRouteEvidenceRef
 } from "./verifier-route.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 import type { WorkspaceReview, WorkspaceReviewItem } from "./workspace-review.js";
 
 export type WorkspaceRunNextStatus = "planned" | "executed" | "blocked";
 
+export interface WorkspaceRunNextWriteResult {
+  plan: WorkspaceRunNextPlan;
+  jsonPath: string;
+  markdownPath: string;
+  markdown: string;
+}
+
 export interface WorkspaceRunNextPlan {
   schemaVersion: "truth-harness.workspace-run-next.v0";
+  planId: string;
   createdAt: string;
   workspacePath: string;
   localOnly: true;
@@ -59,9 +71,11 @@ export async function createWorkspaceRunNextPlan(input: {
   now?: string;
 }): Promise<WorkspaceRunNextPlan> {
   const createdAt = input.now ?? new Date().toISOString();
+  const planId = workspaceRunNextPlanId(createdAt, input.review.reviewId);
   const nextItem = input.review.items.find((item) => item.itemId === input.review.autonomy.nextItemId) ?? input.review.items[0];
   const basePlan: WorkspaceRunNextPlan = {
     schemaVersion: "truth-harness.workspace-run-next.v0",
+    planId,
     createdAt,
     workspacePath: input.rootPath,
     localOnly: true,
@@ -120,6 +134,94 @@ export async function createWorkspaceRunNextPlan(input: {
     status: execution.status,
     execution
   };
+}
+
+export async function writeWorkspaceRunNextPlan(input: {
+  rootPath: string;
+  plan: WorkspaceRunNextPlan;
+}): Promise<WorkspaceRunNextWriteResult> {
+  const status = await requireRunNextWorkspace(input.rootPath);
+  const plan: WorkspaceRunNextPlan = {
+    ...input.plan,
+    workspacePath: status.root
+  };
+  const findingsDir = resolve(status.root, status.manifest.directories.findings);
+  await mkdir(findingsDir, { recursive: true });
+  const baseName = `${plan.createdAt.slice(0, 10)}-${plan.planId}-workspace-run-next`;
+  const jsonPath = join(findingsDir, `${baseName}.json`);
+  const markdownPath = join(findingsDir, `${baseName}.md`);
+  const markdown = renderWorkspaceRunNextMarkdown(plan);
+  await writeJsonFileAtomic(jsonPath, plan);
+  await writeFileAtomic(markdownPath, markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "findings",
+    now: plan.createdAt,
+    staleReason: "workspace run-next plan written"
+  });
+
+  return {
+    plan,
+    jsonPath,
+    markdownPath,
+    markdown
+  };
+}
+
+export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): string {
+  const item = plan.item;
+  const lines = [
+    "# Truth Harness Run-Next Plan",
+    "",
+    "| Field | Value |",
+    "| --- | --- |",
+    `| Plan | \`${plan.planId}\` |`,
+    `| Review | \`${plan.reviewId}\` |`,
+    `| Created | ${escapeMarkdownTable(plan.createdAt)} |`,
+    `| Local only | \`${String(plan.localOnly)}\` |`,
+    `| Network | \`${plan.networkAccess}\` |`,
+    `| Dry run | \`${String(plan.dryRun)}\` |`,
+    `| Status | \`${plan.status}\` |`,
+    `| Mode | \`${plan.mode}\` |`,
+    "",
+    "## Next Item",
+    "",
+    item
+      ? `- ${item.title} (\`${item.kind}\`, \`${item.priority}\`)`
+      : "- No open workspace review item.",
+    ...(item?.summary ? [`- Summary: ${item.summary}`] : []),
+    ...(item?.command ? [`- Command: \`${item.command}\``] : []),
+    ...(item?.routeId ? [`- Route: \`${item.routeId}\``] : []),
+    ...(item?.obligationId ? [`- Obligation: \`${item.obligationId}\` (${item.obligationKind ?? "evidence"})`] : []),
+    ...(item?.claimId ? [`- Claim: \`${item.claimId}\``] : []),
+    ...(item?.sessionId ? [`- Session: \`${item.sessionId}\``] : []),
+    "",
+    "## Execution",
+    "",
+    `- Status: \`${plan.execution.status}\``,
+    `- Kind: \`${plan.execution.kind}\``,
+    `- Summary: ${plan.execution.summary}`,
+    ...(plan.execution.command ? [`- Command: \`${plan.execution.command}\``] : []),
+    ...(plan.execution.evidenceRef ? [`- Evidence ref: \`${plan.execution.evidenceRef}\``] : []),
+    ...(typeof plan.execution.attached === "boolean" ? [`- Attached to route: \`${String(plan.execution.attached)}\``] : []),
+    "",
+    "## Stop Conditions",
+    "",
+    ...(plan.stopConditions.length > 0 ? plan.stopConditions.map((condition) => `- ${condition}`) : ["- None recorded."]),
+    "",
+    "## Warnings",
+    "",
+    ...plan.warnings.map((warning) => `- ${warning}`),
+    "",
+    "## Trust Boundary",
+    "",
+    "- This packet records what the local planner selected or did.",
+    "- It is not proof, not a trust-label upgrade, and not a substitute for the evidence artifact.",
+    "- Trust labels move only when replayable evidence satisfies the matching route or claim gate.",
+    ""
+  ];
+  return lines.join("\n");
 }
 
 function workspaceRunNextItemSummary(item: WorkspaceReviewItem): WorkspaceRunNextPlan["item"] {
@@ -494,4 +596,33 @@ function parseSympyOperation(value: string): SympyOperation {
 
 function workspaceLocalRef(rootPath: string, path: string): string {
   return relative(resolve(rootPath), resolve(path)).replace(/\\/gu, "/");
+}
+
+async function requireRunNextWorkspace(rootPath: string): Promise<
+  LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }
+> {
+  const status = await getLocalWorkspaceStatus(rootPath);
+  if (!status.exists || !status.manifest) {
+    throw new Error("No Truth Harness workspace found. Run `truth-harness workspace init` before writing run-next plans.");
+  }
+
+  if (status.missingDirectories.length > 0) {
+    throw new Error(`Truth Harness workspace is missing directories: ${status.missingDirectories.join(", ")}`);
+  }
+
+  return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
+}
+
+function workspaceRunNextPlanId(createdAt: string, reviewId: string): string {
+  const seed = `${createdAt}:${reviewId}`;
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `wrn_${hash.toString(16).padStart(8, "0")}`;
+}
+
+function escapeMarkdownTable(value: string): string {
+  return value.replace(/\|/gu, "\\|");
 }

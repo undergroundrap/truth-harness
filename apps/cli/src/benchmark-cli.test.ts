@@ -1293,6 +1293,7 @@ describe("benchmark CLI", () => {
       "--json"
     ]);
     const dryPlan = JSON.parse(dryRun.stdout) as {
+      planId: string;
       dryRun: boolean;
       status: string;
       mode: string;
@@ -1310,6 +1311,17 @@ describe("benchmark CLI", () => {
       "--execute-local",
       "--json"
     ]);
+    const writtenDryRun = await runCli([
+      "workspace",
+      "run-next",
+      root,
+      "--max-routes",
+      "0",
+      "--max-sessions",
+      "0",
+      "--write",
+      "--json"
+    ]);
     const executedPlan = JSON.parse(executed.stdout) as {
       dryRun: boolean;
       status: string;
@@ -1317,6 +1329,11 @@ describe("benchmark CLI", () => {
       item?: { kind: string; claimId?: string };
       execution: { status: string; kind: string; summary: string; result: { claimId: string } };
       networkAccess: string;
+    };
+    const writtenDryRunPayload = JSON.parse(writtenDryRun.stdout) as {
+      written: boolean;
+      plan: { schemaVersion: string; planId: string; dryRun: boolean };
+      result: { jsonPath: string; markdownPath: string; markdown: string };
     };
     const human = await runCli([
       "workspace",
@@ -1329,6 +1346,7 @@ describe("benchmark CLI", () => {
     ]);
 
     expect(dryRun.exitCode).toBe(0);
+    expect(dryPlan.planId).toMatch(/^wrn_[a-f0-9]{8}$/u);
     expect(dryPlan.dryRun).toBe(true);
     expect(dryPlan.status).toBe("planned");
     expect(dryPlan.mode).toBe("human-review-gated");
@@ -1348,7 +1366,19 @@ describe("benchmark CLI", () => {
     expect(executedPlan.execution.status).toBe("executed");
     expect(executedPlan.execution.kind).toBe("claim-review");
     expect(executedPlan.execution.result.claimId).toBe(writtenClaim.claim.claimId);
+    expect(writtenDryRun.exitCode).toBe(0);
+    expect(writtenDryRunPayload.written).toBe(true);
+    expect(writtenDryRunPayload.plan).toMatchObject({
+      schemaVersion: "truth-harness.workspace-run-next.v0",
+      dryRun: true
+    });
+    expect(writtenDryRunPayload.result.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(writtenDryRunPayload.result.markdownPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(writtenDryRunPayload.result.markdown).toContain("Truth Harness Run-Next Plan");
+    const writtenPlan = JSON.parse(await readFile(writtenDryRunPayload.result.jsonPath, "utf8")) as { planId: string };
+    expect(writtenPlan.planId).toBe(writtenDryRunPayload.plan.planId);
     expect(human.stdout).toContain("Truth Harness workspace run-next");
+    expect(human.stdout).toContain("Plan:");
     expect(human.stdout).toContain("Dry run: true");
     expect(human.stdout).toContain("Execution: planned (dry-run)");
   });

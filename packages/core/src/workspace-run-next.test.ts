@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
+import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
-import { createWorkspaceRunNextPlan } from "./workspace-run-next.js";
+import { createWorkspaceRunNextPlan, writeWorkspaceRunNextPlan } from "./workspace-run-next.js";
 import type { WorkspaceReview } from "./workspace-review.js";
 
 const roots: string[] = [];
@@ -68,6 +69,46 @@ describe("workspace run-next", () => {
     expect(plan.status).toBe("blocked");
     expect(plan.execution.kind).toBe("unsupported-command");
     expect(plan.execution.summary).toContain("Unsupported shell metacharacter");
+  });
+
+  it("writes dry-run plans into findings with a local artifact event", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    const review = minimalReview({
+      rootPath: root,
+      command: "truth-harness proof check docs/examples/trivial.lean --write",
+      claimId: "claim_fake"
+    });
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+
+    const result = await writeWorkspaceRunNextPlan({ rootPath: root, plan });
+
+    expect(result.plan.planId).toMatch(/^wrn_[a-f0-9]{8}$/u);
+    expect(result.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(result.markdownPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(result.markdown).toContain("# Truth Harness Run-Next Plan");
+    expect(result.markdown).toContain("It is not proof, not a trust-label upgrade");
+    const parsed = JSON.parse(await readFile(result.jsonPath, "utf8")) as { schemaVersion?: string; planId?: string; dryRun?: boolean };
+    expect(parsed).toMatchObject({
+      schemaVersion: "truth-harness.workspace-run-next.v0",
+      planId: result.plan.planId,
+      dryRun: true
+    });
+    const events = await listWorkspaceEvents(root, 10);
+    expect(events.events).toContainEqual(
+      expect.objectContaining({
+        action: "artifact-written",
+        kind: "findings",
+        artifactId: result.plan.planId,
+        localOnly: true,
+        networkAccess: "none"
+      })
+    );
   });
 });
 

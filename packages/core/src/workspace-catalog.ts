@@ -1227,7 +1227,7 @@ function artifactIdForRecord(kind: WorkspaceValidationArtifactKind, record: Reco
     snapshots: ["snapshotId"],
     sessions: ["sessionId"],
     reviews: ["reviewId"],
-    findings: ["reviewId"],
+    findings: ["planId", "reviewId"],
     validation: ["planId"],
     literature: ["recordId"],
     "notebook-runs": ["runRecordId"],
