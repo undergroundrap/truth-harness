@@ -747,6 +747,91 @@ describe("workspace artifact validation", () => {
     expect(validation.artifacts.find((artifact) => artifact.artifactId === invention.entry.entryId)?.valid).toBe(false);
   });
 
+  it("fails verifier routes that mark formal-proof obligations satisfied with unscoped proof evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "prove that every even integer is divisible by two",
+      now: new Date("2026-06-10T02:00:00.000Z"),
+      leanCommand: "truth-harness-missing-lean-command",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const obligation = route.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
+    const proofRef = join(".truth-harness", "proofs", "unscoped-proof.json");
+    await mkdir(join(root, ".truth-harness", "proofs"), { recursive: true });
+    await writeFile(
+      join(root, proofRef),
+      `${JSON.stringify(
+        {
+          schemaVersion: "truth-harness.proof-check.v0",
+          checkId: "proof_1111111111111111",
+          createdAt: "2026-06-10T02:01:00.000Z",
+          backend: {
+            id: "lean",
+            displayName: "Lean proof checker",
+            adapter: "local-lean-subprocess",
+            role: "proof-checker",
+            acceptedProofChecker: true,
+            command: "lean",
+            args: ["unscoped.lean"],
+            exitCode: 0
+          },
+          source: {
+            path: "unscoped.lean",
+            sha256: "1111111111111111111111111111111111111111111111111111111111111111",
+            byteLength: 24
+          },
+          status: "accepted",
+          trust: "proved",
+          proofCheckerBacked: true,
+          localOnly: true,
+          networkAccess: "none",
+          replay: "truth-harness proof check unscoped.lean --write --json",
+          limitations: ["Fixture intentionally omits route-obligation scope."],
+          warnings: []
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const tamperedRoute = {
+      ...route.route,
+      proofObligations: route.route.proofObligations.map((candidate) =>
+        candidate.obligationId === obligation?.obligationId
+          ? {
+              ...candidate,
+              status: "satisfied",
+              satisfiedAt: "2026-06-10T02:02:00.000Z",
+              satisfactionSummary: "Tampered route claims an unrelated proof closes this formal obligation.",
+              satisfiedBy: [{ kind: "proof", ref: proofRef, trust: "proved" }]
+            }
+          : candidate
+      )
+    };
+    await writeFile(route.jsonPath, `${JSON.stringify(tamperedRoute, null, 2)}\n`, "utf8");
+
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(validation.passed).toBe(false);
+    expect(validation.issues).toContainEqual(
+      expect.objectContaining({
+        severity: "error",
+        code: "route-obligation-evidence-mismatch",
+        path: expect.stringContaining(route.route.routeId),
+        message: expect.stringContaining("no attached proof-check record is accepted, proved, and scoped")
+      })
+    );
+    expect(validation.artifacts.find((artifact) => artifact.artifactId === route.route.routeId)).toMatchObject({
+      valid: false,
+      issueCodes: expect.arrayContaining(["route-obligation-evidence-mismatch"])
+    });
+  });
+
   it("allows external model preflight packets before context is sent", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);

@@ -8,6 +8,7 @@ import {
   type LocalWorkspaceDirectory,
   type LocalWorkspaceStatus
 } from "./local-workspace.js";
+import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { parseReceiptJson, ReceiptValidationError } from "./receipt-validation.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 
@@ -25,6 +26,7 @@ export interface WorkspaceValidationIssue {
     | "unexpected-schema-version"
     | "missing-artifact-id"
     | "unresolved-evidence-ref"
+    | "route-obligation-evidence-mismatch"
     | "external-model-context-sent-without-approval"
     | "external-model-context-sent-without-disclosure"
     | "unresolved-disclosure-ref"
@@ -96,6 +98,12 @@ interface WorkspaceReference {
   fieldPath: string;
   kind?: string;
   ref: string;
+}
+
+interface ArtifactIndex {
+  idsByKind: Map<WorkspaceValidationArtifactKind, Set<string>>;
+  paths: Set<string>;
+  pathsByKindAndId: Map<string, string>;
 }
 
 const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidationRule>> = {
@@ -669,16 +677,14 @@ async function validateWorkspaceReferences(
     }
 
     validateExternalDisclosurePolicy(parsed, artifact, index, issues);
+    await validateVerifierRouteObligationPolicy(root, parsed, artifact, index, issues);
   }
 }
 
 function validateExternalDisclosurePolicy(
   value: unknown,
   artifact: WorkspaceValidationArtifact,
-  index: {
-    idsByKind: Map<WorkspaceValidationArtifactKind, Set<string>>;
-    paths: Set<string>;
-  },
+  index: ArtifactIndex,
   issues: WorkspaceValidationIssue[]
 ): void {
   if (!isRecord(value)) {
@@ -698,10 +704,7 @@ function validateExternalDisclosurePolicy(
 function validateModelContextPolicy(
   record: Record<string, unknown>,
   artifact: WorkspaceValidationArtifact,
-  index: {
-    idsByKind: Map<WorkspaceValidationArtifactKind, Set<string>>;
-    paths: Set<string>;
-  },
+  index: ArtifactIndex,
   issues: WorkspaceValidationIssue[]
 ): void {
   const target = isRecord(record.target) ? record.target : undefined;
@@ -759,6 +762,99 @@ function validateModelContextPolicy(
   }
 }
 
+async function validateVerifierRouteObligationPolicy(
+  root: string,
+  value: unknown,
+  artifact: WorkspaceValidationArtifact,
+  index: ArtifactIndex,
+  issues: WorkspaceValidationIssue[]
+): Promise<void> {
+  if (artifact.kind !== "routes" || !isRecord(value)) {
+    return;
+  }
+
+  const routeId = typeof value.routeId === "string" ? value.routeId : undefined;
+  const proofObligations = Array.isArray(value.proofObligations) ? value.proofObligations : [];
+  if (!routeId || proofObligations.length === 0) {
+    return;
+  }
+
+  for (const [obligationIndex, obligationValue] of proofObligations.entries()) {
+    if (!isRecord(obligationValue)) {
+      continue;
+    }
+
+    const obligationId = typeof obligationValue.obligationId === "string" ? obligationValue.obligationId : undefined;
+    const kind = typeof obligationValue.kind === "string" ? obligationValue.kind : undefined;
+    const status = typeof obligationValue.status === "string" ? obligationValue.status : undefined;
+    if (kind !== "formal-proof" || status !== "satisfied" || !obligationId) {
+      continue;
+    }
+
+    const satisfiedBy = Array.isArray(obligationValue.satisfiedBy) ? obligationValue.satisfiedBy : [];
+    const hasScopedAcceptedProof = await hasScopedAcceptedProofEvidence({
+      root,
+      index,
+      routeId,
+      obligationId,
+      evidenceRefs: satisfiedBy
+    });
+
+    if (!hasScopedAcceptedProof) {
+      pushArtifactIssue(artifact, issues, {
+        severity: "error",
+        code: "route-obligation-evidence-mismatch",
+        path: artifact.path,
+        message:
+          `$.proofObligations[${obligationIndex}].satisfiedBy marks formal-proof obligation ${obligationId} satisfied, ` +
+          `but no attached proof-check record is accepted, proved, and scoped to route ${routeId} obligation ${obligationId}.`
+      });
+    }
+  }
+}
+
+async function hasScopedAcceptedProofEvidence(input: {
+  root: string;
+  index: ArtifactIndex;
+  routeId: string;
+  obligationId: string;
+  evidenceRefs: unknown[];
+}): Promise<boolean> {
+  for (const refValue of input.evidenceRefs) {
+    if (!isRecord(refValue) || refValue.kind !== "proof" || typeof refValue.ref !== "string") {
+      continue;
+    }
+
+    const proof = await readProofEvidence(input.root, refValue.ref, input.index);
+    const scope = proof?.scope;
+    if (
+      proof?.status === "accepted" &&
+      proof.trust === "proved" &&
+      proof.proofCheckerBacked === true &&
+      proof.backend.acceptedProofChecker === true &&
+      scope?.routeId === input.routeId &&
+      scope.obligationId === input.obligationId
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function readProofEvidence(root: string, ref: string, index: ArtifactIndex) {
+  const path = resolveArtifactReferencePath("proofs", ref, index);
+  if (!path) {
+    return undefined;
+  }
+
+  try {
+    return parseLeanProofCheckRecord(await readFile(resolve(root, path), "utf8"), path);
+  } catch {
+    return undefined;
+  }
+}
+
 function validateDisclosurePolicy(
   record: Record<string, unknown>,
   artifact: WorkspaceValidationArtifact,
@@ -807,12 +903,10 @@ function pushArtifactIssue(
   artifact.issueCodes.push(issue.code);
 }
 
-function createArtifactIndex(artifacts: WorkspaceValidationArtifact[]): {
-  idsByKind: Map<WorkspaceValidationArtifactKind, Set<string>>;
-  paths: Set<string>;
-} {
+function createArtifactIndex(artifacts: WorkspaceValidationArtifact[]): ArtifactIndex {
   const idsByKind = new Map<WorkspaceValidationArtifactKind, Set<string>>();
   const paths = new Set<string>();
+  const pathsByKindAndId = new Map<string, string>();
 
   for (const artifact of artifacts) {
     if (!artifact.valid) {
@@ -824,10 +918,11 @@ function createArtifactIndex(artifacts: WorkspaceValidationArtifact[]): {
       const ids = idsByKind.get(artifact.kind) ?? new Set<string>();
       ids.add(artifact.artifactId);
       idsByKind.set(artifact.kind, ids);
+      pathsByKindAndId.set(`${artifact.kind}:${artifact.artifactId}`, artifact.path);
     }
   }
 
-  return { idsByKind, paths };
+  return { idsByKind, paths, pathsByKindAndId };
 }
 
 function collectWorkspaceReferences(value: unknown, sourcePath: string): WorkspaceReference[] {
@@ -846,6 +941,11 @@ function collectWorkspaceReferences(value: unknown, sourcePath: string): Workspa
     for (const [key, entry] of Object.entries(current)) {
       const entryPath = `${path}.${key}`;
       if (key === "evidenceRefs" && Array.isArray(entry)) {
+        collectEvidenceRefArray(entry, sourcePath, entryPath, refs);
+        continue;
+      }
+
+      if (key === "satisfiedBy" && Array.isArray(entry)) {
         collectEvidenceRefArray(entry, sourcePath, entryPath, refs);
         continue;
       }
@@ -959,10 +1059,7 @@ function shouldResolveReference(ref: WorkspaceReference): boolean {
 
 function isResolvedReference(
   ref: WorkspaceReference,
-  index: {
-    idsByKind: Map<WorkspaceValidationArtifactKind, Set<string>>;
-    paths: Set<string>;
-  }
+  index: ArtifactIndex
 ): boolean {
   const artifactKind = kindToArtifactKind(ref.kind);
   if (!artifactKind) {
@@ -980,10 +1077,7 @@ function isResolvedReference(
 function isResolvedArtifactRef(
   artifactKind: WorkspaceValidationArtifactKind,
   ref: string,
-  index: {
-    idsByKind: Map<WorkspaceValidationArtifactKind, Set<string>>;
-    paths: Set<string>;
-  }
+  index: ArtifactIndex
 ): boolean {
   const parsed = parseStringReference(ref, "", "$");
   const normalizedRef = parsed.kind === "disclosure" ? parsed.ref : ref;
@@ -992,6 +1086,21 @@ function isResolvedArtifactRef(
   }
 
   return index.idsByKind.get(artifactKind)?.has(normalizedRef) ?? false;
+}
+
+function resolveArtifactReferencePath(
+  artifactKind: WorkspaceValidationArtifactKind,
+  ref: string,
+  index: ArtifactIndex
+): string | undefined {
+  const parsed = parseStringReference(ref, "", "$");
+  const normalizedRef = parsed.kind ? parsed.ref : ref;
+  if (looksLikePathReference(normalizedRef)) {
+    const pathRef = normalizeReferencePath(normalizedRef);
+    return index.paths.has(pathRef) ? pathRef : undefined;
+  }
+
+  return index.pathsByKindAndId.get(`${artifactKind}:${normalizedRef}`);
 }
 
 function kindToArtifactKind(kind: string | undefined): WorkspaceValidationArtifactKind | undefined {
