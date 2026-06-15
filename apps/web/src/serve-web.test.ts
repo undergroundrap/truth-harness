@@ -60,6 +60,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("workspace-events");
     expect(statusPayload.capabilities).toContain("workspace-run-next-dry-run");
     expect(statusPayload.capabilities).toContain("workspace-maintenance");
+    expect(statusPayload.capabilities).toContain("engine-evidence-verification");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
       sameOriginWritesOnly: true,
@@ -72,6 +73,7 @@ describe("local web route ledger API", () => {
       localOnly: true,
       externalCalls: false,
       commands: {
+        engines: "npm run docker:engines",
         proof: "npm run docker:proof",
         verify: "npm run docker:verify"
       },
@@ -85,6 +87,21 @@ describe("local web route ledger API", () => {
     });
     expect(typeof statusPayload.dockerVerifier.recommended).toBe("boolean");
     expect(statusPayload.dockerVerifier.notes).toContain("The web UI never runs Docker automatically; it only exposes copyable commands.");
+    expect(statusPayload.engineVerification).toMatchObject({
+      schemaVersion: "truth-harness.engine-verification.v0",
+      localOnly: true,
+      networkAccess: "none",
+      docker: {
+        coreCommand: "npm run docker:engines",
+        verifyImageCommand: "npm run docker:verify",
+        networkPolicy: "compose-core-no-network"
+      },
+      trustBoundary: {
+        statusProbeIsNotEvidence: true,
+        concreteChecksCanMintEvidence: true
+      }
+    });
+    expect(Array.isArray(statusPayload.engineVerification.cases)).toBe(true);
 
     const receiptResponse = await fetch(`${baseUrl}/api/receipt`, {
       method: "POST",

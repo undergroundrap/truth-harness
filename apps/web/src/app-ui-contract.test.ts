@@ -30,6 +30,27 @@ describe("web UI action contracts", () => {
     expect(source).toContain('fallbackTitle: "Downloaded engine command"');
   });
 
+  it("surfaces concrete engine evidence gates separately from readiness probes", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('id="engine-evidence-gate"');
+    expect(source).toContain("function renderEngineEvidenceGate(payload = state.safetyStatus)");
+    expect(source).toContain("payload.engineVerification");
+    expect(source).toContain("function engineEvidenceCaseHtml(entry)");
+    expect(source).toContain("function engineEvidenceCaseSummary(entry)");
+    expect(source).toContain('data-testid="copy-engine-evidence-command"');
+    expect(source).toContain("function engineEvidenceSummary(payload)");
+    expect(source).toContain("focusedEngineEvidenceCase(target)");
+    expect(source).toContain("Status probes do not mint evidence, truth labels, or proof.");
+    expect(styles).toContain(".engine-evidence-gate");
+    expect(styles).toContain(".engine-evidence-case-grid");
+    expect(styles).toContain("grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));");
+  });
+
   it("clears focused queue state when closing the selected workspace action", async () => {
     const source = await readFile(appSourcePath, "utf8");
     const handler = source.match(/workspaceReviewAction\.querySelector\("\.close-workspace-action"\)[\s\S]*?workspaceReviewAction\.querySelector\("\.open-workspace-action-route"\)/u)?.[0];

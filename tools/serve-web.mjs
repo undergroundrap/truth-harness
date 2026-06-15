@@ -156,6 +156,7 @@ async function handleApiRequest(request, response, requestUrl) {
     const codeRunSandbox = await readCodeRunSandboxStatus();
     const engineManifest = await readEngineManifest();
     const verification = await readVerificationEngineStatus();
+    const engineVerification = await readEngineEvidenceVerification();
     const mcpCodeRunExposed = isTruthyEnv(process.env.TRUTH_HARNESS_ALLOW_CODE_RUN);
     const unsandboxedCodeRunAllowed = isTruthyEnv(process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN);
     const webServer = webServerSafetyStatus();
@@ -186,6 +187,7 @@ async function handleApiRequest(request, response, requestUrl) {
       },
       engineManifest,
       verification,
+      engineVerification,
       dockerVerifier: dockerVerifierGuidance(verification),
       capabilities: [
         "receipt-create",
@@ -202,6 +204,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "validation-plan",
         "engine-manifest",
         "verification-readiness",
+        "engine-evidence-verification",
         "workspace-review-queue",
         "workspace-run-next-dry-run",
         "docker-verifier-guidance",
@@ -1971,6 +1974,7 @@ function dockerVerifierGuidance(verification) {
     recommended,
     status: recommended ? "recommended" : "optional",
     commands: {
+      engines: "npm run docker:engines",
       proof: "npm run docker:proof",
       verify: "npm run docker:verify"
     },
@@ -1984,6 +1988,7 @@ function dockerVerifierGuidance(verification) {
     },
     notes: [
       "The web UI never runs Docker automatically; it only exposes copyable commands.",
+      "npm run docker:engines runs concrete Maxima/Z3 evidence smoke checks inside the no-network compose service.",
       "npm run docker:proof runs the truth-harness compose service with no external network route after the dev image exists.",
       "npm run docker:verify builds and tests the verification image; image builds may download dependencies.",
       "Docker status does not prove a claim. Trust labels still require concrete Lean, Z3, Maxima, or other accepted evidence artifacts."
@@ -2124,6 +2129,47 @@ async function readVerificationEngineStatus() {
       },
       warnings: [
         `Verification readiness unavailable: ${error instanceof Error ? error.message : "unknown error"}`
+      ]
+    };
+  }
+}
+
+async function readEngineEvidenceVerification() {
+  try {
+    const { verifyEngineEvidence } = await loadCoreModule();
+    return await verifyEngineEvidence({
+      rootPath: projectRoot,
+      timeoutMs: 1500
+    });
+  } catch (error) {
+    return {
+      schemaVersion: "truth-harness.engine-verification.v0",
+      createdAt: new Date().toISOString(),
+      localOnly: true,
+      networkAccess: "none",
+      status: "failed",
+      requiredPassed: 0,
+      requiredTotal: 0,
+      concretePassed: 0,
+      concreteTotal: 0,
+      evidenceMinted: 0,
+      cases: [],
+      docker: {
+        coreCommand: "npm run docker:engines",
+        leanCommand: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean",
+        verifyImageCommand: "npm run docker:verify",
+        networkPolicy: "compose-core-no-network"
+      },
+      trustBoundary: {
+        statusProbeIsNotEvidence: true,
+        concreteChecksCanMintEvidence: true,
+        sageIsStatusOnlyUntilConstrainedRecordsExist: true,
+        provedRequiresAcceptedLeanRun: true,
+        crossCheckedRequiresMaximaAgreement: true,
+        smtCheckedRequiresZ3SatOrUnsat: true
+      },
+      warnings: [
+        `Engine evidence verification unavailable: ${error instanceof Error ? error.message : "unknown error"}`
       ]
     };
   }

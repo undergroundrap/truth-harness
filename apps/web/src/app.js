@@ -366,6 +366,7 @@ const matrixCurrentClaim = document.querySelector("#matrix-current-claim");
 const matrixNextCommand = document.querySelector("#matrix-next-command");
 const checksWorkOrder = document.querySelector("#checks-work-order");
 const verificationMatrix = document.querySelector("#verification-matrix");
+const engineEvidenceGate = document.querySelector("#engine-evidence-gate");
 const claimReviewGate = document.querySelector("#claim-review-gate");
 const claimReviewStatus = document.querySelector("#claim-review-status");
 const claimReviewDecision = document.querySelector("#claim-review-decision");
@@ -7155,6 +7156,7 @@ function renderChecksWorkOrder(receipt, rows) {
     <span class="mini-label">Engine readiness</span>
     <strong>${escapeHtml(engineReadiness.title)}</strong>
     <small>${escapeHtml(engineReadiness.detail)}</small>
+    ${engineReadiness.evidence ? `<small>${escapeHtml(engineReadiness.evidence)}</small>` : ""}
     <code>${escapeHtml(engineReadiness.command)}</code>
     <button class="text-button compact-button copy-engine-readiness-command" data-testid="copy-engine-readiness-command" data-command="${escapeHtml(engineReadiness.command)}" type="button">Copy engine command</button>
   </div>` : ""}
@@ -7395,14 +7397,36 @@ function focusedEngineReadiness(row) {
   const engine = focusedEngineStatus(target);
   const available = engine?.status === "available";
   const displayName = engine?.displayName ?? target.displayName;
+  const evidenceCase = focusedEngineEvidenceCase(target);
   return {
     statusClass: available ? "ready" : "missing",
     title: `${displayName} ${available ? "available on host" : "missing on host"}`,
     detail: available
       ? `${target.trustLabel} still requires a concrete replayable run; a status probe is not evidence.`
       : `Use the Docker verifier path instead of installing or trusting ad hoc host tools; ${target.trustLabel} remains blocked until a concrete accepted run succeeds.`,
-    command: available ? (engine?.command ?? target.hostCommand) : target.fallbackCommand
+    command: available ? (engine?.command ?? target.hostCommand) : target.fallbackCommand,
+    evidence: evidenceCase
+      ? `${engineEvidenceCaseLabel(evidenceCase.status)} concrete smoke: ${evidenceCase.evidenceMinted ? "evidence minted" : "no evidence minted"} (${evidenceCase.trust}).`
+      : "No concrete engine evidence smoke record is loaded for this verifier yet."
   };
+}
+
+function focusedEngineEvidenceCase(target) {
+  const cases = Array.isArray(state.safetyStatus?.engineVerification?.cases)
+    ? state.safetyStatus.engineVerification.cases
+    : [];
+  const normalizedIds = new Set(target.ids.map((id) => id.toLowerCase()));
+  return cases.find((entry) => {
+    const candidates = [
+      entry.id,
+      entry.capabilityId,
+      entry.displayName
+    ].filter(Boolean).map((value) => String(value).toLowerCase());
+    return candidates.some((value) =>
+      normalizedIds.has(value)
+      || target.ids.some((id) => value.includes(id.toLowerCase()))
+    );
+  });
 }
 
 function focusedEngineTarget(row) {
@@ -7912,6 +7936,12 @@ async function refreshSafetyStatus() {
       "Loaded engine readiness",
       localApiSuccessMessage(payload, engineReadinessSummary(payload)),
       payload.verification?.readyCount > 0 ? "passed" : "waiting"
+    );
+    addActivity(
+      "local-api",
+      "Loaded engine evidence gate",
+      localApiSuccessMessage(payload, engineEvidenceSummary(payload)),
+      payload.engineVerification?.concretePassed > 0 ? "passed" : "waiting"
     );
   } catch (error) {
     state.safetyStatus = {
@@ -8660,6 +8690,7 @@ function renderEngineReadinessStatus(payload) {
 
   const readiness = payload.verification ?? {};
   const manifest = payload.engineManifest ?? {};
+  const evidence = payload.engineVerification ?? {};
   const engines = Array.isArray(readiness.engines) ? readiness.engines : [];
   const totalCount = Number.isFinite(readiness.totalCount) ? readiness.totalCount : engines.length;
   const readyCount = Number.isFinite(readiness.readyCount)
@@ -8674,6 +8705,7 @@ function renderEngineReadinessStatus(payload) {
   const rows = [
     ["Adapters", `${readyCount}/${totalCount} verification backends`],
     ["Manifest", `${manifestReadyCount}/${manifestTotalCount} active capabilities`],
+    ["Evidence gate", `${evidence.concretePassed ?? 0}/${evidence.concreteTotal ?? 0} concrete checks`],
     ["Native", `${nativeCount} local kernels`],
     ["Roadmap", `${plannedCount} planned adapters`],
     ...engines.map((engine) => [
@@ -8690,9 +8722,13 @@ function renderEngineReadinessStatus(payload) {
 
   const boundaryNotes = [
     "Status probes do not mint evidence, truth labels, or proof.",
+    evidence.evidenceMinted !== undefined
+      ? `Concrete engine gate minted ${evidence.evidenceMinted} replayable evidence record${evidence.evidenceMinted === 1 ? "" : "s"}.`
+      : undefined,
     ...engines
       .filter((engine) => engine.status !== "available")
       .map((engine) => `${engine.displayName ?? engine.id ?? "Backend"}: ${engine.note ?? "not available"}`),
+    ...(Array.isArray(evidence.warnings) ? evidence.warnings : []),
     ...engines
       .filter((engine) => engine.status === "available")
       .map((engine) => engine.trustBoundary)
@@ -8715,6 +8751,7 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
     dockerVerifierPill.className = "status-pill waiting";
     dockerVerifierSummary.textContent = "Checking local proof, CAS, and SMT engines before recommending the isolated verifier path.";
     dockerVerifierNotes.innerHTML = `<li>Engine probes are readiness checks only; claim evidence still requires a concrete replayable run.</li>`;
+    renderEngineEvidenceGate(payload);
     return;
   }
 
@@ -8723,6 +8760,7 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
     dockerVerifierPill.className = "status-pill waiting";
     dockerVerifierSummary.textContent = "The local status API is unavailable, so use the Docker commands manually when you are ready to verify engines.";
     dockerVerifierNotes.innerHTML = `<li>${escapeHtml(payload.error)}</li>`;
+    renderEngineEvidenceGate(payload);
     return;
   }
 
@@ -8772,6 +8810,164 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
         "Docker status does not prove a claim. Only accepted Lean, Z3, or Maxima artifacts can satisfy their matching obligations."
       ];
   dockerVerifierNotes.innerHTML = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
+  renderEngineEvidenceGate(payload);
+}
+
+function renderEngineEvidenceGate(payload = state.safetyStatus) {
+  if (!engineEvidenceGate) {
+    return;
+  }
+
+  if (!payload) {
+    engineEvidenceGate.innerHTML = `<div class="panel-heading compact-heading">
+      <h3>Engine Evidence Gate</h3>
+      <span class="status-pill waiting">checking</span>
+    </div>
+    <p>Loading concrete engine evidence checks. Readiness probes alone never satisfy a trust label.</p>`;
+    return;
+  }
+
+  if (payload.error) {
+    engineEvidenceGate.innerHTML = `<div class="panel-heading compact-heading">
+      <h3>Engine Evidence Gate</h3>
+      <span class="status-pill refuted">unavailable</span>
+    </div>
+    <p>${escapeHtml(payload.error)}</p>`;
+    return;
+  }
+
+  const report = payload.engineVerification;
+  if (!report) {
+    engineEvidenceGate.innerHTML = `<div class="panel-heading compact-heading">
+      <h3>Engine Evidence Gate</h3>
+      <span class="status-pill waiting">missing</span>
+    </div>
+    <p>The status API did not return concrete engine evidence metadata.</p>`;
+    return;
+  }
+
+  const cases = Array.isArray(report.cases) ? report.cases : [];
+  const command = report.docker?.coreCommand ?? "npm run docker:engines";
+  const leanCommand = report.docker?.leanCommand ?? "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean";
+  const statusClass = report.status === "passed" ? "exact" : report.status === "partial" ? "checked" : "waiting";
+  const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+
+  engineEvidenceGate.innerHTML = `<div class="panel-heading compact-heading">
+    <div>
+      <h3>Engine Evidence Gate</h3>
+      <p class="panel-subtitle">concrete checks, not install probes</p>
+    </div>
+    <span class="status-pill ${statusClass}">${escapeHtml(engineEvidenceStatusLabel(report.status))}</span>
+  </div>
+  <div class="engine-evidence-summary">
+    <div>
+      <span class="mini-label">Concrete checks</span>
+      <strong>${escapeHtml(`${report.concretePassed ?? 0}/${report.concreteTotal ?? cases.length}`)}</strong>
+      <small>${escapeHtml(`${report.evidenceMinted ?? 0} evidence records minted`)}</small>
+    </div>
+    <div>
+      <span class="mini-label">Required gates</span>
+      <strong>${escapeHtml(`${report.requiredPassed ?? 0}/${report.requiredTotal ?? 0}`)}</strong>
+      <small>${escapeHtml(report.requiredTotal > 0 ? "strict mode active" : "host status only")}</small>
+    </div>
+    <div>
+      <span class="mini-label">Network</span>
+      <strong>${escapeHtml(report.networkAccess ?? "none")}</strong>
+      <small>${escapeHtml(report.docker?.networkPolicy ?? "local status")}</small>
+    </div>
+  </div>
+  <div class="engine-evidence-command-row">
+    <code>${escapeHtml(command)}</code>
+    <button class="text-button compact-button copy-engine-evidence-command" data-testid="copy-engine-evidence-command" data-command="${escapeHtml(command)}" type="button">Copy smoke</button>
+    <button class="text-button compact-button copy-engine-evidence-command" data-command="${escapeHtml(leanCommand)}" type="button">Copy Lean</button>
+  </div>
+  <div class="engine-evidence-case-grid">
+    ${cases.length > 0 ? cases.map((entry) => engineEvidenceCaseHtml(entry)).join("") : `<article class="engine-evidence-case missing"><strong>No cases returned</strong><p>The local API could not load the engine evidence report.</p></article>`}
+  </div>
+  ${warnings.length > 0 ? `<ul class="engine-evidence-warnings">${warnings.slice(0, 4).map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>` : `<p class="engine-evidence-boundary">Readiness probes are provenance only. Trust upgrades require the concrete evidence rows above or attached receipt artifacts.</p>`}`;
+
+  engineEvidenceGate.querySelectorAll(".copy-engine-evidence-command").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      copyOrDownloadText({
+        text: `${event.currentTarget.dataset.command ?? command}\n`,
+        filename: `truth-harness-engine-evidence-${safeFilenameTimestamp()}.txt`,
+        type: "text/plain",
+        button: event.currentTarget,
+        copiedTitle: "Copied engine evidence command",
+        copiedDetail: "Run this from the workspace to reproduce the local engine evidence gate.",
+        fallbackTitle: "Downloaded engine evidence command",
+        fallbackDetail: "the engine evidence command was saved as plain text instead."
+      });
+    });
+  });
+}
+
+function engineEvidenceCaseHtml(entry) {
+  const status = entry.status ?? "missing";
+  const statusClass = engineEvidenceCaseClass(status);
+  const trust = entry.trust ?? "none";
+  const evidence = entry.evidenceMinted ? "evidence earned" : "no evidence minted";
+  const replay = entry.replay ?? entry.command ?? "";
+
+  return `<article class="engine-evidence-case ${statusClass}">
+    <div>
+      <span class="task-state ${statusClass}"></span>
+      <strong>${escapeHtml(entry.displayName ?? entry.id ?? "Engine case")}</strong>
+      <span>${escapeHtml(engineEvidenceCaseLabel(status))}</span>
+    </div>
+    <p>${escapeHtml(engineEvidenceCaseSummary(entry))}</p>
+    <small>${escapeHtml(`${trust} / ${evidence}`)}</small>
+    ${replay ? `<code>${escapeHtml(replay)}</code>` : ""}
+  </article>`;
+}
+
+function engineEvidenceCaseSummary(entry) {
+  const summary = entry.summary ?? "No engine case summary returned.";
+  if (/spawnSync\s+\S+\s+EPERM/iu.test(summary)) {
+    return `${entry.displayName ?? "This engine"} could not be launched from the host process. Use the pinned Docker smoke command for a clean no-network evidence run.`;
+  }
+  return summary;
+}
+
+function engineEvidenceStatusLabel(status) {
+  switch (status) {
+    case "passed":
+      return "evidence passed";
+    case "partial":
+      return "partial evidence";
+    case "failed":
+      return "evidence gaps";
+    default:
+      return "checking";
+  }
+}
+
+function engineEvidenceCaseClass(status) {
+  switch (status) {
+    case "passed":
+      return "passed";
+    case "failed":
+      return "missing";
+    case "not-implemented":
+      return "waiting";
+    case "missing":
+    default:
+      return "waiting";
+  }
+}
+
+function engineEvidenceCaseLabel(status) {
+  switch (status) {
+    case "passed":
+      return "PASS";
+    case "failed":
+      return "FAIL";
+    case "not-implemented":
+      return "HOLD";
+    case "missing":
+    default:
+      return "MISS";
+  }
 }
 
 function safetyStatusSummary(payload) {
@@ -8811,6 +9007,19 @@ function engineReadinessSummary(payload) {
   }
 
   return `${readyCount}/${totalCount} local verification engines available, with ${nativeCount}/${activeCapabilities} native/workspace capabilities active. Missing: ${missing.join(", ") || "unknown"}.`;
+}
+
+function engineEvidenceSummary(payload) {
+  const report = payload?.engineVerification;
+  if (!report) {
+    return "No concrete engine evidence report returned.";
+  }
+
+  const concretePassed = Number.isFinite(report.concretePassed) ? report.concretePassed : 0;
+  const concreteTotal = Number.isFinite(report.concreteTotal) ? report.concreteTotal : 0;
+  const evidenceMinted = Number.isFinite(report.evidenceMinted) ? report.evidenceMinted : 0;
+  const warnings = Array.isArray(report.warnings) ? report.warnings.length : 0;
+  return `${concretePassed}/${concreteTotal} concrete engine evidence checks passed; ${evidenceMinted} replayable evidence records minted; ${warnings} warnings.`;
 }
 
 function workspaceReadinessSummary(readiness) {
