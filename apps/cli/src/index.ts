@@ -126,6 +126,7 @@ import {
   updateResearchSessionTask,
   validateWorkspaceArtifacts,
   verifyVaultEntry,
+  verifyEngineEvidence,
   verifyWorkspaceSnapshot,
   writeBenchmarkComparisonRecord,
   writeBenchmarkRunRecord,
@@ -174,6 +175,7 @@ import {
   type WorkspaceEventListResult,
   type CodeRunSummary,
   type EngineManifest,
+  type EngineVerificationReport,
   type CodeRunPolicyInput,
   type CodeRunWriteResult,
   type DiscoveryPackage,
@@ -3651,7 +3653,7 @@ smt
     printSmtCheckList(checks);
   });
 
-program
+const engines = program
   .command("engines")
   .description("Show the local engine capability manifest and trust boundaries.")
   .option("--json", "Print the full engine manifest JSON")
@@ -3683,6 +3685,69 @@ program
       }
 
       printEngineManifest(manifest);
+    }
+  );
+
+engines
+  .command("verify")
+  .description("Run concrete local engine evidence checks without minting fake trust.")
+  .option("--json", "Print the full engine verification JSON")
+  .option("--timeout-ms <ms>", "Concrete check timeout in milliseconds", parsePositiveInteger, 3000)
+  .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
+  .option("--sage-command <command>", "Override SageMath executable for the status-only probe")
+  .option("--lean-command <command>", "Override Lean executable for the proof fixture")
+  .option("--z3-command <command>", "Override Z3 executable for the SMT check")
+  .option("--smt-source <path>", "Workspace-local SMT-LIB source for the Z3 check", "docs/examples/constraints.smt2")
+  .option("--lean-source <path>", "Workspace-local Lean source for the Lean fixture", "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean")
+  .option("--require-maxima", "Fail unless Maxima earns a concrete cross-checked result")
+  .option("--require-z3", "Fail unless Z3 earns a concrete smt-checked result")
+  .option("--require-lean", "Fail unless Lean accepts the pinned proof fixture")
+  .option("--require-sage", "Fail unless constrained Sage evidence exists; currently expected to fail closed")
+  .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
+  .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
+  .action(
+    async (options: {
+      json?: boolean;
+      timeoutMs: number;
+      maximaCommand?: string;
+      sageCommand?: string;
+      leanCommand?: string;
+      z3Command?: string;
+      smtSource: string;
+      leanSource: string;
+      requireMaxima?: boolean;
+      requireZ3?: boolean;
+      requireLean?: boolean;
+      requireSage?: boolean;
+      requireDockerCore?: boolean;
+      requireAllConcrete?: boolean;
+    }) => {
+      const report = await verifyEngineEvidence({
+        rootPath: ".",
+        timeoutMs: options.timeoutMs,
+        maximaCommand: options.maximaCommand,
+        sageCommand: options.sageCommand,
+        leanCommand: options.leanCommand,
+        z3Command: options.z3Command,
+        smtSourcePath: options.smtSource,
+        leanSourcePath: options.leanSource,
+        requirements: {
+          maxima: Boolean(options.requireMaxima || options.requireDockerCore || options.requireAllConcrete),
+          z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete),
+          lean: Boolean(options.requireLean || options.requireAllConcrete),
+          sage: Boolean(options.requireSage)
+        }
+      });
+
+      if (options.json) {
+        printJson(report);
+      } else {
+        printEngineVerificationReport(report);
+      }
+
+      if (report.requiredTotal > 0 && report.requiredPassed !== report.requiredTotal) {
+        process.exitCode = 1;
+      }
     }
   );
 
@@ -4572,6 +4637,52 @@ function printEngineCapabilityGroup(
     console.log(`    Boundary: ${capability.trustBoundary}`);
     if (capability.nextStep) {
       console.log(`    Next: ${capability.nextStep}`);
+    }
+  }
+}
+
+function printEngineVerificationReport(report: EngineVerificationReport): void {
+  console.log("Truth Harness engine verification");
+  console.log(`Status: ${report.status}`);
+  console.log(`Concrete evidence gates: ${report.concretePassed}/${report.concreteTotal}`);
+  console.log(`Required gates: ${report.requiredPassed}/${report.requiredTotal}`);
+  console.log(`Evidence records earned in-memory: ${report.evidenceMinted}`);
+  console.log(`Network: ${report.networkAccess}`);
+
+  console.log("");
+  console.log("Engine gates:");
+  for (const item of report.cases) {
+    const marker = item.status === "passed" ? "PASS" : item.status === "missing" ? "MISS" : item.status === "not-implemented" ? "HOLD" : "FAIL";
+    const required = item.required ? " required" : "";
+    console.log(`  [${marker}] ${item.displayName}${required}`);
+    console.log(`    Trust: ${item.trust}; evidence: ${item.evidenceMinted ? "earned" : "not-earned"}`);
+    console.log(`    ${item.summary}`);
+    console.log(`    Command: ${item.command}`);
+    if (item.evidence?.backendVersion) {
+      console.log(`    Backend: ${item.evidence.backendId} (${item.evidence.backendVersion})`);
+    } else if (item.evidence?.backendId) {
+      console.log(`    Backend: ${item.evidence.backendId}`);
+    }
+  }
+
+  console.log("");
+  console.log("Docker routes:");
+  console.log(`  Core no-network: ${report.docker.coreCommand}`);
+  console.log(`  Lean fixture: ${report.docker.leanCommand}`);
+  console.log(`  Verify image: ${report.docker.verifyImageCommand}`);
+
+  console.log("");
+  console.log("Trust boundary:");
+  console.log("  Status probes do not mint evidence.");
+  console.log("  Concrete Maxima, Z3, and Lean runs can mint only their scoped labels.");
+  console.log("  Sage is status-only until constrained Sage check records exist.");
+  console.log("  Every claim still needs a replayable receipt, proof, SMT, CAS, or source artifact.");
+
+  if (report.warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const warning of report.warnings) {
+      console.log(`  ${warning}`);
     }
   }
 }

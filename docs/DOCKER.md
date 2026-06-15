@@ -8,7 +8,7 @@ Docker is still not magic security. The Docker daemon is powerful, and a dev con
 
 Start Docker Desktop first and make sure the Linux engine is running.
 
-This builds a verification image from the committed source without bind-mounting the repo into the running checks. It runs the TypeScript build, test suite, launch proof gate, a concrete Maxima CAS agreement check, and a concrete Z3 SMT-LIB check inside the image build.
+This builds a verification image from the committed source without bind-mounting the repo into the running checks. It runs the TypeScript build, test suite, launch proof gate, a concrete Maxima CAS agreement check, a concrete Z3 SMT-LIB check, and the `engines verify --require-maxima --require-z3` evidence gate inside the image build.
 
 ```bash
 docker build --target verify -t truth-harness:verify .
@@ -38,6 +38,14 @@ docker compose run --rm truth-harness npm run proof:launch:engines
 
 The engine-backed gate runs the standard launch suite first, then requires Maxima to independently agree that `sin(x)^2 + cos(x)^2` simplifies to `1`, and checks `docs/examples/constraints.smt2` with `--fail-on-unverified`. If Maxima is missing or disagrees, or if Z3 is missing, returns `unknown`, or fails to produce a concrete `sat`/`unsat` result, the command exits non-zero instead of printing a comforting but unsupported success.
 
+Run the smaller engine evidence smoke from the freshly built image with no runtime network:
+
+```bash
+npm run docker:engines
+```
+
+This command differs from `truth-harness engines`: the manifest reports availability and trust boundaries, while `engines verify` runs concrete checks and reports which scoped labels were actually earned. The script builds the `truth-harness` image first, then runs the `engine-smoke` service without the repo bind mount or `node_modules` named volume so stale dev dependencies cannot affect the result. Use `truth-harness engines verify --json` when an agent needs a machine-readable gate report.
+
 Run the pinned Lean proof fixture in the separate Lean image:
 
 ```bash
@@ -46,6 +54,12 @@ docker compose run --rm lean-proof
 ```
 
 The `lean-proof` target installs Lean through elan during image build, pins the default toolchain to `leanprover/lean4:v4.12.0`, and runs `npm run proof:lean-fixture`. The compose service then checks the fixture again with `network_mode: "none"`. This is intentionally separate from the default dev image so proof-lane dependencies do not become silent bloat.
+
+The same Lean fixture can be checked through the engine evidence report:
+
+```bash
+docker compose run --rm lean-proof npm run cli -- engines verify --require-lean
+```
 
 Run CLI commands:
 
@@ -56,6 +70,7 @@ docker compose run --rm truth-harness npm run cli -- cas backends
 docker compose run --rm truth-harness npm run cli -- cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write
 docker compose run --rm truth-harness npm run cli -- smt backends
 docker compose run --rm truth-harness npm run cli -- proof backends
+npm run docker:engines
 docker compose run --rm truth-harness npm run cli -- proof project .
 docker compose run --rm truth-harness npm run cli -- code sandbox-status --json
 ```
@@ -76,10 +91,11 @@ The Checks tab includes a Safe Verifier Path card for machines that do not have 
 
 ```bash
 npm run docker:proof
+npm run docker:engines
 npm run docker:verify
 ```
 
-Use `npm run docker:proof` for the day-to-day no-runtime-network engine suite after the dev image exists. Use `npm run docker:verify` before demos or review checkpoints when you want the full image build and verification target. Image builds may download dependencies; verifier runs inside the `truth-harness` compose service use the no-network runtime boundary described below.
+Use `npm run docker:engines` for the quickest no-runtime-network Maxima/Z3 evidence smoke from the built image. Use `npm run docker:proof` for the broader day-to-day no-runtime-network engine suite after the dev image exists. Use `npm run docker:verify` before demos or review checkpoints when you want the full image build and verification target. Image builds may download dependencies; verifier runs inside the `engine-smoke` or `truth-harness` compose services use the no-network runtime boundary described below.
 
 The UI card is guidance, not evidence. Claims still need concrete receipts: `cross-checked` requires an accepted independent CAS record, `smt-checked` requires a concrete Z3 solver record, and `proved` requires an accepted proof-checker record.
 
@@ -111,7 +127,7 @@ By default, MCP `truth_harness_code_run` is still disabled. To expose it to an a
 - The measured Docker provider attests the current container network namespace, not mathematical truth, code correctness, medical/scientific validity, or safety.
 - Loopback remains available inside the container. The measurement means no non-loopback interface/default route was observed.
 - Docker does not make AI-generated code safe. Keep executable allowlists narrow, prefer `--require-sandbox` for risky workflows, and review any command before running it.
-- Maxima and Z3 availability probes are not evidence by themselves. `cross-checked` still requires a concrete Maxima agreement run over the recorded expression/result pair, and `smt-checked` still requires a concrete Z3 `sat` or `unsat` solver run over the recorded artifact.
+- Maxima and Z3 availability probes are not evidence by themselves. `cross-checked` still requires a concrete Maxima agreement run over the recorded expression/result pair, and `smt-checked` still requires a concrete Z3 `sat` or `unsat` solver run over the recorded artifact. `truth-harness engines verify` exists to make that distinction machine-readable.
 
 ## Reset Container State
 

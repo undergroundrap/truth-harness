@@ -40,7 +40,7 @@ CMD ["npm", "run", "check"]
 
 FROM dev AS verify
 
-RUN npm run check && npm run proof:launch:engines
+RUN npm run check && npm run proof:launch:engines && npm run engines:verify:docker-core
 
 FROM dev AS lean-proof
 
@@ -59,6 +59,6 @@ RUN curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-ini
   && elan toolchain install leanprover/lean4:v4.12.0 \
   && lean --version
 
-RUN npm run proof:lean-fixture
+RUN npm run proof:lean-fixture && npm run engines:verify:lean
 
 CMD ["npm", "run", "proof:lean-fixture"]
