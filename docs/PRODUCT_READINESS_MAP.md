@@ -27,7 +27,7 @@ The product should stay private-prototype until the readiness gates below move f
 | Web UI | Yellow/red | The workbench shell exists and is improving. It is not yet polished enough to be the product's first impression. |
 | Visuals | Yellow/red | Number line, maps, lineage, and visual tabs exist. Needs interaction polish, layout QA, editability, and large-canvas testing. |
 | Teaching/reporting | Yellow | Teaching packets and HTML reports exist. Needs professor/student workflow testing. |
-| Storage scale | Yellow | Local workspace artifacts work; catalog indexing, same-directory atomic writes, append-only artifact-write event logs, and locks for session/corpus read-modify-write paths are in place. Large-workspace performance, event-tail inspection UX, and longer multi-agent stress tests still need proof. |
+| Storage scale | Yellow | Local workspace artifacts work; catalog indexing, same-directory atomic writes, append-only artifact-write event logs, local web `/api/events`, and locks for session/corpus read-modify-write paths are in place. Large-workspace performance, timeline UX polish, and longer multi-agent stress tests still need proof. |
 | Formal proof | Yellow/red | Lean proof-check records exist when Lean is installed. Docker does not yet ship a pinned Lean/Mathlib project. |
 | Sage/Wolfram-like breadth | Red | Sage is only a capability/status direction today, not a constrained trust-minting adapter. |
 | Biology/medicine/patents | Red | Evidence organization patterns exist. No automated medical, patent, or discovery claims should be made. |

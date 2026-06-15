@@ -197,6 +197,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "research-map",
         "visual-artifacts",
         "catalog-search",
+        "workspace-events",
         "validation-plan",
         "engine-manifest",
         "verification-readiness",
@@ -276,6 +277,24 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, 409, error instanceof Error ? error.message : "Catalog search failed.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/events" && request.method === "GET") {
+    try {
+      const { listWorkspaceEvents } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const limit = boundedPositiveNumberOrUndefined(requestUrl.searchParams.get("limit"), 1_000) ?? 100;
+      const eventLog = await listWorkspaceEvents(projectRoot, limit);
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-events-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        eventLog
+      });
+    } catch (error) {
+      writeApiError(response, 409, error instanceof Error ? error.message : "Workspace event log read failed.", request);
     }
     return;
   }

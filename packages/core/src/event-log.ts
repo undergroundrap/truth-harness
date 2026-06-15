@@ -67,6 +67,8 @@ export interface WorkspaceEventAppendResult {
 export interface WorkspaceEventListResult {
   schemaVersion: "truth-harness.event-list.v0";
   rootPath: string;
+  localOnly: true;
+  networkAccess: "none";
   total: number;
   events: WorkspaceEventRecord[];
   warnings: string[];
@@ -125,6 +127,8 @@ export async function listWorkspaceEvents(rootPath: string, limit = 100): Promis
       return {
         schemaVersion: "truth-harness.event-list.v0",
         rootPath: status.root,
+        localOnly: true,
+        networkAccess: "none",
         total: 0,
         events: [],
         warnings
@@ -156,6 +160,8 @@ export async function listWorkspaceEvents(rootPath: string, limit = 100): Promis
   return {
     schemaVersion: "truth-harness.event-list.v0",
     rootPath: status.root,
+    localOnly: true,
+    networkAccess: "none",
     total: events.length,
     events: events.slice(-Math.max(1, Math.min(limit, 1_000))),
     warnings

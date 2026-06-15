@@ -1064,6 +1064,7 @@ updateNotesStatus("local draft");
 addActivity("system", "Workbench opened", "Static shell loaded; no external service contacted.", "passed");
 addActivity("system", "Local API ready", "UI will submit prompts only to local receipt and claim ledger routes on this machine.", "waiting");
 render();
+void refreshWorkspaceEvents({ announce: false });
 void refreshSafetyStatus();
 void refreshWorkspaceReadiness();
 void refreshCatalogStatus();
@@ -5662,6 +5663,7 @@ async function attachEvidenceToRoute(input) {
     await refreshWorkspaceReview({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
     await refreshWorkspaceReadiness({ announce: false });
+    await refreshWorkspaceEvents({ announce: false });
     render();
   } catch (error) {
     addActivity("local-api", `${label} attach rejected`, error instanceof Error ? error.message : "Unknown route satisfaction failure.", "refuted");
@@ -6043,6 +6045,7 @@ async function recordCurrentClaim() {
     await refreshWorkspaceReview({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
     await refreshWorkspaceReadiness({ announce: false });
+    await refreshWorkspaceEvents({ announce: false });
   } catch (error) {
     updateLatestActivity("Recording claim", "refuted", error instanceof Error ? error.message : "Unknown claim ledger failure.");
   } finally {
@@ -6068,6 +6071,7 @@ async function recordCurrentChain() {
     await refreshWorkspaceReview({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
     await refreshWorkspaceReadiness({ announce: false });
+    await refreshWorkspaceEvents({ announce: false });
     updateLatestActivity("Recording claim chain", "passed", `${claimId} is now linked to recorded upstream claims.`);
   } catch (error) {
     updateLatestActivity("Recording claim chain", "refuted", error instanceof Error ? error.message : "Unknown claim chain failure.");
@@ -9134,6 +9138,93 @@ function renderActivityLog() {
   activityLog.scrollTop = previousScrollTop;
 }
 
+async function refreshWorkspaceEvents({ announce = true, limit = 100 } = {}) {
+  if (!activityLog) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/events?limit=${encodeURIComponent(String(limit))}`, {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local workspace event log API failed.");
+    const added = mergeWorkspaceEventLog(payload.eventLog);
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded workspace events",
+        localApiSuccessMessage(payload, `${payload.eventLog?.events?.length ?? 0} durable local artifact events loaded.`),
+        "passed"
+      );
+    } else if (added > 0) {
+      renderActivityLog();
+    }
+  } catch (error) {
+    if (announce) {
+      addActivity("local-api", "Workspace events unavailable", error instanceof Error ? error.message : "Unknown workspace event log failure.", "waiting");
+    }
+  }
+}
+
+function mergeWorkspaceEventLog(eventLog) {
+  const events = Array.isArray(eventLog?.events) ? eventLog.events : [];
+  let added = 0;
+  for (const record of events) {
+    const event = activityEventFromWorkspaceEvent(record);
+    if (!event || activityEvents.some((item) => item.id === event.id)) {
+      continue;
+    }
+    activityEvents.push(event);
+    added += 1;
+  }
+
+  if (added > 0) {
+    activityEvents.sort((left, right) => right.at.localeCompare(left.at) || right.id.localeCompare(left.id));
+  }
+  return added;
+}
+
+function activityEventFromWorkspaceEvent(record) {
+  if (!record?.eventId || !record.createdAt) {
+    return undefined;
+  }
+
+  const actor = record.actor?.name ?? record.actor?.kind ?? "truth-harness-core";
+  const artifact = record.artifactId ?? record.kind ?? "workspace artifact";
+  const path = record.path ? ` at ${record.path}` : "";
+  const hash = record.artifact?.sha256 ? ` sha256=${record.artifact.sha256.slice(0, 12)}` : "";
+  return {
+    id: record.eventId,
+    actor,
+    title: workspaceEventTitle(record.action),
+    detail: record.summary ?? `${artifact}${path}${hash}`,
+    status: workspaceEventStatus(record.action),
+    at: record.createdAt,
+    workspaceEventId: record.eventId,
+    path: record.path
+  };
+}
+
+function workspaceEventTitle(action) {
+  switch (action) {
+    case "artifact-written":
+      return "Artifact written";
+    case "catalog-stale":
+      return "Catalog marked stale";
+    case "workspace-initialized":
+      return "Workspace initialized";
+    default:
+      return "Workspace event";
+  }
+}
+
+function workspaceEventStatus(action) {
+  return action === "catalog-stale" ? "waiting" : "passed";
+}
+
 function addActivity(actor, title, detail, status = "passed", at = new Date().toISOString()) {
   const requestId = extractActivityRequestId(detail);
   const event = {
@@ -9188,7 +9279,7 @@ function filteredActivityEvents() {
 }
 
 function activityEventText(event) {
-  return [event.at, event.status, event.actor, event.title, event.detail, event.requestId ?? ""].join(" ");
+  return [event.at, event.status, event.actor, event.title, event.detail, event.requestId ?? "", event.workspaceEventId ?? "", event.path ?? ""].join(" ");
 }
 
 function extractActivityRequestId(value) {
@@ -9212,7 +9303,8 @@ function formatActivityExport(events) {
   return events
     .map((event) => {
       const requestMarker = event.requestId ? ` request=${event.requestId}` : "";
-      return `[${event.at}] ${event.status.toUpperCase()}${requestMarker} ${event.actor}: ${event.title} - ${event.detail}`;
+      const eventMarker = event.workspaceEventId ? ` event=${event.workspaceEventId}` : "";
+      return `[${event.at}] ${event.status.toUpperCase()}${requestMarker}${eventMarker} ${event.actor}: ${event.title} - ${event.detail}`;
     })
     .join("\n");
 }
@@ -11245,6 +11337,7 @@ composer.addEventListener("submit", async (event) => {
     await refreshWorkspaceReview({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
     await refreshWorkspaceReadiness({ announce: false });
+    await refreshWorkspaceEvents({ announce: false });
     addActivity("web-ui", "Rendered receipt", `${payload.receipt.runId} displayed with trace and evidence graph.`, "passed");
   } catch (error) {
     updateLatestActivity("Calling local API", "refuted", "POST /api/receipt failed");

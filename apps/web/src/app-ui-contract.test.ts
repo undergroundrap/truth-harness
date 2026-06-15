@@ -117,6 +117,19 @@ describe("web UI action contracts", () => {
     expect(activitySectionStyles).not.toContain("overflow: auto;");
   });
 
+  it("hydrates the activity log from durable local workspace events", async () => {
+    const source = await readFile(appSourcePath, "utf8");
+
+    expect(source).toContain('fetch(`/api/events?limit=${encodeURIComponent(String(limit))}`');
+    expect(source).toContain("function refreshWorkspaceEvents({ announce = true, limit = 100 } = {})");
+    expect(source).toContain("function mergeWorkspaceEventLog(eventLog)");
+    expect(source).toContain("function activityEventFromWorkspaceEvent(record)");
+    expect(source).toContain("workspaceEventId: record.eventId");
+    expect(source).toContain("event.workspaceEventId ?? \"\"");
+    expect(source).toContain("void refreshWorkspaceEvents({ announce: false });");
+    expect(source).toContain("await refreshWorkspaceEvents({ announce: false });");
+  });
+
   it("keeps ledgers and replay paged instead of nested scrollboxes", async () => {
     const [html, source, styles] = await Promise.all([
       readFile(appHtmlPath, "utf8"),

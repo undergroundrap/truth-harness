@@ -55,6 +55,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("research-map");
     expect(statusPayload.capabilities).toContain("visual-artifacts");
     expect(statusPayload.capabilities).toContain("catalog-search");
+    expect(statusPayload.capabilities).toContain("workspace-events");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
       sameOriginWritesOnly: true,
@@ -194,6 +195,37 @@ describe("local web route ledger API", () => {
         artifactId: receiptClaimPayload.claim.claimId,
         kind: "claims",
         trust: "exact-computed"
+      })
+    );
+
+    const eventLogResponse = await fetch(`${baseUrl}/api/events?limit=50`);
+    expect(eventLogResponse.status).toBe(200);
+    const eventLogPayload = await eventLogResponse.json();
+    expectLocalApiSuccess(eventLogResponse, eventLogPayload);
+    expect(eventLogPayload.localOnly).toBe(true);
+    expect(eventLogPayload.externalCalls).toEqual([]);
+    expect(eventLogPayload.eventLog).toMatchObject({
+      schemaVersion: "truth-harness.event-list.v0",
+      localOnly: true,
+      networkAccess: "none"
+    });
+    expect(eventLogPayload.eventLog.total).toBeGreaterThanOrEqual(3);
+    expect(eventLogPayload.eventLog.events).toContainEqual(
+      expect.objectContaining({
+        action: "artifact-written",
+        kind: "receipts",
+        artifactId: receiptPayload.receipt.runId,
+        localOnly: true,
+        networkAccess: "none"
+      })
+    );
+    expect(eventLogPayload.eventLog.events).toContainEqual(
+      expect.objectContaining({
+        action: "artifact-written",
+        kind: "claims",
+        artifactId: receiptClaimPayload.claim.claimId,
+        localOnly: true,
+        networkAccess: "none"
       })
     );
 
