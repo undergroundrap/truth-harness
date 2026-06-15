@@ -305,6 +305,11 @@ export {
   LOCAL_WORKSPACE_MANIFEST,
   repairLocalWorkspace
 } from "./local-workspace.js";
+export {
+  cleanLocalWorkspace,
+  isWorkspaceCleanTarget,
+  repairWorkspaceArtifacts
+} from "./workspace-maintenance.js";
 export { replayReceipt } from "./replay.js";
 export { stableHash } from "./stable-hash.js";
 export { withWorkspaceLock, writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
@@ -752,4 +757,12 @@ export type {
   LocalWorkspaceRepairResult,
   LocalWorkspaceStatus
 } from "./local-workspace.js";
+export type {
+  WorkspaceArtifactRepairAction,
+  WorkspaceArtifactRepairResult,
+  WorkspaceCleanEntry,
+  WorkspaceCleanGroup,
+  WorkspaceCleanResult,
+  WorkspaceCleanTarget
+} from "./workspace-maintenance.js";
 export type { ReplayResult } from "./replay.js";

@@ -132,18 +132,24 @@ export async function writeReceiptPlotVisualArtifact(input: ReceiptPlotVisualInp
   };
   const rendererSource = receiptPlotRendererSource(input.renderer, receipt.problem, points, plotSpec);
 
+  const sourceRef = receiptRef.startsWith("prompt:")
+    ? {
+        kind: "manual" as const,
+        ref: receiptRef,
+        label: "Prompt input"
+      }
+    : {
+        kind: "receipt" as const,
+        ref: receiptRef,
+        label: `Receipt ${receipt.runId}`
+      };
+
   return writeVisualArtifact({
     rootPath: input.rootPath,
     title: input.title?.trim() || `Plot for ${receipt.problem}`,
     kind: "plot",
     renderer: rendererInfo(input.renderer, "receipt-plot-adapter"),
-    sourceRefs: [
-      {
-        kind: "receipt",
-        ref: receiptRef,
-        label: `Receipt ${receipt.runId}`
-      }
-    ],
+    sourceRefs: [sourceRef],
     replayCommand: receiptRef.startsWith("prompt:")
       ? `truth-harness visual plot --problem ${quoteArg(receipt.problem)} --renderer ${input.renderer} --workspace ${quoteArg(input.rootPath)}`
       : `truth-harness visual plot ${quoteArg(receiptRef)} --renderer ${input.renderer} --workspace ${quoteArg(input.rootPath)}`,

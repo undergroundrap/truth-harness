@@ -1,0 +1,48 @@
+# Local Workspace Maintenance
+
+Truth Harness stores private project data under `.truth-harness/` by default. Maintenance commands are intentionally conservative: they operate only on manifest-known directories inside that folder, and cleanup is a dry run unless deletion is explicitly confirmed.
+
+## Repair
+
+```bash
+npm run cli -- workspace repair
+npm run workspace:repair-artifacts:preview
+npm run cli -- workspace repair-artifacts
+npm run cli -- workspace validate
+```
+
+`workspace repair` restores missing private directories and manifest defaults. `workspace repair-artifacts` repairs known legacy JSON metadata drift, such as older verifier-route manifest fields or prompt-derived visual refs that should be manual context instead of receipt evidence. It never reruns a verifier and never upgrades a trust label.
+
+Use preview mode before changing artifact JSON:
+
+```bash
+npm run workspace:repair-artifacts:preview
+node apps/cli/dist/index.js workspace repair-artifacts . --preview
+```
+
+## Cleanup
+
+```bash
+npm run workspace:clean
+npm run cli -- workspace clean . --target scratch
+npm run cli -- workspace clean . --target generated --confirm-delete
+```
+
+The default `workspace clean` target is `scratch`, which previews clearing rebuildable caches and generated health files:
+
+- `.truth-harness/indexes`
+- `.truth-harness/validation`
+- `.truth-harness/snapshots`
+
+Additional targets:
+
+- `generated`: scratch data plus generated events, findings, artifacts, visuals, and benchmark outputs.
+- `evidence`: durable receipts, claims, routes, proof/SMT/CAS records, sessions, disclosures, reviews, and other research evidence.
+- `all`: every manifest-known data directory under `.truth-harness`, while preserving `.truth-harness/project.json`.
+- Any explicit directory name such as `receipts`, `claims`, `routes`, `visuals`, or `model-contexts`.
+
+Deletion requires `--confirm-delete`. Without it, Truth Harness prints the files and bytes that would be cleared and exits without changing the workspace.
+
+## Safety Boundary
+
+Cleanup does not accept arbitrary filesystem paths. Targets are resolved from the local workspace manifest and must stay under `.truth-harness/`. Index lock files are preserved so cleanup does not disturb active workspace operations.

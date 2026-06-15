@@ -10,6 +10,7 @@ import {
   checkClaimFile,
   checkLeanProofArtifact,
   checkSmtLibArtifact,
+  cleanLocalWorkspace,
   createBenchmarkComparisonRecord,
   createClaimChart,
   createClaimLedgerGraph,
@@ -36,6 +37,7 @@ import {
   getSmtBackendStatus,
   ingestLocalCorpus,
   initLocalWorkspace,
+  isWorkspaceCleanTarget,
   isExpertReviewKind,
   isExpertReviewOutcome,
   isExpertReviewStatus,
@@ -100,6 +102,7 @@ import {
   renderPlotlyVisualArtifact,
   renderTeachingPacketMarkdown,
   repairLocalWorkspace,
+  repairWorkspaceArtifacts,
   rebuildWorkspaceCatalog,
   replayReceipt,
   runWorkspaceStress,
@@ -203,6 +206,9 @@ import {
   type LocalWorkspaceInitResult,
   type LocalWorkspaceRepairResult,
   type LocalWorkspaceStatus,
+  type WorkspaceArtifactRepairResult,
+  type WorkspaceCleanResult,
+  type WorkspaceCleanTarget,
   type ModelContextDisclosureStatus,
   type ModelContextPacket,
   type ModelContextSection,
@@ -2741,6 +2747,63 @@ workspace
   });
 
 workspace
+  .command("repair-artifacts")
+  .description("Repair legacy local artifact metadata without changing trust labels.")
+  .argument("[path]", "Project root path", ".")
+  .option("--dry-run", "Preview artifact repair actions without writing files")
+  .option("--preview", "Preview artifact repair actions without writing files")
+  .option("--json", "Print the full artifact repair JSON")
+  .action(async (path: string, options: { dryRun?: boolean; preview?: boolean; json?: boolean }) => {
+    const result = await repairWorkspaceArtifacts({
+      rootPath: path,
+      dryRun: options.dryRun || options.preview
+    });
+
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+
+    printWorkspaceArtifactRepair(result);
+  });
+
+workspace
+  .command("clean")
+  .description("Preview or clear selected .truth-harness data directories.")
+  .argument("[path]", "Project root path", ".")
+  .option(
+    "--target <target>",
+    "Clean target: scratch, generated, evidence, all, or a workspace directory name. Repeat for multiple targets.",
+    collectWorkspaceCleanTarget,
+    [] as WorkspaceCleanTarget[]
+  )
+  .option("--confirm-delete", "Actually delete files. Without this flag the command is a dry run.")
+  .option("--json", "Print the full workspace cleanup JSON")
+  .action(
+    async (
+      path: string,
+      options: {
+        target: WorkspaceCleanTarget[];
+        confirmDelete?: boolean;
+        json?: boolean;
+      }
+    ) => {
+      const result = await cleanLocalWorkspace({
+        rootPath: path,
+        targets: options.target,
+        dryRun: !options.confirmDelete
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printWorkspaceClean(result);
+    }
+  );
+
+workspace
   .command("validate")
   .description("Validate local workspace evidence artifacts before agents rely on them.")
   .argument("[path]", "Project root path", ".")
@@ -5215,6 +5278,64 @@ function printWorkspaceRepair(result: LocalWorkspaceRepairResult): void {
   }
 }
 
+function printWorkspaceArtifactRepair(result: WorkspaceArtifactRepairResult): void {
+  console.log(result.repaired ? "Repaired Truth Harness artifact metadata" : "Truth Harness artifact metadata already healthy");
+  console.log(`Root: ${result.root}`);
+  console.log(`Mode: ${result.dryRun ? "dry-run" : "write"}`);
+  console.log(`Actions: ${result.actions.length}`);
+
+  if (result.actions.length > 0) {
+    console.log("");
+    console.log("Artifact repairs:");
+    for (const action of result.actions) {
+      const status = action.applied ? "applied" : "planned";
+      console.log(`  ${status.padEnd(7)} ${action.kind.padEnd(17)} ${action.path}`);
+      console.log(`           ${action.changes.join(", ")}`);
+    }
+  }
+
+  if (result.warnings.length > 0) {
+    console.log("");
+    console.log("Repair boundary:");
+    for (const warning of result.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printWorkspaceClean(result: WorkspaceCleanResult): void {
+  console.log(result.dryRun ? "Truth Harness workspace cleanup preview" : "Truth Harness workspace cleanup complete");
+  console.log(`Root: ${result.root}`);
+  console.log(`Mode: ${result.dryRun ? "dry-run" : "delete confirmed"}`);
+  console.log(`Targets: ${result.targets.join(", ")}`);
+  console.log(`Resolved directories: ${result.resolvedDirectories.join(", ")}`);
+
+  if (result.entries.length > 0) {
+    console.log("");
+    console.log("Directory impact:");
+    for (const entry of result.entries) {
+      const action = result.dryRun ? "would clear" : entry.deleted ? "cleared" : "skipped";
+      const preserved = entry.preserved.length > 0 ? `; preserved ${entry.preserved.join(", ")}` : "";
+      console.log(
+        `  ${action.padEnd(11)} ${entry.directory.padEnd(14)} ${entry.files} files, ${formatBytes(entry.bytes)}${preserved}`
+      );
+    }
+  }
+
+  if (!result.dryRun) {
+    console.log("");
+    console.log(`Deleted: ${result.deletedFiles} files, ${formatBytes(result.deletedBytes)}`);
+  }
+
+  if (result.warnings.length > 0) {
+    console.log("");
+    console.log("Safety notes:");
+    for (const warning of result.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
 function printManifestRepair(repair: LocalWorkspaceInitResult["manifestRepair"]): void {
   if (!repair || repair.addedDirectories.length === 0) {
     return;
@@ -7080,6 +7201,21 @@ function collectRepeated(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
+function collectWorkspaceCleanTarget(value: string, previous: WorkspaceCleanTarget[]): WorkspaceCleanTarget[] {
+  const targets = value
+    .split(",")
+    .map((target) => target.trim())
+    .filter((target) => target.length > 0);
+
+  for (const target of targets) {
+    if (!isWorkspaceCleanTarget(target)) {
+      throw new Error(`Unsupported workspace clean target ${JSON.stringify(target)}.`);
+    }
+  }
+
+  return [...previous, ...(targets as WorkspaceCleanTarget[])];
+}
+
 const VISUAL_ARTIFACT_KINDS: VisualArtifactKind[] = [
   "plot",
   "proof-tree",
@@ -7253,6 +7389,22 @@ function singleLineSnippet(value: string): string {
 function formatRecordCounts(value: Record<string, number>): string {
   const entries = Object.entries(value).sort(([left], [right]) => left.localeCompare(right));
   return entries.length > 0 ? entries.map(([key, count]) => `${key}=${count}`).join(", ") : "none";
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
 }
 
 function formatDefinedRecord(value: Record<string, unknown>): string {
