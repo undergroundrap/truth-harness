@@ -762,7 +762,9 @@ export type {
 } from "./local-workspace.js";
 export type {
   WorkspaceArchiveEntry,
+  WorkspaceArchiveFileEntry,
   WorkspaceArchiveListResult,
+  WorkspaceArchiveRestoreConflict,
   WorkspaceArchiveRestoreEntry,
   WorkspaceArchiveRestoreResult,
   WorkspaceArchiveResult,

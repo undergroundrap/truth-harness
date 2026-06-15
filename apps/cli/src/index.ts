@@ -2837,6 +2837,7 @@ workspace
     [] as WorkspaceCleanTarget[]
   )
   .option("--confirm-restore", "Actually copy archive files back into live workspace directories")
+  .option("--overwrite", "Allow restore to replace changed live files after previewing conflicts")
   .option("--json", "Print the full workspace archive restore JSON")
   .action(
     async (
@@ -2845,6 +2846,7 @@ workspace
       options: {
         target: WorkspaceCleanTarget[];
         confirmRestore?: boolean;
+        overwrite?: boolean;
         json?: boolean;
       }
     ) => {
@@ -2852,7 +2854,8 @@ workspace
         rootPath: path,
         archiveRef: archive,
         targets: options.target,
-        dryRun: !options.confirmRestore
+        dryRun: !options.confirmRestore,
+        overwrite: options.overwrite
       });
 
       if (options.json) {
@@ -5464,6 +5467,7 @@ function printWorkspaceArchiveRestore(result: WorkspaceArchiveRestoreResult): vo
   console.log(`Archive: ${result.archiveId}`);
   console.log(`Root: ${result.root}`);
   console.log(`Mode: ${result.dryRun ? "dry-run" : "restore confirmed"}`);
+  console.log(`Overwrite: ${result.overwrite ? "allowed" : "blocked"}`);
   console.log(`Targets: ${result.targets.join(", ")}`);
   console.log(`Resolved directories: ${result.resolvedDirectories.join(", ")}`);
 
@@ -5473,8 +5477,20 @@ function printWorkspaceArchiveRestore(result: WorkspaceArchiveRestoreResult): vo
     for (const entry of result.entries) {
       const action = result.dryRun ? "would copy" : entry.restored ? "copied" : entry.exists ? "empty" : "missing";
       console.log(
-        `  ${action.padEnd(10)} ${entry.directory.padEnd(14)} ${entry.files} files, ${formatBytes(entry.bytes)} -> ${entry.targetPath}`
+        `  ${action.padEnd(10)} ${entry.directory.padEnd(14)} ${entry.files} files, ${formatBytes(entry.bytes)}, conflicts ${entry.conflicts} -> ${entry.targetPath}`
       );
+    }
+  }
+
+  if (result.conflicts.length > 0) {
+    console.log("");
+    console.log("Restore conflicts:");
+    for (const conflict of result.conflicts) {
+      console.log(`  ${conflict.reason.padEnd(13)} ${conflict.path}`);
+      console.log(`    archive ${formatBytes(conflict.archiveBytes)} ${conflict.archiveSha256 || "no-hash"}`);
+      if (conflict.liveBytes !== undefined || conflict.liveSha256) {
+        console.log(`    live    ${formatBytes(conflict.liveBytes ?? 0)} ${conflict.liveSha256 ?? "unknown"}`);
+      }
     }
   }
 

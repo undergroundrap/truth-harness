@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { copyFile, mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
@@ -64,6 +65,14 @@ export interface WorkspaceArchiveEntry {
   copied: boolean;
 }
 
+export interface WorkspaceArchiveFileEntry {
+  directory: LocalWorkspaceDirectory;
+  sourcePath: string;
+  archivePath: string;
+  bytes: number;
+  sha256: string;
+}
+
 export interface WorkspaceArchiveResult {
   schemaVersion: "truth-harness.workspace-archive.v0";
   archiveId: string;
@@ -74,6 +83,7 @@ export interface WorkspaceArchiveResult {
   targets: WorkspaceCleanTarget[];
   resolvedDirectories: LocalWorkspaceDirectory[];
   entries: WorkspaceArchiveEntry[];
+  files: WorkspaceArchiveFileEntry[];
   archivedFiles: number;
   archivedBytes: number;
   warnings: string[];
@@ -89,6 +99,8 @@ export interface WorkspaceArchiveSummary {
   resolvedDirectories: LocalWorkspaceDirectory[];
   totalFiles: number;
   totalBytes: number;
+  damaged: boolean;
+  damageReason?: string;
 }
 
 export interface WorkspaceArchiveListResult {
@@ -96,8 +108,18 @@ export interface WorkspaceArchiveListResult {
   root: string;
   workspaceDir: string;
   total: number;
+  damaged: number;
   archives: WorkspaceArchiveSummary[];
   warnings: string[];
+}
+
+export interface WorkspaceArchiveRestoreConflict {
+  path: string;
+  reason: "target-exists" | "hash-mismatch";
+  archiveBytes: number;
+  archiveSha256: string;
+  liveBytes?: number;
+  liveSha256?: string;
 }
 
 export interface WorkspaceArchiveRestoreEntry {
@@ -107,6 +129,7 @@ export interface WorkspaceArchiveRestoreEntry {
   exists: boolean;
   files: number;
   bytes: number;
+  conflicts: number;
   restored: boolean;
 }
 
@@ -120,8 +143,11 @@ export interface WorkspaceArchiveRestoreResult {
   targets: WorkspaceCleanTarget[];
   resolvedDirectories: LocalWorkspaceDirectory[];
   entries: WorkspaceArchiveRestoreEntry[];
+  conflicts: WorkspaceArchiveRestoreConflict[];
+  verifiedFiles: number;
   restoredFiles: number;
   restoredBytes: number;
+  overwrite: boolean;
   warnings: string[];
 }
 
@@ -267,11 +293,13 @@ export async function archiveLocalWorkspace(input: {
   const now = input.now ?? new Date().toISOString();
   const targets: WorkspaceCleanTarget[] = input.targets && input.targets.length > 0 ? input.targets : ["all"];
   const directories = resolveCleanTargets(targets);
-  const archiveId = `archive_${compactTimestamp(now)}`;
+  const archiveId = await nextArchiveId(status.root, now);
   const archiveDir = resolveWorkspaceDirectory(status.root, `${LOCAL_WORKSPACE_DIR}/archives/${archiveId}`);
   const entries: WorkspaceArchiveEntry[] = [];
+  const files: WorkspaceArchiveFileEntry[] = [];
   const warnings = [
-    "Archive copies selected workspace data into .truth-harness/archives; it is local evidence backup, not off-machine backup."
+    "Archive copies selected workspace data into .truth-harness/archives; it is local evidence backup, not off-machine backup.",
+    "Archive manifests include per-file SHA-256 hashes for restore verification; hashes prove file identity, not claim truth."
   ];
 
   await mkdir(archiveDir, { recursive: true });
@@ -285,6 +313,7 @@ export async function archiveLocalWorkspace(input: {
 
     if (exists) {
       await copyDirectory(sourcePath, targetPath, new Set(["archives"]));
+      files.push(...(await collectArchiveFileEntries(status.root, directory, sourcePath, targetPath)));
       copied = stats.files > 0;
     }
 
@@ -308,7 +337,8 @@ export async function archiveLocalWorkspace(input: {
     targets,
     resolvedDirectories: directories,
     reason: input.reason ?? "local workspace maintenance archive",
-    entries
+    entries,
+    files
   };
   const manifestPath = join(archiveDir, "archive-manifest.json");
   await writeJsonFileAtomic(manifestPath, manifest);
@@ -323,6 +353,7 @@ export async function archiveLocalWorkspace(input: {
     targets,
     resolvedDirectories: directories,
     entries,
+    files,
     archivedFiles: entries.reduce((sum, entry) => sum + (entry.copied ? entry.files : 0), 0),
     archivedBytes: entries.reduce((sum, entry) => sum + (entry.copied ? entry.bytes : 0), 0),
     warnings
@@ -342,10 +373,7 @@ export async function listLocalWorkspaceArchives(input: { rootPath: string }): P
       }
 
       const manifestPath = join(archivesRoot, entry.name, "archive-manifest.json");
-      const summary = await readArchiveSummary(status.root, manifestPath);
-      if (summary) {
-        archives.push(summary);
-      }
+      archives.push(await readArchiveSummary(status.root, manifestPath, entry.name));
     }
   }
 
@@ -356,8 +384,12 @@ export async function listLocalWorkspaceArchives(input: { rootPath: string }): P
     root: status.root,
     workspaceDir: status.workspaceDir,
     total: archives.length,
+    damaged: archives.filter((archive) => archive.damaged).length,
     archives,
-    warnings: ["Archives are local copies under .truth-harness/archives; they are not off-machine backups."]
+    warnings: [
+      "Archives are local copies under .truth-harness/archives; they are not off-machine backups.",
+      ...archives.filter((archive) => archive.damaged).map((archive) => `Damaged archive listed for review: ${archive.archiveId}.`)
+    ]
   };
 }
 
@@ -366,9 +398,11 @@ export async function restoreLocalWorkspaceArchive(input: {
   archiveRef: string;
   targets?: WorkspaceCleanTarget[];
   dryRun?: boolean;
+  overwrite?: boolean;
 }): Promise<WorkspaceArchiveRestoreResult> {
   const status = await requireWorkspace(input.rootPath);
   const dryRun = input.dryRun ?? true;
+  const overwrite = input.overwrite ?? false;
   const archiveDir = resolveArchiveDirectory(status.root, input.archiveRef);
   const manifestPath = join(archiveDir, "archive-manifest.json");
   const manifest = await readArchiveManifest(status.root, manifestPath);
@@ -377,15 +411,72 @@ export async function restoreLocalWorkspaceArchive(input: {
     input.targets && input.targets.length > 0 ? input.targets : manifestDirectories.length > 0 ? manifestDirectories : ["scratch"];
   const directories = resolveCleanTargets(targets).filter((directory) => manifestDirectories.includes(directory));
   const entries: WorkspaceArchiveRestoreEntry[] = [];
+  const conflicts: WorkspaceArchiveRestoreConflict[] = [];
+  let verifiedFiles = 0;
 
   for (const directory of directories) {
     const archivePath = resolveWorkspaceDirectory(status.root, `${LOCAL_WORKSPACE_DIR}/archives/${manifest.archiveId}/${directory}`);
     const targetPath = resolveWorkspaceDirectory(status.root, status.manifest.directories[directory]);
     const exists = await pathExists(archivePath);
     const stats = exists ? await collectDirectoryStats(archivePath, new Set()) : { files: 0, bytes: 0 };
+    const fileEntries = manifest.files.filter((file) => file.directory === directory);
+    const directoryConflicts: WorkspaceArchiveRestoreConflict[] = [];
     let restored = false;
 
+    if (exists) {
+      if (stats.files > 0 && fileEntries.length === 0) {
+        directoryConflicts.push({
+          path: relativeWorkspacePath(status.root, archivePath),
+          reason: "hash-mismatch",
+          archiveBytes: stats.bytes,
+          archiveSha256: "",
+          liveBytes: stats.bytes
+        });
+      }
+
+      for (const file of fileEntries) {
+        const archiveFilePath = resolveWorkspaceDirectory(status.root, file.archivePath);
+        const targetFilePath = resolveWorkspaceDirectory(
+          status.root,
+          `${status.manifest.directories[directory]}/${relativePathWithinDirectory(file.archivePath, directory)}`
+        );
+        const archiveFile = await fileIdentity(archiveFilePath);
+        if (!archiveFile || archiveFile.bytes !== file.bytes || archiveFile.sha256 !== file.sha256) {
+          directoryConflicts.push({
+            path: relativeWorkspacePath(status.root, archiveFilePath),
+            reason: "hash-mismatch",
+            archiveBytes: file.bytes,
+            archiveSha256: file.sha256,
+            liveBytes: archiveFile?.bytes,
+            liveSha256: archiveFile?.sha256
+          });
+          continue;
+        }
+
+        verifiedFiles += 1;
+        const liveFile = await fileIdentity(targetFilePath);
+        if (liveFile && (liveFile.bytes !== file.bytes || liveFile.sha256 !== file.sha256) && !overwrite) {
+          directoryConflicts.push({
+            path: relativeWorkspacePath(status.root, targetFilePath),
+            reason: "target-exists",
+            archiveBytes: file.bytes,
+            archiveSha256: file.sha256,
+            liveBytes: liveFile.bytes,
+            liveSha256: liveFile.sha256
+          });
+        }
+      }
+    }
+
+    conflicts.push(...directoryConflicts);
+
     if (exists && !dryRun) {
+      if (directoryConflicts.length > 0) {
+        throw new Error(
+          `Archive restore has ${directoryConflicts.length} conflict${directoryConflicts.length === 1 ? "" : "s"} in ${directory}. Preview first, or pass --overwrite to replace changed live files.`
+        );
+      }
+
       await copyDirectory(archivePath, targetPath, new Set());
       restored = stats.files > 0;
     }
@@ -397,6 +488,7 @@ export async function restoreLocalWorkspaceArchive(input: {
       exists,
       files: stats.files,
       bytes: stats.bytes,
+      conflicts: directoryConflicts.length,
       restored
     });
   }
@@ -405,6 +497,10 @@ export async function restoreLocalWorkspaceArchive(input: {
     dryRun
       ? "Dry run only. Pass --confirm-restore to copy files from the archive into live workspace directories."
       : "Confirmed restore copied archive files into live workspace directories. Files not present in the archive were not deleted.",
+    overwrite
+      ? "Overwrite was allowed; changed live files can be replaced by archive copies."
+      : "Restore refuses to overwrite changed live files unless overwrite is explicitly allowed.",
+    "Restore verifies archive file hashes before copying. Hashes prove file identity, not claim truth.",
     "Restore is local-only and does not upgrade, prove, or validate any claim by itself."
   ];
 
@@ -418,8 +514,11 @@ export async function restoreLocalWorkspaceArchive(input: {
     targets,
     resolvedDirectories: directories,
     entries,
+    conflicts,
+    verifiedFiles,
     restoredFiles: dryRun ? 0 : entries.reduce((sum, entry) => sum + (entry.restored ? entry.files : 0), 0),
     restoredBytes: dryRun ? 0 : entries.reduce((sum, entry) => sum + (entry.restored ? entry.bytes : 0), 0),
+    overwrite,
     warnings
   };
 }
@@ -637,7 +736,7 @@ async function readJsonRecord(filePath: string): Promise<Record<string, unknown>
   return isRecord(parsed) ? parsed : {};
 }
 
-async function readArchiveSummary(root: string, manifestPath: string): Promise<WorkspaceArchiveSummary | undefined> {
+async function readArchiveSummary(root: string, manifestPath: string, fallbackArchiveId: string): Promise<WorkspaceArchiveSummary> {
   try {
     const manifest = await readArchiveManifest(root, manifestPath);
     return {
@@ -649,10 +748,23 @@ async function readArchiveSummary(root: string, manifestPath: string): Promise<W
       targets: manifest.targets,
       resolvedDirectories: manifest.resolvedDirectories,
       totalFiles: manifest.entries.reduce((sum, entry) => sum + entry.files, 0),
-      totalBytes: manifest.entries.reduce((sum, entry) => sum + entry.bytes, 0)
+      totalBytes: manifest.entries.reduce((sum, entry) => sum + entry.bytes, 0),
+      damaged: false
     };
-  } catch {
-    return undefined;
+  } catch (error) {
+    return {
+      archiveId: fallbackArchiveId,
+      createdAt: "",
+      reason: "damaged archive manifest",
+      archiveDir: relativeWorkspacePath(root, dirname(manifestPath)),
+      manifestPath: relativeWorkspacePath(root, manifestPath),
+      targets: [],
+      resolvedDirectories: [],
+      totalFiles: 0,
+      totalBytes: 0,
+      damaged: true,
+      damageReason: error instanceof Error ? error.message : "Archive manifest could not be read."
+    };
   }
 }
 
@@ -666,6 +778,7 @@ async function readArchiveManifest(
   targets: WorkspaceCleanTarget[];
   resolvedDirectories: LocalWorkspaceDirectory[];
   entries: Array<{ directory: LocalWorkspaceDirectory; files: number; bytes: number }>;
+  files: WorkspaceArchiveFileEntry[];
 }> {
   const parsed = await readJsonRecord(manifestPath);
   if (parsed.schemaVersion !== "truth-harness.workspace-archive-manifest.v0") {
@@ -691,6 +804,21 @@ async function readArchiveManifest(
         }))
         .filter((entry): entry is { directory: LocalWorkspaceDirectory; files: number; bytes: number } => Boolean(entry.directory))
     : [];
+  const files = Array.isArray(parsed.files)
+    ? parsed.files
+        .filter((entry): entry is Record<string, unknown> => isRecord(entry))
+        .map((entry) => ({
+          directory: normalizeWorkspaceDirectory(entry.directory),
+          sourcePath: typeof entry.sourcePath === "string" ? entry.sourcePath : "",
+          archivePath: typeof entry.archivePath === "string" ? entry.archivePath : "",
+          bytes: normalizeNonNegativeNumber(entry.bytes),
+          sha256: typeof entry.sha256 === "string" && /^[a-f0-9]{64}$/u.test(entry.sha256) ? entry.sha256 : ""
+        }))
+        .filter(
+          (entry): entry is WorkspaceArchiveFileEntry =>
+            Boolean(entry.directory && entry.sourcePath && entry.archivePath && entry.sha256)
+        )
+    : [];
 
   return {
     archiveId,
@@ -698,8 +826,62 @@ async function readArchiveManifest(
     reason: typeof parsed.reason === "string" ? parsed.reason : "local workspace maintenance archive",
     targets,
     resolvedDirectories,
-    entries
+    entries,
+    files
   };
+}
+
+async function nextArchiveId(root: string, now: string): Promise<string> {
+  const baseId = `archive_${compactTimestamp(now)}`;
+  let candidate = baseId;
+  let suffix = 2;
+  while (await pathExists(resolveWorkspaceDirectory(root, `${LOCAL_WORKSPACE_DIR}/archives/${candidate}`))) {
+    candidate = `${baseId}_${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+async function collectArchiveFileEntries(
+  root: string,
+  directory: LocalWorkspaceDirectory,
+  sourceRoot: string,
+  archiveRoot: string
+): Promise<WorkspaceArchiveFileEntry[]> {
+  const entries: WorkspaceArchiveFileEntry[] = [];
+
+  async function walk(sourceDirectory: string, archiveDirectory: string): Promise<void> {
+    let dirents;
+    try {
+      dirents = await readdir(archiveDirectory, { withFileTypes: true });
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code === "ENOENT") {
+        return;
+      }
+      throw error;
+    }
+
+    for (const dirent of dirents.sort((left, right) => left.name.localeCompare(right.name))) {
+      const archivePath = join(archiveDirectory, dirent.name);
+      const sourcePath = join(sourceDirectory, dirent.name);
+      if (dirent.isDirectory()) {
+        await walk(sourcePath, archivePath);
+      } else if (dirent.isFile()) {
+        const identity = await requireFileIdentity(archivePath);
+        entries.push({
+          directory,
+          sourcePath: relativeWorkspacePath(root, sourcePath),
+          archivePath: relativeWorkspacePath(root, archivePath),
+          bytes: identity.bytes,
+          sha256: identity.sha256
+        });
+      }
+    }
+  }
+
+  await walk(sourceRoot, archiveRoot);
+  return entries.sort((left, right) => left.archivePath.localeCompare(right.archivePath));
 }
 
 async function collectDirectoryStats(
@@ -761,6 +943,30 @@ async function copyDirectory(sourcePath: string, targetPath: string, ignoredBase
   }
 }
 
+async function requireFileIdentity(filePath: string): Promise<{ bytes: number; sha256: string }> {
+  const identity = await fileIdentity(filePath);
+  if (!identity) {
+    throw new Error(`Expected file is missing: ${filePath}`);
+  }
+  return identity;
+}
+
+async function fileIdentity(filePath: string): Promise<{ bytes: number; sha256: string } | undefined> {
+  try {
+    const bytes = await readFile(filePath);
+    return {
+      bytes: bytes.byteLength,
+      sha256: sha256(bytes)
+    };
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT" || nodeError.code === "EISDIR") {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 async function pathExists(path: string): Promise<boolean> {
   try {
     await stat(path);
@@ -772,6 +978,15 @@ async function pathExists(path: string): Promise<boolean> {
     }
     throw error;
   }
+}
+
+function relativePathWithinDirectory(archivePath: string, directory: LocalWorkspaceDirectory): string {
+  const marker = `/${directory}/`;
+  const index = archivePath.indexOf(marker);
+  if (index === -1) {
+    throw new Error(`Archive file path does not contain expected directory ${directory}: ${archivePath}`);
+  }
+  return archivePath.slice(index + marker.length);
 }
 
 function resolveArchiveDirectory(root: string, archiveRef: string): string {
@@ -848,6 +1063,10 @@ function relativeWorkspacePath(root: string, filePath: string): string {
 
 function compactTimestamp(value: string): string {
   return value.replace(/[^0-9A-Za-z]/gu, "").slice(0, 24);
+}
+
+function sha256(value: Buffer): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function replaceExtension(filePath: string, nextExtension: string): string {

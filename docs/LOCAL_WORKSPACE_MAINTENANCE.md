@@ -29,14 +29,15 @@ npm run workspace:restore-preview -- archive_20260615T000500000Z
 npm run cli -- workspace archive . --target evidence --reason "before fresh start"
 npm run cli -- workspace restore-archive archive_20260615T000500000Z . --target receipts
 npm run cli -- workspace restore-archive archive_20260615T000500000Z . --target receipts --confirm-restore
+npm run cli -- workspace restore-archive archive_20260615T000500000Z . --target receipts --confirm-restore --overwrite
 npm run workspace:clean
 npm run cli -- workspace clean . --target scratch
 npm run cli -- workspace clean . --target generated --confirm-delete
 ```
 
-Use `workspace archive` before destructive cleanup. It copies selected manifest-known `.truth-harness` directories into `.truth-harness/archives/<archive-id>/` and writes an `archive-manifest.json` with targets, copied directories, file counts, byte counts, and the reason. Archives are local backups for maintenance and handoff safety; they are not off-machine backups and should still be committed, exported, or copied elsewhere if the work is important.
+Use `workspace archive` before destructive cleanup. It copies selected manifest-known `.truth-harness` directories into `.truth-harness/archives/<archive-id>/` and writes an `archive-manifest.json` with targets, copied directories, file counts, byte counts, per-file SHA-256 hashes, and the reason. Archives are local backups for maintenance and handoff safety; they are not off-machine backups and should still be committed, exported, or copied elsewhere if the work is important.
 
-Use `workspace archives` to list local archives. Use `workspace restore-archive` to preview copying files from an archive back into live workspace directories. Restore is dry-run by default; `--confirm-restore` is required to write files. Restore copies archive files back but does not delete live files that are not present in the archive.
+Use `workspace archives` to list local archives. Damaged archive manifests are listed as damaged instead of disappearing. Use `workspace restore-archive` to preview copying files from an archive back into live workspace directories. Restore is dry-run by default; `--confirm-restore` is required to write files. Restore verifies archive file hashes before copying, copies archive files back, and does not delete live files that are not present in the archive. If a live file changed after the archive was created, restore reports a conflict and refuses to overwrite it unless `--overwrite` is also passed.
 
 The default `workspace clean` target is `scratch`, which previews clearing rebuildable caches and generated health files:
 
@@ -57,4 +58,4 @@ Deletion requires `--confirm-delete`. Without it, Truth Harness prints the files
 
 Cleanup does not accept arbitrary filesystem paths. Targets are resolved from the local workspace manifest and must stay under `.truth-harness/`. Index lock files are preserved so cleanup does not disturb active workspace operations.
 
-Archive and cleanup commands use the same target vocabulary. Archive output is structured JSON with `--json`, so an agent can cite the archive manifest before requesting any destructive cleanup.
+Archive, restore, and cleanup commands use the same target vocabulary. Archive and restore output is structured JSON with `--json`, so an agent can cite the archive manifest, hash verification state, and conflict list before requesting any destructive cleanup or overwrite.

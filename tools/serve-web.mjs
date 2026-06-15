@@ -441,7 +441,8 @@ async function handleApiRequest(request, response, requestUrl) {
         rootPath: projectRoot,
         archiveRef: input.archiveRef,
         targets,
-        dryRun: input.confirmRestore !== true
+        dryRun: input.confirmRestore !== true,
+        overwrite: input.overwrite === true
       });
       writeJson(response, 200, {
         schemaVersion: "truth-harness.web-workspace-archive-restore-response.v0",

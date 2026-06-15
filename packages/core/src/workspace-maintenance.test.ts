@@ -135,12 +135,16 @@ describe("workspace maintenance", () => {
     expect(archive.schemaVersion).toBe("truth-harness.workspace-archive.v0");
     expect(archive.archiveId).toBe("archive_20260615T000500000Z");
     expect(archive.archivedFiles).toBe(1);
+    expect(archive.files).toHaveLength(1);
+    expect(archive.files[0]?.sha256).toMatch(/^[a-f0-9]{64}$/u);
     expect(await pathExists(archivedReceiptFile)).toBe(true);
     expect(await pathExists(archiveManifest)).toBe(true);
     const archives = await listLocalWorkspaceArchives({ rootPath: root });
     expect(archives.total).toBe(1);
+    expect(archives.damaged).toBe(0);
     expect(archives.archives[0]).toMatchObject({
       archiveId: archive.archiveId,
+      damaged: false,
       totalFiles: 1,
       totalBytes: expect.any(Number)
     });
@@ -158,23 +162,103 @@ describe("workspace maintenance", () => {
     });
     expect(restorePreview.dryRun).toBe(true);
     expect(restorePreview.restoredFiles).toBe(0);
+    expect(restorePreview.conflicts).toEqual([]);
+    expect(restorePreview.verifiedFiles).toBe(1);
     expect(restorePreview.entries).toContainEqual(
       expect.objectContaining({
         directory: "receipts",
         files: 1,
+        conflicts: 0,
         restored: false
       })
     );
     expect(await pathExists(receiptFile)).toBe(false);
+    await writeFile(receiptFile, JSON.stringify({ schemaVersion: "test.receipt.v0", id: "newer-live-file" }), "utf8");
+
+    const conflictPreview = await restoreLocalWorkspaceArchive({
+      rootPath: root,
+      archiveRef: archive.manifestPath,
+      targets: ["receipts"],
+      dryRun: true
+    });
+    expect(conflictPreview.conflicts).toContainEqual(
+      expect.objectContaining({
+        path: ".truth-harness/receipts/keep.json",
+        reason: "target-exists"
+      })
+    );
+    await expect(
+      restoreLocalWorkspaceArchive({
+        rootPath: root,
+        archiveRef: archive.manifestPath,
+        targets: ["receipts"],
+        dryRun: false
+      })
+    ).rejects.toThrow("Archive restore has 1 conflict");
 
     const restored = await restoreLocalWorkspaceArchive({
       rootPath: root,
       archiveRef: archive.manifestPath,
       targets: ["receipts"],
-      dryRun: false
+      dryRun: false,
+      overwrite: true
     });
     expect(restored.restoredFiles).toBe(1);
+    expect(restored.overwrite).toBe(true);
     expect(await pathExists(receiptFile)).toBe(true);
+    expect(await readFile(receiptFile, "utf8")).toContain("\"keep\"");
+  });
+
+  it("lists damaged archives and blocks tampered archive restore", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-15T00:00:00.000Z" });
+    const receiptFile = join(root, ".truth-harness", "receipts", "keep.json");
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
+    await writeFile(receiptFile, JSON.stringify({ schemaVersion: "test.receipt.v0", id: "keep" }), "utf8");
+
+    const archive = await archiveLocalWorkspace({
+      rootPath: root,
+      targets: ["receipts"],
+      now: "2026-06-15T00:05:00.000Z"
+    });
+    const damagedDir = join(root, ".truth-harness", "archives", "archive_damaged");
+    await mkdir(damagedDir, { recursive: true });
+    await writeFile(join(damagedDir, "archive-manifest.json"), "{not-json", "utf8");
+
+    const archives = await listLocalWorkspaceArchives({ rootPath: root });
+    expect(archives.total).toBe(2);
+    expect(archives.damaged).toBe(1);
+    expect(archives.archives).toContainEqual(
+      expect.objectContaining({
+        archiveId: "archive_damaged",
+        damaged: true
+      })
+    );
+
+    await cleanLocalWorkspace({ rootPath: root, targets: ["receipts"], dryRun: false });
+    const archivedReceiptFile = join(root, ".truth-harness", "archives", archive.archiveId, "receipts", "keep.json");
+    await writeFile(archivedReceiptFile, JSON.stringify({ schemaVersion: "test.receipt.v0", id: "tampered" }), "utf8");
+    const restorePreview = await restoreLocalWorkspaceArchive({
+      rootPath: root,
+      archiveRef: archive.archiveId,
+      targets: ["receipts"],
+      dryRun: true
+    });
+    expect(restorePreview.conflicts).toContainEqual(
+      expect.objectContaining({
+        path: `.truth-harness/archives/${archive.archiveId}/receipts/keep.json`,
+        reason: "hash-mismatch"
+      })
+    );
+    await expect(
+      restoreLocalWorkspaceArchive({
+        rootPath: root,
+        archiveRef: archive.archiveId,
+        targets: ["receipts"],
+        dryRun: false,
+        overwrite: true
+      })
+    ).rejects.toThrow("Archive restore has 1 conflict");
   });
 });
 
