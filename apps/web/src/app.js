@@ -197,6 +197,7 @@ const claimLedgerStore = new Map();
 const routeLedgerStore = new Map();
 const casCheckStore = new Map();
 const smtCheckStore = new Map();
+let researchSessions = [];
 let workspaceReview = {
   schemaVersion: "truth-harness.workspace-review.v0",
   autonomy: emptyAutonomyContract(),
@@ -300,7 +301,8 @@ const state = {
   catalogError: undefined,
   catalogRebuildLoading: false,
   selectedWorkspaceReviewItemId: undefined,
-  selectedWorkspaceObligationId: undefined
+  selectedWorkspaceObligationId: undefined,
+  selectedResearchSessionId: undefined
 };
 
 const appShell = document.querySelector("#app-shell");
@@ -316,6 +318,7 @@ const sidebarSearchCount = document.querySelector("#sidebar-search-count");
 const catalogSearchStatus = document.querySelector("#catalog-search-status");
 const catalogRebuildButton = document.querySelector("#catalog-rebuild");
 const catalogResultList = document.querySelector("#catalog-result-list");
+const sessionList = document.querySelector("#session-list");
 const sidebarActionButtons = document.querySelectorAll("[data-sidebar-action]");
 const projectRows = document.querySelectorAll(".project-row");
 const laneButtons = document.querySelectorAll(".lane-row");
@@ -1080,6 +1083,7 @@ void refreshWorkspaceReadiness();
 void refreshCatalogStatus();
 void refreshClaimLedger();
 void refreshRouteLedger();
+void refreshResearchSessions();
 void refreshResearchMap();
 void refreshVisualArtifacts();
 void refreshWorkspaceReview();
@@ -1171,6 +1175,7 @@ function render() {
   updateClaimRecordButtons(receipt);
   renderCatalogSearchPanel();
   renderSidebarProjects();
+  renderResearchSessions();
   renderSidebarActions();
   applySidebarSearch();
   document.querySelectorAll(".segment").forEach((button) => {
@@ -1208,6 +1213,7 @@ function renderSidebarProjects() {
 function sidebarProjectSummary(lane) {
   const totalClaims = claimLedgerStore.size;
   const totalRoutes = routeLedgerStore.size;
+  const totalSessions = researchSessions.length;
   const queueItems = Number.isFinite(workspaceReview.summary?.totalItems)
     ? workspaceReview.summary.totalItems
     : workspaceReview.items?.length ?? 0;
@@ -1217,7 +1223,7 @@ function sidebarProjectSummary(lane) {
     return {
       label: "Truth Harness",
       meta: totalClaims > 0 ? `${totalClaims} claims` : `${receiptCount} receipts`,
-      detail: `${totalClaims} claim records, ${totalRoutes} verifier routes, ${queueItems} project queue items.`
+      detail: `${totalClaims} claim records, ${totalRoutes} verifier routes, ${totalSessions} research sessions, ${queueItems} project queue items.`
     };
   }
 
@@ -1241,6 +1247,53 @@ function countClaimsForLane(lane) {
 
 function countReceiptsForLane(lane) {
   return [...receiptStore.values()].filter((receipt) => receiptTags(receipt).includes(lane)).length;
+}
+
+function renderResearchSessions() {
+  if (!sessionList) {
+    return;
+  }
+
+  const query = state.sidebarQuery.trim().toLowerCase();
+  const sessions = researchSessions
+    .filter((session) => !query || researchSessionSearchText(session).includes(query))
+    .slice(0, 4);
+
+  if (sessions.length === 0) {
+    sessionList.innerHTML = `<div class="sidebar-empty">${query ? "No matching local sessions." : "No local sessions yet."}</div>`;
+    return;
+  }
+
+  sessionList.innerHTML = sessions.map((session) => {
+    const title = session.title || session.objective || session.sessionId;
+    const active = state.selectedResearchSessionId === session.sessionId ? " active" : "";
+    const domains = Array.isArray(session.domains) && session.domains.length > 0 ? session.domains.join(", ") : "research";
+    const openTasks = Number.isFinite(session.openTaskCount) ? session.openTaskCount : 0;
+    const checkpoints = Number.isFinite(session.checkpointCount) ? session.checkpointCount : 0;
+    const evidence = Number.isFinite(session.evidenceRefCount) ? session.evidenceRefCount : 0;
+    const updated = formatRouteDate(session.updatedAt);
+    const summary = `${domains} - ${openTasks} open tasks, ${checkpoints} checkpoints, ${evidence} evidence refs`;
+
+    return `
+      <button class="session-row${active}" data-session-id="${escapeHtml(session.sessionId)}" type="button" title="${escapeHtml(summary)}">
+        <strong>${escapeHtml(title)}</strong>
+        <small>${escapeHtml(updated)} - ${escapeHtml(summary)}</small>
+      </button>
+    `;
+  }).join("");
+}
+
+function researchSessionSearchText(session) {
+  return [
+    session.sessionId,
+    session.title,
+    session.objective,
+    ...(session.domains ?? []),
+    session.privacy?.mode,
+    session.modelPolicy?.hostedModels
+  ]
+    .join(" ")
+    .toLowerCase();
 }
 
 function renderRouteLedger(receipt) {
@@ -5520,6 +5573,35 @@ function applyRouteLedgerPayload(payload) {
   }
 }
 
+async function refreshResearchSessions({ announce = true } = {}) {
+  if (!sessionList) {
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/sessions", {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local research session API failed.");
+
+    researchSessions = Array.isArray(payload.sessions) ? payload.sessions : [];
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded research sessions",
+        localApiSuccessMessage(payload, `${researchSessions.length} local research sessions available.`),
+        "passed"
+      );
+    }
+    render();
+  } catch (error) {
+    researchSessions = [];
+    sessionList.innerHTML = `<div class="sidebar-empty">Research sessions unavailable.</div>`;
+    addActivity("local-api", "Research sessions unavailable", error instanceof Error ? error.message : "Unknown research session failure.", "waiting");
+  }
+}
+
 async function refreshWorkspaceReview({ announce = true } = {}) {
   if (!workspaceReviewList || !workspaceReviewCount) {
     return;
@@ -6671,9 +6753,9 @@ function renderSidebarActions() {
     const action = button.dataset.sidebarAction;
     const active =
       (action === "new-session" && state.surface === "trace") ||
+      (action === "lineage" && state.surface === "graph") ||
       (action === "agent-tools" && state.surface === "runbook") ||
-      (action === "benchmarks" && state.surface === "checks") ||
-      (action === "search" && document.activeElement === sidebarSearch);
+      (action === "benchmarks" && state.surface === "checks");
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", String(active));
   });
@@ -8778,7 +8860,7 @@ function applySidebarSearch() {
   let matched = 0;
   let total = sidebarRecentEntries("").length;
 
-  document.querySelectorAll(".project-row, .lane-row, .task-row, .progress-row").forEach((row) => {
+  document.querySelectorAll(".project-row, .session-row, .lane-row, .task-row, .progress-row").forEach((row) => {
     total += 1;
     const visible = !query || searchableSidebarText(row).includes(query);
     row.hidden = !visible;
@@ -10936,12 +11018,11 @@ function openSidebarAction(action) {
     return;
   }
 
-  if (action === "search") {
-    sidebarSearch.focus();
-    sidebarSearch.select();
-    renderSidebarActions();
-    scheduleCatalogSearch();
-    addActivity("human", "Focused workspace search", "Search filters projects, focus lanes, recent claims, and the local catalog.", "waiting");
+  if (action === "lineage") {
+    state.surface = "graph";
+    render();
+    resetActiveSurfaceScroll();
+    addActivity("human", "Opened lineage", "Claim, route, session, and evidence graph surfaces are visible.", "waiting");
     return;
   }
 
@@ -10973,6 +11054,27 @@ function openSidebarProject(row) {
   resetActiveSurfaceScroll();
   const projectName = row.querySelector("span")?.textContent?.trim() ?? "Project";
   addActivity("human", `Opened ${projectName}`, `${laneStatusText[lane] ?? "Research lane"} template loaded locally.`, "waiting");
+}
+
+function openSidebarSession(sessionId) {
+  if (!sessionId) {
+    return;
+  }
+
+  const session = researchSessions.find((candidate) => candidate.sessionId === sessionId);
+  if (!session) {
+    return;
+  }
+
+  state.selectedResearchSessionId = sessionId;
+  state.surface = "runbook";
+  state.sidebarQuery = "";
+  sidebarSearch.value = "";
+  render();
+  resetActiveSurfaceScroll();
+  const title = session.title || session.objective || session.sessionId;
+  const openTasks = Number.isFinite(session.openTaskCount) ? session.openTaskCount : 0;
+  addActivity("human", "Opened research session", `${title} has ${openTasks} open tasks and ${session.evidenceRefCount ?? 0} evidence refs.`, "waiting");
 }
 
 function openReceiptKey(key) {
@@ -11044,6 +11146,15 @@ projectRows.forEach((row) => {
   row.addEventListener("click", () => {
     openSidebarProject(row);
   });
+});
+
+sessionList?.addEventListener("click", (event) => {
+  const row = event.target.closest(".session-row[data-session-id]");
+  if (!row) {
+    return;
+  }
+
+  openSidebarSession(row.dataset.sessionId);
 });
 
 researcherNameInput.addEventListener("input", saveResearcherName);

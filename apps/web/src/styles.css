@@ -90,7 +90,7 @@ button {
 .sidebar {
   position: relative;
   display: grid;
-  grid-template-rows: auto auto auto auto auto auto minmax(150px, 1fr) auto;
+  grid-template-rows: auto auto auto auto auto auto auto minmax(150px, 1fr) auto;
   min-width: 0;
   background: #1d1c1a;
   border-right: 1px solid var(--line);
@@ -199,7 +199,8 @@ button {
 .nav-item:hover,
 .project-row:hover,
 .claim-row:hover,
-.lane-row:hover {
+.lane-row:hover,
+.session-row:hover {
   background: #302f2c;
 }
 
@@ -343,7 +344,8 @@ button {
 
 .app-shell.sidebar-collapsed .nav-item,
 .app-shell.sidebar-collapsed .project-row,
-.app-shell.sidebar-collapsed .claim-row {
+.app-shell.sidebar-collapsed .claim-row,
+.app-shell.sidebar-collapsed .session-row {
   justify-content: center;
   padding-inline: 8px;
 }
@@ -365,6 +367,8 @@ button {
 
 .app-shell.sidebar-collapsed .project-row,
 .app-shell.sidebar-collapsed .lane-list,
+.app-shell.sidebar-collapsed .session-list,
+.app-shell.sidebar-collapsed .sessions-section,
 .app-shell.sidebar-collapsed .sidebar-search,
 .app-shell.sidebar-collapsed .catalog-search-panel,
 .app-shell.sidebar-collapsed .claim-row span:last-child,
@@ -381,7 +385,8 @@ button {
 
 .nav-item,
 .project-row,
-.claim-row {
+.claim-row,
+.session-row {
   width: 100%;
   border: 0;
   border-radius: 8px;
@@ -412,7 +417,8 @@ button {
 
 .nav-item.active,
 .project-row.selected,
-.claim-row.active {
+.claim-row.active,
+.session-row.active {
   background: #34312d;
 }
 
@@ -441,6 +447,43 @@ button {
 .project-row span:last-child {
   color: var(--muted);
   font-size: 12px;
+}
+
+.session-list {
+  display: grid;
+  gap: 4px;
+  max-height: min(12vh, 112px);
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+
+.session-row {
+  display: grid;
+  gap: 3px;
+  min-height: 44px;
+  min-width: 0;
+  padding: 7px 9px 7px 24px;
+}
+
+.session-row strong,
+.session-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-row strong {
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.session-row small {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .lane-list {

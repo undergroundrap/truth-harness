@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
+import { writeResearchSession } from "../../../packages/core/src/index.js";
 
 const repoRoot = resolve(".");
 const tsxCli = resolve(repoRoot, "node_modules/tsx/dist/cli.mjs");
@@ -52,6 +53,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.localOnly).toBe(true);
     expect(statusPayload.externalCalls).toBe(false);
     expect(statusPayload.capabilities).toContain("docker-verifier-guidance");
+    expect(statusPayload.capabilities).toContain("research-session-list");
     expect(statusPayload.capabilities).toContain("research-map");
     expect(statusPayload.capabilities).toContain("visual-artifacts");
     expect(statusPayload.capabilities).toContain("catalog-search");
@@ -340,6 +342,51 @@ describe("local web route ledger API", () => {
         id: "stress-fixture",
         status: "waiting",
         command: expect.stringContaining("truth-harness workspace stress")
+      })
+    );
+
+    const sessionWrite = await writeResearchSession({
+      rootPath: tempProjectRoot,
+      title: "Fraction verification thread",
+      objective: "Track reusable exact fraction proof work from local receipts and route ledgers.",
+      domains: ["math"],
+      evidenceRefs: [
+        {
+          kind: "receipt",
+          ref: receiptPayload.receiptPaths.ref,
+          trust: receiptPayload.receipt.trust
+        }
+      ],
+      tasks: ["Attach a Lean proof fixture", "Run an independent CAS check"],
+      now: "2026-06-15T01:00:00.000Z"
+    });
+    const sessionsResponse = await fetch(`${baseUrl}/api/sessions`);
+    expect(sessionsResponse.status).toBe(200);
+    const sessionsPayload = await sessionsResponse.json();
+    expectLocalApiSuccess(sessionsResponse, sessionsPayload);
+    expect(sessionsPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-sessions-response.v0",
+      localOnly: true,
+      externalCalls: []
+    });
+    expect(sessionsPayload.sessions).toContainEqual(
+      expect.objectContaining({
+        sessionId: sessionWrite.session.sessionId,
+        title: "Fraction verification thread",
+        objective: "Track reusable exact fraction proof work from local receipts and route ledgers.",
+        domains: ["math"],
+        taskCount: 2,
+        openTaskCount: 2,
+        checkpointCount: 0,
+        evidenceRefCount: 1,
+        snapshotRefCount: 0,
+        warningCount: expect.any(Number),
+        privacy: expect.objectContaining({
+          mode: "local-only"
+        }),
+        modelPolicy: expect.objectContaining({
+          hostedModels: "optional-with-disclosure"
+        })
       })
     );
 

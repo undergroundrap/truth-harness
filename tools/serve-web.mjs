@@ -194,6 +194,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "activity-log",
         "agent-runbook",
         "research-session",
+        "research-session-list",
         "research-map",
         "visual-artifacts",
         "catalog-search",
@@ -318,6 +319,17 @@ async function handleApiRequest(request, response, requestUrl) {
       localOnly: true,
       externalCalls: [],
       routes
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/sessions" && request.method === "GET") {
+    const sessions = await readResearchSessionSnapshot();
+    writeJson(response, 200, {
+      schemaVersion: "truth-harness.web-sessions-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      sessions
     });
     return;
   }
@@ -984,6 +996,29 @@ async function readRouteLedgerSnapshot() {
   return routes.map((route) => ({
     ...route,
     routePaths: routePathsFor(route.path)
+  }));
+}
+
+async function readResearchSessionSnapshot() {
+  const { listResearchSessions } = await loadCoreModule();
+  await ensureLocalWorkspace();
+  const sessions = await listResearchSessions(projectRoot);
+  return sessions.map((session) => ({
+    sessionId: session.sessionId,
+    projectId: session.projectId,
+    title: session.title,
+    objective: session.objective,
+    domains: session.domains,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    privacy: session.privacy,
+    modelPolicy: session.modelPolicy,
+    taskCount: session.tasks?.length ?? 0,
+    openTaskCount: (session.tasks ?? []).filter((task) => task.status !== "done").length,
+    checkpointCount: session.checkpoints?.length ?? 0,
+    evidenceRefCount: session.evidenceRefs?.length ?? 0,
+    snapshotRefCount: session.snapshotRefs?.length ?? 0,
+    warningCount: session.warnings?.length ?? 0
   }));
 }
 

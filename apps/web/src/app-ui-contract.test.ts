@@ -93,15 +93,21 @@ describe("web UI action contracts", () => {
     ]);
 
     expect(html).toContain('data-sidebar-action="new-session"');
-    expect(html).toContain('data-sidebar-action="search"');
+    expect(html).toContain('data-sidebar-action="lineage"');
     expect(html).toContain('data-sidebar-action="agent-tools"');
     expect(html).toContain('data-sidebar-action="benchmarks"');
+    expect(html).toContain('id="session-list"');
     expect(html).toContain('data-project-lane="finance"');
     expect(html).toContain('data-project-lane="physics"');
     expect(source).toContain("function openSidebarAction(action)");
+    expect(source).toContain('state.surface = "graph";');
     expect(source).toContain('state.surface = "runbook";');
     expect(source).toContain('state.surface = "checks";');
     expect(source).toContain("function openSidebarProject(row)");
+    expect(source).toContain("function refreshResearchSessions");
+    expect(source).toContain("function renderResearchSessions()");
+    expect(source).toContain("function openSidebarSession(sessionId)");
+    expect(source).toContain('fetch("/api/sessions"');
     expect(source).toContain("function renderSidebarProjects()");
     expect(source).toContain("function sidebarRecentEntries(query)");
     expect(source).toContain("function sidebarClaimEntry(claim, index)");
@@ -112,8 +118,9 @@ describe("web UI action contracts", () => {
     expect(source).toContain("let total = sidebarRecentEntries(\"\").length;");
     expect(source).toContain("sidebarActionButtons.forEach");
     expect(source).toContain("projectRows.forEach");
-    expect(styles).toContain("grid-template-rows: auto auto auto auto auto auto minmax(150px, 1fr) auto;");
+    expect(styles).toContain("grid-template-rows: auto auto auto auto auto auto auto minmax(150px, 1fr) auto;");
     expect(styles).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
+    expect(styles).toContain(".session-row");
     expect(styles).toContain("max-height: min(15vh, 142px);");
   });
 

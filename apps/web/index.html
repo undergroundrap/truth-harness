@@ -22,7 +22,7 @@
 
         <nav class="nav-list" aria-label="Workspace shortcuts">
           <button class="nav-item active" data-sidebar-action="new-session" type="button"><span>+</span> New session</button>
-          <button class="nav-item" data-sidebar-action="search" type="button"><span>?</span> Search</button>
+          <button class="nav-item" data-sidebar-action="lineage" type="button"><span>~</span> Lineage</button>
           <button class="nav-item" data-sidebar-action="agent-tools" type="button"><span>@</span> Agents</button>
           <button class="nav-item" data-sidebar-action="benchmarks" type="button"><span>*</span> Checks</button>
         </nav>
@@ -56,6 +56,13 @@
             <span>Physics notes</span>
             <span>3h</span>
           </button>
+        </section>
+
+        <section class="sidebar-section sessions-section" aria-label="Research sessions">
+          <div class="section-label">Research Sessions</div>
+          <div class="session-list" id="session-list">
+            <div class="sidebar-empty">No local sessions yet.</div>
+          </div>
         </section>
 
         <section class="sidebar-section">
