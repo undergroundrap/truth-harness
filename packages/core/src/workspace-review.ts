@@ -17,6 +17,7 @@ import {
 } from "./research-session.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export type WorkspaceReviewItemKind =
   | "route-obligation"
@@ -208,6 +209,13 @@ export async function writeWorkspaceReview(input: CreateWorkspaceReviewInput): P
   const markdownPath = join(findingsDir, `${baseName}.md`);
   await writeFile(jsonPath, `${JSON.stringify(review, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, review.markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "findings",
+    now: review.createdAt,
+    staleReason: "workspace review written"
+  });
 
   return {
     review,

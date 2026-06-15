@@ -16,6 +16,7 @@ import {
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import type { SymbolicPrompt } from "./sympy.js";
 import type { TrustLabel } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export type CasBackendId = "maxima" | "sage";
 export type CasBackendStatus = "available" | "missing" | "error";
@@ -366,6 +367,13 @@ export async function writeSymbolicCasCheckRecord(
 
   await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "cas",
+    now: record.createdAt,
+    staleReason: "CAS check record written"
+  });
 
   return {
     record,

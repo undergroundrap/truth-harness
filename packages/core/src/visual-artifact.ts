@@ -4,6 +4,7 @@ import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const VISUAL_ARTIFACT_SCHEMA_VERSION = "truth-harness.visual-artifact.v0";
 
@@ -210,6 +211,13 @@ export async function writeVisualArtifact(input: CreateVisualArtifactInput): Pro
   const markdownPath = join(visualsDir, `${baseName}.md`);
   await writeFile(jsonPath, `${JSON.stringify(visual, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, visual.markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "visuals",
+    now: visual.createdAt,
+    staleReason: "visual artifact written"
+  });
 
   return {
     visual,

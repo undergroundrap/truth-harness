@@ -3,6 +3,7 @@ import { join, relative, resolve, sep } from "node:path";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, Receipt, TrustLabel } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export interface BenchmarkRunTaskLike {
   id: string;
@@ -321,6 +322,13 @@ export async function writeBenchmarkRunRecord(input: CreateBenchmarkRunRecordInp
   const markdown = renderBenchmarkRunMarkdown(record);
   await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "benchmarks",
+    now: record.createdAt,
+    staleReason: "benchmark run record written"
+  });
 
   return {
     record,
@@ -408,6 +416,13 @@ export async function writeBenchmarkComparisonRecord(
   const markdown = renderBenchmarkComparisonMarkdown(record);
   await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "benchmarks",
+    now: record.createdAt,
+    staleReason: "benchmark comparison record written"
+  });
 
   return {
     record,

@@ -570,6 +570,7 @@ export {
   getWorkspaceCatalogStatus,
   markWorkspaceCatalogStale,
   rebuildWorkspaceCatalog,
+  refreshWorkspaceCatalogArtifact,
   searchWorkspaceCatalog,
   upsertWorkspaceCatalogArtifact
 } from "./workspace-catalog.js";

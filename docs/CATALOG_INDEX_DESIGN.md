@@ -184,15 +184,16 @@ Use transactions so failed rebuilds do not leave half-indexed data. Because the 
 
 ## Incremental Refresh
 
-Phase 2 can add:
+Phase 2 includes:
 
 - `catalog refresh`: compare `mtime_ms`, byte length, and sha256 for known JSON files.
 - Delete rows for missing files.
 - Reparse only changed files.
 - Rebuild FTS rows for changed files.
 - Keep `catalog_meta.last_refresh_at`.
+- Writer hooks for claims, verifier routes, route-obligation updates, web receipts, proof checks, SMT checks, CAS checks, visual artifacts, workspace reviews, benchmark runs/comparisons, notebook runs, code runs, and literature records. Each writer calls the shared catalog refresh helper after the canonical JSON write. If row-level upsert fails, the catalog is marked stale instead of blocking evidence writes.
 
-Do not hook every artifact writer on day one. Keep artifact writers simple until the catalog API is stable.
+Keep the shared refresh helper small and boring. Artifact writers should still write canonical JSON/Markdown first; catalog updates remain cache maintenance, not evidence creation.
 
 ## CLI And MCP Surface
 
@@ -221,7 +222,7 @@ All outputs should be structured JSON-first and include whether the response cam
 4. Route web search through catalog if available, fallback to existing APIs. Done for sidebar workspace search with explicit rebuild/status prompts.
 5. Route `claim list`, `route list`, and visual/artifact search through catalog for large workspaces.
 6. Add MCP catalog tools for agents. Done.
-7. Add incremental refresh and stale detection. File freshness detection is done for status surfaces, and row-level incremental upsert is done for claim, route, route-obligation, and web receipt writes. Broader writer coverage remains future work.
+7. Add incremental refresh and stale detection. File freshness detection is done for status surfaces, and row-level incremental upsert is done for claim, route, route-obligation, web receipt, proof, SMT, CAS, visual, workspace-review, benchmark, notebook-run, code-run, and literature writers.
 
 ## Tests
 
@@ -240,12 +241,12 @@ Required tests:
 ## Open Decisions
 
 - Whether the web server should auto-refresh the catalog on startup or only show "catalog stale" until the user/agent runs rebuild.
-- Whether route/claim writer APIs should eventually update the catalog synchronously or enqueue a refresh marker.
+- Whether very high-volume agent loops should keep synchronous row-level updates or enqueue catalog refresh work after the first scale threshold.
 - Whether FTS should include Markdown reports or only canonical JSON summaries.
 
 ## Recommendation
 
-Implement the catalog as a rebuildable read/index layer first. Do not mutate existing artifact writers yet. Do not make SQLite canonical. Do not let catalog rows satisfy proof obligations or claim finalization.
+Keep the catalog as a rebuildable read/index layer. Do not make SQLite canonical. Do not let catalog rows satisfy proof obligations or claim finalization.
 
 The first useful slice should be:
 

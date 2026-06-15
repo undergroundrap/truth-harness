@@ -1,8 +1,9 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const NOTEBOOK_RUN_KINDS = ["notebook", "script", "pipeline", "test", "analysis", "simulation", "other"] as const;
 export const NOTEBOOK_RUN_STATUSES = ["planned", "completed", "failed", "reproduced", "superseded"] as const;
@@ -197,6 +198,13 @@ export async function writeNotebookRun(input: CreateNotebookRunInput): Promise<N
   const markdown = renderNotebookRunMarkdown(record);
   await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "notebook-runs",
+    now: record.createdAt,
+    staleReason: "notebook run record written"
+  });
 
   return {
     record,

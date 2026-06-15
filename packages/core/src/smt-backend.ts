@@ -18,6 +18,7 @@ import {
 } from "./artifact-record-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import type { TrustLabel } from "./types.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export type SmtBackendId = "z3";
 export type SmtBackendStatus = "available" | "missing" | "error";
@@ -394,6 +395,13 @@ export async function writeSmtCheckRecord(input: WriteSmtCheckInput): Promise<Sm
 
   await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "smt",
+    now: record.createdAt,
+    staleReason: "SMT check record written"
+  });
 
   return {
     record,

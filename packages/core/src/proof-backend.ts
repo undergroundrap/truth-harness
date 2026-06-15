@@ -18,6 +18,7 @@ import {
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import type { TrustLabel } from "./types.js";
 import { writeVisualArtifact, type VisualArtifactWriteResult } from "./visual-artifact.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export type ProofBackendId = "lean";
 export type ProofBackendStatus = "available" | "missing" | "error";
@@ -387,6 +388,13 @@ export async function writeLeanProofCheckRecord(input: WriteLeanProofCheckInput)
 
   await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "proofs",
+    now: record.createdAt,
+    staleReason: "Lean proof check record written"
+  });
 
   return {
     record,

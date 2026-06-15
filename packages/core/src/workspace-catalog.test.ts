@@ -12,8 +12,13 @@ import {
   upsertWorkspaceCatalogArtifact
 } from "./workspace-catalog.js";
 import { sealVaultFile } from "./vault.js";
+import { writeSymbolicCasCheckRecord, type CasBackendCommandRunner } from "./cas-backend.js";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
+import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
+import { writeSmtCheckRecord, type SmtBackendCommandRunner } from "./smt-backend.js";
 import { writeVerifierRoute } from "./verifier-route.js";
+import { writeVisualArtifact } from "./visual-artifact.js";
+import { writeWorkspaceReview } from "./workspace-review.js";
 
 const roots: string[] = [];
 const originalVaultKey = process.env.TRUTH_HARNESS_CATALOG_TEST_KEY;
@@ -242,6 +247,134 @@ describe("workspace catalog", () => {
         path: ".truth-harness/receipts/incremental.json",
         kind: "receipts",
         trust: "exact-computed"
+      })
+    );
+  });
+
+  it("keeps readable catalogs current when verifier artifact writers add JSON after rebuild", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Verifier Catalog Lab", now: "2026-06-14T00:00:00.000Z" });
+    await writeFile(join(root, "trivial.lean"), "example : True := by trivial\n", "utf8");
+    await writeFile(
+      join(root, "constraints.smt2"),
+      "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n(get-model)\n",
+      "utf8"
+    );
+    const rebuild = await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-14T00:00:01.000Z" });
+    const casRunner: CasBackendCommandRunner = (_command, args) =>
+      args[0] === "--version"
+        ? { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" }
+        : { status: 0, stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n", stderr: "" };
+    const smtRunner: SmtBackendCommandRunner = (_command, args) =>
+      args[0] === "-version"
+        ? { status: 0, stdout: "Z3 version 4.13.0\n", stderr: "" }
+        : { status: 0, stdout: "sat\n(\n  (define-fun x () Int\n    1)\n)\n", stderr: "" };
+    const proofRunner: ProofBackendCommandRunner = (_command, args) =>
+      args[0] === "--version" ? { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" } : { status: 0, stdout: "", stderr: "" };
+
+    const visual = await writeVisualArtifact({
+      rootPath: root,
+      title: "Catalog visual probe",
+      kind: "lineage-graph",
+      renderer: { engine: "mermaid" },
+      payload: {
+        format: "graph-json",
+        rendererSource: {
+          language: "mermaid",
+          content: "graph LR\n  claim --> proof\n"
+        },
+        content: {
+          nodes: [{ id: "claim" }, { id: "proof" }],
+          edges: [{ source: "claim", target: "proof" }]
+        }
+      },
+      now: "2026-06-14T00:00:02.000Z"
+    });
+    const cas = await writeSymbolicCasCheckRecord({
+      rootPath: root,
+      prompt: {
+        operation: "simplify",
+        expression: "sin(x)^2 + cos(x)^2",
+        variable: "x"
+      },
+      result: "1",
+      runner: casRunner,
+      now: new Date("2026-06-14T00:00:03.000Z")
+    });
+    const smt = await writeSmtCheckRecord({
+      rootPath: root,
+      sourcePath: "constraints.smt2",
+      queryName: "positive_integer_model",
+      runner: smtRunner,
+      now: new Date("2026-06-14T00:00:04.000Z")
+    });
+    const proof = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "trivial.lean",
+      declarationName: "trivial_true",
+      runner: proofRunner,
+      now: new Date("2026-06-14T00:00:05.000Z")
+    });
+    const review = await writeWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-14T00:00:06.000Z"
+    });
+
+    const status = await getWorkspaceCatalogStatus(root, { checkFiles: true });
+    const visualSearch = await searchWorkspaceCatalog({ rootPath: root, kind: "visuals" });
+    const casSearch = await searchWorkspaceCatalog({ rootPath: root, kind: "cas" });
+    const smtSearch = await searchWorkspaceCatalog({ rootPath: root, kind: "smt" });
+    const proofSearch = await searchWorkspaceCatalog({ rootPath: root, kind: "proofs" });
+    const reviewSearch = await searchWorkspaceCatalog({ rootPath: root, kind: "findings" });
+
+    expect(status).toMatchObject({
+      readable: true,
+      stale: false,
+      artifactCount: rebuild.artifactCount + 5,
+      freshness: {
+        checked: true,
+        stale: false,
+        changedArtifacts: 0,
+        missingArtifacts: 0,
+        newArtifacts: 0
+      }
+    });
+    expect(visualSearch.results).toContainEqual(
+      expect.objectContaining({
+        path: normalizePath(visual.jsonPath, root),
+        kind: "visuals",
+        artifactId: visual.visual.visualId
+      })
+    );
+    expect(casSearch.results).toContainEqual(
+      expect.objectContaining({
+        path: normalizePath(cas.jsonPath, root),
+        kind: "cas",
+        artifactId: cas.record.checkId,
+        trust: "cross-checked"
+      })
+    );
+    expect(smtSearch.results).toContainEqual(
+      expect.objectContaining({
+        path: normalizePath(smt.jsonPath, root),
+        kind: "smt",
+        artifactId: smt.record.checkId,
+        trust: "smt-checked"
+      })
+    );
+    expect(proofSearch.results).toContainEqual(
+      expect.objectContaining({
+        path: normalizePath(proof.jsonPath, root),
+        kind: "proofs",
+        artifactId: proof.record.checkId,
+        trust: "proved"
+      })
+    );
+    expect(reviewSearch.results).toContainEqual(
+      expect.objectContaining({
+        path: normalizePath(review.jsonPath, root),
+        kind: "findings",
+        artifactId: review.review.reviewId
       })
     );
   });

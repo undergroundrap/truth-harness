@@ -6,6 +6,7 @@ import { join, relative, resolve, sep } from "node:path";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { getCodeRunSandboxStatus, sandboxMeasurementForStatus, type CodeRunSandboxMeasurement } from "./sandbox.js";
 import { stableHash } from "./stable-hash.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export type CodeRunStatus = "passed" | "failed" | "timed-out" | "error";
 export type CodeRunPolicyCategory =
@@ -326,6 +327,13 @@ export async function writeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRunW
 
   await writeFile(jsonPath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
   await writeFile(markdownPath, markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "code-runs",
+    now: record.createdAt,
+    staleReason: "code run record written"
+  });
 
   return {
     record,

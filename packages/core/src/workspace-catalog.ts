@@ -53,6 +53,7 @@ export interface WorkspaceCatalogUpsertInput {
   path: string;
   kind?: string;
   now?: string;
+  staleReason?: string;
 }
 
 export interface WorkspaceCatalogUpsertResult {
@@ -598,6 +599,20 @@ export async function upsertWorkspaceCatalogArtifact(input: WorkspaceCatalogUpse
       warnings: [`Catalog row could not be updated: ${error instanceof Error ? error.message : String(error)}. Rebuild required.`]
     };
   }
+}
+
+export async function refreshWorkspaceCatalogArtifact(input: WorkspaceCatalogUpsertInput): Promise<WorkspaceCatalogUpsertResult | WorkspaceCatalogStaleResult> {
+  const catalogUpdate = await upsertWorkspaceCatalogArtifact(input);
+  if (!catalogUpdate.updated && catalogUpdate.exists) {
+    return markWorkspaceCatalogStale({
+      rootPath: input.rootPath,
+      reason: input.staleReason ?? "workspace artifact written",
+      path: catalogUpdate.path,
+      kind: input.kind,
+      now: input.now
+    });
+  }
+  return catalogUpdate;
 }
 
 export async function getWorkspaceCatalogStatus(rootPath: string, input: WorkspaceCatalogStatusInput = {}): Promise<WorkspaceCatalogStatus> {
@@ -1210,6 +1225,7 @@ function artifactIdForRecord(kind: WorkspaceValidationArtifactKind, record: Reco
     snapshots: ["snapshotId"],
     sessions: ["sessionId"],
     reviews: ["reviewId"],
+    findings: ["reviewId"],
     validation: ["planId"],
     literature: ["recordId"],
     "notebook-runs": ["runRecordId"],
