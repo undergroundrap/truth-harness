@@ -137,6 +137,24 @@
                 <small>Settings, about, identity</small>
               </span>
             </summary>
+            <div class="maintenance-panel" aria-label="Workspace maintenance">
+              <div class="maintenance-heading">
+                <strong>Workspace maintenance</strong>
+                <span class="mini-label" id="maintenance-status">not checked</span>
+              </div>
+              <div class="maintenance-metrics" id="maintenance-metrics">
+                <span>Validation</span>
+                <strong>checking</strong>
+              </div>
+              <div class="maintenance-actions">
+                <button class="text-button compact-button" id="maintenance-refresh" type="button">Check</button>
+                <button class="text-button compact-button" id="maintenance-repair-preview" type="button">Preview repair</button>
+                <button class="text-button compact-button" id="maintenance-repair-apply" type="button">Repair</button>
+                <button class="text-button compact-button" id="maintenance-clean-preview" type="button">Preview clean</button>
+                <button class="text-button compact-button danger-button" id="maintenance-clean-scratch" type="button">Clear scratch</button>
+              </div>
+              <p id="maintenance-detail">Dry-run cleanup only clears rebuildable workspace scratch data unless explicitly confirmed.</p>
+            </div>
             <label for="researcher-name-input">Researcher name</label>
             <input id="researcher-name-input" type="text" autocomplete="name" placeholder="Your name">
             <p>Stored locally. Printed on reports as the human researcher attached to this session.</p>

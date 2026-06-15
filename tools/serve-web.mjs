@@ -206,7 +206,8 @@ async function handleApiRequest(request, response, requestUrl) {
         "workspace-run-next-dry-run",
         "docker-verifier-guidance",
         "sandbox-status",
-        "safety-center"
+        "safety-center",
+        "workspace-maintenance"
       ]
     });
     return;
@@ -297,6 +298,83 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, 409, error instanceof Error ? error.message : "Workspace event log read failed.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/workspace-maintenance" && request.method === "GET") {
+    try {
+      const maintenance = await readWorkspaceMaintenance();
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-maintenance-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        maintenance
+      });
+    } catch (error) {
+      writeApiError(response, 409, error instanceof Error ? error.message : "Workspace maintenance read failed.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/workspace-maintenance/repair-artifacts" && request.method === "POST") {
+    try {
+      const input = await readJsonBody(request);
+      const { repairWorkspaceArtifacts } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const repair = await repairWorkspaceArtifacts({
+        rootPath: projectRoot,
+        dryRun: input.preview === true || input.dryRun === true
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-artifact-repair-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        repair,
+        activity: [
+          {
+            actor: "local-api",
+            action: repair.dryRun ? "previewed-artifact-repair" : "repaired-artifact-metadata",
+            detail: `${repair.actions.length} local artifact metadata action${repair.actions.length === 1 ? "" : "s"} ${repair.dryRun ? "previewed" : "applied"} without changing trust labels.`,
+            at: new Date().toISOString()
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Workspace artifact repair failed.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/workspace-maintenance/clean" && request.method === "POST") {
+    try {
+      const input = await readJsonBody(request);
+      const { cleanLocalWorkspace } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const targets = normalizeWorkspaceCleanTargets(input.targets);
+      const clean = await cleanLocalWorkspace({
+        rootPath: projectRoot,
+        targets,
+        dryRun: input.confirmDelete !== true
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-clean-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        clean,
+        activity: [
+          {
+            actor: "local-api",
+            action: clean.dryRun ? "previewed-workspace-clean" : "cleaned-workspace",
+            detail: clean.dryRun
+              ? `${clean.entries.length} .truth-harness director${clean.entries.length === 1 ? "y" : "ies"} previewed; no files deleted.`
+              : `${clean.deletedFiles} scratch file${clean.deletedFiles === 1 ? "" : "s"} deleted from selected .truth-harness directories.`,
+            at: new Date().toISOString()
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Workspace cleanup failed.", request);
     }
     return;
   }
@@ -1150,6 +1228,60 @@ async function readWorkspaceReadiness() {
   };
 }
 
+async function readWorkspaceMaintenance() {
+  const {
+    cleanLocalWorkspace,
+    repairWorkspaceArtifacts,
+    validateWorkspaceArtifacts
+  } = await loadCoreModule();
+  await ensureLocalWorkspace();
+  const checkedAt = new Date().toISOString();
+  const [repairPreview, scratchPreview, validation] = await Promise.all([
+    repairWorkspaceArtifacts({
+      rootPath: projectRoot,
+      dryRun: true,
+      now: checkedAt
+    }),
+    cleanLocalWorkspace({
+      rootPath: projectRoot,
+      targets: ["scratch"],
+      dryRun: true
+    }),
+    validateWorkspaceArtifacts({
+      rootPath: projectRoot,
+      now: checkedAt
+    })
+  ]);
+
+  return {
+    schemaVersion: "truth-harness.workspace-maintenance.v0",
+    checkedAt,
+    workspacePath: projectRoot,
+    localOnly: true,
+    networkAccess: "none",
+    validation: {
+      passed: validation.passed === true,
+      checkedFiles: validation.summary?.checkedFiles ?? 0,
+      errors: validation.summary?.errors ?? 0,
+      warnings: validation.summary?.warnings ?? 0
+    },
+    artifactRepair: repairPreview,
+    scratchCleanup: scratchPreview,
+    commands: {
+      repairPreview: "npm run workspace:repair-artifacts:preview",
+      repairApply: "npm run workspace:repair-artifacts",
+      cleanPreview: "npm run workspace:clean",
+      cleanScratch: `node apps/cli/dist/index.js workspace clean ${quoteCommandArg(projectRoot)} --target scratch --confirm-delete`
+    },
+    warnings: [
+      "Maintenance is local workspace hygiene; it does not prove or upgrade any claim.",
+      "Cleanup defaults to dry-run. Deletion can only target manifest-known .truth-harness directories.",
+      ...repairPreview.warnings,
+      ...scratchPreview.warnings
+    ].slice(0, 10)
+  };
+}
+
 function workspaceReadinessStatus(input) {
   if (!input.validationPassed || input.validationErrors > 0) {
     return "blocked";
@@ -1178,6 +1310,11 @@ function readinessGate(input) {
 
 function quoteCommandArg(value) {
   return JSON.stringify(value);
+}
+
+function normalizeWorkspaceCleanTargets(value) {
+  const targets = stringList(value);
+  return targets.length > 0 ? targets.slice(0, 12) : ["scratch"];
 }
 
 async function readCasCheckSnapshot() {

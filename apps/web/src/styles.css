@@ -90,7 +90,7 @@ button {
 .sidebar {
   position: relative;
   display: grid;
-  grid-template-rows: auto auto auto auto auto auto auto minmax(150px, 1fr) auto;
+  grid-template-rows: auto auto auto auto auto auto auto minmax(0, 1fr) auto;
   min-width: 0;
   background: #1d1c1a;
   border-right: 1px solid var(--line);
@@ -664,6 +664,7 @@ button {
 .sidebar-footer {
   min-height: 0;
   padding-top: 8px;
+  overflow: hidden;
 }
 
 .identity-panel {
@@ -671,6 +672,29 @@ button {
   border-radius: 9px;
   background: #141414;
   padding: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.identity-panel[open] {
+  max-height: min(30vh, 280px);
+  overflow: auto;
+  scrollbar-color: #5c574d #141414;
+  scrollbar-width: thin;
+}
+
+.identity-panel[open]::-webkit-scrollbar {
+  width: 9px;
+}
+
+.identity-panel[open]::-webkit-scrollbar-track {
+  background: #141414;
+}
+
+.identity-panel[open]::-webkit-scrollbar-thumb {
+  border: 2px solid #141414;
+  border-radius: 999px;
+  background: #5c574d;
 }
 
 .identity-panel summary {
@@ -682,6 +706,10 @@ button {
   cursor: pointer;
   list-style: none;
   padding: 8px 9px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #141414;
 }
 
 .identity-panel summary::-webkit-details-marker {
@@ -743,6 +771,69 @@ button {
   margin: 0;
   padding: 0 10px 10px;
   line-height: 1.35;
+}
+
+.maintenance-panel {
+  border-top: 1px solid var(--line-soft);
+  margin: 2px 0 0;
+  padding: 9px 10px 10px;
+}
+
+.maintenance-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.maintenance-heading strong {
+  font-size: 12px;
+}
+
+.maintenance-metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #101010;
+  padding: 6px 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.maintenance-metrics strong {
+  color: var(--text);
+  font-size: 11px;
+  max-width: 135px;
+  white-space: normal;
+  text-align: right;
+}
+
+.maintenance-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.maintenance-actions .text-button {
+  min-width: 0;
+  justify-content: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.danger-button {
+  border-color: rgba(255, 138, 128, 0.38);
+  color: #ffb4ab;
+}
+
+#maintenance-detail {
+  padding: 8px 0 0;
 }
 
 .workspace {

@@ -300,6 +300,9 @@ const state = {
   catalogSearchLoading: false,
   catalogError: undefined,
   catalogRebuildLoading: false,
+  maintenance: undefined,
+  maintenanceLoading: false,
+  maintenanceError: undefined,
   selectedWorkspaceReviewItemId: undefined,
   selectedWorkspaceObligationId: undefined,
   selectedResearchSessionId: undefined
@@ -318,6 +321,14 @@ const sidebarSearchCount = document.querySelector("#sidebar-search-count");
 const catalogSearchStatus = document.querySelector("#catalog-search-status");
 const catalogRebuildButton = document.querySelector("#catalog-rebuild");
 const catalogResultList = document.querySelector("#catalog-result-list");
+const maintenanceStatus = document.querySelector("#maintenance-status");
+const maintenanceMetrics = document.querySelector("#maintenance-metrics");
+const maintenanceDetail = document.querySelector("#maintenance-detail");
+const maintenanceRefreshButton = document.querySelector("#maintenance-refresh");
+const maintenanceRepairPreviewButton = document.querySelector("#maintenance-repair-preview");
+const maintenanceRepairApplyButton = document.querySelector("#maintenance-repair-apply");
+const maintenanceCleanPreviewButton = document.querySelector("#maintenance-clean-preview");
+const maintenanceCleanScratchButton = document.querySelector("#maintenance-clean-scratch");
 const sessionList = document.querySelector("#session-list");
 const sidebarActionButtons = document.querySelectorAll("[data-sidebar-action]");
 const projectRows = document.querySelectorAll(".project-row");
@@ -1080,6 +1091,7 @@ render();
 void refreshWorkspaceEvents({ announce: false });
 void refreshSafetyStatus();
 void refreshWorkspaceReadiness();
+void refreshWorkspaceMaintenance({ announce: false });
 void refreshCatalogStatus();
 void refreshClaimLedger();
 void refreshRouteLedger();
@@ -1169,6 +1181,7 @@ function render() {
   renderWorkspaceRunNext();
   renderVerificationMatrix(receipt);
   renderCapabilityLedger();
+  renderMaintenancePanel();
   renderTaskDock(receipt);
   renderReplay(receipt);
   renderReport(receipt);
@@ -7942,6 +7955,150 @@ async function refreshWorkspaceReadiness({ announce = true } = {}) {
   }
 }
 
+async function refreshWorkspaceMaintenance({ announce = false } = {}) {
+  if (!maintenanceStatus) {
+    return;
+  }
+
+  state.maintenanceLoading = true;
+  state.maintenanceError = undefined;
+  renderMaintenancePanel();
+
+  try {
+    const response = await fetch("/api/workspace-maintenance", {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local workspace maintenance API failed.");
+    state.maintenance = payload.maintenance;
+    state.maintenanceError = undefined;
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Checked workspace maintenance",
+        localApiSuccessMessage(payload, maintenanceSummary(payload.maintenance)),
+        payload.maintenance?.validation?.passed ? "passed" : "waiting"
+      );
+    }
+  } catch (error) {
+    state.maintenance = undefined;
+    state.maintenanceError = error instanceof Error ? error.message : "Unknown workspace maintenance failure.";
+    addActivity("local-api", "Workspace maintenance unavailable", state.maintenanceError, "waiting");
+  } finally {
+    state.maintenanceLoading = false;
+    renderMaintenancePanel();
+  }
+}
+
+async function repairWorkspaceArtifactsFromUi({ preview = false } = {}) {
+  if (state.maintenanceLoading) {
+    return;
+  }
+
+  state.maintenanceLoading = true;
+  state.maintenanceError = undefined;
+  renderMaintenancePanel();
+  addActivity(
+    "human",
+    preview ? "Previewing artifact repair" : "Repairing artifact metadata",
+    preview
+      ? "Local API will inspect legacy JSON metadata without writing files."
+      : "Local API will repair known legacy artifact metadata without changing trust labels.",
+    "waiting"
+  );
+
+  try {
+    const response = await fetch("/api/workspace-maintenance/repair-artifacts", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ preview })
+    });
+    const payload = await readLocalApiJson(response, "Workspace artifact repair failed.");
+    updateLatestActivity(
+      preview ? "Previewing artifact repair" : "Repairing artifact metadata",
+      "passed",
+      localApiSuccessMessage(payload, `${payload.repair?.actions?.length ?? 0} artifact metadata action(s) ${preview ? "previewed" : "applied"}.`)
+    );
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, "passed", item.at);
+    }
+    await refreshWorkspaceMaintenance({ announce: false });
+    await refreshWorkspaceReadiness({ announce: false });
+    await refreshWorkspaceGraph();
+  } catch (error) {
+    state.maintenanceError = error instanceof Error ? error.message : "Unknown workspace artifact repair failure.";
+    updateLatestActivity(preview ? "Previewing artifact repair" : "Repairing artifact metadata", "refuted", state.maintenanceError);
+  } finally {
+    state.maintenanceLoading = false;
+    renderMaintenancePanel();
+  }
+}
+
+async function cleanWorkspaceFromUi({ confirmDelete = false } = {}) {
+  if (state.maintenanceLoading) {
+    return;
+  }
+
+  if (confirmDelete) {
+    const confirmed = window.confirm(
+      "Clear rebuildable scratch data under .truth-harness/indexes, .truth-harness/validation, and .truth-harness/snapshots? Receipts, claims, routes, notes, and research records are preserved."
+    );
+    if (!confirmed) {
+      return;
+    }
+  }
+
+  state.maintenanceLoading = true;
+  state.maintenanceError = undefined;
+  renderMaintenancePanel();
+  addActivity(
+    "human",
+    confirmDelete ? "Clearing scratch workspace data" : "Previewing workspace cleanup",
+    confirmDelete
+      ? "Only scratch directories selected by the workspace manifest will be cleared."
+      : "Local API will report scratch cleanup impact without deleting files.",
+    "waiting"
+  );
+
+  try {
+    const response = await fetch("/api/workspace-maintenance/clean", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        targets: ["scratch"],
+        confirmDelete
+      })
+    });
+    const payload = await readLocalApiJson(response, "Workspace cleanup failed.");
+    updateLatestActivity(
+      confirmDelete ? "Clearing scratch workspace data" : "Previewing workspace cleanup",
+      "passed",
+      localApiSuccessMessage(payload, maintenanceCleanSummary(payload.clean))
+    );
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, item.detail, "passed", item.at);
+    }
+    await refreshWorkspaceMaintenance({ announce: false });
+    await refreshCatalogStatus({ announce: false });
+    await refreshWorkspaceReadiness({ announce: false });
+    await refreshWorkspaceEvents({ announce: false });
+  } catch (error) {
+    state.maintenanceError = error instanceof Error ? error.message : "Unknown workspace cleanup failure.";
+    updateLatestActivity(confirmDelete ? "Clearing scratch workspace data" : "Previewing workspace cleanup", "refuted", state.maintenanceError);
+  } finally {
+    state.maintenanceLoading = false;
+    renderMaintenancePanel();
+  }
+}
+
 async function refreshCatalogStatus({ announce = false } = {}) {
   if (!catalogSearchStatus) {
     return;
@@ -8166,6 +8323,104 @@ function catalogStatusSummary(catalog) {
     return "catalog stale";
   }
   return `${catalog.artifactCount ?? 0} indexed`;
+}
+
+function renderMaintenancePanel() {
+  if (!maintenanceStatus || !maintenanceMetrics || !maintenanceDetail) {
+    return;
+  }
+
+  const maintenance = state.maintenance;
+  const repairActions = maintenance?.artifactRepair?.actions?.length ?? 0;
+  const scratchFiles = maintenance?.scratchCleanup?.entries?.reduce((sum, entry) => sum + (entry.files ?? 0), 0) ?? 0;
+  const scratchBytes = maintenance?.scratchCleanup?.entries?.reduce((sum, entry) => sum + (entry.bytes ?? 0), 0) ?? 0;
+  const validation = maintenance?.validation;
+  const buttons = [
+    maintenanceRefreshButton,
+    maintenanceRepairPreviewButton,
+    maintenanceRepairApplyButton,
+    maintenanceCleanPreviewButton,
+    maintenanceCleanScratchButton
+  ].filter(Boolean);
+
+  for (const button of buttons) {
+    button.disabled = state.maintenanceLoading;
+  }
+
+  if (state.maintenanceLoading && !maintenance) {
+    maintenanceStatus.textContent = "checking";
+    maintenanceMetrics.innerHTML = `<span>Validation</span><strong>checking</strong>`;
+    maintenanceDetail.textContent = "Reading local workspace maintenance state.";
+    return;
+  }
+
+  if (state.maintenanceError) {
+    maintenanceStatus.textContent = "needs attention";
+    maintenanceMetrics.innerHTML = `<span>Local API</span><strong>unavailable</strong>`;
+    maintenanceDetail.textContent = state.maintenanceError;
+    return;
+  }
+
+  if (!maintenance) {
+    maintenanceStatus.textContent = "not checked";
+    maintenanceMetrics.innerHTML = `<span>Validation</span><strong>not checked</strong>`;
+    maintenanceDetail.textContent = "Use Check to preview local repair and scratch cleanup impact.";
+    return;
+  }
+
+  const healthy = validation?.passed === true && repairActions === 0;
+  maintenanceStatus.textContent = healthy ? "healthy" : repairActions > 0 ? "repair available" : "checked";
+  maintenanceMetrics.innerHTML = `
+    <span>${validation?.passed ? "Validation passed" : "Validation blocked"}</span>
+    <strong>${validation?.checkedFiles ?? 0} files / ${scratchFiles} scratch</strong>
+  `;
+  maintenanceDetail.textContent = repairActions > 0
+    ? `${repairActions} artifact metadata repair action${repairActions === 1 ? "" : "s"} available. Scratch preview: ${formatBytes(scratchBytes)}.`
+    : `No metadata repairs pending. Scratch preview: ${scratchFiles} file${scratchFiles === 1 ? "" : "s"}, ${formatBytes(scratchBytes)}.`;
+}
+
+function maintenanceSummary(maintenance) {
+  if (!maintenance) {
+    return "Workspace maintenance state unavailable.";
+  }
+
+  const repairActions = maintenance.artifactRepair?.actions?.length ?? 0;
+  const scratchFiles = maintenance.scratchCleanup?.entries?.reduce((sum, entry) => sum + (entry.files ?? 0), 0) ?? 0;
+  const validation = maintenance.validation;
+  return `${validation?.passed ? "Validation passed" : "Validation needs attention"} across ${validation?.checkedFiles ?? 0} files; ${repairActions} repair actions pending; ${scratchFiles} scratch files previewed.`;
+}
+
+function maintenanceCleanSummary(clean) {
+  if (!clean) {
+    return "Workspace cleanup result unavailable.";
+  }
+
+  const files = clean.dryRun
+    ? clean.entries?.reduce((sum, entry) => sum + (entry.files ?? 0), 0) ?? 0
+    : clean.deletedFiles ?? 0;
+  const bytes = clean.dryRun
+    ? clean.entries?.reduce((sum, entry) => sum + (entry.bytes ?? 0), 0) ?? 0
+    : clean.deletedBytes ?? 0;
+  return clean.dryRun
+    ? `${files} scratch file${files === 1 ? "" : "s"} (${formatBytes(bytes)}) would be cleared; no files deleted.`
+    : `${files} scratch file${files === 1 ? "" : "s"} (${formatBytes(bytes)}) deleted from selected .truth-harness directories.`;
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let scaled = value;
+  let unitIndex = 0;
+  while (scaled >= 1024 && unitIndex < units.length - 1) {
+    scaled /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${unitIndex === 0 ? scaled.toFixed(0) : scaled.toFixed(1)} ${units[unitIndex]}`;
 }
 
 function openCatalogResult(button) {
@@ -11195,6 +11450,26 @@ claimList.addEventListener("click", (event) => {
 
 catalogRebuildButton?.addEventListener("click", () => {
   void rebuildCatalogIndex();
+});
+
+maintenanceRefreshButton?.addEventListener("click", () => {
+  void refreshWorkspaceMaintenance({ announce: true });
+});
+
+maintenanceRepairPreviewButton?.addEventListener("click", () => {
+  void repairWorkspaceArtifactsFromUi({ preview: true });
+});
+
+maintenanceRepairApplyButton?.addEventListener("click", () => {
+  void repairWorkspaceArtifactsFromUi({ preview: false });
+});
+
+maintenanceCleanPreviewButton?.addEventListener("click", () => {
+  void cleanWorkspaceFromUi({ confirmDelete: false });
+});
+
+maintenanceCleanScratchButton?.addEventListener("click", () => {
+  void cleanWorkspaceFromUi({ confirmDelete: true });
 });
 
 catalogResultList?.addEventListener("click", (event) => {

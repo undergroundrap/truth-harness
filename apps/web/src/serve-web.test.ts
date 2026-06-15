@@ -59,6 +59,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("catalog-search");
     expect(statusPayload.capabilities).toContain("workspace-events");
     expect(statusPayload.capabilities).toContain("workspace-run-next-dry-run");
+    expect(statusPayload.capabilities).toContain("workspace-maintenance");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
       sameOriginWritesOnly: true,
@@ -344,6 +345,54 @@ describe("local web route ledger API", () => {
         command: expect.stringContaining("truth-harness workspace stress")
       })
     );
+
+    const maintenanceResponse = await fetch(`${baseUrl}/api/workspace-maintenance`);
+    expect(maintenanceResponse.status).toBe(200);
+    const maintenancePayload = await maintenanceResponse.json();
+    expectLocalApiSuccess(maintenanceResponse, maintenancePayload);
+    expect(maintenancePayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-maintenance-response.v0",
+      localOnly: true,
+      externalCalls: []
+    });
+    expect(maintenancePayload.maintenance).toMatchObject({
+      schemaVersion: "truth-harness.workspace-maintenance.v0",
+      localOnly: true,
+      networkAccess: "none"
+    });
+    expect(maintenancePayload.maintenance.artifactRepair.dryRun).toBe(true);
+    expect(maintenancePayload.maintenance.scratchCleanup.dryRun).toBe(true);
+
+    const repairPreviewResponse = await fetch(`${baseUrl}/api/workspace-maintenance/repair-artifacts`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ preview: true })
+    });
+    expect(repairPreviewResponse.status).toBe(200);
+    const repairPreviewPayload = await repairPreviewResponse.json();
+    expectLocalApiSuccess(repairPreviewResponse, repairPreviewPayload);
+    expect(repairPreviewPayload.repair).toMatchObject({
+      schemaVersion: "truth-harness.workspace-artifact-repair.v0",
+      dryRun: true
+    });
+
+    const cleanPreviewResponse = await fetch(`${baseUrl}/api/workspace-maintenance/clean`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ targets: ["scratch"] })
+    });
+    expect(cleanPreviewResponse.status).toBe(200);
+    const cleanPreviewPayload = await cleanPreviewResponse.json();
+    expectLocalApiSuccess(cleanPreviewResponse, cleanPreviewPayload);
+    expect(cleanPreviewPayload.clean).toMatchObject({
+      schemaVersion: "truth-harness.workspace-clean.v0",
+      dryRun: true,
+      resolvedDirectories: ["indexes", "validation", "snapshots"]
+    });
 
     const sessionWrite = await writeResearchSession({
       rootPath: tempProjectRoot,

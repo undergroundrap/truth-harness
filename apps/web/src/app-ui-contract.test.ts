@@ -85,6 +85,27 @@ describe("web UI action contracts", () => {
     expect(styles).toContain("overflow-wrap: anywhere;");
   });
 
+  it("keeps workspace maintenance visible and routed through local preview-first APIs", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('id="maintenance-status"');
+    expect(html).toContain('id="maintenance-repair-preview"');
+    expect(html).toContain('id="maintenance-clean-preview"');
+    expect(html).toContain('id="maintenance-clean-scratch"');
+    expect(source).toContain('fetch("/api/workspace-maintenance"');
+    expect(source).toContain('fetch("/api/workspace-maintenance/repair-artifacts"');
+    expect(source).toContain('fetch("/api/workspace-maintenance/clean"');
+    expect(source).toContain("function renderMaintenancePanel()");
+    expect(source).toContain("window.confirm(");
+    expect(source).toContain('targets: ["scratch"]');
+    expect(styles).toContain(".maintenance-panel");
+    expect(styles).toContain(".danger-button");
+  });
+
   it("keeps the sidebar shortcuts wired to real workspace surfaces", async () => {
     const [html, source, styles] = await Promise.all([
       readFile(appHtmlPath, "utf8"),
@@ -118,7 +139,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("let total = sidebarRecentEntries(\"\").length;");
     expect(source).toContain("sidebarActionButtons.forEach");
     expect(source).toContain("projectRows.forEach");
-    expect(styles).toContain("grid-template-rows: auto auto auto auto auto auto auto minmax(150px, 1fr) auto;");
+    expect(styles).toContain("grid-template-rows: auto auto auto auto auto auto auto minmax(0, 1fr) auto;");
     expect(styles).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
     expect(styles).toContain(".session-row");
     expect(styles).toContain("max-height: min(15vh, 142px);");
