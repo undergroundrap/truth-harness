@@ -144,6 +144,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_visual_plot",
         "truth_harness_visual_render",
         "truth_harness_visual_show",
+        "truth_harness_workspace_events",
         "truth_harness_workspace_graph",
         "truth_harness_workspace_init",
         "truth_harness_workspace_repair",
@@ -583,6 +584,17 @@ describe("Truth Harness MCP server", () => {
       expect(workspaceGraphResult.isError).not.toBe(true);
       expect(workspaceGraphText).toContain("\"schemaVersion\": \"truth-harness.workspace-graph.v0\"");
       expect(workspaceGraphText).toContain(JSON.parse(snapshotText).snapshot.snapshotId);
+
+      const workspaceEventsResult = await client.callTool({
+        name: "truth_harness_workspace_events",
+        arguments: {
+          limit: 5
+        }
+      });
+      const workspaceEventsText = firstText(workspaceEventsResult.content);
+      expect(workspaceEventsResult.isError).not.toBe(true);
+      expect(workspaceEventsText).toContain("\"schemaVersion\": \"truth-harness.event-list.v0\"");
+      expect(workspaceEventsText).toContain("\"action\": \"artifact-written\"");
 
       const visualGraphResult = await client.callTool({
         name: "truth_harness_visual_graph",

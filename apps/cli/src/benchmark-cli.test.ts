@@ -403,6 +403,38 @@ describe("benchmark CLI", () => {
     expect(human.stdout).toContain(".truth-harness/receipts/fraction.json");
   });
 
+  it("lists append-only workspace events from the CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    const claim = JSON.parse(
+      (await runCli(["claim", "add", "Event log records artifact writes.", "--workspace", root, "--tag", "events", "--json"])).stdout
+    ) as { claim: { claimId: string }; jsonPath: string };
+
+    const events = JSON.parse((await runCli(["workspace", "events", root, "--limit", "5", "--json"])).stdout) as {
+      schemaVersion: string;
+      total: number;
+      events: Array<{ action: string; kind?: string; artifactId?: string; path?: string; artifact?: { sha256: string } }>;
+    };
+    const human = await runCli(["workspace", "events", root, "--limit", "1"]);
+
+    expect(events.schemaVersion).toBe("truth-harness.event-list.v0");
+    expect(events.total).toBeGreaterThanOrEqual(1);
+    expect(events.events).toContainEqual(
+      expect.objectContaining({
+        action: "artifact-written",
+        kind: "claims",
+        artifactId: claim.claim.claimId,
+        path: expect.stringContaining(".truth-harness/claims/"),
+        artifact: expect.objectContaining({
+          sha256: expect.stringMatching(/^[a-f0-9]{64}$/u)
+        })
+      })
+    );
+    expect(human.stdout).toContain("Truth Harness workspace events");
+    expect(human.stdout).toContain("artifact-written");
+    expect(human.stdout).toContain(claim.claim.claimId);
+  });
+
   it("renders teaching packets from saved receipts", async () => {
     const root = await tempRoot();
     const receipt = createReceipt("compute 3 / 4 + 5 / 8");

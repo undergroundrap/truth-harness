@@ -76,6 +76,7 @@ import {
   handleTruthHarnessVisualShow,
   handleTruthHarnessVerify,
   handleTruthHarnessWorkspaceInit,
+  handleTruthHarnessWorkspaceEvents,
   handleTruthHarnessWorkspaceGraph,
   handleTruthHarnessWorkspaceRepair,
   handleTruthHarnessWorkspaceReview,
@@ -195,6 +196,34 @@ describe("MCP tool handlers", () => {
       criticalOpenProofObligations
     });
     expect(shown.routeId).toBe(result.route.routeId);
+  });
+
+  it("lists workspace artifact events for agents", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Event Lab" });
+    const claim = await handleTruthHarnessClaimAdd({
+      statement: "Agent event logs should record artifact writes.",
+      domain: "code",
+      tags: ["events"]
+    });
+
+    const events = await handleTruthHarnessWorkspaceEvents({ limit: 10 });
+
+    expect(events.schemaVersion).toBe("truth-harness.event-list.v0");
+    expect(events.total).toBeGreaterThanOrEqual(1);
+    expect(events.events).toContainEqual(
+      expect.objectContaining({
+        action: "artifact-written",
+        kind: "claims",
+        artifactId: claim.claim.claimId,
+        path: expect.stringContaining(".truth-harness/claims/"),
+        artifact: expect.objectContaining({
+          sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+          byteLength: expect.any(Number)
+        })
+      })
+    );
   });
 
   it("satisfies verifier route obligations for agents", async () => {

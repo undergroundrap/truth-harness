@@ -46,6 +46,7 @@ Before an agent presents a ledger claim as usable, call `truth_harness_claim_rev
 | `truth_harness_workspace_repair` | Create missing private workspace directories and persist newly added manifest defaults. |
 | `truth_harness_workspace_validate` | Validate local evidence artifacts before agents rely on them; receipts get deep trust-boundary checks and known workspace records get JSON Schema, id, reference, and trust-boundary checks. |
 | `truth_harness_workspace_graph` | Build a read-only local evidence graph with artifact nodes, evidence edges, claim lineage, task/checkpoint refs, snapshots, and missing links. |
+| `truth_harness_workspace_events` | List the local append-only artifact-write event log for audit ordering; events are control-plane metadata, not proof. |
 | `truth_harness_workspace_review` | Return or write a bounded local work queue across saved verifier routes, claim records, and active research sessions for agent handoff. |
 | `truth_harness_workspace_review_list` / `truth_harness_workspace_review_show` | Reopen persisted review handoffs by id or path so agents can resume from exact local queues instead of chat memory. |
 | `truth_harness_workspace_snapshot` | Write a portable local provenance snapshot with hashes for workspace artifacts. |

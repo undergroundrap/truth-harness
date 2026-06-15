@@ -60,6 +60,7 @@ import {
   listValidationPlans,
   listVerifierRoutes,
   listVisualArtifacts,
+  listWorkspaceEvents,
   listWorkspaceReviews,
   listWorkspaceSnapshots,
   listVaultEntries,
@@ -220,6 +221,7 @@ import {
   type WorkspaceCatalogRebuildResult,
   type WorkspaceCatalogSearchResult,
   type WorkspaceCatalogStatus,
+  type WorkspaceEventListResult,
   type TrustLabel,
   type WorkspaceValidation,
   type WorkspaceGraph,
@@ -496,6 +498,11 @@ export interface TruthHarnessWorkspaceSnapshotInput {
 
 export interface TruthHarnessWorkspaceGraphInput {
   workspacePath?: string;
+}
+
+export interface TruthHarnessWorkspaceEventsInput {
+  workspacePath?: string;
+  limit?: number;
 }
 
 export interface TruthHarnessVisualGraphInput {
@@ -1496,6 +1503,10 @@ export async function handleTruthHarnessWorkspaceGraph(input: TruthHarnessWorksp
   return createWorkspaceGraph({
     rootPath: resolveWorkspaceRoot(input.workspacePath)
   });
+}
+
+export async function handleTruthHarnessWorkspaceEvents(input: TruthHarnessWorkspaceEventsInput): Promise<WorkspaceEventListResult> {
+  return listWorkspaceEvents(resolveWorkspaceRoot(input.workspacePath), input.limit ?? 50);
 }
 
 export async function handleTruthHarnessVisualGraph(input: TruthHarnessVisualGraphInput): Promise<VisualArtifactWriteResult> {

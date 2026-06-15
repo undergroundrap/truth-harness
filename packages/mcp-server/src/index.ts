@@ -77,6 +77,7 @@ import {
   handleTruthHarnessVisualShow,
   handleTruthHarnessVerify,
   handleTruthHarnessWorkspaceInit,
+  handleTruthHarnessWorkspaceEvents,
   handleTruthHarnessWorkspaceGraph,
   handleTruthHarnessWorkspaceRepair,
   handleTruthHarnessWorkspaceReview,
@@ -1062,6 +1063,27 @@ export function createTruthHarnessMcpServer(): McpServer {
       }
     },
     async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceGraph({ workspacePath }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_events",
+    {
+      title: "List Workspace Events",
+      description:
+        "List the local append-only artifact-write event log for audit ordering. Events are control-plane metadata and do not upgrade evidence trust.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        limit: z.number().int().positive().max(1000).optional().describe("Maximum events to return. Defaults to 50.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, limit }) => toolJson(await handleTruthHarnessWorkspaceEvents({ workspacePath, limit }))
   );
 
   server.registerTool(

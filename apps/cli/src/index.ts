@@ -81,6 +81,7 @@ import {
   listValidationPlans,
   listVerifierRoutes,
   listVisualArtifacts,
+  listWorkspaceEvents,
   listWorkspaceReviews,
   listWorkspaceSnapshots,
   listVaultEntries,
@@ -161,6 +162,7 @@ import {
   type WorkspaceCatalogRebuildResult,
   type WorkspaceCatalogSearchResult,
   type WorkspaceCatalogStatus,
+  type WorkspaceEventListResult,
   type CodeRunSummary,
   type EngineManifest,
   type CodeRunPolicyInput,
@@ -2907,6 +2909,23 @@ workspace
   });
 
 workspace
+  .command("events")
+  .description("List the local append-only artifact-write event log.")
+  .argument("[path]", "Project root path", ".")
+  .option("--limit <count>", "Maximum events to return", parsePositiveInteger, 50)
+  .option("--json", "Print the full workspace event list JSON")
+  .action(async (path: string, options: { limit: number; json?: boolean }) => {
+    const events = await listWorkspaceEvents(path, options.limit);
+
+    if (options.json) {
+      printJson(events);
+      return;
+    }
+
+    printWorkspaceEvents(events);
+  });
+
+workspace
   .command("reviews")
   .description("List persisted workspace review handoff packets.")
   .argument("[path]", "Project root path", ".")
@@ -5521,6 +5540,32 @@ function printWorkspaceSnapshotList(snapshots: WorkspaceSnapshotSummary[]): void
     console.log(`  Files: ${snapshot.totalFiles}`);
     console.log(`  Bytes: ${snapshot.totalBytes}`);
     console.log(`  Kinds: ${formatRecordCounts(snapshot.byKind)}`);
+  }
+}
+
+function printWorkspaceEvents(result: WorkspaceEventListResult): void {
+  console.log(`Truth Harness workspace events: ${result.events.length} shown / ${result.total} total`);
+  console.log(`Workspace: ${result.rootPath}`);
+  console.log("Local-only audit trail; event entries do not upgrade trust labels.");
+
+  for (const event of result.events) {
+    const artifact = event.artifact ? ` sha256=${event.artifact.sha256.slice(0, 12)} bytes=${event.artifact.byteLength}` : "";
+    console.log("");
+    console.log(`${event.createdAt} ${event.eventId}`);
+    console.log(`  Action: ${event.action}`);
+    console.log(`  Actor: ${event.actor.kind}${event.actor.name ? `/${event.actor.name}` : ""}`);
+    console.log(`  Artifact: ${event.kind ?? "unknown"} ${event.artifactId ?? "unknown"} ${event.path ?? "(no path)"}${artifact}`);
+    if (event.summary) {
+      console.log(`  Summary: ${event.summary}`);
+    }
+  }
+
+  if (result.warnings.length > 0) {
+    console.log("");
+    console.log("Event warnings:");
+    for (const warning of result.warnings) {
+      console.log(`  ${warning}`);
+    }
   }
 }
 

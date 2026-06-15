@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, open, readFile, readdir } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { withWorkspaceLock } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
@@ -90,12 +91,14 @@ export async function appendArtifactWriteEvent(
   const path = workspaceRelativePath(status.root, input.path);
   const artifactPath = resolveUnderRoot(status.root, path);
   const artifact = await fileIdentity(artifactPath);
+  const artifactId = input.artifactId ?? (await inferArtifactId(artifactPath));
   const createdAt = input.now ?? new Date().toISOString();
   const event = await createWorkspaceEvent(status, {
     ...input,
     now: createdAt,
     action: "artifact-written",
     path,
+    artifactId,
     metadata: {
       ...input.metadata,
       artifactSha256: artifact.sha256,
@@ -222,6 +225,30 @@ async function fileIdentity(path: string): Promise<{ sha256: string; byteLength:
   };
 }
 
+async function inferArtifactId(path: string): Promise<string | undefined> {
+  if (!path.endsWith(".json")) {
+    return undefined;
+  }
+
+  try {
+    const parsed = parseJsonWithOptionalBom(await readFile(path, "utf8"));
+    if (!isRecord(parsed)) {
+      return undefined;
+    }
+
+    for (const key of ARTIFACT_ID_KEYS) {
+      const value = parsed[key];
+      if (typeof value === "string" && value.trim().length > 0) {
+        return value;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
 async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }> {
   const status = await getLocalWorkspaceStatus(rootPath);
   if (!status.exists || !status.manifest) {
@@ -267,6 +294,35 @@ function normalizeOptionalText(value: string | undefined): string | undefined {
   return normalized ? normalized : undefined;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function toPortablePath(path: string): string {
   return path.replace(/\\/g, "/");
 }
+
+const ARTIFACT_ID_KEYS = [
+  "runId",
+  "claimId",
+  "routeId",
+  "checkId",
+  "benchmarkRunId",
+  "comparisonId",
+  "disclosureId",
+  "simulationId",
+  "chartId",
+  "experimentId",
+  "vaultId",
+  "auditId",
+  "snapshotId",
+  "sessionId",
+  "reviewId",
+  "planId",
+  "recordId",
+  "runRecordId",
+  "packetId",
+  "visualId",
+  "entryId",
+  "packageId"
+] as const;
