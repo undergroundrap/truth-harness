@@ -1324,6 +1324,116 @@ describe("benchmark CLI", () => {
     expect(graphText.stdout).toContain("Nodes:");
   });
 
+  it("writes and verifies credibility reviewer bundles from the CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+
+    const bundleResult = await runCli([
+      "workspace",
+      "credibility-bundle",
+      root,
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--max-sessions",
+      "0",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--sage-command",
+      "truth-harness-missing-sage-command",
+      "--json"
+    ]);
+    const bundle = JSON.parse(bundleResult.stdout) as {
+      manifest: {
+        schemaVersion: string;
+        bundleId: string;
+        packStatus: string;
+        summary: { totalFiles: number };
+        reviewerCommands: { verifyBundle: string };
+      };
+      result: { bundleDir: string; manifestPath: string; packMarkdownPath: string };
+    };
+    const verifyById = JSON.parse(
+      (await runCli(["workspace", "verify-credibility-bundle", root, bundle.manifest.bundleId, "--json"])).stdout
+    ) as {
+      schemaVersion: string;
+      bundleId: string;
+      passed: boolean;
+      sourceMatchesWorkspace: boolean;
+      checkedBundleFiles: number;
+    };
+    const humanBundle = await runCli([
+      "workspace",
+      "credibility-bundle",
+      root,
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--max-sessions",
+      "0",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--sage-command",
+      "truth-harness-missing-sage-command"
+    ]);
+    const humanVerify = await runCli([
+      "workspace",
+      "verify-credibility-bundle",
+      bundle.manifest.bundleId,
+      "--workspace",
+      root
+    ]);
+
+    expect(bundleResult.exitCode).toBe(0);
+    expect(bundle.manifest.schemaVersion).toBe("truth-harness.credibility-bundle.v0");
+    expect(bundle.manifest.bundleId).toMatch(/^cbun_[a-f0-9]{16}$/u);
+    expect(bundle.manifest.packStatus).toBe("blocked");
+    expect(bundle.manifest.summary.totalFiles).toBeGreaterThan(0);
+    expect(bundle.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
+    expect(bundle.result.bundleDir.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(await readFile(bundle.result.manifestPath, "utf8")).toContain(bundle.manifest.bundleId);
+    expect(verifyById).toMatchObject({
+      schemaVersion: "truth-harness.credibility-bundle-verification.v0",
+      bundleId: bundle.manifest.bundleId,
+      passed: true,
+      sourceMatchesWorkspace: true
+    });
+    expect(verifyById.checkedBundleFiles).toBe(bundle.manifest.summary.totalFiles);
+    expect(humanBundle.stdout).toContain("Truth Harness portable reviewer bundle");
+    expect(humanBundle.stdout).toContain("Reviewer commands:");
+    expect(humanVerify.stdout).toContain("Truth Harness credibility bundle verification");
+    expect(humanVerify.stdout).toContain("Bundle integrity: passed");
+
+    await writeFile(bundle.result.packMarkdownPath, "tampered reviewer markdown\n", "utf8");
+    const tampered = JSON.parse(
+      (await runCli(["workspace", "verify-credibility-bundle", bundle.result.bundleDir, "--workspace", root, "--json"])).stdout
+    ) as {
+      passed: boolean;
+      sourceMatchesWorkspace: boolean;
+      changedBundleFiles: Array<{ path: string }>;
+      changedSourceFiles: Array<{ path: string }>;
+    };
+
+    expect(tampered.passed).toBe(false);
+    expect(tampered.sourceMatchesWorkspace).toBe(true);
+    expect(tampered.changedBundleFiles).toContainEqual(expect.objectContaining({ path: "credibility-pack.md" }));
+    expect(tampered.changedSourceFiles).toHaveLength(0);
+  });
+
   it("plans and executes one workspace autonomy action without shell execution", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);
