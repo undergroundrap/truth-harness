@@ -76,6 +76,8 @@ import {
   handleTruthHarnessVisualShow,
   handleTruthHarnessVerify,
   handleTruthHarnessWorkspaceInit,
+  handleTruthHarnessWorkspaceCredibilityBundle,
+  handleTruthHarnessWorkspaceCredibilityBundleVerify,
   handleTruthHarnessWorkspaceEvents,
   handleTruthHarnessWorkspaceGraph,
   handleTruthHarnessWorkspaceRepair,
@@ -1152,6 +1154,40 @@ describe("MCP tool handlers", () => {
     expect(list.snapshots[0]?.snapshotId).toBe(snapshot.snapshot.snapshotId);
     expect(verification.passed).toBe(true);
     expect(verification.changed).toEqual([]);
+  });
+
+  it("writes and verifies credibility reviewer bundles for agents", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Credibility Bundle Lab" });
+
+    const bundle = await handleTruthHarnessWorkspaceCredibilityBundle({
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      timeoutMs: 50,
+      maximaCommand: "truth-harness-missing-maxima-command",
+      z3Command: "truth-harness-missing-z3-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      sageCommand: "truth-harness-missing-sage-command"
+    });
+    const verification = await handleTruthHarnessWorkspaceCredibilityBundleVerify({
+      bundleRef: bundle.manifest.bundleId
+    });
+
+    expect(bundle.manifest.schemaVersion).toBe("truth-harness.credibility-bundle.v0");
+    expect(bundle.manifest.bundleId).toMatch(/^cbun_[a-f0-9]{16}$/u);
+    expect(bundle.manifest.packStatus).toBe("blocked");
+    expect(bundle.manifest.localOnly).toBe(true);
+    expect(bundle.manifest.networkAccess).toBe("none");
+    expect(bundle.manifest.summary.totalFiles).toBeGreaterThan(0);
+    expect(bundle.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
+    expect(verification).toMatchObject({
+      schemaVersion: "truth-harness.credibility-bundle-verification.v0",
+      bundleId: bundle.manifest.bundleId,
+      passed: true,
+      sourceMatchesWorkspace: true
+    });
   });
 
   it("starts and checkpoints local research sessions for agents", async () => {

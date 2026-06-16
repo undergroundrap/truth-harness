@@ -144,6 +144,8 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_visual_plot",
         "truth_harness_visual_render",
         "truth_harness_visual_show",
+        "truth_harness_workspace_credibility_bundle",
+        "truth_harness_workspace_credibility_bundle_verify",
         "truth_harness_workspace_events",
         "truth_harness_workspace_graph",
         "truth_harness_workspace_init",
@@ -526,6 +528,41 @@ describe("Truth Harness MCP server", () => {
       });
       const snapshotVerifyText = firstText(snapshotVerifyResult.content);
       expect(snapshotVerifyText).toContain("\"passed\": true");
+
+      const credibilityBundle = await client.callTool({
+        name: "truth_harness_workspace_credibility_bundle",
+        arguments: {
+          maxRoutes: 0,
+          maxClaims: 0,
+          maxSessions: 0,
+          timeoutMs: 50,
+          maximaCommand: "truth-harness-missing-maxima-command",
+          z3Command: "truth-harness-missing-z3-command",
+          leanCommand: "truth-harness-missing-lean-command",
+          sageCommand: "truth-harness-missing-sage-command"
+        }
+      });
+      const credibilityBundleText = firstText(credibilityBundle.content);
+      const credibilityBundleJson = JSON.parse(credibilityBundleText) as {
+        manifest: { bundleId: string };
+      };
+      expect(credibilityBundle.isError).not.toBe(true);
+      expect(credibilityBundleText).toContain("\"schemaVersion\": \"truth-harness.credibility-bundle.v0\"");
+      expect(credibilityBundleText).toContain("\"localOnly\": true");
+      expect(credibilityBundleText).toContain("\"networkAccess\": \"none\"");
+      expect(credibilityBundleText).toContain("\"packStatus\": \"blocked\"");
+
+      const credibilityBundleVerify = await client.callTool({
+        name: "truth_harness_workspace_credibility_bundle_verify",
+        arguments: {
+          bundleRef: credibilityBundleJson.manifest.bundleId
+        }
+      });
+      const credibilityBundleVerifyText = firstText(credibilityBundleVerify.content);
+      expect(credibilityBundleVerify.isError).not.toBe(true);
+      expect(credibilityBundleVerifyText).toContain("\"schemaVersion\": \"truth-harness.credibility-bundle-verification.v0\"");
+      expect(credibilityBundleVerifyText).toContain("\"passed\": true");
+      expect(credibilityBundleVerifyText).toContain("\"sourceMatchesWorkspace\": true");
 
       const researchStartResult = await client.callTool({
         name: "truth_harness_research_session_start",

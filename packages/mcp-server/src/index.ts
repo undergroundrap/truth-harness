@@ -78,6 +78,8 @@ import {
   handleTruthHarnessVerify,
   handleTruthHarnessWorkspaceInit,
   handleTruthHarnessWorkspaceEvents,
+  handleTruthHarnessWorkspaceCredibilityBundle,
+  handleTruthHarnessWorkspaceCredibilityBundleVerify,
   handleTruthHarnessWorkspaceGraph,
   handleTruthHarnessWorkspaceRepair,
   handleTruthHarnessWorkspaceReview,
@@ -1539,6 +1541,94 @@ export function createTruthHarnessMcpServer(): McpServer {
     },
     async ({ workspacePath, snapshotRef }) =>
       toolJson(await handleTruthHarnessWorkspaceSnapshotVerify({ workspacePath, snapshotRef }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_credibility_bundle",
+    {
+      title: "Write Credibility Reviewer Bundle",
+      description:
+        "Write a portable reviewer bundle directory containing a credibility pack, copied canonical artifacts, manifest hashes, and reviewer commands. This is local-only and does not upgrade trust labels.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        maxRoutes: z
+          .number()
+          .int()
+          .min(0)
+          .max(500)
+          .optional()
+          .describe("Maximum route summaries to inspect. Defaults to 100; use 0 to skip routes."),
+        maxClaims: z
+          .number()
+          .int()
+          .min(0)
+          .max(1000)
+          .optional()
+          .describe("Maximum claim records to inspect. Defaults to 200; use 0 to skip claims."),
+        maxSessions: z
+          .number()
+          .int()
+          .min(0)
+          .max(500)
+          .optional()
+          .describe("Maximum research sessions to inspect. Defaults to 100; use 0 to skip sessions."),
+        timeoutMs: z
+          .number()
+          .int()
+          .min(1)
+          .max(300000)
+          .optional()
+          .describe("Concrete engine check timeout in milliseconds."),
+        maximaCommand: z.string().optional().describe("Override Maxima executable for the symbolic cross-check."),
+        sageCommand: z.string().optional().describe("Override SageMath executable for the status-only probe."),
+        leanCommand: z.string().optional().describe("Override Lean executable for the proof fixture."),
+        z3Command: z.string().optional().describe("Override Z3 executable for the SMT check."),
+        smtSourcePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local SMT-LIB source for the Z3 check."),
+        leanSourcePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local Lean source for the Lean fixture."),
+        requireMaxima: z.boolean().optional().describe("Mark Maxima as required for reviewer readiness."),
+        requireZ3: z.boolean().optional().describe("Mark Z3 as required for reviewer readiness."),
+        requireLean: z.boolean().optional().describe("Mark Lean as required for reviewer readiness."),
+        requireSage: z.boolean().optional().describe("Mark constrained Sage evidence as required; currently expected to block."),
+        requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima and Z3 evidence gates."),
+        requireAllConcrete: z.boolean().optional().describe("Require Maxima, Z3, and Lean concrete evidence gates.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTruthHarnessWorkspaceCredibilityBundle(input))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_credibility_bundle_verify",
+    {
+      title: "Verify Credibility Reviewer Bundle",
+      description:
+        "Verify a credibility reviewer bundle manifest, copied file hashes, and live source workspace drift without making external calls.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        bundleRef: z.string().min(1).describe("Bundle id, bundle directory, or workspace-local bundle path.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, bundleRef }) =>
+      toolJson(await handleTruthHarnessWorkspaceCredibilityBundleVerify({ workspacePath, bundleRef }))
   );
 
   server.registerTool(

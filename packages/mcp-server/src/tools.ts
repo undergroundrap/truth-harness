@@ -83,6 +83,7 @@ import {
   updateResearchSessionTask,
   validateWorkspaceArtifacts,
   verifyVaultEntry,
+  verifyCredibilityBundle,
   verifyWorkspaceSnapshot,
   renderReceipt,
   replayReceipt,
@@ -92,6 +93,7 @@ import {
   writeExpertReview,
   writeClaimChart,
   writeClaimLedgerRecord,
+  writeCredibilityBundle,
   writeSymbolicCasCheckRecord,
   writeLeanProofCheckRecord,
   writeSmtCheckRecord,
@@ -133,6 +135,8 @@ import {
   type CodeRunSandboxStatus,
   type CodeRunSummary,
   type CodeRunWriteResult,
+  type CredibilityBundleVerification,
+  type CredibilityBundleWriteResult,
   type DiscoveryPackage,
   type DiscoveryPackageWriteResult,
   type EngineManifest,
@@ -624,6 +628,31 @@ export type TruthHarnessWorkspaceRunNextOutput = WorkspaceRunNextPlan | TruthHar
 export interface TruthHarnessWorkspaceSnapshotVerifyInput {
   workspacePath?: string;
   snapshotRef: string;
+}
+
+export interface TruthHarnessWorkspaceCredibilityBundleInput {
+  workspacePath?: string;
+  maxRoutes?: number;
+  maxClaims?: number;
+  maxSessions?: number;
+  timeoutMs?: number;
+  maximaCommand?: string;
+  sageCommand?: string;
+  leanCommand?: string;
+  z3Command?: string;
+  smtSourcePath?: string;
+  leanSourcePath?: string;
+  requireMaxima?: boolean;
+  requireZ3?: boolean;
+  requireLean?: boolean;
+  requireSage?: boolean;
+  requireDockerCore?: boolean;
+  requireAllConcrete?: boolean;
+}
+
+export interface TruthHarnessWorkspaceCredibilityBundleVerifyInput {
+  workspacePath?: string;
+  bundleRef: string;
 }
 
 export interface TruthHarnessSourceIngestInput {
@@ -1736,6 +1765,39 @@ export async function handleTruthHarnessWorkspaceSnapshotVerify(
   return verifyWorkspaceSnapshot({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     snapshotRef: input.snapshotRef
+  });
+}
+
+export async function handleTruthHarnessWorkspaceCredibilityBundle(
+  input: TruthHarnessWorkspaceCredibilityBundleInput
+): Promise<CredibilityBundleWriteResult> {
+  return writeCredibilityBundle({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    maxRoutes: input.maxRoutes,
+    maxClaims: input.maxClaims,
+    maxSessions: input.maxSessions,
+    timeoutMs: input.timeoutMs,
+    maximaCommand: input.maximaCommand,
+    sageCommand: input.sageCommand,
+    leanCommand: input.leanCommand,
+    z3Command: input.z3Command,
+    smtSourcePath: input.smtSourcePath,
+    leanSourcePath: input.leanSourcePath,
+    engineRequirements: {
+      maxima: Boolean(input.requireMaxima || input.requireDockerCore || input.requireAllConcrete),
+      z3: Boolean(input.requireZ3 || input.requireDockerCore || input.requireAllConcrete),
+      lean: Boolean(input.requireLean || input.requireAllConcrete),
+      sage: Boolean(input.requireSage)
+    }
+  });
+}
+
+export async function handleTruthHarnessWorkspaceCredibilityBundleVerify(
+  input: TruthHarnessWorkspaceCredibilityBundleVerifyInput
+): Promise<CredibilityBundleVerification> {
+  return verifyCredibilityBundle({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    bundleRef: input.bundleRef
   });
 }
 

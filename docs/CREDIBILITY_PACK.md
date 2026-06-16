@@ -62,6 +62,13 @@ Bundle verification reports two separate facts:
 
 A bundle can remain valid even after the live workspace changes. That is useful for peer review because the exported evidence can be frozen while active research continues.
 
+Agents can use the same workflow through MCP:
+
+- `truth_harness_workspace_credibility_bundle`
+- `truth_harness_workspace_credibility_bundle_verify`
+
+Both MCP tools are local-only. The create tool writes the bundle directory; the verify tool only reads the manifest, copied hashes, and current workspace source files.
+
 ## What Counts As Professor Ready
 
 A pack is `ready-for-review` only when:
