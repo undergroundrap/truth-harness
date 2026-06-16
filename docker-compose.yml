@@ -41,6 +41,21 @@ services:
       TRUTH_HARNESS_Z3: "z3"
     command: ["npm", "run", "cli", "--", "engines", "verify", "--require-maxima", "--require-z3"]
 
+  sage-math:
+    <<: *truth-harness-security
+    build:
+      context: .
+      target: sage-math
+    image: truth-harness:sage-math
+    working_dir: /workspace
+    network_mode: "none"
+    environment:
+      CI: "true"
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
+      TRUTH_HARNESS_CONTAINER: "1"
+      TRUTH_HARNESS_SAGE: "sage"
+    command: ["npm", "run", "engines:verify:sage"]
+
   mcp:
     <<: *truth-harness-security
     image: truth-harness:dev

@@ -3047,7 +3047,7 @@ workspace
   .option("--require-maxima", "Mark Maxima as required for professor readiness")
   .option("--require-z3", "Mark Z3 as required for professor readiness")
   .option("--require-lean", "Mark Lean as required for professor readiness")
-  .option("--require-sage", "Mark pinned Sage evidence as required; currently expected to block until a Sage fixture exists")
+  .option("--require-sage", "Require SageMath to earn a constrained CAS cross-check")
   .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
   .option("--fail-on-blocked", "Exit non-zero if the pack is blocked")
@@ -3129,7 +3129,7 @@ workspace
   .option("--require-maxima", "Mark Maxima as required for professor readiness")
   .option("--require-z3", "Mark Z3 as required for professor readiness")
   .option("--require-lean", "Mark Lean as required for professor readiness")
-  .option("--require-sage", "Mark pinned Sage evidence as required; currently expected to block until a Sage fixture exists")
+  .option("--require-sage", "Require SageMath to earn a constrained CAS cross-check")
   .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
   .option("--fail-on-blocked", "Exit non-zero if the underlying credibility pack is blocked")
@@ -3932,7 +3932,7 @@ engines
   .option("--require-maxima", "Fail unless Maxima earns a concrete cross-checked result")
   .option("--require-z3", "Fail unless Z3 earns a concrete smt-checked result")
   .option("--require-lean", "Fail unless Lean accepts the pinned proof fixture")
-  .option("--require-sage", "Fail unless pinned Sage evidence exists; currently expected to fail closed until a Sage fixture exists")
+  .option("--require-sage", "Fail unless SageMath earns a constrained CAS cross-check")
   .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
   .action(
@@ -4932,7 +4932,7 @@ function printEngineVerificationReport(
   console.log("");
   console.log("Engine gates:");
   for (const item of report.cases) {
-    const marker = item.status === "passed" ? "PASS" : item.status === "missing" ? "MISS" : item.status === "not-implemented" ? "HOLD" : "FAIL";
+    const marker = item.status === "passed" ? "PASS" : item.status === "missing" ? "MISS" : item.status === "not-required" ? "SKIP" : "FAIL";
     const required = item.required ? " required" : "";
     console.log(`  [${marker}] ${item.displayName}${required}`);
     console.log(`    Trust: ${item.trust}; evidence: ${item.evidenceMinted ? "earned" : "not-earned"}`);

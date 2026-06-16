@@ -80,7 +80,7 @@ A pack is `ready-for-review` only when:
 
 This status is intentionally conservative. A ready pack does not prove every claim; it only says the workspace is coherent enough for external review.
 
-Maxima and SageMath CAS check records can support the narrow `cross-checked` label only when a concrete recorded agreement exists. The default Docker core credibility gate currently requires Maxima and Z3 evidence; SageMath is available as a direct constrained CAS adapter, but `--require-sage` should remain a blocking reviewer gate until a pinned Sage runtime fixture is added.
+Maxima and SageMath CAS check records can support the narrow `cross-checked` label only when a concrete recorded agreement exists. The default Docker core credibility gate currently requires Maxima and Z3 evidence. SageMath is available as a direct constrained CAS adapter and as the heavier no-network `sage-math` Docker gate; use `--require-sage` or `npm run docker:sage` when a reviewer wants SageMath to earn its own recorded CAS agreement.
 
 ## What It Does Not Prove
 

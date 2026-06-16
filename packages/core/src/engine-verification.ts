@@ -14,6 +14,7 @@ import {
 } from "./artifact-record-validation.js";
 import {
   checkSymbolicWithMaximaSync,
+  checkSymbolicWithSageSync,
   getCasBackendStatus,
   type CasBackendCommandRunner,
   type SymbolicCasCheckResult
@@ -31,8 +32,8 @@ export type EngineVerificationCaseId =
   | "maxima-symbolic-cross-check"
   | "z3-smt-check"
   | "lean-proof-fixture"
-  | "sage-optional-readiness";
-export type EngineVerificationCaseStatus = "passed" | "failed" | "missing" | "not-implemented";
+  | "sage-symbolic-cross-check";
+export type EngineVerificationCaseStatus = "passed" | "failed" | "missing" | "not-required";
 export type EngineVerificationStatus = "passed" | "partial" | "failed";
 
 export type EngineVerificationCommandRunner =
@@ -110,15 +111,16 @@ export interface EngineVerificationReport {
   docker: {
     coreCommand: string;
     leanCommand: string;
+    sageCommand: string;
     verifyImageCommand: string;
     networkPolicy: "compose-core-no-network";
   };
   trustBoundary: {
     statusProbeIsNotEvidence: true;
     concreteChecksCanMintEvidence: true;
-    sageIsStatusOnlyUntilConstrainedRecordsExist: true;
+    sageRequiredGateRunsConstrainedCas: true;
     provedRequiresAcceptedLeanRun: true;
-    crossCheckedRequiresMaximaAgreement: true;
+    crossCheckedRequiresIndependentCasAgreement: true;
     smtCheckedRequiresZ3SatOrUnsat: true;
   };
   warnings: string[];
@@ -194,7 +196,7 @@ export async function verifyEngineEvidence(input: EngineVerificationInput = {}):
   cases.push(sageCase(input, timeoutMs, Boolean(requirements.sage)));
 
   const requiredCases = cases.filter((entry) => entry.required);
-  const concreteCases = cases.filter((entry) => entry.id !== "sage-optional-readiness");
+  const concreteCases = cases.filter((entry) => entry.id !== "sage-symbolic-cross-check" || entry.required);
   const requiredPassed = requiredCases.filter((entry) => entry.status === "passed").length;
   const concretePassed = concreteCases.filter((entry) => entry.status === "passed").length;
   const evidenceMinted = cases.filter((entry) => entry.evidenceMinted).length;
@@ -220,15 +222,16 @@ export async function verifyEngineEvidence(input: EngineVerificationInput = {}):
     docker: {
       coreCommand: "npm run docker:engines",
       leanCommand: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean",
+      sageCommand: "docker compose run --rm sage-math npm run cli -- engines verify --require-sage",
       verifyImageCommand: "npm run docker:verify",
       networkPolicy: "compose-core-no-network"
     },
     trustBoundary: {
       statusProbeIsNotEvidence: true,
       concreteChecksCanMintEvidence: true,
-      sageIsStatusOnlyUntilConstrainedRecordsExist: true,
+      sageRequiredGateRunsConstrainedCas: true,
       provedRequiresAcceptedLeanRun: true,
-      crossCheckedRequiresMaximaAgreement: true,
+      crossCheckedRequiresIndependentCasAgreement: true,
       smtCheckedRequiresZ3SatOrUnsat: true
     },
     warnings: reportWarnings(cases)
@@ -272,7 +275,7 @@ export async function createEngineVerificationRunRecord(
     limitations: [
       "This record verifies local engine availability and concrete smoke evidence only.",
       "A passing engine run does not prove future claims; each claim still needs its own replayable receipt or accepted checker artifact.",
-      "SageMath can produce direct constrained CAS check records, but this engine smoke remains provenance-only until a pinned Sage runtime gate is added."
+      "SageMath can produce direct constrained CAS check records; it participates in this engine smoke only when `--require-sage` is requested."
     ],
     warnings: report.warnings
   };
@@ -448,7 +451,7 @@ export function renderEngineVerificationRunMarkdown(record: EngineVerificationRu
     "",
     "- Engine readiness probes do not prove claims.",
     "- Maxima, Z3, and Lean can only mint their scoped trust labels for concrete recorded checks.",
-    "- SageMath direct CAS checks can mint scoped `cross-checked` records; this engine readiness smoke keeps Sage provenance-only until a pinned Sage runtime fixture is added.",
+    "- SageMath direct CAS checks can mint scoped `cross-checked` records when `--require-sage` is requested.",
     "- A future claim must attach its own receipt, proof, SMT, CAS, simulation, source, or review artifact.",
     "",
     "## Limitations",
@@ -624,33 +627,71 @@ function sageCase(
   timeoutMs: number,
   required: boolean
 ): EngineVerificationCase {
-  const status = getCasBackendStatus({
-    maximaCommand: input.maximaCommand,
+  const prompt = input.symbolicPrompt ?? DEFAULT_SYMBOLIC_PROMPT;
+  const result = input.symbolicResult ?? DEFAULT_SYMBOLIC_RESULT;
+  const command = "truth-harness cas check --backend sage --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --fail-on-unverified";
+  const replay = `truth-harness cas check --backend sage --operation ${prompt.operation} --expression ${quote(prompt.expression)} --result ${quote(result)} --fail-on-unverified`;
+
+  if (!required) {
+    const status = getCasBackendStatus({
+      maximaCommand: input.maximaCommand,
+      sageCommand: input.sageCommand,
+      timeoutMs,
+      now: input.now,
+      runner: input.runner
+    });
+    const sage = status.backends.find((backend) => backend.backendId === "sage");
+    const available = sage?.status === "available";
+
+    return {
+      id: "sage-symbolic-cross-check",
+      capabilityId: "sage-cas",
+      displayName: "SageMath symbolic cross-check",
+      lane: "math",
+      required,
+      status: available ? "not-required" : sage?.status === "error" ? "failed" : "missing",
+      trust: "provenance-only",
+      evidenceMinted: false,
+      summary: available
+        ? "SageMath was detected; the constrained Sage gate was skipped because `--require-sage` was not requested."
+        : sage?.error ?? "SageMath was not detected.",
+      command,
+      replay,
+      limitations: sage?.limitations ?? ["SageMath has not been probed."],
+      warnings: available
+        ? ["Run `truth-harness engines verify --require-sage` when a reviewer wants SageMath to earn concrete CAS evidence."]
+        : []
+    };
+  }
+
+  const record = checkSymbolicWithSageSync({
+    prompt,
+    result,
     sageCommand: input.sageCommand,
     timeoutMs,
     now: input.now,
     runner: input.runner
   });
-  const sage = status.backends.find((backend) => backend.backendId === "sage");
-  const available = sage?.status === "available";
+  const passed = record.status === "passed" && record.trust === "cross-checked";
+  const missing = record.status === "solver-unavailable";
 
   return {
-    id: "sage-optional-readiness",
+    id: "sage-symbolic-cross-check",
     capabilityId: "sage-cas",
-    displayName: "SageMath optional readiness probe",
+    displayName: "SageMath symbolic cross-check",
     lane: "math",
     required,
-    status: available ? "not-implemented" : sage?.status === "error" ? "failed" : "missing",
-    trust: "provenance-only",
-    evidenceMinted: false,
-    summary: available
-      ? "SageMath was detected; direct constrained CAS checks are available through `truth-harness cas check --backend sage`, but this readiness smoke has no pinned Sage evidence fixture yet."
-      : sage?.error ?? "SageMath was not detected.",
-    command: "truth-harness cas backends",
-    limitations: sage?.limitations ?? ["SageMath has not been probed."],
-    warnings: [
-      "SageMath does not satisfy the engine readiness gate until a pinned Sage fixture is added and required."
-    ]
+    status: passed ? "passed" : missing ? "missing" : "failed",
+    trust: record.trust,
+    evidenceMinted: passed,
+    summary: passed
+      ? `SageMath independently agreed that ${prompt.expression} simplifies to ${result}.`
+      : record.error ?? `SageMath returned ${record.status}.`,
+    command,
+    replay,
+    evidence: summarizeEvidence(record),
+    limitations: record.limitations,
+    warnings: record.warnings
   };
 }
 
@@ -723,10 +764,6 @@ function reportWarnings(cases: EngineVerificationCase[]): string[] {
   const warnings = cases
     .filter((entry) => entry.required && entry.status !== "passed")
     .map((entry) => `Required engine gate failed: ${entry.displayName} (${entry.status}).`);
-
-  if (cases.some((entry) => entry.id === "sage-optional-readiness" && entry.status === "not-implemented")) {
-    warnings.push("SageMath was detected; direct constrained CAS records are supported, but this engine readiness smoke does not yet require a pinned Sage evidence fixture.");
-  }
 
   return warnings;
 }

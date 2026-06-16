@@ -42,6 +42,20 @@ FROM dev AS verify
 
 RUN npm run check && npm run proof:launch:engines && npm run engines:verify:docker-core
 
+FROM dev AS sage-math
+
+USER root
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends sagemath \
+  && rm -rf /var/lib/apt/lists/*
+
+USER truth
+ENV TRUTH_HARNESS_SAGE=sage
+
+RUN sage --version && npm run demo:sage && npm run engines:verify:sage
+
+CMD ["npm", "run", "engines:verify:sage"]
+
 FROM dev AS lean-proof
 
 USER root

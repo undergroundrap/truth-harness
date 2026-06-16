@@ -410,7 +410,7 @@ function sageCapability(probe: ReturnType<typeof getCasBackendStatus>["backends"
     limitations: probe?.limitations ?? ["SageMath has not been probed."],
     nextStep:
       probe?.status === "available"
-        ? "Run `truth-harness cas check --backend sage` for a scoped symbolic equality; keep engine readiness gated until a pinned Sage fixture exists."
+        ? "Run `truth-harness cas check --backend sage` for a scoped symbolic equality, or `truth-harness engines verify --require-sage` for the reviewer gate."
         : "Install/configure SageMath or use a pinned Docker image before enabling Sage-backed checks."
   };
 }

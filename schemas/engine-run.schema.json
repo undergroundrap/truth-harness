@@ -131,7 +131,7 @@
                   "maxima-symbolic-cross-check",
                   "z3-smt-check",
                   "lean-proof-fixture",
-                  "sage-optional-readiness"
+                  "sage-symbolic-cross-check"
                 ]
               },
               "capabilityId": {
@@ -150,7 +150,7 @@
                 "type": "boolean"
               },
               "status": {
-                "enum": ["passed", "failed", "missing", "not-implemented"]
+                "enum": ["passed", "failed", "missing", "not-required"]
               },
               "trust": {
                 "enum": [

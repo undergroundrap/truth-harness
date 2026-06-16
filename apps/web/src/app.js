@@ -9050,7 +9050,7 @@ function engineEvidenceCaseClass(status) {
       return "passed";
     case "failed":
       return "missing";
-    case "not-implemented":
+    case "not-required":
       return "waiting";
     case "missing":
     default:
@@ -9064,8 +9064,8 @@ function engineEvidenceCaseLabel(status) {
       return "PASS";
     case "failed":
       return "FAIL";
-    case "not-implemented":
-      return "HOLD";
+    case "not-required":
+      return "SKIP";
     case "missing":
     default:
       return "MISS";

@@ -12,7 +12,7 @@ import {
 import { initLocalWorkspace } from "./local-workspace.js";
 
 describe("engine evidence verification", () => {
-  it("passes concrete Maxima, Z3, and Lean gates without treating Sage as trust evidence", async () => {
+  it("passes concrete Maxima, Z3, and Lean gates while skipping optional Sage evidence", async () => {
     const runner: EngineVerificationCommandRunner = (command, args) => {
       if (command === "maxima-test" && args[0] === "--version") {
         return { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" };
@@ -65,7 +65,7 @@ describe("engine evidence verification", () => {
     expect(report.concretePassed).toBe(3);
     expect(report.evidenceMinted).toBe(3);
     expect(report.trustBoundary.statusProbeIsNotEvidence).toBe(true);
-    expect(report.trustBoundary.sageIsStatusOnlyUntilConstrainedRecordsExist).toBe(true);
+    expect(report.trustBoundary.sageRequiredGateRunsConstrainedCas).toBe(true);
 
     expect(report.cases).toContainEqual(
       expect.objectContaining({
@@ -96,13 +96,53 @@ describe("engine evidence verification", () => {
     );
     expect(report.cases).toContainEqual(
       expect.objectContaining({
-        id: "sage-optional-readiness",
-        status: "not-implemented",
+        id: "sage-symbolic-cross-check",
+        status: "not-required",
         trust: "provenance-only",
         evidenceMinted: false
       })
     );
-    expect(report.warnings.join(" ")).toContain("direct constrained CAS records are supported");
+    expect(report.warnings).toEqual([]);
+  });
+
+  it("passes the required Sage gate only after constrained Sage CAS evidence is earned", async () => {
+    const runner: EngineVerificationCommandRunner = (command, args) => {
+      if (command === "sage-test" && args[0] === "--version") {
+        return { status: 0, stdout: "SageMath version 10.6, Release Date: 2025-03-31\n", stderr: "" };
+      }
+      if (command === "sage-test") {
+        return { status: 0, stdout: "TRUTH_HARNESS_SAGE_STATUS:passed:0\n", stderr: "" };
+      }
+
+      return {
+        status: null,
+        stdout: "",
+        stderr: "",
+        error: { name: "Error", message: `missing ${command} ${args.join(" ")}` }
+      };
+    };
+
+    const report = await verifyEngineEvidence({
+      now: new Date("2026-06-15T00:00:00.000Z"),
+      sageCommand: "sage-test",
+      requirements: { sage: true },
+      runner
+    });
+
+    expect(report.status).toBe("passed");
+    expect(report.requiredPassed).toBe(1);
+    expect(report.requiredTotal).toBe(1);
+    expect(report.evidenceMinted).toBe(1);
+    expect(report.cases).toContainEqual(
+      expect.objectContaining({
+        id: "sage-symbolic-cross-check",
+        required: true,
+        status: "passed",
+        trust: "cross-checked",
+        evidenceMinted: true,
+        evidence: expect.objectContaining({ backendId: "sage", trust: "cross-checked" })
+      })
+    );
   });
 
   it("fails closed when required concrete engines cannot earn evidence", async () => {

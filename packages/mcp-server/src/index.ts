@@ -1608,7 +1608,7 @@ export function createTruthHarnessMcpServer(): McpServer {
         requireSage: z
           .boolean()
           .optional()
-          .describe("Mark pinned Sage evidence as required; currently expected to block until a Sage fixture exists."),
+          .describe("Require SageMath to earn a constrained CAS cross-check."),
         requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima and Z3 evidence gates."),
         requireAllConcrete: z.boolean().optional().describe("Require Maxima, Z3, and Lean concrete evidence gates.")
       },
