@@ -119,12 +119,13 @@ First harness: `truth-harness workspace stress <path> --receipts 100 --claims 50
 2. **Readiness dashboard:** surface `engines verify`, workspace health, and launch-recording gates as separate evidence panels.
 3. **Workspace scale fixtures:** expand `workspace stress` beyond the first receipts/claims/routes harness into large mixed-artifact runs, performance budgets, and web API latency checks.
 4. **Claim search and dependency UX:** make tags, lineage, supersession, and linked claims obvious in UI and CLI.
-5. **Report hardening:** make reports printable, cite run ids, show author identity, and export a complete session packet.
-6. **Agent session log:** unified timeline for human actions, agent actions, CLI commands, API calls, receipts, notes, and reports.
-7. **Sage adapter design:** pinned Docker Sage runtime first, then constrained Sage check records for named operations only.
-8. **Lean runtime design:** expand the pinned Lean fixture toward real project templates, Mathlib-aware diagnostics, and proof records that support meaningful `proved` claims.
-9. **Adversarial benchmark suite:** a public false-claims and hallucination-catcher suite before public launch.
-10. **Security rehearsal:** re-run threat model around code-run, MCP, Docker, filesystem writes, and local reports.
+5. **Professor credibility packets:** `workspace credibility-pack` now writes a local reviewer packet with validation status, embedded artifact hashes, engine evidence, open obligations, and rerun commands. Next harden it into a zip/bundle verifier.
+6. **Report hardening:** make reports printable, cite run ids, show author identity, and export a complete session packet.
+7. **Agent session log:** unified timeline for human actions, agent actions, CLI commands, API calls, receipts, notes, and reports.
+8. **Sage adapter design:** pinned Docker Sage runtime first, then constrained Sage check records for named operations only.
+9. **Lean runtime design:** expand the pinned Lean fixture toward real project templates, Mathlib-aware diagnostics, and proof records that support meaningful `proved` claims.
+10. **Adversarial benchmark suite:** a public false-claims and hallucination-catcher suite before public launch.
+11. **Security rehearsal:** re-run threat model around code-run, MCP, Docker, filesystem writes, and local reports.
 
 ## Product Principle
 

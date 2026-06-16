@@ -116,6 +116,7 @@ const JSON_ID_KEYS = [
   "benchmarkRunId",
   "comparisonId",
   "packetId",
+  "packId",
   "projectId",
   "documentId"
 ] as const;

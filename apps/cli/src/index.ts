@@ -14,6 +14,7 @@ import {
   cleanLocalWorkspace,
   createBenchmarkComparisonRecord,
   createClaimChart,
+  createCredibilityPack,
   createClaimLedgerGraph,
   createClaimReviewPacket,
   createDiscoveryPackage,
@@ -133,6 +134,7 @@ import {
   writeBenchmarkRunRecord,
   writeSymbolicCasCheckRecord,
   writeClaimLedgerRecord,
+  writeCredibilityPack,
   writeCodeRun,
   writeEvidenceAudit,
   writeEvidenceAuditReport,
@@ -182,6 +184,8 @@ import {
   type EngineVerificationRunWriteResult,
   type CodeRunPolicyInput,
   type CodeRunWriteResult,
+  type CredibilityPack,
+  type CredibilityPackWriteResult,
   type DiscoveryPackage,
   type DiscoveryPackageWriteResult,
   type EvidenceAudit,
@@ -3014,6 +3018,89 @@ workspace
 
       printWorkspaceReview(review, writeResult);
       if (options.failOnCritical && review.summary.criticalItems > 0) {
+        process.exitCode = 1;
+      }
+    }
+  );
+
+workspace
+  .command("credibility-pack")
+  .description("Write a professor/reviewer packet with validation, engine gates, artifact hashes, and open obligations.")
+  .argument("[path]", "Project root path", ".")
+  .option("--dry-run", "Create the pack in memory without writing JSON/Markdown")
+  .option("--json", "Print the full credibility pack JSON")
+  .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
+  .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
+  .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
+  .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds", parsePositiveInteger, 3000)
+  .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
+  .option("--sage-command <command>", "Override SageMath executable for the status-only probe")
+  .option("--lean-command <command>", "Override Lean executable for the proof fixture")
+  .option("--z3-command <command>", "Override Z3 executable for the SMT check")
+  .option("--smt-source <path>", "Workspace-local SMT-LIB source for the Z3 check", "docs/examples/constraints.smt2")
+  .option("--lean-source <path>", "Workspace-local Lean source for the Lean fixture", "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean")
+  .option("--require-maxima", "Mark Maxima as required for professor readiness")
+  .option("--require-z3", "Mark Z3 as required for professor readiness")
+  .option("--require-lean", "Mark Lean as required for professor readiness")
+  .option("--require-sage", "Mark constrained Sage evidence as required; currently expected to block")
+  .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
+  .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
+  .option("--fail-on-blocked", "Exit non-zero if the pack is blocked")
+  .action(
+    async (
+      path: string,
+      options: {
+        dryRun?: boolean;
+        json?: boolean;
+        maxRoutes?: number;
+        maxClaims?: number;
+        maxSessions?: number;
+        timeoutMs: number;
+        maximaCommand?: string;
+        sageCommand?: string;
+        leanCommand?: string;
+        z3Command?: string;
+        smtSource: string;
+        leanSource: string;
+        requireMaxima?: boolean;
+        requireZ3?: boolean;
+        requireLean?: boolean;
+        requireSage?: boolean;
+        requireDockerCore?: boolean;
+        requireAllConcrete?: boolean;
+        failOnBlocked?: boolean;
+      }
+    ) => {
+      const engineRequirements = {
+        maxima: Boolean(options.requireMaxima || options.requireDockerCore || options.requireAllConcrete),
+        z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete),
+        lean: Boolean(options.requireLean || options.requireAllConcrete),
+        sage: Boolean(options.requireSage)
+      };
+      const input = {
+        rootPath: path,
+        maxRoutes: options.maxRoutes,
+        maxClaims: options.maxClaims,
+        maxSessions: options.maxSessions,
+        timeoutMs: options.timeoutMs,
+        maximaCommand: options.maximaCommand,
+        sageCommand: options.sageCommand,
+        leanCommand: options.leanCommand,
+        z3Command: options.z3Command,
+        smtSourcePath: options.smtSource,
+        leanSourcePath: options.leanSource,
+        engineRequirements
+      };
+      const writeResult = options.dryRun ? undefined : await writeCredibilityPack(input);
+      const pack = writeResult?.pack ?? await createCredibilityPack(input);
+
+      if (options.json) {
+        printJson(writeResult ? { pack, written: true, result: writeResult } : pack);
+      } else {
+        printCredibilityPack(pack, writeResult);
+      }
+
+      if (options.failOnBlocked && pack.status === "blocked") {
         process.exitCode = 1;
       }
     }
@@ -6022,6 +6109,55 @@ function printWorkspaceReview(review: WorkspaceReview, writeResult?: WorkspaceRe
     console.log("");
     console.log("Review boundary:");
     for (const warning of review.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+
+  if (writeResult) {
+    console.log("");
+    console.log(`JSON: ${writeResult.jsonPath}`);
+    console.log(`Markdown: ${writeResult.markdownPath}`);
+  }
+}
+
+function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPackWriteResult): void {
+  console.log("Truth Harness professor credibility pack");
+  console.log(`Pack: ${pack.packId}`);
+  console.log(`Status: ${pack.status}`);
+  console.log(`Professor ready: ${pack.summary.professorReady ? "yes" : "no"}`);
+  console.log(`Project: ${pack.projectId}`);
+  console.log(`Privacy: ${pack.privacy.mode} (network: ${pack.networkAccess})`);
+  console.log(
+    `Validation: ${pack.summary.validationPassed ? "passed" : "failed"} ` +
+      `(${pack.summary.validationErrors} errors, ${pack.summary.validationWarnings} warnings, ${pack.summary.checkedFiles} files)`
+  );
+  console.log(
+    `Engines: ${pack.summary.engineStatus} ` +
+      `(${pack.summary.concreteEngineGates} concrete, ${pack.summary.requiredEngineGates} required, ${pack.summary.engineEvidenceMinted} evidence)`
+  );
+  console.log(`Embedded snapshot: ${pack.embeddedSnapshot.snapshotId} (${pack.summary.snapshotFiles} files)`);
+  console.log(`Review queue: ${pack.summary.reviewItems} items (${pack.summary.criticalReviewItems} critical, ${pack.summary.highReviewItems} high)`);
+
+  console.log("");
+  console.log("Reviewer commands:");
+  console.log(`  ${pack.reviewerCommands.validateWorkspace}`);
+  console.log(`  ${pack.reviewerCommands.verifyEngines}`);
+  console.log(`  ${pack.reviewerCommands.reviewWorkspace}`);
+  console.log(`  ${pack.reviewerCommands.reproducePack}`);
+
+  if (pack.workspaceReview.topItems.length > 0) {
+    console.log("");
+    console.log("Top open work:");
+    for (const item of pack.workspaceReview.topItems.slice(0, 5)) {
+      console.log(`  ${item.priority.toUpperCase()} ${item.kind}: ${item.title}`);
+      console.log(`    ${item.command}`);
+    }
+  }
+
+  if (pack.warnings.length > 0) {
+    console.log("");
+    console.log("Blocking warnings:");
+    for (const warning of pack.warnings) {
       console.log(`  ${warning}`);
     }
   }

@@ -214,6 +214,11 @@ export {
   renderWorkspaceRunNextMarkdown,
   writeWorkspaceRunNextPlan
 } from "./workspace-run-next.js";
+export {
+  createCredibilityPack,
+  renderCredibilityPackMarkdown,
+  writeCredibilityPack
+} from "./credibility-pack.js";
 export type {
   WorkspaceRunNextPlan,
   WorkspaceRunNextStatus,
@@ -575,6 +580,14 @@ export type {
   WorkspaceReviewSummary,
   WorkspaceReviewWriteResult
 } from "./workspace-review.js";
+export type {
+  CreateCredibilityPackInput,
+  CredibilityPack,
+  CredibilityPackCommandSet,
+  CredibilityPackReviewItem,
+  CredibilityPackStatus,
+  CredibilityPackWriteResult
+} from "./credibility-pack.js";
 export type {
   CreateVisualArtifactInput,
   VisualArtifact,

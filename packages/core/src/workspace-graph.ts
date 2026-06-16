@@ -419,6 +419,7 @@ function referenceKindToArtifactKind(kind: string | undefined): WorkspaceValidat
     case "snapshot":
       return "snapshots";
     case "workspace-review":
+    case "credibility-pack":
       return "findings";
     case "review":
       return "reviews";

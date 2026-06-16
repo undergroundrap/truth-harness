@@ -78,11 +78,11 @@ For serious mathlib work, the target environment should be:
 
 Lean should not be bundled into the default image until the project has a pinned proof-lane environment. The current Docker image keeps Maxima and Z3 ready for CAS/SMT work; Lean remains opt-in until the proof project layout is chosen.
 
-The repository includes a tiny pinned fixture at `docs/examples/lean-fixture`:
+The repository includes a small pinned fixture at `docs/examples/lean-fixture`:
 
 - `lean-toolchain`: `leanprover/lean4:v4.12.0`
-- `lakefile.lean`: minimal Lake package metadata
-- `TruthHarnessFixture/Trivial.lean`: accepted smoke theorems
+- `lakefile.lean`: minimal ASCII Lake package metadata
+- `TruthHarnessFixture/Trivial.lean`: accepted smoke theorems for implication, conjunction, equality reflexivity, and basic Nat identities
 
 Run the local script when Lean is installed:
 
@@ -117,7 +117,7 @@ Agents may propose proof repairs, but they should not describe a claim as proved
 The next proof-lane milestones are:
 
 - a pinned Lean/Lake/mathlib Docker profile,
-- fixture promotion from the current tiny Lean project to a mathlib-backed project,
+- fixture promotion from the current small Lean project to a mathlib-backed project,
 - proof project fixtures for regression tests,
 - route obligations that point to specific formal statements,
 - proof attempt history records for rejected attempts,

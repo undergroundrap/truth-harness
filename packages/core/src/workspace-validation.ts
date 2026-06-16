@@ -1180,6 +1180,9 @@ function inferLooseArtifactId(
   if (record?.schemaVersion === "truth-harness.workspace-run-next.v0") {
     return typeof record.planId === "string" ? record.planId : undefined;
   }
+  if (record?.schemaVersion === "truth-harness.credibility-pack.v0") {
+    return typeof record.packId === "string" ? record.packId : undefined;
+  }
 
   return undefined;
 }
