@@ -1183,6 +1183,9 @@ function inferLooseArtifactId(
   if (record?.schemaVersion === "truth-harness.credibility-pack.v0") {
     return typeof record.packId === "string" ? record.packId : undefined;
   }
+  if (record?.schemaVersion === "truth-harness.credibility-bundle.v0") {
+    return typeof record.bundleId === "string" ? record.bundleId : undefined;
+  }
 
   return undefined;
 }

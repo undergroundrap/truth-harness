@@ -11,15 +11,20 @@ truth-harness workspace credibility-pack .
 truth-harness workspace credibility-pack . --require-docker-core
 truth-harness workspace credibility-pack . --require-all-concrete
 truth-harness workspace credibility-pack . --dry-run --json
+truth-harness workspace credibility-bundle .
+truth-harness workspace verify-credibility-bundle . .truth-harness/findings/<date>-<bundle-id>-credibility-bundle
 ```
 
 The command writes paired JSON and Markdown into `.truth-harness/findings/` unless `--dry-run` is used.
+The bundle command writes a plain directory under `.truth-harness/findings/` with a manifest, copied canonical artifacts, the generated credibility pack, and a README.
 
 When using the npm wrapper, pass command flags after an extra separator so npm does not consume them:
 
 ```bash
 npm run cli -- workspace credibility-pack . -- --require-docker-core
 npm run cli -- workspace credibility-pack . -- --dry-run --json
+npm run cli -- workspace credibility-bundle . -- --require-docker-core
+npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/<date>-<bundle-id>-credibility-bundle
 ```
 
 ## What The Pack Contains
@@ -30,6 +35,32 @@ npm run cli -- workspace credibility-pack . -- --dry-run --json
 - Workspace review queue with top open proof/check obligations.
 - Exact reviewer commands for validation, engine checks, review, Docker core engines, and the Lean proof fixture.
 - Blocking warnings when validation fails, required engines are missing, concrete engine smoke gates are incomplete, or critical review items remain open.
+
+## Portable Reviewer Bundle
+
+Use `truth-harness workspace credibility-bundle .` when you want to hand the evidence to someone else instead of asking them to trust your UI or your chat history.
+
+The bundle is intentionally a directory, not a black-box archive:
+
+- `manifest.json` records `bundleId`, `packId`, source paths, copied paths, byte counts, SHA-256 hashes, reviewer commands, and trust-boundary warnings.
+- `credibility-pack.json` and `credibility-pack.md` preserve the generated professor credibility pack.
+- `artifacts/` contains copied canonical Truth Harness workspace files from the embedded snapshot.
+- Prior `*-credibility-bundle/` folders are skipped so repeated exports do not recursively copy old bundles into new bundles.
+
+Verify it with:
+
+```bash
+truth-harness workspace verify-credibility-bundle . .truth-harness/findings/<date>-<bundle-id>-credibility-bundle
+truth-harness workspace verify-credibility-bundle <bundle-id>
+truth-harness workspace verify-credibility-bundle <bundle-path> --fail-on-bundle-change --fail-on-source-drift
+```
+
+Bundle verification reports two separate facts:
+
+- **Bundle integrity:** copied files still match the manifest hashes.
+- **Source workspace drift:** the current workspace files still match the versions copied into the bundle.
+
+A bundle can remain valid even after the live workspace changes. That is useful for peer review because the exported evidence can be frozen while active research continues.
 
 ## What Counts As Professor Ready
 
@@ -50,3 +81,4 @@ This status is intentionally conservative. A ready pack does not prove every cla
 - It does not replace Lean, Z3, Maxima, SageMath, peer review, or human domain expertise.
 
 The pack is a reviewer doorway: it gives serious people one local artifact to inspect before deciding whether the underlying receipts, proof-checks, SMT/CAS records, routes, and claims deserve deeper attention.
+The reviewer bundle is the handoff container for that doorway: it makes the packet and its cited local artifacts portable, hash-checkable, and inspectable without relying on the browser.

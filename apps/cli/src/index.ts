@@ -129,11 +129,13 @@ import {
   validateWorkspaceArtifacts,
   verifyVaultEntry,
   verifyEngineEvidence,
+  verifyCredibilityBundle,
   verifyWorkspaceSnapshot,
   writeBenchmarkComparisonRecord,
   writeBenchmarkRunRecord,
   writeSymbolicCasCheckRecord,
   writeClaimLedgerRecord,
+  writeCredibilityBundle,
   writeCredibilityPack,
   writeCodeRun,
   writeEvidenceAudit,
@@ -184,6 +186,8 @@ import {
   type EngineVerificationRunWriteResult,
   type CodeRunPolicyInput,
   type CodeRunWriteResult,
+  type CredibilityBundleVerification,
+  type CredibilityBundleWriteResult,
   type CredibilityPack,
   type CredibilityPackWriteResult,
   type DiscoveryPackage,
@@ -3101,6 +3105,130 @@ workspace
       }
 
       if (options.failOnBlocked && pack.status === "blocked") {
+        process.exitCode = 1;
+      }
+    }
+  );
+
+workspace
+  .command("credibility-bundle")
+  .description("Write a portable reviewer bundle directory with copied artifacts, hashes, and a verification manifest.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full bundle manifest JSON")
+  .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
+  .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
+  .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
+  .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds", parsePositiveInteger, 3000)
+  .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
+  .option("--sage-command <command>", "Override SageMath executable for the status-only probe")
+  .option("--lean-command <command>", "Override Lean executable for the proof fixture")
+  .option("--z3-command <command>", "Override Z3 executable for the SMT check")
+  .option("--smt-source <path>", "Workspace-local SMT-LIB source for the Z3 check", "docs/examples/constraints.smt2")
+  .option("--lean-source <path>", "Workspace-local Lean source for the Lean fixture", "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean")
+  .option("--require-maxima", "Mark Maxima as required for professor readiness")
+  .option("--require-z3", "Mark Z3 as required for professor readiness")
+  .option("--require-lean", "Mark Lean as required for professor readiness")
+  .option("--require-sage", "Mark constrained Sage evidence as required; currently expected to block")
+  .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
+  .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
+  .option("--fail-on-blocked", "Exit non-zero if the underlying credibility pack is blocked")
+  .action(
+    async (
+      path: string,
+      options: {
+        json?: boolean;
+        maxRoutes?: number;
+        maxClaims?: number;
+        maxSessions?: number;
+        timeoutMs: number;
+        maximaCommand?: string;
+        sageCommand?: string;
+        leanCommand?: string;
+        z3Command?: string;
+        smtSource: string;
+        leanSource: string;
+        requireMaxima?: boolean;
+        requireZ3?: boolean;
+        requireLean?: boolean;
+        requireSage?: boolean;
+        requireDockerCore?: boolean;
+        requireAllConcrete?: boolean;
+        failOnBlocked?: boolean;
+      }
+    ) => {
+      const engineRequirements = {
+        maxima: Boolean(options.requireMaxima || options.requireDockerCore || options.requireAllConcrete),
+        z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete),
+        lean: Boolean(options.requireLean || options.requireAllConcrete),
+        sage: Boolean(options.requireSage)
+      };
+      const result = await writeCredibilityBundle({
+        rootPath: path,
+        maxRoutes: options.maxRoutes,
+        maxClaims: options.maxClaims,
+        maxSessions: options.maxSessions,
+        timeoutMs: options.timeoutMs,
+        maximaCommand: options.maximaCommand,
+        sageCommand: options.sageCommand,
+        leanCommand: options.leanCommand,
+        z3Command: options.z3Command,
+        smtSourcePath: options.smtSource,
+        leanSourcePath: options.leanSource,
+        engineRequirements
+      });
+
+      if (options.json) {
+        printJson({ manifest: result.manifest, written: true, result });
+      } else {
+        printCredibilityBundle(result);
+      }
+
+      if (options.failOnBlocked && result.manifest.packStatus === "blocked") {
+        process.exitCode = 1;
+      }
+    }
+  );
+
+workspace
+  .command("verify-credibility-bundle")
+  .description("Verify a portable reviewer bundle manifest, copied artifact hashes, and source workspace drift.")
+  .argument("[workspaceOrBundle]", "Bundle ref, or project root path when a second bundle argument is provided")
+  .argument("[bundle]", "Bundle id, bundle directory, or workspace-local bundle path")
+  .option("--workspace <path>", "Project root path when only a bundle ref is passed", ".")
+  .option("--json", "Print the full verification JSON")
+  .option("--fail-on-bundle-change", "Exit non-zero if bundle files are missing or changed")
+  .option("--fail-on-source-drift", "Exit non-zero if the current workspace no longer matches bundled source hashes")
+  .action(
+    async (
+      workspaceOrBundle: string | undefined,
+      bundle: string | undefined,
+      options: {
+        workspace: string;
+        json?: boolean;
+        failOnBundleChange?: boolean;
+        failOnSourceDrift?: boolean;
+      }
+    ) => {
+      if (!workspaceOrBundle) {
+        throw new Error("Credibility bundle ref is required.");
+      }
+      const workspacePath = bundle ? workspaceOrBundle : options.workspace;
+      const bundleRef = bundle ?? workspaceOrBundle;
+      const verification = await verifyCredibilityBundle({
+        rootPath: workspacePath,
+        bundleRef
+      });
+
+      if (options.json) {
+        printJson(verification);
+      } else {
+        printCredibilityBundleVerification(verification);
+      }
+
+      if (options.failOnBundleChange && !verification.passed) {
+        process.exitCode = 1;
+      }
+      if (options.failOnSourceDrift && !verification.sourceMatchesWorkspace) {
         process.exitCode = 1;
       }
     }
@@ -6166,6 +6294,84 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
     console.log("");
     console.log(`JSON: ${writeResult.jsonPath}`);
     console.log(`Markdown: ${writeResult.markdownPath}`);
+  }
+}
+
+function printCredibilityBundle(result: CredibilityBundleWriteResult): void {
+  const manifest = result.manifest;
+  console.log("Truth Harness portable reviewer bundle");
+  console.log(`Bundle: ${manifest.bundleId}`);
+  console.log(`Pack: ${manifest.packId}`);
+  console.log(`Status: ${manifest.packStatus}`);
+  console.log(`Professor ready: ${manifest.packSummary.professorReady ? "yes" : "no"}`);
+  console.log(`Project: ${manifest.projectId}`);
+  console.log(`Privacy: ${manifest.privacy.mode} (network: ${manifest.networkAccess})`);
+  console.log(
+    `Files: ${manifest.summary.totalFiles} total ` +
+      `(${manifest.summary.artifactFiles} artifacts, ${manifest.summary.generatedFiles} generated, ${manifest.summary.totalBytes} bytes)`
+  );
+  if (manifest.summary.skippedBundleFiles > 0) {
+    console.log(`Skipped prior bundle files: ${manifest.summary.skippedBundleFiles}`);
+  }
+
+  console.log("");
+  console.log("Reviewer commands:");
+  console.log(`  ${manifest.reviewerCommands.verifyBundle}`);
+  console.log(`  ${manifest.reviewerCommands.validateWorkspace}`);
+  console.log(`  ${manifest.reviewerCommands.verifyEngines}`);
+  console.log(`  ${manifest.reviewerCommands.reviewWorkspace}`);
+
+  if (manifest.warnings.length > 0) {
+    console.log("");
+    console.log("Blocking warnings from pack:");
+    for (const warning of manifest.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+
+  console.log("");
+  console.log(`Bundle directory: ${result.bundleDir}`);
+  console.log(`Manifest: ${result.manifestPath}`);
+  console.log(`Pack JSON: ${result.packJsonPath}`);
+  console.log(`Pack Markdown: ${result.packMarkdownPath}`);
+  console.log(`README: ${result.readmePath}`);
+}
+
+function printCredibilityBundleVerification(verification: CredibilityBundleVerification): void {
+  console.log("Truth Harness credibility bundle verification");
+  console.log(`Bundle: ${verification.bundleId}`);
+  console.log(`Pack: ${verification.packId}`);
+  console.log(`Bundle integrity: ${verification.passed ? "passed" : "failed"}`);
+  console.log(`Source workspace: ${verification.sourceMatchesWorkspace ? "matches bundle" : "drifted"}`);
+  console.log(`Checked bundle files: ${verification.checkedBundleFiles}`);
+  console.log(`Checked source files: ${verification.checkedSourceFiles}`);
+
+  if (verification.missingBundleFiles.length > 0 || verification.changedBundleFiles.length > 0) {
+    console.log("");
+    console.log("Bundle problems:");
+    for (const item of verification.missingBundleFiles.slice(0, 8)) {
+      console.log(`  missing ${item.path}`);
+    }
+    for (const item of verification.changedBundleFiles.slice(0, 8)) {
+      console.log(`  changed ${item.path}`);
+    }
+  }
+
+  if (verification.missingSourceFiles.length > 0 || verification.changedSourceFiles.length > 0) {
+    console.log("");
+    console.log("Source workspace drift:");
+    for (const item of verification.missingSourceFiles.slice(0, 8)) {
+      console.log(`  missing ${item.path}`);
+    }
+    for (const item of verification.changedSourceFiles.slice(0, 8)) {
+      console.log(`  changed ${item.path}`);
+    }
+  }
+
+  console.log("");
+  console.log(`Bundle path: ${verification.bundlePath}`);
+  for (const warning of verification.warnings) {
+    console.log(`  ${warning}`);
   }
 }
 
