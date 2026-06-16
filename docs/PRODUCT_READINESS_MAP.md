@@ -29,7 +29,7 @@ The product should stay private-prototype until the readiness gates below move f
 | Teaching/reporting | Yellow | Teaching packets and HTML reports exist. Needs professor/student workflow testing. |
 | Storage scale | Yellow | Local workspace artifacts work; catalog indexing, same-directory atomic writes, append-only artifact-write event logs, local web `/api/events`, and locks for session/corpus read-modify-write paths are in place. Large-workspace performance, timeline UX polish, and longer multi-agent stress tests still need proof. |
 | Formal proof | Yellow | Lean proof-check records exist when Lean is installed. A separate Docker `lean-proof` target pins Lean and checks a small fixture; broad Mathlib/project automation is still future work. |
-| Sage/Wolfram-like breadth | Red | Sage is only a capability/status direction today, not a constrained trust-minting adapter. |
+| Sage/Wolfram-like breadth | Yellow/red | Constrained SageMath CAS check records now exist for scoped symbolic equality via `cas check --backend sage`, but Sage is not yet pinned in the Docker core credibility path and is not a general Sage execution surface. |
 | Biology/medicine/patents | Red | Evidence organization patterns exist. No automated medical, patent, or discovery claims should be made. |
 
 ## What The Demo Proves
@@ -122,7 +122,7 @@ First harness: `truth-harness workspace stress <path> --receipts 100 --claims 50
 5. **Professor credibility packets:** `workspace credibility-pack` now writes a local reviewer packet with validation status, embedded artifact hashes, engine evidence, open obligations, and rerun commands. `workspace credibility-bundle` now copies the cited canonical artifacts into a portable directory and `workspace verify-credibility-bundle` checks bundle hashes separately from source workspace drift. Next harden it with optional signing and compressed export.
 6. **Report hardening:** make reports printable, cite run ids, show author identity, and export a complete session packet.
 7. **Agent session log:** unified timeline for human actions, agent actions, CLI commands, API calls, receipts, notes, and reports.
-8. **Sage adapter design:** pinned Docker Sage runtime first, then constrained Sage check records for named operations only.
+8. **Pinned Sage credibility gate:** direct constrained Sage check records exist; next is a pinned Docker Sage runtime plus a small reviewer fixture before `--require-sage` should pass.
 9. **Lean runtime design:** expand the pinned Lean fixture toward real project templates, Mathlib-aware diagnostics, and proof records that support meaningful `proved` claims.
 10. **Adversarial benchmark suite:** a public false-claims and hallucination-catcher suite before public launch.
 11. **Security rehearsal:** re-run threat model around code-run, MCP, Docker, filesystem writes, and local reports.

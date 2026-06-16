@@ -127,7 +127,7 @@ By default, MCP `truth_harness_code_run` is still disabled. To expose it to an a
 - The measured Docker provider attests the current container network namespace, not mathematical truth, code correctness, medical/scientific validity, or safety.
 - Loopback remains available inside the container. The measurement means no non-loopback interface/default route was observed.
 - Docker does not make AI-generated code safe. Keep executable allowlists narrow, prefer `--require-sandbox` for risky workflows, and review any command before running it.
-- Maxima and Z3 availability probes are not evidence by themselves. `cross-checked` still requires a concrete Maxima agreement run over the recorded expression/result pair, and `smt-checked` still requires a concrete Z3 `sat` or `unsat` solver run over the recorded artifact. `truth-harness engines verify` exists to make that distinction machine-readable.
+- Maxima, SageMath, and Z3 availability probes are not evidence by themselves. `cross-checked` still requires a concrete CAS agreement run over the recorded expression/result pair, and `smt-checked` still requires a concrete Z3 `sat` or `unsat` solver run over the recorded artifact. `truth-harness engines verify` exists to make that distinction machine-readable.
 
 ## Reset Container State
 

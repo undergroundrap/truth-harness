@@ -131,7 +131,7 @@
                   "maxima-symbolic-cross-check",
                   "z3-smt-check",
                   "lean-proof-fixture",
-                  "sage-status-only"
+                  "sage-optional-readiness"
                 ]
               },
               "capabilityId": {

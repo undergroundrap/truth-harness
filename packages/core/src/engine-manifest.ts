@@ -403,14 +403,14 @@ function sageCapability(probe: ReturnType<typeof getCasBackendStatus>["backends"
     version: probe?.version,
     localOnly: true,
     networkAccess: "none",
-    strongestTrust: "provenance-only",
-    canMintTrust: false,
+    strongestTrust: "cross-checked",
+    canMintTrust: probe?.status === "available",
     statusProbeMintedEvidence: false,
-    trustBoundary: "Current SageMath integration is an availability probe only; Sage output cannot mint trust until constrained check records exist.",
+    trustBoundary: "Can support cross-checked only after a concrete generated constrained SageMath equality check record; it never mints proved.",
     limitations: probe?.limitations ?? ["SageMath has not been probed."],
     nextStep:
       probe?.status === "available"
-        ? "Implement constrained SageMath check records for specific operations before routing claims through Sage."
+        ? "Run `truth-harness cas check --backend sage` for a scoped symbolic equality; keep engine readiness gated until a pinned Sage fixture exists."
         : "Install/configure SageMath or use a pinned Docker image before enabling Sage-backed checks."
   };
 }

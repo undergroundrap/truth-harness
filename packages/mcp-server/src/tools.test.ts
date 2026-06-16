@@ -333,7 +333,7 @@ describe("MCP tool handlers", () => {
     expect(result.backends[0]?.role).toBe("cas");
     expect(result.backends[0]?.statusProbeMintedCheck).toBe(false);
     expect(result.backends[1]?.backendId).toBe("sage");
-    expect(result.backends[1]?.adapter).toBe("local-sagemath-status-probe");
+    expect(result.backends[1]?.adapter).toBe("local-sagemath-symbolic-subprocess");
     expect(result.backends[1]?.canCheckSymbolic).toBe(false);
     expect(result.trustBoundary.statusProbeIsNotCheck).toBe(true);
     expect(result.trustBoundary.crossCheckedRequiresIndependentRun).toBe(true);

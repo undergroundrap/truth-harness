@@ -620,7 +620,7 @@ export function createTruthHarnessMcpServer(): McpServer {
     {
       title: "Check Symbolic CAS Result",
       description:
-        "Run a local Maxima symbolic equality check for a concrete expression/result pair and optionally write a truth-harness.cas-check.v0 record. A passing CAS check can support `cross-checked`, never `proved`.",
+        "Run a local Maxima or SageMath symbolic equality check for a concrete expression/result pair and optionally write a truth-harness.cas-check.v0 record. A passing CAS check can support `cross-checked`, never `proved`.",
       inputSchema: {
         operation: z
           .enum(["simplify", "factor", "expand", "differentiate", "integrate"])
@@ -628,6 +628,10 @@ export function createTruthHarnessMcpServer(): McpServer {
         expression: z.string().min(1).describe("Original symbolic expression to check."),
         result: z.string().min(1).describe("Expected symbolic result to compare against."),
         variable: z.string().min(1).optional().describe("Symbolic variable. Defaults to x."),
+        backend: z
+          .enum(["maxima", "sage"])
+          .optional()
+          .describe("Independent CAS backend to use. Defaults to maxima."),
         workspacePath: z
           .string()
           .optional()
@@ -636,6 +640,10 @@ export function createTruthHarnessMcpServer(): McpServer {
           .string()
           .optional()
           .describe("Maxima executable path or command. Defaults to TRUTH_HARNESS_MAXIMA or maxima."),
+        sageCommand: z
+          .string()
+          .optional()
+          .describe("SageMath executable path or command. Defaults to TRUTH_HARNESS_SAGE or sage."),
         timeoutMs: z
           .number()
           .int()
@@ -650,7 +658,7 @@ export function createTruthHarnessMcpServer(): McpServer {
         failOnUnverified: z
           .boolean()
           .optional()
-          .describe("When true, mark the tool call as an error unless Maxima independently agrees.")
+          .describe("When true, mark the tool call as an error unless the selected CAS independently agrees.")
       },
       annotations: {
         readOnlyHint: false,
@@ -1583,7 +1591,7 @@ export function createTruthHarnessMcpServer(): McpServer {
           .optional()
           .describe("Concrete engine check timeout in milliseconds."),
         maximaCommand: z.string().optional().describe("Override Maxima executable for the symbolic cross-check."),
-        sageCommand: z.string().optional().describe("Override SageMath executable for the status-only probe."),
+        sageCommand: z.string().optional().describe("Override SageMath executable for the optional CAS readiness probe."),
         leanCommand: z.string().optional().describe("Override Lean executable for the proof fixture."),
         z3Command: z.string().optional().describe("Override Z3 executable for the SMT check."),
         smtSourcePath: z
@@ -1597,7 +1605,10 @@ export function createTruthHarnessMcpServer(): McpServer {
         requireMaxima: z.boolean().optional().describe("Mark Maxima as required for reviewer readiness."),
         requireZ3: z.boolean().optional().describe("Mark Z3 as required for reviewer readiness."),
         requireLean: z.boolean().optional().describe("Mark Lean as required for reviewer readiness."),
-        requireSage: z.boolean().optional().describe("Mark constrained Sage evidence as required; currently expected to block."),
+        requireSage: z
+          .boolean()
+          .optional()
+          .describe("Mark pinned Sage evidence as required; currently expected to block until a Sage fixture exists."),
         requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima and Z3 evidence gates."),
         requireAllConcrete: z.boolean().optional().describe("Require Maxima, Z3, and Lean concrete evidence gates.")
       },

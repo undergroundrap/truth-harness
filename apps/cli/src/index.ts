@@ -172,6 +172,7 @@ import {
   type ClaimLedgerStatus,
   type ClaimLedgerWriteResult,
   type CasBackendStatusReport,
+  type SymbolicCasBackendId,
   type SymbolicCasCheckRecord,
   type SymbolicCasCheckSummary,
   type SymbolicCasCheckWriteResult,
@@ -3038,7 +3039,7 @@ workspace
   .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
   .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
-  .option("--sage-command <command>", "Override SageMath executable for the status-only probe")
+  .option("--sage-command <command>", "Override SageMath executable for the optional CAS readiness probe")
   .option("--lean-command <command>", "Override Lean executable for the proof fixture")
   .option("--z3-command <command>", "Override Z3 executable for the SMT check")
   .option("--smt-source <path>", "Workspace-local SMT-LIB source for the Z3 check", "docs/examples/constraints.smt2")
@@ -3046,7 +3047,7 @@ workspace
   .option("--require-maxima", "Mark Maxima as required for professor readiness")
   .option("--require-z3", "Mark Z3 as required for professor readiness")
   .option("--require-lean", "Mark Lean as required for professor readiness")
-  .option("--require-sage", "Mark constrained Sage evidence as required; currently expected to block")
+  .option("--require-sage", "Mark pinned Sage evidence as required; currently expected to block until a Sage fixture exists")
   .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
   .option("--fail-on-blocked", "Exit non-zero if the pack is blocked")
@@ -3120,7 +3121,7 @@ workspace
   .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
   .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
-  .option("--sage-command <command>", "Override SageMath executable for the status-only probe")
+  .option("--sage-command <command>", "Override SageMath executable for the optional CAS readiness probe")
   .option("--lean-command <command>", "Override Lean executable for the proof fixture")
   .option("--z3-command <command>", "Override Z3 executable for the SMT check")
   .option("--smt-source <path>", "Workspace-local SMT-LIB source for the Z3 check", "docs/examples/constraints.smt2")
@@ -3128,7 +3129,7 @@ workspace
   .option("--require-maxima", "Mark Maxima as required for professor readiness")
   .option("--require-z3", "Mark Z3 as required for professor readiness")
   .option("--require-lean", "Mark Lean as required for professor readiness")
-  .option("--require-sage", "Mark constrained Sage evidence as required; currently expected to block")
+  .option("--require-sage", "Mark pinned Sage evidence as required; currently expected to block until a Sage fixture exists")
   .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
   .option("--fail-on-blocked", "Exit non-zero if the underlying credibility pack is blocked")
@@ -3477,16 +3478,18 @@ cas
 
 cas
   .command("check")
-  .description("Run an independent Maxima symbolic equality check and produce a CAS check record.")
+  .description("Run an independent local CAS symbolic equality check and produce a CAS check record.")
   .requiredOption("--operation <operation>", "simplify, factor, expand, differentiate, or integrate", parseSympyOperation)
   .requiredOption("--expression <expression>", "Original symbolic expression to check")
   .requiredOption("--result <expression>", "Expected symbolic result to compare against")
   .option("--variable <name>", "Symbolic variable for differentiation/integration", "x")
+  .option("--backend <backend>", "CAS backend: maxima or sage", parseSymbolicCasBackend, "maxima")
   .option("--json", "Print the full CAS check JSON")
   .option("--out <path>", "Write the full CAS check JSON to a file")
   .option("--write", "Write JSON and Markdown into .truth-harness/cas")
   .option("--workspace <path>", "Project root path", ".")
   .option("--maxima-command <path>", "Maxima executable path or command. Defaults to TRUTH_HARNESS_MAXIMA or maxima.")
+  .option("--sage-command <path>", "SageMath executable path or command. Defaults to TRUTH_HARNESS_SAGE or sage.")
   .option("--timeout-ms <ms>", "Backend probe and check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--fail-on-unverified", "Exit non-zero unless the independent CAS check passes")
   .action(
@@ -3495,11 +3498,13 @@ cas
       expression: string;
       result: string;
       variable: string;
+      backend: SymbolicCasBackendId;
       json?: boolean;
       out?: string;
       write?: boolean;
       workspace: string;
       maximaCommand?: string;
+      sageCommand?: string;
       timeoutMs: number;
       failOnUnverified?: boolean;
     }) => {
@@ -3513,7 +3518,9 @@ cas
             rootPath: options.workspace,
             prompt,
             result: options.result,
+            backend: options.backend,
             maximaCommand: options.maximaCommand,
+            sageCommand: options.sageCommand,
             timeoutMs: options.timeoutMs
           })
         : undefined;
@@ -3522,7 +3529,9 @@ cas
         createSymbolicCasCheckRecord({
           prompt,
           result: options.result,
+          backend: options.backend,
           maximaCommand: options.maximaCommand,
+          sageCommand: options.sageCommand,
           timeoutMs: options.timeoutMs
         });
 
@@ -3914,7 +3923,7 @@ engines
   .option("--workspace <path>", "Local workspace root for source files and --write output", ".")
   .option("--timeout-ms <ms>", "Concrete check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
-  .option("--sage-command <command>", "Override SageMath executable for the status-only probe")
+  .option("--sage-command <command>", "Override SageMath executable for the optional CAS readiness probe")
   .option("--lean-command <command>", "Override Lean executable for the proof fixture")
   .option("--z3-command <command>", "Override Z3 executable for the SMT check")
   .option("--smt-source <path>", "Workspace-local SMT-LIB source for the Z3 check", "docs/examples/constraints.smt2")
@@ -3923,7 +3932,7 @@ engines
   .option("--require-maxima", "Fail unless Maxima earns a concrete cross-checked result")
   .option("--require-z3", "Fail unless Z3 earns a concrete smt-checked result")
   .option("--require-lean", "Fail unless Lean accepts the pinned proof fixture")
-  .option("--require-sage", "Fail unless constrained Sage evidence exists; currently expected to fail closed")
+  .option("--require-sage", "Fail unless pinned Sage evidence exists; currently expected to fail closed until a Sage fixture exists")
   .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
   .action(
@@ -4128,6 +4137,14 @@ function parseSympyOperation(value: string): SympyOperation {
   throw new Error(
     `Unsupported symbolic operation ${JSON.stringify(value)}. Use simplify, factor, expand, differentiate, or integrate.`
   );
+}
+
+function parseSymbolicCasBackend(value: string): SymbolicCasBackendId {
+  if (value === "maxima" || value === "sage") {
+    return value;
+  }
+
+  throw new Error(`Unsupported CAS backend ${JSON.stringify(value)}. Use maxima or sage.`);
 }
 
 type DemoTrustBucket = "verified" | "refuted" | "unverified";
@@ -4938,7 +4955,7 @@ function printEngineVerificationReport(
   console.log("Trust boundary:");
   console.log("  Status probes do not mint evidence.");
   console.log("  Concrete Maxima, Z3, and Lean runs can mint only their scoped labels.");
-  console.log("  Sage is status-only until constrained Sage check records exist.");
+  console.log("  Sage direct CAS checks are constrained; engine readiness keeps Sage optional until a pinned fixture exists.");
   console.log("  Every claim still needs a replayable receipt, proof, SMT, CAS, or source artifact.");
 
   if (report.warnings.length > 0) {

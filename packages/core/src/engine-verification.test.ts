@@ -96,13 +96,13 @@ describe("engine evidence verification", () => {
     );
     expect(report.cases).toContainEqual(
       expect.objectContaining({
-        id: "sage-status-only",
+        id: "sage-optional-readiness",
         status: "not-implemented",
         trust: "provenance-only",
         evidenceMinted: false
       })
     );
-    expect(report.warnings.join(" ")).toContain("SageMath was detected but remains status-only");
+    expect(report.warnings.join(" ")).toContain("direct constrained CAS records are supported");
   });
 
   it("fails closed when required concrete engines cannot earn evidence", async () => {

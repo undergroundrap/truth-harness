@@ -128,6 +128,7 @@ import {
   type ClaimLedgerStatus,
   type ClaimLedgerWriteResult,
   type CasBackendStatusReport,
+  type SymbolicCasBackendId,
   type SymbolicCasCheckRecord,
   type SymbolicCasCheckSummary,
   type SymbolicCasCheckWriteResult,
@@ -384,8 +385,10 @@ export interface TruthHarnessCasCheckInput {
   expression: string;
   result: string;
   variable?: string;
+  backend?: SymbolicCasBackendId;
   workspacePath?: string;
   maximaCommand?: string;
+  sageCommand?: string;
   timeoutMs?: number;
   write?: boolean;
   failOnUnverified?: boolean;
@@ -1373,7 +1376,9 @@ export async function handleTruthHarnessCasCheck(input: TruthHarnessCasCheckInpu
         rootPath: resolveWorkspaceRoot(input.workspacePath),
         prompt,
         result: input.result,
+        backend: input.backend,
         maximaCommand: input.maximaCommand,
+        sageCommand: input.sageCommand,
         timeoutMs: input.timeoutMs
       })
     : undefined;
@@ -1382,7 +1387,9 @@ export async function handleTruthHarnessCasCheck(input: TruthHarnessCasCheckInpu
     createSymbolicCasCheckRecord({
       prompt,
       result: input.result,
+      backend: input.backend,
       maximaCommand: input.maximaCommand,
+      sageCommand: input.sageCommand,
       timeoutMs: input.timeoutMs
     });
   const error = input.failOnUnverified === true && record.trust !== "cross-checked";

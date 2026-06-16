@@ -267,7 +267,9 @@ export {
   inspectLeanProject
 } from "./lean-project.js";
 export {
+  checkSymbolicWithCasSync,
   checkSymbolicWithMaximaSync,
+  checkSymbolicWithSageSync,
   createSymbolicCasCheckRecord,
   getCasBackendStatus,
   listSymbolicCasChecks,
@@ -732,6 +734,7 @@ export type {
   CasBackendStatusOptions,
   CasBackendStatusReport,
   SymbolicCasCheckInput,
+  SymbolicCasBackendId,
   SymbolicCasCheckRecord,
   SymbolicCasCheckRecordInput,
   SymbolicCasCheckResult,

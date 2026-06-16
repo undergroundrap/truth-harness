@@ -74,7 +74,7 @@ describe("engine manifest", () => {
         id: "sage-cas",
         kind: "adapter",
         status: "missing",
-        strongestTrust: "provenance-only",
+        strongestTrust: "cross-checked",
         canMintTrust: false,
         determinism: expect.objectContaining({
           determinismClass: "replay-deterministic",

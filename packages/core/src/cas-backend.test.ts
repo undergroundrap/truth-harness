@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   checkSymbolicWithMaximaSync,
+  checkSymbolicWithSageSync,
   getCasBackendStatus,
   listSymbolicCasChecks,
   writeSymbolicCasCheckRecord,
@@ -72,14 +73,14 @@ describe("CAS backend status", () => {
     });
     expect(report.backends[1]).toMatchObject({
       backendId: "sage",
-      adapter: "local-sagemath-status-probe",
+      adapter: "local-sagemath-symbolic-subprocess",
       status: "missing",
       canCheckSymbolic: false,
       statusProbeMintedCheck: false
     });
   });
 
-  it("reports SageMath availability as status-only until constrained checks exist", () => {
+  it("reports SageMath availability as a constrained symbolic CAS backend", () => {
     const runner: CasBackendCommandRunner = (command) => {
       if (command === "sage-test") {
         return {
@@ -111,12 +112,14 @@ describe("CAS backend status", () => {
     expect(report.backends[1]).toMatchObject({
       backendId: "sage",
       displayName: "SageMath CAS",
+      adapter: "local-sagemath-symbolic-subprocess",
       status: "available",
       version: "SageMath version 10.6, Release Date: 2025-03-31",
-      canCheckSymbolic: false,
+      canCheckSymbolic: true,
       statusProbeMintedCheck: false
     });
-    expect(report.warnings.join(" ")).toContain("status-only and cannot mint trust");
+    expect(report.warnings.join(" ")).toContain("SageMath CAS");
+    expect(report.warnings.join(" ")).toContain("does not prove, refute, or cross-check any claim");
   });
 
   it("skips Lisp loader chatter when reporting Maxima-Sage availability", () => {
@@ -378,6 +381,167 @@ describe("Maxima symbolic cross-check", () => {
     expect(record.status).toBe("error");
     expect(record.trust).toBe("unverified");
     expect(record.error).toContain("outside the supported Maxima-safe subset");
+  });
+
+  it("rejects unsafe function identifiers before sending input to Maxima", () => {
+    const calls: string[][] = [];
+    const runner: CasBackendCommandRunner = (_command, args) => {
+      calls.push(args);
+      return {
+        status: 0,
+        stdout: "Maxima 5.47.0\n",
+        stderr: ""
+      };
+    };
+
+    const record = checkSymbolicWithMaximaSync({
+      prompt: {
+        operation: "simplify",
+        expression: "quit()",
+        variable: "x"
+      },
+      result: "0",
+      runner
+    });
+
+    expect(calls).toEqual([["--version"]]);
+    expect(record.status).toBe("error");
+    expect(record.trust).toBe("unverified");
+    expect(record.error).toContain("not allowed");
+  });
+});
+
+describe("SageMath symbolic cross-check", () => {
+  it("mints cross-checked only after a constrained independent SageMath agreement", () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+    const runner: CasBackendCommandRunner = (command, args) => {
+      calls.push({ command, args });
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "SageMath version 10.6, Release Date: 2025-03-31\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "TRUTH_HARNESS_SAGE_STATUS:passed:0\n",
+        stderr: ""
+      };
+    };
+
+    const record = checkSymbolicWithSageSync({
+      prompt: {
+        operation: "simplify",
+        expression: "sin(x)^2 + cos(x)^2",
+        variable: "x"
+      },
+      result: "1",
+      sageCommand: "sage-test",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      runner
+    });
+
+    expect(calls[0]).toEqual({ command: "sage-test", args: ["--version"] });
+    expect(calls[1]?.command).toBe("sage-test");
+    expect(calls[1]?.args[0]).toBe("-c");
+    expect(calls[1]?.args[1]).toContain("simplify_full");
+    expect(calls[1]?.args[1]).toContain("TRUTH_HARNESS_SAGE_STATUS:");
+    expect(record.backend).toMatchObject({
+      id: "sage",
+      displayName: "SageMath CAS",
+      adapter: "local-sagemath-symbolic-subprocess"
+    });
+    expect(record.status).toBe("passed");
+    expect(record.trust).toBe("cross-checked");
+    expect(record.proofCheckerBacked).toBe(false);
+    expect(record.residual).toBe("0");
+  });
+
+  it("writes and validates SageMath CAS check records", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
+    const runner: CasBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "SageMath version 10.6, Release Date: 2025-03-31\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "TRUTH_HARNESS_SAGE_STATUS:passed:0\n",
+        stderr: ""
+      };
+    };
+
+    const result = await writeSymbolicCasCheckRecord({
+      rootPath: root,
+      prompt: {
+        operation: "simplify",
+        expression: "sin(x)^2 + cos(x)^2",
+        variable: "x"
+      },
+      result: "1",
+      backend: "sage",
+      sageCommand: "sage-test",
+      now: new Date("2026-06-12T00:05:00.000Z"),
+      runner
+    });
+    const list = await listSymbolicCasChecks(root);
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(result.record.trust).toBe("cross-checked");
+    expect(result.record.backend.id).toBe("sage");
+    expect(result.record.replay).toContain("--backend sage");
+    expect(result.record.replay).toContain("--sage-command sage-test");
+    expect(result.markdown).toContain("SageMath CAS agreement");
+    expect(list[0]).toMatchObject({
+      checkId: result.record.checkId,
+      backendId: "sage",
+      status: "passed",
+      trust: "cross-checked"
+    });
+    expect(validation.passed).toBe(true);
+  });
+
+  it("does not send unsafe expressions to SageMath", () => {
+    const calls: string[][] = [];
+    const runner: CasBackendCommandRunner = (_command, args) => {
+      calls.push(args);
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "SageMath version 10.6, Release Date: 2025-03-31\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "TRUTH_HARNESS_SAGE_STATUS:passed:0\n",
+        stderr: ""
+      };
+    };
+
+    const record = checkSymbolicWithSageSync({
+      prompt: {
+        operation: "simplify",
+        expression: "open()",
+        variable: "x"
+      },
+      result: "0",
+      sageCommand: "sage-test",
+      runner
+    });
+
+    expect(calls).toEqual([["--version"]]);
+    expect(record.status).toBe("error");
+    expect(record.trust).toBe("unverified");
+    expect(record.error).toContain("not allowed");
   });
 });
 

@@ -38,13 +38,13 @@
       "required": ["id", "displayName", "adapter", "role", "acceptedProofChecker", "command", "args"],
       "properties": {
         "id": {
-          "const": "maxima"
+          "enum": ["maxima", "sage"]
         },
         "displayName": {
-          "const": "Maxima CAS"
+          "enum": ["Maxima CAS", "SageMath CAS"]
         },
         "adapter": {
-          "const": "local-maxima-symbolic-subprocess"
+          "enum": ["local-maxima-symbolic-subprocess", "local-sagemath-symbolic-subprocess"]
         },
         "role": {
           "const": "cas"

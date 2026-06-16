@@ -20,6 +20,7 @@ import type { TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export type CasBackendId = "maxima" | "sage";
+export type SymbolicCasBackendId = CasBackendId;
 export type CasBackendStatus = "available" | "missing" | "error";
 export type SymbolicCasCheckStatus = "passed" | "failed" | "solver-unavailable" | "error";
 
@@ -88,7 +89,9 @@ export interface CasBackendStatusOptions {
 export interface SymbolicCasCheckInput {
   prompt: SymbolicPrompt;
   result: string;
+  backend?: SymbolicCasBackendId;
   maximaCommand?: string;
+  sageCommand?: string;
   timeoutMs?: number;
   now?: Date;
   runner?: CasBackendCommandRunner;
@@ -103,9 +106,9 @@ export interface SymbolicCasCheckResult {
   checkId: string;
   createdAt: string;
   backend: {
-    id: "maxima";
-    displayName: "Maxima CAS";
-    adapter: "local-maxima-symbolic-subprocess";
+    id: SymbolicCasBackendId;
+    displayName: "Maxima CAS" | "SageMath CAS";
+    adapter: "local-maxima-symbolic-subprocess" | "local-sagemath-symbolic-subprocess";
     role: "cas";
     acceptedProofChecker: false;
     command: string;
@@ -156,13 +159,33 @@ export interface SymbolicCasCheckSummary {
   variable: string;
   status: SymbolicCasCheckStatus;
   trust: TrustLabel;
-  backendId: "maxima";
+  backendId: SymbolicCasBackendId;
   backendVersion?: string;
   warnings: string[];
 }
 
 const DEFAULT_TIMEOUT_MS = 3000;
 const MAXIMA_MARKER = "TRUTH_HARNESS_MAXIMA_STATUS:";
+const SAGE_MARKER = "TRUTH_HARNESS_SAGE_STATUS:";
+const ALLOWED_SYMBOLIC_IDENTIFIERS = new Set([
+  "abs",
+  "acos",
+  "asin",
+  "atan",
+  "cos",
+  "cosh",
+  "E",
+  "e",
+  "exp",
+  "ln",
+  "log",
+  "pi",
+  "sin",
+  "sinh",
+  "sqrt",
+  "tan",
+  "tanh"
+]);
 
 export function getCasBackendStatus(options: CasBackendStatusOptions = {}): CasBackendStatusReport {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -211,7 +234,7 @@ export function checkSymbolicWithMaximaSync(input: SymbolicCasCheckInput): Symbo
   });
   const base = {
     schemaVersion: "truth-harness.symbolic-cas-check.v0" as const,
-    checkId: `cas_${hashCasCheck(input.prompt, input.result).slice(0, 16)}`,
+    checkId: `cas_${hashCasCheck(input.prompt, input.result, "maxima").slice(0, 16)}`,
     createdAt,
     backend: {
       id: "maxima" as const,
@@ -335,8 +358,147 @@ export function checkSymbolicWithMaximaSync(input: SymbolicCasCheckInput): Symbo
   };
 }
 
+export function checkSymbolicWithSageSync(input: SymbolicCasCheckInput): SymbolicCasCheckResult {
+  const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const runner = input.runner ?? runCommand;
+  const sageCommand = resolveSageCommand(input.sageCommand);
+  const createdAt = (input.now ?? new Date()).toISOString();
+  const backendProbe = probeSageBackend({
+    command: sageCommand,
+    timeoutMs,
+    runner
+  });
+  const base = {
+    schemaVersion: "truth-harness.symbolic-cas-check.v0" as const,
+    checkId: `cas_${hashCasCheck(input.prompt, input.result, "sage").slice(0, 16)}`,
+    createdAt,
+    backend: {
+      id: "sage" as const,
+      displayName: "SageMath CAS" as const,
+      adapter: "local-sagemath-symbolic-subprocess" as const,
+      role: "cas" as const,
+      acceptedProofChecker: false as const,
+      command: sageCommand,
+      args: [] as string[],
+      ...(backendProbe.version ? { version: backendProbe.version } : {}),
+      ...(backendProbe.exitCode !== undefined ? { exitCode: backendProbe.exitCode } : {})
+    },
+    operation: input.prompt.operation,
+    expression: input.prompt.expression,
+    result: input.result,
+    variable: input.prompt.variable,
+    proofCheckerBacked: false as const,
+    localOnly: true as const,
+    networkAccess: "none" as const
+  };
+
+  if (backendProbe.status !== "available") {
+    return {
+      ...base,
+      status: "solver-unavailable",
+      trust: "unverified",
+      error: backendProbe.error ?? backendProbe.stderr ?? "SageMath CAS is unavailable.",
+      limitations: [
+        "Independent CAS cross-check did not run because SageMath was unavailable.",
+        "Unavailable CAS status must not upgrade a symbolic result to `cross-checked`."
+      ],
+      warnings: ["Install SageMath or configure TRUTH_HARNESS_SAGE to enable constrained local SageMath checks."]
+    };
+  }
+
+  let script: string;
+  try {
+    script = buildSageCheckScript(input.prompt, input.result);
+  } catch (error) {
+    return {
+      ...base,
+      status: "error",
+      trust: "unverified",
+      error: error instanceof Error ? error.message : "Could not build SageMath symbolic check script.",
+      limitations: [
+        "The independent CAS check was not run because the symbolic expression could not be translated safely.",
+        "Translation failure must not upgrade a symbolic result to `cross-checked`."
+      ],
+      warnings: ["Keep SageMath CAS expressions inside the supported safe expression subset."]
+    };
+  }
+
+  const args = ["-c", script];
+  const output = runner(sageCommand, args, timeoutMs);
+  const marker = parseSageMarker(output.stdout);
+  const stderr = trimOptional(output.stderr);
+  const stdout = trimOptional(output.stdout);
+  const backend = {
+    ...base.backend,
+    args,
+    exitCode: output.status,
+    ...(backendProbe.version ? { version: backendProbe.version } : {})
+  };
+
+  if (output.error) {
+    return {
+      ...base,
+      backend,
+      status: "error",
+      trust: "unverified",
+      stderr,
+      error: output.error.message,
+      limitations: [
+        "The independent SageMath process failed before producing a check result.",
+        "CAS execution failure must not upgrade a symbolic result to `cross-checked`."
+      ],
+      warnings: [output.error.message]
+    };
+  }
+
+  if (output.status !== 0 || !marker) {
+    return {
+      ...base,
+      backend,
+      status: "error",
+      trust: "unverified",
+      stdout,
+      stderr,
+      error: marker ? undefined : "SageMath did not emit a recognizable Truth Harness check marker.",
+      limitations: [
+        "The independent SageMath run did not produce a parseable agreement result.",
+        "Unparseable CAS output must not upgrade a symbolic result to `cross-checked`."
+      ],
+      warnings: [stderr ?? "SageMath output could not be parsed."].filter(Boolean)
+    };
+  }
+
+  return {
+    ...base,
+    backend,
+    status: marker.status,
+    trust: marker.status === "passed" ? "cross-checked" : "unverified",
+    residual: marker.residual,
+    stdout,
+    stderr,
+    limitations:
+      marker.status === "passed"
+        ? [
+            "Cross-checked means SymPy and SageMath agreed on a generated, constrained symbolic equality check.",
+            "CAS agreement is not a proof-checker-backed proof of an arbitrary informal truth-harness."
+          ]
+        : [
+            "SageMath did not agree with the SymPy result under the generated equality check.",
+            "A CAS disagreement leaves the symbolic claim unverified until a human or stronger checker resolves it."
+          ],
+    warnings:
+      marker.status === "passed"
+        ? []
+        : ["Independent SageMath disagreement: do not rely on the symbolic result without follow-up."]
+  };
+}
+
+export function checkSymbolicWithCasSync(input: SymbolicCasCheckInput): SymbolicCasCheckResult {
+  return input.backend === "sage" ? checkSymbolicWithSageSync(input) : checkSymbolicWithMaximaSync(input);
+}
+
 export function createSymbolicCasCheckRecord(input: SymbolicCasCheckRecordInput): SymbolicCasCheckRecord {
-  const check = checkSymbolicWithMaximaSync(input);
+  const check = checkSymbolicWithCasSync(input);
   const replay = input.replayCommand ?? casCheckReplayCommand(input, false);
 
   return {
@@ -353,7 +515,9 @@ export async function writeSymbolicCasCheckRecord(
   const record = createSymbolicCasCheckRecord({
     prompt: input.prompt,
     result: input.result,
+    backend: input.backend,
     maximaCommand: input.maximaCommand,
+    sageCommand: input.sageCommand,
     timeoutMs: input.timeoutMs,
     now: input.now,
     runner: input.runner,
@@ -425,9 +589,14 @@ export function parseSymbolicCasCheckRecord(raw: string, sourcePath = "CAS check
 
   const backend = expectRecord(parsed, "backend", "$.backend", issues);
   if (backend) {
-    expectConst(backend, "id", "maxima", "$.backend.id", issues);
-    expectConst(backend, "displayName", "Maxima CAS", "$.backend.displayName", issues);
-    expectConst(backend, "adapter", "local-maxima-symbolic-subprocess", "$.backend.adapter", issues);
+    const backendId = expectOneOf(backend, "id", ["maxima", "sage"], "$.backend.id", issues);
+    if (backendId === "sage") {
+      expectConst(backend, "displayName", "SageMath CAS", "$.backend.displayName", issues);
+      expectConst(backend, "adapter", "local-sagemath-symbolic-subprocess", "$.backend.adapter", issues);
+    } else {
+      expectConst(backend, "displayName", "Maxima CAS", "$.backend.displayName", issues);
+      expectConst(backend, "adapter", "local-maxima-symbolic-subprocess", "$.backend.adapter", issues);
+    }
     expectConst(backend, "role", "cas", "$.backend.role", issues);
     expectConst(backend, "acceptedProofChecker", false, "$.backend.acceptedProofChecker", issues);
     expectNonEmptyString(backend, "command", "$.backend.command", issues);
@@ -531,7 +700,7 @@ export function renderSymbolicCasCheckMarkdown(record: SymbolicCasCheckRecord): 
     "",
     "## Boundary",
     "",
-    "A Maxima CAS agreement supports a narrow `cross-checked` symbolic equality. It is not a proof-checker-backed proof of an arbitrary formal math claim, scientific claim, medical claim, safety claim, regulatory claim, or patent claim."
+    `A ${record.backend.displayName} agreement supports a narrow \`cross-checked\` symbolic equality. It is not a proof-checker-backed proof of an arbitrary formal math claim, scientific claim, medical claim, safety claim, regulatory claim, or patent claim.`
   );
 
   return `${lines.join("\n")}\n`;
@@ -602,7 +771,7 @@ function probeSageBackend(args: {
   return {
     backendId: "sage",
     displayName: "SageMath CAS",
-    adapter: "local-sagemath-status-probe",
+    adapter: "local-sagemath-symbolic-subprocess",
     role: "cas",
     acceptedProofChecker: false,
     status,
@@ -615,28 +784,23 @@ function probeSageBackend(args: {
     stdout: trimOptional(result.stdout),
     stderr: trimOptional(result.stderr),
     error: errorText,
-    canCheckSymbolic: false,
+    canCheckSymbolic: status === "available",
     statusProbeMintedCheck: false,
     limitations: [
-      "This SageMath adapter is currently a local availability probe only; it does not run arbitrary Sage code or mint trust.",
-      "Future SageMath checks must use constrained scripts, recorded inputs/outputs, timeouts, replay commands, and conservative trust labels.",
+      "The SageMath adapter can run generated symbolic equality scripts only for a restricted expression subset.",
+      "It never runs arbitrary user-authored Sage code and never upgrades a result to `proved`.",
       "SageMath output is CAS evidence, not proof-checker-backed proof."
     ]
   };
 }
 
 function casBackendStatusWarnings(backends: CasBackendProbe[]): string[] {
-  if (backends.some((backend) => backend.backendId === "maxima" && backend.canCheckSymbolic)) {
+  const checkCapable = backends.filter((backend) => backend.canCheckSymbolic);
+  if (checkCapable.length > 0) {
+    const names = checkCapable.map((backend) => backend.displayName).join(", ");
     return [
-      "Detected a Maxima CAS backend that can run concrete symbolic agreement checks, but this status report does not prove, refute, or cross-check any claim.",
+      `Detected independent CAS backend(s) that can run concrete symbolic agreement checks: ${names}. This status report does not prove, refute, or cross-check any claim.`,
       "Detected CAS availability must not upgrade trust labels without a concrete recorded check."
-    ];
-  }
-
-  if (backends.some((backend) => backend.backendId === "sage" && backend.status === "available")) {
-    return [
-      "Detected SageMath locally, but the current Sage adapter is status-only and cannot mint trust.",
-      "Truth Harness must not label SageMath output `cross-checked` until a constrained Sage check record is implemented and replayable."
     ];
   }
 
@@ -646,9 +810,9 @@ function casBackendStatusWarnings(backends: CasBackendProbe[]): string[] {
 }
 
 function buildMaximaCheckScript(prompt: SymbolicPrompt, result: string): string {
-  const expression = toMaximaExpression(prompt.expression);
-  const resultExpression = toMaximaExpression(result);
   const variable = toMaximaIdentifier(prompt.variable);
+  const expression = toMaximaExpression(prompt.expression, variable);
+  const resultExpression = toMaximaExpression(result, variable);
   const [left, right] = comparisonExpressions(prompt.operation, expression, resultExpression, variable);
 
   return [
@@ -657,6 +821,26 @@ function buildMaximaCheckScript(prompt: SymbolicPrompt, result: string): string 
     'status: if is(residual = 0) then "passed" else "failed"$',
     `printf(true, "${MAXIMA_MARKER}~a:~a~%", status, residual)$`,
     "quit();"
+  ].join("\n");
+}
+
+function buildSageCheckScript(prompt: SymbolicPrompt, result: string): string {
+  const variable = toSageIdentifier(prompt.variable);
+  const expression = toSageExpression(prompt.expression, variable);
+  const resultExpression = toSageExpression(result, variable);
+  const [left, right] = comparisonExpressions(prompt.operation, expression, resultExpression, variable);
+
+  return [
+    `var(${JSON.stringify(variable)})`,
+    `left = (${left})`,
+    `right = (${right})`,
+    "residual = (left - right).simplify_full()",
+    "try:",
+    "    residual = residual.trig_simplify().simplify_full()",
+    "except Exception:",
+    "    residual = residual.simplify_full()",
+    'status = "passed" if bool(residual == 0) else "failed"',
+    `print(${JSON.stringify(SAGE_MARKER)} + status + ":" + str(residual))`
   ].join("\n");
 }
 
@@ -677,14 +861,30 @@ function comparisonExpressions(
   return [expression, result];
 }
 
-function toMaximaExpression(source: string): string {
+function toMaximaExpression(source: string, variable: string): string {
   const converted = source
     .replaceAll("**", "^")
     .replace(/\bpi\b/gu, "%pi")
     .replace(/\bE\b/gu, "%e");
 
-  if (converted.includes("__") || !/^[A-Za-z0-9_%+\-*/^().,\s]+$/u.test(converted)) {
+  assertSafeSymbolicExpression(source, variable, "Maxima");
+
+  if (!/^[A-Za-z0-9_%+\-*/^().,\s]+$/u.test(converted)) {
     throw new Error(`Expression is outside the supported Maxima-safe subset: ${source}`);
+  }
+
+  return converted;
+}
+
+function toSageExpression(source: string, variable: string): string {
+  const converted = source
+    .replaceAll("**", "^")
+    .replace(/\bE\b/gu, "e");
+
+  assertSafeSymbolicExpression(source, variable, "SageMath");
+
+  if (!/^[A-Za-z0-9_+\-*/^().,\s]+$/u.test(converted)) {
+    throw new Error(`Expression is outside the supported SageMath-safe subset: ${source}`);
   }
 
   return converted;
@@ -698,14 +898,43 @@ function toMaximaIdentifier(source: string): string {
   return source;
 }
 
+function toSageIdentifier(source: string): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(source)) {
+    throw new Error(`Invalid symbolic variable for SageMath: ${source}`);
+  }
+
+  return source;
+}
+
+function assertSafeSymbolicExpression(source: string, variable: string, backendName: string): void {
+  if (source.includes("__") || /[^A-Za-z0-9_+\-*/^().,\s]/u.test(source)) {
+    throw new Error(`Expression is outside the supported ${backendName}-safe subset: ${source}`);
+  }
+
+  for (const match of source.matchAll(/[A-Za-z_][A-Za-z0-9_]*/gu)) {
+    const identifier = match[0];
+    if (identifier !== variable && !ALLOWED_SYMBOLIC_IDENTIFIERS.has(identifier)) {
+      throw new Error(`Identifier ${JSON.stringify(identifier)} is not allowed in the ${backendName}-safe subset.`);
+    }
+  }
+}
+
 function parseMaximaMarker(stdout: string): { status: "passed" | "failed"; residual: string } | undefined {
+  return parseCasMarker(stdout, MAXIMA_MARKER);
+}
+
+function parseSageMarker(stdout: string): { status: "passed" | "failed"; residual: string } | undefined {
+  return parseCasMarker(stdout, SAGE_MARKER);
+}
+
+function parseCasMarker(stdout: string, marker: string): { status: "passed" | "failed"; residual: string } | undefined {
   for (const line of stdout.split(/\r?\n/u)) {
-    const markerStart = line.indexOf(MAXIMA_MARKER);
+    const markerStart = line.indexOf(marker);
     if (markerStart < 0) {
       continue;
     }
 
-    const payload = line.slice(markerStart + MAXIMA_MARKER.length).trim();
+    const payload = line.slice(markerStart + marker.length).trim();
     const match = /^(passed|failed):(.*)$/u.exec(payload);
     if (match) {
       return {
@@ -765,7 +994,7 @@ function summarizeSymbolicCasCheck(
     variable: record.variable,
     status: record.status,
     trust: record.trust,
-    backendId: "maxima",
+    backendId: record.backend.id,
     backendVersion: record.backend.version,
     warnings: record.warnings
   };
@@ -782,7 +1011,9 @@ function casCheckReplayCommand(input: SymbolicCasCheckInput, write: boolean): st
     `--expression ${quoteCommandArg(input.prompt.expression)}`,
     `--result ${quoteCommandArg(input.result)}`,
     `--variable ${quoteCommandArg(input.prompt.variable)}`,
+    ...(input.backend ? [`--backend ${quoteCommandArg(input.backend)}`] : []),
     ...(input.maximaCommand ? [`--maxima-command ${quoteCommandArg(input.maximaCommand)}`] : []),
+    ...(input.sageCommand ? [`--sage-command ${quoteCommandArg(input.sageCommand)}`] : []),
     ...(input.timeoutMs ? [`--timeout-ms ${String(input.timeoutMs)}`] : []),
     ...(write ? ["--write"] : []),
     "--json"
@@ -831,8 +1062,9 @@ function isLaunchFailure(error: { name?: string; message: string }): boolean {
   return /\b(?:ENOENT|EPERM|EACCES|ETIMEDOUT)\b/u.test(`${error.name ?? ""} ${error.message}`);
 }
 
-function hashCasCheck(prompt: SymbolicPrompt, result: string): string {
+function hashCasCheck(prompt: SymbolicPrompt, result: string, backend: SymbolicCasBackendId): string {
   const payload = JSON.stringify({
+    backend,
     operation: prompt.operation,
     expression: prompt.expression,
     variable: prompt.variable,
