@@ -78,6 +78,27 @@ describe("workspace run-next", () => {
     expect(plan.execution.summary).toContain("Unsupported shell metacharacter");
   });
 
+  it("blocks Docker reviewer gates with an explicit manual boundary", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    const review = minimalReview({
+      rootPath: root,
+      command: "npm run docker:engines",
+      claimId: "claim_fake"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+
+    expect(plan.status).toBe("blocked");
+    expect(plan.execution.kind).toBe("manual-container-gate");
+    expect(plan.execution.summary).toContain("does not execute npm, Docker, or shell commands");
+  });
+
   it("executes engine verification actions without shell execution", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });

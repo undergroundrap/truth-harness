@@ -460,6 +460,11 @@ async function executeWorkspaceRunNextItem(
   rootPath: string,
   item: WorkspaceReviewItem
 ): Promise<WorkspaceRunNextPlan["execution"]> {
+  const manualBoundary = manualContainerGateBoundary(item.command);
+  if (manualBoundary) {
+    return manualBoundary;
+  }
+
   const parsed = parseLocalTruthHarnessCommand(item.command);
   if (!parsed.ok) {
     return {
@@ -673,6 +678,27 @@ async function executeWorkspaceRunNextItem(
     command: item.command,
     summary: "This Truth Harness command is not yet supported by workspace run-next execution."
   };
+}
+
+function manualContainerGateBoundary(command: string): WorkspaceRunNextPlan["execution"] | undefined {
+  const normalized = command.trim();
+  if (/^npm\s+run\s+docker:[\w:-]+(?:\s|$)/u.test(normalized)) {
+    return {
+      status: "blocked",
+      kind: "manual-container-gate",
+      command,
+      summary: "This reviewer action starts a Docker-backed npm script. Workspace run-next does not execute npm, Docker, or shell commands; run it manually or through an approved container workflow."
+    };
+  }
+  if (/^docker\s+compose\s+run(?:\s|$)/u.test(normalized)) {
+    return {
+      status: "blocked",
+      kind: "manual-container-gate",
+      command,
+      summary: "This reviewer action starts a Docker compose service. Workspace run-next does not execute Docker or shell commands; run it manually after approving the container boundary."
+    };
+  }
+  return undefined;
 }
 
 function blockedPlaceholderCommand(command: string, kind: string): WorkspaceRunNextPlan["execution"] {
