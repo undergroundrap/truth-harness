@@ -370,6 +370,48 @@ describe("web UI action contracts", () => {
     expect(styles).toContain("overflow-wrap: anywhere;");
   });
 
+  it("keeps the desktop research workspace roomy enough for long visual and proof work", async () => {
+    const [html, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+    const workSurfaceStyles = [...styles.matchAll(/\.work-surface \{[\s\S]*?\r?\n\}/gu)]
+      .map((match) => match[0])
+      .find((block) => block.includes("container-type: inline-size;"));
+    const plotSurfaceStyles = styles.match(/body\[data-surface="plot"\] \.work-surface,[\s\S]*?body\[data-surface="graph"\] \.work-surface \{[\s\S]*?\r?\n\}/u)?.[0];
+    const plotLayoutStyles = styles.match(/\.plot-layout \{[\s\S]*?\r?\n\}/u)?.[0];
+    const plotCanvasStyles = styles.match(/\.plot-canvas \{[\s\S]*?\r?\n\}/u)?.[0];
+    const plotSvgStyles = styles.match(/\.plot-canvas svg \{[\s\S]*?\r?\n\}/u)?.[0];
+    const mindMapSvgStyles = styles.match(/\.plot-canvas\[data-visual-mode="mind-map"\] svg \{[\s\S]*?\r?\n\}/u)?.[0];
+    const taskDockStyles = [...styles.matchAll(/\.task-dock \{[\s\S]*?\r?\n\}/gu)]
+      .map((match) => match[0])
+      .find((block) => block.includes("width: min(1120px, calc(100% - 36px));"));
+
+    expect(html).toContain('class="work-surface"');
+    expect(html).toContain('class="plot-layout"');
+    expect(html).toContain('id="plot-canvas"');
+    expect(html).toContain('class="task-dock"');
+    expect(workSurfaceStyles).toBeTruthy();
+    expect(workSurfaceStyles).toContain("min-height: clamp(1040px, 124vh, 1520px);");
+    expect(workSurfaceStyles).toContain("overflow: visible;");
+    expect(plotSurfaceStyles).toBeTruthy();
+    expect(plotSurfaceStyles).toContain("min-height: clamp(1120px, 136vh, 1680px);");
+    expect(plotLayoutStyles).toBeTruthy();
+    expect(plotLayoutStyles).toContain("grid-template-columns: minmax(720px, 1fr) minmax(260px, 300px);");
+    expect(plotLayoutStyles).toContain("overflow: hidden;");
+    expect(plotCanvasStyles).toBeTruthy();
+    expect(plotCanvasStyles).toContain("overflow-x: auto;");
+    expect(plotCanvasStyles).toContain("overflow-y: auto;");
+    expect(plotCanvasStyles).toContain("overscroll-behavior: contain;");
+    expect(plotSvgStyles).toBeTruthy();
+    expect(plotSvgStyles).toContain("min-height: clamp(420px, 56vh, 720px);");
+    expect(mindMapSvgStyles).toBeTruthy();
+    expect(mindMapSvgStyles).toContain("min-height: clamp(560px, 66vh, 880px);");
+    expect(taskDockStyles).toBeTruthy();
+    expect(taskDockStyles).toContain("width: min(1120px, calc(100% - 36px));");
+    expect(taskDockStyles).toContain("flex: 0 0 auto;");
+  });
+
   it("shows the browser-safe workspace run-next dry run on the Run tab", async () => {
     const [html, source, styles] = await Promise.all([
       readFile(appHtmlPath, "utf8"),
