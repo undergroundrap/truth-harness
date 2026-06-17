@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/report-draft.schema.json",
+  "title": "Truth Harness Report Draft",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "reportId",
+    "createdAt",
+    "localOnly",
+    "networkAccess",
+    "externalCalls",
+    "source",
+    "title",
+    "bundleVerificationIds",
+    "markdownSha256",
+    "markdownByteLength",
+    "warnings",
+    "paths"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.report-draft.v0"
+    },
+    "reportId": {
+      "type": "string",
+      "pattern": "^report_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "externalCalls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string"
+    },
+    "receiptRunId": {
+      "type": "string"
+    },
+    "claimId": {
+      "type": "string"
+    },
+    "trust": {
+      "type": "string"
+    },
+    "bundleVerificationIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^cver_[a-f0-9]{16}$"
+      }
+    },
+    "markdownSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "markdownByteLength": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "paths": {
+      "type": "object",
+      "required": ["json", "markdown"],
+      "properties": {
+        "json": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/"
+        },
+        "markdown": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

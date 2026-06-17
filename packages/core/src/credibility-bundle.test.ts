@@ -109,21 +109,27 @@ describe("credibility reviewer bundle", () => {
       expect.objectContaining({
         kind: "findings",
         artifactId: result.manifest.bundleId,
-        schemaVersion: "truth-harness.credibility-bundle.v0"
+        schemaVersion: "truth-harness.credibility-bundle.v0",
+        expectedSchemaVersion: "truth-harness.credibility-bundle.v0",
+        issueCodes: []
       })
     );
     expect(validation.artifacts).toContainEqual(
       expect.objectContaining({
         kind: "findings",
         artifactId: reportDraft.report.reportId,
-        schemaVersion: "truth-harness.report-draft.v0"
+        schemaVersion: "truth-harness.report-draft.v0",
+        expectedSchemaVersion: "truth-harness.report-draft.v0",
+        issueCodes: []
       })
     );
     expect(validation.artifacts).toContainEqual(
       expect.objectContaining({
         kind: "findings",
         artifactId: writtenVerification.verification.verificationId,
-        schemaVersion: "truth-harness.credibility-bundle-verification.v0"
+        schemaVersion: "truth-harness.credibility-bundle-verification.v0",
+        expectedSchemaVersion: "truth-harness.credibility-bundle-verification.v0",
+        issueCodes: []
       })
     );
 
@@ -140,6 +146,37 @@ describe("credibility reviewer bundle", () => {
       expect.objectContaining({
         kind: "findings",
         artifactId: writtenVerification.verification.verificationId
+      })
+    );
+
+    const originalManifest = await readFile(result.manifestPath, "utf8");
+    const tamperedManifest = JSON.parse(originalManifest) as Record<string, unknown>;
+    tamperedManifest.localOnly = false;
+    await writeFile(result.manifestPath, `${JSON.stringify(tamperedManifest, null, 2)}\n`, "utf8");
+    const tamperedManifestValidation = await validateWorkspaceArtifacts({ rootPath: root });
+    expect(tamperedManifestValidation.passed).toBe(false);
+    expect(tamperedManifestValidation.artifacts).toContainEqual(
+      expect.objectContaining({
+        kind: "findings",
+        artifactId: result.manifest.bundleId,
+        schemaVersion: "truth-harness.credibility-bundle.v0",
+        issueCodes: expect.arrayContaining(["invalid-artifact-schema"])
+      })
+    );
+
+    await writeFile(result.manifestPath, originalManifest, "utf8");
+    const originalVerification = await readFile(writtenVerification.jsonPath, "utf8");
+    const tamperedVerification = JSON.parse(originalVerification) as Record<string, unknown>;
+    tamperedVerification.checkedBundleFiles = -1;
+    await writeFile(writtenVerification.jsonPath, `${JSON.stringify(tamperedVerification, null, 2)}\n`, "utf8");
+    const tamperedVerificationValidation = await validateWorkspaceArtifacts({ rootPath: root });
+    expect(tamperedVerificationValidation.passed).toBe(false);
+    expect(tamperedVerificationValidation.artifacts).toContainEqual(
+      expect.objectContaining({
+        kind: "findings",
+        artifactId: writtenVerification.verification.verificationId,
+        schemaVersion: "truth-harness.credibility-bundle-verification.v0",
+        issueCodes: expect.arrayContaining(["invalid-artifact-schema"])
       })
     );
   });

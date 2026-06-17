@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/credibility-bundle-verification.schema.json",
+  "title": "Truth Harness Credibility Bundle Verification",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "verificationId",
+    "bundleId",
+    "packId",
+    "verifiedAt",
+    "bundlePath",
+    "passed",
+    "sourceMatchesWorkspace",
+    "checkedBundleFiles",
+    "checkedSourceFiles",
+    "missingBundleFiles",
+    "changedBundleFiles",
+    "missingSourceFiles",
+    "changedSourceFiles",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.credibility-bundle-verification.v0"
+    },
+    "verificationId": {
+      "type": "string",
+      "pattern": "^cver_[a-f0-9]{16}$"
+    },
+    "bundleId": {
+      "type": "string",
+      "pattern": "^cbun_[a-f0-9]{16}$"
+    },
+    "packId": {
+      "type": "string",
+      "pattern": "^cred_[a-f0-9]{16}$"
+    },
+    "verifiedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "bundlePath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "passed": {
+      "type": "boolean"
+    },
+    "sourceMatchesWorkspace": {
+      "type": "boolean"
+    },
+    "checkedBundleFiles": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "checkedSourceFiles": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "missingBundleFiles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "changedBundleFiles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "missingSourceFiles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "changedSourceFiles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expectedBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "actualBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "expectedSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "actualSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourcePath": {
+          "type": "string"
+        },
+        "bundledPath": {
+          "type": "string"
+        },
+        "artifactId": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

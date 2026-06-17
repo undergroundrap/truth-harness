@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/credibility-bundle.schema.json",
+  "title": "Truth Harness Portable Credibility Bundle Manifest",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "bundleId",
+    "title",
+    "createdAt",
+    "projectId",
+    "workspacePath",
+    "bundlePath",
+    "localOnly",
+    "networkAccess",
+    "privacy",
+    "packId",
+    "packStatus",
+    "packSummary",
+    "embeddedSnapshotId",
+    "files",
+    "generatedFiles",
+    "reportDrafts",
+    "summary",
+    "reviewerCommands",
+    "limitations",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.credibility-bundle.v0"
+    },
+    "bundleId": {
+      "type": "string",
+      "pattern": "^cbun_[a-f0-9]{16}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspacePath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "bundlePath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "packId": {
+      "type": "string",
+      "pattern": "^cred_[a-f0-9]{16}$"
+    },
+    "packStatus": {
+      "enum": ["ready-for-review", "blocked"]
+    },
+    "packSummary": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "embeddedSnapshotId": {
+      "type": "string",
+      "pattern": "^snap_[a-f0-9]{16}$"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/bundleFile"
+      }
+    },
+    "generatedFiles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/generatedFile"
+      }
+    },
+    "reportDrafts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/reportDraft"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "artifactFiles",
+        "generatedFiles",
+        "totalFiles",
+        "artifactBytes",
+        "generatedBytes",
+        "totalBytes",
+        "copiedSnapshotFiles",
+        "skippedBundleFiles",
+        "reportDrafts",
+        "reportDraftFiles"
+      ],
+      "properties": {
+        "artifactFiles": { "type": "integer", "minimum": 0 },
+        "generatedFiles": { "type": "integer", "minimum": 0 },
+        "totalFiles": { "type": "integer", "minimum": 0 },
+        "artifactBytes": { "type": "integer", "minimum": 0 },
+        "generatedBytes": { "type": "integer", "minimum": 0 },
+        "totalBytes": { "type": "integer", "minimum": 0 },
+        "copiedSnapshotFiles": { "type": "integer", "minimum": 0 },
+        "skippedBundleFiles": { "type": "integer", "minimum": 0 },
+        "reportDrafts": { "type": "integer", "minimum": 0 },
+        "reportDraftFiles": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "reviewerCommands": {
+      "type": "object",
+      "required": [
+        "verifyBundle",
+        "validateWorkspace",
+        "verifyEngines",
+        "runAdversarialBenchmark",
+        "reviewWorkspace",
+        "reproducePack"
+      ],
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "workspaceKind": {
+      "enum": [
+        "receipts",
+        "artifacts",
+        "indexes",
+        "findings",
+        "inventions",
+        "cas",
+        "proofs",
+        "smt",
+        "engine-runs",
+        "benchmarks",
+        "disclosures",
+        "simulations",
+        "patents",
+        "experiments",
+        "vault",
+        "audits",
+        "snapshots",
+        "sessions",
+        "reviews",
+        "validation",
+        "literature",
+        "notebook-runs",
+        "code-runs",
+        "model-contexts",
+        "routes",
+        "visuals",
+        "manifest",
+        "unknown"
+      ]
+    },
+    "bundleFile": {
+      "type": "object",
+      "required": ["sourcePath", "bundledPath", "kind", "bytes", "sha256"],
+      "properties": {
+        "sourcePath": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/"
+        },
+        "bundledPath": {
+          "type": "string",
+          "pattern": "^artifacts/"
+        },
+        "kind": {
+          "$ref": "#/$defs/workspaceKind"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "schemaVersion": {
+          "type": "string"
+        },
+        "artifactId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "generatedFile": {
+      "type": "object",
+      "required": ["role", "bundledPath", "bytes", "sha256"],
+      "properties": {
+        "role": {
+          "enum": ["credibility-pack-json", "credibility-pack-markdown", "readme"]
+        },
+        "bundledPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "additionalProperties": false
+    },
+    "reportDraft": {
+      "type": "object",
+      "required": ["reportId", "title", "markdownVerified", "sourceJsonPath", "bundledJsonPath", "warnings"],
+      "properties": {
+        "reportId": {
+          "type": "string",
+          "pattern": "^report_[a-f0-9]{16}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "trust": {
+          "type": "string"
+        },
+        "receiptRunId": {
+          "type": "string"
+        },
+        "claimId": {
+          "type": "string"
+        },
+        "markdownSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "markdownVerified": {
+          "type": "boolean"
+        },
+        "sourceJsonPath": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/"
+        },
+        "bundledJsonPath": {
+          "type": "string",
+          "pattern": "^artifacts/"
+        },
+        "sourceMarkdownPath": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/"
+        },
+        "bundledMarkdownPath": {
+          "type": "string",
+          "pattern": "^artifacts/"
+        },
+        "warnings": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": {
+          "enum": ["local-only", "external-calls"]
+        },
+        "localFirst": {
+          "const": true
+        },
+        "networkAccess": {
+          "enum": ["none", "optional", "required", "unknown"]
+        },
+        "dataResidency": {
+          "const": "local-workspace"
+        },
+        "externalDisclosures": {
+          "type": "array"
+        }
+      },
+      "additionalProperties": true
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

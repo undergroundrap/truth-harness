@@ -300,6 +300,21 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
         schemaVersion: "truth-harness.credibility-pack.v0",
         schemaFile: "credibility-pack.schema.json",
         idKey: "packId"
+      },
+      {
+        schemaVersion: "truth-harness.credibility-bundle.v0",
+        schemaFile: "credibility-bundle.schema.json",
+        idKey: "bundleId"
+      },
+      {
+        schemaVersion: "truth-harness.credibility-bundle-verification.v0",
+        schemaFile: "credibility-bundle-verification.schema.json",
+        idKey: "verificationId"
+      },
+      {
+        schemaVersion: "truth-harness.report-draft.v0",
+        schemaFile: "report-draft.schema.json",
+        idKey: "reportId"
       }
     ]
   }
