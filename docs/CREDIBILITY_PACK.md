@@ -87,7 +87,7 @@ A pack is `ready-for-review` only when:
 - every explicitly required engine gate passes,
 - the workspace review has no critical open items.
 
-Critical review items are reserved for product, evidence, or current-claim blockers. Open research routes that honestly remain `unverified`, and upgrade obligations that would be needed before claiming a stronger label, should appear in the action queue without making the whole workspace look broken.
+Critical review items are reserved for product, evidence, or current-claim blockers. Open research routes that honestly remain `unverified` should appear as high-priority work, while upgrade obligations that would be needed before claiming a stronger label should appear below that. The queue should make the next honest move obvious without making the whole workspace look broken.
 
 This status is intentionally conservative. A ready pack does not prove every claim; it only says the workspace is coherent enough for external review.
 

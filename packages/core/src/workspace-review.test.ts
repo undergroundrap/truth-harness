@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -196,6 +196,90 @@ describe("workspace review", () => {
       })
     );
     expect(review.summary.readyRoutesWithoutClaims).toBe(0);
+  });
+
+  it("keeps stronger-label upgrades below current route blockers", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "for all integers n, n^2+n is even",
+      now: new Date("2026-06-13T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-13T00:02:00.000Z"
+    });
+    const upgradeItems = review.items.filter((item) =>
+      item.kind === "route-obligation" && item.routeId === route.route.routeId
+    );
+
+    expect(route.route.finalTrust).toBe("exact-computed");
+    expect(review.summary.criticalItems).toBe(0);
+    expect(review.items).toContainEqual(
+      expect.objectContaining({
+        kind: "route-ready-claim",
+        routeId: route.route.routeId,
+        priority: "low"
+      })
+    );
+    expect(upgradeItems.length).toBeGreaterThan(0);
+    expect(upgradeItems.every((item) => item.priority === "medium")).toBe(true);
+  });
+
+  it("demotes legacy stronger-claim obligations that were stored as critical", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "compute 3 / 4 + 5 / 8",
+      now: new Date("2026-06-13T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const stored = JSON.parse(await readFile(route.jsonPath, "utf8")) as {
+      proofObligations: Array<Record<string, unknown>>;
+    };
+    stored.proofObligations = [
+      {
+        ...stored.proofObligations[0],
+        status: "open",
+        severity: "critical",
+        requiredBefore: "Before making a stronger claim than the current receipt supports."
+      }
+    ];
+    await writeFile(route.jsonPath, JSON.stringify(stored, null, 2), "utf8");
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-13T00:02:00.000Z"
+    });
+
+    expect(review.summary.criticalItems).toBe(0);
+    expect(review.items).toContainEqual(
+      expect.objectContaining({
+        kind: "route-obligation",
+        routeId: route.route.routeId,
+        priority: "low"
+      })
+    );
   });
 
   it("creates a local verifier autonomy contract for non-high-stakes work", async () => {

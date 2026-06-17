@@ -775,8 +775,16 @@ function uniqueSorted(values: string[]): string[] {
 }
 
 function priorityForRouteObligation(route: VerifierRoute, obligation: ProofObligation): WorkspaceReviewPriority {
+  if (isStrongerLabelUpgrade(obligation)) {
+    return route.finalTrust === "unverified" ? "medium" : "low";
+  }
+
   if (obligation.severity === "critical") {
     return route.finalTrust === "unverified" ? "high" : "critical";
+  }
+
+  if (route.finalTrust !== "unverified" && route.finalTrust !== "refuted") {
+    return "medium";
   }
 
   if (obligation.kind === "formal-proof" || obligation.kind === "solver-encoding") {
@@ -784,6 +792,10 @@ function priorityForRouteObligation(route: VerifierRoute, obligation: ProofOblig
   }
 
   return obligation.severity === "warning" ? "high" : "medium";
+}
+
+function isStrongerLabelUpgrade(obligation: ProofObligation): boolean {
+  return obligation.requiredBefore === "Before making a stronger claim than the current receipt supports.";
 }
 
 function priorityForClaim(claim: ClaimLedgerRecord): WorkspaceReviewPriority {
