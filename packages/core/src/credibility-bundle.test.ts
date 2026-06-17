@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -30,6 +31,7 @@ describe("credibility reviewer bundle", () => {
       workingDirectory: root,
       now: "2026-06-16T00:00:30.000Z"
     });
+    const reportDraft = await writeReportDraftFixture(root);
 
     const result = await writeCredibilityBundle({
       rootPath: root,
@@ -51,9 +53,32 @@ describe("credibility reviewer bundle", () => {
     expect(result.manifest.packStatus).toBe("ready-for-review");
     expect(result.manifest.summary.artifactFiles).toBeGreaterThan(0);
     expect(result.manifest.generatedFiles).toHaveLength(3);
+    expect(result.manifest.summary.reportDrafts).toBe(1);
+    expect(result.manifest.summary.reportDraftFiles).toBe(2);
+    expect(result.manifest.files).toContainEqual(
+      expect.objectContaining({
+        sourcePath: reportDraft.relativeJson,
+        artifactId: reportDraft.report.reportId,
+        schemaVersion: "truth-harness.report-draft.v0"
+      })
+    );
+    expect(result.manifest.reportDrafts).toContainEqual(
+      expect.objectContaining({
+        reportId: reportDraft.report.reportId,
+        title: reportDraft.report.title,
+        sourceJsonPath: reportDraft.relativeJson,
+        sourceMarkdownPath: reportDraft.relativeMarkdown,
+        markdownVerified: true
+      })
+    );
     expect(result.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
     expect(result.manifest.reviewerCommands.runAdversarialBenchmark).toContain("ai-failure-seed");
-    expect(await readFile(result.readmePath, "utf8")).toContain("Truth Harness Portable Reviewer Bundle");
+    const readme = await readFile(result.readmePath, "utf8");
+    expect(readme).toContain("Truth Harness Portable Reviewer Bundle");
+    expect(readme).toContain("Saved Report Drafts");
+    expect(readme).toContain(reportDraft.report.reportId);
+    const bundledDraft = result.manifest.reportDrafts[0]!;
+    expect(await readFile(resolve(result.bundleDir, bundledDraft.bundledMarkdownPath!), "utf8")).toBe(reportDraft.markdown);
 
     const verification = await verifyCredibilityBundle({
       rootPath: root,
@@ -85,6 +110,13 @@ describe("credibility reviewer bundle", () => {
         kind: "findings",
         artifactId: result.manifest.bundleId,
         schemaVersion: "truth-harness.credibility-bundle.v0"
+      })
+    );
+    expect(validation.artifacts).toContainEqual(
+      expect.objectContaining({
+        kind: "findings",
+        artifactId: reportDraft.report.reportId,
+        schemaVersion: "truth-harness.report-draft.v0"
       })
     );
     expect(validation.artifacts).toContainEqual(
@@ -212,6 +244,50 @@ function benchmarkRun(receipt: ReturnType<typeof createReceipt>) {
         failures: []
       }
     ]
+  };
+}
+
+async function writeReportDraftFixture(root: string) {
+  const reportId = "report_aaaaaaaaaaaaaaaa";
+  const markdown = "# Saved Reviewer Draft\n\nEvery result is replayable.\n";
+  const markdownSha256 = createHash("sha256").update(markdown).digest("hex");
+  const findingsDir = join(root, ".truth-harness", "findings");
+  await mkdir(findingsDir, { recursive: true });
+
+  const baseName = `2026-06-16-${reportId}-report-draft`;
+  const relativeJson = `.truth-harness/findings/${baseName}.json`;
+  const relativeMarkdown = `.truth-harness/findings/${baseName}.md`;
+  const report = {
+    schemaVersion: "truth-harness.report-draft.v0",
+    reportId,
+    createdAt: "2026-06-16T00:00:45.000Z",
+    localOnly: true,
+    networkAccess: "none",
+    externalCalls: [],
+    source: "test",
+    title: "Saved Reviewer Draft",
+    summary: "Fixture report",
+    receiptRunId: "run_report_fixture",
+    claimId: "claim_report_fixture",
+    trust: "exact-computed",
+    bundleVerificationIds: [],
+    markdownSha256,
+    markdownByteLength: Buffer.byteLength(markdown),
+    warnings: ["draft only"],
+    paths: {
+      json: relativeJson,
+      markdown: relativeMarkdown
+    }
+  };
+
+  await writeFile(join(findingsDir, `${baseName}.json`), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await writeFile(join(findingsDir, `${baseName}.md`), markdown, "utf8");
+
+  return {
+    report,
+    markdown,
+    relativeJson,
+    relativeMarkdown
   };
 }
 

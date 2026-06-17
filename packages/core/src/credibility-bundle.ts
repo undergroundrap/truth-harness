@@ -31,6 +31,22 @@ export interface CredibilityBundleGeneratedFile {
   sha256: string;
 }
 
+export interface CredibilityBundleReportDraft {
+  reportId: string;
+  title: string;
+  createdAt?: string;
+  trust?: string;
+  receiptRunId?: string;
+  claimId?: string;
+  markdownSha256?: string;
+  markdownVerified: boolean;
+  sourceJsonPath: string;
+  bundledJsonPath: string;
+  sourceMarkdownPath?: string;
+  bundledMarkdownPath?: string;
+  warnings: string[];
+}
+
 export interface CredibilityBundleManifest {
   schemaVersion: "truth-harness.credibility-bundle.v0";
   bundleId: string;
@@ -48,6 +64,7 @@ export interface CredibilityBundleManifest {
   embeddedSnapshotId: string;
   files: CredibilityBundleFile[];
   generatedFiles: CredibilityBundleGeneratedFile[];
+  reportDrafts: CredibilityBundleReportDraft[];
   summary: {
     artifactFiles: number;
     generatedFiles: number;
@@ -57,6 +74,8 @@ export interface CredibilityBundleManifest {
     totalBytes: number;
     copiedSnapshotFiles: number;
     skippedBundleFiles: number;
+    reportDrafts: number;
+    reportDraftFiles: number;
   };
   reviewerCommands: {
     verifyBundle: string;
@@ -157,6 +176,7 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
   for (const entry of eligibleEntries) {
     files.push(await copySnapshotEntry(status.root, artifactsDir, entry));
   }
+  const reportDrafts = await summarizeReportDrafts(status.root, files);
 
   const packJsonPath = join(bundleDir, "credibility-pack.json");
   const packMarkdownPath = join(bundleDir, "credibility-pack.md");
@@ -165,7 +185,8 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
     bundleId,
     bundleDir,
     pack,
-    files
+    files,
+    reportDrafts
   });
   await writeJsonFileAtomic(packJsonPath, pack);
   await writeFileAtomic(packMarkdownPath, pack.markdown, "utf8");
@@ -195,6 +216,7 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
     embeddedSnapshotId: pack.embeddedSnapshot.snapshotId,
     files,
     generatedFiles,
+    reportDrafts,
     summary: {
       artifactFiles: files.length,
       generatedFiles: generatedFiles.length,
@@ -203,7 +225,9 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
       generatedBytes,
       totalBytes: artifactBytes + generatedBytes,
       copiedSnapshotFiles: files.length,
-      skippedBundleFiles
+      skippedBundleFiles,
+      reportDrafts: reportDrafts.length,
+      reportDraftFiles: reportDrafts.reduce((total, draft) => total + 1 + (draft.sourceMarkdownPath ? 1 : 0), 0)
     },
     reviewerCommands: {
       verifyBundle: `truth-harness workspace verify-credibility-bundle . ${toPortablePath(relative(status.root, bundleDir))}`,
@@ -422,11 +446,60 @@ function appendVerificationEntries(
   lines.push("");
 }
 
+async function summarizeReportDrafts(root: string, files: CredibilityBundleFile[]): Promise<CredibilityBundleReportDraft[]> {
+  const bySourcePath = new Map(files.map((file) => [file.sourcePath, file]));
+  const drafts: CredibilityBundleReportDraft[] = [];
+  const reportJsonFiles = files
+    .filter((file) => file.schemaVersion === "truth-harness.report-draft.v0")
+    .sort((left, right) => left.sourcePath.localeCompare(right.sourcePath));
+
+  for (const file of reportJsonFiles) {
+    const sourcePath = resolveUnderRoot(root, file.sourcePath, "Report draft source path escapes workspace root");
+    const parsed = JSON.parse(await readFile(sourcePath, "utf8")) as Record<string, unknown>;
+    const reportId = typeof parsed.reportId === "string" ? parsed.reportId : undefined;
+    if (!reportId || !/^report_[a-f0-9]{16}$/u.test(reportId)) {
+      continue;
+    }
+
+    const paths = typeof parsed.paths === "object" && parsed.paths !== null ? parsed.paths as Record<string, unknown> : {};
+    const recordedMarkdownPath = normalizePortableArtifactPath(typeof paths.markdown === "string" ? paths.markdown : undefined);
+    const fallbackMarkdownPath = file.sourcePath.replace(/\.json$/u, ".md");
+    const markdownFile = bySourcePath.get(recordedMarkdownPath ?? fallbackMarkdownPath);
+    const markdownSha256 = typeof parsed.markdownSha256 === "string" ? parsed.markdownSha256 : undefined;
+    const markdownVerified = Boolean(markdownFile && markdownSha256 && markdownFile.sha256 === markdownSha256);
+    const warnings = Array.isArray(parsed.warnings)
+      ? parsed.warnings.filter((warning): warning is string => typeof warning === "string")
+      : [];
+    if (!markdownVerified) {
+      warnings.push("Report draft Markdown was missing from the bundle or did not match the JSON-recorded SHA-256.");
+    }
+
+    drafts.push({
+      reportId,
+      title: typeof parsed.title === "string" ? parsed.title : "Truth Harness Report Draft",
+      createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : undefined,
+      trust: typeof parsed.trust === "string" ? parsed.trust : undefined,
+      receiptRunId: typeof parsed.receiptRunId === "string" ? parsed.receiptRunId : undefined,
+      claimId: typeof parsed.claimId === "string" ? parsed.claimId : undefined,
+      markdownSha256,
+      markdownVerified,
+      sourceJsonPath: file.sourcePath,
+      bundledJsonPath: file.bundledPath,
+      sourceMarkdownPath: markdownFile?.sourcePath,
+      bundledMarkdownPath: markdownFile?.bundledPath,
+      warnings
+    });
+  }
+
+  return drafts.sort((left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? "") || right.reportId.localeCompare(left.reportId));
+}
+
 function renderCredibilityBundleReadme(input: {
   bundleId: string;
   bundleDir: string;
   pack: CredibilityPack;
   files: CredibilityBundleFile[];
+  reportDrafts: CredibilityBundleReportDraft[];
 }): string {
   const bundleRef = toPortablePath(relative(input.pack.workspacePath, input.bundleDir));
   const lines = [
@@ -459,11 +532,30 @@ function renderCredibilityBundleReadme(input: {
     "## Summary",
     "",
     `- Copied artifacts: ${input.files.length}`,
+    `- Saved report drafts: ${input.reportDrafts.length}`,
     `- Snapshot: \`${input.pack.embeddedSnapshot.snapshotId}\``,
     `- Engine gates: ${input.pack.summary.concreteEngineGates} concrete, ${input.pack.summary.requiredEngineGates} required`,
     `- Review queue: ${input.pack.summary.reviewItems} items (${input.pack.summary.criticalReviewItems} critical)`,
     ""
   ];
+
+  if (input.reportDrafts.length > 0) {
+    lines.push("## Saved Report Drafts", "");
+    for (const draft of input.reportDrafts.slice(0, 12)) {
+      lines.push(
+        `- \`${draft.reportId}\`: ${draft.title}`,
+        `  - Trust: \`${draft.trust ?? "unlabeled"}\``,
+        `  - Receipt: \`${draft.receiptRunId ?? "not recorded"}\``,
+        `  - Markdown hash: ${draft.markdownVerified ? "verified" : "needs review"}`,
+        `  - JSON: \`${draft.bundledJsonPath}\``,
+        `  - Markdown: \`${draft.bundledMarkdownPath ?? "missing from bundle"}\``
+      );
+    }
+    if (input.reportDrafts.length > 12) {
+      lines.push(`- ${input.reportDrafts.length - 12} additional saved report draft${input.reportDrafts.length - 12 === 1 ? "" : "s"} omitted from this README summary.`);
+    }
+    lines.push("");
+  }
 
   return `${lines.join("\n")}\n`;
 }
@@ -673,6 +765,11 @@ function requireText(value: string | undefined, message: string): string {
 
 function toPortablePath(value: string): string {
   return value.split(sep).join("/");
+}
+
+function normalizePortableArtifactPath(value: string | undefined): string | undefined {
+  const normalized = value?.trim().replace(/\\/gu, "/").replace(/^\.\/+/u, "");
+  return normalized || undefined;
 }
 
 function sha256(value: Buffer): string {

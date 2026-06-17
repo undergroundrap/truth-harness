@@ -6866,6 +6866,15 @@ function printCredibilityBundle(result: CredibilityBundleWriteResult): void {
   if (manifest.summary.skippedBundleFiles > 0) {
     console.log(`Skipped prior bundle files: ${manifest.summary.skippedBundleFiles}`);
   }
+  if (manifest.summary.reportDrafts > 0) {
+    console.log(`Report drafts: ${manifest.summary.reportDrafts} (${manifest.summary.reportDraftFiles} files)`);
+    for (const draft of manifest.reportDrafts.slice(0, 3)) {
+      console.log(
+        `  ${draft.reportId}: ${draft.title} ` +
+          `(${draft.markdownVerified ? "Markdown hash verified" : "Markdown needs review"})`
+      );
+    }
+  }
 
   console.log("");
   console.log("Reviewer commands:");
