@@ -170,6 +170,8 @@ describe("professor credibility pack", () => {
         closes: expect.arrayContaining(["required-engine:lean-proof-fixture"])
       })
     );
+    expect(pack.reviewerActionPlan.actions.map((action) => action.detail).join("\n")).not.toContain("spawn");
+    expect(pack.reviewerActionPlan.actions.map((action) => action.detail).join("\n")).toContain("engine executable was not found");
     expect(pack.markdown).toContain("## Reviewer Action Plan");
     expect(pack.markdown).toContain("Close required Maxima symbolic cross-check gate");
     expect(pack.markdown).toContain("## Blocking Warnings");

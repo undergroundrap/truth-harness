@@ -1572,6 +1572,106 @@ describe("benchmark CLI", () => {
     expect(tampered.changedSourceFiles).toHaveLength(0);
   });
 
+  it("lists credibility reviewer actions without executing them", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+
+    const result = await runCli([
+      "workspace",
+      "credibility-actions",
+      root,
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--max-sessions",
+      "0",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--sage-command",
+      "truth-harness-missing-sage-command",
+      "--cvc5-command",
+      "truth-harness-missing-cvc5-command",
+      "--require-all-engines",
+      "--category",
+      "engine",
+      "--json"
+    ]);
+    const actions = JSON.parse(result.stdout) as {
+      schemaVersion: string;
+      status: string;
+      professorReady: boolean;
+      totalActions: number;
+      criticalActions: number;
+      actions: Array<{
+        category: string;
+        priority: string;
+        title: string;
+        detail: string;
+        command: string;
+        closes: string[];
+      }>;
+    };
+    const human = await runCli([
+      "workspace",
+      "credibility-actions",
+      root,
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--max-sessions",
+      "0",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--sage-command",
+      "truth-harness-missing-sage-command",
+      "--cvc5-command",
+      "truth-harness-missing-cvc5-command",
+      "--require-all-engines",
+      "--priority",
+      "critical"
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(actions.schemaVersion).toBe("truth-harness.credibility-actions.v0");
+    expect(actions.status).toBe("blocked");
+    expect(actions.professorReady).toBe(false);
+    expect(actions.totalActions).toBeGreaterThanOrEqual(5);
+    expect(actions.criticalActions).toBeGreaterThanOrEqual(5);
+    expect(actions.actions).toContainEqual(
+      expect.objectContaining({
+        category: "engine",
+        priority: "critical",
+        title: "Close required Maxima symbolic cross-check gate",
+        command: "truth-harness engines verify --write --require-all-engines",
+        closes: expect.arrayContaining(["required-engine:maxima-symbolic-cross-check"])
+      })
+    );
+    expect(actions.actions).toContainEqual(
+      expect.objectContaining({
+        title: "Close required SageMath symbolic cross-check gate",
+        closes: expect.arrayContaining(["required-engine:sage-symbolic-cross-check"])
+      })
+    );
+    expect(actions.actions.map((action) => action.detail).join("\n")).not.toContain("spawnSync");
+    expect(human.stdout).toContain("Truth Harness reviewer action queue");
+    expect(human.stdout).toContain("Close required Lean proof fixture gate");
+    expect(human.stdout).toContain("Command: truth-harness engines verify --write --require-all-engines");
+  });
+
   it("plans and executes one workspace autonomy action without shell execution", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);

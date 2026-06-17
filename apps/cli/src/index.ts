@@ -191,6 +191,7 @@ import {
   type CredibilityBundleVerification,
   type CredibilityBundleWriteResult,
   type CredibilityPack,
+  type CredibilityPackActionItem,
   type CredibilityPackWriteResult,
   type DiscoveryPackage,
   type DiscoveryPackageWriteResult,
@@ -3118,6 +3119,104 @@ workspace
       }
 
       if (options.failOnBlocked && pack.status === "blocked") {
+        process.exitCode = 1;
+      }
+    }
+  );
+
+workspace
+  .command("credibility-actions")
+  .description("List the next reviewer actions from a credibility pack without executing commands.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print machine-readable reviewer actions")
+  .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
+  .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
+  .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
+  .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds", parsePositiveInteger, 3000)
+  .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
+  .option("--sage-command <command>", "Override SageMath executable for the optional CAS readiness probe")
+  .option("--lean-command <command>", "Override Lean executable for the proof fixture")
+  .option("--z3-command <command>", "Override Z3 executable for the SMT check")
+  .option("--cvc5-command <command>", "Override cvc5 executable for the optional second SMT check")
+  .option("--smt-source <path>", "Workspace-local SMT-LIB source for SMT checks", "docs/examples/constraints.smt2")
+  .option("--lean-source <path>", "Workspace-local Lean source for the Lean fixture", "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean")
+  .option("--require-maxima", "Mark Maxima as required for professor readiness")
+  .option("--require-z3", "Mark Z3 as required for professor readiness")
+  .option("--require-cvc5", "Mark cvc5 as required for professor readiness")
+  .option("--require-lean", "Mark Lean as required for professor readiness")
+  .option("--require-sage", "Require SageMath to earn a constrained CAS cross-check")
+  .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
+  .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
+  .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates")
+  .option("--priority <priority>", "Only show one priority: critical, high, medium, or low")
+  .option("--category <category>", "Only show one category: validation, engine, or workspace-review")
+  .option("--fail-on-actions", "Exit non-zero when reviewer actions are open")
+  .action(
+    async (
+      path: string,
+      options: {
+        json?: boolean;
+        maxRoutes?: number;
+        maxClaims?: number;
+        maxSessions?: number;
+        timeoutMs: number;
+        maximaCommand?: string;
+        sageCommand?: string;
+        leanCommand?: string;
+        z3Command?: string;
+        cvc5Command?: string;
+        smtSource: string;
+        leanSource: string;
+        requireMaxima?: boolean;
+        requireZ3?: boolean;
+        requireCvc5?: boolean;
+        requireLean?: boolean;
+        requireSage?: boolean;
+        requireDockerCore?: boolean;
+        requireAllConcrete?: boolean;
+        requireAllEngines?: boolean;
+        priority?: string;
+        category?: string;
+        failOnActions?: boolean;
+      }
+    ) => {
+      const engineRequirements = engineRequirementsFromOptions(options);
+      const pack = await createCredibilityPack({
+        rootPath: path,
+        maxRoutes: options.maxRoutes,
+        maxClaims: options.maxClaims,
+        maxSessions: options.maxSessions,
+        timeoutMs: options.timeoutMs,
+        maximaCommand: options.maximaCommand,
+        sageCommand: options.sageCommand,
+        leanCommand: options.leanCommand,
+        z3Command: options.z3Command,
+        cvc5Command: options.cvc5Command,
+        smtSourcePath: options.smtSource,
+        leanSourcePath: options.leanSource,
+        engineRequirements
+      });
+      const actions = filterCredibilityActions(pack.reviewerActionPlan.actions, {
+        priority: options.priority,
+        category: options.category
+      });
+
+      if (options.json) {
+        printJson({
+          schemaVersion: "truth-harness.credibility-actions.v0",
+          packId: pack.packId,
+          status: pack.status,
+          professorReady: pack.summary.professorReady,
+          totalActions: actions.length,
+          criticalActions: actions.filter((action) => action.priority === "critical").length,
+          highActions: actions.filter((action) => action.priority === "high").length,
+          actions
+        });
+      } else {
+        printCredibilityActions(pack, actions);
+      }
+
+      if (options.failOnActions && actions.length > 0) {
         process.exitCode = 1;
       }
     }
@@ -6400,6 +6499,44 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
     console.log("");
     console.log(`JSON: ${writeResult.jsonPath}`);
     console.log(`Markdown: ${writeResult.markdownPath}`);
+  }
+}
+
+function filterCredibilityActions(
+  actions: CredibilityPackActionItem[],
+  filters: { priority?: string; category?: string }
+): CredibilityPackActionItem[] {
+  return actions.filter((action) => {
+    if (filters.priority && action.priority !== filters.priority) {
+      return false;
+    }
+    if (filters.category && action.category !== filters.category) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function printCredibilityActions(pack: CredibilityPack, actions: CredibilityPackActionItem[]): void {
+  console.log("Truth Harness reviewer action queue");
+  console.log(`Pack: ${pack.packId}`);
+  console.log(`Status: ${pack.status}`);
+  console.log(`Professor ready: ${pack.summary.professorReady ? "yes" : "no"}`);
+  console.log(`Open actions: ${actions.length}`);
+
+  if (actions.length === 0) {
+    console.log("");
+    console.log("No open reviewer actions were generated.");
+    return;
+  }
+
+  console.log("");
+  for (const action of actions) {
+    console.log(`${action.priority.toUpperCase()} ${action.category} ${action.actionId}`);
+    console.log(`  ${action.title}`);
+    console.log(`  ${action.detail}`);
+    console.log(`  Closes: ${action.closes.join(", ")}`);
+    console.log(`  Command: ${action.command}`);
   }
 }
 

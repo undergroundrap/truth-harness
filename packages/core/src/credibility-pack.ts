@@ -571,8 +571,11 @@ function createReviewerActionPlan(input: {
 }
 
 function reviewerEngineSummary(summary: string): string {
-  if (/spawnSync\s+\S+\s+EPERM/iu.test(summary)) {
+  if (/\bspawn(?:Sync)?\b.*\bEPERM\b/iu.test(summary)) {
     return "The local OS or sandbox blocked the engine process, so Truth Harness did not count this backend as reviewer evidence.";
+  }
+  if (/\bspawn(?:Sync)?\b.*\bENOENT\b/iu.test(summary)) {
+    return "The configured engine executable was not found, so Truth Harness did not count this backend as reviewer evidence.";
   }
 
   return summary;
