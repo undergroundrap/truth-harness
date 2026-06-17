@@ -183,6 +183,7 @@ import {
   type CodeRunSummary,
   type EngineManifest,
   type EngineVerificationReport,
+  type EngineVerificationRequirements,
   type EngineVerificationRunSummary,
   type EngineVerificationRunWriteResult,
   type CodeRunPolicyInput,
@@ -3061,6 +3062,7 @@ workspace
   .option("--require-sage", "Require SageMath to earn a constrained CAS cross-check")
   .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
+  .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates")
   .option("--fail-on-blocked", "Exit non-zero if the pack is blocked")
   .action(
     async (
@@ -3086,16 +3088,11 @@ workspace
         requireSage?: boolean;
         requireDockerCore?: boolean;
         requireAllConcrete?: boolean;
+        requireAllEngines?: boolean;
         failOnBlocked?: boolean;
       }
     ) => {
-      const engineRequirements = {
-        maxima: Boolean(options.requireMaxima || options.requireDockerCore || options.requireAllConcrete),
-        z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete),
-        cvc5: Boolean(options.requireCvc5),
-        lean: Boolean(options.requireLean || options.requireAllConcrete),
-        sage: Boolean(options.requireSage)
-      };
+      const engineRequirements = engineRequirementsFromOptions(options);
       const input = {
         rootPath: path,
         maxRoutes: options.maxRoutes,
@@ -3149,6 +3146,7 @@ workspace
   .option("--require-sage", "Require SageMath to earn a constrained CAS cross-check")
   .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
+  .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates")
   .option("--fail-on-blocked", "Exit non-zero if the underlying credibility pack is blocked")
   .action(
     async (
@@ -3173,16 +3171,11 @@ workspace
         requireSage?: boolean;
         requireDockerCore?: boolean;
         requireAllConcrete?: boolean;
+        requireAllEngines?: boolean;
         failOnBlocked?: boolean;
       }
     ) => {
-      const engineRequirements = {
-        maxima: Boolean(options.requireMaxima || options.requireDockerCore || options.requireAllConcrete),
-        z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete),
-        cvc5: Boolean(options.requireCvc5),
-        lean: Boolean(options.requireLean || options.requireAllConcrete),
-        sage: Boolean(options.requireSage)
-      };
+      const engineRequirements = engineRequirementsFromOptions(options);
       const result = await writeCredibilityBundle({
         rootPath: path,
         maxRoutes: options.maxRoutes,
@@ -3977,6 +3970,7 @@ engines
   .option("--require-sage", "Fail unless SageMath earns a constrained CAS cross-check")
   .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
+  .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates")
   .action(
     async (options: {
       json?: boolean;
@@ -3997,15 +3991,10 @@ engines
       requireSage?: boolean;
       requireDockerCore?: boolean;
       requireAllConcrete?: boolean;
+      requireAllEngines?: boolean;
     }) => {
       const json = Boolean(options.json || engines.opts<{ json?: boolean }>().json);
-      const requirements = {
-        maxima: Boolean(options.requireMaxima || options.requireDockerCore || options.requireAllConcrete),
-        z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete),
-        cvc5: Boolean(options.requireCvc5),
-        lean: Boolean(options.requireLean || options.requireAllConcrete),
-        sage: Boolean(options.requireSage)
-      };
+      const requirements = engineRequirementsFromOptions(options);
       const replayCommand = engineVerificationReplayCommand(options);
       const writeResult = options.write
         ? await writeEngineVerificationRun({
@@ -5051,6 +5040,7 @@ function engineVerificationReplayCommand(options: {
   requireSage?: boolean;
   requireDockerCore?: boolean;
   requireAllConcrete?: boolean;
+  requireAllEngines?: boolean;
 }): string {
   const args = ["truth-harness", "engines", "verify"];
   if (options.write) {
@@ -5102,7 +5092,33 @@ function engineVerificationReplayCommand(options: {
   if (options.requireAllConcrete) {
     args.push("--require-all-concrete");
   }
+  if (options.requireAllEngines) {
+    args.push("--require-all-engines");
+  }
   return args.map(shellQuote).join(" ");
+}
+
+function engineRequirementsFromOptions(options: EngineRequirementOptions): EngineVerificationRequirements {
+  return {
+    maxima: Boolean(
+      options.requireMaxima || options.requireDockerCore || options.requireAllConcrete || options.requireAllEngines
+    ),
+    z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete || options.requireAllEngines),
+    cvc5: Boolean(options.requireCvc5 || options.requireAllEngines),
+    lean: Boolean(options.requireLean || options.requireAllConcrete || options.requireAllEngines),
+    sage: Boolean(options.requireSage || options.requireAllEngines)
+  };
+}
+
+interface EngineRequirementOptions {
+  requireMaxima?: boolean;
+  requireZ3?: boolean;
+  requireCvc5?: boolean;
+  requireLean?: boolean;
+  requireSage?: boolean;
+  requireDockerCore?: boolean;
+  requireAllConcrete?: boolean;
+  requireAllEngines?: boolean;
 }
 
 function shellQuote(value: string): string {

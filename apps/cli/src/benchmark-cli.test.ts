@@ -450,6 +450,46 @@ describe("benchmark CLI", () => {
     );
   });
 
+  it("fails closed when the strict all-engines evidence gate is requested", async () => {
+    const result = await runCli([
+      "engines",
+      "verify",
+      "--json",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
+      "--cvc5-command",
+      "truth-harness-missing-cvc5-command",
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--sage-command",
+      "truth-harness-missing-sage-command",
+      "--require-all-engines"
+    ]);
+    const report = JSON.parse(result.stdout) as {
+      status: string;
+      requiredPassed: number;
+      requiredTotal: number;
+      cases: Array<{ id: string; required: boolean; status: string }>;
+    };
+
+    expect(result.exitCode).toBe(1);
+    expect(report.status).toBe("failed");
+    expect(report.requiredPassed).toBe(0);
+    expect(report.requiredTotal).toBe(5);
+    expect(report.cases.filter((entry) => entry.required).map((entry) => entry.id).sort()).toEqual([
+      "cvc5-smt-check",
+      "lean-proof-fixture",
+      "maxima-symbolic-cross-check",
+      "sage-symbolic-cross-check",
+      "z3-smt-check"
+    ]);
+    expect(report.cases.filter((entry) => entry.required).every((entry) => entry.status === "missing")).toBe(true);
+  });
+
   it("rebuilds and searches the workspace catalog from the CLI", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);
@@ -1436,6 +1476,9 @@ describe("benchmark CLI", () => {
       "truth-harness-missing-lean-command",
       "--sage-command",
       "truth-harness-missing-sage-command",
+      "--cvc5-command",
+      "truth-harness-missing-cvc5-command",
+      "--require-all-engines",
       "--json"
     ]);
     const bundle = JSON.parse(bundleResult.stdout) as {
@@ -1443,8 +1486,9 @@ describe("benchmark CLI", () => {
         schemaVersion: string;
         bundleId: string;
         packStatus: string;
+        packSummary: { requiredEngineGates: string };
         summary: { totalFiles: number };
-        reviewerCommands: { verifyBundle: string };
+        reviewerCommands: { verifyBundle: string; verifyEngines: string; reproducePack: string };
       };
       result: { bundleDir: string; manifestPath: string; packMarkdownPath: string };
     };
@@ -1476,7 +1520,10 @@ describe("benchmark CLI", () => {
       "--lean-command",
       "truth-harness-missing-lean-command",
       "--sage-command",
-      "truth-harness-missing-sage-command"
+      "truth-harness-missing-sage-command",
+      "--cvc5-command",
+      "truth-harness-missing-cvc5-command",
+      "--require-all-engines"
     ]);
     const humanVerify = await runCli([
       "workspace",
@@ -1490,8 +1537,11 @@ describe("benchmark CLI", () => {
     expect(bundle.manifest.schemaVersion).toBe("truth-harness.credibility-bundle.v0");
     expect(bundle.manifest.bundleId).toMatch(/^cbun_[a-f0-9]{16}$/u);
     expect(bundle.manifest.packStatus).toBe("blocked");
+    expect(bundle.manifest.packSummary.requiredEngineGates).toBe("0/5");
     expect(bundle.manifest.summary.totalFiles).toBeGreaterThan(0);
     expect(bundle.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
+    expect(bundle.manifest.reviewerCommands.verifyEngines).toContain("--require-all-engines");
+    expect(bundle.manifest.reviewerCommands.reproducePack).toContain("--require-all-engines");
     expect(bundle.result.bundleDir.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
     expect(await readFile(bundle.result.manifestPath, "utf8")).toContain(bundle.manifest.bundleId);
     expect(verifyById).toMatchObject({

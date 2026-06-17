@@ -286,7 +286,7 @@ export async function createEngineVerificationRunRecord(
     limitations: [
       "This record verifies local engine availability and concrete smoke evidence only.",
       "A passing engine run does not prove future claims; each claim still needs its own replayable receipt or accepted checker artifact.",
-      "SageMath can produce direct constrained CAS check records; it participates in this engine smoke only when `--require-sage` is requested."
+      "SageMath can produce direct constrained CAS check records; it participates in this engine smoke only when `--require-sage` or the stricter all-engine reviewer gate is requested."
     ],
     warnings: report.warnings
   };
@@ -462,7 +462,7 @@ export function renderEngineVerificationRunMarkdown(record: EngineVerificationRu
     "",
     "- Engine readiness probes do not prove claims.",
     "- Maxima, Z3, cvc5, and Lean can only mint their scoped trust labels for concrete recorded checks.",
-    "- SageMath direct CAS checks can mint scoped `cross-checked` records when `--require-sage` is requested.",
+    "- SageMath direct CAS checks can mint scoped `cross-checked` records when `--require-sage` or the stricter all-engine reviewer gate is requested.",
     "- A future claim must attach its own receipt, proof, SMT, CAS, simulation, source, or review artifact.",
     "",
     "## Limitations",
@@ -722,13 +722,13 @@ function sageCase(
       trust: "provenance-only",
       evidenceMinted: false,
       summary: available
-        ? "SageMath was detected; the constrained Sage gate was skipped because `--require-sage` was not requested."
+        ? "SageMath was detected; the constrained Sage gate was skipped because no Sage/all-engine requirement was requested."
         : sage?.error ?? "SageMath was not detected.",
       command,
       replay,
       limitations: sage?.limitations ?? ["SageMath has not been probed."],
       warnings: available
-        ? ["Run `truth-harness engines verify --require-sage` when a reviewer wants SageMath to earn concrete CAS evidence."]
+        ? ["Run `truth-harness engines verify --require-sage` or `truth-harness engines verify --require-all-engines` when a reviewer wants SageMath to earn concrete CAS evidence."]
         : []
     };
   }

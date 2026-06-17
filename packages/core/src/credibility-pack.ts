@@ -379,13 +379,18 @@ function credibilityWarnings(input: {
 }
 
 function createReviewerCommands(requirements: EngineVerificationRequirements | undefined): CredibilityPackCommandSet {
-  const engineFlags = [
-    requirements?.maxima ? "--require-maxima" : undefined,
-    requirements?.z3 ? "--require-z3" : undefined,
-    requirements?.cvc5 ? "--require-cvc5" : undefined,
-    requirements?.lean ? "--require-lean" : undefined,
-    requirements?.sage ? "--require-sage" : undefined
-  ].filter((flag): flag is string => Boolean(flag));
+  const requiresAllEngines = Boolean(
+    requirements?.maxima && requirements.z3 && requirements.cvc5 && requirements.lean && requirements.sage
+  );
+  const engineFlags = requiresAllEngines
+    ? ["--require-all-engines"]
+    : [
+        requirements?.maxima ? "--require-maxima" : undefined,
+        requirements?.z3 ? "--require-z3" : undefined,
+        requirements?.cvc5 ? "--require-cvc5" : undefined,
+        requirements?.lean ? "--require-lean" : undefined,
+        requirements?.sage ? "--require-sage" : undefined
+      ].filter((flag): flag is string => Boolean(flag));
   const engineSuffix = engineFlags.length > 0 ? ` ${engineFlags.join(" ")}` : "";
 
   return {

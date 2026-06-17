@@ -662,6 +662,7 @@ export interface TruthHarnessWorkspaceCredibilityBundleInput {
   requireSage?: boolean;
   requireDockerCore?: boolean;
   requireAllConcrete?: boolean;
+  requireAllEngines?: boolean;
 }
 
 export interface TruthHarnessWorkspaceCredibilityBundleVerifyInput {
@@ -1815,11 +1816,11 @@ export async function handleTruthHarnessWorkspaceCredibilityBundle(
     smtSourcePath: input.smtSourcePath,
     leanSourcePath: input.leanSourcePath,
     engineRequirements: {
-      maxima: Boolean(input.requireMaxima || input.requireDockerCore || input.requireAllConcrete),
-      z3: Boolean(input.requireZ3 || input.requireDockerCore || input.requireAllConcrete),
-      cvc5: Boolean(input.requireCvc5),
-      lean: Boolean(input.requireLean || input.requireAllConcrete),
-      sage: Boolean(input.requireSage)
+      maxima: Boolean(input.requireMaxima || input.requireDockerCore || input.requireAllConcrete || input.requireAllEngines),
+      z3: Boolean(input.requireZ3 || input.requireDockerCore || input.requireAllConcrete || input.requireAllEngines),
+      cvc5: Boolean(input.requireCvc5 || input.requireAllEngines),
+      lean: Boolean(input.requireLean || input.requireAllConcrete || input.requireAllEngines),
+      sage: Boolean(input.requireSage || input.requireAllEngines)
     }
   });
 }

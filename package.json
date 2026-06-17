@@ -52,6 +52,7 @@
     "engines:verify:lean": "npm run cli -- engines verify --require-lean",
     "engines:verify:cvc5": "npm run cli -- engines verify --require-cvc5",
     "engines:verify:sage": "npm run cli -- engines verify --require-sage",
+    "engines:verify:all": "node apps/cli/dist/index.js engines verify --require-all-engines",
     "mcp": "node packages/mcp-server/dist/index.js",
     "proof:lean-fixture": "npm run cli -- proof project docs/examples/lean-fixture --json && npm run cli -- proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean --timeout-ms 30000 --fail-on-unproved --json",
     "proof:launch": "npm run demo:replay && npm run demo:render && npm run demo:parity && npm run demo:bench && npm run demo:physics && npm run demo:numeric && npm run demo:symbolic && npm run demo:check",

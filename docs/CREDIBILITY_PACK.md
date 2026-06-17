@@ -11,6 +11,7 @@ truth-harness workspace credibility-pack .
 truth-harness workspace credibility-pack . --require-docker-core
 truth-harness workspace credibility-pack . --require-cvc5
 truth-harness workspace credibility-pack . --require-all-concrete
+truth-harness workspace credibility-pack . --require-all-engines
 truth-harness workspace credibility-pack . --dry-run --json
 truth-harness workspace credibility-bundle .
 truth-harness workspace verify-credibility-bundle . .truth-harness/findings/<date>-<bundle-id>-credibility-bundle
@@ -23,6 +24,7 @@ When using the npm wrapper, pass command flags after an extra separator so npm d
 
 ```bash
 npm run cli -- workspace credibility-pack . -- --require-docker-core
+npm run cli -- workspace credibility-pack . -- --require-all-engines
 npm run cli -- workspace credibility-pack . -- --dry-run --json
 npm run cli -- workspace credibility-bundle . -- --require-docker-core
 npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/<date>-<bundle-id>-credibility-bundle
@@ -81,7 +83,7 @@ A pack is `ready-for-review` only when:
 
 This status is intentionally conservative. A ready pack does not prove every claim; it only says the workspace is coherent enough for external review.
 
-Maxima and SageMath CAS check records can support the narrow `cross-checked` label only when a concrete recorded agreement exists. Z3 and cvc5 SMT records can support the narrow `smt-checked` label only when the selected solver returns `sat` or `unsat` for a concrete SMT-LIB artifact. The default Docker core credibility gate currently requires Maxima and Z3 evidence. cvc5 is an optional second SMT solver gate through `--require-cvc5`; SageMath is available as a direct constrained CAS adapter and as the heavier no-network `sage-math` Docker gate through `--require-sage` or `npm run docker:sage`.
+Maxima and SageMath CAS check records can support the narrow `cross-checked` label only when a concrete recorded agreement exists. Z3 and cvc5 SMT records can support the narrow `smt-checked` label only when the selected solver returns `sat` or `unsat` for a concrete SMT-LIB artifact. The default Docker core credibility gate currently requires Maxima and Z3 evidence. cvc5 is an optional second SMT solver gate through `--require-cvc5`; SageMath is available as a direct constrained CAS adapter and as the heavier no-network `sage-math` Docker gate through `--require-sage` or `npm run docker:sage`. Use `--require-all-engines` when a reviewer packet should fail unless Maxima, Z3, cvc5, Lean, and SageMath all earn their own scoped evidence. That stronger mode is still a smoke gate over representative fixtures, not proof of every workspace claim.
 
 ## What It Does Not Prove
 

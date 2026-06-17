@@ -1168,8 +1168,10 @@ describe("MCP tool handlers", () => {
       timeoutMs: 50,
       maximaCommand: "truth-harness-missing-maxima-command",
       z3Command: "truth-harness-missing-z3-command",
+      cvc5Command: "truth-harness-missing-cvc5-command",
       leanCommand: "truth-harness-missing-lean-command",
-      sageCommand: "truth-harness-missing-sage-command"
+      sageCommand: "truth-harness-missing-sage-command",
+      requireAllEngines: true
     });
     const verification = await handleTruthHarnessWorkspaceCredibilityBundleVerify({
       bundleRef: bundle.manifest.bundleId
@@ -1180,8 +1182,10 @@ describe("MCP tool handlers", () => {
     expect(bundle.manifest.packStatus).toBe("blocked");
     expect(bundle.manifest.localOnly).toBe(true);
     expect(bundle.manifest.networkAccess).toBe("none");
+    expect(bundle.manifest.packSummary.requiredEngineGates).toBe("0/5");
     expect(bundle.manifest.summary.totalFiles).toBeGreaterThan(0);
     expect(bundle.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
+    expect(bundle.manifest.reviewerCommands.verifyEngines).toContain("--require-all-engines");
     expect(verification).toMatchObject({
       schemaVersion: "truth-harness.credibility-bundle-verification.v0",
       bundleId: bundle.manifest.bundleId,
