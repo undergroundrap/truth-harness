@@ -26,6 +26,7 @@
     "dev:cli": "tsx apps/cli/src/index.ts",
     "web:serve": "node tools/serve-web.mjs",
     "web:restart": "powershell -ExecutionPolicy Bypass -File tools/restart-web.ps1",
+    "web:smoke": "vitest run apps/web/src/app-ui-contract.test.ts apps/web/src/serve-web.test.ts",
     "workspace:repair": "npm run cli -- workspace repair",
     "workspace:repair-artifacts": "npm run cli -- workspace repair-artifacts .",
     "workspace:repair-artifacts:preview": "node apps/cli/dist/index.js workspace repair-artifacts . --preview",

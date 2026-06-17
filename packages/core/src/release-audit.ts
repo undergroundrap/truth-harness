@@ -740,10 +740,11 @@ function manualUiCheck(): ReleaseAuditCheck {
     id: "web-ui-smoke",
     title: "Web UI launch polish",
     blocking: false,
-    summary: "CLI release audit cannot yet prove screenshot-level UI polish.",
-    command: "npm run web:restart",
+    summary: "Automated web smoke coverage exists, but screenshot-level UI polish still needs browser review.",
+    command: "npm run web:smoke",
     details: [
-      "Before public recording, run a browser pass for overflow, clipping, focus state, scroll behavior, and report readability.",
+      "Run the web smoke before public recording to catch contract and local API regressions.",
+      "Then run a browser pass for overflow, clipping, focus state, scroll behavior, and report readability.",
       "This warning should become an automated browser screenshot regression gate later."
     ]
   });

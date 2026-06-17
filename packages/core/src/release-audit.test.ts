@@ -89,7 +89,12 @@ describe("release audit", () => {
       })
     );
     expect(audit.checks).toContainEqual(
-      expect.objectContaining({ id: "web-ui-smoke", status: "warn", blocking: false })
+      expect.objectContaining({
+        id: "web-ui-smoke",
+        status: "warn",
+        blocking: false,
+        command: "npm run web:smoke"
+      })
     );
     expect(markdown).toContain("# Truth Harness Release Audit");
     expect(markdown).toContain("Required engine gates: 5/5");
