@@ -6015,6 +6015,92 @@ textarea:focus-visible {
   word-break: break-word;
 }
 
+.report-verification-citations {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(125, 211, 168, 0.24);
+  border-radius: 8px;
+  background: rgba(125, 211, 168, 0.04);
+  padding: 12px;
+  min-width: 0;
+}
+
+.report-verification-citations.warning {
+  border-color: rgba(230, 195, 106, 0.28);
+  background: rgba(230, 195, 106, 0.05);
+}
+
+.report-verification-citations p {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.report-verification-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.report-verification-citation {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid rgba(183, 169, 138, 0.14);
+  border-radius: 7px;
+  background: rgba(13, 13, 13, 0.86);
+  padding: 10px;
+}
+
+.report-verification-citation.exact {
+  border-color: rgba(125, 211, 168, 0.32);
+}
+
+.report-verification-citation.refuted {
+  border-color: rgba(255, 132, 120, 0.34);
+}
+
+.report-verification-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.report-verification-head strong {
+  color: #f3ead8;
+  overflow-wrap: anywhere;
+}
+
+.report-verification-citation dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 7px;
+  margin: 0;
+  min-width: 0;
+}
+
+.report-verification-citation dl div {
+  min-width: 0;
+}
+
+.report-verification-citation dt {
+  color: var(--faint);
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+
+.report-verification-citation dd {
+  color: #d8d2c8;
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .report-tags {
   display: flex;
   flex-wrap: wrap;

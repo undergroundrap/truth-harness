@@ -8203,6 +8203,7 @@ async function refreshCredibilityBundle({ announce = true } = {}) {
   } finally {
     state.credibilityBundleLoading = false;
     renderCredibilityPackPanel();
+    renderReport(receiptStore.get(state.receiptKey));
   }
 }
 
@@ -8249,6 +8250,7 @@ async function verifyCredibilityBundleFromUi(button) {
   } finally {
     state.credibilityBundleVerifying = false;
     renderCredibilityPackPanel();
+    renderReport(receiptStore.get(state.receiptKey));
   }
 }
 
@@ -8284,6 +8286,7 @@ async function refreshCredibilityBundleVerificationHistory({ announce = true } =
   } finally {
     state.credibilityBundleVerificationsLoading = false;
     renderCredibilityPackPanel();
+    renderReport(receiptStore.get(state.receiptKey));
   }
 }
 
@@ -12499,6 +12502,103 @@ function credibilityPackActivitySummary(pack) {
   return `${pack.status}; validation ${pack.summary.validationPassed ? "passed" : "failed"}, engines ${pack.summary.requiredEngineGates}, benchmark ${pack.summary.latestAdversarialBenchmarkStatus ?? "missing"}, queue ${pack.summary.reviewItems} item${pack.summary.reviewItems === 1 ? "" : "s"}.`;
 }
 
+function credibilityBundleVerificationReportItems(limit = 5) {
+  const items = Array.isArray(state.credibilityBundleVerifications) ? state.credibilityBundleVerifications : [];
+  return items.slice(0, limit).map((item) => {
+    const verification = item?.verification ?? {};
+    const verificationId = typeof verification.verificationId === "string" ? verification.verificationId : "";
+    const passed = verification.passed === true;
+    const sourceMatches = verification.sourceMatchesWorkspace === true;
+    const status = passed && sourceMatches ? "clean" : passed ? "source drift" : "bundle changed";
+    return {
+      verification,
+      verificationId,
+      bundleId: verification.bundleId ?? "unknown",
+      status,
+      statusClass: passed && sourceMatches ? "exact" : passed ? "waiting" : "refuted",
+      checkedBundleFiles: verification.checkedBundleFiles ?? 0,
+      checkedSourceFiles: verification.checkedSourceFiles ?? 0,
+      verifiedAt: verification.verifiedAt ?? "unknown",
+      relativeJson: item?.paths?.relativeJson ?? item?.paths?.json ?? "not recorded",
+      relativeMarkdown: item?.paths?.relativeMarkdown ?? item?.paths?.markdown ?? "not recorded",
+      jsonHref: verificationId ? `/api/credibility-bundle/verifications/file?id=${encodeURIComponent(verificationId)}&kind=json` : "",
+      markdownHref: verificationId ? `/api/credibility-bundle/verifications/file?id=${encodeURIComponent(verificationId)}&kind=markdown` : ""
+    };
+  });
+}
+
+function credibilityBundleVerificationReportHtml() {
+  if (state.credibilityBundleVerificationsError) {
+    return `<section class="report-verification-citations warning">
+      <p>Saved reviewer-bundle verification history could not be loaded: ${escapeHtml(state.credibilityBundleVerificationsError)}</p>
+    </section>`;
+  }
+
+  const items = credibilityBundleVerificationReportItems();
+  if (items.length === 0) {
+    return `<section class="report-verification-citations warning">
+      <p>No saved <code>cver_...</code> reviewer-bundle verification is attached to this report yet. Use <strong>Verify now</strong> on the reviewer bundle before treating this packet as externally reviewable.</p>
+    </section>`;
+  }
+
+  return `<section class="report-verification-citations">
+    <p>Saved local reviewer checks cite when the portable bundle was verified and whether the live source workspace still matched the copied evidence.</p>
+    <div class="report-verification-list">
+      ${items.map((item) => `<article class="report-verification-citation ${item.statusClass}">
+        <div class="report-verification-head">
+          <strong>${escapeHtml(item.verificationId || "unidentified verification")}</strong>
+          <span class="status-pill ${item.statusClass}">${escapeHtml(item.status)}</span>
+        </div>
+        <dl>
+          <div><dt>Bundle</dt><dd>${escapeHtml(item.bundleId)}</dd></div>
+          <div><dt>Verified</dt><dd>${escapeHtml(formatActivityTime(item.verifiedAt))}</dd></div>
+          <div><dt>Checked files</dt><dd>${escapeHtml(`${item.checkedBundleFiles} bundle, ${item.checkedSourceFiles} source`)}</dd></div>
+          <div><dt>JSON artifact</dt><dd><code>${escapeHtml(item.relativeJson)}</code></dd></div>
+          <div><dt>Markdown artifact</dt><dd><code>${escapeHtml(item.relativeMarkdown)}</code></dd></div>
+          <div><dt>Local downloads</dt><dd><code>${escapeHtml(item.jsonHref)}</code><br><code>${escapeHtml(item.markdownHref)}</code></dd></div>
+        </dl>
+      </article>`).join("")}
+    </div>
+  </section>`;
+}
+
+function credibilityBundleVerificationReportMarkdown() {
+  if (state.credibilityBundleVerificationsError) {
+    return [
+      "## Reviewer Bundle Verifications",
+      "",
+      `- Saved reviewer-bundle verification history could not be loaded: ${state.credibilityBundleVerificationsError}`
+    ];
+  }
+
+  const items = credibilityBundleVerificationReportItems();
+  if (items.length === 0) {
+    return [
+      "## Reviewer Bundle Verifications",
+      "",
+      "- No saved `cver_...` reviewer-bundle verification is attached to this report yet.",
+      "- Before external review, use `Verify now` in the Report tab or run `truth-harness workspace verify-credibility-bundle <bundle-id> --write`."
+    ];
+  }
+
+  return [
+    "## Reviewer Bundle Verifications",
+    "",
+    "Saved local reviewer checks cite when the portable bundle was verified and whether the live source workspace still matched the copied evidence.",
+    "",
+    ...items.flatMap((item) => [
+      `- ${item.verificationId || "unidentified verification"}: ${item.status}`,
+      `  - Bundle: ${item.bundleId}`,
+      `  - Verified: ${item.verifiedAt}`,
+      `  - Checked files: ${item.checkedBundleFiles} bundle, ${item.checkedSourceFiles} source`,
+      `  - JSON artifact: \`${item.relativeJson}\``,
+      `  - Markdown artifact: \`${item.relativeMarkdown}\``,
+      `  - Local JSON download: \`${item.jsonHref}\``,
+      `  - Local Markdown download: \`${item.markdownHref}\``
+    ])
+  ];
+}
+
 function renderReport(receipt) {
   if (!receipt) {
     return;
@@ -12629,6 +12729,8 @@ function renderReport(receipt) {
     <dl class="report-facts">${verificationEnvironmentFactsHtml()}</dl>
     <ul>${verificationEnvironmentCommandHtml()}</ul>
     <ul class="report-sublist">${verificationEnvironmentNotesHtml()}</ul>
+    <h3>Reviewer Bundle Verifications</h3>
+    ${credibilityBundleVerificationReportHtml()}
     <h3>Agent Runbook</h3>
     <dl class="report-facts">
       <div><dt>Mode</dt><dd>${escapeHtml(runbook.lane)} - ${escapeHtml(runbook.protocol)}</dd></div>
@@ -12768,6 +12870,8 @@ function generateReportMarkdown(receipt) {
     `- Report: \`${routes.report}\``,
     "",
     ...verificationEnvironmentMarkdown(),
+    "",
+    ...credibilityBundleVerificationReportMarkdown(),
     "",
     "## Agent Runbook",
     "",

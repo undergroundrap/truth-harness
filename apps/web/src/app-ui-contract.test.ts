@@ -88,6 +88,9 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function credibilityBundleCardHtml()");
     expect(source).toContain("function credibilityBundleVerificationHistoryHtml()");
     expect(source).toContain("function credibilityBundleVerificationHistoryItemHtml(item)");
+    expect(source).toContain("function credibilityBundleVerificationReportItems(limit = 5)");
+    expect(source).toContain("function credibilityBundleVerificationReportHtml()");
+    expect(source).toContain("function credibilityBundleVerificationReportMarkdown()");
     expect(source).toContain("function credibilityReviewerChecklistHtml(pack)");
     expect(source).toContain("function credibilityChecklistItemHtml(item)");
     expect(source).toContain("function gateStringIsComplete(value)");
@@ -120,6 +123,8 @@ describe("web UI action contracts", () => {
     expect(source).toContain("Saved ${payload.verification?.verificationId");
     expect(source).toContain("Verified Reviewer Bundle");
     expect(source).toContain("Bundle Verification History");
+    expect(source).toContain("Reviewer Bundle Verifications");
+    expect(source).toContain("Saved local reviewer checks cite when the portable bundle was verified");
     expect(source).toContain("Professor Review Checklist");
     expect(source).toContain("Reviewer bundle verification command copied from the Report tab.");
     expect(source).toContain("Downloaded reviewer bundle file");
@@ -154,6 +159,9 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".credibility-verification-history");
     expect(styles).toContain(".credibility-verification-history-item");
     expect(styles).toContain(".credibility-verification-history-actions");
+    expect(styles).toContain(".report-verification-citations");
+    expect(styles).toContain(".report-verification-citation");
+    expect(styles).toContain(".report-verification-head");
     expect(styles).toContain(".credibility-review-checklist");
     expect(styles).toContain(".credibility-checklist-grid");
     expect(styles).toContain(".credibility-checklist-item");
