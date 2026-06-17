@@ -303,6 +303,9 @@ const state = {
   credibilityPackLoading: false,
   credibilityPackSaving: false,
   credibilityPackError: undefined,
+  credibilityBundle: undefined,
+  credibilityBundleLoading: false,
+  credibilityBundleError: undefined,
   credibilityRunNextPlan: undefined,
   credibilityRunNextLoading: false,
   credibilityRunNextSaving: false,
@@ -8135,6 +8138,7 @@ async function writeCredibilityPackFromUi(button) {
       payload.pack?.status === "ready-for-review" ? "passed" : "waiting",
       payload.pack?.createdAt
     );
+    void refreshCredibilityBundle({ announce: false });
     void refreshCatalogStatus({ announce: false });
     void refreshReleaseAudit({ announce: false });
   } catch (error) {
@@ -8142,6 +8146,42 @@ async function writeCredibilityPackFromUi(button) {
     addActivity("local-api", "Credibility pack write failed", state.credibilityPackError, "refuted");
   } finally {
     state.credibilityPackSaving = false;
+    renderCredibilityPackPanel();
+  }
+}
+
+async function refreshCredibilityBundle({ announce = true } = {}) {
+  state.credibilityBundleLoading = true;
+  state.credibilityBundleError = undefined;
+  renderCredibilityPackPanel();
+
+  try {
+    const response = await fetch("/api/credibility-bundle/latest", {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local credibility bundle API failed.");
+    state.credibilityBundle = payload;
+    state.credibilityBundleError = undefined;
+    if (announce) {
+      addActivity(
+        "local-api",
+        payload.latest ? "Loaded verified reviewer bundle" : "No reviewer bundle found",
+        localApiSuccessMessage(payload, credibilityBundleActivitySummary(payload)),
+        credibilityBundleTrust(payload),
+        payload.manifest?.createdAt
+      );
+    }
+  } catch (error) {
+    state.credibilityBundle = undefined;
+    state.credibilityBundleError = error instanceof Error ? error.message : "Unknown credibility bundle failure.";
+    if (announce) {
+      addActivity("local-api", "Credibility bundle unavailable", state.credibilityBundleError, "waiting");
+    }
+  } finally {
+    state.credibilityBundleLoading = false;
     renderCredibilityPackPanel();
   }
 }
@@ -11626,6 +11666,7 @@ function renderCredibilityPackPanel() {
   const runNextCard = credibilityRunNextHtml();
   const pathRows = credibilityPackPathRows(state.credibilityPackPaths);
   const benchmarkCard = credibilityBenchmarkCardHtml(pack);
+  const bundleCard = credibilityBundleCardHtml();
   const summaryRows = pack
     ? credibilityPackSummaryRows(pack)
       .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${credibilityPackValueHtml(value)}</dd></div>`)
@@ -11646,6 +11687,7 @@ function renderCredibilityPackPanel() {
       </div>
       <span class="status-pill ${statusClass}">${escapeHtml(credibilityPackStatusLabel(status))}</span>
     </div>
+    ${bundleCard}
     <dl class="credibility-pack-summary">${summaryRows}</dl>
     <div class="credibility-pack-actions">
       <button class="text-button compact-button refresh-credibility-pack" data-testid="refresh-credibility-pack" type="button" ${state.credibilityPackLoading ? "disabled" : ""}>${state.credibilityPackLoading ? "Refreshing" : "Refresh"}</button>
@@ -11702,6 +11744,37 @@ function renderCredibilityPackPanel() {
       fallbackDetail: "the adversarial benchmark command was saved as a local text file instead."
     });
   });
+  credibilityPackPanel.querySelector(".refresh-credibility-bundle")?.addEventListener("click", () => {
+    void refreshCredibilityBundle({ announce: true });
+  });
+  credibilityPackPanel.querySelector(".copy-credibility-bundle-command")?.addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    const commandText = button.dataset.command ?? credibilityBundleCommand();
+    void copyOrDownloadText({
+      button,
+      text: `${commandText}\n`,
+      filename: `truth-harness-credibility-bundle-verify-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      copiedTitle: "Copied bundle verifier",
+      copiedDetail: "Reviewer bundle verification command copied from the Report tab.",
+      fallbackTitle: "Downloaded bundle verifier",
+      fallbackDetail: "the reviewer bundle verification command was saved as a local text file instead."
+    });
+  });
+  credibilityPackPanel.querySelector(".copy-credibility-bundle-path")?.addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    const path = button.dataset.path ?? state.credibilityBundle?.paths?.relativeBundle ?? "";
+    void copyOrDownloadText({
+      button,
+      text: `${path}\n`,
+      filename: `truth-harness-credibility-bundle-path-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      copiedTitle: "Copied bundle path",
+      copiedDetail: "Reviewer bundle path copied from the Report tab.",
+      fallbackTitle: "Downloaded bundle path",
+      fallbackDetail: "the reviewer bundle path was saved as a local text file instead."
+    });
+  });
   credibilityPackPanel.querySelector(".plan-credibility-run-next")?.addEventListener("click", () => {
     void refreshCredibilityRunNext({ announce: true });
   });
@@ -11736,6 +11809,108 @@ function renderCredibilityPackPanel() {
       });
     });
   });
+}
+
+function credibilityBundleCardHtml() {
+  const payload = state.credibilityBundle;
+  const manifest = payload?.manifest;
+  const verification = payload?.verification;
+  const hasBundle = payload?.latest && manifest;
+  const status = state.credibilityBundleError
+    ? "error"
+    : state.credibilityBundleLoading
+      ? "checking"
+      : hasBundle
+        ? verification?.passed && verification?.sourceMatchesWorkspace
+          ? "verified"
+          : "drift"
+        : "missing";
+  const statusClass = status === "verified" ? "exact" : status === "drift" ? "waiting" : status === "error" ? "refuted" : "waiting";
+  const statusLabel = state.credibilityBundleLoading
+    ? "checking"
+    : status === "verified"
+      ? "verified bundle"
+      : status === "drift"
+        ? "bundle drift"
+        : status === "error"
+          ? "unavailable"
+          : "no bundle";
+  const detail = state.credibilityBundleError
+    ? state.credibilityBundleError
+    : hasBundle
+      ? "Portable reviewer bundle found locally. The verification command checks copied hashes and reports live source drift separately."
+      : "Run the Docker professor route to create the portable reviewer bundle after engine and benchmark gates pass.";
+  const command = credibilityBundleCommand();
+  const path = payload?.paths?.relativeBundle ?? payload?.bundleRef ?? "";
+  const facts = hasBundle
+    ? [
+        ["Bundle", manifest.bundleId],
+        ["Pack", manifest.packId],
+        ["Pack status", manifest.packStatus],
+        ["Engine gates", `${manifest.packSummary?.requiredEngineGates ?? "0/0"} required, ${manifest.packSummary?.concreteEngineGates ?? "0/0"} concrete`],
+        ["Bundle integrity", verification?.passed ? "passed" : "changed"],
+        ["Source workspace", verification?.sourceMatchesWorkspace ? "matches bundle" : "drifted"],
+        ["Files", `${verification?.checkedBundleFiles ?? manifest.summary?.totalFiles ?? 0} checked`]
+      ]
+    : [
+        ["Expected route", "npm run docker:professor"],
+        ["Network", "no-network compose service"],
+        ["Status", state.credibilityBundleLoading ? "checking local findings" : "not exported yet"]
+      ];
+
+  return `<section class="credibility-bundle-card bundle-${escapeHtml(status)}" aria-label="Portable reviewer bundle">
+    <div class="credibility-bundle-head">
+      <div>
+        <span class="mini-label">portable handoff</span>
+        <strong>Verified Reviewer Bundle</strong>
+      </div>
+      <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
+    </div>
+    <p>${escapeHtml(detail)}</p>
+    <dl class="credibility-bundle-facts">
+      ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${credibilityBundleValueHtml(value)}</dd></div>`).join("")}
+    </dl>
+    ${path ? `<small>Bundle path: <code>${escapeHtml(path)}</code></small>` : ""}
+    <div class="credibility-bundle-command">
+      <code>${escapeHtml(command)}</code>
+      <div class="credibility-bundle-actions">
+        <button class="text-button compact-button refresh-credibility-bundle" data-testid="refresh-credibility-bundle" type="button" ${state.credibilityBundleLoading ? "disabled" : ""}>${state.credibilityBundleLoading ? "Refreshing" : "Refresh bundle"}</button>
+        <button class="text-button compact-button copy-credibility-bundle-command" data-testid="copy-credibility-bundle-command" data-command="${escapeHtml(command)}" type="button">Copy verify</button>
+        <button class="text-button compact-button copy-credibility-bundle-path" data-testid="copy-credibility-bundle-path" data-path="${escapeHtml(path)}" type="button" ${path ? "" : "disabled"}>Copy path</button>
+      </div>
+    </div>
+  </section>`;
+}
+
+function credibilityBundleCommand() {
+  return state.credibilityBundle?.command ??
+    state.credibilityBundle?.manifest?.reviewerCommands?.verifyBundle ??
+    "npm run docker:professor";
+}
+
+function credibilityBundleValueHtml(value) {
+  const text = String(value ?? "");
+  if (/^(cbun|cred)_[a-f0-9]+$/u.test(text)) {
+    return `<code>${escapeHtml(text)}</code>`;
+  }
+  return escapeHtml(text);
+}
+
+function credibilityBundleTrust(payload) {
+  if (!payload?.latest) {
+    return "waiting";
+  }
+  return payload.verification?.passed && payload.verification?.sourceMatchesWorkspace ? "passed" : "waiting";
+}
+
+function credibilityBundleActivitySummary(payload) {
+  if (!payload?.latest) {
+    return "No portable reviewer bundle is present yet; run npm run docker:professor after evidence gates pass.";
+  }
+
+  const manifest = payload.manifest ?? {};
+  const verification = payload.verification ?? {};
+  return `${manifest.bundleId ?? "bundle"} for ${manifest.packId ?? "pack"}; integrity ${verification.passed ? "passed" : "changed"}, source ${verification.sourceMatchesWorkspace ? "matches" : "drifted"}.`;
 }
 
 function credibilityBenchmarkCardHtml(pack) {
@@ -12729,6 +12904,12 @@ projectStartReport?.addEventListener("click", () => {
   if (!state.credibilityPack && !state.credibilityPackLoading) {
     void refreshCredibilityPack({ announce: false });
   }
+  if (!state.credibilityBundle && !state.credibilityBundleLoading) {
+    void refreshCredibilityBundle({ announce: false });
+  }
+  if (!state.credibilityRunNextPlan && !state.credibilityRunNextLoading) {
+    void refreshCredibilityRunNext({ announce: false });
+  }
   resetActiveSurfaceScroll();
 });
 
@@ -13028,6 +13209,9 @@ surfaceTabs.forEach((button) => {
     }
     if (nextSurface === "report" && !state.credibilityPack && !state.credibilityPackLoading) {
       void refreshCredibilityPack({ announce: false });
+    }
+    if (nextSurface === "report" && !state.credibilityBundle && !state.credibilityBundleLoading) {
+      void refreshCredibilityBundle({ announce: false });
     }
     if (nextSurface === "report" && !state.credibilityRunNextPlan && !state.credibilityRunNextLoading) {
       void refreshCredibilityRunNext({ announce: false });

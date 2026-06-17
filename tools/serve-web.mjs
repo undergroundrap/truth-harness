@@ -1,8 +1,8 @@
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
-import { extname, join, normalize, resolve, sep } from "node:path";
+import { extname, join, normalize, relative, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 
@@ -207,6 +207,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "engine-evidence-verification",
         "engine-evidence-runs",
         "credibility-pack",
+        "credibility-bundle-latest",
         "workspace-review-queue",
         "workspace-run-next-dry-run",
         "workspace-run-next-save",
@@ -338,6 +339,23 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, 400, error instanceof Error ? error.message : "Credibility pack could not be written.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/credibility-bundle/latest" && request.method === "GET") {
+    try {
+      await ensureLocalWorkspace();
+      const bundle = await readLatestCredibilityBundle();
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-credibility-bundle-latest-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        latest: Boolean(bundle),
+        ...bundle
+      });
+    } catch (error) {
+      writeApiError(response, 409, error instanceof Error ? error.message : "Latest credibility bundle could not be read.", request);
     }
     return;
   }
@@ -2076,6 +2094,74 @@ function artifactPathsFor(relativeOrAbsoluteJsonPath) {
   return {
     json,
     markdown: json.replace(/\.json$/u, ".md")
+  };
+}
+
+async function readLatestCredibilityBundle() {
+  const findingsDir = resolve(projectRoot, ".truth-harness", "findings");
+  let entries;
+  try {
+    entries = await readdir(findingsDir, { withFileTypes: true });
+  } catch (error) {
+    const nodeError = error;
+    if (nodeError?.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+
+  const candidates = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.endsWith("-credibility-bundle")) {
+      continue;
+    }
+
+    const bundlePath = join(findingsDir, entry.name);
+    const manifestPath = join(bundlePath, "manifest.json");
+    try {
+      const [info, raw] = await Promise.all([stat(bundlePath), readFile(manifestPath, "utf8")]);
+      const manifest = JSON.parse(raw);
+      if (manifest?.schemaVersion !== "truth-harness.credibility-bundle.v0") {
+        continue;
+      }
+      candidates.push({
+        bundlePath,
+        manifestPath,
+        manifest,
+        mtimeMs: info.mtimeMs
+      });
+    } catch (error) {
+      const nodeError = error;
+      if (nodeError?.code !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+
+  candidates.sort((left, right) => right.mtimeMs - left.mtimeMs);
+  const latest = candidates[0];
+  if (!latest) {
+    return undefined;
+  }
+
+  const { verifyCredibilityBundle } = await loadCoreModule();
+  const bundleRef = portablePath(relative(projectRoot, latest.bundlePath));
+  const verification = await verifyCredibilityBundle({
+    rootPath: projectRoot,
+    bundleRef
+  });
+
+  return {
+    bundleRef,
+    manifest: latest.manifest,
+    verification,
+    paths: {
+      bundle: latest.bundlePath,
+      manifest: latest.manifestPath,
+      relativeBundle: bundleRef
+    },
+    command: latest.manifest?.reviewerCommands?.verifyBundle ??
+      `truth-harness workspace verify-credibility-bundle . ${bundleRef}`
   };
 }
 

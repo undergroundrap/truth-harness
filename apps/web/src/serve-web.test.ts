@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
-import { writeResearchSession } from "../../../packages/core/src/index.js";
+import { writeCredibilityBundle, writeResearchSession, type EngineVerificationCommandRunner } from "../../../packages/core/src/index.js";
 
 const repoRoot = resolve(".");
 const tsxCli = resolve(repoRoot, "node_modules/tsx/dist/cli.mjs");
@@ -64,6 +64,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("engine-evidence-verification");
     expect(statusPayload.capabilities).toContain("engine-evidence-runs");
     expect(statusPayload.capabilities).toContain("credibility-pack");
+    expect(statusPayload.capabilities).toContain("credibility-bundle-latest");
     expect(statusPayload.capabilities).toContain("release-audit");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
@@ -259,6 +260,56 @@ describe("local web route ledger API", () => {
         action: "wrote-credibility-pack"
       })
     );
+
+    const emptyBundleResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest`);
+    expect(emptyBundleResponse.status).toBe(200);
+    const emptyBundlePayload = await emptyBundleResponse.json();
+    expectLocalApiSuccess(emptyBundleResponse, emptyBundlePayload);
+    expect(emptyBundlePayload).toMatchObject({
+      schemaVersion: "truth-harness.web-credibility-bundle-latest-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      latest: false
+    });
+
+    const bundle = await writeCredibilityBundle({
+      rootPath: tempProjectRoot,
+      now: "2026-06-17T00:00:00.000Z",
+      engineRequirements: { maxima: true, z3: true, lean: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      leanCommand: "lean-test",
+      sageCommand: "sage-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: passingEngineRunner
+    });
+    const bundleResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest`);
+    expect(bundleResponse.status).toBe(200);
+    const bundlePayload = await bundleResponse.json();
+    expectLocalApiSuccess(bundleResponse, bundlePayload);
+    expect(bundlePayload).toMatchObject({
+      schemaVersion: "truth-harness.web-credibility-bundle-latest-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      latest: true,
+      bundleRef: expect.stringContaining("-credibility-bundle"),
+      manifest: {
+        schemaVersion: "truth-harness.credibility-bundle.v0",
+        bundleId: bundle.manifest.bundleId,
+        packId: bundle.manifest.packId
+      },
+      verification: {
+        schemaVersion: "truth-harness.credibility-bundle-verification.v0",
+        bundleId: bundle.manifest.bundleId,
+        passed: true,
+        sourceMatchesWorkspace: true
+      }
+    });
+    expect(bundlePayload.command).toContain("workspace verify-credibility-bundle");
+    expect(bundlePayload.paths.relativeBundle).toContain(bundle.manifest.bundleId);
 
     const receiptResponse = await fetch(`${baseUrl}/api/receipt`, {
       method: "POST",
@@ -1619,6 +1670,37 @@ async function getFreePort(): Promise<number> {
     });
   });
 }
+
+const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => {
+  if (command === "maxima-test" && args[0] === "--version") {
+    return { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" };
+  }
+  if (command === "maxima-test") {
+    return { status: 0, stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n", stderr: "" };
+  }
+  if (command === "z3-test" && args[0] === "-version") {
+    return { status: 0, stdout: "Z3 version 4.13.0\n", stderr: "" };
+  }
+  if (command === "z3-test") {
+    return { status: 0, stdout: "sat\n", stderr: "" };
+  }
+  if (command === "lean-test" && args[0] === "--version") {
+    return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+  }
+  if (command === "lean-test") {
+    return { status: 0, stdout: "", stderr: "" };
+  }
+  if (command === "sage-test") {
+    return { status: 0, stdout: "SageMath version 10.6\n", stderr: "" };
+  }
+
+  return {
+    status: null,
+    stdout: "",
+    stderr: "",
+    error: { name: "Error", message: `unexpected command ${command} ${args.join(" ")}` }
+  };
+};
 
 async function startWebServer(port: number, projectRoot: string): Promise<ChildProcessWithoutNullStreams> {
   const server = spawn(process.execPath, [
