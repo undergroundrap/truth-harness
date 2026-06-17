@@ -298,6 +298,11 @@ const state = {
   engineRunsError: undefined,
   engineRunsSaving: false,
   engineRunsSavingMode: undefined,
+  credibilityPack: undefined,
+  credibilityPackPaths: undefined,
+  credibilityPackLoading: false,
+  credibilityPackSaving: false,
+  credibilityPackError: undefined,
   workspaceReadiness: undefined,
   catalogStatus: undefined,
   catalogSearch: undefined,
@@ -433,6 +438,7 @@ const refreshRunNextButton = document.querySelector("#refresh-run-next");
 const copyRunNextCommandButton = document.querySelector("#copy-run-next-command");
 const researchNotes = document.querySelector("#research-notes");
 const notesStatus = document.querySelector("#notes-status");
+const credibilityPackPanel = document.querySelector("#credibility-pack-panel");
 const reportPreview = document.querySelector("#report-preview");
 const copyReportButton = document.querySelector("#copy-report");
 const downloadReportButton = document.querySelector("#download-report");
@@ -1191,6 +1197,7 @@ function render() {
   renderMaintenancePanel();
   renderTaskDock(receipt);
   renderReplay(receipt);
+  renderCredibilityPackPanel();
   renderReport(receipt);
   updateClaimRecordButtons(receipt);
   renderCatalogSearchPanel();
@@ -8037,6 +8044,94 @@ async function saveEngineEvidenceRun(button, { requireAllEngines = false } = {})
   }
 }
 
+async function refreshCredibilityPack({ announce = true } = {}) {
+  state.credibilityPackLoading = true;
+  state.credibilityPackError = undefined;
+  renderCredibilityPackPanel();
+
+  try {
+    const params = new URLSearchParams({
+      requireAllEngines: "true",
+      timeoutMs: "1500"
+    });
+    const response = await fetch(`/api/credibility-pack?${params.toString()}`, {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local credibility pack API failed.");
+    state.credibilityPack = payload.pack;
+    state.credibilityPackPaths = payload.paths;
+    state.credibilityPackError = undefined;
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded professor credibility pack",
+        localApiSuccessMessage(payload, credibilityPackActivitySummary(payload.pack)),
+        payload.pack?.status === "ready-for-review" ? "passed" : "waiting",
+        payload.pack?.createdAt
+      );
+    }
+  } catch (error) {
+    state.credibilityPack = undefined;
+    state.credibilityPackPaths = undefined;
+    state.credibilityPackError = error instanceof Error ? error.message : "Unknown credibility pack failure.";
+    if (announce) {
+      addActivity("local-api", "Credibility pack unavailable", state.credibilityPackError, "waiting");
+    }
+  } finally {
+    state.credibilityPackLoading = false;
+    renderCredibilityPackPanel();
+  }
+}
+
+async function writeCredibilityPackFromUi(button) {
+  if (state.credibilityPackSaving) {
+    return;
+  }
+
+  state.credibilityPackSaving = true;
+  state.credibilityPackError = undefined;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Writing";
+  }
+  renderCredibilityPackPanel();
+
+  try {
+    const response = await fetch("/api/credibility-pack", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        requireAllEngines: true,
+        timeoutMs: 1500
+      })
+    });
+    const payload = await readLocalApiJson(response, "Local credibility pack write failed.");
+    state.credibilityPack = payload.pack;
+    state.credibilityPackPaths = payload.paths;
+    state.credibilityPackError = undefined;
+    addActivity(
+      "local-api",
+      "Wrote professor credibility pack",
+      payload.activity?.[0]?.detail ?? `${payload.pack?.packId ?? "credibility pack"} saved under .truth-harness/findings.`,
+      payload.pack?.status === "ready-for-review" ? "passed" : "waiting",
+      payload.pack?.createdAt
+    );
+    void refreshCatalogStatus({ announce: false });
+  } catch (error) {
+    state.credibilityPackError = error instanceof Error ? error.message : "Unknown credibility pack write failure.";
+    addActivity("local-api", "Credibility pack write failed", state.credibilityPackError, "refuted");
+  } finally {
+    state.credibilityPackSaving = false;
+    renderCredibilityPackPanel();
+  }
+}
+
 async function refreshWorkspaceReadiness({ announce = true } = {}) {
   if (!workspaceReadinessPill) {
     return;
@@ -11082,6 +11177,158 @@ function teachingPacketMarkdown(packet) {
   ].join("\n");
 }
 
+function renderCredibilityPackPanel() {
+  if (!credibilityPackPanel) {
+    return;
+  }
+
+  const pack = state.credibilityPack;
+  const status = pack?.status ?? (state.credibilityPackLoading ? "checking" : "not loaded");
+  const statusClass = credibilityPackStatusClass(status);
+  const command = credibilityPackReviewerCommand(pack);
+  const warningItems = credibilityPackWarnings(pack)
+    .map((warning) => `<li>${escapeHtml(warning)}</li>`)
+    .join("");
+  const pathRows = credibilityPackPathRows(state.credibilityPackPaths);
+  const summaryRows = pack
+    ? credibilityPackSummaryRows(pack)
+      .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${credibilityPackValueHtml(value)}</dd></div>`)
+      .join("")
+    : [
+        ["Reviewer mode", "strict all-engines"],
+        ["Privacy", "local-only"],
+        ["Network", "none"],
+        ["Status", state.credibilityPackError ?? "Refresh to inspect the current workspace."]
+      ].map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("");
+
+  credibilityPackPanel.innerHTML = `
+    <div class="credibility-pack-head">
+      <div>
+        <span class="mini-label">workspace reviewer packet</span>
+        <h4>Professor Credibility Pack</h4>
+        <p>Workspace-level validation, strict engine gates, open review queue, replay commands, and local-only privacy boundaries.</p>
+      </div>
+      <span class="status-pill ${statusClass}">${escapeHtml(credibilityPackStatusLabel(status))}</span>
+    </div>
+    <dl class="credibility-pack-summary">${summaryRows}</dl>
+    <div class="credibility-pack-actions">
+      <button class="text-button compact-button refresh-credibility-pack" data-testid="refresh-credibility-pack" type="button" ${state.credibilityPackLoading ? "disabled" : ""}>${state.credibilityPackLoading ? "Refreshing" : "Refresh"}</button>
+      <button class="text-button compact-button strong-action write-credibility-pack" data-testid="write-credibility-pack" type="button" ${state.credibilityPackSaving ? "disabled" : ""}>${state.credibilityPackSaving ? "Writing" : "Write reviewer pack"}</button>
+      <button class="text-button compact-button copy-credibility-pack-command" data-testid="copy-credibility-pack-command" data-command="${escapeHtml(command)}" type="button">Copy command</button>
+    </div>
+    <div class="credibility-pack-command">
+      <span>Replayable command</span>
+      <code>${escapeHtml(command)}</code>
+    </div>
+    ${pathRows ? `<dl class="credibility-pack-paths">${pathRows}</dl>` : ""}
+    ${warningItems ? `<ul class="credibility-pack-warnings">${warningItems}</ul>` : ""}
+  `;
+
+  credibilityPackPanel.querySelector(".refresh-credibility-pack")?.addEventListener("click", () => {
+    void refreshCredibilityPack({ announce: true });
+  });
+  credibilityPackPanel.querySelector(".write-credibility-pack")?.addEventListener("click", (event) => {
+    void writeCredibilityPackFromUi(event.currentTarget);
+  });
+  credibilityPackPanel.querySelector(".copy-credibility-pack-command")?.addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    void copyOrDownloadText({
+      button,
+      text: `${button.dataset.command ?? command}\n`,
+      filename: `truth-harness-credibility-pack-command-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      copiedTitle: "Copied credibility command",
+      copiedDetail: "Reviewer credibility-pack command copied from the Report tab.",
+      fallbackTitle: "Downloaded credibility command",
+      fallbackDetail: "the reviewer credibility-pack command was saved as a local text file instead."
+    });
+  });
+}
+
+function credibilityPackSummaryRows(pack) {
+  const summary = pack.summary ?? {};
+  return [
+    ["Professor ready", summary.professorReady ? "yes" : "blocked"],
+    ["Workspace validation", `${summary.validationPassed ? "passed" : "failed"} (${summary.validationErrors ?? 0} errors, ${summary.validationWarnings ?? 0} warnings)`],
+    ["Strict engine gates", `${summary.requiredEngineGates ?? "0/0"} required${summary.latestStrictEngineRunStatus ? `, latest saved ${summary.latestStrictEngineRunStatus}` : ""}`],
+    ["Engine evidence", `${summary.engineStatus ?? "unknown"} (${summary.concreteEngineGates ?? "0/0"} concrete, ${summary.engineEvidenceMinted ?? 0} evidence records)`],
+    ["Saved engine ledger", `${summary.savedEngineRuns ?? 0} run${summary.savedEngineRuns === 1 ? "" : "s"}`],
+    ["Open review queue", `${summary.reviewItems ?? 0} items (${summary.criticalReviewItems ?? 0} critical, ${summary.highReviewItems ?? 0} high)`],
+    ["Snapshot", `${summary.snapshotFiles ?? 0} files, ${formatBytes(summary.snapshotBytes ?? 0)}`],
+    ["Pack ID", pack.packId]
+  ];
+}
+
+function credibilityPackWarnings(pack) {
+  const warnings = [];
+  if (state.credibilityPackError) {
+    warnings.push(state.credibilityPackError);
+  }
+  if (pack?.warnings?.length) {
+    warnings.push(...pack.warnings.slice(0, 5));
+  }
+  if (pack?.limitations?.length) {
+    warnings.push(pack.limitations[0]);
+  }
+  if (!pack && !state.credibilityPackError) {
+    warnings.push("Reviewer packs are generated locally and do not call hosted models or external services.");
+  }
+  return [...new Set(warnings)];
+}
+
+function credibilityPackPathRows(paths) {
+  if (!paths?.json && !paths?.markdown) {
+    return "";
+  }
+
+  return [
+    ["JSON", paths.json],
+    ["Markdown", paths.markdown]
+  ]
+    .filter(([, value]) => value)
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd><code>${escapeHtml(value)}</code></dd></div>`)
+    .join("");
+}
+
+function credibilityPackReviewerCommand(pack) {
+  return pack?.reviewerCommands?.reproducePack ?? "truth-harness workspace credibility-pack . --require-all-engines";
+}
+
+function credibilityPackStatusLabel(status) {
+  if (status === "ready-for-review") {
+    return "ready for review";
+  }
+  if (status === "blocked") {
+    return "blocked honestly";
+  }
+  return status;
+}
+
+function credibilityPackStatusClass(status) {
+  if (status === "ready-for-review") {
+    return "exact";
+  }
+  if (status === "blocked") {
+    return "waiting";
+  }
+  return "waiting";
+}
+
+function credibilityPackValueHtml(value) {
+  if (typeof value === "string" && value.startsWith("cred_")) {
+    return `<code>${escapeHtml(value)}</code>`;
+  }
+  return escapeHtml(String(value ?? ""));
+}
+
+function credibilityPackActivitySummary(pack) {
+  if (!pack?.summary) {
+    return "Professor credibility pack loaded from the local workspace.";
+  }
+
+  return `${pack.status}; validation ${pack.summary.validationPassed ? "passed" : "failed"}, engines ${pack.summary.requiredEngineGates}, queue ${pack.summary.reviewItems} item${pack.summary.reviewItems === 1 ? "" : "s"}.`;
+}
+
 function renderReport(receipt) {
   if (!receipt) {
     return;
@@ -11852,6 +12099,9 @@ projectStartChecks?.addEventListener("click", () => {
 projectStartReport?.addEventListener("click", () => {
   state.surface = "report";
   render();
+  if (!state.credibilityPack && !state.credibilityPackLoading) {
+    void refreshCredibilityPack({ announce: false });
+  }
   resetActiveSurfaceScroll();
 });
 
@@ -12148,6 +12398,9 @@ surfaceTabs.forEach((button) => {
     state.surface = nextSurface;
     if (nextSurface === "plot") {
       requestVisualFit();
+    }
+    if (nextSurface === "report" && !state.credibilityPack && !state.credibilityPackLoading) {
+      void refreshCredibilityPack({ announce: false });
     }
     render();
     resetActiveSurfaceScroll();

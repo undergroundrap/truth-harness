@@ -62,6 +62,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("workspace-maintenance");
     expect(statusPayload.capabilities).toContain("engine-evidence-verification");
     expect(statusPayload.capabilities).toContain("engine-evidence-runs");
+    expect(statusPayload.capabilities).toContain("credibility-pack");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
       sameOriginWritesOnly: true,
@@ -151,6 +152,59 @@ describe("local web route ledger API", () => {
       expect.objectContaining({
         runId: strictEngineRunWritePayload.run.runId,
         requiredTotal: 5
+      })
+    );
+
+    const credibilityResponse = await fetch(`${baseUrl}/api/credibility-pack?requireAllEngines=true&timeoutMs=50`);
+    expect(credibilityResponse.status).toBe(200);
+    const credibilityPayload = await credibilityResponse.json();
+    expectLocalApiSuccess(credibilityResponse, credibilityPayload);
+    expect(credibilityPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-credibility-pack-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      mode: "all-engines"
+    });
+    expect(credibilityPayload.pack).toMatchObject({
+      schemaVersion: "truth-harness.credibility-pack.v0",
+      localOnly: true,
+      networkAccess: "none",
+      title: "Truth Harness Professor Credibility Pack"
+    });
+    expect(credibilityPayload.pack.summary.requiredEngineGates).toMatch(/\/5$/u);
+    expect(credibilityPayload.pack.engineRunLedger.latestStrictReviewerRun).toMatchObject({
+      runId: strictEngineRunWritePayload.run.runId,
+      requiredTotal: 5
+    });
+    expect(credibilityPayload.pack.reviewerCommands.verifyEngines).toContain("--write --require-all-engines");
+    expect(credibilityPayload.pack.reviewerCommands.reproducePack).toContain("--require-all-engines");
+
+    const credibilityWriteResponse = await fetch(`${baseUrl}/api/credibility-pack`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ timeoutMs: 50, requireAllEngines: true })
+    });
+    expect(credibilityWriteResponse.status).toBe(200);
+    const credibilityWritePayload = await credibilityWriteResponse.json();
+    expectLocalApiSuccess(credibilityWriteResponse, credibilityWritePayload);
+    expect(credibilityWritePayload).toMatchObject({
+      schemaVersion: "truth-harness.web-credibility-pack-write-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      mode: "all-engines"
+    });
+    expect(credibilityWritePayload.pack.schemaVersion).toBe("truth-harness.credibility-pack.v0");
+    expect(credibilityWritePayload.pack.reviewerCommands.verifyEngines).toContain("--write --require-all-engines");
+    expect(credibilityWritePayload.paths.json).toContain(".truth-harness");
+    expect(credibilityWritePayload.paths.markdown).toContain(".truth-harness");
+    expect(existsSync(credibilityWritePayload.paths.json)).toBe(true);
+    expect(existsSync(credibilityWritePayload.paths.markdown)).toBe(true);
+    expect(credibilityWritePayload.activity).toContainEqual(
+      expect.objectContaining({
+        actor: "local-api",
+        action: "wrote-credibility-pack"
       })
     );
 

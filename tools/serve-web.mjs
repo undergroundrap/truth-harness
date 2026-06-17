@@ -206,6 +206,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "verification-readiness",
         "engine-evidence-verification",
         "engine-evidence-runs",
+        "credibility-pack",
         "workspace-review-queue",
         "workspace-run-next-dry-run",
         "docker-verifier-guidance",
@@ -276,6 +277,65 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, 400, error instanceof Error ? error.message : "Engine evidence run could not be written.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/credibility-pack" && request.method === "GET") {
+    try {
+      const { createCredibilityPack } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const input = credibilityPackInputFromValue({
+        requireAllEngines:
+          isTruthyQueryParam(requestUrl.searchParams.get("requireAllEngines")) ||
+          requestUrl.searchParams.get("mode") === "all-engines",
+        timeoutMs: requestUrl.searchParams.get("timeoutMs"),
+        maxRoutes: requestUrl.searchParams.get("maxRoutes"),
+        maxClaims: requestUrl.searchParams.get("maxClaims"),
+        maxSessions: requestUrl.searchParams.get("maxSessions")
+      });
+      const pack = await createCredibilityPack(input);
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-credibility-pack-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        mode: input.engineRequirements ? "all-engines" : "default",
+        pack
+      });
+    } catch (error) {
+      writeApiError(response, 409, error instanceof Error ? error.message : "Credibility pack could not be created.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/credibility-pack" && request.method === "POST") {
+    try {
+      const body = await readJsonBody(request);
+      const { writeCredibilityPack } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const input = credibilityPackInputFromValue(body);
+      const result = await writeCredibilityPack(input);
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-credibility-pack-write-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        mode: input.engineRequirements ? "all-engines" : "default",
+        pack: result.pack,
+        paths: {
+          json: result.jsonPath,
+          markdown: result.markdownPath
+        },
+        activity: [
+          {
+            actor: "local-api",
+            action: "wrote-credibility-pack",
+            detail: `${result.pack.packId} saved as a local reviewer credibility pack with status ${result.pack.status}.`,
+            at: result.pack.createdAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(response, 400, error instanceof Error ? error.message : "Credibility pack could not be written.", request);
     }
     return;
   }
@@ -1469,6 +1529,26 @@ function readinessGate(input) {
     status: input.status,
     detail: input.detail,
     command: input.command
+  };
+}
+
+function credibilityPackInputFromValue(value = {}) {
+  const requireAllEngines = value?.requireAllEngines === true || value?.mode === "all-engines";
+  return {
+    rootPath: projectRoot,
+    timeoutMs: boundedPositiveNumberOrUndefined(value?.timeoutMs, 10_000) ?? 1500,
+    maxRoutes: boundedPositiveNumberOrUndefined(value?.maxRoutes, 100),
+    maxClaims: boundedPositiveNumberOrUndefined(value?.maxClaims, 100),
+    maxSessions: boundedPositiveNumberOrUndefined(value?.maxSessions, 50),
+    engineRequirements: requireAllEngines
+      ? {
+          maxima: true,
+          z3: true,
+          cvc5: true,
+          lean: true,
+          sage: true
+        }
+      : undefined
   };
 }
 

@@ -65,6 +65,29 @@ describe("web UI action contracts", () => {
     expect(styles).toContain("grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));");
   });
 
+  it("surfaces workspace credibility packs from the Report tab", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('id="credibility-pack-panel"');
+    expect(source).toContain('fetch(`/api/credibility-pack?${params.toString()}`');
+    expect(source).toContain('fetch("/api/credibility-pack"');
+    expect(source).toContain("function renderCredibilityPackPanel()");
+    expect(source).toContain("async function refreshCredibilityPack({ announce = true } = {})");
+    expect(source).toContain("async function writeCredibilityPackFromUi(button)");
+    expect(source).toContain('data-testid="refresh-credibility-pack"');
+    expect(source).toContain('data-testid="write-credibility-pack"');
+    expect(source).toContain('data-testid="copy-credibility-pack-command"');
+    expect(source).toContain("truth-harness workspace credibility-pack . --require-all-engines");
+    expect(source).toContain("Reviewer credibility-pack command copied from the Report tab.");
+    expect(styles).toContain(".credibility-pack-panel");
+    expect(styles).toContain(".credibility-pack-summary");
+    expect(styles).toContain("overflow-wrap: anywhere;");
+  });
+
   it("clears focused queue state when closing the selected workspace action", async () => {
     const source = await readFile(appSourcePath, "utf8");
     const handler = source.match(/workspaceReviewAction\.querySelector\("\.close-workspace-action"\)[\s\S]*?workspaceReviewAction\.querySelector\("\.open-workspace-action-route"\)/u)?.[0];
