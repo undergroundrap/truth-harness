@@ -287,19 +287,20 @@ export function verifierRouteReadiness(route: VerifierRoute): VerifierRouteReadi
   const obligations = route.proofObligations ?? [];
   const openObligations = obligations.filter((obligation) => obligation.status === "open");
   const criticalOpenObligations = openObligations.filter((obligation) => obligation.severity === "critical");
+  const blockingObligations = criticalOpenObligations;
   const strongestTrust = strongestTrustFromRoute(route);
   const readyForNarrowClaim =
     route.status !== "refuted" &&
     strongestTrust !== "unverified" &&
     strongestTrust !== "refuted" &&
-    openObligations.length === 0;
+    blockingObligations.length === 0;
 
   return {
     readyForNarrowClaim,
     strongestTrust,
     openObligations: openObligations.length,
     criticalOpenObligations: criticalOpenObligations.length,
-    blockingObligations: openObligations.map((obligation) => ({
+    blockingObligations: blockingObligations.map((obligation) => ({
       obligationId: obligation.obligationId,
       kind: obligation.kind,
       severity: obligation.severity,
@@ -313,7 +314,8 @@ export function verifierRouteReadiness(route: VerifierRoute): VerifierRouteReadi
       readyForNarrowClaim,
       strongestTrust,
       openObligations,
-      criticalOpenObligations
+      criticalOpenObligations,
+      blockingObligations
     })
   };
 }
@@ -1369,13 +1371,18 @@ function routeReadinessSummary(input: {
   strongestTrust: TrustLabel;
   openObligations: ProofObligation[];
   criticalOpenObligations: ProofObligation[];
+  blockingObligations: ProofObligation[];
 }): string {
   if (input.route.status === "refuted" || input.strongestTrust === "refuted") {
     return "This route is refuted under the recorded assumptions; cite it only as a refutation or supersession input.";
   }
 
   if (input.readyForNarrowClaim) {
-    return `Ready only as a narrow ${input.strongestTrust} claim matching the recorded inputs, outputs, evidence refs, and limitations.`;
+    const upgradeCount = input.openObligations.length - input.blockingObligations.length;
+    const upgradeText = upgradeCount > 0
+      ? ` ${upgradeCount} upgrade obligation${upgradeCount === 1 ? "" : "s"} remain open before stronger labels.`
+      : "";
+    return `Ready only as a narrow ${input.strongestTrust} claim matching the recorded inputs, outputs, evidence refs, and limitations.${upgradeText}`;
   }
 
   const open = input.openObligations.length;

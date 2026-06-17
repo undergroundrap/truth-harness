@@ -475,7 +475,7 @@ function routeObligationItem(workspacePath: string, route: VerifierRoute, obliga
       obligationId: obligation.obligationId
     }),
     kind: "route-obligation",
-    priority: priorityForRouteObligation(obligation),
+    priority: priorityForRouteObligation(route, obligation),
     title: obligation.title,
     summary: `${route.problem} - ${obligation.requiredBefore}`,
     command: obligation.command ?? `truth-harness route show ${quoteCommandArg(route.routeId)} --workspace ${quoteCommandArg(workspacePath)} --json`,
@@ -774,9 +774,9 @@ function uniqueSorted(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))].sort((left, right) => left.localeCompare(right));
 }
 
-function priorityForRouteObligation(obligation: ProofObligation): WorkspaceReviewPriority {
+function priorityForRouteObligation(route: VerifierRoute, obligation: ProofObligation): WorkspaceReviewPriority {
   if (obligation.severity === "critical") {
-    return "critical";
+    return route.finalTrust === "unverified" ? "high" : "critical";
   }
 
   if (obligation.kind === "formal-proof" || obligation.kind === "solver-encoding") {

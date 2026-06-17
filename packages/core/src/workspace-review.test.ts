@@ -68,6 +68,8 @@ describe("workspace review", () => {
     expect(review.summary.routeObligations).toBeGreaterThanOrEqual(3);
     expect(review.summary.readyRoutesWithoutClaims).toBe(1);
     expect(review.summary.blockedClaims).toBe(1);
+    expect(review.summary.criticalItems).toBe(0);
+    expect(review.summary.highItems).toBeGreaterThanOrEqual(1);
     expect(review.autonomy).toMatchObject({
       mode: "human-review-gated",
       canRunUnattended: true,
@@ -80,9 +82,12 @@ describe("workspace review", () => {
     expect(review.autonomy.humanReviewRequiredFor).toEqual(expect.arrayContaining([expect.stringMatching(/^claim-blocker:claim_/u)]));
     expect(review.autonomy.agentPacket).toContain("# Truth Harness Autonomy Contract");
     expect(review.autonomy.agentPacket).toContain("This contract can authorize local work. It cannot certify truth.");
-    expect(review.items[0]).toMatchObject({
+    const blockedRouteAction = review.items.find(
+      (item) => item.kind === "route-obligation" && item.routeId === blockedRoute.route.routeId
+    );
+    expect(blockedRouteAction).toMatchObject({
       kind: "route-obligation",
-      priority: "critical",
+      priority: "high",
       routeId: blockedRoute.route.routeId,
       acceptanceCriteria: expect.arrayContaining([
         "Open the source route and satisfy this exact obligation before upgrading trust.",
@@ -100,9 +105,16 @@ describe("workspace review", () => {
       ]),
       agentPacket: expect.stringContaining("# Truth Harness Workspace Action")
     });
-    expect(review.items[0].agentPacket).toContain(`Route: ${blockedRoute.route.routeId}`);
-    expect(review.items[0].agentPacket).toContain("Evidence slots:");
-    expect(review.items[0].agentPacket).toContain("This packet is a plan, not evidence.");
+    expect(review.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "route-obligation",
+        routeId: blockedRoute.route.routeId,
+        priority: "critical"
+      })
+    );
+    expect(blockedRouteAction?.agentPacket).toContain(`Route: ${blockedRoute.route.routeId}`);
+    expect(blockedRouteAction?.agentPacket).toContain("Evidence slots:");
+    expect(blockedRouteAction?.agentPacket).toContain("This packet is a plan, not evidence.");
     expect(review.items).toContainEqual(
       expect.objectContaining({
         kind: "route-ready-claim",

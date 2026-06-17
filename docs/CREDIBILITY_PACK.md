@@ -39,7 +39,7 @@ npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/
 - Embedded local artifact snapshot with file hashes.
 - Concrete engine evidence report from `engines verify`.
 - Saved engine-run ledger summary from `.truth-harness/engine-runs`, including the latest strict all-engines reviewer run when one exists.
-- Workspace review queue with top open proof/check obligations.
+- Workspace review queue with top open proof/check obligations. Normal unverified exploration and stronger-label upgrades stay visible as work, but they are not treated as release-critical defects unless they block a current claim boundary.
 - Structured reviewer action plan with priorities, close targets, and commands for validation, engine, and workspace-review blockers.
 - Exact reviewer commands for validation, writable engine checks, review, Docker core engines, and the Lean proof fixture.
 - Blocking warnings when validation fails, required engines are missing, concrete engine smoke gates are incomplete, or critical review items remain open.
@@ -86,6 +86,8 @@ A pack is `ready-for-review` only when:
 - all concrete engine smoke gates pass,
 - every explicitly required engine gate passes,
 - the workspace review has no critical open items.
+
+Critical review items are reserved for product, evidence, or current-claim blockers. Open research routes that honestly remain `unverified`, and upgrade obligations that would be needed before claiming a stronger label, should appear in the action queue without making the whole workspace look broken.
 
 This status is intentionally conservative. A ready pack does not prove every claim; it only says the workspace is coherent enough for external review.
 

@@ -36,7 +36,7 @@ Direct claim-ledger proof evidence can support a `proved` trust label only when 
 
 Route obligations and claim-ledger evidence promotion parse proof-check, CAS-check, and SMT-check records strictly before trusting them. A hand-written or malformed JSON file that merely says `trust: proved`, `trust: cross-checked`, or `trust: smt-checked` is unresolved evidence, not proof, independent verification, or solver evidence.
 
-Verifier routes are work orders, not proof objects. Claim-ledger promotion only treats a `route:` evidence ref as finalization-supporting evidence when the route readiness gate says it is ready for a narrow claim. If a route still has open obligations, the claim keeps the route attached as `unverified` evidence and copies the route readiness blocker into the claim finalization boundary.
+Verifier routes are work orders, not proof objects. Claim-ledger promotion only treats a `route:` evidence ref as finalization-supporting evidence when the route readiness gate says it is ready for a narrow claim. Open upgrade obligations, such as "attach Lean before calling this proved," do not invalidate an already scoped `exact-computed`, `cross-checked`, or `smt-checked` result. If a route still has open blocking obligations for its current claim boundary, the claim keeps the route attached as `unverified` evidence and copies the route readiness blocker into the claim finalization boundary.
 
 `truth-harness smt backends` and the MCP `truth_harness_smt_backends` tool report local Z3 and cvc5 availability without network access. A successful solver version probe means this machine may be able to check SMT-LIB artifacts; it does not check any constraint file and never mints `smt-checked` by itself.
 

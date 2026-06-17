@@ -70,6 +70,35 @@ describe("verifier route", () => {
     });
   });
 
+  it("treats stronger-label obligations as upgrades for already scoped exact results", () => {
+    const route = createVerifierRoute("for all integers n, n^2+n is even", {
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const readiness = verifierRouteReadiness(route);
+
+    expect(route.finalTrust).toBe("exact-computed");
+    expect(route.proofObligations).toContainEqual(
+      expect.objectContaining({
+        status: "open",
+        severity: "warning",
+        requiredBefore: "Before labeling this scoped claim proved."
+      })
+    );
+    expect(readiness).toMatchObject({
+      readyForNarrowClaim: true,
+      strongestTrust: "exact-computed",
+      criticalOpenObligations: 0,
+      blockingObligations: []
+    });
+    expect(readiness.openObligations).toBeGreaterThan(0);
+    expect(readiness.summary).toContain("Ready only as a narrow exact-computed claim");
+    expect(readiness.summary).toContain("upgrade obligation");
+  });
+
   it("routes symbolic claims through SymPy and records independent Maxima when available", () => {
     const route = createVerifierRoute("symbolic simplify sin(x)^2 + cos(x)^2", {
       now: new Date("2026-06-12T00:00:00.000Z"),
