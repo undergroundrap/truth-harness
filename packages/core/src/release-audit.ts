@@ -429,7 +429,8 @@ function engineCheck(pack: CredibilityPack, required: boolean): ReleaseAuditChec
   const detail = [
     `Required gates: ${pack.summary.requiredEngineGates}.`,
     `Concrete gates: ${pack.summary.concreteEngineGates}.`,
-    `Evidence minted: ${pack.summary.engineEvidenceMinted}.`
+    `Evidence minted: ${pack.summary.engineEvidenceMinted}.`,
+    ...engineEvidenceLadderDetails(pack)
   ];
   const command = preferredEngineEvidenceCommand(pack);
   const details = [
@@ -481,6 +482,13 @@ function engineEvidenceGuidance(pack: CredibilityPack): string[] {
     "Host subprocess launch appears blocked for at least one engine; use the matching no-network Docker gate before treating host failures as engine failures.",
     ...commands.map((command) => `Docker fallback: ${command}.`)
   ];
+}
+
+function engineEvidenceLadderDetails(pack: CredibilityPack): string[] {
+  return pack.engineEvidenceLadder.slice(0, 8).map((entry) => {
+    const gate = entry.gate === "required" ? "required" : "optional";
+    return `Gate ${entry.displayName} (${gate}): ${entry.evidenceTier}; status ${entry.status}; trust ${entry.trust}. ${entry.reviewerMeaning}`;
+  });
 }
 
 function engineEvidenceDockerCommands(pack: CredibilityPack): string[] {

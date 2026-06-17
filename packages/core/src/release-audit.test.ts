@@ -67,7 +67,15 @@ describe("release audit", () => {
       blockingFailures: 0
     });
     expect(audit.checks).toContainEqual(
-      expect.objectContaining({ id: "engine-evidence", status: "pass", blocking: false })
+      expect.objectContaining({
+        id: "engine-evidence",
+        status: "pass",
+        blocking: false,
+        details: expect.arrayContaining([
+          expect.stringContaining("Gate Lean proof fixture (required): earned evidence; status passed; trust proved."),
+          expect.stringContaining("Concrete `proved` evidence earned for this fixture")
+        ])
+      })
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "adversarial-ai-benchmark", status: "pass", blocking: false })
@@ -269,7 +277,15 @@ describe("release audit", () => {
       expect.objectContaining({ id: "catalog", status: "fail", blocking: true })
     );
     expect(audit.checks).toContainEqual(
-      expect.objectContaining({ id: "engine-evidence", status: "fail", blocking: true })
+      expect.objectContaining({
+        id: "engine-evidence",
+        status: "fail",
+        blocking: true,
+        details: expect.arrayContaining([
+          expect.stringContaining("Gate Maxima symbolic cross-check (required): missing evidence; status missing; trust unverified."),
+          expect.stringContaining("Required evidence is missing, so strict reviewer readiness fails closed.")
+        ])
+      })
     );
     expect(audit.commands.releaseAudit).toContain("--require-saved-strict-engine-run");
     expect(audit.commands.releaseAudit).toContain("--require-sandbox");

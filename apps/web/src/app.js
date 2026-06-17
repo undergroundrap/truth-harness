@@ -9400,8 +9400,9 @@ function releaseAuditBenchmarkLabel(status) {
 function releaseAuditCheckCardHtml(check) {
   const statusClass = check.status === "fail" ? "refuted" : check.status === "warn" ? "waiting" : "exact";
   const command = check.command ? `<code>${escapeHtml(check.command)}</code>` : "";
+  const detailLimit = check.id === "engine-evidence" ? 8 : 3;
   const details = Array.isArray(check.details)
-    ? check.details.slice(0, 3).map((detail) => `<li>${escapeHtml(detail)}</li>`).join("")
+    ? check.details.slice(0, detailLimit).map((detail) => `<li>${escapeHtml(detail)}</li>`).join("")
     : "";
 
   return `<section class="release-audit-check ${escapeHtml(check.status)}">
