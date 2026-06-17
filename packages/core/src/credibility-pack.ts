@@ -562,7 +562,11 @@ function createReviewerActionPlan(input: {
       medium: 2,
       low: 3
     };
-    return priorityRank[left.priority] - priorityRank[right.priority] || left.title.localeCompare(right.title);
+    return (
+      priorityRank[left.priority] - priorityRank[right.priority] ||
+      reviewerActionRank(left) - reviewerActionRank(right) ||
+      left.title.localeCompare(right.title)
+    );
   });
 
   return {
@@ -571,6 +575,25 @@ function createReviewerActionPlan(input: {
     highActions: sorted.filter((item) => item.priority === "high").length,
     actions: sorted
   };
+}
+
+function reviewerActionRank(action: CredibilityPackActionItem): number {
+  if (action.category === "validation") {
+    return 0;
+  }
+  if (action.category !== "engine") {
+    return 50;
+  }
+
+  const engineRank: Record<string, number> = {
+    "maxima-symbolic-cross-check": 10,
+    "z3-smt-check": 11,
+    "lean-proof-fixture": 20,
+    "sage-symbolic-cross-check": 30,
+    "cvc5-smt-check": 40,
+    "latest-strict-reviewer-run": 45
+  };
+  return engineRank[action.source.ref] ?? 49;
 }
 
 function reviewerEngineSummary(summary: string): string {

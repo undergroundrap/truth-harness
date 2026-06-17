@@ -225,6 +225,12 @@ describe("professor credibility pack", () => {
         command: "npm run docker:sage"
       })
     );
+    expect(pack.reviewerActionPlan.actions.map((action) => action.title).slice(0, 4)).toEqual([
+      "Close required Maxima symbolic cross-check gate",
+      "Close required Z3 SMT-LIB check gate",
+      "Close required Lean proof fixture gate",
+      "Close required SageMath symbolic cross-check gate"
+    ]);
   });
 });
 
