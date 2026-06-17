@@ -85,6 +85,7 @@ interface DirectoryValidationRule {
   idKey?: string;
   required?: boolean;
   variants?: DirectoryValidationVariant[];
+  knownVariants?: DirectoryValidationVariant[];
 }
 
 interface DirectoryValidationVariant {
@@ -293,7 +294,14 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
     kind: "artifacts"
   },
   findings: {
-    kind: "findings"
+    kind: "findings",
+    knownVariants: [
+      {
+        schemaVersion: "truth-harness.credibility-pack.v0",
+        schemaFile: "credibility-pack.schema.json",
+        idKey: "packId"
+      }
+    ]
   }
 };
 
@@ -629,7 +637,10 @@ function resolveRuleVariant(
   rule: DirectoryValidationRule,
   schemaVersion: string | undefined
 ): DirectoryValidationVariant | undefined {
-  return rule.variants?.find((variant) => variant.schemaVersion === schemaVersion);
+  return (
+    rule.variants?.find((variant) => variant.schemaVersion === schemaVersion) ??
+    rule.knownVariants?.find((variant) => variant.schemaVersion === schemaVersion)
+  );
 }
 
 function formatExpectedSchemaVersions(rule: DirectoryValidationRule): string | undefined {

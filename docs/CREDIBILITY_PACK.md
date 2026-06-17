@@ -23,6 +23,7 @@ truth-harness workspace verify-credibility-bundle . .truth-harness/findings/<dat
 The command writes paired JSON and Markdown into `.truth-harness/findings/` unless `--dry-run` is used.
 The `credibility-actions` command computes the same pack but prints only the unresolved reviewer queue; it never executes the suggested commands.
 The bundle command writes a plain directory under `.truth-harness/findings/` with a manifest, copied canonical artifacts, the generated credibility pack, and a README.
+Credibility-pack JSON is validated by `schemas/credibility-pack.schema.json` during workspace validation, so reviewer packets are checked as first-class local artifacts instead of loose notes.
 
 When using the npm wrapper, pass command flags after an extra separator so npm does not consume them:
 

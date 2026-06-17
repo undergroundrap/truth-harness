@@ -156,7 +156,9 @@ describe("professor credibility pack", () => {
       expect.objectContaining({
         kind: "findings",
         artifactId: result.pack.packId,
-        schemaVersion: "truth-harness.credibility-pack.v0"
+        schemaVersion: "truth-harness.credibility-pack.v0",
+        expectedSchemaVersion: "truth-harness.credibility-pack.v0",
+        issueCodes: []
       })
     );
 
@@ -166,6 +168,20 @@ describe("professor credibility pack", () => {
       expect.objectContaining({
         kind: "findings",
         artifactId: result.pack.packId
+      })
+    );
+
+    const tampered = JSON.parse(json) as Record<string, unknown>;
+    tampered.engineEvidence = { status: "passed" };
+    await writeFile(result.jsonPath, `${JSON.stringify(tampered, null, 2)}\n`, "utf8");
+    const tamperedValidation = await validateWorkspaceArtifacts({ rootPath: root });
+    expect(tamperedValidation.passed).toBe(false);
+    expect(tamperedValidation.artifacts).toContainEqual(
+      expect.objectContaining({
+        kind: "findings",
+        artifactId: result.pack.packId,
+        schemaVersion: "truth-harness.credibility-pack.v0",
+        issueCodes: expect.arrayContaining(["invalid-artifact-schema"])
       })
     );
   });

@@ -1,0 +1,318 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/credibility-pack.schema.json",
+  "title": "Truth Harness Professor Credibility Pack",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "packId",
+    "title",
+    "createdAt",
+    "projectId",
+    "workspacePath",
+    "status",
+    "localOnly",
+    "networkAccess",
+    "privacy",
+    "summary",
+    "validation",
+    "engineEvidence",
+    "engineRunLedger",
+    "benchmarkLedger",
+    "workspaceReview",
+    "reviewerActionPlan",
+    "reviewerCommands",
+    "limitations",
+    "warnings",
+    "markdown"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.credibility-pack.v0"
+    },
+    "packId": {
+      "type": "string",
+      "pattern": "^cred_[a-f0-9]{16}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspacePath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": ["ready-for-review", "blocked"]
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "validationPassed",
+        "validationErrors",
+        "validationWarnings",
+        "checkedFiles",
+        "snapshotFiles",
+        "snapshotBytes",
+        "engineStatus",
+        "concreteEngineGates",
+        "requiredEngineGates",
+        "engineEvidenceMinted",
+        "savedEngineRuns",
+        "savedBenchmarkRuns",
+        "latestAdversarialBenchmarkStatus",
+        "savedReportDrafts",
+        "reportDraftsNeedingAttention",
+        "reviewItems",
+        "criticalReviewItems",
+        "highReviewItems",
+        "professorReady"
+      ],
+      "properties": {
+        "validationPassed": { "type": "boolean" },
+        "validationErrors": { "type": "integer", "minimum": 0 },
+        "validationWarnings": { "type": "integer", "minimum": 0 },
+        "checkedFiles": { "type": "integer", "minimum": 0 },
+        "snapshotFiles": { "type": "integer", "minimum": 0 },
+        "snapshotBytes": { "type": "integer", "minimum": 0 },
+        "engineStatus": { "enum": ["passed", "partial", "failed"] },
+        "concreteEngineGates": { "type": "string", "pattern": "^[0-9]+/[0-9]+$" },
+        "requiredEngineGates": { "type": "string", "pattern": "^[0-9]+/[0-9]+$" },
+        "engineEvidenceMinted": { "type": "integer", "minimum": 0 },
+        "savedEngineRuns": { "type": "integer", "minimum": 0 },
+        "latestStrictEngineRunStatus": { "enum": ["passed", "partial", "failed"] },
+        "savedBenchmarkRuns": { "type": "integer", "minimum": 0 },
+        "latestAdversarialBenchmarkStatus": { "enum": ["missing", "passed", "failed"] },
+        "latestAdversarialBenchmarkAccuracy": { "type": "number", "minimum": 0, "maximum": 1 },
+        "savedReportDrafts": { "type": "integer", "minimum": 0 },
+        "reportDraftsNeedingAttention": { "type": "integer", "minimum": 0 },
+        "reviewItems": { "type": "integer", "minimum": 0 },
+        "criticalReviewItems": { "type": "integer", "minimum": 0 },
+        "highReviewItems": { "type": "integer", "minimum": 0 },
+        "professorReady": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "embeddedSnapshot": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "validation": {
+      "type": "object",
+      "required": ["passed", "checkedFiles", "validFiles", "invalidFiles", "errors", "warnings", "issueCodes"],
+      "properties": {
+        "passed": { "type": "boolean" },
+        "checkedFiles": { "type": "integer", "minimum": 0 },
+        "validFiles": { "type": "integer", "minimum": 0 },
+        "invalidFiles": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 },
+        "issueCodes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "engineEvidence": {
+      "type": "object",
+      "required": ["status", "requiredPassed", "requiredTotal", "concretePassed", "concreteTotal", "evidenceMinted", "cases"],
+      "properties": {
+        "status": { "enum": ["passed", "partial", "failed"] },
+        "requiredPassed": { "type": "integer", "minimum": 0 },
+        "requiredTotal": { "type": "integer", "minimum": 0 },
+        "concretePassed": { "type": "integer", "minimum": 0 },
+        "concreteTotal": { "type": "integer", "minimum": 0 },
+        "evidenceMinted": { "type": "integer", "minimum": 0 },
+        "cases": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/engineCase" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "engineEvidenceLadder": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/engineEvidenceLadderEntry" }
+    },
+    "engineRunLedger": {
+      "type": "object",
+      "required": ["savedRuns", "latestRuns"],
+      "properties": {
+        "savedRuns": { "type": "integer", "minimum": 0 },
+        "latestRuns": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "latestStrictReviewerRun": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "benchmarkLedger": {
+      "type": "object",
+      "required": ["savedRuns", "latestRuns"],
+      "properties": {
+        "savedRuns": { "type": "integer", "minimum": 0 },
+        "latestRuns": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "latestAdversarialRun": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "workspaceReview": {
+      "type": "object",
+      "required": ["reviewId", "summary", "autonomy", "topItems"],
+      "properties": {
+        "reviewId": { "type": "string", "minLength": 1 },
+        "summary": { "type": "object", "additionalProperties": true },
+        "autonomy": { "type": "object", "additionalProperties": true },
+        "topItems": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "additionalProperties": true
+    },
+    "reviewerActionPlan": {
+      "type": "object",
+      "required": ["totalActions", "criticalActions", "highActions", "actions"],
+      "properties": {
+        "totalActions": { "type": "integer", "minimum": 0 },
+        "criticalActions": { "type": "integer", "minimum": 0 },
+        "highActions": { "type": "integer", "minimum": 0 },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reviewerAction" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "reviewerCommands": {
+      "type": "object",
+      "required": [
+        "validateWorkspace",
+        "verifyEngines",
+        "runAdversarialBenchmark",
+        "reviewWorkspace",
+        "reproducePack",
+        "dockerProfessorEvidence",
+        "dockerCoreEngines",
+        "dockerLeanFixture",
+        "dockerSageFixture"
+      ],
+      "additionalProperties": { "type": "string" }
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "markdown": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "trustLabel": {
+      "enum": [
+        "proved",
+        "exact-computed",
+        "bounded-numeric",
+        "dimension-checked",
+        "smt-checked",
+        "cross-checked",
+        "source-cited",
+        "refuted",
+        "unverified",
+        "provenance-only",
+        "none"
+      ]
+    },
+    "engineCase": {
+      "type": "object",
+      "required": ["id", "displayName", "required", "status", "trust", "evidenceMinted", "summary", "command"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "status": { "enum": ["passed", "failed", "missing", "not-required"] },
+        "trust": { "$ref": "#/$defs/trustLabel" },
+        "evidenceMinted": { "type": "boolean" },
+        "summary": { "type": "string", "minLength": 1 },
+        "command": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "engineEvidenceLadderEntry": {
+      "type": "object",
+      "required": ["caseId", "displayName", "gate", "status", "trust", "evidenceTier", "reviewerMeaning", "replayCommand"],
+      "properties": {
+        "caseId": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string", "minLength": 1 },
+        "gate": { "enum": ["required", "optional"] },
+        "status": { "enum": ["passed", "failed", "missing", "not-required"] },
+        "trust": { "$ref": "#/$defs/trustLabel" },
+        "evidenceTier": { "type": "string", "minLength": 1 },
+        "reviewerMeaning": { "type": "string", "minLength": 1 },
+        "replayCommand": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "reviewerAction": {
+      "type": "object",
+      "required": ["actionId", "category", "priority", "title", "detail", "command", "closes", "source"],
+      "properties": {
+        "actionId": { "type": "string", "pattern": "^cred_action_[a-f0-9]{16}$" },
+        "category": { "enum": ["validation", "engine", "benchmark", "workspace-review"] },
+        "priority": { "enum": ["critical", "high", "medium", "low"] },
+        "title": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string", "minLength": 1 },
+        "command": { "type": "string", "minLength": 1 },
+        "closes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "source": {
+          "type": "object",
+          "required": ["kind", "ref"],
+          "properties": {
+            "kind": { "type": "string", "minLength": 1 },
+            "ref": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
