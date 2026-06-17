@@ -98,9 +98,19 @@ describe("professor credibility pack", () => {
     expect(result.pack.engineEvidence.cases).toContainEqual(
       expect.objectContaining({ id: "lean-proof-fixture", trust: "proved", evidenceMinted: true })
     );
+    expect(result.pack.engineEvidenceLadder).toContainEqual(
+      expect.objectContaining({
+        caseId: "lean-proof-fixture",
+        gate: "required",
+        evidenceTier: "earned evidence",
+        reviewerMeaning: "Concrete `proved` evidence earned for this fixture; replay it before citing the engine gate."
+      })
+    );
     expect(result.markdown).toContain("Professor ready: yes");
     expect(result.markdown).toContain("Saved engine-run ledger: 1 saved");
     expect(result.markdown).toContain("Adversarial benchmark: passed (100.0%)");
+    expect(result.markdown).toContain("## Engine Evidence Ladder");
+    expect(result.markdown).toContain("| Lean proof fixture | required | `passed` | `proved` | earned evidence | Concrete `proved` evidence earned");
     expect(result.markdown).toContain("## Saved Engine Run Ledger");
     expect(result.markdown).toContain(strictEngineRun.record.runId);
     expect(result.markdown).toContain("## Benchmark Ledger");
@@ -222,8 +232,13 @@ describe("professor credibility pack", () => {
     );
     expect(pack.reviewerActionPlan.actions.map((action) => action.detail).join("\n")).not.toContain("spawn");
     expect(pack.reviewerActionPlan.actions.map((action) => action.detail).join("\n")).toContain("engine executable was not found");
+    expect(pack.reviewerActionPlan.actions.map((action) => action.detail).join("\n")).toContain(
+      "Evidence status: missing evidence. Required evidence is missing, so strict reviewer readiness fails closed."
+    );
     expect(pack.markdown).toContain("## Reviewer Action Plan");
     expect(pack.markdown).toContain("Close required Maxima symbolic cross-check gate");
+    expect(pack.markdown).toContain("## Engine Evidence Ladder");
+    expect(pack.markdown).toContain("| Maxima symbolic cross-check | required | `missing` | `unverified` | missing evidence | Required evidence is missing");
     expect(pack.markdown).toContain("## Blocking Warnings");
   });
 

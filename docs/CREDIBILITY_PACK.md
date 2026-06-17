@@ -40,6 +40,7 @@ npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/
 - Workspace validation summary.
 - Embedded local artifact snapshot with file hashes.
 - Concrete engine evidence report from `engines verify`.
+- Structured engine evidence ladder that separates required/optional gates, earned/missing/failed evidence, and the plain-English reviewer meaning for each engine row.
 - Saved engine-run ledger summary from `.truth-harness/engine-runs`, including the latest strict all-engines reviewer run when one exists.
 - Saved benchmark ledger summary from `.truth-harness/benchmarks`, including the latest `ai-failure-seed` adversarial AI-failure run, artifact path, trust accuracy, replay command, and sample receipt replay commands.
 - Saved report draft summary from `.truth-harness/findings`, including how many human-facing Markdown drafts exist and whether any need integrity review before sharing.
@@ -107,6 +108,7 @@ When the pack is blocked, `reviewerActionPlan.actions` is the first queue a huma
 
 - the priority (`critical`, `high`, `medium`, or `low`),
 - the category (`validation`, `engine`, `benchmark`, or `workspace-review`),
+- the evidence status and reviewer meaning for blocked engine gates,
 - benchmark actions mean the reviewer packet is missing or failing the saved adversarial AI-failure suite,
 - the exact command to run,
 - the gate or artifact it closes.

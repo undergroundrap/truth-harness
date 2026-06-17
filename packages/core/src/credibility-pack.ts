@@ -2,6 +2,8 @@ import { mkdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { listBenchmarkArtifacts, type BenchmarkArtifactSummary } from "./benchmark-run.js";
 import {
+  engineVerificationCaseEvidenceMeaning,
+  engineVerificationCaseEvidenceTier,
   listEngineVerificationRuns,
   verifyEngineEvidence,
   type EngineVerificationCommandRunner,
@@ -70,6 +72,17 @@ export interface CredibilityPackBenchmarkLedger {
   latestAdversarialRun?: BenchmarkArtifactSummary;
 }
 
+export interface CredibilityPackEngineEvidenceLadderEntry {
+  caseId: string;
+  displayName: string;
+  gate: "required" | "optional";
+  status: EngineVerificationReport["cases"][number]["status"];
+  trust: EngineVerificationReport["cases"][number]["trust"];
+  evidenceTier: string;
+  reviewerMeaning: string;
+  replayCommand: string;
+}
+
 export interface CredibilityPack {
   schemaVersion: "truth-harness.credibility-pack.v0";
   packId: string;
@@ -115,6 +128,7 @@ export interface CredibilityPack {
     issueCodes: string[];
   };
   engineEvidence: EngineVerificationReport;
+  engineEvidenceLadder: CredibilityPackEngineEvidenceLadderEntry[];
   engineRunLedger: CredibilityPackEngineRunLedger;
   benchmarkLedger: CredibilityPackBenchmarkLedger;
   workspaceReview: {
@@ -246,6 +260,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
     embeddedSnapshot: snapshot,
     validation: summarizeValidation(validation),
     engineEvidence,
+    engineEvidenceLadder: summarizeEngineEvidenceLadder(engineEvidence),
     engineRunLedger,
     benchmarkLedger,
     workspaceReview: {
@@ -376,6 +391,19 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
   }
 
   lines.push(
+    "## Engine Evidence Ladder",
+    "",
+    "| Case | Gate | Status | Trust | Evidence status | Reviewer meaning |",
+    "| --- | --- | --- | --- | --- | --- |"
+  );
+  for (const item of pack.engineEvidenceLadder) {
+    lines.push(
+      `| ${markdownCell(item.displayName)} | ${item.gate} | \`${item.status}\` | \`${item.trust}\` | ${markdownCell(item.evidenceTier)} | ${markdownCell(item.reviewerMeaning)} |`
+    );
+  }
+  lines.push("");
+
+  lines.push(
     "## Engine Gates",
     ""
   );
@@ -387,6 +415,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
       `- Status: \`${item.status}\`${item.required ? " (required)" : ""}`,
       `- Trust: \`${item.trust}\``,
       `- Evidence minted: ${String(item.evidenceMinted)}`,
+      `- Reviewer meaning: ${engineVerificationCaseEvidenceMeaning(item)}`,
       `- Command: \`${item.command}\``,
       `- Summary: ${item.summary}`,
       ""
@@ -522,6 +551,19 @@ function summarizeEngineRunLedger(runs: EngineVerificationRunSummary[]): Credibi
   };
 }
 
+function summarizeEngineEvidenceLadder(report: EngineVerificationReport): CredibilityPackEngineEvidenceLadderEntry[] {
+  return report.cases.map((item) => ({
+    caseId: item.id,
+    displayName: item.displayName,
+    gate: item.required ? "required" : "optional",
+    status: item.status,
+    trust: item.trust,
+    evidenceTier: engineVerificationCaseEvidenceTier(item),
+    reviewerMeaning: engineVerificationCaseEvidenceMeaning(item),
+    replayCommand: item.command
+  }));
+}
+
 function summarizeBenchmarkLedger(artifacts: BenchmarkArtifactSummary[]): CredibilityPackBenchmarkLedger {
   const runs = artifacts.filter((artifact) => artifact.kind === "run");
   return {
@@ -607,7 +649,7 @@ function createReviewerActionPlan(input: {
       category: "engine",
       priority,
       title: `${item.required ? "Close required" : "Close concrete"} ${item.displayName} gate`,
-      detail: `${reviewerEngineSummary(item.summary)} This gate currently reports ${item.status}; ${reviewerEngineActionDetail(item, command, input.reviewerCommands)}.`,
+      detail: `${reviewerEngineSummary(item.summary)} Evidence status: ${engineVerificationCaseEvidenceTier(item)}. ${engineVerificationCaseEvidenceMeaning(item)} This gate currently reports ${item.status}; ${reviewerEngineActionDetail(item, command, input.reviewerCommands)}.`,
       command,
       closes: [
         item.required ? `required-engine:${item.id}` : `concrete-engine:${item.id}`,
@@ -738,6 +780,10 @@ function reviewerEngineSummary(summary: string): string {
 
 function isHostProcessBlocked(summary: string): boolean {
   return /\bspawn(?:Sync)?\b.*\bEPERM\b/iu.test(summary);
+}
+
+function markdownCell(value: string): string {
+  return value.replace(/\|/gu, "\\|").replace(/\r?\n/gu, " ").trim();
 }
 
 function credibilityWarnings(input: {
