@@ -626,6 +626,19 @@
                   </div>
                 </div>
                 <p class="mini-label report-save-status" id="report-save-status">report draft not saved to workspace yet</p>
+                <section class="report-drafts-panel" aria-label="Saved report drafts">
+                  <div class="report-drafts-heading">
+                    <div>
+                      <h4>Saved Drafts</h4>
+                      <p class="mini-label" id="report-drafts-status">local report draft history not loaded yet</p>
+                    </div>
+                    <div class="activity-actions" aria-label="Saved report draft actions">
+                      <button class="text-button compact-button" id="show-current-report" type="button">Current</button>
+                      <button class="text-button compact-button" id="refresh-report-drafts" type="button">Refresh</button>
+                    </div>
+                  </div>
+                  <div class="report-draft-list" id="report-draft-list"></div>
+                </section>
                 <section class="credibility-pack-panel" id="credibility-pack-panel" aria-label="Workspace credibility pack">
                   <div class="credibility-pack-empty">
                     <span class="status-pill waiting">not loaded</span>

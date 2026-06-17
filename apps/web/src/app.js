@@ -318,6 +318,11 @@ const state = {
   reportSaving: false,
   savedReportDraft: undefined,
   reportSaveError: undefined,
+  reportDrafts: [],
+  reportDraftsLoaded: false,
+  reportDraftsLoading: false,
+  reportDraftsError: undefined,
+  openedReportDraft: undefined,
   credibilityRunNextPlan: undefined,
   credibilityRunNextLoading: false,
   credibilityRunNextSaving: false,
@@ -467,6 +472,10 @@ const credibilityPackPanel = document.querySelector("#credibility-pack-panel");
 const reportPreview = document.querySelector("#report-preview");
 const saveReportButton = document.querySelector("#save-report");
 const reportSaveStatus = document.querySelector("#report-save-status");
+const reportDraftList = document.querySelector("#report-draft-list");
+const reportDraftsStatus = document.querySelector("#report-drafts-status");
+const refreshReportDraftsButton = document.querySelector("#refresh-report-drafts");
+const showCurrentReportButton = document.querySelector("#show-current-report");
 const copyReportButton = document.querySelector("#copy-report");
 const downloadReportButton = document.querySelector("#download-report");
 const copyTeachingPacketButton = document.querySelector("#copy-teaching-packet");
@@ -12604,8 +12613,263 @@ function credibilityBundleVerificationReportMarkdown() {
   ];
 }
 
+function renderReportDraftHistory(receipt = receiptStore.get(state.receiptKey)) {
+  if (!reportDraftList || !reportDraftsStatus) {
+    return;
+  }
+
+  const drafts = state.reportDrafts ?? [];
+  if (refreshReportDraftsButton) {
+    refreshReportDraftsButton.disabled = state.reportDraftsLoading;
+  }
+  if (showCurrentReportButton) {
+    showCurrentReportButton.disabled = !state.openedReportDraft;
+  }
+  reportDraftsStatus.textContent = state.reportDraftsLoading
+    ? "loading local report drafts..."
+    : state.reportDraftsError
+      ? `report history unavailable: ${state.reportDraftsError}`
+      : drafts.length > 0
+        ? `${drafts.length} saved local report draft${drafts.length === 1 ? "" : "s"}`
+        : "no saved report drafts yet";
+
+  if (state.reportDraftsError) {
+    reportDraftList.innerHTML = `<div class="report-draft-empty">${escapeHtml(state.reportDraftsError)}</div>`;
+    return;
+  }
+
+  if (state.reportDraftsLoading && drafts.length === 0) {
+    reportDraftList.innerHTML = `<div class="report-draft-empty">Reading local findings for saved report drafts.</div>`;
+    return;
+  }
+
+  if (drafts.length === 0) {
+    reportDraftList.innerHTML = `<div class="report-draft-empty">Save the current report to create a durable Markdown and JSON draft.</div>`;
+    return;
+  }
+
+  reportDraftList.innerHTML = drafts
+    .map((item) => reportDraftHistoryRowHtml(item, receipt))
+    .join("");
+}
+
+function reportDraftHistoryRowHtml(item, receipt) {
+  const report = item.report ?? {};
+  const active = state.openedReportDraft?.report?.reportId === report.reportId;
+  const current = receipt?.runId && report.receiptRunId === receipt.runId;
+  const verified = item.markdownVerified === true;
+  const statusClass = verified ? "exact" : "refuted";
+  const statusText = verified ? "hash verified" : item.markdownStatus ?? "needs review";
+  const title = report.title ?? report.reportId ?? "Saved report draft";
+  const createdAt = report.createdAt ? formatActivityTime(report.createdAt) : "local draft";
+  const markdownPath = item.paths?.relativeMarkdown ?? report.paths?.markdown ?? "local markdown path not recorded";
+  return `<button class="report-draft-row ${active ? "active" : ""}" data-report-id="${escapeHtml(report.reportId ?? "")}" type="button">
+    <span>
+      <strong>${escapeHtml(title)}</strong>
+      <small>${escapeHtml(createdAt)} - ${escapeHtml(report.trust ?? "unlabeled")}${current ? " - current receipt" : ""}</small>
+      <code>${escapeHtml(markdownPath)}</code>
+    </span>
+    <span class="report-draft-status ${statusClass}">${escapeHtml(statusText)}</span>
+  </button>`;
+}
+
+async function refreshReportDrafts({ announce = true } = {}) {
+  if (state.reportDraftsLoading) {
+    return;
+  }
+
+  state.reportDraftsLoading = true;
+  state.reportDraftsError = undefined;
+  renderReportDraftHistory();
+  try {
+    const response = await fetch("/api/reports?limit=8", {
+      headers: {
+        Accept: "application/json"
+      }
+    });
+    const payload = await readLocalApiJson(response, "Local report draft history failed.");
+    state.reportDrafts = Array.isArray(payload.reports) ? payload.reports : [];
+    state.reportDraftsLoaded = true;
+    state.reportDraftsError = undefined;
+    if (announce) {
+      addActivity("local-api", "Loaded report drafts", `${state.reportDrafts.length} saved local report draft(s) found in .truth-harness/findings.`, "passed");
+    }
+  } catch (error) {
+    state.reportDraftsError = error instanceof Error ? error.message : "Unknown report draft history failure.";
+    state.reportDraftsLoaded = true;
+    if (announce) {
+      addActivity("local-api", "Report draft history unavailable", state.reportDraftsError, "waiting");
+    }
+  } finally {
+    state.reportDraftsLoading = false;
+    renderReportDraftHistory();
+  }
+}
+
+async function openSavedReportDraft(reportId) {
+  if (!/^report_[a-f0-9]{16}$/u.test(reportId)) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/reports/${encodeURIComponent(reportId)}`, {
+      headers: {
+        Accept: "application/json"
+      }
+    });
+    const payload = await readLocalApiJson(response, "Local report draft could not be opened.");
+    state.openedReportDraft = payload;
+    addActivity(
+      "human",
+      "Opened saved report draft",
+      `${payload.report?.reportId ?? reportId} opened from local findings; Markdown hash ${payload.markdownVerified ? "verified" : "needs review"}.`,
+      payload.markdownVerified ? "passed" : "waiting"
+    );
+    renderReport(receiptStore.get(state.receiptKey));
+    reportPreview?.scrollTo({ top: 0, left: 0 });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Unknown report draft open failure.";
+    addActivity("local-api", "Report draft open failed", detail, "refuted");
+    state.reportDraftsError = detail;
+    renderReportDraftHistory();
+  }
+}
+
+function showCurrentReportDraft() {
+  if (!state.openedReportDraft) {
+    return;
+  }
+
+  state.openedReportDraft = undefined;
+  renderReport(receiptStore.get(state.receiptKey));
+  addActivity("human", "Opened current report draft", "Report preview returned to the live receipt-generated draft.", "passed");
+}
+
+function renderSavedReportDraftPreview(payload) {
+  const report = payload.report ?? {};
+  const verified = payload.markdownVerified === true;
+  const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+  reportPreview.innerHTML = `
+    <header class="saved-report-header">
+      <div>
+        <h2>${escapeHtml(report.title ?? "Saved Report Draft")}</h2>
+        <p>${escapeHtml(report.summary ?? "Saved local Markdown report draft.")}</p>
+      </div>
+      <span class="status-pill ${verified ? "exact" : "refuted"}">${verified ? "hash verified" : "hash needs review"}</span>
+    </header>
+    <dl class="report-facts">
+      <div><dt>Report ID</dt><dd><code>${escapeHtml(report.reportId ?? "not recorded")}</code></dd></div>
+      <div><dt>Created</dt><dd>${escapeHtml(report.createdAt ?? "not recorded")}</dd></div>
+      <div><dt>Trust</dt><dd>${escapeHtml(report.trust ?? "unlabeled")}</dd></div>
+      <div><dt>Receipt</dt><dd><code>${escapeHtml(report.receiptRunId ?? "not recorded")}</code></dd></div>
+      <div><dt>Markdown SHA-256</dt><dd><code>${escapeHtml(payload.markdownSha256 ?? report.markdownSha256 ?? "not recorded")}</code></dd></div>
+      <div><dt>Markdown path</dt><dd><code>${escapeHtml(payload.paths?.relativeMarkdown ?? report.paths?.markdown ?? "not recorded")}</code></dd></div>
+    </dl>
+    ${warnings.length > 0 ? `<ul class="report-sublist">${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>` : ""}
+    <section class="saved-report-markdown">${renderMarkdownSubset(payload.markdown ?? "")}</section>
+  `;
+}
+
+function renderMarkdownSubset(markdown) {
+  const lines = String(markdown ?? "").split(/\r?\n/u);
+  const html = [];
+  let list = undefined;
+  let inCode = false;
+  let codeLines = [];
+
+  const closeList = () => {
+    if (list) {
+      html.push(`</${list}>`);
+      list = undefined;
+    }
+  };
+  const openList = (nextList) => {
+    if (list !== nextList) {
+      closeList();
+      list = nextList;
+      html.push(`<${list}>`);
+    }
+  };
+  const closeCode = () => {
+    if (inCode) {
+      html.push(`<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`);
+      inCode = false;
+      codeLines = [];
+    }
+  };
+
+  for (const line of lines) {
+    if (line.startsWith("```")) {
+      if (inCode) {
+        closeCode();
+      } else {
+        closeList();
+        inCode = true;
+        codeLines = [];
+      }
+      continue;
+    }
+
+    if (inCode) {
+      codeLines.push(line);
+      continue;
+    }
+
+    const heading = /^(#{1,4})\s+(.+)$/u.exec(line);
+    if (heading) {
+      closeList();
+      const level = Math.min(4, heading[1].length + 1);
+      html.push(`<h${level}>${renderMarkdownInline(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const ordered = /^\d+\.\s+(.+)$/u.exec(line);
+    if (ordered) {
+      openList("ol");
+      html.push(`<li>${renderMarkdownInline(ordered[1])}</li>`);
+      continue;
+    }
+
+    const unordered = /^[-*]\s+(.+)$/u.exec(line);
+    if (unordered) {
+      openList("ul");
+      html.push(`<li>${renderMarkdownInline(unordered[1])}</li>`);
+      continue;
+    }
+
+    if (!line.trim()) {
+      closeList();
+      continue;
+    }
+
+    closeList();
+    html.push(`<p>${renderMarkdownInline(line)}</p>`);
+  }
+
+  closeCode();
+  closeList();
+  return html.join("");
+}
+
+function renderMarkdownInline(value) {
+  return escapeHtml(value).replace(/`([^`]+)`/gu, "<code>$1</code>");
+}
+
 function renderReport(receipt) {
   if (!receipt) {
+    return;
+  }
+
+  if (state.openedReportDraft?.report?.receiptRunId && state.openedReportDraft.report.receiptRunId !== receipt.runId) {
+    state.openedReportDraft = undefined;
+  }
+  if (state.surface === "report" && !state.reportDraftsLoaded && !state.reportDraftsLoading) {
+    void refreshReportDrafts({ announce: false });
+  }
+  renderReportDraftHistory(receipt);
+  if (state.openedReportDraft) {
+    renderSavedReportDraftPreview(state.openedReportDraft);
+    renderReportSaveStatus(receipt);
     return;
   }
 
@@ -12960,6 +13224,27 @@ function reportDraftPayload(receipt) {
   };
 }
 
+function currentReportDocument(receipt) {
+  const opened = state.openedReportDraft;
+  if (opened?.markdown && opened?.report?.reportId) {
+    return {
+      markdown: opened.markdown,
+      filename: `${opened.report.reportId}-report-draft.md`,
+      label: opened.report.reportId,
+      copiedDetail: `${opened.report.reportId} saved report draft copied as Markdown.`,
+      downloadedDetail: `${opened.report.reportId} saved report draft downloaded as Markdown.`
+    };
+  }
+
+  return {
+    markdown: generateReportMarkdown(receipt),
+    filename: `${receipt.runId}-report.md`,
+    label: receipt.runId,
+    copiedDetail: `${receipt.runId} report copied as Markdown.`,
+    downloadedDetail: `${receipt.runId} report saved as Markdown.`
+  };
+}
+
 function renderReportSaveStatus(receipt = receiptStore.get(state.receiptKey)) {
   if (!reportSaveStatus) {
     return;
@@ -12974,6 +13259,14 @@ function renderReportSaveStatus(receipt = receiptStore.get(state.receiptKey)) {
   if (state.reportSaveError) {
     reportSaveStatus.textContent = `report save failed: ${state.reportSaveError}`;
     reportSaveStatus.className = "mini-label report-save-status refuted";
+    return;
+  }
+
+  const opened = state.openedReportDraft;
+  if (opened?.report?.reportId) {
+    const verified = opened.markdownVerified === true;
+    reportSaveStatus.textContent = `opened ${opened.report.reportId} from local findings; markdown hash ${verified ? "verified" : "needs review"}`;
+    reportSaveStatus.className = `mini-label report-save-status ${verified ? "exact" : "refuted"}`;
     return;
   }
 
@@ -13014,6 +13307,7 @@ async function saveReportDraftFromUi(button) {
     const payload = await readLocalApiJson(response, "Local report save failed.");
     state.savedReportDraft = payload.report;
     state.reportSaveError = undefined;
+    state.openedReportDraft = undefined;
     addActivity(
       "local-api",
       "Saved report draft",
@@ -13022,6 +13316,7 @@ async function saveReportDraftFromUi(button) {
       payload.report?.createdAt
     );
     void refreshCatalogStatus({ announce: false });
+    void refreshReportDrafts({ announce: false });
   } catch (error) {
     state.reportSaveError = error instanceof Error ? error.message : "Unknown report save failure.";
     addActivity("local-api", "Report save failed", state.reportSaveError, "refuted");
@@ -13478,6 +13773,9 @@ projectStartReport?.addEventListener("click", () => {
   if (!state.credibilityRunNextPlan && !state.credibilityRunNextLoading) {
     void refreshCredibilityRunNext({ announce: false });
   }
+  if (!state.reportDraftsLoaded && !state.reportDraftsLoading) {
+    void refreshReportDrafts({ announce: false });
+  }
   resetActiveSurfaceScroll();
 });
 
@@ -13783,6 +14081,9 @@ surfaceTabs.forEach((button) => {
     }
     if (nextSurface === "report" && !state.credibilityRunNextPlan && !state.credibilityRunNextLoading) {
       void refreshCredibilityRunNext({ announce: false });
+    }
+    if (nextSurface === "report" && !state.reportDraftsLoaded && !state.reportDraftsLoading) {
+      void refreshReportDrafts({ announce: false });
     }
     render();
     resetActiveSurfaceScroll();
@@ -14147,22 +14448,37 @@ saveReportButton.addEventListener("click", () => {
   void saveReportDraftFromUi(saveReportButton);
 });
 
+refreshReportDraftsButton?.addEventListener("click", () => {
+  void refreshReportDrafts({ announce: true });
+});
+
+showCurrentReportButton?.addEventListener("click", showCurrentReportDraft);
+
+reportDraftList?.addEventListener("click", (event) => {
+  const button = event.target.closest(".report-draft-row[data-report-id]");
+  if (!button) {
+    return;
+  }
+
+  void openSavedReportDraft(button.dataset.reportId);
+});
+
 copyReportButton.addEventListener("click", () => {
   const receipt = receiptStore.get(state.receiptKey);
   if (!receipt) {
     return;
   }
 
-  const markdown = generateReportMarkdown(receipt);
+  const document = currentReportDocument(receipt);
   copyOrDownloadText({
-    text: markdown,
-    filename: `${receipt.runId}-report.md`,
+    text: document.markdown,
+    filename: document.filename,
     type: "text/markdown",
     button: copyReportButton,
     copiedTitle: "Copied report draft",
-    copiedDetail: `${receipt.runId} report copied as Markdown.`,
+    copiedDetail: document.copiedDetail,
     fallbackTitle: "Downloaded report draft",
-    fallbackDetail: `${receipt.runId} report was saved as Markdown instead.`
+    fallbackDetail: `${document.label} report was saved as Markdown instead.`
   });
 });
 
@@ -14172,8 +14488,9 @@ downloadReportButton.addEventListener("click", () => {
     return;
   }
 
-  downloadTextFile(`${receipt.runId}-report.md`, generateReportMarkdown(receipt), "text/markdown");
-  addActivity("human", "Downloaded report draft", `${receipt.runId} report saved as Markdown.`, "passed");
+  const document = currentReportDocument(receipt);
+  downloadTextFile(document.filename, document.markdown, "text/markdown");
+  addActivity("human", "Downloaded report draft", document.downloadedDetail, "passed");
 });
 
 copyTeachingPacketButton.addEventListener("click", () => {

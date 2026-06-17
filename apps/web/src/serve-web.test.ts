@@ -179,6 +179,51 @@ describe("local web route ledger API", () => {
     const savedReportMarkdown = await readFile(reportSavePayload.paths.markdown, "utf8");
     expect(savedReportMarkdown).toBe(reportMarkdown);
 
+    const reportListResponse = await fetch(`${baseUrl}/api/reports?limit=5`);
+    expect(reportListResponse.status).toBe(200);
+    const reportListPayload = await reportListResponse.json();
+    expectLocalApiSuccess(reportListResponse, reportListPayload);
+    expect(reportListPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-report-draft-list-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      count: expect.any(Number)
+    });
+    expect(reportListPayload.reports[0]).toMatchObject({
+      report: {
+        reportId: reportSavePayload.report.reportId,
+        title: "Saved Report",
+        receiptRunId: "run_report_fixture"
+      },
+      markdownVerified: true,
+      markdownStatus: "verified",
+      markdownSha256: reportMarkdownSha256,
+      paths: {
+        relativeJson: expect.stringContaining("report-draft.json"),
+        relativeMarkdown: expect.stringContaining("report-draft.md")
+      }
+    });
+
+    const reportReadResponse = await fetch(`${baseUrl}/api/reports/${reportSavePayload.report.reportId}`);
+    expect(reportReadResponse.status).toBe(200);
+    const reportReadPayload = await reportReadResponse.json();
+    expectLocalApiSuccess(reportReadResponse, reportReadPayload);
+    expect(reportReadPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-report-draft-read-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      report: {
+        reportId: reportSavePayload.report.reportId,
+        title: "Saved Report"
+      },
+      markdown: reportMarkdown,
+      markdownVerified: true,
+      markdownSha256: reportMarkdownSha256
+    });
+
+    const invalidReportReadResponse = await fetch(`${baseUrl}/api/reports/not-a-report`);
+    expect(invalidReportReadResponse.status).toBe(400);
+
     const invalidReportSaveResponse = await fetch(`${baseUrl}/api/reports`, {
       method: "POST",
       headers: {

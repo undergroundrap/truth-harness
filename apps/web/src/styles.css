@@ -5852,6 +5852,120 @@ textarea:focus-visible {
   color: var(--refuted);
 }
 
+.report-drafts-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #111;
+  padding: 10px;
+}
+
+.report-drafts-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.report-drafts-heading h4,
+.report-drafts-heading p {
+  margin: 0;
+}
+
+.report-draft-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.report-draft-row,
+.report-draft-empty {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0d0d0d;
+  color: var(--text);
+  padding: 10px;
+}
+
+.report-draft-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.report-draft-row:hover,
+.report-draft-row.active {
+  border-color: rgba(125, 211, 168, 0.65);
+  background: #101611;
+}
+
+.report-draft-row span:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.report-draft-row strong,
+.report-draft-row small,
+.report-draft-row code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.report-draft-row small,
+.report-draft-row code,
+.report-draft-empty {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.report-draft-status {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  padding: 4px 7px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.report-draft-status.exact {
+  color: var(--exact);
+  border-color: rgba(125, 211, 168, 0.45);
+}
+
+.report-draft-status.refuted {
+  color: var(--refuted);
+  border-color: rgba(242, 139, 130, 0.45);
+}
+
+.saved-report-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.saved-report-markdown {
+  display: grid;
+  gap: 10px;
+}
+
+.saved-report-markdown pre {
+  margin: 0;
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0b0b0b;
+  padding: 10px;
+}
+
 .report-preview header {
   border-bottom: 1px solid var(--line-soft);
   padding-bottom: 10px;
