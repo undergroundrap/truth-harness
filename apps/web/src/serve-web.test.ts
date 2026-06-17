@@ -134,6 +134,26 @@ describe("local web route ledger API", () => {
       })
     );
 
+    const strictEngineRunWriteResponse = await fetch(`${baseUrl}/api/engine-runs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ timeoutMs: 50, requireAllEngines: true })
+    });
+    expect(strictEngineRunWriteResponse.status).toBe(200);
+    const strictEngineRunWritePayload = await strictEngineRunWriteResponse.json();
+    expectLocalApiSuccess(strictEngineRunWriteResponse, strictEngineRunWritePayload);
+    expect(strictEngineRunWritePayload.mode).toBe("all-engines");
+    expect(strictEngineRunWritePayload.run.replay).toContain("--require-all-engines");
+    expect(strictEngineRunWritePayload.run.report.requiredTotal).toBe(5);
+    expect(strictEngineRunWritePayload.runs).toContainEqual(
+      expect.objectContaining({
+        runId: strictEngineRunWritePayload.run.runId,
+        requiredTotal: 5
+      })
+    );
+
     const receiptResponse = await fetch(`${baseUrl}/api/receipt`, {
       method: "POST",
       headers: {

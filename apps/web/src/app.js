@@ -297,6 +297,7 @@ const state = {
   engineRuns: [],
   engineRunsError: undefined,
   engineRunsSaving: false,
+  engineRunsSavingMode: undefined,
   workspaceReadiness: undefined,
   catalogStatus: undefined,
   catalogSearch: undefined,
@@ -7988,15 +7989,17 @@ async function refreshEngineRuns({ announce = true } = {}) {
   }
 }
 
-async function saveEngineEvidenceRun(button) {
+async function saveEngineEvidenceRun(button, { requireAllEngines = false } = {}) {
   if (state.engineRunsSaving) {
     return;
   }
 
+  const mode = requireAllEngines ? "all-engines" : "default";
   state.engineRunsSaving = true;
+  state.engineRunsSavingMode = mode;
   if (button) {
     button.disabled = true;
-    button.textContent = "Saving";
+    button.textContent = requireAllEngines ? "Saving strict" : "Saving";
   }
 
   try {
@@ -8006,7 +8009,7 @@ async function saveEngineEvidenceRun(button) {
         Accept: "application/json",
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ timeoutMs: 1500 })
+      body: JSON.stringify({ timeoutMs: 1500, requireAllEngines })
     });
     const payload = await readLocalApiJson(response, "Local engine evidence run write failed.");
     state.engineRuns = Array.isArray(payload.runs) ? payload.runs : [];
@@ -8019,7 +8022,7 @@ async function saveEngineEvidenceRun(button) {
     state.engineRunsError = undefined;
     addActivity(
       "local-api",
-      "Saved engine evidence run",
+      requireAllEngines ? "Saved strict engine reviewer run" : "Saved engine evidence run",
       payload.activity?.[0]?.detail ?? `${payload.run?.runId ?? "engine run"} saved under .truth-harness/engine-runs.`,
       payload.run?.status === "passed" ? "passed" : "waiting",
       payload.run?.createdAt
@@ -8029,6 +8032,7 @@ async function saveEngineEvidenceRun(button) {
     addActivity("local-api", "Engine evidence save failed", state.engineRunsError, "refuted");
   } finally {
     state.engineRunsSaving = false;
+    state.engineRunsSavingMode = undefined;
     renderEngineEvidenceGate(state.safetyStatus);
   }
 }
@@ -8928,15 +8932,20 @@ function renderEngineEvidenceGate(payload = state.safetyStatus) {
   const cases = Array.isArray(report.cases) ? report.cases : [];
   const command = report.docker?.coreCommand ?? "npm run docker:engines";
   const leanCommand = report.docker?.leanCommand ?? "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean";
+  const strictReviewerCommand = "truth-harness engines verify --write --require-all-engines";
   const statusClass = report.status === "passed" ? "exact" : report.status === "partial" ? "checked" : "waiting";
   const warnings = Array.isArray(report.warnings) ? report.warnings : [];
   const savedRun = latestEngineRun();
+  const strictSavedRun = latestEngineRun({ requireAllEngines: true });
   const savedRunCount = Array.isArray(state.engineRuns) ? state.engineRuns.length : 0;
+  const strictModeActive = Number(report.requiredTotal ?? 0) >= 5;
+  const defaultSaving = state.engineRunsSaving && state.engineRunsSavingMode !== "all-engines";
+  const strictSaving = state.engineRunsSaving && state.engineRunsSavingMode === "all-engines";
 
   engineEvidenceGate.innerHTML = `<div class="panel-heading compact-heading">
     <div>
       <h3>Engine Evidence Gate</h3>
-      <p class="panel-subtitle">concrete checks, not install probes</p>
+      <p class="panel-subtitle">reviewer-grade engine evidence, not install probes</p>
     </div>
     <span class="status-pill ${statusClass}">${escapeHtml(engineEvidenceStatusLabel(report.status))}</span>
   </div>
@@ -8949,28 +8958,62 @@ function renderEngineEvidenceGate(payload = state.safetyStatus) {
     <div>
       <span class="mini-label">Required gates</span>
       <strong>${escapeHtml(`${report.requiredPassed ?? 0}/${report.requiredTotal ?? 0}`)}</strong>
-      <small>${escapeHtml(report.requiredTotal > 0 ? "strict mode active" : "host status only")}</small>
+      <small>${escapeHtml(strictModeActive ? "all-engines standard" : report.requiredTotal > 0 ? "custom strict mode" : "daily smoke")}</small>
     </div>
     <div>
       <span class="mini-label">Network</span>
       <strong>${escapeHtml(report.networkAccess ?? "none")}</strong>
       <small>${escapeHtml(report.docker?.networkPolicy ?? "local status")}</small>
     </div>
-  </div>
-  <div class="engine-evidence-command-row">
-    <code>${escapeHtml(command)}</code>
-    <button class="text-button compact-button copy-engine-evidence-command" data-testid="copy-engine-evidence-command" data-command="${escapeHtml(command)}" type="button">Copy smoke</button>
-    <button class="text-button compact-button copy-engine-evidence-command" data-command="${escapeHtml(leanCommand)}" type="button">Copy Lean</button>
-    <button class="text-button compact-button save-engine-evidence-run" data-testid="save-engine-evidence-run" type="button" ${state.engineRunsSaving ? "disabled" : ""}>${state.engineRunsSaving ? "Saving" : "Save run"}</button>
-  </div>
-  <div class="engine-evidence-saved-run ${savedRun ? "" : "empty"}">
     <div>
-      <span class="mini-label">Saved evidence runs</span>
-      <strong>${escapeHtml(savedRun ? `${savedRunCount} saved` : "none saved")}</strong>
-      <small>${escapeHtml(savedRun ? `${savedRun.status} / ${savedRun.path}` : "Save the current engine gate to .truth-harness/engine-runs.")}</small>
-      ${state.engineRunsError ? `<small class="warning-text">${escapeHtml(state.engineRunsError)}</small>` : ""}
+      <span class="mini-label">Reviewer standard</span>
+      <strong>${escapeHtml(strictModeActive ? "strict" : "fast")}</strong>
+      <small>${escapeHtml(strictSavedRun ? `last strict: ${strictSavedRun.status}` : "strict run not saved")}</small>
     </div>
-    ${savedRun ? `<code>${escapeHtml(savedRun.runId)}</code>` : `<code>truth-harness engines verify --write</code>`}
+  </div>
+  <div class="engine-evidence-command-stack">
+    <div class="engine-evidence-command-row">
+      <div>
+        <span class="mini-label">Daily engine smoke</span>
+        <code>${escapeHtml(command)}</code>
+      </div>
+      <button class="text-button compact-button copy-engine-evidence-command" data-testid="copy-engine-evidence-command" data-command="${escapeHtml(command)}" type="button">Copy smoke</button>
+      <button class="text-button compact-button save-engine-evidence-run" data-testid="save-engine-evidence-run" data-require-all-engines="false" type="button" ${state.engineRunsSaving ? "disabled" : ""}>${defaultSaving ? "Saving" : "Save smoke"}</button>
+    </div>
+    <div class="engine-evidence-command-row strict">
+      <div>
+        <span class="mini-label">Strict reviewer gate</span>
+        <code>${escapeHtml(strictReviewerCommand)}</code>
+      </div>
+      <button class="text-button compact-button copy-engine-evidence-command" data-testid="copy-all-engines-command" data-command="${escapeHtml(strictReviewerCommand)}" type="button">Copy strict</button>
+      <button class="text-button compact-button save-engine-evidence-run strong-action" data-testid="save-all-engines-run" data-require-all-engines="true" type="button" ${state.engineRunsSaving ? "disabled" : ""}>${strictSaving ? "Saving strict" : "Save strict run"}</button>
+    </div>
+    <div class="engine-evidence-command-row lean">
+      <div>
+        <span class="mini-label">Lean fixture path</span>
+        <code>${escapeHtml(leanCommand)}</code>
+      </div>
+      <button class="text-button compact-button copy-engine-evidence-command" data-command="${escapeHtml(leanCommand)}" type="button">Copy Lean</button>
+    </div>
+  </div>
+  <div class="engine-evidence-saved-grid">
+    <div class="engine-evidence-saved-run ${savedRun ? "" : "empty"}">
+      <div>
+        <span class="mini-label">Latest saved run</span>
+        <strong>${escapeHtml(savedRun ? `${savedRunCount} saved` : "none saved")}</strong>
+        <small>${escapeHtml(savedRun ? `${savedRun.status} / ${savedRun.path}` : "Save a local engine run into .truth-harness/engine-runs.")}</small>
+        ${state.engineRunsError ? `<small class="warning-text">${escapeHtml(state.engineRunsError)}</small>` : ""}
+      </div>
+      ${savedRun ? `<code>${escapeHtml(savedRun.runId)}</code>` : `<code>truth-harness engines verify --write</code>`}
+    </div>
+    <div class="engine-evidence-saved-run ${strictSavedRun ? "strict" : "empty"}">
+      <div>
+        <span class="mini-label">Latest strict reviewer run</span>
+        <strong>${escapeHtml(strictSavedRun ? strictSavedRun.status : "not saved")}</strong>
+        <small>${escapeHtml(strictSavedRun ? `${strictSavedRun.requiredPassed}/${strictSavedRun.requiredTotal} required gates / ${strictSavedRun.path}` : "Use Save strict run before sending a reviewer bundle.")}</small>
+      </div>
+      ${strictSavedRun ? `<code>${escapeHtml(strictSavedRun.runId)}</code>` : `<code>--require-all-engines</code>`}
+    </div>
   </div>
   <div class="engine-evidence-case-grid">
     ${cases.length > 0 ? cases.map((entry) => engineEvidenceCaseHtml(entry)).join("") : `<article class="engine-evidence-case missing"><strong>No cases returned</strong><p>The local API could not load the engine evidence report.</p></article>`}
@@ -8991,15 +9034,20 @@ function renderEngineEvidenceGate(payload = state.safetyStatus) {
       });
     });
   });
-  engineEvidenceGate.querySelector(".save-engine-evidence-run")?.addEventListener("click", (event) => {
-    void saveEngineEvidenceRun(event.currentTarget);
+  engineEvidenceGate.querySelectorAll(".save-engine-evidence-run").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      void saveEngineEvidenceRun(event.currentTarget, {
+        requireAllEngines: event.currentTarget.dataset.requireAllEngines === "true"
+      });
+    });
   });
 }
 
-function latestEngineRun() {
+function latestEngineRun({ requireAllEngines = false } = {}) {
   const runs = Array.isArray(state.engineRuns) ? state.engineRuns : [];
   return runs
     .filter((run) => run && typeof run.createdAt === "string")
+    .filter((run) => !requireAllEngines || Number(run.requiredTotal ?? 0) >= 5)
     .slice()
     .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))[0];
 }

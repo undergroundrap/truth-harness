@@ -42,9 +42,15 @@ describe("web UI action contracts", () => {
     expect(source).toContain("payload.engineVerification");
     expect(source).toContain('fetch("/api/engine-runs"');
     expect(source).toContain("function refreshEngineRuns({ announce = true } = {})");
-    expect(source).toContain("async function saveEngineEvidenceRun(button)");
+    expect(source).toContain("async function saveEngineEvidenceRun(button, { requireAllEngines = false } = {})");
     expect(source).toContain('data-testid="save-engine-evidence-run"');
-    expect(source).toContain("function latestEngineRun()");
+    expect(source).toContain('data-testid="save-all-engines-run"');
+    expect(source).toContain('data-testid="copy-all-engines-command"');
+    expect(source).toContain('data-require-all-engines="true"');
+    expect(source).toContain("requireAllEngines");
+    expect(source).toContain("engineRunsSavingMode");
+    expect(source).toContain("truth-harness engines verify --write --require-all-engines");
+    expect(source).toContain("function latestEngineRun({ requireAllEngines = false } = {})");
     expect(source).toContain("function engineEvidenceCaseHtml(entry)");
     expect(source).toContain("function engineEvidenceCaseSummary(entry)");
     expect(source).toContain('data-testid="copy-engine-evidence-command"');
@@ -52,6 +58,8 @@ describe("web UI action contracts", () => {
     expect(source).toContain("focusedEngineEvidenceCase(target)");
     expect(source).toContain("Status probes do not mint evidence, truth labels, or proof.");
     expect(styles).toContain(".engine-evidence-gate");
+    expect(styles).toContain(".engine-evidence-command-stack");
+    expect(styles).toContain(".engine-evidence-saved-grid");
     expect(styles).toContain(".engine-evidence-saved-run");
     expect(styles).toContain(".engine-evidence-case-grid");
     expect(styles).toContain("grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));");

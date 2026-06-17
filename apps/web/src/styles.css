@@ -4239,7 +4239,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 
 .engine-evidence-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
   gap: 8px;
   min-width: 0;
 }
@@ -4266,12 +4266,54 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   overflow-wrap: anywhere;
 }
 
+.engine-evidence-command-stack {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
 .engine-evidence-command-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
   min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(10, 10, 10, 0.44);
+  padding: 8px;
+}
+
+.engine-evidence-command-row > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.engine-evidence-command-row.strict {
+  border-color: rgba(230, 195, 106, 0.32);
+  background: rgba(35, 27, 9, 0.22);
+}
+
+.engine-evidence-command-row.lean {
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-color: rgba(125, 211, 168, 0.18);
+  background: rgba(12, 26, 20, 0.2);
+}
+
+.engine-evidence-command-row .strong-action {
+  border-color: rgba(125, 211, 168, 0.38);
+  color: #d9ffe9;
+}
+
+@media (max-width: 980px) {
+  .engine-evidence-command-row {
+    grid-template-columns: 1fr;
+  }
+
+  .engine-evidence-command-row .text-button {
+    justify-self: start;
+  }
 }
 
 .engine-evidence-command-row code,
@@ -4286,6 +4328,13 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   overflow-wrap: anywhere;
   padding: 7px;
   white-space: normal;
+}
+
+.engine-evidence-saved-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+  min-width: 0;
 }
 
 .engine-evidence-saved-run {
@@ -4303,6 +4352,11 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 .engine-evidence-saved-run.empty {
   border-color: var(--line-soft);
   background: rgba(12, 12, 12, 0.55);
+}
+
+.engine-evidence-saved-run.strict {
+  border-color: rgba(230, 195, 106, 0.36);
+  background: rgba(35, 27, 9, 0.24);
 }
 
 .engine-evidence-saved-run > div {

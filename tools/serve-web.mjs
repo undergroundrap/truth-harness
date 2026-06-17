@@ -240,10 +240,18 @@ async function handleApiRequest(request, response, requestUrl) {
       const { listEngineVerificationRuns, writeEngineVerificationRun } = await loadCoreModule();
       await ensureLocalWorkspace();
       const timeoutMs = boundedPositiveNumberOrUndefined(input?.timeoutMs, 10_000) ?? 1500;
+      const requireAllEngines = input?.requireAllEngines === true || input?.mode === "all-engines";
+      const requirements = requireAllEngines
+        ? { maxima: true, z3: true, cvc5: true, lean: true, sage: true }
+        : undefined;
+      const replayCommand = requireAllEngines
+        ? `truth-harness engines verify --write --require-all-engines --timeout-ms ${timeoutMs}`
+        : `truth-harness engines verify --write --timeout-ms ${timeoutMs}`;
       const result = await writeEngineVerificationRun({
         rootPath: projectRoot,
         timeoutMs,
-        replayCommand: `truth-harness engines verify --write --timeout-ms ${timeoutMs}`
+        requirements,
+        replayCommand
       });
       const runs = await listEngineVerificationRuns(projectRoot);
       writeJson(response, 200, {
@@ -251,6 +259,7 @@ async function handleApiRequest(request, response, requestUrl) {
         localOnly: true,
         externalCalls: [],
         run: result.record,
+        mode: requireAllEngines ? "all-engines" : "default",
         paths: {
           json: result.jsonPath,
           markdown: result.markdownPath
@@ -260,7 +269,7 @@ async function handleApiRequest(request, response, requestUrl) {
           {
             actor: "local-api",
             action: "saved-engine-evidence-run",
-            detail: `${result.record.runId} saved local engine evidence status with ${result.record.report.evidenceMinted} evidence records earned.`,
+            detail: `${result.record.runId} saved ${requireAllEngines ? "strict all-engines reviewer" : "local engine"} evidence status with ${result.record.report.evidenceMinted} evidence records earned.`,
             at: result.record.createdAt
           }
         ]
