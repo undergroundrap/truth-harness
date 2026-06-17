@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { writeSymbolicCasCheckRecord, type CasBackendCommandRunner } from "./cas-backend.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
+import type { SmtBackendCommandRunner } from "./smt-backend.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import {
   createVerifierRoute,
@@ -208,6 +209,54 @@ describe("verifier route", () => {
     expect(readBack.routeId).toBe(result.route.routeId);
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.routes).toBe(1);
+  });
+
+  it("forwards cvc5 command overrides into written verifier route manifests", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-12T00:00:00.000Z"
+    });
+    const now = new Date("2026-06-12T00:00:00.000Z");
+    const smtRunner: SmtBackendCommandRunner = (command, args) => {
+      if (command === "cvc5-test" && args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "cvc5 version 1.1.2\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: null,
+        stdout: "",
+        stderr: "",
+        error: {
+          message: `spawn ${command} ENOENT`
+        }
+      };
+    };
+    const common = {
+      now,
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50,
+      smtRunner
+    };
+    const withoutCvc5 = createVerifierRoute("prove the Riemann hypothesis", common);
+    const expectedWithCvc5 = createVerifierRoute("prove the Riemann hypothesis", {
+      ...common,
+      cvc5Command: "cvc5-test"
+    });
+    const written = await writeVerifierRoute({
+      rootPath: root,
+      problem: "prove the Riemann hypothesis",
+      ...common,
+      cvc5Command: "cvc5-test"
+    });
+
+    expect(expectedWithCvc5.manifest.readyCount).toBeGreaterThan(withoutCvc5.manifest.readyCount);
+    expect(written.route.manifest.readyCount).toBe(expectedWithCvc5.manifest.readyCount);
   });
 
   it("satisfies a formal proof obligation only with scoped accepted proof-check evidence", async () => {

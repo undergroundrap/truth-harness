@@ -1151,7 +1151,8 @@ export async function handleTruthHarnessVerify(input: TruthHarnessVerifyInput): 
         maximaCommand: input.maximaCommand,
         sageCommand: input.sageCommand,
         leanCommand: input.leanCommand,
-        z3Command: input.z3Command
+        z3Command: input.z3Command,
+        cvc5Command: input.cvc5Command
       })
     : undefined;
   const route =
@@ -1161,7 +1162,8 @@ export async function handleTruthHarnessVerify(input: TruthHarnessVerifyInput): 
       maximaCommand: input.maximaCommand,
       sageCommand: input.sageCommand,
       leanCommand: input.leanCommand,
-      z3Command: input.z3Command
+      z3Command: input.z3Command,
+      cvc5Command: input.cvc5Command
     });
   const strictFailure = input.strict === true && route.finalTrust === "unverified";
 

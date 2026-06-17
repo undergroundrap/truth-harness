@@ -168,6 +168,10 @@ export function createTruthHarnessMcpServer(): McpServer {
           .string()
           .optional()
           .describe("Z3 executable path or command for this route."),
+        cvc5Command: z
+          .string()
+          .optional()
+          .describe("cvc5 executable path or command for this route."),
         timeoutMs: z
           .number()
           .int()

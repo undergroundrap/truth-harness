@@ -315,7 +315,9 @@ export async function writeVerifierRoute(input: WriteVerifierRouteInput): Promis
     sageCommand: input.sageCommand,
     leanCommand: input.leanCommand,
     z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command,
     now: input.now,
+    smtRunner: input.smtRunner,
     casRunner: input.casRunner
   });
   const routesDir = resolve(status.root, status.manifest.directories.routes);

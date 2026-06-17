@@ -358,6 +358,7 @@ program
   .option("--sage-command <command>", "Override SageMath executable for this route")
   .option("--lean-command <command>", "Override Lean executable for this route")
   .option("--z3-command <command>", "Override Z3 executable for this route")
+  .option("--cvc5-command <command>", "Override cvc5 executable for this route")
   .action(
     async (
       problemTokens: string[],
@@ -372,6 +373,7 @@ program
         sageCommand?: string;
         leanCommand?: string;
         z3Command?: string;
+        cvc5Command?: string;
       }
     ) => {
       const problem = problemTokens.join(" ");
@@ -383,7 +385,8 @@ program
             maximaCommand: options.maximaCommand,
             sageCommand: options.sageCommand,
             leanCommand: options.leanCommand,
-            z3Command: options.z3Command
+            z3Command: options.z3Command,
+            cvc5Command: options.cvc5Command
           })
         : undefined;
       const route =
@@ -393,7 +396,8 @@ program
           maximaCommand: options.maximaCommand,
           sageCommand: options.sageCommand,
           leanCommand: options.leanCommand,
-          z3Command: options.z3Command
+          z3Command: options.z3Command,
+          cvc5Command: options.cvc5Command
         });
 
       if (options.out) {

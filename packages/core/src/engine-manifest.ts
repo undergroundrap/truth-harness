@@ -1,7 +1,7 @@
 import { getCasBackendStatus, type CasBackendStatusOptions } from "./cas-backend.js";
 import { getCodeRunSandboxStatus, type CodeRunSandboxStatus } from "./sandbox.js";
 import { getProofBackendStatus, type ProofBackendStatusOptions } from "./proof-backend.js";
-import { getSmtBackendStatus, type SmtBackendStatusOptions } from "./smt-backend.js";
+import { getSmtBackendStatus, type SmtBackendCommandRunner, type SmtBackendStatusOptions } from "./smt-backend.js";
 import type { TrustLabel } from "./types.js";
 
 export type EngineCapabilityKind = "native-kernel" | "adapter" | "workspace-service" | "safety-boundary" | "planned-adapter";
@@ -69,6 +69,7 @@ export interface EngineManifestOptions {
   leanCommand?: string;
   z3Command?: string;
   cvc5Command?: string;
+  smtRunner?: SmtBackendCommandRunner;
   now?: Date;
 }
 
@@ -123,7 +124,8 @@ export function getEngineManifest(options: EngineManifestOptions = {}): EngineMa
     timeoutMs,
     z3Command: options.z3Command,
     cvc5Command: options.cvc5Command,
-    now: options.now
+    now: options.now,
+    runner: options.smtRunner
   } satisfies SmtBackendStatusOptions);
   const sandbox = getCodeRunSandboxStatus();
   const capabilities = [
