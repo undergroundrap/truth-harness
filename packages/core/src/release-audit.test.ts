@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import { rebuildWorkspaceCatalog } from "./workspace-catalog.js";
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
 import { createReceipt } from "./receipt.js";
 import type { EngineVerificationCommandRunner } from "./engine-verification.js";
+import { writeReportDraft } from "./report-draft.js";
 
 const roots: string[] = [];
 
@@ -58,6 +59,8 @@ describe("release audit", () => {
       requiredEngineGates: "5/5",
       concreteEngineGates: "5/5",
       adversarialBenchmark: "passed",
+      reportDrafts: 0,
+      reportDraftsNeedingAttention: 0,
       blockingFailures: 0
     });
     expect(audit.checks).toContainEqual(
@@ -65,6 +68,9 @@ describe("release audit", () => {
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "adversarial-ai-benchmark", status: "pass", blocking: false })
+    );
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({ id: "report-drafts", status: "pass", blocking: false })
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
@@ -82,6 +88,72 @@ describe("release audit", () => {
     expect(markdown).toContain("# Truth Harness Release Audit");
     expect(markdown).toContain("Required engine gates: 5/5");
     expect(markdown).toContain("Adversarial benchmark: passed");
+    expect(markdown).toContain("Report drafts: 0 saved, 0 needing attention");
+  });
+
+  it("blocks release readiness when a saved report draft fails sidecar integrity", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Report Draft Audit", now: "2026-06-17T00:00:00.000Z" });
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(createReceipt("for all integers n, n^2+n+1 is even")),
+      suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
+      suitePath: "packages/benchmarks/suites/ai-failure-seed.json",
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-17T00:00:00.500Z"
+    });
+    const draft = await writeReportDraft({
+      rootPath: root,
+      title: "Shareable Reviewer Draft",
+      summary: "Saved draft that should block sharing if edited after save.",
+      markdown: "# Shareable Reviewer Draft\n\nOriginal evidence summary.\n",
+      now: "2026-06-17T00:00:00.700Z"
+    });
+    await writeFile(draft.paths.markdown, "# Shareable Reviewer Draft\n\nEdited outside the recorder.\n", "utf8");
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-17T00:00:02.000Z",
+      engineRequirements: { maxima: true, z3: true, lean: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      leanCommand: "lean-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: passingEngineRunner
+    });
+    const markdown = renderReleaseAuditMarkdown(audit);
+
+    expect(audit.status).toBe("blocked");
+    expect(audit.professorReady).toBe(false);
+    expect(audit.summary).toMatchObject({
+      validationPassed: true,
+      catalogFresh: true,
+      requiredEngineGates: "3/3",
+      concreteEngineGates: "3/3",
+      adversarialBenchmark: "passed",
+      reportDrafts: 1,
+      reportDraftsNeedingAttention: 1
+    });
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "report-drafts",
+        status: "fail",
+        blocking: true,
+        summary: "1/1 saved report draft(s) need integrity review before sharing.",
+        command: "truth-harness workspace reports .",
+        details: expect.arrayContaining([
+          expect.stringContaining("high: Fix report draft before sharing: Shareable Reviewer Draft (report_")
+        ])
+      })
+    );
+    expect(audit.nextActions).toContain("truth-harness workspace reports .");
+    expect(markdown).toContain("Report drafts: 1 saved, 1 needing attention");
+    expect(markdown).toContain("FAIL Saved report draft integrity");
   });
 
   it("blocks when the catalog is stale and required engines cannot earn evidence", async () => {

@@ -213,7 +213,9 @@ describe("web UI action contracts", () => {
     expect(source).toContain('data-testid="copy-release-benchmark-command"');
     expect(source).toContain("requireSavedStrictEngineRun");
     expect(source).toContain("requireSandbox");
+    expect(source).toContain("maxReports");
     expect(source).toContain("adversarialBenchmark");
+    expect(source).toContain("reportDraftsNeedingAttention");
     expect(source).toContain("Receipt replay:");
     expect(source).toContain("releaseAuditActivitySummary");
     expect(source).toContain(".copy-release-action-command");

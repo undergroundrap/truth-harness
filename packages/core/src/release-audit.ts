@@ -27,6 +27,7 @@ export interface CreateReleaseAuditInput
     | "maxRoutes"
     | "maxClaims"
     | "maxSessions"
+    | "maxReports"
     | "timeoutMs"
     | "maximaCommand"
     | "z3Command"
@@ -67,6 +68,8 @@ export interface ReleaseAudit {
     requiredEngineGates: string;
     concreteEngineGates: string;
     adversarialBenchmark: string;
+    reportDrafts: number;
+    reportDraftsNeedingAttention: number;
     reviewItems: number;
     criticalReviewItems: number;
     sandboxAvailable: boolean;
@@ -132,6 +135,8 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
       requiredEngineGates: "0/0",
       concreteEngineGates: "0/0",
       adversarialBenchmark: "missing",
+      reportDrafts: 0,
+      reportDraftsNeedingAttention: 0,
       reviewItems: 0,
       criticalReviewItems: 0
     });
@@ -144,6 +149,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     maxRoutes: input.maxRoutes,
     maxClaims: input.maxClaims,
     maxSessions: input.maxSessions,
+    maxReports: input.maxReports,
     timeoutMs: input.timeoutMs,
     maximaCommand: input.maximaCommand,
     z3Command: input.z3Command,
@@ -163,6 +169,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     catalogCheck(catalog),
     engineCheck(credibilityPack, hasRequiredEngine(engineRequirements)),
     adversarialBenchmarkCheck(credibilityPack),
+    reportDraftsCheck(credibilityPack),
     savedStrictEngineRunCheck(credibilityPack, input.requireSavedStrictEngineRun === true),
     reviewQueueCheck(credibilityPack),
     sandboxCheck(sandbox, input.requireSandbox === true),
@@ -184,6 +191,8 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     requiredEngineGates: credibilityPack.summary.requiredEngineGates,
     concreteEngineGates: credibilityPack.summary.concreteEngineGates,
     adversarialBenchmark: credibilityPack.summary.latestAdversarialBenchmarkStatus,
+    reportDrafts: credibilityPack.summary.savedReportDrafts,
+    reportDraftsNeedingAttention: credibilityPack.summary.reportDraftsNeedingAttention,
     reviewItems: credibilityPack.summary.reviewItems,
     criticalReviewItems: credibilityPack.summary.criticalReviewItems
   });
@@ -209,6 +218,7 @@ export function renderReleaseAuditMarkdown(audit: ReleaseAudit): string {
     `- Required engine gates: ${audit.summary.requiredEngineGates}`,
     `- Concrete engine gates: ${audit.summary.concreteEngineGates}`,
     `- Adversarial benchmark: ${audit.summary.adversarialBenchmark}`,
+    `- Report drafts: ${audit.summary.reportDrafts} saved, ${audit.summary.reportDraftsNeedingAttention} needing attention`,
     `- Review queue: ${audit.summary.reviewItems} item(s), ${audit.summary.criticalReviewItems} critical`,
     `- Code-run sandbox: ${audit.summary.sandboxAvailable ? "available" : "not measured"}`,
     "",
@@ -269,6 +279,8 @@ function buildAudit(input: {
   requiredEngineGates: string;
   concreteEngineGates: string;
   adversarialBenchmark: string;
+  reportDrafts: number;
+  reportDraftsNeedingAttention: number;
   reviewItems: number;
   criticalReviewItems: number;
 }): ReleaseAudit {
@@ -300,6 +312,8 @@ function buildAudit(input: {
       requiredEngineGates: input.requiredEngineGates,
       concreteEngineGates: input.concreteEngineGates,
       adversarialBenchmark: input.adversarialBenchmark,
+      reportDrafts: input.reportDrafts,
+      reportDraftsNeedingAttention: input.reportDraftsNeedingAttention,
       reviewItems: input.reviewItems,
       criticalReviewItems: input.criticalReviewItems,
       sandboxAvailable: input.sandbox.available
@@ -570,6 +584,38 @@ function adversarialBenchmarkEvidenceDetails(pack: CredibilityPack): string[] {
   }
 
   return details;
+}
+
+function reportDraftsCheck(pack: CredibilityPack): ReleaseAuditCheck {
+  const saved = pack.summary.savedReportDrafts;
+  const needingAttention = pack.summary.reportDraftsNeedingAttention;
+  const affectedDrafts = pack.workspaceReview.topItems
+    .filter((item) => item.kind === "report-draft-review" && item.priority !== "low")
+    .slice(0, 5);
+
+  if (needingAttention > 0) {
+    return failCheck({
+      id: "report-drafts",
+      title: "Saved report draft integrity",
+      blocking: true,
+      summary: `${needingAttention}/${saved} saved report draft(s) need integrity review before sharing.`,
+      command: "truth-harness workspace reports .",
+      details: [
+        "Saved Markdown report drafts are human-facing review artifacts and must match the SHA-256 recorded in their JSON sidecars.",
+        ...affectedDrafts.map((item) => `${item.priority}: ${item.title} (${item.source.ref})`)
+      ]
+    });
+  }
+
+  return passCheck({
+    id: "report-drafts",
+    title: "Saved report draft integrity",
+    summary: `${saved} saved report draft(s) have no integrity blockers in this audit scope.`,
+    command: "truth-harness workspace reports .",
+    details: [
+      "Report drafts are shareable summaries, not proof. Their trust remains bounded by cited receipts, bundles, and replay commands."
+    ]
+  });
 }
 
 function reviewQueueCheck(pack: CredibilityPack): ReleaseAuditCheck {

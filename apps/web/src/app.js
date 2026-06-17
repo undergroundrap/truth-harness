@@ -8446,7 +8446,8 @@ async function refreshReleaseAudit({ announce = true } = {}) {
       requireAllEngines: "true",
       requireSavedStrictEngineRun: "true",
       requireSandbox: "true",
-      timeoutMs: "1500"
+      timeoutMs: "1500",
+      maxReports: "50"
     });
     const response = await fetch(`/api/release-audit?${params.toString()}`, {
       headers: {
@@ -9218,6 +9219,7 @@ function renderReleaseAuditGate() {
         ["Checks", `${summary.passedChecks ?? 0} pass / ${summary.warningChecks ?? 0} warn / ${summary.failedChecks ?? 0} fail`],
         ["Engines", `${summary.requiredEngineGates ?? "0/5"} required / ${summary.concreteEngineGates ?? "0/5"} concrete`],
         ["Adversarial benchmark", releaseAuditBenchmarkSummary(summary)],
+        ["Report drafts", `${summary.reportDrafts ?? 0} saved / ${summary.reportDraftsNeedingAttention ?? 0} attention`],
         ["Review queue", `${summary.reviewItems ?? 0} open / ${summary.criticalReviewItems ?? 0} critical`],
         ["Catalog", summary.catalogFresh ? "fresh" : "rebuild required"],
         ["Sandbox", summary.sandboxAvailable ? "measured" : "not measured"],
@@ -9422,7 +9424,7 @@ function releaseAuditActivitySummary(audit) {
   }
 
   const summary = audit.summary ?? {};
-  return `Release audit ${audit.status}; ${summary.blockingFailures ?? 0} blocking failure${summary.blockingFailures === 1 ? "" : "s"}, ${summary.criticalReviewItems ?? 0} critical queue item${summary.criticalReviewItems === 1 ? "" : "s"}.`;
+  return `Release audit ${audit.status}; ${summary.blockingFailures ?? 0} blocking failure${summary.blockingFailures === 1 ? "" : "s"}, ${summary.reportDraftsNeedingAttention ?? 0} report draft${summary.reportDraftsNeedingAttention === 1 ? "" : "s"} needing attention, ${summary.criticalReviewItems ?? 0} critical queue item${summary.criticalReviewItems === 1 ? "" : "s"}.`;
 }
 
 function formatPercent(value) {

@@ -3076,6 +3076,7 @@ workspace
         maxRoutes: options.maxRoutes,
         maxClaims: options.maxClaims,
         maxSessions: options.maxSessions,
+        maxReports: options.maxReports,
         timeoutMs: options.timeoutMs,
         maximaCommand: options.maximaCommand,
         sageCommand: options.sageCommand,

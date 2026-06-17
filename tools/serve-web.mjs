@@ -376,7 +376,8 @@ async function handleApiRequest(request, response, requestUrl) {
         timeoutMs: requestUrl.searchParams.get("timeoutMs"),
         maxRoutes: requestUrl.searchParams.get("maxRoutes"),
         maxClaims: requestUrl.searchParams.get("maxClaims"),
-        maxSessions: requestUrl.searchParams.get("maxSessions")
+        maxSessions: requestUrl.searchParams.get("maxSessions"),
+        maxReports: requestUrl.searchParams.get("maxReports")
       });
       const pack = await createCredibilityPack(input);
       writeJson(response, 200, {
@@ -591,7 +592,8 @@ async function handleApiRequest(request, response, requestUrl) {
         timeoutMs: requestUrl.searchParams.get("timeoutMs"),
         maxRoutes: requestUrl.searchParams.get("maxRoutes"),
         maxClaims: requestUrl.searchParams.get("maxClaims"),
-        maxSessions: requestUrl.searchParams.get("maxSessions")
+        maxSessions: requestUrl.searchParams.get("maxSessions"),
+        maxReports: requestUrl.searchParams.get("maxReports")
       });
       const audit = await createReleaseAudit(input);
       writeJson(response, 200, {
@@ -1906,6 +1908,7 @@ function releaseAuditInputFromValue(value = {}) {
     maxRoutes: boundedPositiveNumberOrUndefined(value?.maxRoutes, 100),
     maxClaims: boundedPositiveNumberOrUndefined(value?.maxClaims, 100),
     maxSessions: boundedPositiveNumberOrUndefined(value?.maxSessions, 50),
+    maxReports: boundedPositiveNumberOrUndefined(value?.maxReports, 50),
     requireSandbox: isTruthyInputValue(value?.requireSandbox),
     requireSavedStrictEngineRun: isTruthyInputValue(value?.requireSavedStrictEngineRun),
     engineRequirements: requireAllEngines
