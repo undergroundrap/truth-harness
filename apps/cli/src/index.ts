@@ -3019,6 +3019,7 @@ workspace
   .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
   .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
   .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
+  .option("--max-reports <count>", "Maximum saved report drafts to inspect; use 0 to skip reports", parseNonNegativeInteger)
   .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
   .option("--sage-command <command>", "Override SageMath executable for the optional CAS readiness probe")
@@ -3047,6 +3048,7 @@ workspace
         maxRoutes?: number;
         maxClaims?: number;
         maxSessions?: number;
+        maxReports?: number;
         timeoutMs: number;
         maximaCommand?: string;
         sageCommand?: string;
@@ -3150,6 +3152,7 @@ workspace
   .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
   .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
   .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
+  .option("--max-reports <count>", "Maximum saved report drafts to inspect; use 0 to skip reports", parseNonNegativeInteger)
   .option("--fail-on-critical", "Exit non-zero when critical review items exist")
   .action(
     async (
@@ -3160,6 +3163,7 @@ workspace
         maxRoutes?: number;
         maxClaims?: number;
         maxSessions?: number;
+        maxReports?: number;
         failOnCritical?: boolean;
       }
     ) => {
@@ -3167,7 +3171,8 @@ workspace
         rootPath: path,
         maxRoutes: options.maxRoutes,
         maxClaims: options.maxClaims,
-        maxSessions: options.maxSessions
+        maxSessions: options.maxSessions,
+        maxReports: options.maxReports
       };
       const writeResult = options.write ? await writeWorkspaceReview(reviewInput) : undefined;
       const review = writeResult?.review ?? (await createWorkspaceReview(reviewInput));
@@ -3196,6 +3201,7 @@ workspace
   .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
   .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
   .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
+  .option("--max-reports <count>", "Maximum saved report drafts to inspect; use 0 to skip reports", parseNonNegativeInteger)
   .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
   .option("--sage-command <command>", "Override SageMath executable for the optional CAS readiness probe")
@@ -3222,6 +3228,7 @@ workspace
         maxRoutes?: number;
         maxClaims?: number;
         maxSessions?: number;
+        maxReports?: number;
         timeoutMs: number;
         maximaCommand?: string;
         sageCommand?: string;
@@ -3247,6 +3254,7 @@ workspace
         maxRoutes: options.maxRoutes,
         maxClaims: options.maxClaims,
         maxSessions: options.maxSessions,
+        maxReports: options.maxReports,
         timeoutMs: options.timeoutMs,
         maximaCommand: options.maximaCommand,
         sageCommand: options.sageCommand,
@@ -3280,6 +3288,7 @@ workspace
   .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
   .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
   .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
+  .option("--max-reports <count>", "Maximum saved report drafts to inspect; use 0 to skip reports", parseNonNegativeInteger)
   .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
   .option("--sage-command <command>", "Override SageMath executable for the optional CAS readiness probe")
@@ -3307,6 +3316,7 @@ workspace
         maxRoutes?: number;
         maxClaims?: number;
         maxSessions?: number;
+        maxReports?: number;
         timeoutMs: number;
         maximaCommand?: string;
         sageCommand?: string;
@@ -3334,6 +3344,7 @@ workspace
         maxRoutes: options.maxRoutes,
         maxClaims: options.maxClaims,
         maxSessions: options.maxSessions,
+        maxReports: options.maxReports,
         timeoutMs: options.timeoutMs,
         maximaCommand: options.maximaCommand,
         sageCommand: options.sageCommand,
@@ -3378,6 +3389,7 @@ workspace
   .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
   .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
   .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
+  .option("--max-reports <count>", "Maximum saved report drafts to inspect; use 0 to skip reports", parseNonNegativeInteger)
   .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
   .option("--sage-command <command>", "Override SageMath executable for the optional CAS readiness probe")
@@ -3403,6 +3415,7 @@ workspace
         maxRoutes?: number;
         maxClaims?: number;
         maxSessions?: number;
+        maxReports?: number;
         timeoutMs: number;
         maximaCommand?: string;
         sageCommand?: string;
@@ -3428,6 +3441,7 @@ workspace
         maxRoutes: options.maxRoutes,
         maxClaims: options.maxClaims,
         maxSessions: options.maxSessions,
+        maxReports: options.maxReports,
         timeoutMs: options.timeoutMs,
         maximaCommand: options.maximaCommand,
         sageCommand: options.sageCommand,
@@ -3519,6 +3533,7 @@ workspace
   .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
   .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
   .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
+  .option("--max-reports <count>", "Maximum saved report drafts to inspect when source is workspace-review; use 0 to skip reports", parseNonNegativeInteger)
   .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds for credibility-actions", parsePositiveInteger, 3000)
   .option("--maxima-command <command>", "Override Maxima executable for credibility-actions")
   .option("--sage-command <command>", "Override SageMath executable for credibility-actions")
@@ -3547,6 +3562,7 @@ workspace
         maxRoutes?: number;
         maxClaims?: number;
         maxSessions?: number;
+        maxReports?: number;
         timeoutMs: number;
         maximaCommand?: string;
         sageCommand?: string;
@@ -5434,7 +5450,8 @@ async function createRunNextReviewFromOptions(path: string, options: RunNextSour
       rootPath: path,
       maxRoutes: options.maxRoutes,
       maxClaims: options.maxClaims,
-      maxSessions: options.maxSessions
+      maxSessions: options.maxSessions,
+      maxReports: options.maxReports
     });
   }
 
@@ -5444,6 +5461,7 @@ async function createRunNextReviewFromOptions(path: string, options: RunNextSour
       maxRoutes: options.maxRoutes,
       maxClaims: options.maxClaims,
       maxSessions: options.maxSessions,
+      maxReports: options.maxReports,
       timeoutMs: options.timeoutMs,
       maximaCommand: options.maximaCommand,
       sageCommand: options.sageCommand,
@@ -5476,6 +5494,7 @@ interface RunNextSourceOptions extends EngineRequirementOptions {
   maxRoutes?: number;
   maxClaims?: number;
   maxSessions?: number;
+  maxReports?: number;
   timeoutMs?: number;
   maximaCommand?: string;
   sageCommand?: string;
@@ -6747,6 +6766,7 @@ function printWorkspaceReview(review: WorkspaceReview, writeResult?: WorkspaceRe
   console.log(`Routes: ${review.summary.routes}`);
   console.log(`Claims: ${review.summary.claims}`);
   console.log(`Sessions: ${review.summary.sessions ?? 0}`);
+  console.log(`Report drafts: ${review.summary.reportDrafts ?? 0}`);
   console.log(`Queue items: ${review.summary.totalItems}`);
   console.log(`Critical/high/medium/low: ${review.summary.criticalItems}/${review.summary.highItems}/${review.summary.mediumItems}/${review.summary.lowItems}`);
   console.log(`Privacy: ${review.privacy.mode} (network: ${review.networkAccess})`);
@@ -7054,6 +7074,9 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
     console.log("");
     console.log(`Next item: ${plan.item.priority.toUpperCase()} ${plan.item.kind} ${plan.item.itemId}`);
     console.log(`  ${plan.item.title}`);
+    if (plan.item.reportId) {
+      console.log(`  Report: ${plan.item.reportId}`);
+    }
     console.log(`  Command: ${plan.item.command}`);
   }
 

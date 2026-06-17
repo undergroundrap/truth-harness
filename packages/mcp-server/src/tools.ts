@@ -600,6 +600,7 @@ export interface TruthHarnessWorkspaceReviewInput {
   maxRoutes?: number;
   maxClaims?: number;
   maxSessions?: number;
+  maxReports?: number;
   write?: boolean;
 }
 
@@ -609,6 +610,7 @@ export interface TruthHarnessWorkspaceRunNextInput {
   maxRoutes?: number;
   maxClaims?: number;
   maxSessions?: number;
+  maxReports?: number;
   timeoutMs?: number;
   maximaCommand?: string;
   sageCommand?: string;
@@ -683,6 +685,7 @@ export interface TruthHarnessWorkspaceCredibilityBundleInput {
   maxRoutes?: number;
   maxClaims?: number;
   maxSessions?: number;
+  maxReports?: number;
   timeoutMs?: number;
   maximaCommand?: string;
   sageCommand?: string;
@@ -1749,7 +1752,8 @@ export async function handleTruthHarnessWorkspaceReview(
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     maxRoutes: input.maxRoutes,
     maxClaims: input.maxClaims,
-    maxSessions: input.maxSessions
+    maxSessions: input.maxSessions,
+    maxReports: input.maxReports
   };
 
   if (input.write) {
@@ -1797,7 +1801,8 @@ async function createRunNextReviewFromInput(
       rootPath,
       maxRoutes: input.maxRoutes,
       maxClaims: input.maxClaims,
-      maxSessions: input.maxSessions
+      maxSessions: input.maxSessions,
+      maxReports: input.maxReports
     });
   }
 
@@ -1807,6 +1812,7 @@ async function createRunNextReviewFromInput(
       maxRoutes: input.maxRoutes,
       maxClaims: input.maxClaims,
       maxSessions: input.maxSessions,
+      maxReports: input.maxReports,
       timeoutMs: input.timeoutMs,
       maximaCommand: input.maximaCommand,
       sageCommand: input.sageCommand,
@@ -1915,6 +1921,7 @@ export async function handleTruthHarnessWorkspaceCredibilityBundle(
     maxRoutes: input.maxRoutes,
     maxClaims: input.maxClaims,
     maxSessions: input.maxSessions,
+    maxReports: input.maxReports,
     timeoutMs: input.timeoutMs,
     maximaCommand: input.maximaCommand,
     sageCommand: input.sageCommand,
@@ -1935,6 +1942,7 @@ export async function handleTruthHarnessWorkspaceCredibilityActions(
     maxRoutes: input.maxRoutes,
     maxClaims: input.maxClaims,
     maxSessions: input.maxSessions,
+    maxReports: input.maxReports,
     timeoutMs: input.timeoutMs,
     maximaCommand: input.maximaCommand,
     sageCommand: input.sageCommand,

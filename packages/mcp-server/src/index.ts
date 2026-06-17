@@ -1371,6 +1371,13 @@ export function createTruthHarnessMcpServer(): McpServer {
           .max(500)
           .optional()
           .describe("Maximum research sessions to inspect. Defaults to 100; use 0 to skip sessions."),
+        maxReports: z
+          .number()
+          .int()
+          .min(0)
+          .max(200)
+          .optional()
+          .describe("Maximum saved report drafts to inspect. Defaults to 50; use 0 to skip report drafts."),
         write: z
           .boolean()
           .optional()
@@ -1381,8 +1388,8 @@ export function createTruthHarnessMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath, maxRoutes, maxClaims, maxSessions, write }) =>
-      toolJson(await handleTruthHarnessWorkspaceReview({ workspacePath, maxRoutes, maxClaims, maxSessions, write }))
+    async ({ workspacePath, maxRoutes, maxClaims, maxSessions, maxReports, write }) =>
+      toolJson(await handleTruthHarnessWorkspaceReview({ workspacePath, maxRoutes, maxClaims, maxSessions, maxReports, write }))
   );
 
   server.registerTool(
@@ -1417,6 +1424,13 @@ export function createTruthHarnessMcpServer(): McpServer {
           .max(500)
           .optional()
           .describe("Maximum research sessions to inspect. Defaults to 100; use 0 to skip sessions."),
+        maxReports: z
+          .number()
+          .int()
+          .min(0)
+          .max(200)
+          .optional()
+          .describe("Maximum saved report drafts to inspect when source is workspace-review. Defaults to 50; use 0 to skip report drafts."),
         timeoutMs: z
           .number()
           .int()
@@ -1685,6 +1699,13 @@ export function createTruthHarnessMcpServer(): McpServer {
           .max(500)
           .optional()
           .describe("Maximum research sessions to inspect. Defaults to 100; use 0 to skip sessions."),
+        maxReports: z
+          .number()
+          .int()
+          .min(0)
+          .max(200)
+          .optional()
+          .describe("Maximum saved report drafts to inspect. Defaults to 50; use 0 to skip report drafts."),
         timeoutMs: z
           .number()
           .int()
@@ -1768,6 +1789,13 @@ export function createTruthHarnessMcpServer(): McpServer {
           .max(500)
           .optional()
           .describe("Maximum research sessions to inspect. Defaults to 100; use 0 to skip sessions."),
+        maxReports: z
+          .number()
+          .int()
+          .min(0)
+          .max(200)
+          .optional()
+          .describe("Maximum saved report drafts to inspect. Defaults to 50; use 0 to skip report drafts."),
         timeoutMs: z
           .number()
           .int()

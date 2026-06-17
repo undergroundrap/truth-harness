@@ -139,6 +139,7 @@ export interface CreateCredibilityPackInput {
   maxRoutes?: number;
   maxClaims?: number;
   maxSessions?: number;
+  maxReports?: number;
   engineRequirements?: EngineVerificationRequirements;
   timeoutMs?: number;
   maximaCommand?: string;
@@ -196,6 +197,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
     maxRoutes: input.maxRoutes,
     maxClaims: input.maxClaims,
     maxSessions: input.maxSessions,
+    maxReports: input.maxReports,
     now: createdAt
   });
   const reviewerCommands = createReviewerCommands(input);

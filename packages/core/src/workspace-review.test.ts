@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchSession } from "./research-session.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createWorkspaceReview, listWorkspaceReviews, readWorkspaceReview, writeWorkspaceReview } from "./workspace-review.js";
@@ -435,6 +436,92 @@ describe("workspace review", () => {
     );
     expect(review.markdown).toContain("| Sessions | `1` |");
     expect(skipped.summary.sessions).toBe(0);
+    expect(skipped.summary.totalItems).toBe(0);
+  });
+
+  it("includes saved report drafts in bounded agent handoffs", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const verified = await writeReportDraft({
+      rootPath: root,
+      title: "Verified Reviewer Draft",
+      markdown: "# Verified Reviewer Draft\n\nReplayable and hash-checked.\n",
+      trust: "exact-computed",
+      source: "test",
+      now: "2026-06-13T00:01:00.000Z"
+    });
+    const tampered = await writeReportDraft({
+      rootPath: root,
+      title: "Edited Reviewer Draft",
+      markdown: "# Original Reviewer Draft\n",
+      source: "test",
+      now: "2026-06-13T00:02:00.000Z"
+    });
+    await writeFile(tampered.paths.markdown, "# Edited after save\n", "utf8");
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      maxReports: 10,
+      now: "2026-06-13T00:03:00.000Z"
+    });
+    const skipped = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      maxReports: 0,
+      now: "2026-06-13T00:04:00.000Z"
+    });
+
+    expect(review.summary.reportDrafts).toBe(2);
+    expect(review.summary.reportDraftReviewItems).toBe(2);
+    expect(review.summary.reportDraftsNeedingAttention).toBe(1);
+    expect(review.autonomy.mode).toBe("human-review-gated");
+    expect(review.items).toContainEqual(
+      expect.objectContaining({
+        kind: "report-draft-review",
+        priority: "low",
+        reportId: verified.report.reportId,
+        command: expect.stringContaining(`truth-harness workspace report ${verified.report.reportId}`),
+        acceptanceCriteria: expect.arrayContaining([
+          "Read the report draft through the local report command and inspect its warnings.",
+          "Use the draft as a review artifact, not as independent proof."
+        ]),
+        evidenceSlots: expect.arrayContaining([
+          expect.objectContaining({
+            slotId: "verified-report-markdown",
+            status: "satisfied",
+            required: false
+          })
+        ]),
+        agentPacket: expect.stringContaining(`Report: ${verified.report.reportId}`)
+      })
+    );
+    expect(review.items).toContainEqual(
+      expect.objectContaining({
+        kind: "report-draft-review",
+        priority: "high",
+        reportId: tampered.report.reportId,
+        title: "Fix report draft before sharing: Edited Reviewer Draft",
+        acceptanceCriteria: expect.arrayContaining([
+          "Treat the draft as tampered, stale, or manually edited until its Markdown hash is reconciled."
+        ]),
+        evidenceSlots: expect.arrayContaining([
+          expect.objectContaining({
+            slotId: "report-markdown-hash-review",
+            status: "open",
+            required: true
+          })
+        ])
+      })
+    );
+    expect(review.markdown).toContain("| Report drafts | `2` |");
+    expect(skipped.summary.reportDrafts).toBe(0);
     expect(skipped.summary.totalItems).toBe(0);
   });
 

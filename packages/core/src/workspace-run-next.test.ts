@@ -6,6 +6,7 @@ import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { createCredibilityPack } from "./credibility-pack.js";
 import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { writeReportDraft } from "./report-draft.js";
 import {
   createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
@@ -97,6 +98,52 @@ describe("workspace run-next", () => {
     expect(plan.status).toBe("blocked");
     expect(plan.execution.kind).toBe("manual-container-gate");
     expect(plan.execution.summary).toContain("does not execute npm, Docker, or shell commands");
+  });
+
+  it("reads saved report drafts through run-next without honoring command workspace overrides", async () => {
+    const root = await tempRoot();
+    const outsideRoot = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    await initLocalWorkspace(outsideRoot, { now: "2026-06-14T00:00:00.000Z" });
+    const report = await writeReportDraft({
+      rootPath: root,
+      title: "Run Next Report",
+      markdown: "# Run Next Report\n\nLocal report reads stay inside the selected root.\n",
+      now: "2026-06-14T00:01:00.000Z"
+    });
+    const review = minimalReview({
+      rootPath: root,
+      command: `truth-harness workspace report ${report.report.reportId} ${outsideRoot} --json`,
+      claimId: "claim_fake",
+      reportId: report.report.reportId,
+      kind: "report-draft-review"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+
+    expect(plan.status).toBe("executed");
+    expect(plan.item).toMatchObject({
+      kind: "report-draft-review",
+      reportId: report.report.reportId
+    });
+    expect(plan.execution).toMatchObject({
+      kind: "report-read",
+      evidenceRef: `report:${report.report.reportId}`,
+      attached: false
+    });
+    expect(plan.execution.summary).toContain("Markdown verification is passing");
+    expect(plan.execution.result).toMatchObject({
+      report: {
+        reportId: report.report.reportId,
+        title: "Run Next Report"
+      },
+      markdownVerified: true
+    });
   });
 
   it("executes engine verification actions without shell execution", async () => {
@@ -276,7 +323,10 @@ function minimalReview(input: {
   rootPath: string;
   command: string;
   claimId: string;
+  kind?: WorkspaceReview["items"][number]["kind"];
+  reportId?: string;
 }): WorkspaceReview {
+  const kind = input.kind ?? "claim-blocker";
   return {
     schemaVersion: "truth-harness.workspace-review.v0",
     reviewId: "wrev_run_next_test",
@@ -296,10 +346,13 @@ function minimalReview(input: {
       routes: 0,
       claims: 1,
       sessions: 0,
+      reportDrafts: input.reportId ? 1 : 0,
       totalItems: 1,
       routeObligations: 0,
       readyRoutesWithoutClaims: 0,
       blockedClaims: 1,
+      reportDraftReviewItems: input.reportId ? 1 : 0,
+      reportDraftsNeedingAttention: 0,
       sessionTasks: 0,
       sessionNextChecks: 0,
       criticalItems: 0,
@@ -323,12 +376,13 @@ function minimalReview(input: {
     items: [
       {
         itemId: "work_run_next_test",
-        kind: "claim-blocker",
+        kind,
         priority: "high",
         title: "Review blocked claim",
         summary: "Test claim review.",
         command: input.command,
         claimId: input.claimId,
+        reportId: input.reportId,
         domain: "finance",
         trust: "unverified",
         source: {

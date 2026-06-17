@@ -3,6 +3,7 @@ import { join, relative, resolve, sep } from "node:path";
 import { listClaimRecords, type ClaimLedgerRecord } from "./claim-ledger.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { listReportDrafts, type ReportDraftSummary } from "./report-draft.js";
 import {
   listVerifierRoutes,
   readVerifierRoute,
@@ -24,6 +25,7 @@ export type WorkspaceReviewItemKind =
   | "route-obligation"
   | "route-ready-claim"
   | "claim-blocker"
+  | "report-draft-review"
   | "session-task"
   | "session-next-check"
   | "credibility-action";
@@ -61,6 +63,7 @@ export interface WorkspaceReviewItem {
   sessionId?: string;
   taskId?: string;
   checkpointId?: string;
+  reportId?: string;
   domain?: string;
   trust?: TrustLabel;
   createdAt?: string;
@@ -100,10 +103,13 @@ export interface WorkspaceReview {
     routes: number;
     claims: number;
     sessions: number;
+    reportDrafts: number;
     totalItems: number;
     routeObligations: number;
     readyRoutesWithoutClaims: number;
     blockedClaims: number;
+    reportDraftReviewItems: number;
+    reportDraftsNeedingAttention: number;
     sessionTasks: number;
     sessionNextChecks: number;
     criticalItems: number;
@@ -122,6 +128,7 @@ export interface CreateWorkspaceReviewInput {
   maxRoutes?: number;
   maxClaims?: number;
   maxSessions?: number;
+  maxReports?: number;
   now?: string;
 }
 
@@ -157,11 +164,13 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const routeSummaries = (await listVerifierRoutes(status.root)).slice(0, input.maxRoutes ?? 100);
   const claims = (await listClaimRecords(status.root)).slice(0, input.maxClaims ?? 200);
   const sessions = (await listResearchSessions(status.root)).slice(0, input.maxSessions ?? 100);
+  const reportDrafts = await listReportDrafts({ rootPath: status.root, limit: input.maxReports ?? 50 });
   const claimsByRouteRef = claimsByRouteEvidence(claims);
   const routes = await Promise.all(routeSummaries.map((route) => readVerifierRoute(status.root, route.routeId)));
   const items = attachAgentPackets(sortReviewItems([
     ...routes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef)),
     ...claims.flatMap((claim) => claimReviewItems(status.root, claim)),
+    ...reportDrafts.map((report) => reportDraftReviewItem(status.root, report)),
     ...sessions.flatMap((session) => sessionReviewItems(status.root, session))
   ]));
   const autonomy = createAutonomyContract(items);
@@ -177,6 +186,7 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
       routes: routeSummaries.length,
       claims: claims.length,
       sessions: sessions.length,
+      reportDrafts: reportDrafts.length,
       items
     }),
     autonomy,
@@ -316,6 +326,7 @@ export function renderWorkspaceReviewMarkdown(review: Omit<WorkspaceReview, "mar
     `| Routes | \`${review.summary.routes}\` |`,
     `| Claims | \`${review.summary.claims}\` |`,
     `| Sessions | \`${review.summary.sessions ?? 0}\` |`,
+    `| Report drafts | \`${review.summary.reportDrafts ?? 0}\` |`,
     `| Queue items | \`${review.summary.totalItems}\` |`,
     `| Autonomy mode | \`${review.autonomy.mode}\` |`,
     `| Unattended local work | \`${String(review.autonomy.canRunUnattended)}\` |`,
@@ -567,6 +578,33 @@ function sessionReviewItems(workspacePath: string, session: ResearchSession): Wo
   return [...taskItems, ...nextCheckItems];
 }
 
+function reportDraftReviewItem(workspacePath: string, summary: ReportDraftSummary): WorkspaceReviewItem {
+  const report = summary.report;
+  const verified = summary.markdownVerified;
+  return {
+    itemId: itemIdFor({
+      kind: "report-draft-review",
+      reportId: report.reportId,
+      markdownStatus: summary.markdownStatus,
+      markdownSha256: summary.markdownSha256
+    }),
+    kind: "report-draft-review",
+    priority: verified ? "low" : "high",
+    title: verified ? `Review saved report draft: ${report.title}` : `Fix report draft before sharing: ${report.title}`,
+    summary: verified
+      ? `Saved report draft ${report.reportId} has Markdown SHA-256 ${report.markdownSha256} verified against its JSON sidecar.`
+      : `Saved report draft ${report.reportId} has Markdown status ${summary.markdownStatus}; treat it as unreviewed until the JSON and Markdown agree.`,
+    command: `truth-harness workspace report ${quoteCommandArg(report.reportId)} ${quoteCommandArg(workspacePath)} --json`,
+    reportId: report.reportId,
+    trust: isTrustLabel(report.trust) ? report.trust : undefined,
+    createdAt: report.createdAt,
+    source: {
+      label: "report draft",
+      ref: report.reportId
+    }
+  };
+}
+
 function sessionTaskItem(command: string, session: ResearchSession, task: ResearchSessionTask): WorkspaceReviewItem {
   return {
     itemId: itemIdFor({
@@ -650,16 +688,20 @@ function summarizeItems(input: {
   routes: number;
   claims: number;
   sessions: number;
+  reportDrafts: number;
   items: WorkspaceReviewItem[];
 }): WorkspaceReview["summary"] {
   return {
     routes: input.routes,
     claims: input.claims,
     sessions: input.sessions,
+    reportDrafts: input.reportDrafts,
     totalItems: input.items.length,
     routeObligations: input.items.filter((item) => item.kind === "route-obligation").length,
     readyRoutesWithoutClaims: input.items.filter((item) => item.kind === "route-ready-claim").length,
     blockedClaims: input.items.filter((item) => item.kind === "claim-blocker").length,
+    reportDraftReviewItems: input.items.filter((item) => item.kind === "report-draft-review").length,
+    reportDraftsNeedingAttention: input.items.filter((item) => item.kind === "report-draft-review" && item.priority !== "low").length,
     sessionTasks: input.items.filter((item) => item.kind === "session-task").length,
     sessionNextChecks: input.items.filter((item) => item.kind === "session-next-check").length,
     criticalItems: input.items.filter((item) => item.priority === "critical").length,
@@ -706,6 +748,10 @@ function createAutonomyContract(items: WorkspaceReviewItem[]): WorkspaceReviewAu
 }
 
 function itemRequiresHumanReview(item: WorkspaceReviewItem): boolean {
+  if (item.kind === "report-draft-review" && item.priority !== "low") {
+    return true;
+  }
+
   if (item.kind === "claim-blocker") {
     return true;
   }
@@ -721,7 +767,7 @@ function itemRequiresHumanReview(item: WorkspaceReviewItem): boolean {
 
 function autonomyAllowedActions(mode: WorkspaceReviewAutonomyMode): string[] {
   const actions = [
-    "Read local Truth Harness receipts, routes, claims, sessions, reviews, and snapshots.",
+    "Read local Truth Harness receipts, routes, claims, sessions, report drafts, reviews, and snapshots.",
     "Run only the exact local truth-harness commands listed in the ordered work queue.",
     "Write replayable local receipts, CAS checks, SMT checks, proof checks, research checkpoints, workspace reviews, and snapshots.",
     "Prepare model-context packets without sending them to a hosted model."
@@ -929,6 +975,27 @@ function workspaceReviewEvidenceSlots(item: WorkspaceReviewItem): WorkspaceRevie
     ];
   }
 
+  if (item.kind === "report-draft-review") {
+    const verified = item.priority === "low";
+    return [
+      {
+        slotId: verified ? "verified-report-markdown" : "report-markdown-hash-review",
+        label: verified ? "Verified report draft" : "Report draft integrity review",
+        required: !verified,
+        status: verified ? "satisfied" : "open",
+        description: verified
+          ? "The saved Markdown matches the SHA-256 recorded in the report draft JSON sidecar."
+          : "The report draft Markdown is missing or no longer matches the JSON sidecar hash. Regenerate or review before sharing.",
+        acceptedArtifacts: [
+          "truth-harness workspace report <report_id> --json",
+          ".truth-harness/findings/*report-draft.json",
+          ".truth-harness/findings/*report-draft.md"
+        ],
+        suggestedCommand: item.command
+      }
+    ];
+  }
+
   if (item.kind === "session-task" || item.kind === "session-next-check") {
     return [
       {
@@ -1027,6 +1094,20 @@ function workspaceReviewAcceptanceCriteria(item: WorkspaceReviewItem): string[] 
       "Attach citations, receipts, routes, or expert review before finalizing.",
       "Do not finalize the claim until open blockers are represented in the ledger."
     );
+  } else if (item.kind === "report-draft-review") {
+    if (item.priority === "low") {
+      criteria.push(
+        "Read the report draft through the local report command and inspect its warnings.",
+        "Confirm cited receipts, routes, and bundle verifications still support the written wording.",
+        "Use the draft as a review artifact, not as independent proof."
+      );
+    } else {
+      criteria.push(
+        "Treat the draft as tampered, stale, or manually edited until its Markdown hash is reconciled.",
+        "Regenerate or review the saved draft before sharing it with a reviewer.",
+        "Do not cite the draft as a stable artifact while the sidecar verification is failing."
+      );
+    }
   } else if (item.kind === "session-task") {
     criteria.push(
       "Open the research session and update only this task or its attached evidence.",
@@ -1066,6 +1147,7 @@ function workspaceReviewAgentPacket(
     `Route: ${item.routeId ?? "n/a"}`,
     `Claim: ${item.claimId ?? "n/a"}`,
     `Session: ${item.sessionId ?? "n/a"}`,
+    `Report: ${item.reportId ?? "n/a"}`,
     `Obligation: ${item.obligationId ?? "n/a"}`,
     `Trust: ${item.trust ?? "n/a"}`,
     "",
@@ -1127,4 +1209,14 @@ function escapeMarkdownTable(value: string): string {
 
 function escapeMarkdownText(value: string): string {
   return value.replace(/\\/gu, "\\\\").replace(/\*/gu, "\\*").replace(/_/gu, "\\_").replace(/`/gu, "\\`");
+}
+
+function isTrustLabel(value: unknown): value is TrustLabel {
+  return (
+    value === "unverified" ||
+    value === "exact-computed" ||
+    value === "cross-checked" ||
+    value === "proved" ||
+    value === "refuted"
+  );
 }

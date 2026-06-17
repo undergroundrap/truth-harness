@@ -13,6 +13,7 @@ import { writeEngineVerificationRun, type EngineVerificationRequirements } from 
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { writeLeanProofCheckRecord } from "./proof-backend.js";
+import { readReportDraft } from "./report-draft.js";
 import { createReceipt } from "./receipt.js";
 import { readResearchSession } from "./research-session.js";
 import { writeSmtCheckRecord, type SmtBackendId } from "./smt-backend.js";
@@ -78,6 +79,7 @@ export interface WorkspaceRunNextPlan {
     | "obligationKind"
     | "claimId"
     | "sessionId"
+    | "reportId"
   >;
   execution: {
     status: WorkspaceRunNextStatus;
@@ -190,10 +192,13 @@ export function createWorkspaceReviewFromCredibilityPack(input: {
       routes: input.pack.workspaceReview.summary.routes,
       claims: input.pack.workspaceReview.summary.claims,
       sessions: input.pack.workspaceReview.summary.sessions,
+      reportDrafts: input.pack.workspaceReview.summary.reportDrafts ?? 0,
       totalItems: actions.length,
       routeObligations: 0,
       readyRoutesWithoutClaims: 0,
       blockedClaims: 0,
+      reportDraftReviewItems: 0,
+      reportDraftsNeedingAttention: 0,
       sessionTasks: 0,
       sessionNextChecks: 0,
       criticalItems: actions.filter((action) => action.priority === "critical").length,
@@ -371,6 +376,7 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
     ...(item?.obligationId ? [`- Obligation: \`${item.obligationId}\` (${item.obligationKind ?? "evidence"})`] : []),
     ...(item?.claimId ? [`- Claim: \`${item.claimId}\``] : []),
     ...(item?.sessionId ? [`- Session: \`${item.sessionId}\``] : []),
+    ...(item?.reportId ? [`- Report: \`${item.reportId}\``] : []),
     "",
     "## Execution",
     "",
@@ -467,7 +473,8 @@ function workspaceRunNextItemSummary(item: WorkspaceReviewItem): WorkspaceRunNex
     obligationId: item.obligationId,
     obligationKind: item.obligationKind,
     claimId: item.claimId,
-    sessionId: item.sessionId
+    sessionId: item.sessionId,
+    reportId: item.reportId
   };
 }
 
@@ -538,6 +545,23 @@ async function executeWorkspaceRunNextItem(
         command: item.command,
         summary: `Read research session ${session.sessionId}.`,
         result: session
+      };
+    }
+
+    if (group === "workspace" && action === "report") {
+      const reportId = rest[0];
+      if (!reportId) {
+        throw new Error("Missing report id for workspace report.");
+      }
+      const report = await readReportDraft({ rootPath: workspace, reportId });
+      return {
+        status: "executed",
+        kind: "report-read",
+        command: item.command,
+        evidenceRef: `report:${report.report.reportId}`,
+        attached: false,
+        summary: `Read saved report draft ${report.report.reportId}; Markdown verification is ${report.markdownVerified ? "passing" : "failing"}.`,
+        result: report
       };
     }
 
