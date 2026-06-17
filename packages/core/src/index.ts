@@ -230,6 +230,13 @@ export {
   createReleaseAudit,
   renderReleaseAuditMarkdown
 } from "./release-audit.js";
+export {
+  listReportDrafts,
+  readReportDraft,
+  REPORT_DRAFT_SCHEMA_VERSION,
+  ReportDraftError,
+  writeReportDraft
+} from "./report-draft.js";
 export type {
   WorkspaceRunNextPlan,
   WorkspaceRunNextStatus,
@@ -624,6 +631,17 @@ export type {
   ReleaseAuditMode,
   ReleaseAuditStatus
 } from "./release-audit.js";
+export type {
+  ListReportDraftsInput,
+  ReadReportDraftInput,
+  ReportDraft,
+  ReportDraftActivity,
+  ReportDraftPaths,
+  ReportDraftReadResult,
+  ReportDraftSummary,
+  ReportDraftWriteResult,
+  WriteReportDraftInput
+} from "./report-draft.js";
 export type {
   CreateVisualArtifactInput,
   VisualArtifact,

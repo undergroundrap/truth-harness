@@ -234,10 +234,27 @@ async function handleApiRequest(request, response, requestUrl) {
     try {
       await ensureLocalWorkspace();
       const input = await readJsonBody(request);
-      const result = await writeReportDraftArtifact(input);
-      writeJson(response, 200, result);
+      const { writeReportDraft } = await loadCoreModule();
+      const result = await writeReportDraft({
+        rootPath: projectRoot,
+        markdown: typeof input?.markdown === "string" ? input.markdown : "",
+        title: optionalText(input?.title),
+        summary: optionalText(input?.summary),
+        receiptRunId: optionalText(input?.receiptRunId),
+        claimId: optionalText(input?.claimId),
+        trust: optionalText(input?.trust),
+        bundleVerificationIds: stringList(input?.bundleVerificationIds),
+        source: "web-report-tab",
+        actor: "local-api"
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-report-draft-write-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        ...result
+      });
     } catch (error) {
-      writeApiError(response, error instanceof HttpError ? error.status : 409, error instanceof Error ? error.message : "Report draft could not be saved.", request);
+      writeApiError(response, apiErrorStatus(error, 409), error instanceof Error ? error.message : "Report draft could not be saved.", request);
     }
     return;
   }
@@ -245,7 +262,9 @@ async function handleApiRequest(request, response, requestUrl) {
   if (requestUrl.pathname === "/api/reports" && request.method === "GET") {
     try {
       await ensureLocalWorkspace();
-      const reports = await listReportDraftArtifacts({
+      const { listReportDrafts } = await loadCoreModule();
+      const reports = await listReportDrafts({
+        rootPath: projectRoot,
         limit: boundedInteger(requestUrl.searchParams.get("limit"), 8, 1, 50)
       });
       writeJson(response, 200, {
@@ -266,7 +285,11 @@ async function handleApiRequest(request, response, requestUrl) {
     try {
       await ensureLocalWorkspace();
       const reportId = decodeURIComponent(reportDraftMatch[1] ?? "");
-      const draft = await readReportDraftArtifact(reportId);
+      const { readReportDraft } = await loadCoreModule();
+      const draft = await readReportDraft({
+        rootPath: projectRoot,
+        reportId
+      });
       writeJson(response, 200, {
         schemaVersion: "truth-harness.web-report-draft-read-response.v0",
         localOnly: true,
@@ -274,7 +297,7 @@ async function handleApiRequest(request, response, requestUrl) {
         ...draft
       });
     } catch (error) {
-      writeApiError(response, error instanceof HttpError ? error.status : 409, error instanceof Error ? error.message : "Report draft could not be read.", request);
+      writeApiError(response, apiErrorStatus(error, 409), error instanceof Error ? error.message : "Report draft could not be read.", request);
     }
     return;
   }
@@ -1590,238 +1613,6 @@ async function writeReceiptArtifact(receipt) {
     json: jsonPath,
     ref
   };
-}
-
-async function writeReportDraftArtifact(input) {
-  const workspace = await ensureLocalWorkspace();
-  const { refreshWorkspaceCatalogArtifact } = await loadCoreModule();
-  const markdown = typeof input?.markdown === "string" ? input.markdown : "";
-  if (!markdown.trim()) {
-    throw new HttpError(400, "Report markdown is required.");
-  }
-
-  const markdownBytes = Buffer.from(markdown, "utf8");
-  if (markdownBytes.length > 96 * 1024) {
-    throw new HttpError(413, "Report markdown is too large.");
-  }
-
-  const createdAt = new Date().toISOString();
-  const markdownSha256 = sha256Hex(markdownBytes);
-  const bundleVerificationIds = stringList(input?.bundleVerificationIds)
-    .filter((id) => /^cver_[a-f0-9]{16}$/u.test(id))
-    .slice(0, 20);
-  const reportWithoutId = {
-    schemaVersion: "truth-harness.report-draft.v0",
-    createdAt,
-    localOnly: true,
-    networkAccess: "none",
-    externalCalls: [],
-    source: "web-report-tab",
-    title: optionalText(input?.title) ?? "Truth Harness Report Draft",
-    summary: optionalText(input?.summary),
-    receiptRunId: optionalText(input?.receiptRunId),
-    claimId: optionalText(input?.claimId),
-    trust: optionalText(input?.trust),
-    bundleVerificationIds,
-    markdownSha256,
-    markdownByteLength: markdownBytes.length,
-    warnings: [
-      "This is a saved report draft, not proof, peer review, legal review, medical validation, or publication acceptance.",
-      "Trust labels remain governed by the cited receipts, proof checks, SMT/CAS records, bundle verifications, and replay commands."
-    ]
-  };
-  const reportId = `report_${sha256Hex(Buffer.from(JSON.stringify(reportWithoutId), "utf8")).slice(0, 16)}`;
-  const findingsDir = resolve(workspace.root, workspace.manifest.directories.findings ?? ".truth-harness/findings");
-  const baseName = `${createdAt.slice(0, 10)}-${reportId}-report-draft`;
-  const jsonPath = resolve(findingsDir, `${baseName}.json`);
-  const markdownPath = resolve(findingsDir, `${baseName}.md`);
-  const relativeJson = portablePath(relative(workspace.root, jsonPath));
-  const relativeMarkdown = portablePath(relative(workspace.root, markdownPath));
-  const report = {
-    ...reportWithoutId,
-    reportId,
-    paths: {
-      json: relativeJson,
-      markdown: relativeMarkdown
-    }
-  };
-
-  await mkdir(findingsDir, { recursive: true });
-  await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-  await writeFile(markdownPath, markdown, "utf8");
-  await refreshWorkspaceCatalogArtifact({
-    rootPath: workspace.root,
-    path: relativeJson,
-    kind: "findings",
-    now: createdAt,
-    staleReason: "report draft artifact written"
-  });
-
-  return {
-    schemaVersion: "truth-harness.web-report-draft-write-response.v0",
-    localOnly: true,
-    externalCalls: [],
-    report,
-    paths: {
-      json: jsonPath,
-      markdown: markdownPath,
-      relativeJson,
-      relativeMarkdown
-    },
-    activity: [
-      {
-        actor: "local-api",
-        action: "saved-report-draft",
-        detail: `Saved ${reportId} to ${relativeMarkdown} with SHA-256 ${markdownSha256}.`,
-        at: createdAt
-      }
-    ]
-  };
-}
-
-async function listReportDraftArtifacts({ limit } = {}) {
-  const findingsDir = resolve(projectRoot, ".truth-harness", "findings");
-  let entries;
-  try {
-    entries = await readdir(findingsDir, { withFileTypes: true });
-  } catch (error) {
-    const nodeError = error;
-    if (nodeError?.code === "ENOENT") {
-      return [];
-    }
-    throw error;
-  }
-
-  const reports = [];
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith("-report-draft.json")) {
-      continue;
-    }
-
-    const jsonPath = join(findingsDir, entry.name);
-    const summary = await readReportDraftSummary(jsonPath);
-    if (summary) {
-      reports.push(summary);
-    }
-  }
-
-  reports.sort((left, right) => {
-    const leftTime = Date.parse(left.report.createdAt ?? "") || left.mtimeMs;
-    const rightTime = Date.parse(right.report.createdAt ?? "") || right.mtimeMs;
-    return rightTime - leftTime;
-  });
-  return Number.isFinite(limit) ? reports.slice(0, limit) : reports;
-}
-
-async function readReportDraftArtifact(reportId) {
-  if (!/^report_[a-f0-9]{16}$/u.test(reportId)) {
-    throw new HttpError(400, "Invalid report draft id.");
-  }
-
-  const reports = await listReportDraftArtifacts();
-  const summary = reports.find((item) => item.report.reportId === reportId);
-  if (!summary) {
-    throw new HttpError(404, "Report draft was not found in local findings.");
-  }
-
-  let markdown = "";
-  try {
-    markdown = await readFile(summary.paths.markdown, "utf8");
-  } catch (error) {
-    const nodeError = error;
-    if (nodeError?.code === "ENOENT") {
-      throw new HttpError(404, "Report draft Markdown artifact is missing.");
-    }
-    throw error;
-  }
-
-  const markdownSha256 = sha256Hex(Buffer.from(markdown, "utf8"));
-  const markdownVerified = markdownSha256 === summary.report.markdownSha256;
-  const warnings = markdownVerified
-    ? [...(summary.report.warnings ?? [])]
-    : [
-        ...(summary.report.warnings ?? []),
-        "Saved Markdown hash does not match the report draft JSON metadata. Treat this draft as tampered or manually edited until reviewed."
-      ];
-
-  return {
-    report: {
-      ...summary.report,
-      warnings
-    },
-    markdown,
-    markdownVerified,
-    markdownSha256,
-    paths: summary.paths
-  };
-}
-
-async function readReportDraftSummary(jsonPath) {
-  try {
-    const [info, raw] = await Promise.all([stat(jsonPath), readFile(jsonPath, "utf8")]);
-    const report = JSON.parse(raw);
-    if (report?.schemaVersion !== "truth-harness.report-draft.v0" || !/^report_[a-f0-9]{16}$/u.test(report?.reportId ?? "")) {
-      return undefined;
-    }
-
-    let markdownPath;
-    try {
-      markdownPath = resolveWorkspacePath(report.paths?.markdown ?? portablePath(relative(projectRoot, jsonPath.replace(/\.json$/u, ".md"))));
-    } catch {
-      return undefined;
-    }
-    const markdownCheck = await readReportDraftMarkdownCheck(report, markdownPath);
-    return {
-      report,
-      markdownVerified: markdownCheck.verified,
-      markdownStatus: markdownCheck.status,
-      markdownSha256: markdownCheck.sha256,
-      paths: {
-        json: jsonPath,
-        markdown: markdownPath,
-        relativeJson: portablePath(relative(projectRoot, jsonPath)),
-        relativeMarkdown: portablePath(relative(projectRoot, markdownPath))
-      },
-      mtimeMs: info.mtimeMs
-    };
-  } catch (error) {
-    const nodeError = error;
-    if (nodeError?.code === "ENOENT") {
-      return undefined;
-    }
-    throw error;
-  }
-}
-
-function resolveWorkspacePath(relativeOrAbsolutePath) {
-  const candidate = resolve(projectRoot, String(relativeOrAbsolutePath ?? ""));
-  const rootWithSep = projectRoot.endsWith(sep) ? projectRoot : `${projectRoot}${sep}`;
-  if (candidate !== projectRoot && !candidate.startsWith(rootWithSep)) {
-    throw new Error("Workspace artifact path escapes the project root.");
-  }
-  return candidate;
-}
-
-async function readReportDraftMarkdownCheck(report, markdownPath) {
-  try {
-    const markdown = await readFile(markdownPath, "utf8");
-    const sha256 = sha256Hex(Buffer.from(markdown, "utf8"));
-    return {
-      status: sha256 === report.markdownSha256 ? "verified" : "sha-mismatch",
-      verified: sha256 === report.markdownSha256,
-      sha256
-    };
-  } catch (error) {
-    const nodeError = error;
-    if (nodeError?.code === "ENOENT") {
-      return {
-        status: "missing",
-        verified: false,
-        sha256: undefined
-      };
-    }
-    throw error;
-  }
 }
 
 async function readWorkspaceReadiness() {
@@ -3449,6 +3240,16 @@ function safeDownloadFilename(value) {
     .replace(/[^A-Za-z0-9._-]+/gu, "-")
     .replace(/^-+|-+$/gu, "")
     .slice(0, 180) || "truth-harness-download.txt";
+}
+
+function apiErrorStatus(error, fallback) {
+  if (error instanceof HttpError) {
+    return error.status;
+  }
+  if (Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599) {
+    return error.status;
+  }
+  return fallback;
 }
 
 function writeApiError(response, status, error, request) {

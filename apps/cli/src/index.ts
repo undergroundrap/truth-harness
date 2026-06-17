@@ -81,6 +81,7 @@ import {
   listLiteratureRecords,
   listModelContexts,
   listNotebookRuns,
+  listReportDrafts,
   listResearchSessions,
   listSimulationLogEntries,
   listSmtChecks,
@@ -97,6 +98,7 @@ import {
   parseReceiptJson,
   parseBenchmarkRunRecordJson,
   readClaimRecord,
+  readReportDraft,
   readResearchSession,
   readVisualArtifact,
   readWorkspaceRunNextPlan,
@@ -260,6 +262,8 @@ import {
   type ResearchSessionWriteResult,
   type ResearchTaskStatus,
   type ReleaseAudit,
+  type ReportDraftReadResult,
+  type ReportDraftSummary,
   type ReplayResult,
   type SimulationKind,
   type SimulationLogEntry,
@@ -2953,6 +2957,57 @@ workspace
     if (!validation.passed) {
       process.exitCode = 1;
     }
+  });
+
+workspace
+  .command("reports")
+  .description("List saved local report drafts from .truth-harness/findings.")
+  .argument("[path]", "Project root path", ".")
+  .option("--limit <count>", "Maximum saved report drafts to list", parsePositiveInteger, 8)
+  .option("--json", "Print the full report draft list JSON")
+  .action(async (path: string, options: { limit: number; json?: boolean }) => {
+    const reports = await listReportDrafts({ rootPath: path, limit: options.limit });
+
+    if (options.json) {
+      printJson({
+        schemaVersion: "truth-harness.report-draft-list.v0",
+        localOnly: true,
+        externalCalls: [],
+        count: reports.length,
+        reports
+      });
+      return;
+    }
+
+    printReportDraftList(reports);
+  });
+
+workspace
+  .command("report")
+  .description("Read a saved local report draft by report id.")
+  .argument("<reportId>", "Saved report draft id such as report_...")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full report draft JSON and Markdown payload")
+  .option("--markdown", "Print only the saved Markdown body")
+  .action(async (reportId: string, path: string, options: { json?: boolean; markdown?: boolean }) => {
+    const report = await readReportDraft({ rootPath: path, reportId });
+
+    if (options.json) {
+      printJson({
+        schemaVersion: "truth-harness.report-draft-read.v0",
+        localOnly: true,
+        externalCalls: [],
+        ...report
+      });
+      return;
+    }
+
+    if (options.markdown) {
+      console.log(report.markdown.trimEnd());
+      return;
+    }
+
+    printReportDraft(report);
   });
 
 workspace
@@ -6936,6 +6991,53 @@ function printCredibilityBundleVerification(verification: CredibilityBundleVerif
   console.log(`Bundle path: ${verification.bundlePath}`);
   for (const warning of verification.warnings) {
     console.log(`  ${warning}`);
+  }
+}
+
+function printReportDraftList(reports: ReportDraftSummary[]): void {
+  console.log("Truth Harness saved report drafts");
+  console.log(`Reports: ${reports.length}`);
+  if (reports.length === 0) {
+    console.log("No saved report drafts found in .truth-harness/findings.");
+    return;
+  }
+
+  for (const item of reports) {
+    console.log("");
+    console.log(`${item.report.reportId} - ${item.report.title}`);
+    console.log(`  Created: ${item.report.createdAt || "not recorded"}`);
+    console.log(`  Trust: ${item.report.trust ?? "unlabeled"}`);
+    console.log(`  Receipt: ${item.report.receiptRunId ?? "not recorded"}`);
+    console.log(`  Markdown: ${item.markdownStatus}${item.markdownSha256 ? ` (${item.markdownSha256})` : ""}`);
+    console.log(`  JSON: ${item.paths.relativeJson}`);
+    console.log(`  Markdown path: ${item.paths.relativeMarkdown}`);
+  }
+}
+
+function printReportDraft(result: ReportDraftReadResult): void {
+  console.log("Truth Harness saved report draft");
+  console.log(`Report: ${result.report.reportId}`);
+  console.log(`Title: ${result.report.title}`);
+  console.log(`Created: ${result.report.createdAt || "not recorded"}`);
+  console.log(`Trust: ${result.report.trust ?? "unlabeled"}`);
+  console.log(`Receipt: ${result.report.receiptRunId ?? "not recorded"}`);
+  console.log(`Claim: ${result.report.claimId ?? "not recorded"}`);
+  console.log(`Markdown SHA-256: ${result.markdownSha256}`);
+  console.log(`Markdown verified: ${result.markdownVerified ? "yes" : "no"}`);
+  console.log(`JSON: ${result.paths.relativeJson}`);
+  console.log(`Markdown: ${result.paths.relativeMarkdown}`);
+  if (!result.markdownVerified) {
+    console.log("Warning: saved Markdown does not match the report draft JSON sidecar.");
+  }
+  if (result.report.bundleVerificationIds.length > 0) {
+    console.log(`Bundle verifications: ${result.report.bundleVerificationIds.join(", ")}`);
+  }
+  if (result.report.warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const warning of result.report.warnings) {
+      console.log(`  ${warning}`);
+    }
   }
 }
 

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createReceipt } from "@truth-harness/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { writeReportDraft } from "../../../packages/core/src/report-draft.js";
 import { program } from "./index.js";
 
 const roots: string[] = [];
@@ -1846,6 +1847,71 @@ describe("benchmark CLI", () => {
     expect(human.stdout).toContain("Plan:");
     expect(human.stdout).toContain("Dry run: true");
     expect(human.stdout).toContain("Execution: planned (dry-run)");
+  });
+
+  it("lists and reads saved report drafts from the workspace CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    const markdown = "# CLI Report Draft\n\nEvery result is replayable.\n";
+    const written = await writeReportDraft({
+      rootPath: root,
+      title: "CLI Report Draft",
+      summary: "Saved for headless reviewer access.",
+      receiptRunId: "run_cli_report_fixture",
+      claimId: "claim_cli_report_fixture",
+      trust: "exact-computed",
+      bundleVerificationIds: ["cver_bbbbbbbbbbbbbbbb"],
+      source: "test",
+      actor: "agent",
+      markdown,
+      now: "2026-06-16T00:01:00.000Z"
+    });
+
+    const list = await runCli(["workspace", "reports", root, "--json"]);
+    const listPayload = JSON.parse(list.stdout) as {
+      schemaVersion: string;
+      count: number;
+      reports: Array<{ report: { reportId: string; title: string }; markdownVerified: boolean; markdownStatus: string }>;
+    };
+    const humanList = await runCli(["workspace", "reports", root]);
+    const read = await runCli(["workspace", "report", written.report.reportId, root, "--json"]);
+    const readPayload = JSON.parse(read.stdout) as {
+      schemaVersion: string;
+      report: { reportId: string; title: string; bundleVerificationIds: string[] };
+      markdown: string;
+      markdownVerified: boolean;
+    };
+    const markdownOnly = await runCli(["workspace", "report", written.report.reportId, root, "--markdown"]);
+
+    expect(list.exitCode).toBe(0);
+    expect(listPayload).toMatchObject({
+      schemaVersion: "truth-harness.report-draft-list.v0",
+      count: 1,
+      reports: [
+        {
+          report: {
+            reportId: written.report.reportId,
+            title: "CLI Report Draft"
+          },
+          markdownVerified: true,
+          markdownStatus: "verified"
+        }
+      ]
+    });
+    expect(humanList.stdout).toContain("Truth Harness saved report drafts");
+    expect(humanList.stdout).toContain(written.report.reportId);
+    expect(read.exitCode).toBe(0);
+    expect(readPayload).toMatchObject({
+      schemaVersion: "truth-harness.report-draft-read.v0",
+      report: {
+        reportId: written.report.reportId,
+        title: "CLI Report Draft",
+        bundleVerificationIds: ["cver_bbbbbbbbbbbbbbbb"]
+      },
+      markdown,
+      markdownVerified: true
+    });
+    expect(markdownOnly.stdout.trim()).toBe(markdown.trim());
   });
 
   it("plans credibility reviewer actions through workspace run-next", async () => {
