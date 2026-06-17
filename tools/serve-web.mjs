@@ -212,6 +212,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "credibility-bundle-files",
         "credibility-bundle-archive",
         "credibility-bundle-archive-sha256",
+        "credibility-bundle-verify",
         "workspace-review-queue",
         "workspace-run-next-dry-run",
         "workspace-run-next-save",
@@ -360,6 +361,24 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, 409, error instanceof Error ? error.message : "Latest credibility bundle could not be read.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/credibility-bundle/latest/verify" && request.method === "GET") {
+    try {
+      await ensureLocalWorkspace();
+      const bundle = await readLatestCredibilityBundle();
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-credibility-bundle-verify-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        latest: Boolean(bundle),
+        verifiedAt: new Date().toISOString(),
+        ...bundle
+      });
+    } catch (error) {
+      writeApiError(response, 409, error instanceof Error ? error.message : "Latest credibility bundle could not be verified.", request);
     }
     return;
   }

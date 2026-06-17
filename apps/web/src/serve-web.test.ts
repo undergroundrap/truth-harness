@@ -70,6 +70,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("credibility-bundle-files");
     expect(statusPayload.capabilities).toContain("credibility-bundle-archive");
     expect(statusPayload.capabilities).toContain("credibility-bundle-archive-sha256");
+    expect(statusPayload.capabilities).toContain("credibility-bundle-verify");
     expect(statusPayload.capabilities).toContain("release-audit");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
@@ -315,6 +316,26 @@ describe("local web route ledger API", () => {
     });
     expect(bundlePayload.command).toContain("workspace verify-credibility-bundle");
     expect(bundlePayload.paths.relativeBundle).toContain(bundle.manifest.bundleId);
+
+    const bundleVerifyResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest/verify`);
+    expect(bundleVerifyResponse.status).toBe(200);
+    const bundleVerifyPayload = await bundleVerifyResponse.json();
+    expectLocalApiSuccess(bundleVerifyResponse, bundleVerifyPayload);
+    expect(bundleVerifyPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-credibility-bundle-verify-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      latest: true,
+      bundleRef: expect.stringContaining("-credibility-bundle"),
+      verification: {
+        schemaVersion: "truth-harness.credibility-bundle-verification.v0",
+        bundleId: bundle.manifest.bundleId,
+        passed: true,
+        sourceMatchesWorkspace: true
+      }
+    });
+    expect(bundleVerifyPayload.verifiedAt).toEqual(expect.any(String));
+    expect(bundleVerifyPayload.command).toContain("workspace verify-credibility-bundle");
 
     const bundleReadmeResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest/file?kind=readme`);
     expect(bundleReadmeResponse.status).toBe(200);

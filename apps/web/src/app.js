@@ -306,6 +306,9 @@ const state = {
   credibilityBundle: undefined,
   credibilityBundleLoading: false,
   credibilityBundleError: undefined,
+  credibilityBundleVerifying: false,
+  credibilityBundleVerifyError: undefined,
+  credibilityBundleVerifiedAt: undefined,
   credibilityArchive: undefined,
   credibilityArchiveLoading: false,
   credibilityArchiveError: undefined,
@@ -8196,6 +8199,49 @@ async function refreshCredibilityBundle({ announce = true } = {}) {
   }
 }
 
+async function verifyCredibilityBundleFromUi(button) {
+  if (state.credibilityBundleVerifying) {
+    return;
+  }
+
+  state.credibilityBundleVerifying = true;
+  state.credibilityBundleVerifyError = undefined;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Verifying";
+  }
+  renderCredibilityPackPanel();
+
+  try {
+    const response = await fetch("/api/credibility-bundle/latest/verify", {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local credibility bundle verification failed.");
+    state.credibilityBundle = payload;
+    state.credibilityBundleVerifyError = undefined;
+    state.credibilityBundleVerifiedAt = payload.verifiedAt ?? new Date().toISOString();
+    if (payload.latest) {
+      void refreshCredibilityArchive({ announce: false });
+    }
+    addActivity(
+      "local-api",
+      payload.latest ? "Verified reviewer bundle" : "No reviewer bundle to verify",
+      localApiSuccessMessage(payload, credibilityBundleActivitySummary(payload)),
+      credibilityBundleTrust(payload),
+      payload.verifiedAt
+    );
+  } catch (error) {
+    state.credibilityBundleVerifyError = error instanceof Error ? error.message : "Unknown credibility bundle verification failure.";
+    addActivity("local-api", "Reviewer bundle verification failed", state.credibilityBundleVerifyError, "refuted");
+  } finally {
+    state.credibilityBundleVerifying = false;
+    renderCredibilityPackPanel();
+  }
+}
+
 async function refreshCredibilityArchive({ announce = true } = {}) {
   state.credibilityArchiveLoading = true;
   state.credibilityArchiveError = undefined;
@@ -11794,6 +11840,9 @@ function renderCredibilityPackPanel() {
   credibilityPackPanel.querySelector(".refresh-credibility-bundle")?.addEventListener("click", () => {
     void refreshCredibilityBundle({ announce: true });
   });
+  credibilityPackPanel.querySelector(".verify-credibility-bundle")?.addEventListener("click", (event) => {
+    void verifyCredibilityBundleFromUi(event.currentTarget);
+  });
   credibilityPackPanel.querySelector(".copy-credibility-bundle-command")?.addEventListener("click", (event) => {
     const button = event.currentTarget;
     const commandText = button.dataset.command ?? credibilityBundleCommand();
@@ -11881,9 +11930,11 @@ function credibilityBundleCardHtml() {
   const verification = payload?.verification;
   const archive = state.credibilityArchive;
   const hasBundle = payload?.latest && manifest;
-  const status = state.credibilityBundleError
+  const verifying = state.credibilityBundleVerifying;
+  const bundleError = state.credibilityBundleError ?? state.credibilityBundleVerifyError;
+  const status = bundleError
     ? "error"
-    : state.credibilityBundleLoading
+    : state.credibilityBundleLoading || verifying
       ? "checking"
       : hasBundle
         ? verification?.passed && verification?.sourceMatchesWorkspace
@@ -11893,6 +11944,8 @@ function credibilityBundleCardHtml() {
   const statusClass = status === "verified" ? "exact" : status === "drift" ? "waiting" : status === "error" ? "refuted" : "waiting";
   const statusLabel = state.credibilityBundleLoading
     ? "checking"
+    : verifying
+      ? "verifying"
     : status === "verified"
       ? "verified bundle"
       : status === "drift"
@@ -11900,8 +11953,8 @@ function credibilityBundleCardHtml() {
         : status === "error"
           ? "unavailable"
           : "no bundle";
-  const detail = state.credibilityBundleError
-    ? state.credibilityBundleError
+  const detail = bundleError
+    ? bundleError
     : hasBundle
       ? "Portable reviewer bundle found locally. The verification command checks copied hashes and reports live source drift separately."
       : "Run the Docker professor route to create the portable reviewer bundle after engine and benchmark gates pass.";
@@ -11916,6 +11969,7 @@ function credibilityBundleCardHtml() {
         ["Bundle integrity", verification?.passed ? "passed" : "changed"],
         ["Source workspace", verification?.sourceMatchesWorkspace ? "matches bundle" : "drifted"],
         ["Files", `${verification?.checkedBundleFiles ?? manifest.summary?.totalFiles ?? 0} checked`],
+        ["Last web verify", state.credibilityBundleVerifiedAt ? formatActivityTime(state.credibilityBundleVerifiedAt) : "not clicked"],
         ["Archive SHA-256", archive?.sha256 ?? (state.credibilityArchiveLoading ? "calculating" : state.credibilityArchiveError ?? "not loaded")]
       ]
     : [
@@ -11941,6 +11995,7 @@ function credibilityBundleCardHtml() {
       <code>${escapeHtml(command)}</code>
       <div class="credibility-bundle-actions">
         <button class="text-button compact-button refresh-credibility-bundle" data-testid="refresh-credibility-bundle" type="button" ${state.credibilityBundleLoading ? "disabled" : ""}>${state.credibilityBundleLoading ? "Refreshing" : "Refresh bundle"}</button>
+        <button class="text-button compact-button strong-action verify-credibility-bundle" data-testid="verify-credibility-bundle" type="button" ${hasBundle && !verifying ? "" : "disabled"}>${verifying ? "Verifying" : "Verify now"}</button>
         <button class="text-button compact-button copy-credibility-bundle-command" data-testid="copy-credibility-bundle-command" data-command="${escapeHtml(command)}" type="button">Copy verify</button>
         <button class="text-button compact-button copy-credibility-bundle-path" data-testid="copy-credibility-bundle-path" data-path="${escapeHtml(path)}" type="button" ${path ? "" : "disabled"}>Copy path</button>
         <button class="text-button compact-button download-credibility-bundle-file" data-testid="download-credibility-bundle-readme" data-label="Bundle README" data-href="/api/credibility-bundle/latest/file?kind=readme" type="button" ${hasBundle ? "" : "disabled"}>README</button>
@@ -11970,7 +12025,9 @@ function credibilityReviewerChecklistHtml(pack) {
     {
       label: "Bundle hash integrity",
       passed: Boolean(verification?.passed),
-      detail: verification?.passed ? `${verification.checkedBundleFiles ?? 0} bundled files match the manifest.` : "Run or copy the verify command before handoff.",
+      detail: verification?.passed
+        ? `${verification.checkedBundleFiles ?? 0} bundled files match the manifest${state.credibilityBundleVerifiedAt ? `; web verified ${formatActivityTime(state.credibilityBundleVerifiedAt)}` : ""}.`
+        : "Click Verify now or run the verify command before handoff.",
       command: credibilityBundleCommand()
     },
     {

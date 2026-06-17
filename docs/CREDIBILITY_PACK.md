@@ -59,7 +59,7 @@ The canonical bundle is intentionally a directory, not a black-box archive:
 - `artifacts/` contains copied canonical Truth Harness workspace files from the embedded snapshot.
 - Prior `*-credibility-bundle/` folders are skipped so repeated exports do not recursively copy old bundles into new bundles.
 
-The web Report tab can also download a `.tar.gz` archive of the latest bundle plus a `.sha256` sidecar. That archive is only a portable carrier for the same directory contents; it does not add trust by itself. The sidecar identifies the exact downloaded archive bytes. Extract it, then run the normal `verify-credibility-bundle` command against the extracted bundle directory to verify copied file hashes and source drift.
+The web Report tab can also rerun local bundle verification with **Verify now**, download a `.tar.gz` archive of the latest bundle, and download a `.sha256` sidecar. The web verifier uses the same core `verifyCredibilityBundle` path as the CLI and reports copied file integrity separately from source-workspace drift. The archive is only a portable carrier for the same directory contents; it does not add trust by itself. The sidecar identifies the exact downloaded archive bytes. Extract it, then run the normal `verify-credibility-bundle` command against the extracted bundle directory when reviewing outside the original workspace.
 
 Verify it with:
 
