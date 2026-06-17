@@ -5549,6 +5549,13 @@ textarea:focus-visible {
   white-space: normal;
 }
 
+.credibility-verification-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+
 .credibility-review-checklist {
   display: grid;
   gap: 10px;

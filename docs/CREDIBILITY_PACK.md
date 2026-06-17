@@ -75,7 +75,7 @@ Bundle verification reports two separate facts:
 - **Bundle integrity:** copied files still match the manifest hashes.
 - **Source workspace drift:** the current workspace files still match the versions copied into the bundle.
 
-Each saved web or CLI `--write` verification gets a stable `cver_...` ID and appears in the Report tab verification history so reviewers can cite when the bundle was checked.
+Each saved web or CLI `--write` verification gets a stable `cver_...` ID and appears in the Report tab verification history so reviewers can cite when the bundle was checked. The Report tab can download each saved verification as JSON or Markdown by that stable ID; the web API resolves those files from the local findings ledger instead of accepting arbitrary paths from the browser.
 
 A bundle can remain valid even after the live workspace changes. That is useful for peer review because the exported evidence can be frozen while active research continues.
 

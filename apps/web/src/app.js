@@ -11938,6 +11938,23 @@ function renderCredibilityPackPanel() {
       window.location.href = href;
     });
   });
+  credibilityPackPanel.querySelectorAll(".download-credibility-verification-file").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const target = event.currentTarget;
+      const href = target.dataset.href ?? "";
+      const label = target.dataset.label ?? "saved verifier artifact";
+      if (!href) {
+        return;
+      }
+      addActivity(
+        "local-api",
+        "Downloaded verification artifact",
+        `${label} requested from saved local reviewer verification history.`,
+        "passed"
+      );
+      window.location.href = href;
+    });
+  });
   credibilityPackPanel.querySelector(".plan-credibility-run-next")?.addEventListener("click", () => {
     void refreshCredibilityRunNext({ announce: true });
   });
@@ -12093,10 +12110,13 @@ function credibilityBundleVerificationHistoryHtml() {
 
 function credibilityBundleVerificationHistoryItemHtml(item) {
   const verification = item?.verification ?? {};
+  const verificationId = typeof verification.verificationId === "string" ? verification.verificationId : "";
   const passed = verification.passed === true;
   const sourceMatches = verification.sourceMatchesWorkspace === true;
   const statusClass = passed && sourceMatches ? "exact" : passed ? "waiting" : "refuted";
   const statusText = passed && sourceMatches ? "clean" : passed ? "source drift" : "bundle changed";
+  const jsonHref = verificationId ? `/api/credibility-bundle/verifications/file?id=${encodeURIComponent(verificationId)}&kind=json` : "";
+  const markdownHref = verificationId ? `/api/credibility-bundle/verifications/file?id=${encodeURIComponent(verificationId)}&kind=markdown` : "";
   const facts = [
     ["Bundle", verification.bundleId ?? "unknown"],
     ["Checked", `${verification.checkedBundleFiles ?? 0} bundle, ${verification.checkedSourceFiles ?? 0} source`],
@@ -12112,6 +12132,10 @@ function credibilityBundleVerificationHistoryItemHtml(item) {
     <dl>
       ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${credibilityBundleValueHtml(value)}</dd></div>`).join("")}
     </dl>
+    <div class="credibility-verification-history-actions">
+      <button class="text-button compact-button download-credibility-verification-file" data-testid="download-credibility-verification-json" data-label="Verification JSON" data-href="${escapeHtml(jsonHref)}" type="button" ${jsonHref ? "" : "disabled"}>JSON</button>
+      <button class="text-button compact-button download-credibility-verification-file" data-testid="download-credibility-verification-markdown" data-label="Verification Markdown" data-href="${escapeHtml(markdownHref)}" type="button" ${markdownHref ? "" : "disabled"}>Markdown</button>
+    </div>
   </article>`;
 }
 

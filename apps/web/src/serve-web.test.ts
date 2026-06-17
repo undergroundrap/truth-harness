@@ -72,6 +72,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("credibility-bundle-archive-sha256");
     expect(statusPayload.capabilities).toContain("credibility-bundle-verify");
     expect(statusPayload.capabilities).toContain("credibility-bundle-verification-history");
+    expect(statusPayload.capabilities).toContain("credibility-bundle-verification-files");
     expect(statusPayload.capabilities).toContain("release-audit");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
@@ -366,6 +367,43 @@ describe("local web route ledger API", () => {
           })
         })
       ]
+    });
+
+    const verificationId = bundleVerifyPayload.verification.verificationId;
+    const verificationJsonResponse = await fetch(
+      `${baseUrl}/api/credibility-bundle/verifications/file?id=${verificationId}&kind=json`
+    );
+    expect(verificationJsonResponse.status).toBe(200);
+    expect(verificationJsonResponse.headers.get("content-type")).toContain("application/json");
+    expect(verificationJsonResponse.headers.get("content-disposition")).toContain(`${verificationId}-credibility-bundle-verification.json`);
+    const verificationJsonPayload = await verificationJsonResponse.json();
+    expect(verificationJsonPayload).toMatchObject({
+      schemaVersion: "truth-harness.credibility-bundle-verification.v0",
+      verificationId,
+      bundleId: bundle.manifest.bundleId
+    });
+
+    const verificationMarkdownResponse = await fetch(
+      `${baseUrl}/api/credibility-bundle/verifications/file?id=${verificationId}&kind=markdown`
+    );
+    expect(verificationMarkdownResponse.status).toBe(200);
+    expect(verificationMarkdownResponse.headers.get("content-type")).toContain("text/markdown");
+    expect(verificationMarkdownResponse.headers.get("content-disposition")).toContain(`${verificationId}-credibility-bundle-verification.md`);
+    const verificationMarkdown = await verificationMarkdownResponse.text();
+    expect(verificationMarkdown).toContain(verificationId);
+    expect(verificationMarkdown).toContain(bundle.manifest.bundleId);
+
+    const invalidVerificationFileResponse = await fetch(
+      `${baseUrl}/api/credibility-bundle/verifications/file?id=manifest.json&kind=json`
+    );
+    expect(invalidVerificationFileResponse.status).toBe(400);
+    const invalidVerificationFilePayload = await invalidVerificationFileResponse.json();
+    expect(invalidVerificationFilePayload).toMatchObject({
+      schemaVersion: "truth-harness.web-error.v0",
+      localOnly: true,
+      externalCalls: [],
+      status: 400,
+      error: "Credibility bundle verification id is required."
     });
 
     const bundleReadmeResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest/file?kind=readme`);

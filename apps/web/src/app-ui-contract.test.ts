@@ -105,9 +105,13 @@ describe("web UI action contracts", () => {
     expect(source).toContain('data-testid="download-credibility-bundle-pack"');
     expect(source).toContain('data-testid="download-credibility-bundle-archive"');
     expect(source).toContain('data-testid="download-credibility-bundle-sha256"');
+    expect(source).toContain('data-testid="download-credibility-verification-json"');
+    expect(source).toContain('data-testid="download-credibility-verification-markdown"');
+    expect(source).toContain(".download-credibility-verification-file");
     expect(source).toContain("/api/credibility-bundle/latest/archive");
     expect(source).toContain("/api/credibility-bundle/latest/verify");
     expect(source).toContain("/api/credibility-bundle/verifications");
+    expect(source).toContain("/api/credibility-bundle/verifications/file");
     expect(source).toContain("/api/credibility-bundle/latest/archive-metadata");
     expect(source).toContain("/api/credibility-bundle/latest/archive.sha256");
     expect(source).toContain("Archive SHA-256");
@@ -149,6 +153,7 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".credibility-bundle-command");
     expect(styles).toContain(".credibility-verification-history");
     expect(styles).toContain(".credibility-verification-history-item");
+    expect(styles).toContain(".credibility-verification-history-actions");
     expect(styles).toContain(".credibility-review-checklist");
     expect(styles).toContain(".credibility-checklist-grid");
     expect(styles).toContain(".credibility-checklist-item");

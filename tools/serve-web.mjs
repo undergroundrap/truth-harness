@@ -214,6 +214,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "credibility-bundle-archive-sha256",
         "credibility-bundle-verify",
         "credibility-bundle-verification-history",
+        "credibility-bundle-verification-files",
         "workspace-review-queue",
         "workspace-run-next-dry-run",
         "workspace-run-next-save",
@@ -414,6 +415,24 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, 409, error instanceof Error ? error.message : "Credibility bundle verification history could not be read.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/credibility-bundle/verifications/file" && request.method === "GET") {
+    try {
+      await ensureLocalWorkspace();
+      const file = await readCredibilityBundleVerificationFile(
+        requestUrl.searchParams.get("id"),
+        requestUrl.searchParams.get("kind")
+      );
+      writeDownload(response, 200, file.body, {
+        contentType: file.contentType,
+        filename: file.filename,
+        requestId: response.truthHarnessRequestId
+      });
+    } catch (error) {
+      writeApiError(response, error instanceof HttpError ? error.status : 409, error instanceof Error ? error.message : "Credibility bundle verification file could not be read.", request);
     }
     return;
   }
@@ -2289,7 +2308,7 @@ async function readLatestCredibilityBundle() {
   };
 }
 
-async function readCredibilityBundleVerificationHistory({ limit }) {
+async function readCredibilityBundleVerificationHistory({ limit } = {}) {
   const findingsDir = resolve(projectRoot, ".truth-harness", "findings");
   let entries;
   try {
@@ -2340,7 +2359,42 @@ async function readCredibilityBundleVerificationHistory({ limit }) {
     return rightTime - leftTime;
   });
 
-  return history.slice(0, limit).map(({ mtimeMs: _mtimeMs, ...item }) => item);
+  const slicedHistory = Number.isFinite(limit) ? history.slice(0, limit) : history;
+  return slicedHistory.map(({ mtimeMs: _mtimeMs, ...item }) => item);
+}
+
+async function readCredibilityBundleVerificationFile(idValue, kindValue) {
+  const id = typeof idValue === "string" ? idValue.trim() : "";
+  if (!/^cver_[a-f0-9]{16}$/u.test(id)) {
+    throw new HttpError(400, "Credibility bundle verification id is required.");
+  }
+
+  const file = credibilityBundleVerificationFileDescriptor(kindValue);
+  const history = await readCredibilityBundleVerificationHistory();
+  const item = history.find((entry) => entry?.verification?.verificationId === id);
+  if (!item) {
+    throw new HttpError(404, "Credibility bundle verification artifact is not available.");
+  }
+
+  const filePath = file.kind === "markdown" ? item.paths?.markdown : item.paths?.json;
+  if (!filePath) {
+    throw new HttpError(404, "Credibility bundle verification artifact is not available.");
+  }
+
+  try {
+    const body = await readFile(filePath);
+    return {
+      body,
+      contentType: file.contentType,
+      filename: `truth-harness-${id}-credibility-bundle-verification.${file.extension}`
+    };
+  } catch (error) {
+    const nodeError = error;
+    if (nodeError?.code === "ENOENT") {
+      throw new HttpError(404, "Credibility bundle verification artifact is not available.");
+    }
+    throw error;
+  }
 }
 
 async function readLatestCredibilityBundleFile(kindValue) {
@@ -2420,6 +2474,26 @@ function boundedInteger(value, fallback, min, max) {
     return fallback;
   }
   return Math.min(max, Math.max(min, parsed));
+}
+
+function credibilityBundleVerificationFileDescriptor(kindValue) {
+  const kind = typeof kindValue === "string" ? kindValue : "json";
+  switch (kind) {
+    case "json":
+      return {
+        kind: "json",
+        extension: "json",
+        contentType: "application/json; charset=utf-8"
+      };
+    case "markdown":
+      return {
+        kind: "markdown",
+        extension: "md",
+        contentType: "text/markdown; charset=utf-8"
+      };
+    default:
+      throw new HttpError(400, "Unsupported credibility verification file kind.");
+  }
 }
 
 function credibilityBundleFileDescriptor(kindValue) {
