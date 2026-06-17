@@ -6,7 +6,7 @@ import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { writeLeanProofCheckRecord } from "./proof-backend.js";
 import { readResearchSession } from "./research-session.js";
-import { writeSmtCheckRecord } from "./smt-backend.js";
+import { writeSmtCheckRecord, type SmtBackendId } from "./smt-backend.js";
 import type { SympyOperation } from "./sympy.js";
 import {
   readVerifierRoute,
@@ -497,7 +497,9 @@ async function executeWorkspaceRunNextItem(
         rootPath: workspace,
         sourcePath,
         queryName: typeof options.query === "string" ? options.query : undefined,
+        backend: parseSmtBackendOption(options.backend),
         z3Command: typeof options["z3-command"] === "string" ? options["z3-command"] : undefined,
+        cvc5Command: typeof options["cvc5-command"] === "string" ? options["cvc5-command"] : undefined,
         timeoutMs
       });
       const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
@@ -729,6 +731,18 @@ function parseOptionalPositiveIntegerOption(value: string | true | undefined, fa
   }
 
   return parsed;
+}
+
+function parseSmtBackendOption(value: string | true | undefined): SmtBackendId | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === "z3" || value === "cvc5") {
+    return value;
+  }
+
+  throw new Error(`Unsupported SMT backend ${JSON.stringify(value)}. Use z3 or cvc5.`);
 }
 
 function parseSympyOperation(value: string): SympyOperation {

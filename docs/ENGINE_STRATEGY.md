@@ -58,7 +58,7 @@ Truth Harness should adapt mature engines when they are already world-class:
 | Need | Preferred strategy |
 | --- | --- |
 | Formal proof checking | Lean first; later Coq/Isabelle adapters if justified. |
-| SMT/constraint solving | Z3 by default; optional cvc5 for second-solver checks. |
+| SMT/constraint solving | Z3 by default; optional cvc5 for second-solver checks and independent-SMT route obligations. |
 | Symbolic CAS | SymPy now; SageMath/Maxima as independent cross-checks; WolframAlpha only as explicit external disclosure. |
 | Numeric computing | Conservative interval/rational kernels now; Arb/MPFI or similar later for rigorous numerics. |
 | Notebooks/scripts | Record provenance and replay commands; do not pretend notebook output is proof. |
@@ -157,6 +157,7 @@ Truth Harness must keep these rules stable:
 3. **A notebook/code run proves only that the run happened under the recorded policy.**
 4. **A source hit means `source-cited`, not proved.**
 5. **An SMT result means `smt-checked` for the encoded constraints, not formal proof of surrounding informal claims.**
+   Normal verifier routes can require one concrete SMT artifact; reviewer routes can require separate Z3 and cvc5 obligations so solver-diverse evidence is visible without pretending either solver proves the informal statement.
 6. **Only accepted proof-checker output can mint `proved`.**
 7. **A refuting artifact dominates stronger positive labels until the claim is narrowed or superseded.**
 8. **Claim trust must be derived from resolvable local evidence, not a requested label.**

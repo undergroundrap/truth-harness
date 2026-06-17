@@ -359,6 +359,7 @@ program
   .option("--lean-command <command>", "Override Lean executable for this route")
   .option("--z3-command <command>", "Override Z3 executable for this route")
   .option("--cvc5-command <command>", "Override cvc5 executable for this route")
+  .option("--require-independent-smt", "Require separate Z3 and cvc5 solver obligations instead of one generic SMT solver obligation")
   .action(
     async (
       problemTokens: string[],
@@ -374,6 +375,7 @@ program
         leanCommand?: string;
         z3Command?: string;
         cvc5Command?: string;
+        requireIndependentSmt?: boolean;
       }
     ) => {
       const problem = problemTokens.join(" ");
@@ -386,7 +388,8 @@ program
             sageCommand: options.sageCommand,
             leanCommand: options.leanCommand,
             z3Command: options.z3Command,
-            cvc5Command: options.cvc5Command
+            cvc5Command: options.cvc5Command,
+            smtReviewPolicy: options.requireIndependentSmt ? "independent" : "single"
           })
         : undefined;
       const route =
@@ -397,7 +400,8 @@ program
           sageCommand: options.sageCommand,
           leanCommand: options.leanCommand,
           z3Command: options.z3Command,
-          cvc5Command: options.cvc5Command
+          cvc5Command: options.cvc5Command,
+          smtReviewPolicy: options.requireIndependentSmt ? "independent" : "single"
         });
 
       if (options.out) {

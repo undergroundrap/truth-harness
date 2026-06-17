@@ -27,8 +27,11 @@ import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 export type VerifierRouteStatus = "verified" | "refuted" | "unverified";
 export type VerifierRouteStepStatus = "used" | "blocked" | "planned";
 export type VerifierRouteGapSeverity = "info" | "warning" | "critical";
+export type VerifierRouteSmtReviewPolicy = "single" | "independent";
 
-export interface CreateVerifierRouteOptions extends CreateReceiptOptions, EngineManifestOptions {}
+export interface CreateVerifierRouteOptions extends CreateReceiptOptions, EngineManifestOptions {
+  smtReviewPolicy?: VerifierRouteSmtReviewPolicy;
+}
 
 export interface VerifierRouteStep {
   capabilityId: string;
@@ -71,6 +74,7 @@ export interface ResolvedVerifierRouteEvidence extends VerifierRouteEvidenceRef 
   schemaVersion?: string;
   artifactId?: string;
   status?: string;
+  backendId?: string;
   proofCheckerBacked?: boolean;
   acceptedProofChecker?: boolean;
 }
@@ -122,6 +126,9 @@ export interface VerifierRoute {
   plannedCapabilities: VerifierRouteStep[];
   gaps: VerifierRouteGap[];
   proofObligations: ProofObligation[];
+  reviewPolicy?: {
+    smt: VerifierRouteSmtReviewPolicy;
+  };
   nextActions: string[];
   trustBoundary: EngineManifest["trustBoundary"] & {
     routeIsNotProof: true;
@@ -203,6 +210,7 @@ export interface VerifierRouteReadiness {
 
 export function createVerifierRoute(problem: string, options: CreateVerifierRouteOptions = {}): VerifierRoute {
   const createdAt = (options.now ?? new Date()).toISOString();
+  const smtReviewPolicy = options.smtReviewPolicy ?? "single";
   const manifest = getEngineManifest(options);
   const receipt = createReceipt(problem, options);
   const capabilityById = new Map(manifest.capabilities.map((capability) => [capability.id, capability]));
@@ -210,10 +218,9 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
   const usedCapabilities = usedCapabilityIds.map((capabilityId) =>
     routeStep(capabilityById, capabilityId, "used", usedReason(receipt, capabilityId))
   );
-  const blockedCapabilities = blockedCapabilityIdsForReceipt(receipt)
+  const blockedCapabilities = blockedCapabilityIdsForReceipt(receipt, smtReviewPolicy)
     .filter((capabilityId) => !usedCapabilityIds.includes(capabilityId))
     .map((capabilityId) => routeStep(capabilityById, capabilityId, "blocked", blockedReason(receipt, capabilityId)))
-    .filter((step) => step.capabilityStatus !== "available" && step.capabilityStatus !== "ready");
   const plannedCapabilities = manifest.capabilities
     .filter((capability) => capability.kind === "planned-adapter" && plannedCapabilityApplies(receipt, capability))
     .map((capability) => routeStep(capabilityById, capability.id, "planned", "Planned adapter is relevant but cannot support this route yet."));
@@ -224,6 +231,7 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
     receipt: receipt.runId,
     finalTrust: receipt.trust,
     evidenceKind: receipt.evidenceProfile.kind,
+    smtReviewPolicy,
     createdAt
   }).slice(0, 16)}`;
 
@@ -239,7 +247,7 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
     finalTrust: receipt.trust,
     evidenceKind: receipt.evidenceProfile.kind,
     receipt,
-    replay: `truth-harness verify ${quoteCommandArg(problem)} --json`,
+    replay: `truth-harness verify ${quoteCommandArg(problem)}${smtReviewPolicy === "independent" ? " --require-independent-smt" : ""} --json`,
     manifest: {
       schemaVersion: manifest.schemaVersion,
       status: manifest.status,
@@ -262,6 +270,9 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
       receipt,
       gaps
     }),
+    reviewPolicy: {
+      smt: smtReviewPolicy
+    },
     nextActions,
     trustBoundary: {
       ...manifest.trustBoundary,
@@ -316,6 +327,7 @@ export async function writeVerifierRoute(input: WriteVerifierRouteInput): Promis
     leanCommand: input.leanCommand,
     z3Command: input.z3Command,
     cvc5Command: input.cvc5Command,
+    smtReviewPolicy: input.smtReviewPolicy,
     now: input.now,
     smtRunner: input.smtRunner,
     casRunner: input.casRunner
@@ -476,6 +488,7 @@ export function renderVerifierRouteMarkdown(route: VerifierRoute): string {
     "",
     "## Readiness",
     "",
+    `- SMT review policy: \`${route.reviewPolicy?.smt ?? "single"}\``,
     `- Ready for narrow claim: \`${String(readiness.readyForNarrowClaim)}\``,
     `- Strongest supported trust: \`${readiness.strongestTrust}\``,
     `- Open obligations: \`${readiness.openObligations}\``,
@@ -574,16 +587,17 @@ function capabilityIdsForReceipt(receipt: Receipt): string[] {
   return unique(mapped);
 }
 
-function blockedCapabilityIdsForReceipt(receipt: Receipt): string[] {
+function blockedCapabilityIdsForReceipt(receipt: Receipt, smtReviewPolicy: VerifierRouteSmtReviewPolicy): string[] {
+  const smtCapabilityIds = smtCapabilityIdsForReviewPolicy(smtReviewPolicy);
   switch (receipt.evidenceProfile.kind) {
     case "symbolic-cas":
       return receipt.trust === "cross-checked"
         ? ["lean-proof-checker"]
         : ["maxima-cas", "lean-proof-checker"];
     case "universal-parity":
-      return receipt.trust === "refuted" ? [] : ["lean-proof-checker", "z3-smt-solver"];
+      return receipt.trust === "refuted" ? [] : ["lean-proof-checker", ...smtCapabilityIds];
     case "unsupported":
-      return ["lean-proof-checker", "z3-smt-solver", "maxima-cas"];
+      return ["lean-proof-checker", ...smtCapabilityIds, "maxima-cas"];
     case "interval-bound":
       return ["lean-proof-checker"];
     case "dimension-analysis":
@@ -593,6 +607,22 @@ function blockedCapabilityIdsForReceipt(receipt: Receipt): string[] {
     case "source-citation":
       return ["local-vector-rag"];
   }
+}
+
+function smtCapabilityIdsForReviewPolicy(policy: VerifierRouteSmtReviewPolicy): string[] {
+  return policy === "independent" ? ["z3-smt-solver", "cvc5-smt-solver"] : ["smt-solver"];
+}
+
+function smtBackendForCapability(capabilityId: string): "z3" | "cvc5" | undefined {
+  if (capabilityId === "z3-smt-solver") {
+    return "z3";
+  }
+
+  if (capabilityId === "cvc5-smt-solver") {
+    return "cvc5";
+  }
+
+  return undefined;
 }
 
 function routeStep(
@@ -776,6 +806,10 @@ function obligationAcceptanceCriteria(gap: VerifierRouteGap, requiredTrust: Trus
     criteria.unshift("An accepted proof checker returns success for a concrete proof artifact.");
     criteria.unshift("The proof-check record is scoped to this exact route id and obligation id.");
   } else if (requiredTrust === "smt-checked") {
+    const requiredBackend = smtBackendForCapability(gap.capabilityId);
+    if (requiredBackend) {
+      criteria.unshift(`The SMT check record backend id is ${requiredBackend}.`);
+    }
     criteria.unshift("A concrete SMT solver run returns sat or unsat for the recorded SMT-LIB problem.");
   } else if (requiredTrust === "cross-checked") {
     criteria.unshift("An independent CAS agrees with the recorded result on the same scoped expression.");
@@ -838,8 +872,16 @@ function blockedReason(receipt: Receipt, capabilityId: string): string {
       : "The current result is not an accepted proof-checker run, so it must not be labeled proved.";
   }
 
+  if (capabilityId === "smt-solver") {
+    return "A concrete SMT-LIB run from any supported SMT solver could support bounded logic or satisfiability claims, but no solver-backed record exists yet.";
+  }
+
   if (capabilityId === "z3-smt-solver") {
-    return "A concrete SMT-LIB run could support bounded logic or satisfiability claims, but no solver-backed record exists yet.";
+    return "A concrete Z3 SMT-LIB run is required for this stricter review route, but no matching Z3-backed record exists yet.";
+  }
+
+  if (capabilityId === "cvc5-smt-solver") {
+    return "A concrete cvc5 SMT-LIB run is required for this stricter review route, but no matching cvc5-backed record exists yet.";
   }
 
   if (capabilityId === "local-vector-rag") {
@@ -892,6 +934,35 @@ function backendToCapabilityId(backendId: string): string | undefined {
 }
 
 function missingCapability(capabilityId: string): EngineCapability {
+  if (capabilityId === "smt-solver") {
+    return {
+      id: capabilityId,
+      displayName: "SMT solver evidence",
+      kind: "adapter",
+      lane: "math",
+      status: "missing",
+      role: "smt-solver",
+      command: "truth-harness smt check <workspace-local.smt2> --write",
+      localOnly: true,
+      networkAccess: "none",
+      strongestTrust: "smt-checked",
+      canMintTrust: false,
+      statusProbeMintedEvidence: false,
+      trustBoundary: "Route-level generic SMT obligation: any supported solver record may satisfy it, but only after a concrete sat or unsat run.",
+      limitations: ["Generic route gap; inspect SMT backend records for the selected solver identity."],
+      determinism: {
+        determinismClass: "replay-deterministic",
+        deterministic: true,
+        replayable: true,
+        primitiveSemantics: "smt-lib",
+        aiParserFriendly: true,
+        replayRequirements: ["Attach a concrete truth-harness.smt-check.v0 record from Z3, cvc5, or another supported SMT backend."],
+        driftRisks: ["The selected solver, solver version, SMT-LIB encoding, and timeout can change results."]
+      },
+      nextStep: "Encode the scoped claim as SMT-LIB and attach a replayable SMT check record."
+    };
+  }
+
   return {
     id: capabilityId,
     displayName: capabilityId,
@@ -1087,6 +1158,7 @@ async function resolveVerifierRouteEvidence(
       schemaVersion: record.schemaVersion,
       artifactId: record.checkId,
       status: record.status,
+      backendId: record.backend.id,
       proofCheckerBacked: record.proofCheckerBacked,
       acceptedProofChecker: record.backend.acceptedProofChecker
     };
@@ -1170,8 +1242,25 @@ function evidenceSatisfiesObligation(
   }
 
   if (obligation.kind === "solver-encoding") {
-    if (evidence.trust === "smt-checked" || evidence.trust === "proved") {
-      return { satisfied: true, reason: "SMT/proof evidence satisfies the solver-encoding obligation." };
+    if (evidence.trust === "proved") {
+      return { satisfied: true, reason: "Proof evidence satisfies the solver-encoding obligation." };
+    }
+
+    if (evidence.trust === "smt-checked") {
+      const requiredBackend = smtBackendForCapability(obligation.sourceCapabilityId);
+      if (requiredBackend && evidence.backendId !== requiredBackend) {
+        return {
+          satisfied: false,
+          reason: `solver-encoding obligation requires ${requiredBackend} evidence, but attached SMT evidence came from ${evidence.backendId ?? "an unknown backend"}.`
+        };
+      }
+
+      return {
+        satisfied: true,
+        reason: requiredBackend
+          ? `${requiredBackend} SMT evidence satisfies the solver-encoding obligation.`
+          : "SMT evidence satisfies the solver-encoding obligation."
+      };
     }
 
     return { satisfied: false, reason: "solver-encoding obligations require `smt-checked` or `proved` evidence." };
@@ -1340,6 +1429,12 @@ function parseVerifierRouteJson(raw: string, sourcePath: string): VerifierRoute 
   expectArray(parsed, "nextActions", "$.nextActions", issues);
   expectRecord(parsed, "trustBoundary", "$.trustBoundary", issues);
   expectArray(parsed, "warnings", "$.warnings", issues);
+  if (parsed.reviewPolicy !== undefined) {
+    const reviewPolicy = expectRecord(parsed, "reviewPolicy", "$.reviewPolicy", issues);
+    if (reviewPolicy) {
+      expectOneOf(reviewPolicy, "smt", ["single", "independent"], "$.reviewPolicy.smt", issues);
+    }
+  }
   if (parsed.proofObligations !== undefined) {
     expectArray(parsed, "proofObligations", "$.proofObligations", issues);
   }

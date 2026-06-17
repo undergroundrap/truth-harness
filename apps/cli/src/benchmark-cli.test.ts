@@ -628,6 +628,51 @@ describe("benchmark CLI", () => {
     expect(result.stdout).toContain("Required before: Before labeling this scoped claim proved.");
   });
 
+  it("prints independent SMT verifier route obligations when requested", async () => {
+    const result = await runCli([
+      "verify",
+      "prove",
+      "the",
+      "Riemann",
+      "hypothesis",
+      "--json",
+      "--require-independent-smt",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
+      "--cvc5-command",
+      "truth-harness-missing-cvc5-command"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      reviewPolicy?: { smt: string };
+      replay: string;
+      proofObligations: Array<{ kind: string; sourceCapabilityId: string; acceptanceCriteria: string[] }>;
+    };
+
+    expect(result.exitCode).toBe(0);
+    expect(json.reviewPolicy).toEqual({ smt: "independent" });
+    expect(json.replay).toContain("--require-independent-smt");
+    expect(json.proofObligations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "solver-encoding",
+          sourceCapabilityId: "z3-smt-solver",
+          acceptanceCriteria: expect.arrayContaining(["The SMT check record backend id is z3."])
+        }),
+        expect.objectContaining({
+          kind: "solver-encoding",
+          sourceCapabilityId: "cvc5-smt-solver",
+          acceptanceCriteria: expect.arrayContaining(["The SMT check record backend id is cvc5."])
+        })
+      ])
+    );
+  });
+
   it("writes and inspects persisted verifier routes", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);

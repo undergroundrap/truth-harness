@@ -265,6 +265,7 @@ export interface TruthHarnessVerifyInput {
   leanCommand?: string;
   z3Command?: string;
   cvc5Command?: string;
+  requireIndependentSmt?: boolean;
 }
 
 export interface TruthHarnessVerifyOutput {
@@ -1152,7 +1153,8 @@ export async function handleTruthHarnessVerify(input: TruthHarnessVerifyInput): 
         sageCommand: input.sageCommand,
         leanCommand: input.leanCommand,
         z3Command: input.z3Command,
-        cvc5Command: input.cvc5Command
+        cvc5Command: input.cvc5Command,
+        smtReviewPolicy: input.requireIndependentSmt ? "independent" : "single"
       })
     : undefined;
   const route =
@@ -1163,7 +1165,8 @@ export async function handleTruthHarnessVerify(input: TruthHarnessVerifyInput): 
       sageCommand: input.sageCommand,
       leanCommand: input.leanCommand,
       z3Command: input.z3Command,
-      cvc5Command: input.cvc5Command
+      cvc5Command: input.cvc5Command,
+      smtReviewPolicy: input.requireIndependentSmt ? "independent" : "single"
     });
   const strictFailure = input.strict === true && route.finalTrust === "unverified";
 

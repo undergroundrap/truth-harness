@@ -172,6 +172,10 @@ export function createTruthHarnessMcpServer(): McpServer {
           .string()
           .optional()
           .describe("cvc5 executable path or command for this route."),
+        requireIndependentSmt: z
+          .boolean()
+          .optional()
+          .describe("When true, create separate Z3 and cvc5 solver obligations instead of one generic SMT solver obligation."),
         timeoutMs: z
           .number()
           .int()

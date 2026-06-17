@@ -216,6 +216,16 @@
         "$ref": "#/$defs/proofObligation"
       }
     },
+    "reviewPolicy": {
+      "type": "object",
+      "required": ["smt"],
+      "properties": {
+        "smt": {
+          "enum": ["single", "independent"]
+        }
+      },
+      "additionalProperties": false
+    },
     "nextActions": {
       "$ref": "#/$defs/stringArray"
     },

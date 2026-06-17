@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { writeSymbolicCasCheckRecord, type CasBackendCommandRunner } from "./cas-backend.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
-import type { SmtBackendCommandRunner } from "./smt-backend.js";
+import { writeSmtCheckRecord, type SmtBackendCommandRunner } from "./smt-backend.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import {
   createVerifierRoute,
@@ -125,9 +125,10 @@ describe("verifier route", () => {
     expect(route.usedCapabilities).toEqual([]);
     expect(route.blockedCapabilities.map((step) => step.capabilityId)).toEqual([
       "lean-proof-checker",
-      "z3-smt-solver",
+      "smt-solver",
       "maxima-cas"
     ]);
+    expect(route.reviewPolicy).toEqual({ smt: "single" });
     expect(route.gaps.every((gap) => gap.severity === "critical" || gap.severity === "info")).toBe(true);
     expect(route.proofObligations).toEqual(
       expect.arrayContaining([
@@ -139,7 +140,7 @@ describe("verifier route", () => {
         expect.objectContaining({
           kind: "solver-encoding",
           status: "open",
-          sourceCapabilityId: "z3-smt-solver"
+          sourceCapabilityId: "smt-solver"
         }),
         expect.objectContaining({
           kind: "independent-check",
@@ -160,6 +161,93 @@ describe("verifier route", () => {
       criticalOpenObligations
     });
     expect(verifierRouteReadiness(route).summary).toContain(`Not final: ${openObligations} open obligations`);
+  });
+
+  it("can require independent Z3 and cvc5 SMT obligations for stricter review", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-12T00:00:00.000Z"
+    });
+    await writeFile(join(root, "constraints.smt2"), "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n", "utf8");
+    const smtRunner: SmtBackendCommandRunner = (command, args) => {
+      if (command === "z3-test" && args[0] === "-version") {
+        return { status: 0, stdout: "Z3 version 4.13.0\n", stderr: "" };
+      }
+
+      if (command === "cvc5-test" && args[0] === "--version") {
+        return { status: 0, stdout: "cvc5 version 1.1.2\n", stderr: "" };
+      }
+
+      if (command === "z3-test" || command === "cvc5-test") {
+        return { status: 0, stdout: "sat\n", stderr: "" };
+      }
+
+      return {
+        status: null,
+        stdout: "",
+        stderr: "",
+        error: { message: `spawn ${command} ENOENT` }
+      };
+    };
+    const routeWrite = await writeVerifierRoute({
+      rootPath: root,
+      problem: "solve integer constraints x > 0",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "z3-test",
+      cvc5Command: "cvc5-test",
+      smtReviewPolicy: "independent",
+      timeoutMs: 50,
+      smtRunner
+    });
+    const z3Obligation = routeWrite.route.proofObligations.find(
+      (candidate) => candidate.kind === "solver-encoding" && candidate.sourceCapabilityId === "z3-smt-solver"
+    );
+    const cvc5Obligation = routeWrite.route.proofObligations.find(
+      (candidate) => candidate.kind === "solver-encoding" && candidate.sourceCapabilityId === "cvc5-smt-solver"
+    );
+    const cvc5 = await writeSmtCheckRecord({
+      rootPath: root,
+      sourcePath: "constraints.smt2",
+      backend: "cvc5",
+      cvc5Command: "cvc5-test",
+      now: new Date("2026-06-12T00:01:00.000Z"),
+      runner: smtRunner
+    });
+    const cvc5Ref = relative(root, cvc5.jsonPath);
+
+    expect(routeWrite.route.reviewPolicy).toEqual({ smt: "independent" });
+    expect(routeWrite.route.replay).toContain("--require-independent-smt");
+    expect(routeWrite.route.blockedCapabilities.map((step) => step.capabilityId)).toEqual([
+      "lean-proof-checker",
+      "z3-smt-solver",
+      "cvc5-smt-solver",
+      "maxima-cas"
+    ]);
+    expect(z3Obligation?.acceptanceCriteria).toContain("The SMT check record backend id is z3.");
+    expect(cvc5Obligation?.acceptanceCriteria).toContain("The SMT check record backend id is cvc5.");
+
+    await expect(
+      satisfyVerifierRouteObligation({
+        rootPath: root,
+        routeRef: routeWrite.route.routeId,
+        obligationId: z3Obligation?.obligationId ?? "",
+        evidenceRef: { kind: "smt", ref: cvc5Ref },
+        now: new Date("2026-06-12T00:02:00.000Z")
+      })
+    ).rejects.toThrow("requires z3 evidence");
+
+    const satisfied = await satisfyVerifierRouteObligation({
+      rootPath: root,
+      routeRef: routeWrite.route.routeId,
+      obligationId: cvc5Obligation?.obligationId ?? "",
+      evidenceRef: { kind: "smt", ref: cvc5Ref },
+      now: new Date("2026-06-12T00:03:00.000Z")
+    });
+
+    expect(satisfied.obligation.status).toBe("satisfied");
+    expect(satisfied.obligation.satisfactionSummary).toBe("cvc5 SMT evidence satisfies the solver-encoding obligation.");
   });
 
   it("writes, lists, reads, and validates verifier route artifacts", async () => {
