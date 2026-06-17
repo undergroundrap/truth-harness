@@ -72,10 +72,11 @@ A bundle can remain valid even after the live workspace changes. That is useful 
 
 Agents can use the same workflow through MCP:
 
+- `truth_harness_workspace_credibility_actions`
 - `truth_harness_workspace_credibility_bundle`
 - `truth_harness_workspace_credibility_bundle_verify`
 
-Both MCP tools are local-only. The create tool writes the bundle directory; the verify tool only reads the manifest, copied hashes, and current workspace source files.
+All MCP tools are local-only. The actions tool is read-only and returns the unresolved reviewer queue without executing commands. The create tool writes the bundle directory; the verify tool only reads the manifest, copied hashes, and current workspace source files.
 
 ## What Counts As Professor Ready
 

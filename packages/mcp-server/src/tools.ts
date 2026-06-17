@@ -24,6 +24,7 @@ import {
   createSourceCitationReceipt,
   createValidationPlan,
   createVerifierRoute,
+  createCredibilityPack,
   createWorkspaceReview,
   createWorkspaceRunNextPlan,
   createWorkspaceGraph,
@@ -138,9 +139,12 @@ import {
   type CodeRunWriteResult,
   type CredibilityBundleVerification,
   type CredibilityBundleWriteResult,
+  type CredibilityPack,
+  type CredibilityPackActionItem,
   type DiscoveryPackage,
   type DiscoveryPackageWriteResult,
   type EngineManifest,
+  type EngineVerificationRequirements,
   type EvidenceAudit,
   type EvidenceAuditReportWriteResult,
   type EvidenceAuditWriteResult,
@@ -663,6 +667,25 @@ export interface TruthHarnessWorkspaceCredibilityBundleInput {
   requireDockerCore?: boolean;
   requireAllConcrete?: boolean;
   requireAllEngines?: boolean;
+}
+
+export interface TruthHarnessWorkspaceCredibilityActionsInput extends TruthHarnessWorkspaceCredibilityBundleInput {
+  priority?: CredibilityPackActionItem["priority"];
+  category?: CredibilityPackActionItem["category"];
+}
+
+export interface TruthHarnessWorkspaceCredibilityActionsOutput {
+  schemaVersion: "truth-harness.credibility-actions.v0";
+  packId: string;
+  status: CredibilityPack["status"];
+  professorReady: boolean;
+  totalActions: number;
+  criticalActions: number;
+  highActions: number;
+  actions: CredibilityPackActionItem[];
+  reviewerCommands: CredibilityPack["reviewerCommands"];
+  localOnly: true;
+  networkAccess: "none";
 }
 
 export interface TruthHarnessWorkspaceCredibilityBundleVerifyInput {
@@ -1815,14 +1838,51 @@ export async function handleTruthHarnessWorkspaceCredibilityBundle(
     cvc5Command: input.cvc5Command,
     smtSourcePath: input.smtSourcePath,
     leanSourcePath: input.leanSourcePath,
-    engineRequirements: {
-      maxima: Boolean(input.requireMaxima || input.requireDockerCore || input.requireAllConcrete || input.requireAllEngines),
-      z3: Boolean(input.requireZ3 || input.requireDockerCore || input.requireAllConcrete || input.requireAllEngines),
-      cvc5: Boolean(input.requireCvc5 || input.requireAllEngines),
-      lean: Boolean(input.requireLean || input.requireAllConcrete || input.requireAllEngines),
-      sage: Boolean(input.requireSage || input.requireAllEngines)
-    }
+    engineRequirements: credibilityEngineRequirementsFromInput(input)
   });
+}
+
+export async function handleTruthHarnessWorkspaceCredibilityActions(
+  input: TruthHarnessWorkspaceCredibilityActionsInput
+): Promise<TruthHarnessWorkspaceCredibilityActionsOutput> {
+  const pack = await createCredibilityPack({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    maxRoutes: input.maxRoutes,
+    maxClaims: input.maxClaims,
+    maxSessions: input.maxSessions,
+    timeoutMs: input.timeoutMs,
+    maximaCommand: input.maximaCommand,
+    sageCommand: input.sageCommand,
+    leanCommand: input.leanCommand,
+    z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command,
+    smtSourcePath: input.smtSourcePath,
+    leanSourcePath: input.leanSourcePath,
+    engineRequirements: credibilityEngineRequirementsFromInput(input)
+  });
+  const actions = pack.reviewerActionPlan.actions.filter((action) => {
+    if (input.priority && action.priority !== input.priority) {
+      return false;
+    }
+    if (input.category && action.category !== input.category) {
+      return false;
+    }
+    return true;
+  });
+
+  return {
+    schemaVersion: "truth-harness.credibility-actions.v0",
+    packId: pack.packId,
+    status: pack.status,
+    professorReady: pack.summary.professorReady,
+    totalActions: actions.length,
+    criticalActions: actions.filter((action) => action.priority === "critical").length,
+    highActions: actions.filter((action) => action.priority === "high").length,
+    actions,
+    reviewerCommands: pack.reviewerCommands,
+    localOnly: true,
+    networkAccess: "none"
+  };
 }
 
 export async function handleTruthHarnessWorkspaceCredibilityBundleVerify(
@@ -2517,6 +2577,16 @@ function resolveWorkspaceRoot(path?: string): string {
 function resolveWorkspacePath(path: string): string {
   const workspaceRoot = getWorkspaceRoot();
   return resolvePathUnderRoot(workspaceRoot, path);
+}
+
+function credibilityEngineRequirementsFromInput(input: TruthHarnessWorkspaceCredibilityBundleInput): EngineVerificationRequirements {
+  return {
+    maxima: Boolean(input.requireMaxima || input.requireDockerCore || input.requireAllConcrete || input.requireAllEngines),
+    z3: Boolean(input.requireZ3 || input.requireDockerCore || input.requireAllConcrete || input.requireAllEngines),
+    cvc5: Boolean(input.requireCvc5 || input.requireAllEngines),
+    lean: Boolean(input.requireLean || input.requireAllConcrete || input.requireAllEngines),
+    sage: Boolean(input.requireSage || input.requireAllEngines)
+  };
 }
 
 function resolvePathUnderRoot(root: string, path: string): string {

@@ -144,6 +144,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_visual_plot",
         "truth_harness_visual_render",
         "truth_harness_visual_show",
+        "truth_harness_workspace_credibility_actions",
         "truth_harness_workspace_credibility_bundle",
         "truth_harness_workspace_credibility_bundle_verify",
         "truth_harness_workspace_events",
@@ -528,6 +529,30 @@ describe("Truth Harness MCP server", () => {
       });
       const snapshotVerifyText = firstText(snapshotVerifyResult.content);
       expect(snapshotVerifyText).toContain("\"passed\": true");
+
+      const credibilityActions = await client.callTool({
+        name: "truth_harness_workspace_credibility_actions",
+        arguments: {
+          maxRoutes: 0,
+          maxClaims: 0,
+          maxSessions: 0,
+          timeoutMs: 50,
+          maximaCommand: "truth-harness-missing-maxima-command",
+          z3Command: "truth-harness-missing-z3-command",
+          leanCommand: "truth-harness-missing-lean-command",
+          sageCommand: "truth-harness-missing-sage-command",
+          requireDockerCore: true,
+          category: "engine"
+        }
+      });
+      const credibilityActionsText = firstText(credibilityActions.content);
+      expect(credibilityActions.isError).not.toBe(true);
+      expect(credibilityActionsText).toContain("\"schemaVersion\": \"truth-harness.credibility-actions.v0\"");
+      expect(credibilityActionsText).toContain("\"localOnly\": true");
+      expect(credibilityActionsText).toContain("\"networkAccess\": \"none\"");
+      expect(credibilityActionsText).toContain("\"status\": \"blocked\"");
+      expect(credibilityActionsText).toContain("Close required Maxima symbolic cross-check gate");
+      expect(credibilityActionsText).toContain("truth-harness engines verify --write --require-maxima --require-z3");
 
       const credibilityBundle = await client.callTool({
         name: "truth_harness_workspace_credibility_bundle",

@@ -76,6 +76,7 @@ import {
   handleTruthHarnessVisualShow,
   handleTruthHarnessVerify,
   handleTruthHarnessWorkspaceInit,
+  handleTruthHarnessWorkspaceCredibilityActions,
   handleTruthHarnessWorkspaceCredibilityBundle,
   handleTruthHarnessWorkspaceCredibilityBundleVerify,
   handleTruthHarnessWorkspaceEvents,
@@ -1192,6 +1193,46 @@ describe("MCP tool handlers", () => {
       passed: true,
       sourceMatchesWorkspace: true
     });
+  });
+
+  it("lists credibility reviewer actions for agents without executing commands", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Credibility Action Lab" });
+
+    const actions = await handleTruthHarnessWorkspaceCredibilityActions({
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      timeoutMs: 50,
+      maximaCommand: "truth-harness-missing-maxima-command",
+      z3Command: "truth-harness-missing-z3-command",
+      cvc5Command: "truth-harness-missing-cvc5-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      sageCommand: "truth-harness-missing-sage-command",
+      requireAllEngines: true,
+      category: "engine",
+      priority: "critical"
+    });
+
+    expect(actions.schemaVersion).toBe("truth-harness.credibility-actions.v0");
+    expect(actions.localOnly).toBe(true);
+    expect(actions.networkAccess).toBe("none");
+    expect(actions.status).toBe("blocked");
+    expect(actions.professorReady).toBe(false);
+    expect(actions.totalActions).toBeGreaterThanOrEqual(5);
+    expect(actions.highActions).toBe(0);
+    expect(actions.actions.every((action) => action.category === "engine")).toBe(true);
+    expect(actions.actions.every((action) => action.priority === "critical")).toBe(true);
+    expect(actions.actions).toContainEqual(
+      expect.objectContaining({
+        title: "Close required Maxima symbolic cross-check gate",
+        command: "truth-harness engines verify --write --require-all-engines",
+        closes: expect.arrayContaining(["required-engine:maxima-symbolic-cross-check"])
+      })
+    );
+    expect(actions.actions.map((action) => action.detail).join("\n")).not.toContain("spawnSync");
+    expect(actions.reviewerCommands.verifyEngines).toContain("--require-all-engines");
   });
 
   it("starts and checkpoints local research sessions for agents", async () => {
