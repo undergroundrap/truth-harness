@@ -73,6 +73,14 @@ describe("web UI action contracts", () => {
     ]);
 
     expect(html).toContain('id="credibility-pack-panel"');
+    expect(html).toContain('id="save-report"');
+    expect(html).toContain('id="report-save-status"');
+    expect(source).toContain('fetch("/api/reports"');
+    expect(source).toContain("async function saveReportDraftFromUi(button)");
+    expect(source).toContain("function reportDraftPayload(receipt)");
+    expect(source).toContain("function renderReportSaveStatus(receipt = receiptStore.get(state.receiptKey))");
+    expect(source).toContain("Saved report draft");
+    expect(source).toContain("Report save failed");
     expect(source).toContain('fetch(`/api/credibility-pack?${params.toString()}`');
     expect(source).toContain('fetch("/api/credibility-pack"');
     expect(source).toContain('fetch("/api/credibility-bundle/latest"');
@@ -152,6 +160,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("Saved credibility reviewer plan");
     expect(source).toContain("Reviewer action command copied from the credibility pack.");
     expect(styles).toContain(".credibility-pack-panel");
+    expect(styles).toContain(".report-save-status");
     expect(styles).toContain(".credibility-pack-summary");
     expect(styles).toContain(".credibility-bundle-card");
     expect(styles).toContain(".credibility-bundle-facts");

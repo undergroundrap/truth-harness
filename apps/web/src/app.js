@@ -315,6 +315,9 @@ const state = {
   credibilityBundleVerifications: [],
   credibilityBundleVerificationsLoading: false,
   credibilityBundleVerificationsError: undefined,
+  reportSaving: false,
+  savedReportDraft: undefined,
+  reportSaveError: undefined,
   credibilityRunNextPlan: undefined,
   credibilityRunNextLoading: false,
   credibilityRunNextSaving: false,
@@ -462,6 +465,8 @@ const researchNotes = document.querySelector("#research-notes");
 const notesStatus = document.querySelector("#notes-status");
 const credibilityPackPanel = document.querySelector("#credibility-pack-panel");
 const reportPreview = document.querySelector("#report-preview");
+const saveReportButton = document.querySelector("#save-report");
+const reportSaveStatus = document.querySelector("#report-save-status");
 const copyReportButton = document.querySelector("#copy-report");
 const downloadReportButton = document.querySelector("#download-report");
 const copyTeachingPacketButton = document.querySelector("#copy-teaching-packet");
@@ -12759,6 +12764,7 @@ function renderReport(receipt) {
     <h3>Session Citations</h3>
     <ul>${activityItems}</ul>
   `;
+  renderReportSaveStatus(receipt);
 }
 
 function generateReportMarkdown(receipt) {
@@ -12937,6 +12943,96 @@ function generateReportMarkdown(receipt) {
   ];
 
   return `${lines.join("\n")}\n`;
+}
+
+function reportDraftPayload(receipt) {
+  const markdown = generateReportMarkdown(receipt);
+  return {
+    title: receipt.title,
+    summary: receipt.subtitle,
+    receiptRunId: receipt.runId,
+    claimId: receipt.claimId,
+    trust: receipt.trust,
+    bundleVerificationIds: credibilityBundleVerificationReportItems(20)
+      .map((item) => item.verificationId)
+      .filter(Boolean),
+    markdown
+  };
+}
+
+function renderReportSaveStatus(receipt = receiptStore.get(state.receiptKey)) {
+  if (!reportSaveStatus) {
+    return;
+  }
+
+  if (state.reportSaving) {
+    reportSaveStatus.textContent = "saving report draft to local workspace...";
+    reportSaveStatus.className = "mini-label report-save-status waiting";
+    return;
+  }
+
+  if (state.reportSaveError) {
+    reportSaveStatus.textContent = `report save failed: ${state.reportSaveError}`;
+    reportSaveStatus.className = "mini-label report-save-status refuted";
+    return;
+  }
+
+  const saved = state.savedReportDraft;
+  if (saved && (!receipt || saved.receiptRunId === receipt.runId)) {
+    reportSaveStatus.textContent = `saved ${saved.reportId} -> ${saved.paths?.markdown ?? "local report draft"}`;
+    reportSaveStatus.className = "mini-label report-save-status exact";
+    return;
+  }
+
+  reportSaveStatus.textContent = "report draft not saved to workspace yet";
+  reportSaveStatus.className = "mini-label report-save-status";
+}
+
+async function saveReportDraftFromUi(button) {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (!receipt || state.reportSaving) {
+    return;
+  }
+
+  state.reportSaving = true;
+  state.reportSaveError = undefined;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Saving";
+  }
+  renderReportSaveStatus(receipt);
+
+  try {
+    const response = await fetch("/api/reports", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify(reportDraftPayload(receipt))
+    });
+    const payload = await readLocalApiJson(response, "Local report save failed.");
+    state.savedReportDraft = payload.report;
+    state.reportSaveError = undefined;
+    addActivity(
+      "local-api",
+      "Saved report draft",
+      payload.activity?.[0]?.detail ?? `${payload.report?.reportId ?? receipt.runId} report draft saved under .truth-harness/findings.`,
+      "passed",
+      payload.report?.createdAt
+    );
+    void refreshCatalogStatus({ announce: false });
+  } catch (error) {
+    state.reportSaveError = error instanceof Error ? error.message : "Unknown report save failure.";
+    addActivity("local-api", "Report save failed", state.reportSaveError, "refuted");
+  } finally {
+    state.reportSaving = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Save";
+    }
+    renderReport(receipt);
+  }
 }
 
 function downloadTextFile(filename, text, type) {
@@ -14045,6 +14141,10 @@ researchNotes.addEventListener("input", saveNotes);
 
 researchNotes.addEventListener("change", () => {
   addActivity("human", "Updated scratchpad", "Local session notes were saved in browser storage.", "passed");
+});
+
+saveReportButton.addEventListener("click", () => {
+  void saveReportDraftFromUi(saveReportButton);
 });
 
 copyReportButton.addEventListener("click", () => {

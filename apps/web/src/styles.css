@@ -5832,6 +5832,26 @@ textarea:focus-visible {
   line-height: 1.5;
 }
 
+.report-save-status {
+  display: block;
+  max-width: 100%;
+  margin: -4px 0 2px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.report-save-status.exact {
+  color: var(--exact);
+}
+
+.report-save-status.waiting {
+  color: var(--accent);
+}
+
+.report-save-status.refuted {
+  color: var(--refuted);
+}
+
 .report-preview header {
   border-bottom: 1px solid var(--line-soft);
   padding-bottom: 10px;

@@ -196,6 +196,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "trace-render",
         "activity-log",
         "agent-runbook",
+        "report-draft-save",
         "research-session",
         "research-session-list",
         "research-map",
@@ -225,6 +226,18 @@ async function handleApiRequest(request, response, requestUrl) {
         "workspace-maintenance"
       ]
     });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/reports" && request.method === "POST") {
+    try {
+      await ensureLocalWorkspace();
+      const input = await readJsonBody(request);
+      const result = await writeReportDraftArtifact(input);
+      writeJson(response, 200, result);
+    } catch (error) {
+      writeApiError(response, error instanceof HttpError ? error.status : 409, error instanceof Error ? error.message : "Report draft could not be saved.", request);
+    }
     return;
   }
 
@@ -1538,6 +1551,93 @@ async function writeReceiptArtifact(receipt) {
   return {
     json: jsonPath,
     ref
+  };
+}
+
+async function writeReportDraftArtifact(input) {
+  const workspace = await ensureLocalWorkspace();
+  const { refreshWorkspaceCatalogArtifact } = await loadCoreModule();
+  const markdown = typeof input?.markdown === "string" ? input.markdown : "";
+  if (!markdown.trim()) {
+    throw new HttpError(400, "Report markdown is required.");
+  }
+
+  const markdownBytes = Buffer.from(markdown, "utf8");
+  if (markdownBytes.length > 96 * 1024) {
+    throw new HttpError(413, "Report markdown is too large.");
+  }
+
+  const createdAt = new Date().toISOString();
+  const markdownSha256 = sha256Hex(markdownBytes);
+  const bundleVerificationIds = stringList(input?.bundleVerificationIds)
+    .filter((id) => /^cver_[a-f0-9]{16}$/u.test(id))
+    .slice(0, 20);
+  const reportWithoutId = {
+    schemaVersion: "truth-harness.report-draft.v0",
+    createdAt,
+    localOnly: true,
+    networkAccess: "none",
+    externalCalls: [],
+    source: "web-report-tab",
+    title: optionalText(input?.title) ?? "Truth Harness Report Draft",
+    summary: optionalText(input?.summary),
+    receiptRunId: optionalText(input?.receiptRunId),
+    claimId: optionalText(input?.claimId),
+    trust: optionalText(input?.trust),
+    bundleVerificationIds,
+    markdownSha256,
+    markdownByteLength: markdownBytes.length,
+    warnings: [
+      "This is a saved report draft, not proof, peer review, legal review, medical validation, or publication acceptance.",
+      "Trust labels remain governed by the cited receipts, proof checks, SMT/CAS records, bundle verifications, and replay commands."
+    ]
+  };
+  const reportId = `report_${sha256Hex(Buffer.from(JSON.stringify(reportWithoutId), "utf8")).slice(0, 16)}`;
+  const findingsDir = resolve(workspace.root, workspace.manifest.directories.findings ?? ".truth-harness/findings");
+  const baseName = `${createdAt.slice(0, 10)}-${reportId}-report-draft`;
+  const jsonPath = resolve(findingsDir, `${baseName}.json`);
+  const markdownPath = resolve(findingsDir, `${baseName}.md`);
+  const relativeJson = portablePath(relative(workspace.root, jsonPath));
+  const relativeMarkdown = portablePath(relative(workspace.root, markdownPath));
+  const report = {
+    ...reportWithoutId,
+    reportId,
+    paths: {
+      json: relativeJson,
+      markdown: relativeMarkdown
+    }
+  };
+
+  await mkdir(findingsDir, { recursive: true });
+  await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await writeFile(markdownPath, markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: workspace.root,
+    path: relativeJson,
+    kind: "findings",
+    now: createdAt,
+    staleReason: "report draft artifact written"
+  });
+
+  return {
+    schemaVersion: "truth-harness.web-report-draft-write-response.v0",
+    localOnly: true,
+    externalCalls: [],
+    report,
+    paths: {
+      json: jsonPath,
+      markdown: markdownPath,
+      relativeJson,
+      relativeMarkdown
+    },
+    activity: [
+      {
+        actor: "local-api",
+        action: "saved-report-draft",
+        detail: `Saved ${reportId} to ${relativeMarkdown} with SHA-256 ${markdownSha256}.`,
+        at: createdAt
+      }
+    ]
   };
 }
 
