@@ -6320,6 +6320,9 @@ function printReleaseAudit(audit: ReleaseAudit): void {
   console.log(
     `Review queue: ${audit.summary.reviewItems} item(s), ${audit.summary.criticalReviewItems} critical`
   );
+  console.log(
+    `Research sessions: ${audit.summary.researchSessions} inspected, ${audit.summary.sessionContinuationItems} continuation item(s)`
+  );
   console.log(`Code-run sandbox: ${audit.summary.sandboxAvailable ? "available" : "not measured"}`);
 
   const failed = audit.checks.filter((check) => check.status === "fail");

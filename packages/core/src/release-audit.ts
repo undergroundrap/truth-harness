@@ -70,6 +70,8 @@ export interface ReleaseAudit {
     adversarialBenchmark: string;
     reportDrafts: number;
     reportDraftsNeedingAttention: number;
+    researchSessions: number;
+    sessionContinuationItems: number;
     reviewItems: number;
     criticalReviewItems: number;
     sandboxAvailable: boolean;
@@ -137,6 +139,8 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
       adversarialBenchmark: "missing",
       reportDrafts: 0,
       reportDraftsNeedingAttention: 0,
+      researchSessions: 0,
+      sessionContinuationItems: 0,
       reviewItems: 0,
       criticalReviewItems: 0
     });
@@ -170,6 +174,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     engineCheck(credibilityPack, hasRequiredEngine(engineRequirements)),
     adversarialBenchmarkCheck(credibilityPack),
     reportDraftsCheck(credibilityPack),
+    researchSessionContinuityCheck(credibilityPack),
     savedStrictEngineRunCheck(credibilityPack, input.requireSavedStrictEngineRun === true),
     reviewQueueCheck(credibilityPack),
     sandboxCheck(sandbox, input.requireSandbox === true),
@@ -193,6 +198,9 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     adversarialBenchmark: credibilityPack.summary.latestAdversarialBenchmarkStatus,
     reportDrafts: credibilityPack.summary.savedReportDrafts,
     reportDraftsNeedingAttention: credibilityPack.summary.reportDraftsNeedingAttention,
+    researchSessions: credibilityPack.workspaceReview.summary.sessions,
+    sessionContinuationItems:
+      credibilityPack.workspaceReview.summary.sessionTasks + credibilityPack.workspaceReview.summary.sessionNextChecks,
     reviewItems: credibilityPack.summary.reviewItems,
     criticalReviewItems: credibilityPack.summary.criticalReviewItems
   });
@@ -219,6 +227,7 @@ export function renderReleaseAuditMarkdown(audit: ReleaseAudit): string {
     `- Concrete engine gates: ${audit.summary.concreteEngineGates}`,
     `- Adversarial benchmark: ${audit.summary.adversarialBenchmark}`,
     `- Report drafts: ${audit.summary.reportDrafts} saved, ${audit.summary.reportDraftsNeedingAttention} needing attention`,
+    `- Research sessions: ${audit.summary.researchSessions} inspected, ${audit.summary.sessionContinuationItems} continuation item(s)`,
     `- Review queue: ${audit.summary.reviewItems} item(s), ${audit.summary.criticalReviewItems} critical`,
     `- Code-run sandbox: ${audit.summary.sandboxAvailable ? "available" : "not measured"}`,
     "",
@@ -281,6 +290,8 @@ function buildAudit(input: {
   adversarialBenchmark: string;
   reportDrafts: number;
   reportDraftsNeedingAttention: number;
+  researchSessions: number;
+  sessionContinuationItems: number;
   reviewItems: number;
   criticalReviewItems: number;
 }): ReleaseAudit {
@@ -314,6 +325,8 @@ function buildAudit(input: {
       adversarialBenchmark: input.adversarialBenchmark,
       reportDrafts: input.reportDrafts,
       reportDraftsNeedingAttention: input.reportDraftsNeedingAttention,
+      researchSessions: input.researchSessions,
+      sessionContinuationItems: input.sessionContinuationItems,
       reviewItems: input.reviewItems,
       criticalReviewItems: input.criticalReviewItems,
       sandboxAvailable: input.sandbox.available
@@ -614,6 +627,50 @@ function reportDraftsCheck(pack: CredibilityPack): ReleaseAuditCheck {
     command: "truth-harness workspace reports .",
     details: [
       "Report drafts are shareable summaries, not proof. Their trust remains bounded by cited receipts, bundles, and replay commands."
+    ]
+  });
+}
+
+function researchSessionContinuityCheck(pack: CredibilityPack): ReleaseAuditCheck {
+  const sessions = pack.workspaceReview.summary.sessions;
+  const continuationItems = pack.workspaceReview.summary.sessionTasks + pack.workspaceReview.summary.sessionNextChecks;
+  const sessionItems = pack.workspaceReview.topItems
+    .filter((item) => item.kind === "session-task" || item.kind === "session-next-check")
+    .slice(0, 5);
+
+  if (sessions === 0) {
+    return passCheck({
+      id: "research-session-continuity",
+      title: "Research session continuity",
+      summary: "No active research sessions were found in this audit scope.",
+      command: "truth-harness research list .",
+      details: [
+        "Long-running agent work should create research sessions when a problem needs checkpoints, tasks, or resumable evidence trails."
+      ]
+    });
+  }
+
+  if (continuationItems === 0) {
+    return passCheck({
+      id: "research-session-continuity",
+      title: "Research session continuity",
+      summary: `${sessions} research session(s) are present with no open task or checkpoint continuation items.`,
+      command: "truth-harness research list .",
+      details: [
+        "Research sessions are local runbooks. They preserve objectives, budgets, checkpoints, and evidence refs for future agents."
+      ]
+    });
+  }
+
+  return warnCheck({
+    id: "research-session-continuity",
+    title: "Research session continuity",
+    blocking: false,
+    summary: `${continuationItems} open research-session continuation item(s) across ${sessions} session(s).`,
+    command: "truth-harness workspace review . --max-routes 0 --max-claims 0 --max-reports 0",
+    details: [
+      "Open research-session work is not a release blocker, but it should stay visible so long-running agents can resume from local evidence instead of chat memory.",
+      ...sessionItems.map((item) => `${item.priority}: ${item.title} (${item.source.ref})`)
     ]
   });
 }

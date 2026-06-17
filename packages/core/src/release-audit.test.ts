@@ -9,6 +9,7 @@ import { writeBenchmarkRunRecord } from "./benchmark-run.js";
 import { createReceipt } from "./receipt.js";
 import type { EngineVerificationCommandRunner } from "./engine-verification.js";
 import { writeReportDraft } from "./report-draft.js";
+import { addResearchSessionCheckpoint, writeResearchSession } from "./research-session.js";
 
 const roots: string[] = [];
 
@@ -61,6 +62,8 @@ describe("release audit", () => {
       adversarialBenchmark: "passed",
       reportDrafts: 0,
       reportDraftsNeedingAttention: 0,
+      researchSessions: 0,
+      sessionContinuationItems: 0,
       blockingFailures: 0
     });
     expect(audit.checks).toContainEqual(
@@ -71,6 +74,9 @@ describe("release audit", () => {
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "report-drafts", status: "pass", blocking: false })
+    );
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({ id: "research-session-continuity", status: "pass", blocking: false })
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
@@ -89,6 +95,79 @@ describe("release audit", () => {
     expect(markdown).toContain("Required engine gates: 5/5");
     expect(markdown).toContain("Adversarial benchmark: passed");
     expect(markdown).toContain("Report drafts: 0 saved, 0 needing attention");
+    expect(markdown).toContain("Research sessions: 0 inspected, 0 continuation item(s)");
+  });
+
+  it("warns when active research sessions need resumable agent continuation", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Research Session Audit", now: "2026-06-17T00:00:00.000Z" });
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(createReceipt("for all integers n, n^2+n+1 is even")),
+      suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
+      suitePath: "packages/benchmarks/suites/ai-failure-seed.json",
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-17T00:00:00.500Z"
+    });
+    const session = await writeResearchSession({
+      rootPath: root,
+      title: "Autonomous proof route",
+      objective: "Let local agents work through an exact arithmetic proof route without relying on chat memory.",
+      domains: ["math"],
+      tasks: ["Attach accepted Lean proof evidence", "Record independent CAS check"],
+      now: "2026-06-17T00:00:00.700Z"
+    });
+    await addResearchSessionCheckpoint({
+      rootPath: root,
+      sessionRef: session.session.sessionId,
+      summary: "The route is ready for the next verifier branch.",
+      nextChecks: ["Run workspace run-next on the current session item."],
+      now: "2026-06-17T00:00:00.800Z"
+    });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-17T00:00:02.000Z",
+      engineRequirements: { maxima: true, z3: true, lean: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      leanCommand: "lean-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: passingEngineRunner
+    });
+    const markdown = renderReleaseAuditMarkdown(audit);
+
+    expect(audit.status).toBe("ready");
+    expect(audit.summary).toMatchObject({
+      researchSessions: 1,
+      sessionContinuationItems: 3,
+      blockingFailures: 0
+    });
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "research-session-continuity",
+        status: "warn",
+        blocking: false,
+        summary: "3 open research-session continuation item(s) across 1 session(s).",
+        command: "truth-harness workspace review . --max-routes 0 --max-claims 0 --max-reports 0",
+        details: expect.arrayContaining([
+          expect.stringContaining("medium: Research task: Attach accepted Lean proof evidence"),
+          expect.stringContaining("medium: Session next check: Run workspace run-next on the current session item.")
+        ])
+      })
+    );
+    expect(audit.nextActions.some((action) =>
+      action.includes(`truth-harness research show ${session.session.sessionId}`) &&
+      action.includes("--workspace") &&
+      action.includes("--json")
+    )).toBe(true);
+    expect(markdown).toContain("Research sessions: 1 inspected, 3 continuation item(s)");
+    expect(markdown).toContain("WARN Research session continuity");
   });
 
   it("blocks release readiness when a saved report draft fails sidecar integrity", async () => {

@@ -9220,6 +9220,7 @@ function renderReleaseAuditGate() {
         ["Engines", `${summary.requiredEngineGates ?? "0/5"} required / ${summary.concreteEngineGates ?? "0/5"} concrete`],
         ["Adversarial benchmark", releaseAuditBenchmarkSummary(summary)],
         ["Report drafts", `${summary.reportDrafts ?? 0} saved / ${summary.reportDraftsNeedingAttention ?? 0} attention`],
+        ["Research sessions", `${summary.researchSessions ?? 0} sessions / ${summary.sessionContinuationItems ?? 0} open`],
         ["Review queue", `${summary.reviewItems ?? 0} open / ${summary.criticalReviewItems ?? 0} critical`],
         ["Catalog", summary.catalogFresh ? "fresh" : "rebuild required"],
         ["Sandbox", summary.sandboxAvailable ? "measured" : "not measured"],
@@ -9424,7 +9425,7 @@ function releaseAuditActivitySummary(audit) {
   }
 
   const summary = audit.summary ?? {};
-  return `Release audit ${audit.status}; ${summary.blockingFailures ?? 0} blocking failure${summary.blockingFailures === 1 ? "" : "s"}, ${summary.reportDraftsNeedingAttention ?? 0} report draft${summary.reportDraftsNeedingAttention === 1 ? "" : "s"} needing attention, ${summary.criticalReviewItems ?? 0} critical queue item${summary.criticalReviewItems === 1 ? "" : "s"}.`;
+  return `Release audit ${audit.status}; ${summary.blockingFailures ?? 0} blocking failure${summary.blockingFailures === 1 ? "" : "s"}, ${summary.reportDraftsNeedingAttention ?? 0} report draft${summary.reportDraftsNeedingAttention === 1 ? "" : "s"} needing attention, ${summary.sessionContinuationItems ?? 0} session continuation item${summary.sessionContinuationItems === 1 ? "" : "s"}, ${summary.criticalReviewItems ?? 0} critical queue item${summary.criticalReviewItems === 1 ? "" : "s"}.`;
 }
 
 function formatPercent(value) {

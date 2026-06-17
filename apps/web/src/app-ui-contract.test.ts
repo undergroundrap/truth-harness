@@ -216,6 +216,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("maxReports");
     expect(source).toContain("adversarialBenchmark");
     expect(source).toContain("reportDraftsNeedingAttention");
+    expect(source).toContain("sessionContinuationItems");
     expect(source).toContain("Receipt replay:");
     expect(source).toContain("releaseAuditActivitySummary");
     expect(source).toContain(".copy-release-action-command");
