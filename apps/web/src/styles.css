@@ -5360,6 +5360,92 @@ textarea:focus-visible {
   min-width: 0;
 }
 
+.credibility-engine-ladder {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(12, 12, 12, 0.72);
+  padding: 10px;
+}
+
+.credibility-engine-ladder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.credibility-engine-ladder-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  padding: 10px;
+}
+
+.credibility-engine-ladder-card.exact {
+  border-color: rgba(120, 217, 166, 0.36);
+}
+
+.credibility-engine-ladder-card.waiting {
+  border-color: rgba(230, 195, 106, 0.3);
+}
+
+.credibility-engine-ladder-card.refuted {
+  border-color: rgba(242, 139, 130, 0.36);
+}
+
+.credibility-engine-ladder-card strong {
+  color: #f1eadc;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.credibility-engine-ladder-card p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.credibility-engine-ladder-card dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+}
+
+.credibility-engine-ladder-card dl div {
+  min-width: 0;
+}
+
+.credibility-engine-ladder-card dt {
+  color: var(--faint);
+  font-size: 10px;
+  margin-bottom: 3px;
+}
+
+.credibility-engine-ladder-card dd {
+  color: #ece5d8;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.credibility-engine-ladder-card code {
+  white-space: normal;
+}
+
 .credibility-run-next-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

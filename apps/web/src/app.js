@@ -11825,6 +11825,7 @@ function renderCredibilityPackPanel() {
   const bundleCard = credibilityBundleCardHtml();
   const bundleHistory = credibilityBundleVerificationHistoryHtml();
   const reviewerChecklist = credibilityReviewerChecklistHtml(pack);
+  const engineEvidenceLadder = credibilityEngineEvidenceLadderHtml(pack);
   const summaryRows = pack
     ? credibilityPackSummaryRows(pack)
       .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${credibilityPackValueHtml(value)}</dd></div>`)
@@ -11849,6 +11850,7 @@ function renderCredibilityPackPanel() {
     ${bundleHistory}
     ${reviewerChecklist}
     <dl class="credibility-pack-summary">${summaryRows}</dl>
+    ${engineEvidenceLadder}
     <div class="credibility-pack-actions">
       <button class="text-button compact-button refresh-credibility-pack" data-testid="refresh-credibility-pack" type="button" ${state.credibilityPackLoading ? "disabled" : ""}>${state.credibilityPackLoading ? "Refreshing" : "Refresh"}</button>
       <button class="text-button compact-button strong-action write-credibility-pack" data-testid="write-credibility-pack" type="button" ${state.credibilityPackSaving ? "disabled" : ""}>${state.credibilityPackSaving ? "Writing" : "Write reviewer pack"}</button>
@@ -12406,6 +12408,100 @@ function credibilityRunNextPathRows(paths) {
     .filter(([, value]) => value)
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd><code>${escapeHtml(value)}</code></dd></div>`)
     .join("");
+}
+
+function credibilityEngineEvidenceLadderHtml(pack) {
+  const rows = Array.isArray(pack?.engineEvidenceLadder)
+    ? pack.engineEvidenceLadder
+    : credibilityEngineEvidenceLadderFromCases(pack?.engineEvidence?.cases);
+  if (rows.length === 0) {
+    return "";
+  }
+
+  const cards = rows.slice(0, 6).map((entry) => {
+    const statusClass = credibilityEngineLadderStatusClass(entry);
+    const gate = entry.gate === "required" ? "required gate" : "optional gate";
+    return `<article class="credibility-engine-ladder-card ${statusClass}">
+      <div>
+        <span class="mini-label">${escapeHtml(gate)} / ${escapeHtml(entry.evidenceTier ?? "unknown evidence")}</span>
+        <strong>${escapeHtml(entry.displayName ?? entry.caseId ?? "Engine gate")}</strong>
+      </div>
+      <span class="status-pill ${statusClass}">${escapeHtml(entry.status ?? "unknown")}</span>
+      <dl>
+        <div><dt>Trust</dt><dd>${escapeHtml(entry.trust ?? "unverified")}</dd></div>
+        <div><dt>Replay</dt><dd><code>${escapeHtml(entry.replayCommand ?? "truth-harness engines verify --write")}</code></dd></div>
+      </dl>
+      <p>${escapeHtml(entry.reviewerMeaning ?? "No reviewer meaning recorded for this engine gate.")}</p>
+    </article>`;
+  }).join("");
+
+  return `<section class="credibility-engine-ladder" aria-label="Engine evidence ladder">
+    <div class="credibility-pack-section-head">
+      <strong>Engine Evidence Ladder</strong>
+      <span>${rows.length} gate${rows.length === 1 ? "" : "s"} / required gates must earn concrete evidence</span>
+    </div>
+    <div class="credibility-engine-ladder-grid">${cards}</div>
+  </section>`;
+}
+
+function credibilityEngineEvidenceLadderFromCases(cases) {
+  if (!Array.isArray(cases)) {
+    return [];
+  }
+
+  return cases.map((entry) => ({
+    caseId: entry.id,
+    displayName: entry.displayName,
+    gate: entry.required ? "required" : "optional",
+    status: entry.status,
+    trust: entry.trust,
+    evidenceTier: credibilityEngineEvidenceTierFromCase(entry),
+    reviewerMeaning: credibilityEngineEvidenceMeaningFromCase(entry),
+    replayCommand: entry.command
+  }));
+}
+
+function credibilityEngineEvidenceTierFromCase(entry) {
+  if (entry?.evidenceMinted) {
+    return "earned evidence";
+  }
+  if (entry?.status === "not-required") {
+    return "readiness/provenance only";
+  }
+  if (entry?.status === "missing") {
+    return "missing evidence";
+  }
+  return "failed evidence";
+}
+
+function credibilityEngineEvidenceMeaningFromCase(entry) {
+  if (entry?.evidenceMinted) {
+    return `Concrete ${entry.trust ?? "trust-label"} evidence earned for this fixture; replay it before citing the engine gate.`;
+  }
+  if (entry?.status === "not-required") {
+    return "A local backend may be available, but no concrete trust-label evidence was requested or earned in this run.";
+  }
+  if (entry?.status === "missing" && entry?.required) {
+    return "Required evidence is missing, so strict reviewer readiness fails closed.";
+  }
+  if (entry?.status === "missing") {
+    return "Optional evidence is missing; this is not a blocker, but no claim can cite this engine until a concrete run succeeds.";
+  }
+  if (entry?.required) {
+    return "Required evidence was attempted and failed, so strict reviewer readiness fails closed.";
+  }
+  return "Optional evidence was attempted and failed; do not cite this engine row as support.";
+}
+
+function credibilityEngineLadderStatusClass(entry) {
+  const tier = String(entry?.evidenceTier ?? "");
+  if (tier === "earned evidence") {
+    return "exact";
+  }
+  if (tier === "failed evidence") {
+    return "refuted";
+  }
+  return "waiting";
 }
 
 function credibilityPackSummaryRows(pack) {

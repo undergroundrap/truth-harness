@@ -148,6 +148,14 @@ describe("web UI action contracts", () => {
     expect(source).toContain("Downloaded reviewer bundle file");
     expect(source).toContain("function credibilityPackActionItemsHtml(pack)");
     expect(source).toContain("function credibilityPackActionSummary(pack)");
+    expect(source).toContain("function credibilityEngineEvidenceLadderHtml(pack)");
+    expect(source).toContain("function credibilityEngineEvidenceLadderFromCases(cases)");
+    expect(source).toContain("function credibilityEngineEvidenceTierFromCase(entry)");
+    expect(source).toContain("function credibilityEngineEvidenceMeaningFromCase(entry)");
+    expect(source).toContain("function credibilityEngineLadderStatusClass(entry)");
+    expect(source).toContain("pack?.engineEvidenceLadder");
+    expect(source).toContain("pack?.engineEvidence?.cases");
+    expect(source).toContain("Engine Evidence Ladder");
     expect(source).toContain("function credibilityBenchmarkCardHtml(pack)");
     expect(source).toContain('data-testid="copy-credibility-benchmark-command"');
     expect(source).toContain("Adversarial benchmark command copied from the credibility pack.");
@@ -192,6 +200,9 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".credibility-run-next-paths");
     expect(styles).toContain(".credibility-pack-action-plan");
     expect(styles).toContain(".credibility-pack-action");
+    expect(styles).toContain(".credibility-engine-ladder");
+    expect(styles).toContain(".credibility-engine-ladder-grid");
+    expect(styles).toContain(".credibility-engine-ladder-card");
     expect(styles).toContain("overflow-wrap: anywhere;");
   });
 
