@@ -259,7 +259,8 @@ describe("workspace review", () => {
         ...stored.proofObligations[0],
         status: "open",
         severity: "critical",
-        requiredBefore: "Before making a stronger claim than the current receipt supports."
+        requiredBefore: "Before making a stronger claim than the current receipt supports.",
+        command: "truth-harness proof check docs/examples/trivial.lean --write"
       }
     ];
     await writeFile(route.jsonPath, JSON.stringify(stored, null, 2), "utf8");
@@ -273,13 +274,15 @@ describe("workspace review", () => {
     });
 
     expect(review.summary.criticalItems).toBe(0);
-    expect(review.items).toContainEqual(
-      expect.objectContaining({
-        kind: "route-obligation",
-        routeId: route.route.routeId,
-        priority: "low"
-      })
-    );
+    const item = review.items.find((candidate) => candidate.kind === "route-obligation");
+    const obligationId = String(stored.proofObligations[0].obligationId);
+    expect(item).toMatchObject({
+      kind: "route-obligation",
+      routeId: route.route.routeId,
+      priority: "low"
+    });
+    expect(item?.command).toContain(`--route ${route.route.routeId}`);
+    expect(item?.command).toContain(`--obligation ${obligationId}`);
   });
 
   it("creates a local verifier autonomy contract for non-high-stakes work", async () => {

@@ -468,6 +468,7 @@ function routeReviewItems(
 }
 
 function routeObligationItem(workspacePath: string, route: VerifierRoute, obligation: ProofObligation): WorkspaceReviewItem {
+  const command = commandForRouteObligation(workspacePath, route, obligation);
   return {
     itemId: itemIdFor({
       kind: "route-obligation",
@@ -478,7 +479,7 @@ function routeObligationItem(workspacePath: string, route: VerifierRoute, obliga
     priority: priorityForRouteObligation(route, obligation),
     title: obligation.title,
     summary: `${route.problem} - ${obligation.requiredBefore}`,
-    command: obligation.command ?? `truth-harness route show ${quoteCommandArg(route.routeId)} --workspace ${quoteCommandArg(workspacePath)} --json`,
+    command,
     routeId: route.routeId,
     obligationId: obligation.obligationId,
     obligationKind: obligation.kind,
@@ -489,6 +490,39 @@ function routeObligationItem(workspacePath: string, route: VerifierRoute, obliga
       ref: `${route.routeId}:${obligation.obligationId}`
     }
   };
+}
+
+function commandForRouteObligation(workspacePath: string, route: VerifierRoute, obligation: ProofObligation): string {
+  const scopedCommand = scopedProofCommand(obligation.command, route.routeId, obligation.obligationId);
+  if (scopedCommand) {
+    return scopedCommand;
+  }
+
+  return obligation.command ?? `truth-harness route show ${quoteCommandArg(route.routeId)} --workspace ${quoteCommandArg(workspacePath)} --json`;
+}
+
+function scopedProofCommand(command: string | undefined, routeId: string, obligationId: string): string | undefined {
+  if (!command?.startsWith("truth-harness proof check ")) {
+    return command;
+  }
+
+  let scoped = command;
+  if (!hasCliFlag(scoped, "--route")) {
+    scoped += ` --route ${quoteCommandArg(routeId)}`;
+  }
+  if (!hasCliFlag(scoped, "--obligation")) {
+    scoped += ` --obligation ${quoteCommandArg(obligationId)}`;
+  }
+
+  return scoped;
+}
+
+function hasCliFlag(command: string, flag: string): boolean {
+  return new RegExp(`(?:^|\\s)${escapeRegExp(flag)}(?:\\s|=|$)`, "u").test(command);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function claimReviewItems(workspacePath: string, claim: ClaimLedgerRecord): WorkspaceReviewItem[] {
