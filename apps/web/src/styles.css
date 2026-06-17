@@ -5466,6 +5466,89 @@ textarea:focus-visible {
   justify-content: flex-start;
 }
 
+.credibility-verification-history {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid rgba(120, 217, 166, 0.22);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(120, 217, 166, 0.05), rgba(8, 10, 9, 0.9));
+  padding: 12px;
+}
+
+.credibility-verification-history > p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.credibility-verification-history-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.credibility-verification-history-item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid rgba(183, 169, 138, 0.14);
+  border-radius: 8px;
+  background: rgba(8, 8, 8, 0.7);
+  padding: 9px;
+}
+
+.credibility-verification-history-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.credibility-verification-history-row strong {
+  min-width: 0;
+  color: #f1eadc;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.credibility-verification-history-item dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 7px;
+  margin: 0;
+  min-width: 0;
+}
+
+.credibility-verification-history-item dl div {
+  min-width: 0;
+}
+
+.credibility-verification-history-item dt {
+  color: var(--faint);
+  font-size: 10px;
+  margin-bottom: 3px;
+}
+
+.credibility-verification-history-item dd {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.credibility-verification-history-item code {
+  display: inline;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .credibility-review-checklist {
   display: grid;
   gap: 10px;

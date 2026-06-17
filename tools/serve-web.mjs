@@ -213,6 +213,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "credibility-bundle-archive",
         "credibility-bundle-archive-sha256",
         "credibility-bundle-verify",
+        "credibility-bundle-verification-history",
         "workspace-review-queue",
         "workspace-run-next-dry-run",
         "workspace-run-next-save",
@@ -394,6 +395,25 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, 409, error instanceof Error ? error.message : "Latest credibility bundle could not be verified.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/credibility-bundle/verifications" && request.method === "GET") {
+    try {
+      await ensureLocalWorkspace();
+      const history = await readCredibilityBundleVerificationHistory({
+        limit: boundedInteger(requestUrl.searchParams.get("limit"), 8, 1, 50)
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-credibility-bundle-verification-history-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        count: history.length,
+        verifications: history
+      });
+    } catch (error) {
+      writeApiError(response, 409, error instanceof Error ? error.message : "Credibility bundle verification history could not be read.", request);
     }
     return;
   }
@@ -2269,6 +2289,60 @@ async function readLatestCredibilityBundle() {
   };
 }
 
+async function readCredibilityBundleVerificationHistory({ limit }) {
+  const findingsDir = resolve(projectRoot, ".truth-harness", "findings");
+  let entries;
+  try {
+    entries = await readdir(findingsDir, { withFileTypes: true });
+  } catch (error) {
+    const nodeError = error;
+    if (nodeError?.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+
+  const history = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith("-credibility-bundle-verification.json")) {
+      continue;
+    }
+
+    const jsonPath = join(findingsDir, entry.name);
+    try {
+      const [info, raw] = await Promise.all([stat(jsonPath), readFile(jsonPath, "utf8")]);
+      const verification = JSON.parse(raw);
+      if (verification?.schemaVersion !== "truth-harness.credibility-bundle-verification.v0") {
+        continue;
+      }
+
+      history.push({
+        verification,
+        paths: {
+          json: jsonPath,
+          markdown: jsonPath.replace(/\.json$/u, ".md"),
+          relativeJson: portablePath(relative(projectRoot, jsonPath)),
+          relativeMarkdown: portablePath(relative(projectRoot, jsonPath.replace(/\.json$/u, ".md")))
+        },
+        mtimeMs: info.mtimeMs
+      });
+    } catch (error) {
+      const nodeError = error;
+      if (nodeError?.code !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+
+  history.sort((left, right) => {
+    const leftTime = Date.parse(left.verification.verifiedAt ?? "") || left.mtimeMs;
+    const rightTime = Date.parse(right.verification.verifiedAt ?? "") || right.mtimeMs;
+    return rightTime - leftTime;
+  });
+
+  return history.slice(0, limit).map(({ mtimeMs: _mtimeMs, ...item }) => item);
+}
+
 async function readLatestCredibilityBundleFile(kindValue) {
   const bundle = await readLatestCredibilityBundle();
   if (!bundle) {
@@ -2338,6 +2412,14 @@ function archiveChecksumText(archive) {
 
 function sha256Hex(body) {
   return createHash("sha256").update(body).digest("hex");
+}
+
+function boundedInteger(value, fallback, min, max) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, parsed));
 }
 
 function credibilityBundleFileDescriptor(kindValue) {

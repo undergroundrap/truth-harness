@@ -312,6 +312,9 @@ const state = {
   credibilityArchive: undefined,
   credibilityArchiveLoading: false,
   credibilityArchiveError: undefined,
+  credibilityBundleVerifications: [],
+  credibilityBundleVerificationsLoading: false,
+  credibilityBundleVerificationsError: undefined,
   credibilityRunNextPlan: undefined,
   credibilityRunNextLoading: false,
   credibilityRunNextSaving: false,
@@ -8173,9 +8176,12 @@ async function refreshCredibilityBundle({ announce = true } = {}) {
     state.credibilityBundleError = undefined;
     if (payload.latest) {
       void refreshCredibilityArchive({ announce: false });
+      void refreshCredibilityBundleVerificationHistory({ announce: false });
     } else {
       state.credibilityArchive = undefined;
       state.credibilityArchiveError = undefined;
+      state.credibilityBundleVerifications = [];
+      state.credibilityBundleVerificationsError = undefined;
     }
     if (announce) {
       addActivity(
@@ -8189,6 +8195,7 @@ async function refreshCredibilityBundle({ announce = true } = {}) {
   } catch (error) {
     state.credibilityBundle = undefined;
     state.credibilityArchive = undefined;
+    state.credibilityBundleVerifications = [];
     state.credibilityBundleError = error instanceof Error ? error.message : "Unknown credibility bundle failure.";
     if (announce) {
       addActivity("local-api", "Credibility bundle unavailable", state.credibilityBundleError, "waiting");
@@ -8225,6 +8232,7 @@ async function verifyCredibilityBundleFromUi(button) {
     state.credibilityBundleVerifiedAt = payload.verifiedAt ?? new Date().toISOString();
     if (payload.latest) {
       void refreshCredibilityArchive({ announce: false });
+      void refreshCredibilityBundleVerificationHistory({ announce: false });
     }
     addActivity(
       "local-api",
@@ -8240,6 +8248,41 @@ async function verifyCredibilityBundleFromUi(button) {
     addActivity("local-api", "Reviewer bundle verification failed", state.credibilityBundleVerifyError, "refuted");
   } finally {
     state.credibilityBundleVerifying = false;
+    renderCredibilityPackPanel();
+  }
+}
+
+async function refreshCredibilityBundleVerificationHistory({ announce = true } = {}) {
+  state.credibilityBundleVerificationsLoading = true;
+  state.credibilityBundleVerificationsError = undefined;
+  renderCredibilityPackPanel();
+
+  try {
+    const response = await fetch("/api/credibility-bundle/verifications?limit=8", {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local credibility bundle verification history failed.");
+    state.credibilityBundleVerifications = Array.isArray(payload.verifications) ? payload.verifications : [];
+    state.credibilityBundleVerificationsError = undefined;
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded reviewer verification history",
+        `${state.credibilityBundleVerifications.length} saved bundle verification artifact(s) available.`,
+        "passed"
+      );
+    }
+  } catch (error) {
+    state.credibilityBundleVerifications = [];
+    state.credibilityBundleVerificationsError = error instanceof Error ? error.message : "Unknown credibility verification history failure.";
+    if (announce) {
+      addActivity("local-api", "Reviewer verification history unavailable", state.credibilityBundleVerificationsError, "waiting");
+    }
+  } finally {
+    state.credibilityBundleVerificationsLoading = false;
     renderCredibilityPackPanel();
   }
 }
@@ -11760,6 +11803,7 @@ function renderCredibilityPackPanel() {
   const pathRows = credibilityPackPathRows(state.credibilityPackPaths);
   const benchmarkCard = credibilityBenchmarkCardHtml(pack);
   const bundleCard = credibilityBundleCardHtml();
+  const bundleHistory = credibilityBundleVerificationHistoryHtml();
   const reviewerChecklist = credibilityReviewerChecklistHtml(pack);
   const summaryRows = pack
     ? credibilityPackSummaryRows(pack)
@@ -11782,6 +11826,7 @@ function renderCredibilityPackPanel() {
       <span class="status-pill ${statusClass}">${escapeHtml(credibilityPackStatusLabel(status))}</span>
     </div>
     ${bundleCard}
+    ${bundleHistory}
     ${reviewerChecklist}
     <dl class="credibility-pack-summary">${summaryRows}</dl>
     <div class="credibility-pack-actions">
@@ -11844,6 +11889,9 @@ function renderCredibilityPackPanel() {
   });
   credibilityPackPanel.querySelector(".verify-credibility-bundle")?.addEventListener("click", (event) => {
     void verifyCredibilityBundleFromUi(event.currentTarget);
+  });
+  credibilityPackPanel.querySelector(".refresh-credibility-bundle-history")?.addEventListener("click", () => {
+    void refreshCredibilityBundleVerificationHistory({ announce: true });
   });
   credibilityPackPanel.querySelector(".copy-credibility-bundle-command")?.addEventListener("click", (event) => {
     const button = event.currentTarget;
@@ -12010,6 +12058,61 @@ function credibilityBundleCardHtml() {
       </div>
     </div>
   </section>`;
+}
+
+function credibilityBundleVerificationHistoryHtml() {
+  const items = Array.isArray(state.credibilityBundleVerifications) ? state.credibilityBundleVerifications : [];
+  const statusLabel = state.credibilityBundleVerificationsLoading
+    ? "loading"
+    : state.credibilityBundleVerificationsError
+      ? "unavailable"
+      : `${items.length} saved`;
+  const statusClass = state.credibilityBundleVerificationsError ? "refuted" : items.length > 0 ? "exact" : "waiting";
+  const body = state.credibilityBundleVerificationsError
+    ? `<p>${escapeHtml(state.credibilityBundleVerificationsError)}</p>`
+    : items.length > 0
+      ? `<div class="credibility-verification-history-list">
+          ${items.map((item) => credibilityBundleVerificationHistoryItemHtml(item)).join("")}
+        </div>`
+      : `<p>No saved bundle verification artifacts yet. Click Verify now on the reviewer bundle to create a citeable local check.</p>`;
+
+  return `<section class="credibility-verification-history" aria-label="Saved bundle verification history">
+    <div class="credibility-bundle-head">
+      <div>
+        <span class="mini-label">saved local checks</span>
+        <strong>Bundle Verification History</strong>
+      </div>
+      <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
+    </div>
+    ${body}
+    <div class="credibility-bundle-actions">
+      <button class="text-button compact-button refresh-credibility-bundle-history" data-testid="refresh-credibility-bundle-history" type="button" ${state.credibilityBundleVerificationsLoading ? "disabled" : ""}>${state.credibilityBundleVerificationsLoading ? "Refreshing" : "Refresh history"}</button>
+    </div>
+  </section>`;
+}
+
+function credibilityBundleVerificationHistoryItemHtml(item) {
+  const verification = item?.verification ?? {};
+  const passed = verification.passed === true;
+  const sourceMatches = verification.sourceMatchesWorkspace === true;
+  const statusClass = passed && sourceMatches ? "exact" : passed ? "waiting" : "refuted";
+  const statusText = passed && sourceMatches ? "clean" : passed ? "source drift" : "bundle changed";
+  const facts = [
+    ["Bundle", verification.bundleId ?? "unknown"],
+    ["Checked", `${verification.checkedBundleFiles ?? 0} bundle, ${verification.checkedSourceFiles ?? 0} source`],
+    ["Verified", verification.verifiedAt ? formatActivityTime(verification.verifiedAt) : "unknown"],
+    ["Artifact", item?.paths?.relativeJson ?? item?.paths?.json ?? "unknown"]
+  ];
+
+  return `<article class="credibility-verification-history-item">
+    <div class="credibility-verification-history-row">
+      <strong>${credibilityBundleValueHtml(verification.verificationId ?? "unidentified verification")}</strong>
+      <span class="status-pill ${statusClass}">${escapeHtml(statusText)}</span>
+    </div>
+    <dl>
+      ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${credibilityBundleValueHtml(value)}</dd></div>`).join("")}
+    </dl>
+  </article>`;
 }
 
 function credibilityReviewerChecklistHtml(pack) {

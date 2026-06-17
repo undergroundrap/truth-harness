@@ -59,7 +59,7 @@ The canonical bundle is intentionally a directory, not a black-box archive:
 - `artifacts/` contains copied canonical Truth Harness workspace files from the embedded snapshot.
 - Prior `*-credibility-bundle/` folders are skipped so repeated exports do not recursively copy old bundles into new bundles.
 
-The web Report tab can also rerun local bundle verification with **Verify now**, download a `.tar.gz` archive of the latest bundle, and download a `.sha256` sidecar. The web verifier uses the same core `verifyCredibilityBundle` path as the CLI, writes a `truth-harness.credibility-bundle-verification.v0` finding under `.truth-harness/findings`, and reports copied file integrity separately from source-workspace drift. The archive is only a portable carrier for the same directory contents; it does not add trust by itself. The sidecar identifies the exact downloaded archive bytes. Extract it, then run the normal `verify-credibility-bundle` command against the extracted bundle directory when reviewing outside the original workspace.
+The web Report tab can also rerun local bundle verification with **Verify now**, show a saved verification history, download a `.tar.gz` archive of the latest bundle, and download a `.sha256` sidecar. The web verifier uses the same core `verifyCredibilityBundle` path as the CLI, writes a `truth-harness.credibility-bundle-verification.v0` finding under `.truth-harness/findings`, and reports copied file integrity separately from source-workspace drift. The archive is only a portable carrier for the same directory contents; it does not add trust by itself. The sidecar identifies the exact downloaded archive bytes. Extract it, then run the normal `verify-credibility-bundle` command against the extracted bundle directory when reviewing outside the original workspace.
 
 Verify it with:
 
@@ -74,6 +74,8 @@ Bundle verification reports two separate facts:
 
 - **Bundle integrity:** copied files still match the manifest hashes.
 - **Source workspace drift:** the current workspace files still match the versions copied into the bundle.
+
+Each saved web or CLI `--write` verification gets a stable `cver_...` ID and appears in the Report tab verification history so reviewers can cite when the bundle was checked.
 
 A bundle can remain valid even after the live workspace changes. That is useful for peer review because the exported evidence can be frozen while active research continues.
 

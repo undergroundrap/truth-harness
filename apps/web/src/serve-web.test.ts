@@ -71,6 +71,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("credibility-bundle-archive");
     expect(statusPayload.capabilities).toContain("credibility-bundle-archive-sha256");
     expect(statusPayload.capabilities).toContain("credibility-bundle-verify");
+    expect(statusPayload.capabilities).toContain("credibility-bundle-verification-history");
     expect(statusPayload.capabilities).toContain("release-audit");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
@@ -343,6 +344,29 @@ describe("local web route ledger API", () => {
     expect(bundleVerifyPayload.command).toContain("workspace verify-credibility-bundle");
     expect(existsSync(bundleVerifyPayload.verificationPaths.json)).toBe(true);
     expect(existsSync(bundleVerifyPayload.verificationPaths.markdown)).toBe(true);
+
+    const bundleVerificationHistoryResponse = await fetch(`${baseUrl}/api/credibility-bundle/verifications?limit=4`);
+    expect(bundleVerificationHistoryResponse.status).toBe(200);
+    const bundleVerificationHistoryPayload = await bundleVerificationHistoryResponse.json();
+    expectLocalApiSuccess(bundleVerificationHistoryResponse, bundleVerificationHistoryPayload);
+    expect(bundleVerificationHistoryPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-credibility-bundle-verification-history-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      count: expect.any(Number),
+      verifications: [
+        expect.objectContaining({
+          verification: expect.objectContaining({
+            schemaVersion: "truth-harness.credibility-bundle-verification.v0",
+            verificationId: bundleVerifyPayload.verification.verificationId,
+            bundleId: bundle.manifest.bundleId
+          }),
+          paths: expect.objectContaining({
+            relativeJson: expect.stringContaining("credibility-bundle-verification.json")
+          })
+        })
+      ]
+    });
 
     const bundleReadmeResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest/file?kind=readme`);
     expect(bundleReadmeResponse.status).toBe(200);
