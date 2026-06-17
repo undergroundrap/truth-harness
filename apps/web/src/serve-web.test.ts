@@ -93,7 +93,7 @@ describe("local web route ledger API", () => {
     expect(typeof statusPayload.dockerVerifier.recommended).toBe("boolean");
     expect(statusPayload.dockerVerifier.notes).toContain("The web UI never runs Docker automatically; it only exposes copyable commands.");
     expect(statusPayload.dockerVerifier.notes).toContain(
-      "npm run docker:professor writes Maxima/Z3/Lean engine evidence, adversarial benchmark evidence, and a credibility pack inside the no-network compose service."
+      "npm run docker:professor writes Maxima/Z3/Lean engine evidence, adversarial benchmark evidence, a credibility pack, and a verified portable reviewer bundle inside the no-network compose service."
     );
     expect(statusPayload.engineVerification).toMatchObject({
       schemaVersion: "truth-harness.engine-verification.v0",

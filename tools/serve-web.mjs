@@ -2266,7 +2266,7 @@ function dockerVerifierGuidance(verification) {
     },
     notes: [
       "The web UI never runs Docker automatically; it only exposes copyable commands.",
-      "npm run docker:professor writes Maxima/Z3/Lean engine evidence, adversarial benchmark evidence, and a credibility pack inside the no-network compose service.",
+      "npm run docker:professor writes Maxima/Z3/Lean engine evidence, adversarial benchmark evidence, a credibility pack, and a verified portable reviewer bundle inside the no-network compose service.",
       "npm run docker:engines runs concrete Maxima/Z3 evidence smoke checks inside the no-network compose service.",
       "npm run docker:proof runs the truth-harness compose service with no external network route after the dev image exists.",
       "npm run docker:verify builds and tests the verification image; image builds may download dependencies.",

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 
 const steps = [
   {
@@ -53,12 +55,58 @@ const steps = [
       "--max-claims",
       "0",
       "--max-sessions",
-      "0"
+      "0",
+      "--fail-on-blocked"
+    ]
+  },
+  {
+    label: "write portable reviewer bundle",
+    command: "node",
+    args: [
+      "apps/cli/dist/index.js",
+      "workspace",
+      "credibility-bundle",
+      ".",
+      "--require-all-concrete",
+      "--timeout-ms",
+      "30000",
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--max-sessions",
+      "0",
+      "--fail-on-blocked"
     ]
   }
 ];
 
 for (const step of steps) {
+  runStep(step);
+}
+
+const bundleRef = latestCredibilityBundleRef();
+runStep({
+  label: `verify portable reviewer bundle ${bundleRef}`,
+  command: "node",
+  args: [
+    "apps/cli/dist/index.js",
+    "workspace",
+    "verify-credibility-bundle",
+    ".",
+    bundleRef,
+    "--fail-on-bundle-change",
+    "--fail-on-source-drift"
+  ]
+});
+
+console.log("");
+console.log("Professor evidence sequence completed.");
+console.log("Generated local engine, benchmark, credibility-pack, and reviewer-bundle artifacts are under .truth-harness/.");
+console.log(`Verified portable reviewer bundle: ${bundleRef}`);
+console.log("Inspect the latest credibility pack before claiming broader discovery readiness; optional all-engine gates may still block stricter review.");
+
+function runStep(step) {
   console.log(`\n==> ${step.label}`);
   const result = spawnSync(step.command, step.args, {
     stdio: "inherit",
@@ -73,7 +121,22 @@ for (const step of steps) {
   }
 }
 
-console.log("");
-console.log("Professor evidence sequence completed.");
-console.log("Generated local engine, benchmark, and credibility-pack artifacts are under .truth-harness/.");
-console.log("Inspect the latest credibility pack before claiming reviewer-ready; optional all-engine gates may still block stricter review.");
+function latestCredibilityBundleRef() {
+  const findingsDir = join(".", ".truth-harness", "findings");
+  const candidates = readdirSync(findingsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name.endsWith("-credibility-bundle"))
+    .map((entry) => {
+      const path = join(findingsDir, entry.name);
+      return {
+        path,
+        mtimeMs: statSync(path).mtimeMs
+      };
+    })
+    .sort((left, right) => right.mtimeMs - left.mtimeMs);
+
+  if (candidates.length === 0) {
+    throw new Error("No credibility reviewer bundle was written under .truth-harness/findings.");
+  }
+
+  return candidates[0].path.replace(/\\/gu, "/");
+}
