@@ -207,6 +207,7 @@ export {
   writeWorkspaceReview
 } from "./workspace-review.js";
 export {
+  createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
   listWorkspaceRunNextPlans,
   parseWorkspaceRunNextJson,

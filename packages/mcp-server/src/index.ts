@@ -1344,6 +1344,10 @@ export function createTruthHarnessMcpServer(): McpServer {
           .string()
           .optional()
           .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        source: z
+          .enum(["workspace-review", "credibility-actions"])
+          .optional()
+          .describe("Queue source. Defaults to workspace-review; use credibility-actions to close reviewer-pack blockers."),
         maxRoutes: z
           .number()
           .int()
@@ -1411,6 +1415,28 @@ export function createTruthHarnessMcpServer(): McpServer {
           .max(500)
           .optional()
           .describe("Maximum research sessions to inspect. Defaults to 100; use 0 to skip sessions."),
+        timeoutMs: z
+          .number()
+          .int()
+          .min(1)
+          .max(300000)
+          .optional()
+          .describe("Concrete engine check timeout in milliseconds when source is credibility-actions."),
+        maximaCommand: z.string().optional().describe("Override Maxima executable for credibility-actions."),
+        sageCommand: z.string().optional().describe("Override SageMath executable for credibility-actions."),
+        leanCommand: z.string().optional().describe("Override Lean executable for credibility-actions."),
+        z3Command: z.string().optional().describe("Override Z3 executable for credibility-actions."),
+        cvc5Command: z.string().optional().describe("Override cvc5 executable for credibility-actions."),
+        smtSourcePath: z.string().optional().describe("Workspace-local SMT-LIB source for credibility-actions."),
+        leanSourcePath: z.string().optional().describe("Workspace-local Lean source for credibility-actions."),
+        requireMaxima: z.boolean().optional().describe("Require Maxima for credibility-actions."),
+        requireZ3: z.boolean().optional().describe("Require Z3 for credibility-actions."),
+        requireCvc5: z.boolean().optional().describe("Require cvc5 for credibility-actions."),
+        requireLean: z.boolean().optional().describe("Require Lean for credibility-actions."),
+        requireSage: z.boolean().optional().describe("Require SageMath for credibility-actions."),
+        requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima and Z3 evidence gates."),
+        requireAllConcrete: z.boolean().optional().describe("Require Maxima, Z3, and Lean concrete evidence gates."),
+        requireAllEngines: z.boolean().optional().describe("Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates."),
         executeLocal: z
           .boolean()
           .optional()
@@ -1425,15 +1451,10 @@ export function createTruthHarnessMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath, maxRoutes, maxClaims, maxSessions, executeLocal, write }) =>
+    async (input) =>
       toolJson(
         await handleTruthHarnessWorkspaceRunNext({
-          workspacePath,
-          maxRoutes,
-          maxClaims,
-          maxSessions,
-          executeLocal,
-          write
+          ...input
         })
       )
   );

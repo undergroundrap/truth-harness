@@ -26,6 +26,7 @@ import {
   createVerifierRoute,
   createCredibilityPack,
   createWorkspaceReview,
+  createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
   createWorkspaceGraph,
   createSymbolicCasCheckRecord,
@@ -600,9 +601,26 @@ export interface TruthHarnessWorkspaceReviewInput {
 
 export interface TruthHarnessWorkspaceRunNextInput {
   workspacePath?: string;
+  source?: "workspace-review" | "credibility-actions";
   maxRoutes?: number;
   maxClaims?: number;
   maxSessions?: number;
+  timeoutMs?: number;
+  maximaCommand?: string;
+  sageCommand?: string;
+  leanCommand?: string;
+  z3Command?: string;
+  cvc5Command?: string;
+  smtSourcePath?: string;
+  leanSourcePath?: string;
+  requireMaxima?: boolean;
+  requireZ3?: boolean;
+  requireCvc5?: boolean;
+  requireLean?: boolean;
+  requireSage?: boolean;
+  requireDockerCore?: boolean;
+  requireAllConcrete?: boolean;
+  requireAllEngines?: boolean;
   executeLocal?: boolean;
   write?: boolean;
 }
@@ -1736,12 +1754,7 @@ export async function handleTruthHarnessWorkspaceRunNext(
   input: TruthHarnessWorkspaceRunNextInput
 ): Promise<TruthHarnessWorkspaceRunNextOutput> {
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
-  const review = await createWorkspaceReview({
-    rootPath,
-    maxRoutes: input.maxRoutes,
-    maxClaims: input.maxClaims,
-    maxSessions: input.maxSessions
-  });
+  const review = await createRunNextReviewFromInput(rootPath, input);
 
   const plan = await createWorkspaceRunNextPlan({
     rootPath,
@@ -1758,6 +1771,42 @@ export async function handleTruthHarnessWorkspaceRunNext(
   }
 
   return plan;
+}
+
+async function createRunNextReviewFromInput(
+  rootPath: string,
+  input: TruthHarnessWorkspaceRunNextInput
+): Promise<WorkspaceReview> {
+  const source = input.source ?? "workspace-review";
+  if (source === "workspace-review") {
+    return createWorkspaceReview({
+      rootPath,
+      maxRoutes: input.maxRoutes,
+      maxClaims: input.maxClaims,
+      maxSessions: input.maxSessions
+    });
+  }
+
+  if (source === "credibility-actions") {
+    const pack = await createCredibilityPack({
+      rootPath,
+      maxRoutes: input.maxRoutes,
+      maxClaims: input.maxClaims,
+      maxSessions: input.maxSessions,
+      timeoutMs: input.timeoutMs,
+      maximaCommand: input.maximaCommand,
+      sageCommand: input.sageCommand,
+      leanCommand: input.leanCommand,
+      z3Command: input.z3Command,
+      cvc5Command: input.cvc5Command,
+      smtSourcePath: input.smtSourcePath,
+      leanSourcePath: input.leanSourcePath,
+      engineRequirements: credibilityEngineRequirementsFromInput(input)
+    });
+    return createWorkspaceReviewFromCredibilityPack({ rootPath, pack });
+  }
+
+  throw new Error(`Unsupported run-next source: ${source}`);
 }
 
 export async function handleTruthHarnessWorkspaceRunNextList(input: TruthHarnessWorkspaceRunNextListInput): Promise<{

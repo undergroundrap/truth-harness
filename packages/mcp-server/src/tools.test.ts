@@ -1133,6 +1133,49 @@ describe("MCP tool handlers", () => {
     expect(executed.warnings.join(" ")).toContain("never executes shell strings");
   });
 
+  it("plans credibility reviewer actions through run-next", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Credibility Run Next Lab" });
+
+    const dryRun = await handleTruthHarnessWorkspaceRunNext({
+      source: "credibility-actions",
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      timeoutMs: 50,
+      maximaCommand: "truth-harness-missing-maxima-command",
+      requireMaxima: true
+    });
+    const executed = await handleTruthHarnessWorkspaceRunNext({
+      source: "credibility-actions",
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      timeoutMs: 50,
+      maximaCommand: "truth-harness-missing-maxima-command",
+      requireMaxima: true,
+      executeLocal: true
+    });
+    if ("written" in dryRun || "written" in executed) {
+      throw new Error("Expected plain run-next plans without write=true.");
+    }
+
+    expect(dryRun.item).toMatchObject({
+      kind: "credibility-action",
+      title: "Close required Maxima symbolic cross-check gate",
+      command: "truth-harness engines verify --write --require-maxima"
+    });
+    expect(dryRun.execution.kind).toBe("dry-run");
+    expect(executed.status).toBe("executed");
+    expect(executed.execution.kind).toBe("engine-verify");
+    expect(executed.execution.evidenceRef).toContain("engine-run:.truth-harness/engine-runs/");
+    expect(executed.execution.result).toMatchObject({
+      schemaVersion: "truth-harness.engine-run.v0",
+      status: "failed"
+    });
+  });
+
   it("writes, lists, and verifies workspace snapshots for agents", async () => {
     const root = await tempRoot();
     process.env.TRUTH_HARNESS_ROOT = root;

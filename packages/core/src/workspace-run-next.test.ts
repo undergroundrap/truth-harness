@@ -3,9 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
+import { createCredibilityPack } from "./credibility-pack.js";
 import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import {
+  createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
   listWorkspaceRunNextPlans,
   readWorkspaceRunNextPlan,
@@ -74,6 +76,71 @@ describe("workspace run-next", () => {
     expect(plan.status).toBe("blocked");
     expect(plan.execution.kind).toBe("unsupported-command");
     expect(plan.execution.summary).toContain("Unsupported shell metacharacter");
+  });
+
+  it("executes engine verification actions without shell execution", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    const review = minimalReview({
+      rootPath: root,
+      command: "truth-harness engines verify --write --require-maxima --maxima-command truth-harness-missing-maxima-command --timeout-ms 50",
+      claimId: "claim_fake"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+
+    expect(plan.status).toBe("executed");
+    expect(plan.execution.kind).toBe("engine-verify");
+    expect(plan.execution.evidenceRef).toContain("engine-run:.truth-harness/engine-runs/");
+    expect(plan.execution.summary).toContain("Wrote engine verification run");
+    expect(plan.execution.result).toMatchObject({
+      schemaVersion: "truth-harness.engine-run.v0",
+      status: "failed",
+      report: {
+        requiredTotal: 1,
+        requiredPassed: 0
+      }
+    });
+  });
+
+  it("adapts credibility action queues into run-next plans", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    const pack = await createCredibilityPack({
+      rootPath: root,
+      now: "2026-06-14T00:01:00.000Z",
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      timeoutMs: 50,
+      engineRequirements: { maxima: true },
+      maximaCommand: "truth-harness-missing-maxima-command"
+    });
+    const review = createWorkspaceReviewFromCredibilityPack({ rootPath: root, pack });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+
+    expect(review.autonomy.nextCommand).toBe("truth-harness engines verify --write --require-maxima");
+    expect(review.items[0]).toMatchObject({
+      kind: "credibility-action",
+      title: "Close required Maxima symbolic cross-check gate"
+    });
+    expect(plan.item).toMatchObject({
+      kind: "credibility-action",
+      command: "truth-harness engines verify --write --require-maxima"
+    });
+    expect(plan.execution.kind).toBe("dry-run");
+    expect(plan.warnings.join(" ")).toContain("never executes shell strings");
   });
 
   it("writes dry-run plans into findings with a local artifact event", async () => {

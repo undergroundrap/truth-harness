@@ -1825,6 +1825,79 @@ describe("benchmark CLI", () => {
     expect(human.stdout).toContain("Execution: planned (dry-run)");
   });
 
+  it("plans credibility reviewer actions through workspace run-next", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+
+    const dryRun = await runCli([
+      "workspace",
+      "run-next",
+      root,
+      "--source",
+      "credibility-actions",
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--max-sessions",
+      "0",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--require-maxima",
+      "--json"
+    ]);
+    const executed = await runCli([
+      "workspace",
+      "run-next",
+      root,
+      "--source",
+      "credibility-actions",
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--max-sessions",
+      "0",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--require-maxima",
+      "--execute-local",
+      "--json"
+    ]);
+    const dryPlan = JSON.parse(dryRun.stdout) as {
+      item?: { kind: string; title: string; command: string };
+      execution: { kind: string };
+    };
+    const executedPlan = JSON.parse(executed.stdout) as {
+      status: string;
+      execution: {
+        kind: string;
+        evidenceRef?: string;
+        result: { schemaVersion: string; status: string };
+      };
+    };
+
+    expect(dryRun.exitCode).toBe(0);
+    expect(dryPlan.item).toMatchObject({
+      kind: "credibility-action",
+      title: "Close required Maxima symbolic cross-check gate",
+      command: "truth-harness engines verify --write --require-maxima"
+    });
+    expect(dryPlan.execution.kind).toBe("dry-run");
+    expect(executed.exitCode).toBe(0);
+    expect(executedPlan.status).toBe("executed");
+    expect(executedPlan.execution.kind).toBe("engine-verify");
+    expect(executedPlan.execution.evidenceRef).toContain("engine-run:.truth-harness/engine-runs/");
+    expect(executedPlan.execution.result).toMatchObject({
+      schemaVersion: "truth-harness.engine-run.v0",
+      status: "failed"
+    });
+  });
+
   it("generates a synthetic workspace stress report from the CLI", async () => {
     const root = await tempRoot();
     const result = await runCli([

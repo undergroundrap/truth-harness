@@ -25,7 +25,8 @@ export type WorkspaceReviewItemKind =
   | "route-ready-claim"
   | "claim-blocker"
   | "session-task"
-  | "session-next-check";
+  | "session-next-check"
+  | "credibility-action";
 export type WorkspaceReviewPriority = "critical" | "high" | "medium" | "low";
 export type WorkspaceReviewEvidenceSlotStatus = "open" | "satisfied" | "not-required";
 export type WorkspaceReviewAutonomyMode = "idle" | "local-verifier-loop" | "human-review-gated";

@@ -1,7 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { createClaimReviewPacket } from "./claim-ledger.js";
+import type { CredibilityPack } from "./credibility-pack.js";
 import { writeSymbolicCasCheckRecord } from "./cas-backend.js";
+import { writeEngineVerificationRun, type EngineVerificationRequirements } from "./engine-verification.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { writeLeanProofCheckRecord } from "./proof-backend.js";
@@ -151,6 +153,68 @@ export async function createWorkspaceRunNextPlan(input: {
     ...basePlan,
     status: execution.status,
     execution
+  };
+}
+
+export function createWorkspaceReviewFromCredibilityPack(input: {
+  rootPath: string;
+  pack: CredibilityPack;
+}): WorkspaceReview {
+  const actions = input.pack.reviewerActionPlan.actions;
+  const nextAction = actions[0];
+  return {
+    schemaVersion: "truth-harness.workspace-review.v0",
+    reviewId: `wrev_${input.pack.packId}_actions`,
+    projectId: input.pack.projectId,
+    createdAt: input.pack.createdAt,
+    workspacePath: input.rootPath,
+    localOnly: true,
+    networkAccess: "none",
+    privacy: input.pack.privacy,
+    summary: {
+      routes: input.pack.workspaceReview.summary.routes,
+      claims: input.pack.workspaceReview.summary.claims,
+      sessions: input.pack.workspaceReview.summary.sessions,
+      totalItems: actions.length,
+      routeObligations: 0,
+      readyRoutesWithoutClaims: 0,
+      blockedClaims: 0,
+      sessionTasks: 0,
+      sessionNextChecks: 0,
+      criticalItems: actions.filter((action) => action.priority === "critical").length,
+      highItems: actions.filter((action) => action.priority === "high").length,
+      mediumItems: actions.filter((action) => action.priority === "medium").length,
+      lowItems: actions.filter((action) => action.priority === "low").length
+    },
+    autonomy: {
+      mode: actions.length > 0 ? "local-verifier-loop" : "idle",
+      canRunUnattended: true,
+      suggestedBatchSize: 1,
+      nextItemId: nextAction?.actionId,
+      nextCommand: nextAction?.command,
+      allowedActions: ["Run only supported local Truth Harness commands parsed by workspace run-next."],
+      blockedActions: ["Do not execute shell strings, network clients, package mutations, or arbitrary code."],
+      stopConditions: input.pack.limitations,
+      requiredArtifacts: actions.map((action) => action.closes.join(", ")),
+      humanReviewRequiredFor: actions.map((action) => action.actionId),
+      agentPacket: renderCredibilityActionAgentPacket(input.pack)
+    },
+    items: actions.map((action) => ({
+      itemId: action.actionId,
+      kind: "credibility-action",
+      priority: action.priority,
+      title: action.title,
+      summary: action.detail,
+      command: action.command,
+      acceptanceCriteria: action.closes.map((target) => `Close ${target}.`),
+      agentPacket: `${action.title}\n\n${action.detail}\n\nCommand: ${action.command}`,
+      source: {
+        label: `credibility ${action.category}`,
+        ref: `${input.pack.packId}:${action.source.kind}:${action.source.ref}`
+      }
+    })),
+    warnings: input.pack.warnings,
+    markdown: renderCredibilityActionAgentPacket(input.pack)
   };
 }
 
@@ -454,6 +518,40 @@ async function executeWorkspaceRunNextItem(
         command: item.command,
         summary: `Read research session ${session.sessionId}.`,
         result: session
+      };
+    }
+
+    if (group === "engines" && action === "verify") {
+      if (options.write !== true) {
+        return {
+          status: "blocked",
+          kind: "engine-verify",
+          command: item.command,
+          summary: "Engine verification run-next actions must include --write so the result becomes durable evidence."
+        };
+      }
+      const result = await writeEngineVerificationRun({
+        rootPath: workspace,
+        timeoutMs,
+        maximaCommand: optionString(options["maxima-command"]),
+        sageCommand: optionString(options["sage-command"]),
+        leanCommand: optionString(options["lean-command"]),
+        z3Command: optionString(options["z3-command"]),
+        cvc5Command: optionString(options["cvc5-command"]),
+        smtSourcePath: optionString(options["smt-source"]),
+        leanSourcePath: optionString(options["lean-source"]),
+        requirements: engineRequirementsFromOptions(options),
+        replayCommand: item.command
+      });
+      const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
+      return {
+        status: "executed",
+        kind: "engine-verify",
+        command: item.command,
+        evidenceRef: `engine-run:${evidenceRef}`,
+        attached: false,
+        summary: `Wrote engine verification run ${result.record.runId} with status ${result.record.status}.`,
+        result: result.record
       };
     }
 
@@ -761,6 +859,16 @@ function parseSympyOperation(value: string): SympyOperation {
   );
 }
 
+function engineRequirementsFromOptions(options: Record<string, string | true>): EngineVerificationRequirements {
+  return {
+    maxima: Boolean(options["require-maxima"] || options["require-docker-core"] || options["require-all-concrete"] || options["require-all-engines"]),
+    z3: Boolean(options["require-z3"] || options["require-docker-core"] || options["require-all-concrete"] || options["require-all-engines"]),
+    cvc5: Boolean(options["require-cvc5"] || options["require-all-engines"]),
+    lean: Boolean(options["require-lean"] || options["require-all-concrete"] || options["require-all-engines"]),
+    sage: Boolean(options["require-sage"] || options["require-all-engines"])
+  };
+}
+
 function proofCheckScopeFromOptions(
   options: Record<string, string | true>
 ): { routeId?: string; obligationId?: string; statementHash?: string; statement?: string } | undefined {
@@ -805,6 +913,19 @@ function workspaceRunNextPlanId(createdAt: string, reviewId: string): string {
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
   return `wrn_${hash.toString(16).padStart(8, "0")}`;
+}
+
+function renderCredibilityActionAgentPacket(pack: CredibilityPack): string {
+  return [
+    "# Truth Harness Credibility Action Queue",
+    "",
+    `Pack: ${pack.packId}`,
+    `Status: ${pack.status}`,
+    `Professor ready: ${pack.summary.professorReady ? "yes" : "no"}`,
+    `Actions: ${pack.reviewerActionPlan.totalActions} (${pack.reviewerActionPlan.criticalActions} critical, ${pack.reviewerActionPlan.highActions} high)`,
+    "",
+    "This queue is generated from the local credibility pack. Run-next may execute only supported Truth Harness commands through core APIs; it never executes shell strings."
+  ].join("\n");
 }
 
 function escapeMarkdownTable(value: string): string {

@@ -119,6 +119,7 @@ import {
   solveSmtProblem,
   addResearchSessionCheckpoint,
   createWorkspaceReview,
+  createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
   createWorkspaceGraph,
   writeVisualArtifact,
@@ -3355,9 +3356,26 @@ workspace
   .option("--json", "Print the full run-next plan JSON")
   .option("--execute-local", "Execute one supported local Truth Harness action; dry-run is the default")
   .option("--write", "Write the run-next plan JSON/Markdown into .truth-harness/findings")
+  .option("--source <source>", "Source queue: workspace-review or credibility-actions", "workspace-review")
   .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
   .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
   .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
+  .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds for credibility-actions", parsePositiveInteger, 3000)
+  .option("--maxima-command <command>", "Override Maxima executable for credibility-actions")
+  .option("--sage-command <command>", "Override SageMath executable for credibility-actions")
+  .option("--lean-command <command>", "Override Lean executable for credibility-actions")
+  .option("--z3-command <command>", "Override Z3 executable for credibility-actions")
+  .option("--cvc5-command <command>", "Override cvc5 executable for credibility-actions")
+  .option("--smt-source <path>", "Workspace-local SMT-LIB source for credibility-actions", "docs/examples/constraints.smt2")
+  .option("--lean-source <path>", "Workspace-local Lean source for credibility-actions", "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean")
+  .option("--require-maxima", "Require Maxima for credibility-actions")
+  .option("--require-z3", "Require Z3 for credibility-actions")
+  .option("--require-cvc5", "Require cvc5 for credibility-actions")
+  .option("--require-lean", "Require Lean for credibility-actions")
+  .option("--require-sage", "Require SageMath for credibility-actions")
+  .option("--require-docker-core", "Require Docker-core Maxima and Z3 evidence gates for credibility-actions")
+  .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates for credibility-actions")
+  .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates for credibility-actions")
   .option("--fail-on-blocked", "Exit non-zero if no supported local action can run")
   .action(
     async (
@@ -3366,18 +3384,30 @@ workspace
         json?: boolean;
         executeLocal?: boolean;
         write?: boolean;
+        source: string;
         maxRoutes?: number;
         maxClaims?: number;
         maxSessions?: number;
+        timeoutMs: number;
+        maximaCommand?: string;
+        sageCommand?: string;
+        leanCommand?: string;
+        z3Command?: string;
+        cvc5Command?: string;
+        smtSource: string;
+        leanSource: string;
+        requireMaxima?: boolean;
+        requireZ3?: boolean;
+        requireCvc5?: boolean;
+        requireLean?: boolean;
+        requireSage?: boolean;
+        requireDockerCore?: boolean;
+        requireAllConcrete?: boolean;
+        requireAllEngines?: boolean;
         failOnBlocked?: boolean;
       }
     ) => {
-      const review = await createWorkspaceReview({
-        rootPath: path,
-        maxRoutes: options.maxRoutes,
-        maxClaims: options.maxClaims,
-        maxSessions: options.maxSessions
-      });
+      const review = await createRunNextReviewFromOptions(path, options);
       const plan = await createWorkspaceRunNextPlan({
         rootPath: path,
         review,
@@ -5209,6 +5239,38 @@ function engineRequirementsFromOptions(options: EngineRequirementOptions): Engin
   };
 }
 
+async function createRunNextReviewFromOptions(path: string, options: RunNextSourceOptions): Promise<WorkspaceReview> {
+  if (options.source === "workspace-review") {
+    return createWorkspaceReview({
+      rootPath: path,
+      maxRoutes: options.maxRoutes,
+      maxClaims: options.maxClaims,
+      maxSessions: options.maxSessions
+    });
+  }
+
+  if (options.source === "credibility-actions") {
+    const pack = await createCredibilityPack({
+      rootPath: path,
+      maxRoutes: options.maxRoutes,
+      maxClaims: options.maxClaims,
+      maxSessions: options.maxSessions,
+      timeoutMs: options.timeoutMs,
+      maximaCommand: options.maximaCommand,
+      sageCommand: options.sageCommand,
+      leanCommand: options.leanCommand,
+      z3Command: options.z3Command,
+      cvc5Command: options.cvc5Command,
+      smtSourcePath: options.smtSource,
+      leanSourcePath: options.leanSource,
+      engineRequirements: engineRequirementsFromOptions(options)
+    });
+    return createWorkspaceReviewFromCredibilityPack({ rootPath: path, pack });
+  }
+
+  throw new Error(`Unsupported run-next source ${JSON.stringify(options.source)}. Use workspace-review or credibility-actions.`);
+}
+
 interface EngineRequirementOptions {
   requireMaxima?: boolean;
   requireZ3?: boolean;
@@ -5218,6 +5280,21 @@ interface EngineRequirementOptions {
   requireDockerCore?: boolean;
   requireAllConcrete?: boolean;
   requireAllEngines?: boolean;
+}
+
+interface RunNextSourceOptions extends EngineRequirementOptions {
+  source: string;
+  maxRoutes?: number;
+  maxClaims?: number;
+  maxSessions?: number;
+  timeoutMs?: number;
+  maximaCommand?: string;
+  sageCommand?: string;
+  leanCommand?: string;
+  z3Command?: string;
+  cvc5Command?: string;
+  smtSource?: string;
+  leanSource?: string;
 }
 
 function shellQuote(value: string): string {
