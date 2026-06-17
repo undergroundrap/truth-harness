@@ -4956,6 +4956,54 @@ textarea:focus-visible {
   min-width: 0;
 }
 
+.credibility-run-next-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+  border: 1px solid rgba(120, 217, 166, 0.32);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(86, 176, 125, 0.08), rgba(12, 16, 13, 0.84));
+  padding: 12px;
+}
+
+.credibility-run-next-main {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.credibility-run-next-main h5 {
+  color: #f2eadb;
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.credibility-run-next-main p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.credibility-run-next-main code {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.credibility-run-next-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .credibility-pack-section-head {
   display: flex;
   align-items: baseline;
@@ -5029,6 +5077,16 @@ textarea:focus-visible {
 
 .credibility-pack-warnings li::marker {
   color: var(--warn);
+}
+
+@media (max-width: 860px) {
+  .credibility-run-next-card {
+    grid-template-columns: 1fr;
+  }
+
+  .credibility-run-next-actions {
+    justify-content: flex-start;
+  }
 }
 
 .report-preview {

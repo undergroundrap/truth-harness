@@ -303,6 +303,9 @@ const state = {
   credibilityPackLoading: false,
   credibilityPackSaving: false,
   credibilityPackError: undefined,
+  credibilityRunNextPlan: undefined,
+  credibilityRunNextLoading: false,
+  credibilityRunNextError: undefined,
   workspaceReadiness: undefined,
   catalogStatus: undefined,
   catalogSearch: undefined,
@@ -8132,6 +8135,48 @@ async function writeCredibilityPackFromUi(button) {
   }
 }
 
+async function refreshCredibilityRunNext({ announce = true } = {}) {
+  state.credibilityRunNextLoading = true;
+  state.credibilityRunNextError = undefined;
+  renderCredibilityPackPanel();
+
+  try {
+    const params = new URLSearchParams({
+      source: "credibility-actions",
+      requireAllEngines: "true",
+      timeoutMs: "1500"
+    });
+    const response = await fetch(`/api/workspace-run-next?${params.toString()}`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local credibility run-next API failed.");
+    state.credibilityRunNextPlan = payload.plan;
+    state.credibilityRunNextError = undefined;
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Planned credibility reviewer action",
+        localApiSuccessMessage(payload, workspaceRunNextActivitySummary(state.credibilityRunNextPlan)),
+        workspaceRunNextTrust(state.credibilityRunNextPlan?.status),
+        state.credibilityRunNextPlan?.createdAt
+      );
+    }
+  } catch (error) {
+    state.credibilityRunNextPlan = undefined;
+    state.credibilityRunNextError = error instanceof Error ? error.message : "Unknown credibility run-next failure.";
+    if (announce) {
+      addActivity("local-api", "Credibility reviewer action unavailable", state.credibilityRunNextError, "waiting");
+    }
+  } finally {
+    state.credibilityRunNextLoading = false;
+    renderCredibilityPackPanel();
+  }
+}
+
 async function refreshWorkspaceReadiness({ announce = true } = {}) {
   if (!workspaceReadinessPill) {
     return;
@@ -11190,6 +11235,7 @@ function renderCredibilityPackPanel() {
     .map((warning) => `<li>${escapeHtml(warning)}</li>`)
     .join("");
   const actionItems = credibilityPackActionItemsHtml(pack);
+  const runNextCard = credibilityRunNextHtml();
   const pathRows = credibilityPackPathRows(state.credibilityPackPaths);
   const summaryRows = pack
     ? credibilityPackSummaryRows(pack)
@@ -11221,6 +11267,7 @@ function renderCredibilityPackPanel() {
       <span>Replayable command</span>
       <code>${escapeHtml(command)}</code>
     </div>
+    ${runNextCard}
     ${actionItems ? `<div class="credibility-pack-action-plan">
       <div class="credibility-pack-section-head">
         <strong>Reviewer Action Plan</strong>
@@ -11251,6 +11298,22 @@ function renderCredibilityPackPanel() {
       fallbackDetail: "the reviewer credibility-pack command was saved as a local text file instead."
     });
   });
+  credibilityPackPanel.querySelector(".plan-credibility-run-next")?.addEventListener("click", () => {
+    void refreshCredibilityRunNext({ announce: true });
+  });
+  credibilityPackPanel.querySelector(".copy-credibility-run-next-command")?.addEventListener("click", (event) => {
+    const target = event.currentTarget;
+    void copyOrDownloadText({
+      button: target,
+      text: `${target.dataset.command ?? credibilityRunNextCommand()}\n`,
+      filename: `truth-harness-credibility-run-next-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      copiedTitle: "Copied reviewer next action",
+      copiedDetail: "Credibility run-next command copied from the Report tab.",
+      fallbackTitle: "Downloaded reviewer next action",
+      fallbackDetail: "the credibility run-next command was saved as a local text file instead."
+    });
+  });
   credibilityPackPanel.querySelectorAll(".copy-credibility-action-command").forEach((button) => {
     button.addEventListener("click", (event) => {
       const target = event.currentTarget;
@@ -11266,6 +11329,48 @@ function renderCredibilityPackPanel() {
       });
     });
   });
+}
+
+function credibilityRunNextHtml() {
+  const plan = state.credibilityRunNextPlan;
+  const command = credibilityRunNextCommand();
+  const status = state.credibilityRunNextError
+    ? "blocked"
+    : state.credibilityRunNextLoading
+      ? "planned"
+      : plan?.status ?? "planned";
+  const title = state.credibilityRunNextError
+    ? "Credibility next-action planner unavailable."
+    : plan?.item?.title ?? "Plan the next reviewer action.";
+  const summary = state.credibilityRunNextError
+    ? state.credibilityRunNextError
+    : plan?.execution?.summary ?? "Dry-run planner turns the reviewer action queue into one copyable CLI/MCP step without executing in the browser.";
+  const source = plan?.item?.kind === "credibility-action" ? "credibility-actions" : "report queue";
+  const statusLabel = state.credibilityRunNextLoading ? "planning" : workspaceRunNextStatusLabel(status);
+  const copyDisabled = !plan?.item?.command && state.credibilityRunNextLoading ? "disabled" : "";
+
+  return `<section class="credibility-run-next-card" aria-label="Credibility run-next dry run">
+    <div class="credibility-run-next-main">
+      <div class="credibility-pack-section-head">
+        <strong>Next Safe Reviewer Action</strong>
+        <span class="status-pill ${workspaceRunNextTrust(status)}">${escapeHtml(statusLabel)} dry run</span>
+      </div>
+      <span class="mini-label">${escapeHtml(source)} / browser-safe plan</span>
+      <h5>${escapeHtml(title)}</h5>
+      <p>${escapeHtml(summary)}</p>
+      <code>${escapeHtml(command)}</code>
+    </div>
+    <div class="credibility-run-next-actions">
+      <button class="text-button compact-button plan-credibility-run-next" data-testid="plan-credibility-run-next" type="button" ${state.credibilityRunNextLoading ? "disabled" : ""}>${state.credibilityRunNextLoading ? "Planning" : "Plan next action"}</button>
+      <button class="text-button compact-button copy-credibility-run-next-command" data-testid="copy-credibility-run-next-command" data-command="${escapeHtml(command)}" type="button" ${copyDisabled}>Copy command</button>
+    </div>
+  </section>`;
+}
+
+function credibilityRunNextCommand() {
+  return state.credibilityRunNextPlan?.item?.command ??
+    state.credibilityRunNextPlan?.execution?.command ??
+    "truth-harness workspace run-next . --source credibility-actions --json --require-all-engines";
 }
 
 function credibilityPackSummaryRows(pack) {
@@ -12450,6 +12555,9 @@ surfaceTabs.forEach((button) => {
     }
     if (nextSurface === "report" && !state.credibilityPack && !state.credibilityPackLoading) {
       void refreshCredibilityPack({ announce: false });
+    }
+    if (nextSurface === "report" && !state.credibilityRunNextPlan && !state.credibilityRunNextLoading) {
+      void refreshCredibilityRunNext({ announce: false });
     }
     render();
     resetActiveSurfaceScroll();

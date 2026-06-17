@@ -650,9 +650,39 @@ async function handleApiRequest(request, response, requestUrl) {
       return;
     }
 
-    const { createWorkspaceReview, createWorkspaceRunNextPlan } = await loadCoreModule();
+    const runNextSource = requestUrl.searchParams.get("source") ?? "workspace-review";
+    if (runNextSource !== "workspace-review" && runNextSource !== "credibility-actions") {
+      writeApiError(
+        response,
+        400,
+        "Unsupported run-next source. Use workspace-review or credibility-actions.",
+        request
+      );
+      return;
+    }
+
+    const {
+      createCredibilityPack,
+      createWorkspaceReview,
+      createWorkspaceReviewFromCredibilityPack,
+      createWorkspaceRunNextPlan
+    } = await loadCoreModule();
     await ensureLocalWorkspace();
-    const review = await createWorkspaceReview({ rootPath: projectRoot });
+    const credibilityInput = runNextSource === "credibility-actions"
+      ? credibilityPackInputFromValue({
+          requireAllEngines:
+            isTruthyQueryParam(requestUrl.searchParams.get("requireAllEngines")) ||
+            requestUrl.searchParams.get("mode") === "all-engines",
+          timeoutMs: requestUrl.searchParams.get("timeoutMs"),
+          maxRoutes: requestUrl.searchParams.get("maxRoutes"),
+          maxClaims: requestUrl.searchParams.get("maxClaims"),
+          maxSessions: requestUrl.searchParams.get("maxSessions")
+        })
+      : undefined;
+    const credibilityPack = credibilityInput ? await createCredibilityPack(credibilityInput) : undefined;
+    const review = credibilityPack
+      ? createWorkspaceReviewFromCredibilityPack({ rootPath: projectRoot, pack: credibilityPack })
+      : await createWorkspaceReview({ rootPath: projectRoot });
     const plan = await createWorkspaceRunNextPlan({
       rootPath: projectRoot,
       review,
@@ -662,6 +692,17 @@ async function handleApiRequest(request, response, requestUrl) {
       schemaVersion: "truth-harness.web-workspace-run-next-response.v0",
       localOnly: true,
       externalCalls: [],
+      source: runNextSource,
+      mode: credibilityInput?.engineRequirements ? "all-engines" : "default",
+      packSummary: credibilityPack
+        ? {
+            packId: credibilityPack.packId,
+            status: credibilityPack.status,
+            totalActions: credibilityPack.reviewerActionPlan.totalActions,
+            criticalActions: credibilityPack.reviewerActionPlan.criticalActions,
+            highActions: credibilityPack.reviewerActionPlan.highActions
+          }
+        : undefined,
       plan
     });
     return;

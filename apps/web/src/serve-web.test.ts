@@ -435,6 +435,42 @@ describe("local web route ledger API", () => {
     expect(forbiddenRunNextPayload.externalCalls).toEqual([]);
     expect(forbiddenRunNextPayload.error).toContain("dry-run only");
 
+    const credibilityRunNextResponse = await fetch(
+      `${baseUrl}/api/workspace-run-next?source=credibility-actions&requireAllEngines=true&timeoutMs=50`
+    );
+    expect(credibilityRunNextResponse.status).toBe(200);
+    const credibilityRunNextPayload = await credibilityRunNextResponse.json();
+    expectLocalApiSuccess(credibilityRunNextResponse, credibilityRunNextPayload);
+    expect(credibilityRunNextPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-run-next-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      source: "credibility-actions",
+      mode: "all-engines"
+    });
+    expect(credibilityRunNextPayload.packSummary).toMatchObject({
+      packId: expect.stringMatching(/^cred_[a-f0-9]{16}$/u),
+      totalActions: expect.any(Number),
+      criticalActions: expect.any(Number),
+      highActions: expect.any(Number)
+    });
+    expect(credibilityRunNextPayload.plan).toMatchObject({
+      schemaVersion: "truth-harness.workspace-run-next.v0",
+      localOnly: true,
+      networkAccess: "none",
+      dryRun: true,
+      status: "planned",
+      item: {
+        kind: "credibility-action",
+        command: expect.stringContaining("truth-harness")
+      },
+      execution: {
+        status: "planned",
+        kind: "dry-run"
+      }
+    });
+    expect(credibilityRunNextPayload.plan.reviewId).toContain("_actions");
+
     const graphResponse = await fetch(`${baseUrl}/api/workspace-graph`);
     expect(graphResponse.status).toBe(200);
     const graphPayload = await graphResponse.json();
