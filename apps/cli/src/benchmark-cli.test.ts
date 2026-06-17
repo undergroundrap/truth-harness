@@ -1656,7 +1656,7 @@ describe("benchmark CLI", () => {
         category: "engine",
         priority: "critical",
         title: "Close required Maxima symbolic cross-check gate",
-        command: "truth-harness engines verify --write --require-all-engines",
+        command: expect.stringContaining("truth-harness engines verify --write --require-all-engines"),
         closes: expect.arrayContaining(["required-engine:maxima-symbolic-cross-check"])
       })
     );
@@ -1885,7 +1885,7 @@ describe("benchmark CLI", () => {
     expect(dryPlan.item).toMatchObject({
       kind: "credibility-action",
       title: "Close required Maxima symbolic cross-check gate",
-      command: "truth-harness engines verify --write --require-maxima"
+      command: "truth-harness engines verify --write --require-maxima --timeout-ms 50 --maxima-command truth-harness-missing-maxima-command --smt-source docs/examples/constraints.smt2 --lean-source docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean"
     });
     expect(dryPlan.execution.kind).toBe("dry-run");
     expect(executed.exitCode).toBe(0);

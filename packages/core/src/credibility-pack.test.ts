@@ -94,7 +94,9 @@ describe("professor credibility pack", () => {
     expect(result.markdown).toContain("Reviewer action plan: 0 actions");
     expect(result.markdown).toContain("## Reviewer Action Plan");
     expect(result.markdown).toContain("No open reviewer actions were generated");
-    expect(result.pack.reviewerCommands.verifyEngines).toBe("truth-harness engines verify --write --require-maxima --require-z3 --require-lean");
+    expect(result.pack.reviewerCommands.verifyEngines).toBe(
+      "truth-harness engines verify --write --require-maxima --require-z3 --require-lean --maxima-command maxima-test --z3-command z3-test --lean-command lean-test --sage-command sage-test --smt-source constraints.smt2 --lean-source Proof.lean"
+    );
 
     const json = await readFile(result.jsonPath, "utf8");
     expect(json).toContain(result.pack.packId);
@@ -154,7 +156,7 @@ describe("professor credibility pack", () => {
         category: "engine",
         priority: "critical",
         title: "Close required Maxima symbolic cross-check gate",
-        command: "truth-harness engines verify --write --require-maxima --require-z3 --require-lean",
+        command: "truth-harness engines verify --write --require-maxima --require-z3 --require-lean --smt-source constraints.smt2 --lean-source Proof.lean",
         closes: expect.arrayContaining(["required-engine:maxima-symbolic-cross-check", "engine-evidence"])
       })
     );

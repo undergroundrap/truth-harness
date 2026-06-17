@@ -1164,7 +1164,7 @@ describe("MCP tool handlers", () => {
     expect(dryRun.item).toMatchObject({
       kind: "credibility-action",
       title: "Close required Maxima symbolic cross-check gate",
-      command: "truth-harness engines verify --write --require-maxima"
+      command: "truth-harness engines verify --write --require-maxima --timeout-ms 50 --maxima-command truth-harness-missing-maxima-command"
     });
     expect(dryRun.execution.kind).toBe("dry-run");
     expect(executed.status).toBe("executed");
@@ -1270,7 +1270,7 @@ describe("MCP tool handlers", () => {
     expect(actions.actions).toContainEqual(
       expect.objectContaining({
         title: "Close required Maxima symbolic cross-check gate",
-        command: "truth-harness engines verify --write --require-all-engines",
+        command: expect.stringContaining("truth-harness engines verify --write --require-all-engines"),
         closes: expect.arrayContaining(["required-engine:maxima-symbolic-cross-check"])
       })
     );

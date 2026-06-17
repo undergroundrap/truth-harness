@@ -4212,35 +4212,59 @@ engines
       requireDockerCore?: boolean;
       requireAllConcrete?: boolean;
       requireAllEngines?: boolean;
-    }) => {
-      const json = Boolean(options.json || engines.opts<{ json?: boolean }>().json);
-      const requirements = engineRequirementsFromOptions(options);
-      const replayCommand = engineVerificationReplayCommand(options);
-      const writeResult = options.write
+    }, command: Command) => {
+      const parentOptions = engines.opts<{
+        json?: boolean;
+        timeoutMs?: number;
+        maximaCommand?: string;
+        sageCommand?: string;
+        leanCommand?: string;
+        z3Command?: string;
+        cvc5Command?: string;
+      }>();
+      const resolvedOptions = {
+        ...options,
+        json: Boolean(options.json || parentOptions.json),
+        timeoutMs:
+          command.getOptionValueSource("timeoutMs") === "default" &&
+          engines.getOptionValueSource("timeoutMs") !== "default" &&
+          parentOptions.timeoutMs !== undefined
+            ? parentOptions.timeoutMs
+            : options.timeoutMs,
+        maximaCommand: options.maximaCommand ?? parentCliStringOption("maximaCommand", parentOptions.maximaCommand),
+        sageCommand: options.sageCommand ?? parentCliStringOption("sageCommand", parentOptions.sageCommand),
+        leanCommand: options.leanCommand ?? parentCliStringOption("leanCommand", parentOptions.leanCommand),
+        z3Command: options.z3Command ?? parentCliStringOption("z3Command", parentOptions.z3Command),
+        cvc5Command: options.cvc5Command ?? parentCliStringOption("cvc5Command", parentOptions.cvc5Command)
+      };
+      const json = resolvedOptions.json;
+      const requirements = engineRequirementsFromOptions(resolvedOptions);
+      const replayCommand = engineVerificationReplayCommand(resolvedOptions);
+      const writeResult = resolvedOptions.write
         ? await writeEngineVerificationRun({
-            rootPath: options.workspace,
-            timeoutMs: options.timeoutMs,
-            maximaCommand: options.maximaCommand,
-            sageCommand: options.sageCommand,
-            leanCommand: options.leanCommand,
-            z3Command: options.z3Command,
-            cvc5Command: options.cvc5Command,
-            smtSourcePath: options.smtSource,
-            leanSourcePath: options.leanSource,
+            rootPath: resolvedOptions.workspace,
+            timeoutMs: resolvedOptions.timeoutMs,
+            maximaCommand: resolvedOptions.maximaCommand,
+            sageCommand: resolvedOptions.sageCommand,
+            leanCommand: resolvedOptions.leanCommand,
+            z3Command: resolvedOptions.z3Command,
+            cvc5Command: resolvedOptions.cvc5Command,
+            smtSourcePath: resolvedOptions.smtSource,
+            leanSourcePath: resolvedOptions.leanSource,
             requirements,
             replayCommand
           })
         : undefined;
       const report = writeResult?.record.report ?? await verifyEngineEvidence({
-        rootPath: options.workspace,
-        timeoutMs: options.timeoutMs,
-        maximaCommand: options.maximaCommand,
-        sageCommand: options.sageCommand,
-        leanCommand: options.leanCommand,
-        z3Command: options.z3Command,
-        cvc5Command: options.cvc5Command,
-        smtSourcePath: options.smtSource,
-        leanSourcePath: options.leanSource,
+        rootPath: resolvedOptions.workspace,
+        timeoutMs: resolvedOptions.timeoutMs,
+        maximaCommand: resolvedOptions.maximaCommand,
+        sageCommand: resolvedOptions.sageCommand,
+        leanCommand: resolvedOptions.leanCommand,
+        z3Command: resolvedOptions.z3Command,
+        cvc5Command: resolvedOptions.cvc5Command,
+        smtSourcePath: resolvedOptions.smtSource,
+        leanSourcePath: resolvedOptions.leanSource,
         requirements
       });
 
@@ -5328,6 +5352,11 @@ function engineRequirementsFromOptions(options: EngineRequirementOptions): Engin
     lean: Boolean(options.requireLean || options.requireAllConcrete || options.requireAllEngines),
     sage: Boolean(options.requireSage || options.requireAllEngines)
   };
+}
+
+function parentCliStringOption(name: string, value: string | undefined): string | undefined {
+  const source = engines.getOptionValueSource(name);
+  return source !== undefined && source !== "default" ? value : undefined;
 }
 
 async function createRunNextReviewFromOptions(path: string, options: RunNextSourceOptions): Promise<WorkspaceReview> {

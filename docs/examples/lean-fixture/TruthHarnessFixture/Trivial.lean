@@ -22,7 +22,7 @@ theorem equality_reflexive {alpha : Sort u} (x : alpha) : x = x := by
   rfl
 
 theorem nat_zero_add (n : Nat) : 0 + n = n := by
-  rfl
+  exact Nat.zero_add n
 
 theorem nat_add_zero (n : Nat) : n + 0 = n := by
   exact Nat.add_zero n

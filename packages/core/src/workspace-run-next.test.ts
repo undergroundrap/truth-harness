@@ -151,14 +151,16 @@ describe("workspace run-next", () => {
       now: "2026-06-14T00:02:00.000Z"
     });
 
-    expect(review.autonomy.nextCommand).toBe("truth-harness engines verify --write --require-maxima");
+    expect(review.autonomy.nextCommand).toBe(
+      "truth-harness engines verify --write --require-maxima --timeout-ms 50 --maxima-command truth-harness-missing-maxima-command"
+    );
     expect(review.items[0]).toMatchObject({
       kind: "credibility-action",
       title: "Close required Maxima symbolic cross-check gate"
     });
     expect(plan.item).toMatchObject({
       kind: "credibility-action",
-      command: "truth-harness engines verify --write --require-maxima"
+      command: "truth-harness engines verify --write --require-maxima --timeout-ms 50 --maxima-command truth-harness-missing-maxima-command"
     });
     expect(plan.execution.kind).toBe("dry-run");
     expect(plan.warnings.join(" ")).toContain("never executes shell strings");

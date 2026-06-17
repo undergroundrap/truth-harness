@@ -184,7 +184,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
     maxSessions: input.maxSessions,
     now: createdAt
   });
-  const reviewerCommands = createReviewerCommands(input.engineRequirements);
+  const reviewerCommands = createReviewerCommands(input);
   const warnings = credibilityWarnings({
     validation,
     engineEvidence,
@@ -638,7 +638,18 @@ function credibilityWarnings(input: {
   return [...new Set(warnings)];
 }
 
-function createReviewerCommands(requirements: EngineVerificationRequirements | undefined): CredibilityPackCommandSet {
+function createReviewerCommands(input: {
+  engineRequirements?: EngineVerificationRequirements;
+  timeoutMs?: number;
+  maximaCommand?: string;
+  z3Command?: string;
+  cvc5Command?: string;
+  leanCommand?: string;
+  sageCommand?: string;
+  smtSourcePath?: string;
+  leanSourcePath?: string;
+}): CredibilityPackCommandSet {
+  const requirements = input.engineRequirements;
   const requiresAllEngines = Boolean(
     requirements?.maxima && requirements.z3 && requirements.cvc5 && requirements.lean && requirements.sage
   );
@@ -651,7 +662,19 @@ function createReviewerCommands(requirements: EngineVerificationRequirements | u
         requirements?.lean ? "--require-lean" : undefined,
         requirements?.sage ? "--require-sage" : undefined
       ].filter((flag): flag is string => Boolean(flag));
-  const engineSuffix = engineFlags.length > 0 ? ` ${engineFlags.join(" ")}` : "";
+  const engineOptions = [
+    input.timeoutMs !== undefined ? `--timeout-ms ${input.timeoutMs}` : undefined,
+    input.maximaCommand ? `--maxima-command ${quoteCommandArg(input.maximaCommand)}` : undefined,
+    input.z3Command ? `--z3-command ${quoteCommandArg(input.z3Command)}` : undefined,
+    input.cvc5Command ? `--cvc5-command ${quoteCommandArg(input.cvc5Command)}` : undefined,
+    input.leanCommand ? `--lean-command ${quoteCommandArg(input.leanCommand)}` : undefined,
+    input.sageCommand ? `--sage-command ${quoteCommandArg(input.sageCommand)}` : undefined,
+    input.smtSourcePath ? `--smt-source ${quoteCommandArg(input.smtSourcePath)}` : undefined,
+    input.leanSourcePath ? `--lean-source ${quoteCommandArg(input.leanSourcePath)}` : undefined
+  ].filter((flag): flag is string => Boolean(flag));
+  const engineSuffix = [...engineFlags, ...engineOptions].length > 0
+    ? ` ${[...engineFlags, ...engineOptions].join(" ")}`
+    : "";
 
   return {
     validateWorkspace: "truth-harness workspace validate .",
@@ -662,6 +685,10 @@ function createReviewerCommands(requirements: EngineVerificationRequirements | u
     dockerLeanFixture: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean",
     dockerSageFixture: "npm run docker:sage"
   };
+}
+
+function quoteCommandArg(value: string): string {
+  return /^[A-Za-z0-9_./\\:-]+$/u.test(value) ? value : JSON.stringify(value);
 }
 
 function reviewerEngineActionCommand(
