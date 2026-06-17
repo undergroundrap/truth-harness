@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { gunzipSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeCredibilityBundle, writeResearchSession, type EngineVerificationCommandRunner } from "../../../packages/core/src/index.js";
 
@@ -66,6 +67,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("credibility-pack");
     expect(statusPayload.capabilities).toContain("credibility-bundle-latest");
     expect(statusPayload.capabilities).toContain("credibility-bundle-files");
+    expect(statusPayload.capabilities).toContain("credibility-bundle-archive");
     expect(statusPayload.capabilities).toContain("release-audit");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
@@ -328,6 +330,18 @@ describe("local web route ledger API", () => {
       schemaVersion: "truth-harness.credibility-bundle.v0",
       bundleId: bundle.manifest.bundleId
     });
+
+    const bundleArchiveResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest/archive`);
+    expect(bundleArchiveResponse.status).toBe(200);
+    expect(bundleArchiveResponse.headers.get("content-type")).toBe("application/gzip");
+    expect(bundleArchiveResponse.headers.get("content-disposition")).toContain(`${bundle.manifest.bundleId}-credibility-bundle.tar.gz`);
+    expect(bundleArchiveResponse.headers.get("x-truth-harness-bundle-id")).toBe(bundle.manifest.bundleId);
+    const bundleArchiveBytes = Buffer.from(await bundleArchiveResponse.arrayBuffer());
+    expect([...bundleArchiveBytes.slice(0, 2)]).toEqual([0x1f, 0x8b]);
+    const bundleArchiveNames = listTarEntryNames(gunzipSync(bundleArchiveBytes));
+    expect(bundleArchiveNames).toContain(`${bundle.manifest.bundlePath.split(/[\\/]/u).at(-1)}/manifest.json`);
+    expect(bundleArchiveNames).toContain(`${bundle.manifest.bundlePath.split(/[\\/]/u).at(-1)}/credibility-pack.md`);
+    expect(bundleArchiveNames.some((entry) => entry.endsWith("/README.md"))).toBe(true);
 
     const invalidBundleFileResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest/file?kind=zip`);
     expect(invalidBundleFileResponse.status).toBe(400);
@@ -1730,6 +1744,29 @@ const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => 
     error: { name: "Error", message: `unexpected command ${command} ${args.join(" ")}` }
   };
 };
+
+function listTarEntryNames(buffer: Buffer): string[] {
+  const names: string[] = [];
+  let offset = 0;
+  while (offset + 512 <= buffer.length) {
+    const header = buffer.subarray(offset, offset + 512);
+    if (header.every((byte) => byte === 0)) {
+      break;
+    }
+
+    const name = tarHeaderText(header, 0, 100);
+    const prefix = tarHeaderText(header, 345, 155);
+    const sizeText = tarHeaderText(header, 124, 12).replace(/\0/gu, "").trim();
+    const size = Number.parseInt(sizeText || "0", 8);
+    names.push(prefix ? `${prefix}/${name}` : name);
+    offset += 512 + Math.ceil(size / 512) * 512;
+  }
+  return names;
+}
+
+function tarHeaderText(buffer: Buffer, offset: number, length: number): string {
+  return buffer.subarray(offset, offset + length).toString("utf8").replace(/\0.*$/u, "");
+}
 
 async function startWebServer(port: number, projectRoot: string): Promise<ChildProcessWithoutNullStreams> {
   const server = spawn(process.execPath, [

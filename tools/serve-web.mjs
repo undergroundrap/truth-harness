@@ -1,10 +1,11 @@
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { extname, join, normalize, relative, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
+import { gzipSync } from "node:zlib";
 
 const MAX_JSON_BODY_BYTES = 128 * 1024;
 const MAX_RESEARCH_MAP_SNAPSHOTS = 100;
@@ -209,6 +210,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "credibility-pack",
         "credibility-bundle-latest",
         "credibility-bundle-files",
+        "credibility-bundle-archive",
         "workspace-review-queue",
         "workspace-run-next-dry-run",
         "workspace-run-next-save",
@@ -372,6 +374,25 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, error instanceof HttpError ? error.status : 409, error instanceof Error ? error.message : "Latest credibility bundle file could not be read.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/credibility-bundle/latest/archive" && request.method === "GET") {
+    try {
+      await ensureLocalWorkspace();
+      const archive = await readLatestCredibilityBundleArchive();
+      writeDownload(response, 200, archive.body, {
+        contentType: archive.contentType,
+        filename: archive.filename,
+        requestId: response.truthHarnessRequestId,
+        extraHeaders: {
+          "X-Truth-Harness-Bundle-Id": archive.bundleId,
+          "X-Truth-Harness-Archive-Files": String(archive.fileCount)
+        }
+      });
+    } catch (error) {
+      writeApiError(response, error instanceof HttpError ? error.status : 409, error instanceof Error ? error.message : "Latest credibility bundle archive could not be created.", request);
     }
     return;
   }
@@ -2203,6 +2224,28 @@ async function readLatestCredibilityBundleFile(kindValue) {
   };
 }
 
+async function readLatestCredibilityBundleArchive() {
+  const bundle = await readLatestCredibilityBundle();
+  if (!bundle) {
+    throw new HttpError(404, "No credibility reviewer bundle is available.");
+  }
+
+  const bundleDir = resolve(bundle.paths.bundle);
+  const archiveRootName = safeTarPathSegment(bundle.paths.relativeBundle.split("/").filter(Boolean).at(-1) ?? `${bundle.manifest.bundleId}-credibility-bundle`);
+  const archive = await createTarGzArchive({
+    rootDir: bundleDir,
+    archiveRootName
+  });
+
+  return {
+    body: archive.body,
+    contentType: "application/gzip",
+    filename: `truth-harness-${bundle.manifest.bundleId}-credibility-bundle.tar.gz`,
+    bundleId: bundle.manifest.bundleId,
+    fileCount: archive.fileCount
+  };
+}
+
 function credibilityBundleFileDescriptor(kindValue) {
   const kind = typeof kindValue === "string" ? kindValue : "readme";
   switch (kind) {
@@ -2233,6 +2276,151 @@ function credibilityBundleFileDescriptor(kindValue) {
     default:
       throw new HttpError(400, "Unsupported credibility bundle file kind.");
   }
+}
+
+async function createTarGzArchive(input) {
+  const entries = await collectTarEntries(input.rootDir, input.archiveRootName);
+  const tarParts = [];
+  for (const entry of entries) {
+    tarParts.push(createTarHeader(entry));
+    if (entry.body) {
+      tarParts.push(entry.body);
+      const padding = tarPadding(entry.body.length);
+      if (padding > 0) {
+        tarParts.push(Buffer.alloc(padding));
+      }
+    }
+  }
+  tarParts.push(Buffer.alloc(1024));
+
+  return {
+    body: gzipSync(Buffer.concat(tarParts), { level: 9, mtime: 0 }),
+    fileCount: entries.filter((entry) => entry.type === "file").length
+  };
+}
+
+async function collectTarEntries(rootDir, archiveRootName) {
+  const root = resolve(rootDir);
+  const entries = [{
+    name: `${archiveRootName}/`,
+    type: "directory",
+    mode: 0o755,
+    size: 0,
+    mtime: 0
+  }];
+
+  async function visit(directory) {
+    const children = await readdir(directory, { withFileTypes: true });
+    children.sort((left, right) => left.name.localeCompare(right.name));
+    for (const child of children) {
+      const absolutePath = join(directory, child.name);
+      const info = await lstat(absolutePath);
+      if (info.isSymbolicLink()) {
+        throw new HttpError(409, "Credibility bundle archives cannot include symbolic links.");
+      }
+
+      const relativePath = portablePath(relative(root, absolutePath));
+      const archivePath = `${archiveRootName}/${relativePath}${info.isDirectory() ? "/" : ""}`;
+      if (info.isDirectory()) {
+        entries.push({
+          name: archivePath,
+          type: "directory",
+          mode: 0o755,
+          size: 0,
+          mtime: Math.floor(info.mtimeMs / 1000)
+        });
+        await visit(absolutePath);
+      } else if (info.isFile()) {
+        const body = await readFile(absolutePath);
+        entries.push({
+          name: archivePath,
+          type: "file",
+          mode: 0o644,
+          size: body.length,
+          mtime: Math.floor(info.mtimeMs / 1000),
+          body
+        });
+      }
+    }
+  }
+
+  await visit(root);
+  return entries;
+}
+
+function createTarHeader(entry) {
+  const header = Buffer.alloc(512, 0);
+  const { name, prefix } = splitTarPath(entry.name);
+  writeTarString(header, name, 0, 100);
+  writeTarOctal(header, entry.mode, 100, 8);
+  writeTarOctal(header, 0, 108, 8);
+  writeTarOctal(header, 0, 116, 8);
+  writeTarOctal(header, entry.size, 124, 12);
+  writeTarOctal(header, entry.mtime, 136, 12);
+  header.fill(0x20, 148, 156);
+  header.write(entry.type === "directory" ? "5" : "0", 156, 1, "ascii");
+  writeTarString(header, "ustar", 257, 6);
+  writeTarString(header, "00", 263, 2);
+  writeTarString(header, "truth", 265, 32);
+  writeTarString(header, "harness", 297, 32);
+  writeTarString(header, prefix, 345, 155);
+
+  let checksum = 0;
+  for (const byte of header) {
+    checksum += byte;
+  }
+  const checksumText = checksum.toString(8).padStart(6, "0");
+  header.write(`${checksumText}\0 `, 148, 8, "ascii");
+  return header;
+}
+
+function splitTarPath(value) {
+  const path = portablePath(value).replace(/^\/+/u, "");
+  const encoded = Buffer.from(path, "utf8");
+  if (encoded.length <= 100) {
+    return { name: path, prefix: "" };
+  }
+
+  const parts = path.split("/");
+  for (let index = 1; index < parts.length; index += 1) {
+    const prefix = parts.slice(0, index).join("/");
+    const name = parts.slice(index).join("/");
+    if (Buffer.byteLength(prefix, "utf8") <= 155 && Buffer.byteLength(name, "utf8") <= 100) {
+      return { name, prefix };
+    }
+  }
+
+  throw new HttpError(409, `Credibility bundle archive path is too long for portable tar: ${path}`);
+}
+
+function writeTarString(header, value, offset, length) {
+  const text = String(value ?? "");
+  if (Buffer.byteLength(text, "utf8") > length) {
+    throw new HttpError(409, `Credibility bundle archive field is too long: ${text}`);
+  }
+  header.write(text, offset, length, "utf8");
+}
+
+function writeTarOctal(header, value, offset, length) {
+  const text = Math.max(0, Math.floor(value)).toString(8);
+  if (text.length > length - 1) {
+    throw new HttpError(409, "Credibility bundle archive file is too large for portable tar.");
+  }
+  header.write(text.padStart(length - 1, "0"), offset, length - 1, "ascii");
+  header[offset + length - 1] = 0;
+}
+
+function tarPadding(size) {
+  return (512 - (size % 512)) % 512;
+}
+
+function safeTarPathSegment(value) {
+  const text = String(value ?? "truth-harness-credibility-bundle")
+    .replace(/\\/gu, "/")
+    .split("/")
+    .filter(Boolean)
+    .at(-1) ?? "truth-harness-credibility-bundle";
+  return text.replace(/[^A-Za-z0-9._-]+/gu, "-") || "truth-harness-credibility-bundle";
 }
 
 async function ensureLocalWorkspace() {
@@ -2715,7 +2903,8 @@ function writeDownload(response, status, body, options) {
     "Content-Type": options.contentType,
     "Cache-Control": "no-store",
     "Content-Disposition": `attachment; filename="${safeDownloadFilename(options.filename)}"`,
-    "X-Truth-Harness-Request-Id": requestId
+    "X-Truth-Harness-Request-Id": requestId,
+    ...(options.extraHeaders ?? {})
   };
 
   response.writeHead(status, headers);

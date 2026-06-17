@@ -94,6 +94,8 @@ describe("web UI action contracts", () => {
     expect(source).toContain('data-testid="download-credibility-bundle-readme"');
     expect(source).toContain('data-testid="download-credibility-bundle-manifest"');
     expect(source).toContain('data-testid="download-credibility-bundle-pack"');
+    expect(source).toContain('data-testid="download-credibility-bundle-archive"');
+    expect(source).toContain("/api/credibility-bundle/latest/archive");
     expect(source).toContain("Verified Reviewer Bundle");
     expect(source).toContain("Professor Review Checklist");
     expect(source).toContain("Reviewer bundle verification command copied from the Report tab.");

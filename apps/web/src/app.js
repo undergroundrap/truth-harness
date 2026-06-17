@@ -11899,6 +11899,7 @@ function credibilityBundleCardHtml() {
         <button class="text-button compact-button download-credibility-bundle-file" data-testid="download-credibility-bundle-readme" data-label="Bundle README" data-href="/api/credibility-bundle/latest/file?kind=readme" type="button" ${hasBundle ? "" : "disabled"}>README</button>
         <button class="text-button compact-button download-credibility-bundle-file" data-testid="download-credibility-bundle-manifest" data-label="Bundle manifest" data-href="/api/credibility-bundle/latest/file?kind=manifest" type="button" ${hasBundle ? "" : "disabled"}>Manifest</button>
         <button class="text-button compact-button download-credibility-bundle-file" data-testid="download-credibility-bundle-pack" data-label="Credibility pack markdown" data-href="/api/credibility-bundle/latest/file?kind=pack-md" type="button" ${hasBundle ? "" : "disabled"}>Pack MD</button>
+        <button class="text-button compact-button strong-action download-credibility-bundle-file" data-testid="download-credibility-bundle-archive" data-label="Reviewer bundle archive" data-href="/api/credibility-bundle/latest/archive" type="button" ${hasBundle ? "" : "disabled"}>Archive</button>
       </div>
     </div>
   </section>`;
