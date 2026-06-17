@@ -56,6 +56,7 @@ import {
   listLiteratureRecords,
   listModelContexts,
   listNotebookRuns,
+  listReportDrafts,
   listResearchSessions,
   listSimulationLogEntries,
   listSmtChecks,
@@ -72,6 +73,7 @@ import {
   repairLocalWorkspace,
   rebuildWorkspaceCatalog,
   readClaimRecord,
+  readReportDraft,
   readResearchSession,
   readVisualArtifact,
   readWorkspaceRunNextPlan,
@@ -194,6 +196,8 @@ import {
   type ProofBackendStatusReport,
   type Receipt,
   type ReceiptRenderFormat,
+  type ReportDraftReadResult,
+  type ReportDraftSummary,
   type ResearchEvidenceRef,
   type ResearchSession,
   type ResearchSessionCheckpointWriteResult,
@@ -641,6 +645,16 @@ export interface TruthHarnessWorkspaceReviewListInput {
 export interface TruthHarnessWorkspaceReviewShowInput {
   workspacePath?: string;
   reviewRef: string;
+}
+
+export interface TruthHarnessReportListInput {
+  workspacePath?: string;
+  limit?: number;
+}
+
+export interface TruthHarnessReportReadInput {
+  workspacePath?: string;
+  reportId: string;
 }
 
 export interface TruthHarnessWorkspaceReviewWriteOutput {
@@ -1841,6 +1855,28 @@ export async function handleTruthHarnessWorkspaceReviewShow(
   input: TruthHarnessWorkspaceReviewShowInput
 ): Promise<WorkspaceReview> {
   return readWorkspaceReview(resolveWorkspaceRoot(input.workspacePath), input.reviewRef);
+}
+
+export async function handleTruthHarnessReportList(input: TruthHarnessReportListInput): Promise<{
+  total: number;
+  reports: ReportDraftSummary[];
+}> {
+  const reports = await listReportDrafts({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    limit: input.limit
+  });
+
+  return {
+    total: reports.length,
+    reports
+  };
+}
+
+export async function handleTruthHarnessReportRead(input: TruthHarnessReportReadInput): Promise<ReportDraftReadResult> {
+  return readReportDraft({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    reportId: input.reportId
+  });
 }
 
 export async function handleTruthHarnessWorkspaceSnapshot(

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { writeReportDraft } from "@truth-harness/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { createTruthHarnessMcpServer } from "./index.js";
 
@@ -115,6 +116,8 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_proof_list",
         "truth_harness_render_receipt",
         "truth_harness_replay",
+        "truth_harness_report_list",
+        "truth_harness_report_read",
         "truth_harness_research_session_checkpoint",
         "truth_harness_research_session_list",
         "truth_harness_research_session_show",
@@ -292,6 +295,18 @@ describe("Truth Harness MCP server", () => {
       });
       expect(firstText(workspaceResult.content)).toContain("\"networkAccess\": \"none\"");
 
+      const reportDraft = await writeReportDraft({
+        rootPath: root,
+        title: "Protocol Report Draft",
+        summary: "Saved locally so MCP clients can cite verified report Markdown.",
+        receiptRunId: "run_protocol_report_fixture",
+        trust: "exact-computed",
+        markdown: "# Protocol Report Draft\n\nMCP clients can read this without scraping the UI.\n",
+        source: "mcp-server-test",
+        actor: "agent",
+        now: "2026-06-16T01:30:00.000Z"
+      });
+
       const casCheckWrite = await client.callTool({
         name: "truth_harness_cas_check",
         arguments: {
@@ -438,6 +453,28 @@ describe("Truth Harness MCP server", () => {
         }
       });
       expect(firstText(workspaceReviewShow.content)).toContain("\"markdown\": \"# Truth Harness Workspace Review");
+
+      const reportList = await client.callTool({
+        name: "truth_harness_report_list",
+        arguments: {
+          limit: 10
+        }
+      });
+      const reportListText = firstText(reportList.content);
+      expect(reportListText).toContain(reportDraft.report.reportId);
+      expect(reportListText).toContain("\"markdownVerified\": true");
+      expect(reportListText).toContain("\"networkAccess\": \"none\"");
+
+      const reportRead = await client.callTool({
+        name: "truth_harness_report_read",
+        arguments: {
+          reportId: reportDraft.report.reportId
+        }
+      });
+      const reportReadText = firstText(reportRead.content);
+      expect(reportReadText).toContain("\"schemaVersion\": \"truth-harness.report-draft.v0\"");
+      expect(reportReadText).toContain("\"markdownVerified\": true");
+      expect(reportReadText).toContain("MCP clients can read this without scraping the UI.");
 
       const proofCheckWrite = await client.callTool({
         name: "truth_harness_proof_check",

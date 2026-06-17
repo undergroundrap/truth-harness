@@ -45,6 +45,8 @@ import {
   handleTruthHarnessProofBackends,
   handleTruthHarnessProofCheck,
   handleTruthHarnessProofList,
+  handleTruthHarnessReportList,
+  handleTruthHarnessReportRead,
   handleTruthHarnessRenderReceipt,
   handleTruthHarnessReplay,
   handleTruthHarnessResearchSessionCheckpoint,
@@ -1539,6 +1541,54 @@ export function createTruthHarnessMcpServer(): McpServer {
       }
     },
     async ({ workspacePath, reviewRef }) => toolJson(await handleTruthHarnessWorkspaceReviewShow({ workspacePath, reviewRef }))
+  );
+
+  server.registerTool(
+    "truth_harness_report_list",
+    {
+      title: "List Saved Report Drafts",
+      description:
+        "List locally saved reviewer/report drafts from .truth-harness/findings, including Markdown hash verification and local-only provenance.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe("Maximum report drafts to return. Defaults to all saved drafts.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, limit }) => toolJson(await handleTruthHarnessReportList({ workspacePath, limit }))
+  );
+
+  server.registerTool(
+    "truth_harness_report_read",
+    {
+      title: "Read Saved Report Draft",
+      description:
+        "Read one saved report draft by report id, returning the exact Markdown plus SHA-256 verification so agents can cite drafts without scraping UI output.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        reportId: z.string().regex(/^report_[a-f0-9]{16}$/u).describe("Report draft id such as report_<hash>.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, reportId }) => toolJson(await handleTruthHarnessReportRead({ workspacePath, reportId }))
   );
 
   server.registerTool(

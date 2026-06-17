@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createReceipt } from "@truth-harness/core";
+import { createReceipt, writeReportDraft } from "@truth-harness/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   handleTruthHarnessAsk,
@@ -44,6 +44,8 @@ import {
   handleTruthHarnessProofBackends,
   handleTruthHarnessProofCheck,
   handleTruthHarnessProofList,
+  handleTruthHarnessReportList,
+  handleTruthHarnessReportRead,
   handleTruthHarnessRenderReceipt,
   handleTruthHarnessReplay,
   handleTruthHarnessResearchSessionCheckpoint,
@@ -1057,6 +1059,46 @@ describe("MCP tool handlers", () => {
         artifactId: review.review.reviewId
       })
     );
+  });
+
+  it("lists and reads saved report drafts for agents", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Report Lab" });
+    const written = await writeReportDraft({
+      rootPath: root,
+      title: "Agent Reviewer Draft",
+      summary: "A local draft agents can cite without scraping UI text.",
+      receiptRunId: "run_mcp_report_fixture",
+      claimId: "claim_mcp_report_fixture",
+      trust: "exact-computed",
+      markdown: "# Agent Reviewer Draft\n\nEvery cited result is replayable.\n",
+      source: "mcp-test",
+      actor: "agent",
+      now: "2026-06-16T01:00:00.000Z"
+    });
+
+    const list = await handleTruthHarnessReportList({});
+    const read = await handleTruthHarnessReportRead({
+      reportId: written.report.reportId
+    });
+
+    expect(list.total).toBe(1);
+    expect(list.reports[0]).toMatchObject({
+      report: {
+        reportId: written.report.reportId,
+        title: "Agent Reviewer Draft",
+        localOnly: true,
+        networkAccess: "none",
+        externalCalls: []
+      },
+      markdownVerified: true,
+      markdownStatus: "verified"
+    });
+    expect(read.report.reportId).toBe(written.report.reportId);
+    expect(read.markdown).toContain("Every cited result is replayable.");
+    expect(read.markdownVerified).toBe(true);
+    expect(read.markdownSha256).toMatch(/^[a-f0-9]{64}$/u);
   });
 
   it("plans and executes the next workspace action through the shared autonomy contract", async () => {
