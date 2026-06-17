@@ -2171,6 +2171,11 @@ h4 {
 
 .ledger-record .ledger-blocker {
   color: #f0c86d;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .route-record code {

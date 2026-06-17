@@ -466,6 +466,23 @@ describe("web UI action contracts", () => {
     expect(listPagerStyles).toContain("padding: 6px 8px;");
   });
 
+  it("lets claim ledger blocker text wrap instead of clipping finalization requirements", async () => {
+    const [source, styles] = await Promise.all([
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+    const blockerStyles = styles.match(/\.ledger-record \.ledger-blocker \{[\s\S]*?\r?\n\}/u)?.[0];
+
+    expect(source).toContain('class="ledger-blocker"');
+    expect(blockerStyles).toBeTruthy();
+    expect(blockerStyles).toContain("overflow: visible;");
+    expect(blockerStyles).toContain("overflow-wrap: anywhere;");
+    expect(blockerStyles).toContain("white-space: normal;");
+    expect(blockerStyles).toContain("word-break: break-word;");
+    expect(blockerStyles).not.toContain("white-space: nowrap;");
+    expect(blockerStyles).not.toContain("text-overflow: ellipsis;");
+  });
+
   it("renders saved adapter visual artifacts as a distinct viewer state", async () => {
     const [html, source, styles] = await Promise.all([
       readFile(appHtmlPath, "utf8"),
