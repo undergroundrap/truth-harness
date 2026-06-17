@@ -81,6 +81,9 @@ describe("web UI action contracts", () => {
     expect(source).toContain("async function writeCredibilityPackFromUi(button)");
     expect(source).toContain("async function refreshCredibilityBundle({ announce = true } = {})");
     expect(source).toContain("function credibilityBundleCardHtml()");
+    expect(source).toContain("function credibilityReviewerChecklistHtml(pack)");
+    expect(source).toContain("function credibilityChecklistItemHtml(item)");
+    expect(source).toContain("function gateStringIsComplete(value)");
     expect(source).toContain("function credibilityBundleActivitySummary(payload)");
     expect(source).toContain('data-testid="refresh-credibility-pack"');
     expect(source).toContain('data-testid="write-credibility-pack"');
@@ -88,8 +91,13 @@ describe("web UI action contracts", () => {
     expect(source).toContain('data-testid="refresh-credibility-bundle"');
     expect(source).toContain('data-testid="copy-credibility-bundle-command"');
     expect(source).toContain('data-testid="copy-credibility-bundle-path"');
+    expect(source).toContain('data-testid="download-credibility-bundle-readme"');
+    expect(source).toContain('data-testid="download-credibility-bundle-manifest"');
+    expect(source).toContain('data-testid="download-credibility-bundle-pack"');
     expect(source).toContain("Verified Reviewer Bundle");
+    expect(source).toContain("Professor Review Checklist");
     expect(source).toContain("Reviewer bundle verification command copied from the Report tab.");
+    expect(source).toContain("Downloaded reviewer bundle file");
     expect(source).toContain("function credibilityPackActionItemsHtml(pack)");
     expect(source).toContain("function credibilityPackActionSummary(pack)");
     expect(source).toContain("function credibilityBenchmarkCardHtml(pack)");
@@ -118,6 +126,9 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".credibility-bundle-card");
     expect(styles).toContain(".credibility-bundle-facts");
     expect(styles).toContain(".credibility-bundle-command");
+    expect(styles).toContain(".credibility-review-checklist");
+    expect(styles).toContain(".credibility-checklist-grid");
+    expect(styles).toContain(".credibility-checklist-item");
     expect(styles).toContain(".credibility-benchmark-card");
     expect(styles).toContain(".credibility-benchmark-facts");
     expect(styles).toContain(".credibility-run-next-card");

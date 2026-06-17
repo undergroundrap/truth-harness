@@ -65,6 +65,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("engine-evidence-runs");
     expect(statusPayload.capabilities).toContain("credibility-pack");
     expect(statusPayload.capabilities).toContain("credibility-bundle-latest");
+    expect(statusPayload.capabilities).toContain("credibility-bundle-files");
     expect(statusPayload.capabilities).toContain("release-audit");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
@@ -310,6 +311,34 @@ describe("local web route ledger API", () => {
     });
     expect(bundlePayload.command).toContain("workspace verify-credibility-bundle");
     expect(bundlePayload.paths.relativeBundle).toContain(bundle.manifest.bundleId);
+
+    const bundleReadmeResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest/file?kind=readme`);
+    expect(bundleReadmeResponse.status).toBe(200);
+    expect(bundleReadmeResponse.headers.get("content-type")).toContain("text/markdown");
+    expect(bundleReadmeResponse.headers.get("content-disposition")).toContain(`${bundle.manifest.bundleId}-README.md`);
+    const bundleReadmeText = await bundleReadmeResponse.text();
+    expect(bundleReadmeText).toContain("Truth Harness Portable Reviewer Bundle");
+    expect(bundleReadmeText).toContain(bundle.manifest.bundleId);
+
+    const bundleManifestResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest/file?kind=manifest`);
+    expect(bundleManifestResponse.status).toBe(200);
+    expect(bundleManifestResponse.headers.get("content-type")).toContain("application/json");
+    const bundleManifestPayload = await bundleManifestResponse.json();
+    expect(bundleManifestPayload).toMatchObject({
+      schemaVersion: "truth-harness.credibility-bundle.v0",
+      bundleId: bundle.manifest.bundleId
+    });
+
+    const invalidBundleFileResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest/file?kind=zip`);
+    expect(invalidBundleFileResponse.status).toBe(400);
+    const invalidBundleFilePayload = await invalidBundleFileResponse.json();
+    expect(invalidBundleFilePayload).toMatchObject({
+      schemaVersion: "truth-harness.web-error.v0",
+      localOnly: true,
+      externalCalls: [],
+      status: 400,
+      error: "Unsupported credibility bundle file kind."
+    });
 
     const receiptResponse = await fetch(`${baseUrl}/api/receipt`, {
       method: "POST",

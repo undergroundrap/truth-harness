@@ -11667,6 +11667,7 @@ function renderCredibilityPackPanel() {
   const pathRows = credibilityPackPathRows(state.credibilityPackPaths);
   const benchmarkCard = credibilityBenchmarkCardHtml(pack);
   const bundleCard = credibilityBundleCardHtml();
+  const reviewerChecklist = credibilityReviewerChecklistHtml(pack);
   const summaryRows = pack
     ? credibilityPackSummaryRows(pack)
       .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${credibilityPackValueHtml(value)}</dd></div>`)
@@ -11688,6 +11689,7 @@ function renderCredibilityPackPanel() {
       <span class="status-pill ${statusClass}">${escapeHtml(credibilityPackStatusLabel(status))}</span>
     </div>
     ${bundleCard}
+    ${reviewerChecklist}
     <dl class="credibility-pack-summary">${summaryRows}</dl>
     <div class="credibility-pack-actions">
       <button class="text-button compact-button refresh-credibility-pack" data-testid="refresh-credibility-pack" type="button" ${state.credibilityPackLoading ? "disabled" : ""}>${state.credibilityPackLoading ? "Refreshing" : "Refresh"}</button>
@@ -11773,6 +11775,23 @@ function renderCredibilityPackPanel() {
       copiedDetail: "Reviewer bundle path copied from the Report tab.",
       fallbackTitle: "Downloaded bundle path",
       fallbackDetail: "the reviewer bundle path was saved as a local text file instead."
+    });
+  });
+  credibilityPackPanel.querySelectorAll(".download-credibility-bundle-file").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const target = event.currentTarget;
+      const href = target.dataset.href ?? "";
+      const label = target.dataset.label ?? "reviewer bundle file";
+      if (!href) {
+        return;
+      }
+      addActivity(
+        "local-api",
+        "Downloaded reviewer bundle file",
+        `${label} requested from the latest local portable reviewer bundle.`,
+        "passed"
+      );
+      window.location.href = href;
     });
   });
   credibilityPackPanel.querySelector(".plan-credibility-run-next")?.addEventListener("click", () => {
@@ -11877,9 +11896,118 @@ function credibilityBundleCardHtml() {
         <button class="text-button compact-button refresh-credibility-bundle" data-testid="refresh-credibility-bundle" type="button" ${state.credibilityBundleLoading ? "disabled" : ""}>${state.credibilityBundleLoading ? "Refreshing" : "Refresh bundle"}</button>
         <button class="text-button compact-button copy-credibility-bundle-command" data-testid="copy-credibility-bundle-command" data-command="${escapeHtml(command)}" type="button">Copy verify</button>
         <button class="text-button compact-button copy-credibility-bundle-path" data-testid="copy-credibility-bundle-path" data-path="${escapeHtml(path)}" type="button" ${path ? "" : "disabled"}>Copy path</button>
+        <button class="text-button compact-button download-credibility-bundle-file" data-testid="download-credibility-bundle-readme" data-label="Bundle README" data-href="/api/credibility-bundle/latest/file?kind=readme" type="button" ${hasBundle ? "" : "disabled"}>README</button>
+        <button class="text-button compact-button download-credibility-bundle-file" data-testid="download-credibility-bundle-manifest" data-label="Bundle manifest" data-href="/api/credibility-bundle/latest/file?kind=manifest" type="button" ${hasBundle ? "" : "disabled"}>Manifest</button>
+        <button class="text-button compact-button download-credibility-bundle-file" data-testid="download-credibility-bundle-pack" data-label="Credibility pack markdown" data-href="/api/credibility-bundle/latest/file?kind=pack-md" type="button" ${hasBundle ? "" : "disabled"}>Pack MD</button>
       </div>
     </div>
   </section>`;
+}
+
+function credibilityReviewerChecklistHtml(pack) {
+  const payload = state.credibilityBundle;
+  const manifest = payload?.manifest;
+  const verification = payload?.verification;
+  const summary = manifest?.packSummary ?? pack?.summary ?? {};
+  const actionPlan = pack?.reviewerActionPlan;
+  const hasBundle = Boolean(payload?.latest && manifest);
+  const checklist = [
+    {
+      label: "Portable bundle exported",
+      passed: hasBundle,
+      detail: hasBundle ? `${manifest.bundleId} is present under .truth-harness/findings.` : "No reviewer bundle is present yet.",
+      command: "npm run docker:professor"
+    },
+    {
+      label: "Bundle hash integrity",
+      passed: Boolean(verification?.passed),
+      detail: verification?.passed ? `${verification.checkedBundleFiles ?? 0} bundled files match the manifest.` : "Run or copy the verify command before handoff.",
+      command: credibilityBundleCommand()
+    },
+    {
+      label: "Source workspace still matches",
+      passed: Boolean(verification?.sourceMatchesWorkspace),
+      detail: verification?.sourceMatchesWorkspace ? `${verification.checkedSourceFiles ?? 0} source files still match the exported bundle.` : "The source workspace changed after export or has not been verified yet.",
+      command: credibilityBundleCommand()
+    },
+    {
+      label: "Workspace schema validation",
+      passed: summary.validationPassed === true && Number(summary.validationErrors ?? 0) === 0,
+      detail: `${summary.checkedFiles ?? "0"} files checked, ${summary.validationErrors ?? "0"} errors, ${summary.validationWarnings ?? "0"} warnings.`,
+      command: manifest?.reviewerCommands?.validateWorkspace ?? pack?.reviewerCommands?.validateWorkspace
+    },
+    {
+      label: "Required engine gates",
+      passed: gateStringIsComplete(summary.requiredEngineGates),
+      detail: `${summary.requiredEngineGates ?? "0/0"} required reviewer gates are satisfied.`,
+      command: manifest?.reviewerCommands?.verifyEngines ?? pack?.reviewerCommands?.verifyEngines
+    },
+    {
+      label: "Concrete engine breadth",
+      passed: gateStringIsComplete(summary.concreteEngineGates),
+      detail: `${summary.concreteEngineGates ?? "0/0"} concrete Maxima/Z3/Lean/cvc5/Sage fixture gates are satisfied.`,
+      command: manifest?.reviewerCommands?.verifyEngines ?? pack?.reviewerCommands?.verifyEngines
+    },
+    {
+      label: "Adversarial AI-failure benchmark",
+      passed: summary.latestAdversarialBenchmarkStatus === "passed",
+      detail: `Latest saved adversarial benchmark status: ${summary.latestAdversarialBenchmarkStatus ?? "missing"}.`,
+      command: manifest?.reviewerCommands?.runAdversarialBenchmark ?? pack?.reviewerCommands?.runAdversarialBenchmark
+    },
+    {
+      label: "Critical review queue closed",
+      passed: Number(summary.criticalReviewItems ?? actionPlan?.criticalActions ?? 1) === 0,
+      detail: `${summary.reviewItems ?? actionPlan?.totalActions ?? "unknown"} open review item(s), ${summary.criticalReviewItems ?? actionPlan?.criticalActions ?? "unknown"} critical.`,
+      command: manifest?.reviewerCommands?.reviewWorkspace ?? pack?.reviewerCommands?.reviewWorkspace
+    },
+    {
+      label: "Local-only privacy boundary",
+      passed: (manifest?.localOnly ?? pack?.localOnly) === true && (manifest?.networkAccess ?? pack?.networkAccess) === "none",
+      detail: "The reviewer packet records local-only execution and no network access for the bundle workflow.",
+      command: undefined
+    }
+  ];
+  const passed = checklist.filter((item) => item.passed).length;
+  const total = checklist.length;
+  const statusClass = passed === total ? "exact" : checklist.some((item) => !item.passed && item.label.includes("Critical")) ? "refuted" : "waiting";
+  const statusText = passed === total ? "ready" : `${passed}/${total} gates`;
+
+  return `<section class="credibility-review-checklist" aria-label="External reviewer checklist">
+    <div class="credibility-checklist-head">
+      <div>
+        <span class="mini-label">external review readiness</span>
+        <strong>Professor Review Checklist</strong>
+      </div>
+      <span class="status-pill ${statusClass}">${escapeHtml(statusText)}</span>
+    </div>
+    <p>Each row is derived from local pack or bundle evidence. Passing this checklist means ready for outside inspection, not that every claim is true.</p>
+    <div class="credibility-checklist-grid">
+      ${checklist.map((item) => credibilityChecklistItemHtml(item)).join("")}
+    </div>
+  </section>`;
+}
+
+function credibilityChecklistItemHtml(item) {
+  const className = item.passed ? "passed" : "blocked";
+  return `<div class="credibility-checklist-item checklist-${className}">
+    <span>${item.passed ? "passed" : "blocked"}</span>
+    <strong>${escapeHtml(item.label)}</strong>
+    <p>${escapeHtml(item.detail)}</p>
+    ${item.command ? `<code>${escapeHtml(item.command)}</code>` : ""}
+  </div>`;
+}
+
+function gateStringIsComplete(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+  const match = value.match(/^(\d+)\/(\d+)$/u);
+  if (!match) {
+    return false;
+  }
+  const passed = Number(match[1]);
+  const total = Number(match[2]);
+  return total > 0 && passed === total;
 }
 
 function credibilityBundleCommand() {

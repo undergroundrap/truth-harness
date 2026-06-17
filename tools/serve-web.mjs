@@ -208,6 +208,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "engine-evidence-runs",
         "credibility-pack",
         "credibility-bundle-latest",
+        "credibility-bundle-files",
         "workspace-review-queue",
         "workspace-run-next-dry-run",
         "workspace-run-next-save",
@@ -356,6 +357,21 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, 409, error instanceof Error ? error.message : "Latest credibility bundle could not be read.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/credibility-bundle/latest/file" && request.method === "GET") {
+    try {
+      await ensureLocalWorkspace();
+      const file = await readLatestCredibilityBundleFile(requestUrl.searchParams.get("kind"));
+      writeDownload(response, 200, file.body, {
+        contentType: file.contentType,
+        filename: file.filename,
+        requestId: response.truthHarnessRequestId
+      });
+    } catch (error) {
+      writeApiError(response, error instanceof HttpError ? error.status : 409, error instanceof Error ? error.message : "Latest credibility bundle file could not be read.", request);
     }
     return;
   }
@@ -2165,6 +2181,60 @@ async function readLatestCredibilityBundle() {
   };
 }
 
+async function readLatestCredibilityBundleFile(kindValue) {
+  const bundle = await readLatestCredibilityBundle();
+  if (!bundle) {
+    throw new HttpError(404, "No credibility reviewer bundle is available.");
+  }
+
+  const file = credibilityBundleFileDescriptor(kindValue);
+  const bundleDir = resolve(bundle.paths.bundle);
+  const filePath = resolve(bundleDir, file.relativePath);
+  const bundleDirWithSep = bundleDir.endsWith(sep) ? bundleDir : `${bundleDir}${sep}`;
+  if (filePath !== bundleDir && !filePath.startsWith(bundleDirWithSep)) {
+    throw new HttpError(400, "Credibility bundle file path escapes bundle root.");
+  }
+
+  const body = await readFile(filePath);
+  return {
+    body,
+    contentType: file.contentType,
+    filename: `truth-harness-${bundle.manifest.bundleId}-${file.downloadName}`
+  };
+}
+
+function credibilityBundleFileDescriptor(kindValue) {
+  const kind = typeof kindValue === "string" ? kindValue : "readme";
+  switch (kind) {
+    case "manifest":
+      return {
+        relativePath: "manifest.json",
+        contentType: "application/json; charset=utf-8",
+        downloadName: "manifest.json"
+      };
+    case "pack-json":
+      return {
+        relativePath: "credibility-pack.json",
+        contentType: "application/json; charset=utf-8",
+        downloadName: "credibility-pack.json"
+      };
+    case "pack-md":
+      return {
+        relativePath: "credibility-pack.md",
+        contentType: "text/markdown; charset=utf-8",
+        downloadName: "credibility-pack.md"
+      };
+    case "readme":
+      return {
+        relativePath: "README.md",
+        contentType: "text/markdown; charset=utf-8",
+        downloadName: "README.md"
+      };
+    default:
+      throw new HttpError(400, "Unsupported credibility bundle file kind.");
+  }
+}
+
 async function ensureLocalWorkspace() {
   const { initLocalWorkspace } = await loadCoreModule();
   return initLocalWorkspace(projectRoot, {
@@ -2636,6 +2706,27 @@ function writeJson(response, status, payload) {
 
   response.writeHead(status, headers);
   response.end(`${JSON.stringify(responsePayload, null, 2)}\n`);
+}
+
+function writeDownload(response, status, body, options) {
+  const requestId = options.requestId ?? response.truthHarnessRequestId ?? `web_req_${randomUUID()}`;
+  const headers = {
+    ...webSecurityHeaders(),
+    "Content-Type": options.contentType,
+    "Cache-Control": "no-store",
+    "Content-Disposition": `attachment; filename="${safeDownloadFilename(options.filename)}"`,
+    "X-Truth-Harness-Request-Id": requestId
+  };
+
+  response.writeHead(status, headers);
+  response.end(body);
+}
+
+function safeDownloadFilename(value) {
+  return String(value ?? "truth-harness-download.txt")
+    .replace(/[^A-Za-z0-9._-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .slice(0, 180) || "truth-harness-download.txt";
 }
 
 function writeApiError(response, status, error, request) {

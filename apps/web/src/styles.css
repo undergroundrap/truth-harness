@@ -5466,6 +5466,117 @@ textarea:focus-visible {
   justify-content: flex-start;
 }
 
+.credibility-review-checklist {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid rgba(230, 195, 106, 0.28);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(230, 195, 106, 0.06), rgba(13, 12, 10, 0.9));
+  padding: 12px;
+}
+
+.credibility-checklist-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.credibility-checklist-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.credibility-checklist-head strong {
+  color: #f2eadb;
+  font-size: 13px;
+}
+
+.credibility-review-checklist > p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.credibility-checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.credibility-checklist-item {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(9, 9, 9, 0.78);
+  padding: 9px;
+}
+
+.credibility-checklist-item.checklist-passed {
+  border-color: rgba(120, 217, 166, 0.26);
+}
+
+.credibility-checklist-item.checklist-blocked {
+  border-color: rgba(230, 195, 106, 0.24);
+}
+
+.credibility-checklist-item > span {
+  justify-self: start;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  padding: 4px 7px;
+}
+
+.credibility-checklist-item.checklist-passed > span {
+  border-color: rgba(120, 217, 166, 0.28);
+  color: #aee8c8;
+}
+
+.credibility-checklist-item.checklist-blocked > span {
+  border-color: rgba(230, 195, 106, 0.28);
+  color: #efd891;
+}
+
+.credibility-checklist-item strong {
+  color: #f1eadc;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.credibility-checklist-item p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.credibility-checklist-item code {
+  display: block;
+  min-width: 0;
+  border: 1px solid rgba(183, 169, 138, 0.16);
+  border-radius: 7px;
+  background: #0b0b0b;
+  color: #e7decd;
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  padding: 6px;
+  white-space: normal;
+}
+
 .credibility-run-next-main {
   display: grid;
   gap: 7px;
