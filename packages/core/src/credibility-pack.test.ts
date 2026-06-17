@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -9,6 +9,7 @@ import { createCredibilityPack, writeCredibilityPack } from "./credibility-pack.
 import { writeEngineVerificationRun, type EngineVerificationCommandRunner } from "./engine-verification.js";
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
 import { createReceipt } from "./receipt.js";
+import { writeReportDraft } from "./report-draft.js";
 
 const roots: string[] = [];
 
@@ -224,6 +225,86 @@ describe("professor credibility pack", () => {
     expect(pack.markdown).toContain("## Reviewer Action Plan");
     expect(pack.markdown).toContain("Close required Maxima symbolic cross-check gate");
     expect(pack.markdown).toContain("## Blocking Warnings");
+  });
+
+  it("blocks professor readiness when saved report drafts fail integrity checks", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+    await writeReportDraft({
+      rootPath: root,
+      title: "Verified Reviewer Draft",
+      summary: "A report draft with matching Markdown sidecar.",
+      markdown: "# Verified Reviewer Draft\n\nEvery cited result is replayable.\n",
+      now: "2026-06-16T00:00:10.000Z"
+    });
+    const tampered = await writeReportDraft({
+      rootPath: root,
+      title: "Edited Reviewer Draft",
+      summary: "A report draft edited after save.",
+      markdown: "# Edited Reviewer Draft\n\nOriginal saved text.\n",
+      now: "2026-06-16T00:00:20.000Z"
+    });
+    await writeFile(tampered.paths.markdown, "# Edited Reviewer Draft\n\nChanged after save.\n", "utf8");
+    const adversarialReceipt = createReceipt("for all integers n, n^2+n+1 is even");
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(adversarialReceipt, {
+        suiteId: "ai-failure-seed",
+        title: "AI Failure Seed Suite",
+        expectTrust: "refuted",
+        expectEvidenceKind: "universal-parity",
+        category: "false-universal",
+        aiFailureMode: "confident universal claim"
+      }),
+      suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
+      suitePath: "packages/benchmarks/suites/ai-failure-seed.json",
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-16T00:00:45.000Z"
+    });
+
+    const pack = await createCredibilityPack({
+      rootPath: root,
+      now: "2026-06-16T00:01:00.000Z",
+      engineRequirements: { maxima: true, z3: true, lean: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      leanCommand: "lean-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: passingEngineRunner
+    });
+
+    expect(pack.status).toBe("blocked");
+    expect(pack.summary).toMatchObject({
+      engineStatus: "passed",
+      savedReportDrafts: 2,
+      reportDraftsNeedingAttention: 1,
+      professorReady: false
+    });
+    expect(pack.warnings).toContain(
+      "Saved report drafts need integrity review before sharing: 1 draft(s) are missing Markdown or have SHA-256 mismatches."
+    );
+    expect(pack.markdown).toContain("Saved report drafts: 2 saved drafts, 1 needs attention");
+    expect(pack.workspaceReview.summary.reportDrafts).toBe(2);
+    expect(pack.workspaceReview.summary.reportDraftsNeedingAttention).toBe(1);
+    expect(pack.workspaceReview.topItems).toContainEqual(
+      expect.objectContaining({
+        kind: "report-draft-review",
+        priority: "high",
+        title: "Fix report draft before sharing: Edited Reviewer Draft"
+      })
+    );
+    expect(pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({
+        category: "workspace-review",
+        priority: "high",
+        title: "Fix report draft before sharing: Edited Reviewer Draft",
+        closes: expect.arrayContaining(["report-draft-review"])
+      })
+    );
   });
 
   it("routes host-blocked engine gates to no-network Docker reviewer commands", async () => {

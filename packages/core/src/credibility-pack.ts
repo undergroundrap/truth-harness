@@ -97,6 +97,8 @@ export interface CredibilityPack {
     savedBenchmarkRuns: number;
     latestAdversarialBenchmarkStatus: "missing" | "passed" | "failed";
     latestAdversarialBenchmarkAccuracy?: number;
+    savedReportDrafts: number;
+    reportDraftsNeedingAttention: number;
     reviewItems: number;
     criticalReviewItems: number;
     highReviewItems: number;
@@ -234,6 +236,8 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       savedBenchmarkRuns: benchmarkLedger.savedRuns,
       latestAdversarialBenchmarkStatus: adversarialBenchmarkStatus(benchmarkLedger.latestAdversarialRun),
       latestAdversarialBenchmarkAccuracy: benchmarkLedger.latestAdversarialRun?.trustAccuracy,
+      savedReportDrafts: review.summary.reportDrafts ?? 0,
+      reportDraftsNeedingAttention: review.summary.reportDraftsNeedingAttention ?? 0,
       reviewItems: review.summary.totalItems,
       criticalReviewItems: review.summary.criticalItems,
       highReviewItems: review.summary.highItems,
@@ -332,6 +336,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Engine evidence: ${pack.summary.engineStatus} (${pack.summary.concreteEngineGates} concrete gates, ${pack.summary.requiredEngineGates} required gates, ${pack.summary.engineEvidenceMinted} evidence records earned)`,
     `- Saved engine-run ledger: ${pack.summary.savedEngineRuns} saved${pack.summary.latestStrictEngineRunStatus ? ` (latest strict reviewer: ${pack.summary.latestStrictEngineRunStatus})` : ""}`,
     `- Adversarial benchmark: ${formatAdversarialBenchmarkSummary(pack.summary.latestAdversarialBenchmarkStatus, pack.summary.latestAdversarialBenchmarkAccuracy)} (${pack.summary.savedBenchmarkRuns} saved benchmark run${pack.summary.savedBenchmarkRuns === 1 ? "" : "s"})`,
+    `- Saved report drafts: ${formatReportDraftSummary(pack.summary.savedReportDrafts, pack.summary.reportDraftsNeedingAttention)}`,
     `- Embedded artifact snapshot: ${pack.summary.snapshotFiles} files, ${pack.summary.snapshotBytes} bytes`,
     `- Open work queue: ${pack.summary.reviewItems} items (${pack.summary.criticalReviewItems} critical, ${pack.summary.highReviewItems} high)`,
     `- Reviewer action plan: ${pack.reviewerActionPlan.totalActions} actions (${pack.reviewerActionPlan.criticalActions} critical, ${pack.reviewerActionPlan.highActions} high)`,
@@ -545,6 +550,15 @@ function formatAdversarialBenchmarkSummary(
   return `${status}${accuracy === undefined ? "" : ` (${(accuracy * 100).toFixed(1)}%)`}`;
 }
 
+function formatReportDraftSummary(saved: number, needingAttention: number): string {
+  const savedLabel = `${saved} saved draft${saved === 1 ? "" : "s"}`;
+  if (needingAttention === 0) {
+    return `${savedLabel}, 0 need attention`;
+  }
+
+  return `${savedLabel}, ${needingAttention} need${needingAttention === 1 ? "s" : ""} attention`;
+}
+
 function createReviewerActionPlan(input: {
   validation: WorkspaceValidation;
   engineEvidence: EngineVerificationReport;
@@ -756,6 +770,11 @@ function credibilityWarnings(input: {
   }
   if (input.review.summary.criticalItems > 0) {
     warnings.push(`Workspace review has ${input.review.summary.criticalItems} critical open item(s).`);
+  }
+  if ((input.review.summary.reportDraftsNeedingAttention ?? 0) > 0) {
+    warnings.push(
+      `Saved report drafts need integrity review before sharing: ${input.review.summary.reportDraftsNeedingAttention} draft(s) are missing Markdown or have SHA-256 mismatches.`
+    );
   }
 
   return [...new Set(warnings)];

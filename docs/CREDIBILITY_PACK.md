@@ -42,11 +42,12 @@ npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/
 - Concrete engine evidence report from `engines verify`.
 - Saved engine-run ledger summary from `.truth-harness/engine-runs`, including the latest strict all-engines reviewer run when one exists.
 - Saved benchmark ledger summary from `.truth-harness/benchmarks`, including the latest `ai-failure-seed` adversarial AI-failure run, artifact path, trust accuracy, replay command, and sample receipt replay commands.
+- Saved report draft summary from `.truth-harness/findings`, including how many human-facing Markdown drafts exist and whether any need integrity review before sharing.
 - Workspace review queue with top open proof/check obligations. Normal unverified exploration and stronger-label upgrades stay visible as work, but they are not treated as release-critical defects unless they block a current claim boundary.
 - Structured reviewer action plan with priorities, close targets, and commands for validation, engine, benchmark, and workspace-review blockers.
 - Exact reviewer commands for validation, writable engine checks, adversarial benchmarks, review, Docker core engines, the Lean proof fixture, and the heavier SageMath fixture.
 - A one-command Docker professor evidence route: `npm run docker:professor` builds the pinned Lean proof image, then writes Maxima/Z3/Lean engine evidence, adversarial benchmark evidence, a credibility pack, and a verified portable reviewer bundle from inside the no-network compose service.
-- Blocking warnings when validation fails, required engines are missing, concrete engine smoke gates are incomplete, the adversarial benchmark is missing/failing, or critical review items remain open.
+- Blocking warnings when validation fails, required engines are missing, concrete engine smoke gates are incomplete, the adversarial benchmark is missing/failing, saved report drafts fail Markdown sidecar integrity, or critical review items remain open.
 
 ## Portable Reviewer Bundle
 
@@ -95,6 +96,7 @@ A pack is `ready-for-review` only when:
 - all concrete engine smoke gates pass,
 - every explicitly required engine gate passes,
 - the latest saved `ai-failure-seed` adversarial benchmark exists and has no failing cases,
+- saved report draft Markdown files match the SHA-256 recorded in their JSON sidecars,
 - the workspace review has no critical open items.
 
 Critical review items are reserved for product, evidence, or current-claim blockers. Open research routes that honestly remain `unverified` should appear as high-priority work, while upgrade obligations that would be needed before claiming a stronger label should appear below that. The queue should make the next honest move obvious without making the whole workspace look broken.
