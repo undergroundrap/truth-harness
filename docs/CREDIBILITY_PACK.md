@@ -9,6 +9,7 @@ It does not claim the workspace is true. It creates a local packet that says wha
 ```bash
 truth-harness workspace credibility-pack .
 truth-harness workspace credibility-pack . --require-docker-core
+truth-harness workspace credibility-pack . --require-cvc5
 truth-harness workspace credibility-pack . --require-all-concrete
 truth-harness workspace credibility-pack . --dry-run --json
 truth-harness workspace credibility-bundle .
@@ -80,14 +81,14 @@ A pack is `ready-for-review` only when:
 
 This status is intentionally conservative. A ready pack does not prove every claim; it only says the workspace is coherent enough for external review.
 
-Maxima and SageMath CAS check records can support the narrow `cross-checked` label only when a concrete recorded agreement exists. The default Docker core credibility gate currently requires Maxima and Z3 evidence. SageMath is available as a direct constrained CAS adapter and as the heavier no-network `sage-math` Docker gate; use `--require-sage` or `npm run docker:sage` when a reviewer wants SageMath to earn its own recorded CAS agreement.
+Maxima and SageMath CAS check records can support the narrow `cross-checked` label only when a concrete recorded agreement exists. Z3 and cvc5 SMT records can support the narrow `smt-checked` label only when the selected solver returns `sat` or `unsat` for a concrete SMT-LIB artifact. The default Docker core credibility gate currently requires Maxima and Z3 evidence. cvc5 is an optional second SMT solver gate through `--require-cvc5`; SageMath is available as a direct constrained CAS adapter and as the heavier no-network `sage-math` Docker gate through `--require-sage` or `npm run docker:sage`.
 
 ## What It Does Not Prove
 
 - It does not prove the mathematical truth of every claim.
 - It does not prove scientific, medical, safety, legal, or patent conclusions.
 - It does not upgrade trust labels.
-- It does not replace Lean, Z3, Maxima, SageMath, peer review, or human domain expertise.
+- It does not replace Lean, Z3, cvc5, Maxima, SageMath, peer review, or human domain expertise.
 
 The pack is a reviewer doorway: it gives serious people one local artifact to inspect before deciding whether the underlying receipts, proof-checks, SMT/CAS records, routes, and claims deserve deeper attention.
 The reviewer bundle is the handoff container for that doorway: it makes the packet and its cited local artifacts portable, hash-checkable, and inspectable without relying on the browser.

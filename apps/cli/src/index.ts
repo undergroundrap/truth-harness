@@ -260,6 +260,7 @@ import {
   type SimulationLogWriteResult,
   type SimulationScalar,
   type SimulationStage,
+  type SmtBackendId,
   type SmtBackendStatusReport,
   type SmtCheckRecord,
   type SmtCheckSummary,
@@ -3042,10 +3043,12 @@ workspace
   .option("--sage-command <command>", "Override SageMath executable for the optional CAS readiness probe")
   .option("--lean-command <command>", "Override Lean executable for the proof fixture")
   .option("--z3-command <command>", "Override Z3 executable for the SMT check")
-  .option("--smt-source <path>", "Workspace-local SMT-LIB source for the Z3 check", "docs/examples/constraints.smt2")
+  .option("--cvc5-command <command>", "Override cvc5 executable for the optional second SMT check")
+  .option("--smt-source <path>", "Workspace-local SMT-LIB source for SMT checks", "docs/examples/constraints.smt2")
   .option("--lean-source <path>", "Workspace-local Lean source for the Lean fixture", "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean")
   .option("--require-maxima", "Mark Maxima as required for professor readiness")
   .option("--require-z3", "Mark Z3 as required for professor readiness")
+  .option("--require-cvc5", "Mark cvc5 as required for professor readiness")
   .option("--require-lean", "Mark Lean as required for professor readiness")
   .option("--require-sage", "Require SageMath to earn a constrained CAS cross-check")
   .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
@@ -3065,10 +3068,12 @@ workspace
         sageCommand?: string;
         leanCommand?: string;
         z3Command?: string;
+        cvc5Command?: string;
         smtSource: string;
         leanSource: string;
         requireMaxima?: boolean;
         requireZ3?: boolean;
+        requireCvc5?: boolean;
         requireLean?: boolean;
         requireSage?: boolean;
         requireDockerCore?: boolean;
@@ -3079,6 +3084,7 @@ workspace
       const engineRequirements = {
         maxima: Boolean(options.requireMaxima || options.requireDockerCore || options.requireAllConcrete),
         z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete),
+        cvc5: Boolean(options.requireCvc5),
         lean: Boolean(options.requireLean || options.requireAllConcrete),
         sage: Boolean(options.requireSage)
       };
@@ -3092,6 +3098,7 @@ workspace
         sageCommand: options.sageCommand,
         leanCommand: options.leanCommand,
         z3Command: options.z3Command,
+        cvc5Command: options.cvc5Command,
         smtSourcePath: options.smtSource,
         leanSourcePath: options.leanSource,
         engineRequirements
@@ -3124,10 +3131,12 @@ workspace
   .option("--sage-command <command>", "Override SageMath executable for the optional CAS readiness probe")
   .option("--lean-command <command>", "Override Lean executable for the proof fixture")
   .option("--z3-command <command>", "Override Z3 executable for the SMT check")
-  .option("--smt-source <path>", "Workspace-local SMT-LIB source for the Z3 check", "docs/examples/constraints.smt2")
+  .option("--cvc5-command <command>", "Override cvc5 executable for the optional second SMT check")
+  .option("--smt-source <path>", "Workspace-local SMT-LIB source for SMT checks", "docs/examples/constraints.smt2")
   .option("--lean-source <path>", "Workspace-local Lean source for the Lean fixture", "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean")
   .option("--require-maxima", "Mark Maxima as required for professor readiness")
   .option("--require-z3", "Mark Z3 as required for professor readiness")
+  .option("--require-cvc5", "Mark cvc5 as required for professor readiness")
   .option("--require-lean", "Mark Lean as required for professor readiness")
   .option("--require-sage", "Require SageMath to earn a constrained CAS cross-check")
   .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
@@ -3146,10 +3155,12 @@ workspace
         sageCommand?: string;
         leanCommand?: string;
         z3Command?: string;
+        cvc5Command?: string;
         smtSource: string;
         leanSource: string;
         requireMaxima?: boolean;
         requireZ3?: boolean;
+        requireCvc5?: boolean;
         requireLean?: boolean;
         requireSage?: boolean;
         requireDockerCore?: boolean;
@@ -3160,6 +3171,7 @@ workspace
       const engineRequirements = {
         maxima: Boolean(options.requireMaxima || options.requireDockerCore || options.requireAllConcrete),
         z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete),
+        cvc5: Boolean(options.requireCvc5),
         lean: Boolean(options.requireLean || options.requireAllConcrete),
         sage: Boolean(options.requireSage)
       };
@@ -3173,6 +3185,7 @@ workspace
         sageCommand: options.sageCommand,
         leanCommand: options.leanCommand,
         z3Command: options.z3Command,
+        cvc5Command: options.cvc5Command,
         smtSourcePath: options.smtSource,
         leanSourcePath: options.leanSource,
         engineRequirements
@@ -3735,10 +3748,12 @@ smt
   .description("Probe local SMT solver backends without checking a claim.")
   .option("--json", "Print the full SMT backend status JSON")
   .option("--z3-command <path>", "Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3.")
+  .option("--cvc5-command <path>", "cvc5 executable path or command. Defaults to TRUTH_HARNESS_CVC5 or cvc5.")
   .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 3000)
-  .action((options: { json?: boolean; z3Command?: string; timeoutMs: number }) => {
+  .action((options: { json?: boolean; z3Command?: string; cvc5Command?: string; timeoutMs: number }) => {
     const status = getSmtBackendStatus({
       z3Command: options.z3Command,
+      cvc5Command: options.cvc5Command,
       timeoutMs: options.timeoutMs
     });
 
@@ -3752,14 +3767,16 @@ smt
 
 smt
   .command("check")
-  .description("Check a local SMT-LIB artifact with Z3 and produce an SMT check record.")
+  .description("Check a local SMT-LIB artifact with Z3 or cvc5 and produce an SMT check record.")
   .argument("<source>", "SMT-LIB source file to check")
   .option("--json", "Print the full SMT check JSON")
   .option("--out <path>", "Write the full SMT check JSON to a file")
   .option("--write", "Write JSON and Markdown into .truth-harness/smt")
   .option("--workspace <path>", "Project root path", ".")
   .option("--query <name>", "Optional query or constraint-set name represented by the source")
+  .option("--backend <backend>", "SMT backend to use: z3 or cvc5", parseSmtBackendOption, "z3")
   .option("--z3-command <path>", "Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3.")
+  .option("--cvc5-command <path>", "cvc5 executable path or command. Defaults to TRUTH_HARNESS_CVC5 or cvc5.")
   .option("--timeout-ms <ms>", "Backend probe and SMT check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--fail-on-unverified", "Exit non-zero unless the solver returns sat or unsat")
   .action(
@@ -3771,7 +3788,9 @@ smt
         write?: boolean;
         workspace: string;
         query?: string;
+        backend: SmtBackendId;
         z3Command?: string;
+        cvc5Command?: string;
         timeoutMs: number;
         failOnUnverified?: boolean;
       }
@@ -3781,7 +3800,9 @@ smt
             rootPath: options.workspace,
             sourcePath,
             queryName: options.query,
+            backend: options.backend,
             z3Command: options.z3Command,
+            cvc5Command: options.cvc5Command,
             timeoutMs: options.timeoutMs
           })
         : undefined;
@@ -3792,9 +3813,11 @@ smt
           sourceRef: sourcePath,
           sourceText: await readFile(resolve(sourcePath), "utf8"),
           queryName: options.query,
+          backend: options.backend,
           z3Command: options.z3Command,
+          cvc5Command: options.cvc5Command,
           timeoutMs: options.timeoutMs,
-          replayCommand: `truth-harness smt check ${quoteCommandArg(sourcePath)} --json`
+          replayCommand: `truth-harness smt check ${quoteCommandArg(sourcePath)} --backend ${options.backend} --json`
         });
 
       if (options.out) {
@@ -3818,14 +3841,16 @@ smt
 
 smt
   .command("solve")
-  .description("Build workspace-local SMT-LIB from explicit integer constraints and check it with Z3.")
+  .description("Build workspace-local SMT-LIB from explicit integer constraints and check it with Z3 or cvc5.")
   .option("--json", "Print the full generated problem and SMT check JSON")
   .option("--workspace <path>", "Project root path", ".")
   .option("--name <name>", "Optional query or constraint-set name")
   .option("--int <name>", "Declare an integer variable. Repeat for multiple variables.", collectRepeated, [])
   .option("--constraint <expr>", "Add a constraint such as \"x + y >= 3\". Repeat for multiple constraints.", collectRepeated, [])
   .option("--model", "Append get-model after check-sat for satisfiable constraints")
+  .option("--backend <backend>", "SMT backend to use: z3 or cvc5", parseSmtBackendOption, "z3")
   .option("--z3-command <path>", "Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3.")
+  .option("--cvc5-command <path>", "cvc5 executable path or command. Defaults to TRUTH_HARNESS_CVC5 or cvc5.")
   .option("--timeout-ms <ms>", "Backend probe and SMT check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--fail-on-unverified", "Exit non-zero unless the solver returns sat or unsat")
   .action(
@@ -3836,7 +3861,9 @@ smt
       int: string[];
       constraint: string[];
       model?: boolean;
+      backend: SmtBackendId;
       z3Command?: string;
+      cvc5Command?: string;
       timeoutMs: number;
       failOnUnverified?: boolean;
     }) => {
@@ -3846,7 +3873,9 @@ smt
         variables: options.int,
         constraints: options.constraint,
         includeModel: options.model,
+        backend: options.backend,
         z3Command: options.z3Command,
+        cvc5Command: options.cvc5Command,
         timeoutMs: options.timeoutMs
       });
 
@@ -3890,6 +3919,7 @@ const engines = program
   .option("--sage-command <command>", "Override SageMath executable for this probe")
   .option("--lean-command <command>", "Override Lean executable for this probe")
   .option("--z3-command <command>", "Override Z3 executable for this probe")
+  .option("--cvc5-command <command>", "Override cvc5 executable for this probe")
   .action(
     (options: {
       json?: boolean;
@@ -3898,13 +3928,15 @@ const engines = program
       sageCommand?: string;
       leanCommand?: string;
       z3Command?: string;
+      cvc5Command?: string;
     }) => {
       const manifest = getEngineManifest({
         timeoutMs: options.timeoutMs,
         maximaCommand: options.maximaCommand,
         sageCommand: options.sageCommand,
         leanCommand: options.leanCommand,
-        z3Command: options.z3Command
+        z3Command: options.z3Command,
+        cvc5Command: options.cvc5Command
       });
 
       if (options.json) {
@@ -3926,11 +3958,13 @@ engines
   .option("--sage-command <command>", "Override SageMath executable for the optional CAS readiness probe")
   .option("--lean-command <command>", "Override Lean executable for the proof fixture")
   .option("--z3-command <command>", "Override Z3 executable for the SMT check")
-  .option("--smt-source <path>", "Workspace-local SMT-LIB source for the Z3 check", "docs/examples/constraints.smt2")
+  .option("--cvc5-command <command>", "Override cvc5 executable for the optional second SMT check")
+  .option("--smt-source <path>", "Workspace-local SMT-LIB source for the SMT checks", "docs/examples/constraints.smt2")
   .option("--lean-source <path>", "Workspace-local Lean source for the Lean fixture", "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean")
   .option("--write", "Write the engine evidence run into .truth-harness/engine-runs")
   .option("--require-maxima", "Fail unless Maxima earns a concrete cross-checked result")
   .option("--require-z3", "Fail unless Z3 earns a concrete smt-checked result")
+  .option("--require-cvc5", "Fail unless cvc5 earns a concrete smt-checked result")
   .option("--require-lean", "Fail unless Lean accepts the pinned proof fixture")
   .option("--require-sage", "Fail unless SageMath earns a constrained CAS cross-check")
   .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
@@ -3944,11 +3978,13 @@ engines
       sageCommand?: string;
       leanCommand?: string;
       z3Command?: string;
+      cvc5Command?: string;
       smtSource: string;
       leanSource: string;
       write?: boolean;
       requireMaxima?: boolean;
       requireZ3?: boolean;
+      requireCvc5?: boolean;
       requireLean?: boolean;
       requireSage?: boolean;
       requireDockerCore?: boolean;
@@ -3958,6 +3994,7 @@ engines
       const requirements = {
         maxima: Boolean(options.requireMaxima || options.requireDockerCore || options.requireAllConcrete),
         z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete),
+        cvc5: Boolean(options.requireCvc5),
         lean: Boolean(options.requireLean || options.requireAllConcrete),
         sage: Boolean(options.requireSage)
       };
@@ -3970,6 +4007,7 @@ engines
             sageCommand: options.sageCommand,
             leanCommand: options.leanCommand,
             z3Command: options.z3Command,
+            cvc5Command: options.cvc5Command,
             smtSourcePath: options.smtSource,
             leanSourcePath: options.leanSource,
             requirements,
@@ -3983,6 +4021,7 @@ engines
         sageCommand: options.sageCommand,
         leanCommand: options.leanCommand,
         z3Command: options.z3Command,
+        cvc5Command: options.cvc5Command,
         smtSourcePath: options.smtSource,
         leanSourcePath: options.leanSource,
         requirements
@@ -4993,11 +5032,13 @@ function engineVerificationReplayCommand(options: {
   sageCommand?: string;
   leanCommand?: string;
   z3Command?: string;
+  cvc5Command?: string;
   smtSource: string;
   leanSource: string;
   write?: boolean;
   requireMaxima?: boolean;
   requireZ3?: boolean;
+  requireCvc5?: boolean;
   requireLean?: boolean;
   requireSage?: boolean;
   requireDockerCore?: boolean;
@@ -5023,6 +5064,9 @@ function engineVerificationReplayCommand(options: {
   if (options.z3Command) {
     args.push("--z3-command", options.z3Command);
   }
+  if (options.cvc5Command) {
+    args.push("--cvc5-command", options.cvc5Command);
+  }
   if (options.smtSource !== "docs/examples/constraints.smt2") {
     args.push("--smt-source", options.smtSource);
   }
@@ -5034,6 +5078,9 @@ function engineVerificationReplayCommand(options: {
   }
   if (options.requireZ3) {
     args.push("--require-z3");
+  }
+  if (options.requireCvc5) {
+    args.push("--require-cvc5");
   }
   if (options.requireLean) {
     args.push("--require-lean");
@@ -7773,6 +7820,14 @@ function parseTrustLabel(value: string): TrustLabel {
   }
 
   throw new Error(`Unsupported trust label ${JSON.stringify(value)}.`);
+}
+
+function parseSmtBackendOption(value: string): SmtBackendId {
+  if (value === "z3" || value === "cvc5") {
+    return value;
+  }
+
+  throw new Error(`Unsupported SMT backend ${JSON.stringify(value)}. Expected "z3" or "cvc5".`);
 }
 
 function maybeTrustLabel(value: string): TrustLabel | undefined {

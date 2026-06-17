@@ -130,6 +130,7 @@
                 "enum": [
                   "maxima-symbolic-cross-check",
                   "z3-smt-check",
+                  "cvc5-smt-check",
                   "lean-proof-fixture",
                   "sage-symbolic-cross-check"
                 ]

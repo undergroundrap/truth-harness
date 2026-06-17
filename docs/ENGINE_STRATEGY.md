@@ -58,7 +58,7 @@ Truth Harness should adapt mature engines when they are already world-class:
 | Need | Preferred strategy |
 | --- | --- |
 | Formal proof checking | Lean first; later Coq/Isabelle adapters if justified. |
-| SMT/constraint solving | Z3 now; cvc5 next. |
+| SMT/constraint solving | Z3 by default; optional cvc5 for second-solver checks. |
 | Symbolic CAS | SymPy now; SageMath/Maxima as independent cross-checks; WolframAlpha only as explicit external disclosure. |
 | Numeric computing | Conservative interval/rational kernels now; Arb/MPFI or similar later for rigorous numerics. |
 | Notebooks/scripts | Record provenance and replay commands; do not pretend notebook output is proof. |

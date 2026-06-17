@@ -97,6 +97,7 @@ export interface CreateCredibilityPackInput {
   smtSourceText?: string;
   leanSourcePath?: string;
   leanSourceText?: string;
+  cvc5Command?: string;
   runner?: EngineVerificationCommandRunner;
 }
 
@@ -126,6 +127,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
     timeoutMs: input.timeoutMs,
     maximaCommand: input.maximaCommand,
     z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command,
     leanCommand: input.leanCommand,
     sageCommand: input.sageCommand,
     smtSourcePath: input.smtSourcePath,
@@ -380,6 +382,7 @@ function createReviewerCommands(requirements: EngineVerificationRequirements | u
   const engineFlags = [
     requirements?.maxima ? "--require-maxima" : undefined,
     requirements?.z3 ? "--require-z3" : undefined,
+    requirements?.cvc5 ? "--require-cvc5" : undefined,
     requirements?.lean ? "--require-lean" : undefined,
     requirements?.sage ? "--require-sage" : undefined
   ].filter((flag): flag is string => Boolean(flag));

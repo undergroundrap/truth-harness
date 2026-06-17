@@ -68,6 +68,7 @@ export interface EngineManifestOptions {
   sageCommand?: string;
   leanCommand?: string;
   z3Command?: string;
+  cvc5Command?: string;
   now?: Date;
 }
 
@@ -121,6 +122,7 @@ export function getEngineManifest(options: EngineManifestOptions = {}): EngineMa
   const smt = getSmtBackendStatus({
     timeoutMs,
     z3Command: options.z3Command,
+    cvc5Command: options.cvc5Command,
     now: options.now
   } satisfies SmtBackendStatusOptions);
   const sandbox = getCodeRunSandboxStatus();
@@ -131,7 +133,7 @@ export function getEngineManifest(options: EngineManifestOptions = {}): EngineMa
     maximaCapability(cas.backends.find((backend) => backend.backendId === "maxima")),
     sageCapability(cas.backends.find((backend) => backend.backendId === "sage")),
     proofCapability(proof.backends[0]),
-    smtCapability(smt.backends[0]),
+    ...smt.backends.map(smtCapability),
     ...plannedCapabilities()
   ].map(withDeterminism);
   const countedCapabilities = capabilities.filter((capability) => capability.kind !== "planned-adapter");
@@ -441,14 +443,16 @@ function proofCapability(probe: ReturnType<typeof getProofBackendStatus>["backen
 }
 
 function smtCapability(probe: ReturnType<typeof getSmtBackendStatus>["backends"][number] | undefined): RawEngineCapability {
+  const backendId = probe?.backendId ?? "z3";
+  const displayName = probe?.displayName ?? "Z3 SMT solver";
   return {
-    id: "z3-smt-solver",
-    displayName: "Z3 SMT solver",
+    id: `${backendId}-smt-solver`,
+    displayName,
     kind: "adapter",
     lane: "math",
     status: adapterStatus(probe?.status),
     role: "smt-solver",
-    command: "truth-harness smt check docs/examples/constraints.smt2 --write",
+    command: `truth-harness smt check docs/examples/constraints.smt2 --backend ${backendId} --write`,
     executable: probe?.command,
     version: probe?.version,
     localOnly: true,
@@ -456,15 +460,14 @@ function smtCapability(probe: ReturnType<typeof getSmtBackendStatus>["backends"]
     strongestTrust: "smt-checked",
     canMintTrust: probe?.status === "available",
     statusProbeMintedEvidence: false,
-    trustBoundary: "Can support smt-checked only after Z3 returns sat or unsat for a concrete SMT-LIB artifact.",
-    limitations: probe?.limitations ?? ["Z3 has not been probed."],
-    nextStep: probe?.status === "available" ? "Run a concrete SMT-LIB check." : "Use Docker or install/configure Z3."
+    trustBoundary: `Can support smt-checked only after ${displayName} returns sat or unsat for a concrete SMT-LIB artifact.`,
+    limitations: probe?.limitations ?? [`${displayName} has not been probed.`],
+    nextStep: probe?.status === "available" ? "Run a concrete SMT-LIB check." : `Use Docker or install/configure ${displayName}.`
   };
 }
 
 function plannedCapabilities(): RawEngineCapability[] {
   return [
-    plannedCapability("cvc5-smt-solver", "cvc5 SMT solver", "math", "Second SMT solver for cross-solver confidence and regressions."),
     plannedCapability("lean-lsp-router", "Lean LSP proof workflow", "math", "Goals, diagnostics, formal library search, and interactive proof repair."),
     plannedCapability("local-vector-rag", "Local vector/PDF RAG", "sources", "Source ingestion, citation spans, contradiction checks, and reusable indexes."),
     plannedCapability("rigorous-numerics", "Rigorous numerics", "math", "Ball arithmetic, precision budgets, and reproducible error bounds."),
@@ -598,6 +601,7 @@ function adapterPrimitiveSemantics(id: string): EnginePrimitiveSemantics {
     case "lean-proof-checker":
       return "formal-proof";
     case "z3-smt-solver":
+    case "cvc5-smt-solver":
       return "smt-lib";
     case "maxima-cas":
     case "sage-cas":

@@ -154,7 +154,7 @@ Dependency posture:
 | CAS MVP | SymPy via subprocess adapter; optional WolframAlpha API adapter. |
 | Proof MVP | Local modular parity checker first, labeled as `exact-computed`; Lean adapter through existing Lean MCP/LSP project or subprocess wrapper next for `proved`. |
 | Numeric MVP | Conservative rational interval arithmetic first; Arb-backed rigorous ball arithmetic later. |
-| SMT MVP | Z3 adapter, then cvc5 adapter. |
+| SMT MVP | Z3 adapter plus optional cvc5 adapter for second-solver checks. |
 
 ## Benchmarking Capability
 
@@ -230,7 +230,7 @@ Current verifier-route records use `truth-harness.verifier-route.v0` and live un
 
 Current proof-check records use `truth-harness.proof-check.v0` and live under `.truth-harness/proofs/` when `truth-harness proof check <file> --write` or MCP `truth_harness_proof_check` with `write: true` is used. They store the Lean command, source path, source hash, optional declaration name, stdout/stderr, replay command, proof boundary, JSON path, and Markdown report path. `truth-harness proof list` and `truth_harness_proof_list` expose those records for audits, snapshots, research-session evidence refs, and agent follow-up.
 
-Current SMT-check records use `truth-harness.smt-check.v0` and live under `.truth-harness/smt/` when `truth-harness smt check <file> --write`, `truth-harness smt solve`, MCP `truth_harness_smt_check` with `write: true`, or MCP `truth_harness_smt_solve` is used. They store the Z3 command, source path, source hash, optional query name, stdout/stderr, replay command, solver boundary, JSON path, and Markdown report path. `truth-harness smt solve` and `truth_harness_smt_solve` generate `.smt2` sources under `.truth-harness/smt/sources/` from explicit integer variables and constraints before checking them. When `get-model` is present and Z3 returns `sat`, records also extract simple `define-fun` model bindings into structured JSON while preserving raw stdout. `sat` and `unsat` map to `smt-checked`; missing Z3, execution errors, `unknown`, or unrecognized output stay `unverified`. `truth-harness smt list` and `truth_harness_smt_list` expose those records for audits, snapshots, research-session evidence refs, and agent follow-up.
+Current SMT-check records use `truth-harness.smt-check.v0` and live under `.truth-harness/smt/` when `truth-harness smt check <file> --write`, `truth-harness smt solve`, MCP `truth_harness_smt_check` with `write: true`, or MCP `truth_harness_smt_solve` is used. They store the selected Z3 or cvc5 command, source path, source hash, optional query name, stdout/stderr, replay command, solver boundary, JSON path, and Markdown report path. `truth-harness smt solve` and `truth_harness_smt_solve` generate `.smt2` sources under `.truth-harness/smt/sources/` from explicit integer variables and constraints before checking them. Z3 is the default; pass `--backend cvc5` or MCP `backend: "cvc5"` for the optional second solver. When `get-model` is present and the solver returns `sat`, records also extract simple SMT-LIB `define-fun` model bindings into structured JSON while preserving raw stdout. `sat` and `unsat` map to `smt-checked`; missing solvers, execution errors, `unknown`, or unrecognized output stay `unverified`. `truth-harness smt list` and `truth_harness_smt_list` expose those records for audits, snapshots, research-session evidence refs, and agent follow-up.
 
 This makes Truth Harness useful for:
 
@@ -616,7 +616,7 @@ The first formal-backend probe is `truth-harness.proof-backends.v0`. It checks l
 
 The first formal proof-check artifact is `truth-harness.proof-check.v0`. It records the local Lean command, source path, source SHA-256, optional declaration name, stdout/stderr, replay command, and the proof boundary. `status: accepted` maps to `trust: proved` with `proofCheckerBacked: true`; rejected or unavailable checks stay `unverified` because a failed proof attempt is not a mathematical refutation. Written records live under `.truth-harness/proofs/` with paired Markdown reports so agents can cite, snapshot, audit, and revisit concrete proof-check attempts without relying on chat memory.
 
-The first SMT artifact is `truth-harness.smt-check.v0`. It records the local Z3 command, source path, source SHA-256, optional query name, stdout/stderr, replay command, and the solver boundary. `status: sat` or `status: unsat` maps to `trust: smt-checked` with `proofCheckerBacked: false`; `unknown`, unavailable, or failed checks stay `unverified`. Written records live under `.truth-harness/smt/` with paired Markdown reports so agents can cite, snapshot, audit, and revisit concrete constraint checks without treating SMT output as Lean-style proof.
+The first SMT artifact is `truth-harness.smt-check.v0`. It records the selected local solver command, source path, source SHA-256, optional query name, stdout/stderr, replay command, and the solver boundary. Z3 is the default backend and cvc5 is available as an optional second backend. `status: sat` or `status: unsat` maps to `trust: smt-checked` with `proofCheckerBacked: false`; `unknown`, unavailable, or failed checks stay `unverified`. Written records live under `.truth-harness/smt/` with paired Markdown reports so agents can cite, snapshot, audit, and revisit concrete constraint checks without treating SMT output as Lean-style proof.
 
 ## Model Context Packets
 
@@ -652,8 +652,8 @@ Current MCP tools:
 | `truth_harness_proof_backends` | Probe accepted local proof-checker availability without network access; the status report is not a proof. |
 | `truth_harness_proof_check` | Check a workspace-local Lean proof artifact, optionally write a local proof-check record, and return `proved` only when Lean accepts it. |
 | `truth_harness_proof_list` | List local proof-check records and reusable JSON/Markdown paths. |
-| `truth_harness_smt_backends` | Probe local Z3 availability without network access; the status report is not a solver check. |
-| `truth_harness_smt_check` | Check a workspace-local SMT-LIB artifact, optionally write a local SMT-check record, and return `smt-checked` only when Z3 returns `sat` or `unsat`. |
+| `truth_harness_smt_backends` | Probe local Z3 and cvc5 availability without network access; the status report is not a solver check. |
+| `truth_harness_smt_check` | Check a workspace-local SMT-LIB artifact with Z3 or cvc5, optionally write a local SMT-check record, and return `smt-checked` only when the selected solver returns `sat` or `unsat`. |
 | `truth_harness_smt_list` | List local SMT-check records and reusable JSON/Markdown paths. |
 | `truth_harness_smt_solve` | Build workspace-local SMT-LIB from explicit integer constraints, then run the local SMT-check workflow. |
 | `truth_harness_workspace_init` | Initialize the private local workspace. |
@@ -948,7 +948,7 @@ Phase 1: Local MVP
 
 Phase 2: Verification depth
 
-- Higher-level Z3 claim translation and cvc5 adapter.
+- Higher-level SMT claim translation, cross-solver comparison reports, and stronger SMT-LIB coverage.
 - Lean adapter through `lean-lsp-mcp` or a subprocess wrapper.
 - WolframAlpha optional adapter.
 - Cross-checking and counterexample-first routing.

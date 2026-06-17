@@ -21,7 +21,7 @@ import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-work
 import type { TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
-export type SmtBackendId = "z3";
+export type SmtBackendId = "z3" | "cvc5";
 export type SmtBackendStatus = "available" | "missing" | "error";
 
 export interface SmtBackendCommandResult {
@@ -79,6 +79,7 @@ export interface SmtBackendStatusReport {
 
 export interface SmtBackendStatusOptions {
   z3Command?: string;
+  cvc5Command?: string;
   timeoutMs?: number;
   now?: Date;
   runner?: SmtBackendCommandRunner;
@@ -94,7 +95,7 @@ export interface SmtModelBinding {
 }
 
 export interface SmtModelSummary {
-  format: "z3-define-fun";
+  format: "z3-define-fun" | "smtlib-define-fun";
   bindings: SmtModelBinding[];
   warnings: string[];
 }
@@ -104,7 +105,9 @@ export interface SmtCheckInput {
   sourceText: string;
   sourceRef?: string;
   queryName?: string;
+  backend?: SmtBackendId;
   z3Command?: string;
+  cvc5Command?: string;
   timeoutMs?: number;
   now?: Date;
   runner?: SmtBackendCommandRunner;
@@ -116,9 +119,9 @@ export interface SmtCheckRecord {
   checkId: string;
   createdAt: string;
   backend: {
-    id: "z3";
-    displayName: "Z3 SMT solver";
-    adapter: "local-z3-smtlib-subprocess";
+    id: SmtBackendId;
+    displayName: string;
+    adapter: string;
     role: "checker";
     acceptedProofChecker: false;
     command: string;
@@ -150,7 +153,9 @@ export interface WriteSmtCheckInput {
   rootPath: string;
   sourcePath: string;
   queryName?: string;
+  backend?: SmtBackendId;
   z3Command?: string;
+  cvc5Command?: string;
   timeoutMs?: number;
   now?: Date;
   runner?: SmtBackendCommandRunner;
@@ -172,7 +177,7 @@ export interface SmtCheckSummary {
   status: SmtCheckStatus;
   trust: TrustLabel;
   proofCheckerBacked: false;
-  backendId: "z3";
+  backendId: SmtBackendId;
   backendVersion?: string;
   warnings: string[];
 }
@@ -183,12 +188,12 @@ export function getSmtBackendStatus(options: SmtBackendStatusOptions = {}): SmtB
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const runner = options.runner ?? runCommand;
   const z3Command = options.z3Command?.trim() || process.env.TRUTH_HARNESS_Z3?.trim() || "z3";
-  const z3 = probeZ3Backend({
-    command: z3Command,
-    timeoutMs,
-    runner
-  });
-  const smtSolversAvailable = z3.status === "available" ? 1 : 0;
+  const cvc5Command = options.cvc5Command?.trim() || process.env.TRUTH_HARNESS_CVC5?.trim() || "cvc5";
+  const backends = [
+    probeSmtBackend({ backendId: "z3", command: z3Command, timeoutMs, runner }),
+    probeSmtBackend({ backendId: "cvc5", command: cvc5Command, timeoutMs, runner })
+  ];
+  const smtSolversAvailable = backends.filter((backend) => backend.status === "available").length;
 
   return {
     schemaVersion: "truth-harness.smt-backends.v0",
@@ -196,7 +201,7 @@ export function getSmtBackendStatus(options: SmtBackendStatusOptions = {}): SmtB
     localOnly: true,
     networkAccess: "none",
     smtSolversAvailable,
-    backends: [z3],
+    backends,
     trustBoundary: {
       statusProbeIsNotCheck: true,
       smtCheckedRequiresSolverRun: true,
@@ -206,7 +211,8 @@ export function getSmtBackendStatus(options: SmtBackendStatusOptions = {}): SmtB
     warnings:
       smtSolversAvailable > 0
         ? [
-            "A detected SMT solver can check SMT-LIB constraints, but this status report does not prove or refute any claim."
+            "A detected SMT solver can check SMT-LIB constraints, but this status report does not prove or refute any claim.",
+            "Independent Z3/cvc5 agreement can improve reviewer confidence, but it is still SMT evidence about the encoded artifact, not proof-checker-backed proof."
           ]
         : [
             "No accepted local SMT solver was detected. Truth Harness must not label results `smt-checked` until a solver run returns sat or unsat for a concrete SMT-LIB artifact."
@@ -217,29 +223,34 @@ export function getSmtBackendStatus(options: SmtBackendStatusOptions = {}): SmtB
 export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const runner = input.runner ?? runCommand;
+  const backendId = input.backend ?? "z3";
   const z3Command = input.z3Command?.trim() || process.env.TRUTH_HARNESS_Z3?.trim() || "z3";
+  const cvc5Command = input.cvc5Command?.trim() || process.env.TRUTH_HARNESS_CVC5?.trim() || "cvc5";
+  const backendMeta = smtBackendMetadata(backendId);
+  const backendCommand = backendId === "z3" ? z3Command : cvc5Command;
   const createdAt = (input.now ?? new Date()).toISOString();
   const sourcePath = input.sourcePath;
   const sourceRef = input.sourceRef ?? sourcePath;
   const sourceSha256 = sha256(input.sourceText);
   const sourceByteLength = Buffer.byteLength(input.sourceText, "utf8");
   const queryName = normalizeOptional(input.queryName);
-  const backendProbe = probeZ3Backend({
-    command: z3Command,
+  const backendProbe = probeSmtBackend({
+    backendId,
+    command: backendCommand,
     timeoutMs,
     runner
   });
-  const checkArgs = ["-smt2", sourcePath];
+  const checkArgs = smtCheckArgs(backendId, sourcePath);
   const base = {
     schemaVersion: "truth-harness.smt-check.v0" as const,
     createdAt,
     backend: {
-      id: "z3" as const,
-      displayName: "Z3 SMT solver" as const,
-      adapter: "local-z3-smtlib-subprocess" as const,
+      id: backendId,
+      displayName: backendMeta.displayName,
+      adapter: backendMeta.adapter,
       role: "checker" as const,
       acceptedProofChecker: false as const,
-      command: z3Command,
+      command: backendCommand,
       args: checkArgs,
       ...(backendProbe.version ? { version: backendProbe.version } : {})
     },
@@ -252,7 +263,7 @@ export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
     proofCheckerBacked: false as const,
     localOnly: true as const,
     networkAccess: "none" as const,
-    replay: input.replayCommand ?? `truth-harness smt check ${quoteCommandArg(sourceRef)} --json`
+    replay: input.replayCommand ?? `truth-harness smt check ${quoteCommandArg(sourceRef)} --backend ${backendId} --json`
   };
 
   if (backendProbe.status !== "available") {
@@ -268,7 +279,7 @@ export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
       stderr: backendProbe.stderr,
       error: backendProbe.error,
       limitations: [
-        "Z3 did not pass the local backend availability probe, so no SMT-LIB artifact was checked.",
+        `${backendMeta.displayName} did not pass the local backend availability probe, so no SMT-LIB artifact was checked.`,
         "This record cannot support an `smt-checked` trust label."
       ],
       warnings: [
@@ -277,7 +288,7 @@ export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
     });
   }
 
-  const result = runner(z3Command, checkArgs, timeoutMs);
+  const result = runner(backendCommand, checkArgs, timeoutMs);
   const stdout = trimOutput(result.stdout);
   const stderr = trimOutput(result.stderr);
   const errorText = result.error ? `${result.error.name ? `${result.error.name}: ` : ""}${result.error.message}` : undefined;
@@ -295,7 +306,7 @@ export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
       stderr,
       error: errorText,
       limitations: [
-        "Z3 was available during probing but could not be launched for the SMT check.",
+        `${backendMeta.displayName} was available during probing but could not be launched for the SMT check.`,
         "This record cannot support an `smt-checked` trust label."
       ],
       warnings: [
@@ -315,9 +326,9 @@ export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
       trust: "unverified",
       stdout,
       stderr,
-      error: errorText ?? `Z3 exited with status ${String(result.status)}.`,
+      error: errorText ?? `${backendMeta.displayName} exited with status ${String(result.status)}.`,
       limitations: [
-        "Z3 failed before returning a reliable SMT result.",
+        `${backendMeta.displayName} failed before returning a reliable SMT result.`,
         "Execution errors cannot support `smt-checked` or `proved` trust labels."
       ],
       warnings: [
@@ -328,7 +339,7 @@ export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
 
   const solverStatus = parseSolverStatus(stdout);
   if (solverStatus === "sat" || solverStatus === "unsat") {
-    const model = solverStatus === "sat" ? parseSmtModel(stdout) : undefined;
+    const model = solverStatus === "sat" ? parseSmtModel(stdout, backendId) : undefined;
 
     return withCheckId({
       ...base,
@@ -342,7 +353,7 @@ export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
       stdout,
       stderr,
       limitations: [
-        `Z3 returned ${solverStatus} for the provided SMT-LIB artifact.`,
+        `${backendMeta.displayName} returned ${solverStatus} for the provided SMT-LIB artifact.`,
         "This is SMT-solver evidence for the encoded constraints, not a proof-checker-backed proof of an informal, scientific, medical, safety, regulatory, or patent claim."
       ],
       warnings: [
@@ -362,7 +373,7 @@ export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
     stdout,
     stderr,
     limitations: [
-      "Z3 did not return a conclusive sat or unsat result for this artifact.",
+      `${backendMeta.displayName} did not return a conclusive sat or unsat result for this artifact.`,
       "Unknown or unrecognized SMT output cannot support `smt-checked` or `proved` trust labels."
     ],
     warnings: [
@@ -381,11 +392,13 @@ export async function writeSmtCheckRecord(input: WriteSmtCheckInput): Promise<Sm
     sourceRef,
     sourceText,
     queryName: input.queryName,
+    backend: input.backend,
     z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command,
     timeoutMs: input.timeoutMs,
     now: input.now,
     runner: input.runner,
-    replayCommand: `truth-harness smt check ${quoteCommandArg(sourceRef)} --write --json`
+    replayCommand: `truth-harness smt check ${quoteCommandArg(sourceRef)} --backend ${input.backend ?? "z3"} --write --json`
   });
   const smtDir = resolve(status.root, status.manifest.directories.smt);
   await mkdir(smtDir, { recursive: true });
@@ -453,9 +466,14 @@ export function parseSmtCheckRecord(raw: string, sourcePath = "SMT check record"
 
   const backend = expectRecord(parsed, "backend", "$.backend", issues);
   if (backend) {
-    expectConst(backend, "id", "z3", "$.backend.id", issues);
-    expectConst(backend, "displayName", "Z3 SMT solver", "$.backend.displayName", issues);
-    expectConst(backend, "adapter", "local-z3-smtlib-subprocess", "$.backend.adapter", issues);
+    const backendId = expectOneOf(backend, "id", ["z3", "cvc5"], "$.backend.id", issues);
+    if (backendId === "z3") {
+      expectConst(backend, "displayName", "Z3 SMT solver", "$.backend.displayName", issues);
+      expectConst(backend, "adapter", "local-z3-smtlib-subprocess", "$.backend.adapter", issues);
+    } else if (backendId === "cvc5") {
+      expectConst(backend, "displayName", "cvc5 SMT solver", "$.backend.displayName", issues);
+      expectConst(backend, "adapter", "local-cvc5-smtlib-subprocess", "$.backend.adapter", issues);
+    }
     expectConst(backend, "role", "checker", "$.backend.role", issues);
     expectConst(backend, "acceptedProofChecker", false, "$.backend.acceptedProofChecker", issues);
     expectNonEmptyString(backend, "command", "$.backend.command", issues);
@@ -589,7 +607,7 @@ export function renderSmtCheckMarkdown(record: SmtCheckRecord): string {
   return `${lines.join("\n")}\n`;
 }
 
-export function parseSmtModel(stdout: string): SmtModelSummary | undefined {
+export function parseSmtModel(stdout: string, backendId: SmtBackendId = "z3"): SmtModelSummary | undefined {
   const forms = extractDefineFunForms(stdout);
   if (forms.length === 0) {
     return undefined;
@@ -609,18 +627,20 @@ export function parseSmtModel(stdout: string): SmtModelSummary | undefined {
   }
 
   return {
-    format: "z3-define-fun",
+    format: backendId === "z3" ? "z3-define-fun" : "smtlib-define-fun",
     bindings,
     warnings
   };
 }
 
-function probeZ3Backend(args: {
+function probeSmtBackend(args: {
+  backendId: SmtBackendId;
   command: string;
   timeoutMs: number;
   runner: SmtBackendCommandRunner;
 }): SmtBackendProbe {
-  const probeArgs = ["-version"];
+  const backend = smtBackendMetadata(args.backendId);
+  const probeArgs = smtVersionArgs(args.backendId);
   const result = args.runner(args.command, probeArgs, args.timeoutMs);
   const stdout = singleLine(result.stdout);
   const stderr = singleLine(result.stderr);
@@ -628,9 +648,9 @@ function probeZ3Backend(args: {
 
   if (result.error && isMissingExecutable(result.error)) {
     return {
-      backendId: "z3",
-      displayName: "Z3 SMT solver",
-      adapter: "local-z3-smtlib-subprocess",
+      backendId: args.backendId,
+      displayName: backend.displayName,
+      adapter: backend.adapter,
       role: "checker",
       acceptedProofChecker: false,
       status: "missing",
@@ -644,17 +664,17 @@ function probeZ3Backend(args: {
       canCheckSmt: false,
       statusProbeMintedCheck: false,
       limitations: [
-        "Z3 executable was not found or could not be launched.",
-        "Install/configure Z3 before any record can use Z3 for `smt-checked` evidence."
+        `${backend.displayName} executable was not found or could not be launched.`,
+        `Install/configure ${backend.displayName} before any record can use it for \`smt-checked\` evidence.`
       ]
     };
   }
 
   if (result.error || result.status !== 0) {
     return {
-      backendId: "z3",
-      displayName: "Z3 SMT solver",
-      adapter: "local-z3-smtlib-subprocess",
+      backendId: args.backendId,
+      displayName: backend.displayName,
+      adapter: backend.adapter,
       role: "checker",
       acceptedProofChecker: false,
       status: "error",
@@ -665,11 +685,11 @@ function probeZ3Backend(args: {
       exitCode: result.status,
       stdout,
       stderr,
-      error: errorText ?? `Z3 exited with status ${String(result.status)}.`,
+      error: errorText ?? `${backend.displayName} exited with status ${String(result.status)}.`,
       canCheckSmt: false,
       statusProbeMintedCheck: false,
       limitations: [
-        "Z3 was detected but the local version probe failed.",
+        `${backend.displayName} was detected but the local version probe failed.`,
         "A failed backend probe cannot support `smt-checked` trust labels."
       ]
     };
@@ -678,9 +698,9 @@ function probeZ3Backend(args: {
   const version = stdout || stderr || "version unavailable";
 
   return {
-    backendId: "z3",
-    displayName: "Z3 SMT solver",
-    adapter: "local-z3-smtlib-subprocess",
+    backendId: args.backendId,
+    displayName: backend.displayName,
+    adapter: backend.adapter,
     role: "checker",
     acceptedProofChecker: false,
     status: "available",
@@ -696,9 +716,32 @@ function probeZ3Backend(args: {
     statusProbeMintedCheck: false,
     limitations: [
       "This is only a local SMT solver availability probe.",
-      "A record may be labeled `smt-checked` only after Z3 returns sat or unsat for a concrete SMT-LIB artifact."
+      `A record may be labeled \`smt-checked\` only after ${backend.displayName} returns sat or unsat for a concrete SMT-LIB artifact.`
     ]
   };
+}
+
+function smtBackendMetadata(backendId: SmtBackendId): {
+  displayName: string;
+  adapter: string;
+} {
+  return backendId === "z3"
+    ? {
+        displayName: "Z3 SMT solver",
+        adapter: "local-z3-smtlib-subprocess"
+      }
+    : {
+        displayName: "cvc5 SMT solver",
+        adapter: "local-cvc5-smtlib-subprocess"
+      };
+}
+
+function smtVersionArgs(backendId: SmtBackendId): string[] {
+  return backendId === "z3" ? ["-version"] : ["--version"];
+}
+
+function smtCheckArgs(backendId: SmtBackendId, sourcePath: string): string[] {
+  return backendId === "z3" ? ["-smt2", sourcePath] : ["--lang", "smt2", sourcePath];
 }
 
 function runCommand(command: string, args: string[], timeoutMs: number): SmtBackendCommandResult {
@@ -889,7 +932,7 @@ function validateOptionalSmtModel(value: unknown, issues: string[]): void {
     return;
   }
 
-  expectConst(value, "format", "z3-define-fun", "$.model.format", issues);
+  expectOneOf(value, "format", ["z3-define-fun", "smtlib-define-fun"], "$.model.format", issues);
   const bindings = value.bindings;
   if (!Array.isArray(bindings)) {
     issues.push("$.model.bindings must be an array");

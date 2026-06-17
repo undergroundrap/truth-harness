@@ -31,6 +31,7 @@ import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 export type EngineVerificationCaseId =
   | "maxima-symbolic-cross-check"
   | "z3-smt-check"
+  | "cvc5-smt-check"
   | "lean-proof-fixture"
   | "sage-symbolic-cross-check";
 export type EngineVerificationCaseStatus = "passed" | "failed" | "missing" | "not-required";
@@ -44,6 +45,7 @@ export type EngineVerificationCommandRunner =
 export interface EngineVerificationRequirements {
   maxima?: boolean;
   z3?: boolean;
+  cvc5?: boolean;
   lean?: boolean;
   sage?: boolean;
 }
@@ -56,6 +58,7 @@ export interface EngineVerificationInput {
   sageCommand?: string;
   leanCommand?: string;
   z3Command?: string;
+  cvc5Command?: string;
   requirements?: EngineVerificationRequirements;
   symbolicPrompt?: SymbolicPrompt;
   symbolicResult?: string;
@@ -122,6 +125,7 @@ export interface EngineVerificationReport {
     provedRequiresAcceptedLeanRun: true;
     crossCheckedRequiresIndependentCasAgreement: true;
     smtCheckedRequiresZ3SatOrUnsat: true;
+    smtCheckedRequiresConcreteSolverSatOrUnsat: true;
   };
   warnings: string[];
 }
@@ -192,11 +196,17 @@ export async function verifyEngineEvidence(input: EngineVerificationInput = {}):
 
   cases.push(maximaCase(input, timeoutMs, Boolean(requirements.maxima)));
   cases.push(await z3Case(input, rootPath, timeoutMs, Boolean(requirements.z3)));
+  cases.push(await cvc5Case(input, rootPath, timeoutMs, Boolean(requirements.cvc5)));
   cases.push(await leanCase(input, rootPath, timeoutMs, Boolean(requirements.lean)));
   cases.push(sageCase(input, timeoutMs, Boolean(requirements.sage)));
 
   const requiredCases = cases.filter((entry) => entry.required);
-  const concreteCases = cases.filter((entry) => entry.id !== "sage-symbolic-cross-check" || entry.required);
+  const concreteCases = cases.filter((entry) => {
+    if (entry.id === "sage-symbolic-cross-check" || entry.id === "cvc5-smt-check") {
+      return entry.required;
+    }
+    return true;
+  });
   const requiredPassed = requiredCases.filter((entry) => entry.status === "passed").length;
   const concretePassed = concreteCases.filter((entry) => entry.status === "passed").length;
   const evidenceMinted = cases.filter((entry) => entry.evidenceMinted).length;
@@ -232,7 +242,8 @@ export async function verifyEngineEvidence(input: EngineVerificationInput = {}):
       sageRequiredGateRunsConstrainedCas: true,
       provedRequiresAcceptedLeanRun: true,
       crossCheckedRequiresIndependentCasAgreement: true,
-      smtCheckedRequiresZ3SatOrUnsat: true
+      smtCheckedRequiresZ3SatOrUnsat: true,
+      smtCheckedRequiresConcreteSolverSatOrUnsat: true
     },
     warnings: reportWarnings(cases)
   };
@@ -450,7 +461,7 @@ export function renderEngineVerificationRunMarkdown(record: EngineVerificationRu
     "## Trust Boundary",
     "",
     "- Engine readiness probes do not prove claims.",
-    "- Maxima, Z3, and Lean can only mint their scoped trust labels for concrete recorded checks.",
+    "- Maxima, Z3, cvc5, and Lean can only mint their scoped trust labels for concrete recorded checks.",
     "- SageMath direct CAS checks can mint scoped `cross-checked` records when `--require-sage` is requested.",
     "- A future claim must attach its own receipt, proof, SMT, CAS, simulation, source, or review artifact.",
     "",
@@ -558,6 +569,64 @@ async function z3Case(
       ? `Z3 returned ${record.status} for ${sourceRef}.`
       : record.error ?? `Z3 returned ${record.status}.`,
     command: `truth-harness smt check ${sourceRef} --fail-on-unverified`,
+    replay: record.replay,
+    evidence: summarizeEvidence(record),
+    limitations: record.limitations,
+    warnings: record.warnings
+  };
+}
+
+async function cvc5Case(
+  input: EngineVerificationInput,
+  rootPath: string,
+  timeoutMs: number,
+  required: boolean
+): Promise<EngineVerificationCase> {
+  const sourcePath = input.smtSourcePath ?? DEFAULT_SMT_SOURCE;
+  const resolvedPath = resolve(rootPath, sourcePath);
+  const sourceRef = toPortablePath(relative(rootPath, resolvedPath));
+  let sourceText: string;
+  try {
+    sourceText = input.smtSourceText ?? await readFile(resolvedPath, "utf8");
+  } catch (error) {
+    return sourceUnavailableCase({
+      id: "cvc5-smt-check",
+      capabilityId: "cvc5-smt-solver",
+      displayName: "cvc5 SMT-LIB check",
+      sourceRef,
+      command: `truth-harness smt check ${sourceRef} --backend cvc5 --fail-on-unverified`,
+      required,
+      error
+    });
+  }
+  const record = checkSmtLibArtifact({
+    sourcePath: resolvedPath,
+    sourceRef,
+    sourceText,
+    queryName: "truth-harness-engine-smoke",
+    backend: "cvc5",
+    cvc5Command: input.cvc5Command,
+    timeoutMs,
+    now: input.now,
+    runner: input.runner,
+    replayCommand: `truth-harness smt check ${sourceRef} --backend cvc5 --fail-on-unverified`
+  });
+  const passed = record.trust === "smt-checked" && (record.status === "sat" || record.status === "unsat");
+  const missing = record.status === "solver-unavailable";
+
+  return {
+    id: "cvc5-smt-check",
+    capabilityId: "cvc5-smt-solver",
+    displayName: "cvc5 SMT-LIB check",
+    lane: "math",
+    required,
+    status: passed ? "passed" : missing ? "missing" : "failed",
+    trust: record.trust,
+    evidenceMinted: passed,
+    summary: passed
+      ? `cvc5 returned ${record.status} for ${sourceRef}.`
+      : record.error ?? `cvc5 returned ${record.status}.`,
+    command: `truth-harness smt check ${sourceRef} --backend cvc5 --fail-on-unverified`,
     replay: record.replay,
     evidence: summarizeEvidence(record),
     limitations: record.limitations,
@@ -713,7 +782,7 @@ function summarizeEvidence(
 }
 
 function sourceUnavailableCase(input: {
-  id: Extract<EngineVerificationCaseId, "z3-smt-check" | "lean-proof-fixture">;
+  id: Extract<EngineVerificationCaseId, "z3-smt-check" | "cvc5-smt-check" | "lean-proof-fixture">;
   capabilityId: string;
   displayName: string;
   sourceRef: string;

@@ -90,7 +90,7 @@ The version that a serious AI lab notices is not a slick chat UI. It is a trust 
 3. `truth-harness replay` can replay a saved receipt. Status: done.
 4. `truth-harness bench run` produces readable math, physics, bounded-numeric, and symbolic score reports, can write local benchmark-run records with `--write`, can fail CI with `--fail-on-failures`, `truth-harness bench list` can find local benchmark artifacts, and `truth-harness bench compare` can flag or gate regressions between recorded runs. Status: done.
 5. `truth-harness proof check --write` can record local Lean proof-check attempts, `truth-harness proof list` can find them, and `proved` remains reserved for accepted Lean runs. Status: done.
-6. `truth-harness smt check --write` can record local Z3 SMT-LIB checks, `truth-harness smt list` can find them, and SMT output remains `smt-checked` rather than `proved`. Status: done.
+6. `truth-harness smt check --write` can record local Z3 or cvc5 SMT-LIB checks, `truth-harness smt list` can find them, and SMT output remains `smt-checked` rather than `proved`. Status: done.
 7. `truth-harness render` can export receipts as Markdown and HTML. Status: done.
 8. README explains the trust labels in plain language. Status: done.
 9. One GIF or terminal recording shows refutation and honest uncertainty. Status: pending.
@@ -110,7 +110,7 @@ Priority 2: become useful to real math users.
 
 - Add SymPy adapter for symbolic exact computation. Status: done for local subprocess MVP.
 - Add Lean smoke adapter and reserve `proved` for accepted proof-checker output. Status: proof-backend readiness probe, local Lean proof artifact check records, proof record writer, and proof list done; richer formal proof workflow still pending.
-- Add Z3 adapter for constraints and counterexamples. Status: local SMT-LIB Z3 check records, backend probe, writer, list, CLI, MCP, explicit structured integer-constraint-to-SMT generation, and simple `sat` model binding extraction done; broader natural-language claim-to-SMT translation still pending.
+- Add SMT adapters for constraints and counterexamples. Status: local SMT-LIB Z3 and optional cvc5 check records, backend probes, writer, list, CLI, MCP, explicit structured integer-constraint-to-SMT generation, and simple `sat` model binding extraction done; broader natural-language claim-to-SMT translation still pending.
 - Add local direct code execution records for scripts/tests/utilities agents claim to run. Status: core record, schema, sandbox-status capability reporting, fail-closed `requireSandbox`, default-deny executable allowlists, async process capture, timeout/output caps, per-workspace concurrency limiting, unsandboxed `networkAccess: unknown` privacy records, MCP opt-in gate, workspace validation, CLI, MCP, and regression coverage done; richer sandbox isolation still pending.
 - Add unit/dimensional analysis for physics claims.
 

@@ -714,6 +714,10 @@ export function createTruthHarnessMcpServer(): McpServer {
           .string()
           .optional()
           .describe("Z3 executable path or command for this manifest probe."),
+        cvc5Command: z
+          .string()
+          .optional()
+          .describe("cvc5 executable path or command for this manifest probe."),
         timeoutMs: z
           .number()
           .int()
@@ -862,6 +866,10 @@ export function createTruthHarnessMcpServer(): McpServer {
           .string()
           .optional()
           .describe("Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3."),
+        cvc5Command: z
+          .string()
+          .optional()
+          .describe("cvc5 executable path or command. Defaults to TRUTH_HARNESS_CVC5 or cvc5."),
         timeoutMs: z
           .number()
           .int()
@@ -875,7 +883,7 @@ export function createTruthHarnessMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ z3Command, timeoutMs }) => toolJson(handleTruthHarnessSmtBackends({ z3Command, timeoutMs }))
+    async ({ z3Command, cvc5Command, timeoutMs }) => toolJson(handleTruthHarnessSmtBackends({ z3Command, cvc5Command, timeoutMs }))
   );
 
   server.registerTool(
@@ -883,7 +891,7 @@ export function createTruthHarnessMcpServer(): McpServer {
     {
       title: "Check SMT-LIB Artifact",
       description:
-        "Run Z3 on a workspace-local SMT-LIB artifact and optionally write a local truth-harness.smt-check.v0 record.",
+        "Run Z3 or cvc5 on a workspace-local SMT-LIB artifact and optionally write a local truth-harness.smt-check.v0 record.",
       inputSchema: {
         sourcePath: z.string().min(1).describe("Workspace-local SMT-LIB source file to check."),
         workspacePath: z
@@ -891,10 +899,15 @@ export function createTruthHarnessMcpServer(): McpServer {
           .optional()
           .describe("Workspace root for reading and writing SMT check records. Defaults to the MCP workspace root."),
         queryName: z.string().optional().describe("Optional query or constraint-set name represented by the source file."),
+        backend: z.enum(["z3", "cvc5"]).optional().describe("SMT backend to use. Defaults to z3."),
         z3Command: z
           .string()
           .optional()
           .describe("Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3."),
+        cvc5Command: z
+          .string()
+          .optional()
+          .describe("cvc5 executable path or command. Defaults to TRUTH_HARNESS_CVC5 or cvc5."),
         timeoutMs: z
           .number()
           .int()
@@ -916,12 +929,14 @@ export function createTruthHarnessMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ sourcePath, workspacePath, queryName, z3Command, timeoutMs, write, failOnUnverified }) => {
+    async ({ sourcePath, workspacePath, queryName, backend, z3Command, cvc5Command, timeoutMs, write, failOnUnverified }) => {
       const result = await handleTruthHarnessSmtCheck({
         sourcePath,
         workspacePath,
         queryName,
+        backend,
         z3Command,
+        cvc5Command,
         timeoutMs,
         write,
         failOnUnverified
@@ -955,7 +970,7 @@ export function createTruthHarnessMcpServer(): McpServer {
     {
       title: "Generate And Check SMT Problem",
       description:
-        "Build workspace-local SMT-LIB from explicit integer variables and constraints, then run the local Z3 SMT check workflow.",
+        "Build workspace-local SMT-LIB from explicit integer variables and constraints, then run the local Z3 or cvc5 SMT check workflow.",
       inputSchema: {
         workspacePath: z
           .string()
@@ -971,10 +986,15 @@ export function createTruthHarnessMcpServer(): McpServer {
           .min(1)
           .describe("Explicit constraints such as 'x > 0' or 'x + y <= 3'."),
         includeModel: z.boolean().optional().describe("When true, append get-model after check-sat."),
+        backend: z.enum(["z3", "cvc5"]).optional().describe("SMT backend to use. Defaults to z3."),
         z3Command: z
           .string()
           .optional()
           .describe("Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3."),
+        cvc5Command: z
+          .string()
+          .optional()
+          .describe("cvc5 executable path or command. Defaults to TRUTH_HARNESS_CVC5 or cvc5."),
         timeoutMs: z
           .number()
           .int()
@@ -992,14 +1012,16 @@ export function createTruthHarnessMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath, queryName, integerVariables, constraints, includeModel, z3Command, timeoutMs, failOnUnverified }) => {
+    async ({ workspacePath, queryName, integerVariables, constraints, includeModel, backend, z3Command, cvc5Command, timeoutMs, failOnUnverified }) => {
       const result = await handleTruthHarnessSmtSolve({
         workspacePath,
         queryName,
         integerVariables,
         constraints,
         includeModel,
+        backend,
         z3Command,
+        cvc5Command,
         timeoutMs,
         failOnUnverified
       });
@@ -1594,16 +1616,18 @@ export function createTruthHarnessMcpServer(): McpServer {
         sageCommand: z.string().optional().describe("Override SageMath executable for the optional CAS readiness probe."),
         leanCommand: z.string().optional().describe("Override Lean executable for the proof fixture."),
         z3Command: z.string().optional().describe("Override Z3 executable for the SMT check."),
+        cvc5Command: z.string().optional().describe("Override cvc5 executable for the optional second SMT check."),
         smtSourcePath: z
           .string()
           .optional()
-          .describe("Workspace-local SMT-LIB source for the Z3 check."),
+          .describe("Workspace-local SMT-LIB source for SMT checks."),
         leanSourcePath: z
           .string()
           .optional()
           .describe("Workspace-local Lean source for the Lean fixture."),
         requireMaxima: z.boolean().optional().describe("Mark Maxima as required for reviewer readiness."),
         requireZ3: z.boolean().optional().describe("Mark Z3 as required for reviewer readiness."),
+        requireCvc5: z.boolean().optional().describe("Mark cvc5 as required for reviewer readiness."),
         requireLean: z.boolean().optional().describe("Mark Lean as required for reviewer readiness."),
         requireSage: z
           .boolean()

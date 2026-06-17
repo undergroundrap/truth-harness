@@ -202,6 +202,7 @@ import {
   type SimulationLogWriteResult,
   type SimulationScalar,
   type SimulationStage,
+  type SmtBackendId,
   type SmtBackendStatusReport,
   type SmtCheckRecord,
   type SmtCheckSummary,
@@ -263,6 +264,7 @@ export interface TruthHarnessVerifyInput {
   sageCommand?: string;
   leanCommand?: string;
   z3Command?: string;
+  cvc5Command?: string;
 }
 
 export interface TruthHarnessVerifyOutput {
@@ -295,6 +297,7 @@ export interface TruthHarnessEngineManifestInput {
   sageCommand?: string;
   leanCommand?: string;
   z3Command?: string;
+  cvc5Command?: string;
 }
 
 export interface TruthHarnessClaimAddInput {
@@ -438,13 +441,16 @@ export interface TruthHarnessProofListInput {
 export interface TruthHarnessSmtBackendsInput {
   timeoutMs?: number;
   z3Command?: string;
+  cvc5Command?: string;
 }
 
 export interface TruthHarnessSmtCheckInput {
   sourcePath: string;
   workspacePath?: string;
   queryName?: string;
+  backend?: SmtBackendId;
   z3Command?: string;
+  cvc5Command?: string;
   timeoutMs?: number;
   write?: boolean;
   failOnUnverified?: boolean;
@@ -468,7 +474,9 @@ export interface TruthHarnessSmtSolveInput {
   integerVariables: string[];
   constraints: string[];
   includeModel?: boolean;
+  backend?: SmtBackendId;
   z3Command?: string;
+  cvc5Command?: string;
   timeoutMs?: number;
   failOnUnverified?: boolean;
 }
@@ -643,10 +651,12 @@ export interface TruthHarnessWorkspaceCredibilityBundleInput {
   sageCommand?: string;
   leanCommand?: string;
   z3Command?: string;
+  cvc5Command?: string;
   smtSourcePath?: string;
   leanSourcePath?: string;
   requireMaxima?: boolean;
   requireZ3?: boolean;
+  requireCvc5?: boolean;
   requireLean?: boolean;
   requireSage?: boolean;
   requireDockerCore?: boolean;
@@ -1198,7 +1208,8 @@ export function handleTruthHarnessEngineManifest(input: TruthHarnessEngineManife
     maximaCommand: input.maximaCommand,
     sageCommand: input.sageCommand,
     leanCommand: input.leanCommand,
-    z3Command: input.z3Command
+    z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command
   });
 }
 
@@ -1472,6 +1483,7 @@ export async function handleTruthHarnessProofList(input: TruthHarnessProofListIn
 export function handleTruthHarnessSmtBackends(input: TruthHarnessSmtBackendsInput): SmtBackendStatusReport {
   return getSmtBackendStatus({
     z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command,
     timeoutMs: input.timeoutMs
   });
 }
@@ -1483,7 +1495,9 @@ export async function handleTruthHarnessSmtCheck(input: TruthHarnessSmtCheckInpu
         rootPath: workspaceRoot,
         sourcePath: input.sourcePath,
         queryName: input.queryName,
+        backend: input.backend,
         z3Command: input.z3Command,
+        cvc5Command: input.cvc5Command,
         timeoutMs: input.timeoutMs
       })
     : undefined;
@@ -1495,9 +1509,11 @@ export async function handleTruthHarnessSmtCheck(input: TruthHarnessSmtCheckInpu
       sourceRef: input.sourcePath,
       sourceText: await readFile(resolvedSourcePath, "utf8"),
       queryName: input.queryName,
+      backend: input.backend,
       z3Command: input.z3Command,
+      cvc5Command: input.cvc5Command,
       timeoutMs: input.timeoutMs,
-      replayCommand: `truth-harness smt check ${quoteCommandArg(input.sourcePath)} --json`
+      replayCommand: `truth-harness smt check ${quoteCommandArg(input.sourcePath)} --backend ${input.backend ?? "z3"} --json`
     });
   const error = input.failOnUnverified === true && record.trust !== "smt-checked";
 
@@ -1530,7 +1546,9 @@ export async function handleTruthHarnessSmtSolve(input: TruthHarnessSmtSolveInpu
     variables: input.integerVariables,
     constraints: input.constraints,
     includeModel: input.includeModel,
+    backend: input.backend,
     z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command,
     timeoutMs: input.timeoutMs
   });
   const error = input.failOnUnverified === true && result.check.record.trust !== "smt-checked";
@@ -1788,11 +1806,13 @@ export async function handleTruthHarnessWorkspaceCredibilityBundle(
     sageCommand: input.sageCommand,
     leanCommand: input.leanCommand,
     z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command,
     smtSourcePath: input.smtSourcePath,
     leanSourcePath: input.leanSourcePath,
     engineRequirements: {
       maxima: Boolean(input.requireMaxima || input.requireDockerCore || input.requireAllConcrete),
       z3: Boolean(input.requireZ3 || input.requireDockerCore || input.requireAllConcrete),
+      cvc5: Boolean(input.requireCvc5),
       lean: Boolean(input.requireLean || input.requireAllConcrete),
       sage: Boolean(input.requireSage)
     }

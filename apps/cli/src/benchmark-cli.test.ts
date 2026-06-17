@@ -264,6 +264,49 @@ describe("benchmark CLI", () => {
     expect(json.backend.acceptedProofChecker).toBe(false);
   });
 
+  it("supports optional cvc5 SMT backend selection without minting trust when unavailable", async () => {
+    const root = await tempRoot();
+    const source = join(root, "constraints.smt2");
+    await writeFile(source, "(set-logic QF_LIA)\n(assert false)\n(check-sat)\n", "utf8");
+
+    const backends = JSON.parse(
+      (
+        await runCli([
+          "smt",
+          "backends",
+          "--z3-command",
+          "truth-harness-missing-z3-command",
+          "--cvc5-command",
+          "truth-harness-missing-cvc5-command",
+          "--json"
+        ])
+      ).stdout
+    ) as { smtSolversAvailable: number; backends: Array<{ backendId: string; status: string }> };
+    const check = await runCli([
+      "smt",
+      "check",
+      source,
+      "--backend",
+      "cvc5",
+      "--cvc5-command",
+      "truth-harness-missing-cvc5-command",
+      "--json",
+      "--fail-on-unverified"
+    ]);
+    const record = JSON.parse(check.stdout) as { backend: { id: string; adapter: string }; status: string; trust: string };
+
+    expect(backends.smtSolversAvailable).toBe(0);
+    expect(backends.backends).toContainEqual(expect.objectContaining({ backendId: "z3", status: "missing" }));
+    expect(backends.backends).toContainEqual(expect.objectContaining({ backendId: "cvc5", status: "missing" }));
+    expect(check.exitCode).toBe(1);
+    expect(record.backend).toMatchObject({
+      id: "cvc5",
+      adapter: "local-cvc5-smtlib-subprocess"
+    });
+    expect(record.status).toBe("solver-unavailable");
+    expect(record.trust).toBe("unverified");
+  });
+
   it("writes and lists CAS check workspace records", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);

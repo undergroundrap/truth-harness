@@ -35,13 +35,13 @@
       "required": ["id", "displayName", "adapter", "role", "acceptedProofChecker", "command", "args"],
       "properties": {
         "id": {
-          "const": "z3"
+          "enum": ["z3", "cvc5"]
         },
         "displayName": {
-          "const": "Z3 SMT solver"
+          "enum": ["Z3 SMT solver", "cvc5 SMT solver"]
         },
         "adapter": {
-          "const": "local-z3-smtlib-subprocess"
+          "enum": ["local-z3-smtlib-subprocess", "local-cvc5-smtlib-subprocess"]
         },
         "role": {
           "const": "checker"
@@ -111,7 +111,7 @@
       "required": ["format", "bindings", "warnings"],
       "properties": {
         "format": {
-          "const": "z3-define-fun"
+          "enum": ["z3-define-fun", "smtlib-define-fun"]
         },
         "bindings": {
           "type": "array",

@@ -28,6 +28,17 @@ describe("SMT backend status", () => {
     const calls: Array<{ command: string; args: string[]; timeoutMs: number }> = [];
     const runner: SmtBackendCommandRunner = (command, args, timeoutMs) => {
       calls.push({ command, args, timeoutMs });
+      if (command === "cvc5") {
+        return {
+          status: null,
+          stdout: "",
+          stderr: "",
+          error: {
+            name: "Error",
+            message: "spawn cvc5 ENOENT"
+          }
+        };
+      }
       return {
         status: 0,
         stdout: "Z3 version 4.13.0 - 64 bit\n",
@@ -41,7 +52,10 @@ describe("SMT backend status", () => {
       runner
     });
 
-    expect(calls).toEqual([{ command: "z3-test", args: ["-version"], timeoutMs: 3000 }]);
+    expect(calls).toEqual([
+      { command: "z3-test", args: ["-version"], timeoutMs: 3000 },
+      { command: "cvc5", args: ["--version"], timeoutMs: 3000 }
+    ]);
     expect(report.schemaVersion).toBe("truth-harness.smt-backends.v0");
     expect(report.localOnly).toBe(true);
     expect(report.networkAccess).toBe("none");
@@ -119,6 +133,50 @@ describe("SMT backend status", () => {
     expect(record.backend.acceptedProofChecker).toBe(false);
     expect(record.backend.version).toBe("Z3 version 4.13.0");
     expect(record.source.queryName).toBe("inconsistent_constraints");
+    expect(record.limitations.join(" ")).toContain("not a proof-checker-backed proof");
+  });
+
+  it("checks SMT-LIB artifacts through cvc5 without changing the trust boundary", () => {
+    const calls: string[][] = [];
+    const runner: SmtBackendCommandRunner = (_command, args) => {
+      calls.push(args);
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "This is cvc5 version 1.1.2\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "sat\n(\n  (define-fun x () Int\n    2)\n)\n",
+        stderr: ""
+      };
+    };
+
+    const record = checkSmtLibArtifact({
+      sourcePath: "constraints/cvc5.smt2",
+      sourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 1))\n(check-sat)\n(get-model)\n",
+      backend: "cvc5",
+      runner
+    });
+
+    expect(calls).toEqual([["--version"], ["--lang", "smt2", "constraints/cvc5.smt2"]]);
+    expect(record.backend).toMatchObject({
+      id: "cvc5",
+      displayName: "cvc5 SMT solver",
+      adapter: "local-cvc5-smtlib-subprocess",
+      acceptedProofChecker: false,
+      version: "This is cvc5 version 1.1.2"
+    });
+    expect(record.status).toBe("sat");
+    expect(record.trust).toBe("smt-checked");
+    expect(record.proofCheckerBacked).toBe(false);
+    expect(record.model).toMatchObject({
+      format: "smtlib-define-fun",
+      bindings: [{ name: "x", sort: "Int", value: "2" }]
+    });
     expect(record.limitations.join(" ")).toContain("not a proof-checker-backed proof");
   });
 

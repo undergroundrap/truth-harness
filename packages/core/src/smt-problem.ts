@@ -7,6 +7,7 @@ import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-work
 import {
   writeSmtCheckRecord,
   type SmtBackendCommandRunner,
+  type SmtBackendId,
   type SmtCheckWriteResult
 } from "./smt-backend.js";
 
@@ -52,7 +53,9 @@ export interface SmtProblemSourceWriteResult {
 
 export interface SmtProblemSolveInput extends SmtProblemInput {
   rootPath: string;
+  backend?: SmtBackendId;
   z3Command?: string;
+  cvc5Command?: string;
   timeoutMs?: number;
   now?: Date;
   runner?: SmtBackendCommandRunner;
@@ -140,7 +143,9 @@ export async function solveSmtProblem(input: SmtProblemSolveInput): Promise<SmtP
     rootPath: input.rootPath,
     sourcePath: source.sourceRef,
     queryName: source.problem.queryName ?? source.problem.problemId,
+    backend: input.backend,
     z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command,
     timeoutMs: input.timeoutMs,
     now: input.now,
     runner: input.runner

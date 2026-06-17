@@ -145,6 +145,49 @@ describe("engine evidence verification", () => {
     );
   });
 
+  it("passes the required cvc5 gate only after concrete SMT evidence is earned", async () => {
+    const runner: EngineVerificationCommandRunner = (command, args) => {
+      if (command === "cvc5-test" && args[0] === "--version") {
+        return { status: 0, stdout: "This is cvc5 version 1.1.2\n", stderr: "" };
+      }
+      if (command === "cvc5-test") {
+        return { status: 0, stdout: "unsat\n", stderr: "" };
+      }
+
+      return {
+        status: null,
+        stdout: "",
+        stderr: "",
+        error: { name: "Error", message: `missing ${command} ${args.join(" ")}` }
+      };
+    };
+
+    const report = await verifyEngineEvidence({
+      now: new Date("2026-06-15T00:00:00.000Z"),
+      cvc5Command: "cvc5-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(assert false)\n(check-sat)\n",
+      requirements: { cvc5: true },
+      runner
+    });
+
+    expect(report.status).toBe("passed");
+    expect(report.requiredPassed).toBe(1);
+    expect(report.requiredTotal).toBe(1);
+    expect(report.evidenceMinted).toBe(1);
+    expect(report.trustBoundary.smtCheckedRequiresConcreteSolverSatOrUnsat).toBe(true);
+    expect(report.cases).toContainEqual(
+      expect.objectContaining({
+        id: "cvc5-smt-check",
+        required: true,
+        status: "passed",
+        trust: "smt-checked",
+        evidenceMinted: true,
+        evidence: expect.objectContaining({ backendId: "cvc5", trust: "smt-checked" })
+      })
+    );
+  });
+
   it("fails closed when required concrete engines cannot earn evidence", async () => {
     const runner: EngineVerificationCommandRunner = () => ({
       status: null,

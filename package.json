@@ -50,6 +50,7 @@
     "engines:verify": "npm run cli -- engines verify",
     "engines:verify:docker-core": "npm run cli -- engines verify --require-maxima --require-z3",
     "engines:verify:lean": "npm run cli -- engines verify --require-lean",
+    "engines:verify:cvc5": "npm run cli -- engines verify --require-cvc5",
     "engines:verify:sage": "npm run cli -- engines verify --require-sage",
     "mcp": "node packages/mcp-server/dist/index.js",
     "proof:lean-fixture": "npm run cli -- proof project docs/examples/lean-fixture --json && npm run cli -- proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean --timeout-ms 30000 --fail-on-unproved --json",

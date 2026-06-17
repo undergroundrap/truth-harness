@@ -1,6 +1,6 @@
 # Docker-First Workflow
 
-Truth Harness should be run from Docker by default when you are testing agent-facing code, proof gates, symbolic adapters, or MCP workflows. Docker keeps Node, Python, SymPy, Maxima, Z3, and npm dependencies out of the host environment and makes the public credibility path easier to replay.
+Truth Harness should be run from Docker by default when you are testing agent-facing code, proof gates, symbolic adapters, or MCP workflows. Docker keeps Node, Python, SymPy, Maxima, Z3, and npm dependencies out of the host environment and makes the public credibility path easier to replay. Optional larger or second-opinion engines such as SageMath and cvc5 are gated separately.
 
 Docker is still not magic security. The Docker daemon is powerful, and a dev container with the repository bind-mounted can change files in that repository. Treat Docker as the baseline isolation layer, then use Truth Harness receipts, measured sandbox status, and replayable evidence for stronger claims.
 
@@ -97,7 +97,7 @@ npm run docker:verify
 
 Use `npm run docker:engines` for the quickest no-runtime-network Maxima/Z3 evidence smoke from the built image. Use `npm run docker:proof` for the broader day-to-day no-runtime-network engine suite after the dev image exists. Use `npm run docker:verify` before demos or review checkpoints when you want the full image build and verification target. Image builds may download dependencies; verifier runs inside the `engine-smoke` or `truth-harness` compose services use the no-network runtime boundary described below.
 
-The UI card is guidance, not evidence. Claims still need concrete receipts: `cross-checked` requires an accepted independent CAS record, `smt-checked` requires a concrete Z3 solver record, and `proved` requires an accepted proof-checker record.
+The UI card is guidance, not evidence. Claims still need concrete receipts: `cross-checked` requires an accepted independent CAS record, `smt-checked` requires a concrete Z3 or cvc5 solver record, and `proved` requires an accepted proof-checker record.
 
 Agents can also read the same guidance from local `GET /api/status` under `dockerVerifier`. That status packet is local-only metadata and does not launch Docker or mint evidence.
 
@@ -127,7 +127,7 @@ By default, MCP `truth_harness_code_run` is still disabled. To expose it to an a
 - The measured Docker provider attests the current container network namespace, not mathematical truth, code correctness, medical/scientific validity, or safety.
 - Loopback remains available inside the container. The measurement means no non-loopback interface/default route was observed.
 - Docker does not make AI-generated code safe. Keep executable allowlists narrow, prefer `--require-sandbox` for risky workflows, and review any command before running it.
-- Maxima, SageMath, and Z3 availability probes are not evidence by themselves. `cross-checked` still requires a concrete CAS agreement run over the recorded expression/result pair, and `smt-checked` still requires a concrete Z3 `sat` or `unsat` solver run over the recorded artifact. `truth-harness engines verify` exists to make that distinction machine-readable.
+- Maxima, SageMath, Z3, and cvc5 availability probes are not evidence by themselves. `cross-checked` still requires a concrete CAS agreement run over the recorded expression/result pair, and `smt-checked` still requires a concrete selected SMT solver `sat` or `unsat` run over the recorded artifact. `truth-harness engines verify` exists to make that distinction machine-readable.
 - Full SageMath is intentionally isolated in the separate `sage-math` target because it is much larger than the default dev image. Use `npm run docker:sage` to build/run that no-network gate when a reviewer explicitly wants `--require-sage`.
 
 ## Reset Container State
