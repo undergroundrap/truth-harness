@@ -306,6 +306,9 @@ const state = {
   credibilityBundle: undefined,
   credibilityBundleLoading: false,
   credibilityBundleError: undefined,
+  credibilityArchive: undefined,
+  credibilityArchiveLoading: false,
+  credibilityArchiveError: undefined,
   credibilityRunNextPlan: undefined,
   credibilityRunNextLoading: false,
   credibilityRunNextSaving: false,
@@ -8165,6 +8168,12 @@ async function refreshCredibilityBundle({ announce = true } = {}) {
     const payload = await readLocalApiJson(response, "Local credibility bundle API failed.");
     state.credibilityBundle = payload;
     state.credibilityBundleError = undefined;
+    if (payload.latest) {
+      void refreshCredibilityArchive({ announce: false });
+    } else {
+      state.credibilityArchive = undefined;
+      state.credibilityArchiveError = undefined;
+    }
     if (announce) {
       addActivity(
         "local-api",
@@ -8176,12 +8185,48 @@ async function refreshCredibilityBundle({ announce = true } = {}) {
     }
   } catch (error) {
     state.credibilityBundle = undefined;
+    state.credibilityArchive = undefined;
     state.credibilityBundleError = error instanceof Error ? error.message : "Unknown credibility bundle failure.";
     if (announce) {
       addActivity("local-api", "Credibility bundle unavailable", state.credibilityBundleError, "waiting");
     }
   } finally {
     state.credibilityBundleLoading = false;
+    renderCredibilityPackPanel();
+  }
+}
+
+async function refreshCredibilityArchive({ announce = true } = {}) {
+  state.credibilityArchiveLoading = true;
+  state.credibilityArchiveError = undefined;
+  renderCredibilityPackPanel();
+
+  try {
+    const response = await fetch("/api/credibility-bundle/latest/archive-metadata", {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local credibility bundle archive metadata API failed.");
+    state.credibilityArchive = payload.archive;
+    state.credibilityArchiveError = undefined;
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded reviewer archive checksum",
+        `${payload.archive?.filename ?? "archive"} sha256 ${payload.archive?.sha256 ?? "unknown"}.`,
+        "passed"
+      );
+    }
+  } catch (error) {
+    state.credibilityArchive = undefined;
+    state.credibilityArchiveError = error instanceof Error ? error.message : "Unknown credibility archive metadata failure.";
+    if (announce) {
+      addActivity("local-api", "Credibility archive checksum unavailable", state.credibilityArchiveError, "waiting");
+    }
+  } finally {
+    state.credibilityArchiveLoading = false;
     renderCredibilityPackPanel();
   }
 }
@@ -11834,6 +11879,7 @@ function credibilityBundleCardHtml() {
   const payload = state.credibilityBundle;
   const manifest = payload?.manifest;
   const verification = payload?.verification;
+  const archive = state.credibilityArchive;
   const hasBundle = payload?.latest && manifest;
   const status = state.credibilityBundleError
     ? "error"
@@ -11869,7 +11915,8 @@ function credibilityBundleCardHtml() {
         ["Engine gates", `${manifest.packSummary?.requiredEngineGates ?? "0/0"} required, ${manifest.packSummary?.concreteEngineGates ?? "0/0"} concrete`],
         ["Bundle integrity", verification?.passed ? "passed" : "changed"],
         ["Source workspace", verification?.sourceMatchesWorkspace ? "matches bundle" : "drifted"],
-        ["Files", `${verification?.checkedBundleFiles ?? manifest.summary?.totalFiles ?? 0} checked`]
+        ["Files", `${verification?.checkedBundleFiles ?? manifest.summary?.totalFiles ?? 0} checked`],
+        ["Archive SHA-256", archive?.sha256 ?? (state.credibilityArchiveLoading ? "calculating" : state.credibilityArchiveError ?? "not loaded")]
       ]
     : [
         ["Expected route", "npm run docker:professor"],
@@ -11900,6 +11947,7 @@ function credibilityBundleCardHtml() {
         <button class="text-button compact-button download-credibility-bundle-file" data-testid="download-credibility-bundle-manifest" data-label="Bundle manifest" data-href="/api/credibility-bundle/latest/file?kind=manifest" type="button" ${hasBundle ? "" : "disabled"}>Manifest</button>
         <button class="text-button compact-button download-credibility-bundle-file" data-testid="download-credibility-bundle-pack" data-label="Credibility pack markdown" data-href="/api/credibility-bundle/latest/file?kind=pack-md" type="button" ${hasBundle ? "" : "disabled"}>Pack MD</button>
         <button class="text-button compact-button strong-action download-credibility-bundle-file" data-testid="download-credibility-bundle-archive" data-label="Reviewer bundle archive" data-href="/api/credibility-bundle/latest/archive" type="button" ${hasBundle ? "" : "disabled"}>Archive</button>
+        <button class="text-button compact-button download-credibility-bundle-file" data-testid="download-credibility-bundle-sha256" data-label="Reviewer bundle SHA-256 sidecar" data-href="/api/credibility-bundle/latest/archive.sha256" type="button" ${hasBundle && archive?.sha256 ? "" : "disabled"}>SHA256</button>
       </div>
     </div>
   </section>`;
@@ -12020,6 +12068,9 @@ function credibilityBundleCommand() {
 function credibilityBundleValueHtml(value) {
   const text = String(value ?? "");
   if (/^(cbun|cred)_[a-f0-9]+$/u.test(text)) {
+    return `<code>${escapeHtml(text)}</code>`;
+  }
+  if (/^[a-f0-9]{64}$/u.test(text)) {
     return `<code>${escapeHtml(text)}</code>`;
   }
   return escapeHtml(text);

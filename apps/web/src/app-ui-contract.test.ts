@@ -80,6 +80,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("async function refreshCredibilityPack({ announce = true } = {})");
     expect(source).toContain("async function writeCredibilityPackFromUi(button)");
     expect(source).toContain("async function refreshCredibilityBundle({ announce = true } = {})");
+    expect(source).toContain("async function refreshCredibilityArchive({ announce = true } = {})");
     expect(source).toContain("function credibilityBundleCardHtml()");
     expect(source).toContain("function credibilityReviewerChecklistHtml(pack)");
     expect(source).toContain("function credibilityChecklistItemHtml(item)");
@@ -95,7 +96,11 @@ describe("web UI action contracts", () => {
     expect(source).toContain('data-testid="download-credibility-bundle-manifest"');
     expect(source).toContain('data-testid="download-credibility-bundle-pack"');
     expect(source).toContain('data-testid="download-credibility-bundle-archive"');
+    expect(source).toContain('data-testid="download-credibility-bundle-sha256"');
     expect(source).toContain("/api/credibility-bundle/latest/archive");
+    expect(source).toContain("/api/credibility-bundle/latest/archive-metadata");
+    expect(source).toContain("/api/credibility-bundle/latest/archive.sha256");
+    expect(source).toContain("Archive SHA-256");
     expect(source).toContain("Verified Reviewer Bundle");
     expect(source).toContain("Professor Review Checklist");
     expect(source).toContain("Reviewer bundle verification command copied from the Report tab.");

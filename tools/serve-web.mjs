@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { lstat, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { extname, join, normalize, relative, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
@@ -211,6 +211,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "credibility-bundle-latest",
         "credibility-bundle-files",
         "credibility-bundle-archive",
+        "credibility-bundle-archive-sha256",
         "workspace-review-queue",
         "workspace-run-next-dry-run",
         "workspace-run-next-save",
@@ -388,11 +389,43 @@ async function handleApiRequest(request, response, requestUrl) {
         requestId: response.truthHarnessRequestId,
         extraHeaders: {
           "X-Truth-Harness-Bundle-Id": archive.bundleId,
-          "X-Truth-Harness-Archive-Files": String(archive.fileCount)
+          "X-Truth-Harness-Archive-Files": String(archive.fileCount),
+          "X-Truth-Harness-Archive-Sha256": archive.sha256
         }
       });
     } catch (error) {
       writeApiError(response, error instanceof HttpError ? error.status : 409, error instanceof Error ? error.message : "Latest credibility bundle archive could not be created.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/credibility-bundle/latest/archive-metadata" && request.method === "GET") {
+    try {
+      await ensureLocalWorkspace();
+      const archive = await readLatestCredibilityBundleArchive();
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-credibility-bundle-archive-metadata-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        archive: archiveMetadataResponse(archive)
+      });
+    } catch (error) {
+      writeApiError(response, error instanceof HttpError ? error.status : 409, error instanceof Error ? error.message : "Latest credibility bundle archive metadata could not be created.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/credibility-bundle/latest/archive.sha256" && request.method === "GET") {
+    try {
+      await ensureLocalWorkspace();
+      const archive = await readLatestCredibilityBundleArchive();
+      writeDownload(response, 200, Buffer.from(archiveChecksumText(archive), "utf8"), {
+        contentType: "text/plain; charset=utf-8",
+        filename: `${archive.filename}.sha256`,
+        requestId: response.truthHarnessRequestId
+      });
+    } catch (error) {
+      writeApiError(response, error instanceof HttpError ? error.status : 409, error instanceof Error ? error.message : "Latest credibility bundle archive checksum could not be created.", request);
     }
     return;
   }
@@ -2242,8 +2275,35 @@ async function readLatestCredibilityBundleArchive() {
     contentType: "application/gzip",
     filename: `truth-harness-${bundle.manifest.bundleId}-credibility-bundle.tar.gz`,
     bundleId: bundle.manifest.bundleId,
+    bundleRef: bundle.bundleRef,
+    byteLength: archive.body.length,
+    sha256: sha256Hex(archive.body),
     fileCount: archive.fileCount
   };
+}
+
+function archiveMetadataResponse(archive) {
+  return {
+    bundleId: archive.bundleId,
+    bundleRef: archive.bundleRef,
+    filename: archive.filename,
+    byteLength: archive.byteLength,
+    fileCount: archive.fileCount,
+    sha256: archive.sha256,
+    archiveUrl: "/api/credibility-bundle/latest/archive",
+    checksumUrl: "/api/credibility-bundle/latest/archive.sha256",
+    warnings: [
+      "The archive checksum identifies the downloaded carrier bytes. Run verify-credibility-bundle on the extracted directory to verify bundle contents and source drift."
+    ]
+  };
+}
+
+function archiveChecksumText(archive) {
+  return `${archive.sha256}  ${archive.filename}\n`;
+}
+
+function sha256Hex(body) {
+  return createHash("sha256").update(body).digest("hex");
 }
 
 function credibilityBundleFileDescriptor(kindValue) {
