@@ -176,6 +176,56 @@ describe("professor credibility pack", () => {
     expect(pack.markdown).toContain("Close required Maxima symbolic cross-check gate");
     expect(pack.markdown).toContain("## Blocking Warnings");
   });
+
+  it("routes host-blocked engine gates to no-network Docker reviewer commands", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+
+    const pack = await createCredibilityPack({
+      rootPath: root,
+      now: "2026-06-16T00:01:00.000Z",
+      engineRequirements: { maxima: true, z3: true, lean: true, sage: true },
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: () => ({
+        status: null,
+        stdout: "",
+        stderr: "",
+        error: { name: "Error", message: "spawn EPERM" }
+      })
+    });
+
+    expect(pack.status).toBe("blocked");
+    expect(pack.reviewerCommands.dockerSageFixture).toBe("npm run docker:sage");
+    expect(pack.markdown).toContain("Docker Sage fixture");
+    expect(pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({
+        title: "Close required Maxima symbolic cross-check gate",
+        command: "npm run docker:engines",
+        detail: expect.stringContaining("no-network Docker core gate")
+      })
+    );
+    expect(pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({
+        title: "Close required Z3 SMT-LIB check gate",
+        command: "npm run docker:engines"
+      })
+    );
+    expect(pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({
+        title: "Close required Lean proof fixture gate",
+        command: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean"
+      })
+    );
+    expect(pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({
+        title: "Close required SageMath symbolic cross-check gate",
+        command: "npm run docker:sage"
+      })
+    );
+  });
 });
 
 const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => {

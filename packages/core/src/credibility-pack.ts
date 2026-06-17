@@ -26,6 +26,7 @@ export interface CredibilityPackCommandSet {
   reproducePack: string;
   dockerCoreEngines: string;
   dockerLeanFixture: string;
+  dockerSageFixture: string;
 }
 
 export interface CredibilityPackReviewItem {
@@ -320,6 +321,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Reproduce this pack: \`${pack.reviewerCommands.reproducePack}\``,
     `- Docker core engines: \`${pack.reviewerCommands.dockerCoreEngines}\``,
     `- Docker Lean fixture: \`${pack.reviewerCommands.dockerLeanFixture}\``,
+    `- Docker Sage fixture: \`${pack.reviewerCommands.dockerSageFixture}\``,
     "",
     "## Reviewer Action Plan",
     ""
@@ -500,12 +502,13 @@ function createReviewerActionPlan(input: {
     }
 
     const priority: WorkspaceReviewItem["priority"] = item.required ? "critical" : "high";
+    const command = reviewerEngineActionCommand(item, input.reviewerCommands);
     pushAction({
       category: "engine",
       priority,
       title: `${item.required ? "Close required" : "Close concrete"} ${item.displayName} gate`,
-      detail: `${reviewerEngineSummary(item.summary)} This gate currently reports ${item.status}; rerun the writable reviewer command after installing or fixing the backend.`,
-      command: input.reviewerCommands.verifyEngines,
+      detail: `${reviewerEngineSummary(item.summary)} This gate currently reports ${item.status}; ${reviewerEngineActionDetail(item, command, input.reviewerCommands)}.`,
+      command,
       closes: [
         item.required ? `required-engine:${item.id}` : `concrete-engine:${item.id}`,
         "engine-evidence"
@@ -571,7 +574,7 @@ function createReviewerActionPlan(input: {
 }
 
 function reviewerEngineSummary(summary: string): string {
-  if (/\bspawn(?:Sync)?\b.*\bEPERM\b/iu.test(summary)) {
+  if (isHostProcessBlocked(summary)) {
     return "The local OS or sandbox blocked the engine process, so Truth Harness did not count this backend as reviewer evidence.";
   }
   if (/\bspawn(?:Sync)?\b.*\bENOENT\b/iu.test(summary)) {
@@ -579,6 +582,10 @@ function reviewerEngineSummary(summary: string): string {
   }
 
   return summary;
+}
+
+function isHostProcessBlocked(summary: string): boolean {
+  return /\bspawn(?:Sync)?\b.*\bEPERM\b/iu.test(summary);
 }
 
 function credibilityWarnings(input: {
@@ -629,8 +636,50 @@ function createReviewerCommands(requirements: EngineVerificationRequirements | u
     reviewWorkspace: "truth-harness workspace review .",
     reproducePack: `truth-harness workspace credibility-pack .${engineSuffix}`,
     dockerCoreEngines: "npm run docker:engines",
-    dockerLeanFixture: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean"
+    dockerLeanFixture: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean",
+    dockerSageFixture: "npm run docker:sage"
   };
+}
+
+function reviewerEngineActionCommand(
+  item: EngineVerificationReport["cases"][number],
+  commands: CredibilityPackCommandSet
+): string {
+  if (!isHostProcessBlocked(item.summary)) {
+    return commands.verifyEngines;
+  }
+
+  switch (item.id) {
+    case "maxima-symbolic-cross-check":
+    case "z3-smt-check":
+      return commands.dockerCoreEngines;
+    case "lean-proof-fixture":
+      return commands.dockerLeanFixture;
+    case "sage-symbolic-cross-check":
+      return commands.dockerSageFixture;
+    case "cvc5-smt-check":
+      return commands.verifyEngines;
+  }
+}
+
+function reviewerEngineActionDetail(
+  item: EngineVerificationReport["cases"][number],
+  command: string,
+  commands: CredibilityPackCommandSet
+): string {
+  if (command === commands.verifyEngines) {
+    return "rerun the writable reviewer command after installing or fixing the backend";
+  }
+  if (item.id === "maxima-symbolic-cross-check" || item.id === "z3-smt-check") {
+    return "run the no-network Docker core gate because the host blocked direct Maxima/Z3 execution";
+  }
+  if (item.id === "lean-proof-fixture") {
+    return "run the pinned no-network Lean Docker fixture because the host blocked direct Lean execution";
+  }
+  if (item.id === "sage-symbolic-cross-check") {
+    return "run the heavier no-network Sage Docker gate because the host blocked direct Sage execution";
+  }
+  return "use the reviewer command shown here";
 }
 
 async function requireLocalWorkspace(

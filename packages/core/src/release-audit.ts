@@ -395,6 +395,11 @@ function engineCheck(pack: CredibilityPack, required: boolean): ReleaseAuditChec
     `Concrete gates: ${pack.summary.concreteEngineGates}.`,
     `Evidence minted: ${pack.summary.engineEvidenceMinted}.`
   ];
+  const command = preferredEngineEvidenceCommand(pack);
+  const details = [
+    ...detail,
+    ...engineEvidenceGuidance(pack)
+  ];
 
   if (required && pack.summary.engineStatus !== "passed") {
     return failCheck({
@@ -402,8 +407,8 @@ function engineCheck(pack: CredibilityPack, required: boolean): ReleaseAuditChec
       title: "Required engine evidence",
       blocking: true,
       summary: "One or more required proof/CAS/SMT engine gates did not earn concrete evidence.",
-      command: pack.reviewerCommands.verifyEngines,
-      details: [...detail, ...pack.engineEvidence.warnings.slice(0, 8)]
+      command,
+      details: [...details, ...pack.engineEvidence.warnings.slice(0, 8)]
     });
   }
   if (!required && pack.summary.engineStatus !== "passed") {
@@ -412,8 +417,8 @@ function engineCheck(pack: CredibilityPack, required: boolean): ReleaseAuditChec
       title: "Engine evidence",
       blocking: false,
       summary: "Concrete optional engine checks are not all passing on this host.",
-      command: pack.reviewerCommands.verifyEngines,
-      details: [...detail, "Use Docker engine gates before a public or professor-facing demo."]
+      command,
+      details: details.length > detail.length ? details : [...detail, "Use Docker engine gates before a public or professor-facing demo."]
     });
   }
   return passCheck({
@@ -423,6 +428,36 @@ function engineCheck(pack: CredibilityPack, required: boolean): ReleaseAuditChec
     command: pack.reviewerCommands.verifyEngines,
     details: detail
   });
+}
+
+function preferredEngineEvidenceCommand(pack: CredibilityPack): string {
+  const dockerCommands = engineEvidenceDockerCommands(pack);
+  return dockerCommands[0] ?? pack.reviewerCommands.verifyEngines;
+}
+
+function engineEvidenceGuidance(pack: CredibilityPack): string[] {
+  const commands = engineEvidenceDockerCommands(pack);
+  if (commands.length === 0) {
+    return [];
+  }
+
+  return [
+    "Host subprocess launch appears blocked for at least one engine; use the matching no-network Docker gate before treating host failures as engine failures.",
+    ...commands.map((command) => `Docker fallback: ${command}.`)
+  ];
+}
+
+function engineEvidenceDockerCommands(pack: CredibilityPack): string[] {
+  const present = new Set(
+    pack.reviewerActionPlan.actions
+      .filter((action) => action.category === "engine" && action.command !== pack.reviewerCommands.verifyEngines)
+      .map((action) => action.command)
+  );
+  return [
+    pack.reviewerCommands.dockerCoreEngines,
+    pack.reviewerCommands.dockerLeanFixture,
+    pack.reviewerCommands.dockerSageFixture
+  ].filter((command) => present.has(command));
 }
 
 function savedStrictEngineRunCheck(pack: CredibilityPack, required: boolean): ReleaseAuditCheck {
@@ -534,8 +569,9 @@ function nextActions(checks: ReleaseAuditCheck[], pack: CredibilityPack | undefi
   const actionCommands = checks
     .filter((check) => check.status === "fail" && check.command)
     .map((check) => check.command as string);
+  const dockerEngineCommands = pack ? engineEvidenceDockerCommands(pack) : [];
   const reviewerCommands = pack?.reviewerActionPlan.actions.slice(0, 5).map((action) => action.command) ?? [];
-  return [...new Set([...actionCommands, ...reviewerCommands])].slice(0, 8);
+  return [...new Set([...actionCommands, ...dockerEngineCommands, ...reviewerCommands])].slice(0, 8);
 }
 
 function releaseAuditCommands(

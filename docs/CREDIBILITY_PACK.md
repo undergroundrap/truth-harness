@@ -41,7 +41,7 @@ npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/
 - Saved engine-run ledger summary from `.truth-harness/engine-runs`, including the latest strict all-engines reviewer run when one exists.
 - Workspace review queue with top open proof/check obligations. Normal unverified exploration and stronger-label upgrades stay visible as work, but they are not treated as release-critical defects unless they block a current claim boundary.
 - Structured reviewer action plan with priorities, close targets, and commands for validation, engine, and workspace-review blockers.
-- Exact reviewer commands for validation, writable engine checks, review, Docker core engines, and the Lean proof fixture.
+- Exact reviewer commands for validation, writable engine checks, review, Docker core engines, the Lean proof fixture, and the heavier SageMath fixture.
 - Blocking warnings when validation fails, required engines are missing, concrete engine smoke gates are incomplete, or critical review items remain open.
 
 ## Portable Reviewer Bundle
@@ -97,6 +97,8 @@ When the pack is blocked, `reviewerActionPlan.actions` is the first queue a huma
 - the category (`validation`, `engine`, or `workspace-review`),
 - the exact command to run,
 - the gate or artifact it closes.
+
+If a local host or agent sandbox reports `spawn EPERM` while launching Maxima, Z3, Lean, or SageMath, the action plan treats that as a host boundary problem rather than a mathematical result. Maxima/Z3 actions point to `npm run docker:engines`, Lean actions point to the pinned `lean-proof` compose service, and SageMath actions point to `npm run docker:sage`. Those Docker commands are still evidence gates, not truth shortcuts: the engines must earn their scoped labels inside the no-network runtime before any reviewer should trust the result.
 
 The web Report tab renders the same action plan, exposes copy buttons for those commands, and can ask `/api/workspace-run-next?source=credibility-actions` for the next browser-safe reviewer plan. That web path is dry-run only; it shows and copies the same local command that CLI/MCP can execute through the shared gated planner. The Report tab can also save the dry-run plan as JSON/Markdown under `.truth-harness/findings/`, creating an auditable intent packet before any agent or human runs the command.
 For automation or CI, use `truth-harness workspace credibility-actions . --json` to get a compact `truth-harness.credibility-actions.v0` payload. `--priority` and `--category` filter the queue without mutating workspace state.

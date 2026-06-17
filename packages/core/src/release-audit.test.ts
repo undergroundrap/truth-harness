@@ -93,6 +93,43 @@ describe("release audit", () => {
     expect(audit.commands.releaseAudit).toContain("--require-sandbox");
     expect(audit.nextActions).toContain("truth-harness catalog rebuild .");
   });
+
+  it("prefers Docker engine actions when host subprocesses are blocked", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Docker Fallback Audit", now: "2026-06-17T00:00:00.000Z" });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-17T00:00:02.000Z",
+      engineRequirements: { maxima: true, z3: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(check-sat)\n",
+      runner: () => ({
+        status: null,
+        stdout: "",
+        stderr: "",
+        error: { name: "Error", message: "spawn EPERM" }
+      })
+    });
+
+    expect(audit.status).toBe("blocked");
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "engine-evidence",
+        status: "fail",
+        command: "npm run docker:engines",
+        details: expect.arrayContaining([
+          "Host subprocess launch appears blocked for at least one engine; use the matching no-network Docker gate before treating host failures as engine failures.",
+          "Docker fallback: npm run docker:engines."
+        ])
+      })
+    );
+    expect(audit.nextActions).toContain("npm run docker:engines");
+    expect(audit.nextActions[0]).toBe("npm run docker:engines");
+  });
 });
 
 const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => {
