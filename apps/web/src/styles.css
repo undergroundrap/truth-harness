@@ -4548,6 +4548,8 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 }
 
 .release-audit-command code,
+.release-audit-benchmark-command code,
+.release-audit-benchmark-card code,
 .release-audit-check code,
 .release-audit-action code {
   display: block;
@@ -4560,6 +4562,102 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   overflow-wrap: anywhere;
   padding: 7px;
   white-space: normal;
+}
+
+.release-audit-benchmark-card,
+.credibility-benchmark-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid rgba(120, 217, 166, 0.34);
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(86, 176, 125, 0.08), rgba(11, 15, 13, 0.86));
+  padding: 11px;
+}
+
+.release-audit-benchmark-card.benchmark-fail,
+.credibility-benchmark-card.benchmark-failed {
+  border-color: rgba(242, 139, 130, 0.38);
+  background: linear-gradient(180deg, rgba(242, 139, 130, 0.08), rgba(21, 11, 10, 0.88));
+}
+
+.credibility-benchmark-card.benchmark-missing {
+  border-color: rgba(230, 195, 106, 0.34);
+  background: linear-gradient(180deg, rgba(230, 195, 106, 0.08), rgba(20, 16, 8, 0.86));
+}
+
+.release-audit-benchmark-head,
+.credibility-benchmark-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.release-audit-benchmark-head > div,
+.credibility-benchmark-head > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.release-audit-benchmark-head strong,
+.credibility-benchmark-head strong {
+  color: #f4ecdc;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.release-audit-benchmark-facts,
+.credibility-benchmark-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 7px;
+  margin: 0;
+  min-width: 0;
+}
+
+.release-audit-benchmark-facts div,
+.credibility-benchmark-facts div {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: rgba(8, 8, 8, 0.58);
+  padding: 7px;
+}
+
+.release-audit-benchmark-facts dt,
+.credibility-benchmark-facts dt {
+  color: var(--faint);
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+
+.release-audit-benchmark-facts dd,
+.credibility-benchmark-facts dd {
+  margin: 0;
+  color: #efe6d6;
+  font-size: 11.5px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.release-audit-benchmark-card small,
+.credibility-benchmark-card small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.release-audit-benchmark-command,
+.credibility-benchmark-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
 }
 
 .release-audit-check-grid {
@@ -5236,6 +5334,8 @@ textarea:focus-visible {
 }
 
 .credibility-pack-command code,
+.credibility-benchmark-command code,
+.credibility-benchmark-card code,
 .credibility-pack-paths code {
   display: block;
   min-width: 0;
@@ -5399,6 +5499,8 @@ textarea:focus-visible {
 }
 
 @media (max-width: 860px) {
+  .release-audit-benchmark-command,
+  .credibility-benchmark-command,
   .credibility-run-next-card {
     grid-template-columns: 1fr;
   }

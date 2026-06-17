@@ -9014,12 +9014,16 @@ function renderReleaseAuditGate() {
   const warningChecks = Array.isArray(audit?.checks)
     ? audit.checks.filter((check) => check.status === "warn")
     : [];
-  const visibleChecks = [...failedChecks, ...warningChecks].slice(0, 5);
+  const visibleChecks = [...failedChecks, ...warningChecks]
+    .filter((check) => check.id !== "adversarial-ai-benchmark")
+    .slice(0, 5);
   const nextActions = Array.isArray(audit?.nextActions) ? audit.nextActions.slice(0, 4) : [];
+  const benchmarkCard = releaseAuditBenchmarkCardHtml(audit);
   const rows = audit
     ? [
         ["Checks", `${summary.passedChecks ?? 0} pass / ${summary.warningChecks ?? 0} warn / ${summary.failedChecks ?? 0} fail`],
         ["Engines", `${summary.requiredEngineGates ?? "0/5"} required / ${summary.concreteEngineGates ?? "0/5"} concrete`],
+        ["Adversarial benchmark", releaseAuditBenchmarkSummary(summary)],
         ["Review queue", `${summary.reviewItems ?? 0} open / ${summary.criticalReviewItems ?? 0} critical`],
         ["Catalog", summary.catalogFresh ? "fresh" : "rebuild required"],
         ["Sandbox", summary.sandboxAvailable ? "measured" : "not measured"],
@@ -9064,6 +9068,7 @@ function renderReleaseAuditGate() {
       <span>Replayable audit</span>
       <code>${escapeHtml(command)}</code>
     </div>
+    ${benchmarkCard}
     ${checkCards ? `<div class="release-audit-check-grid">${checkCards}</div>` : `<p>No blocking or warning checks returned for this audit scope.</p>`}
     ${actionCards ? `<details class="release-audit-details">
       <summary>
@@ -9112,6 +9117,84 @@ function renderReleaseAuditGate() {
       });
     });
   });
+  releaseAuditGate.querySelector(".copy-release-benchmark-command")?.addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    void copyOrDownloadText({
+      button,
+      text: `${button.dataset.command ?? releaseAuditBenchmarkCommand(audit)}\n`,
+      filename: `truth-harness-adversarial-benchmark-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      copiedTitle: "Copied benchmark command",
+      copiedDetail: "Adversarial benchmark command copied from the Checks tab.",
+      fallbackTitle: "Downloaded benchmark command",
+      fallbackDetail: "the adversarial benchmark command was saved as a local text file instead."
+    });
+  });
+}
+
+function releaseAuditBenchmarkCardHtml(audit) {
+  if (!audit) {
+    return "";
+  }
+
+  const check = Array.isArray(audit.checks)
+    ? audit.checks.find((item) => item.id === "adversarial-ai-benchmark")
+    : undefined;
+  const packSummary = audit.credibilityPack?.summary ?? {};
+  const latestRun = audit.credibilityPack?.benchmarkLedger?.latestAdversarialRun;
+  const status = check?.status ?? (packSummary.latestAdversarialBenchmarkStatus === "passed" ? "pass" : "fail");
+  const statusClass = status === "fail" ? "refuted" : status === "warn" ? "waiting" : "exact";
+  const command = check?.command ?? releaseAuditBenchmarkCommand(audit);
+  const details = Array.isArray(check?.details)
+    ? check.details.slice(0, 3).map((detail) => `<li>${escapeHtml(detail)}</li>`).join("")
+    : "";
+  const facts = [
+    ["Status", packSummary.latestAdversarialBenchmarkStatus ?? audit.summary?.adversarialBenchmark ?? "missing"],
+    ["Trust accuracy", formatPercent(packSummary.latestAdversarialBenchmarkAccuracy)],
+    ["Saved runs", String(packSummary.savedBenchmarkRuns ?? 0)],
+    ["Latest run", latestRun?.artifactId ?? "none"]
+  ];
+
+  return `<section class="release-audit-benchmark-card benchmark-${escapeHtml(status)}">
+    <div class="release-audit-benchmark-head">
+      <div>
+        <span class="mini-label">adversarial AI-failure suite</span>
+        <strong>Fluent-Wrong Math Gate</strong>
+      </div>
+      <span class="status-pill ${statusClass}">${escapeHtml(releaseAuditBenchmarkLabel(status))}</span>
+    </div>
+    <p>${escapeHtml(check?.summary ?? "Run the saved benchmark that catches fluent-but-wrong AI math behavior before serious review.")}</p>
+    <dl class="release-audit-benchmark-facts">
+      ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+    </dl>
+    ${latestRun?.path ? `<small>Artifact: <code>${escapeHtml(latestRun.path)}</code></small>` : ""}
+    <div class="release-audit-benchmark-command">
+      <code>${escapeHtml(command)}</code>
+      <button class="text-button compact-button copy-release-benchmark-command" data-testid="copy-release-benchmark-command" data-command="${escapeHtml(command)}" type="button">Copy benchmark</button>
+    </div>
+    ${details ? `<ul>${details}</ul>` : ""}
+  </section>`;
+}
+
+function releaseAuditBenchmarkCommand(audit) {
+  return audit?.commands?.adversarialBenchmark ??
+    audit?.credibilityPack?.reviewerCommands?.runAdversarialBenchmark ??
+    "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures";
+}
+
+function releaseAuditBenchmarkSummary(summary) {
+  const status = summary?.adversarialBenchmark ?? "missing";
+  return status === "passed" ? "passed" : status === "failed" ? "failed" : "missing";
+}
+
+function releaseAuditBenchmarkLabel(status) {
+  if (status === "pass") {
+    return "passing";
+  }
+  if (status === "warn") {
+    return "warning";
+  }
+  return "blocking";
 }
 
 function releaseAuditCheckCardHtml(check) {
@@ -9143,6 +9226,10 @@ function releaseAuditActivitySummary(audit) {
 
   const summary = audit.summary ?? {};
   return `Release audit ${audit.status}; ${summary.blockingFailures ?? 0} blocking failure${summary.blockingFailures === 1 ? "" : "s"}, ${summary.criticalReviewItems ?? 0} critical queue item${summary.criticalReviewItems === 1 ? "" : "s"}.`;
+}
+
+function formatPercent(value) {
+  return typeof value === "number" && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "not recorded";
 }
 
 function releaseAuditStatusLabel(status) {
@@ -11518,6 +11605,7 @@ function renderCredibilityPackPanel() {
   const actionItems = credibilityPackActionItemsHtml(pack);
   const runNextCard = credibilityRunNextHtml();
   const pathRows = credibilityPackPathRows(state.credibilityPackPaths);
+  const benchmarkCard = credibilityBenchmarkCardHtml(pack);
   const summaryRows = pack
     ? credibilityPackSummaryRows(pack)
       .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${credibilityPackValueHtml(value)}</dd></div>`)
@@ -11548,6 +11636,7 @@ function renderCredibilityPackPanel() {
       <span>Replayable command</span>
       <code>${escapeHtml(command)}</code>
     </div>
+    ${benchmarkCard}
     ${runNextCard}
     ${actionItems ? `<div class="credibility-pack-action-plan">
       <div class="credibility-pack-section-head">
@@ -11577,6 +11666,20 @@ function renderCredibilityPackPanel() {
       copiedDetail: "Reviewer credibility-pack command copied from the Report tab.",
       fallbackTitle: "Downloaded credibility command",
       fallbackDetail: "the reviewer credibility-pack command was saved as a local text file instead."
+    });
+  });
+  credibilityPackPanel.querySelector(".copy-credibility-benchmark-command")?.addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    const benchmarkCommand = credibilityBenchmarkCommand(pack);
+    void copyOrDownloadText({
+      button,
+      text: `${button.dataset.command ?? benchmarkCommand}\n`,
+      filename: `truth-harness-adversarial-benchmark-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      copiedTitle: "Copied adversarial benchmark",
+      copiedDetail: "Adversarial benchmark command copied from the credibility pack.",
+      fallbackTitle: "Downloaded adversarial benchmark",
+      fallbackDetail: "the adversarial benchmark command was saved as a local text file instead."
     });
   });
   credibilityPackPanel.querySelector(".plan-credibility-run-next")?.addEventListener("click", () => {
@@ -11613,6 +11716,50 @@ function renderCredibilityPackPanel() {
       });
     });
   });
+}
+
+function credibilityBenchmarkCardHtml(pack) {
+  const summary = pack?.summary ?? {};
+  const latestRun = pack?.benchmarkLedger?.latestAdversarialRun;
+  const status = summary.latestAdversarialBenchmarkStatus ?? "missing";
+  const command = credibilityBenchmarkCommand(pack);
+  const statusClass = status === "passed" ? "exact" : status === "failed" ? "refuted" : "waiting";
+  const label = status === "passed" ? "passing" : status === "failed" ? "regression" : "required";
+  const detail = status === "passed"
+    ? "The saved adversarial suite is passing and can be replayed by a reviewer."
+    : status === "failed"
+      ? "The latest adversarial suite has failures; fix or triage before professor review."
+      : "Run and save the adversarial suite before asking a professor to trust this workspace.";
+  const facts = [
+    ["Status", status],
+    ["Trust accuracy", formatPercent(summary.latestAdversarialBenchmarkAccuracy)],
+    ["Saved runs", String(summary.savedBenchmarkRuns ?? 0)],
+    ["Latest run", latestRun?.artifactId ?? "none"]
+  ];
+
+  return `<section class="credibility-benchmark-card benchmark-${escapeHtml(status)}">
+    <div class="credibility-benchmark-head">
+      <div>
+        <span class="mini-label">professor credibility gate</span>
+        <strong>Adversarial AI-Failure Benchmark</strong>
+      </div>
+      <span class="status-pill ${statusClass}">${escapeHtml(label)}</span>
+    </div>
+    <p>${escapeHtml(detail)}</p>
+    <dl class="credibility-benchmark-facts">
+      ${facts.map(([labelText, value]) => `<div><dt>${escapeHtml(labelText)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+    </dl>
+    ${latestRun?.path ? `<small>Artifact: <code>${escapeHtml(latestRun.path)}</code></small>` : ""}
+    <div class="credibility-benchmark-command">
+      <code>${escapeHtml(command)}</code>
+      <button class="text-button compact-button copy-credibility-benchmark-command" data-testid="copy-credibility-benchmark-command" data-command="${escapeHtml(command)}" type="button">Copy benchmark</button>
+    </div>
+  </section>`;
+}
+
+function credibilityBenchmarkCommand(pack) {
+  return pack?.reviewerCommands?.runAdversarialBenchmark ??
+    "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures";
 }
 
 function credibilityRunNextHtml() {
@@ -11682,6 +11829,7 @@ function credibilityPackSummaryRows(pack) {
     ["Workspace validation", `${summary.validationPassed ? "passed" : "failed"} (${summary.validationErrors ?? 0} errors, ${summary.validationWarnings ?? 0} warnings)`],
     ["Strict engine gates", `${summary.requiredEngineGates ?? "0/0"} required${summary.latestStrictEngineRunStatus ? `, latest saved ${summary.latestStrictEngineRunStatus}` : ""}`],
     ["Engine evidence", `${summary.engineStatus ?? "unknown"} (${summary.concreteEngineGates ?? "0/0"} concrete, ${summary.engineEvidenceMinted ?? 0} evidence records)`],
+    ["Adversarial benchmark", `${summary.latestAdversarialBenchmarkStatus ?? "missing"} (${formatPercent(summary.latestAdversarialBenchmarkAccuracy)})`],
     ["Saved engine ledger", `${summary.savedEngineRuns ?? 0} run${summary.savedEngineRuns === 1 ? "" : "s"}`],
     ["Open review queue", `${summary.reviewItems ?? 0} items (${summary.criticalReviewItems ?? 0} critical, ${summary.highReviewItems ?? 0} high)`],
     ["Snapshot", `${summary.snapshotFiles ?? 0} files, ${formatBytes(summary.snapshotBytes ?? 0)}`],
@@ -11782,7 +11930,7 @@ function credibilityPackActivitySummary(pack) {
     return "Professor credibility pack loaded from the local workspace.";
   }
 
-  return `${pack.status}; validation ${pack.summary.validationPassed ? "passed" : "failed"}, engines ${pack.summary.requiredEngineGates}, queue ${pack.summary.reviewItems} item${pack.summary.reviewItems === 1 ? "" : "s"}.`;
+  return `${pack.status}; validation ${pack.summary.validationPassed ? "passed" : "failed"}, engines ${pack.summary.requiredEngineGates}, benchmark ${pack.summary.latestAdversarialBenchmarkStatus ?? "missing"}, queue ${pack.summary.reviewItems} item${pack.summary.reviewItems === 1 ? "" : "s"}.`;
 }
 
 function renderReport(receipt) {
