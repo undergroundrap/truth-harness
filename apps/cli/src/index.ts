@@ -6742,6 +6742,13 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
     `Saved engine runs: ${pack.summary.savedEngineRuns}` +
       (pack.summary.latestStrictEngineRunStatus ? ` (latest strict reviewer: ${pack.summary.latestStrictEngineRunStatus})` : "")
   );
+  console.log(
+    `Adversarial benchmark: ${pack.summary.latestAdversarialBenchmarkStatus}` +
+      (pack.summary.latestAdversarialBenchmarkAccuracy === undefined
+        ? ""
+        : ` (${(pack.summary.latestAdversarialBenchmarkAccuracy * 100).toFixed(1)}%)`) +
+      `, saved runs: ${pack.summary.savedBenchmarkRuns}`
+  );
   console.log(`Embedded snapshot: ${pack.embeddedSnapshot.snapshotId} (${pack.summary.snapshotFiles} files)`);
   console.log(`Review queue: ${pack.summary.reviewItems} items (${pack.summary.criticalReviewItems} critical, ${pack.summary.highReviewItems} high)`);
   console.log(
@@ -6753,6 +6760,7 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
   console.log("Reviewer commands:");
   console.log(`  ${pack.reviewerCommands.validateWorkspace}`);
   console.log(`  ${pack.reviewerCommands.verifyEngines}`);
+  console.log(`  ${pack.reviewerCommands.runAdversarialBenchmark}`);
   console.log(`  ${pack.reviewerCommands.reviewWorkspace}`);
   console.log(`  ${pack.reviewerCommands.reproducePack}`);
 
@@ -6850,6 +6858,7 @@ function printCredibilityBundle(result: CredibilityBundleWriteResult): void {
   console.log(`  ${manifest.reviewerCommands.verifyBundle}`);
   console.log(`  ${manifest.reviewerCommands.validateWorkspace}`);
   console.log(`  ${manifest.reviewerCommands.verifyEngines}`);
+  console.log(`  ${manifest.reviewerCommands.runAdversarialBenchmark}`);
   console.log(`  ${manifest.reviewerCommands.reviewWorkspace}`);
 
   if (manifest.warnings.length > 0) {

@@ -1,5 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
+import { listBenchmarkArtifacts, type BenchmarkArtifactSummary } from "./benchmark-run.js";
 import {
   listEngineVerificationRuns,
   verifyEngineEvidence,
@@ -22,6 +23,7 @@ export type CredibilityPackStatus = "ready-for-review" | "blocked";
 export interface CredibilityPackCommandSet {
   validateWorkspace: string;
   verifyEngines: string;
+  runAdversarialBenchmark: string;
   reviewWorkspace: string;
   reproducePack: string;
   dockerCoreEngines: string;
@@ -39,7 +41,7 @@ export interface CredibilityPackReviewItem {
   source: WorkspaceReviewItem["source"];
 }
 
-export type CredibilityPackActionCategory = "validation" | "engine" | "workspace-review";
+export type CredibilityPackActionCategory = "validation" | "engine" | "benchmark" | "workspace-review";
 
 export interface CredibilityPackActionItem {
   actionId: string;
@@ -59,6 +61,12 @@ export interface CredibilityPackEngineRunLedger {
   savedRuns: number;
   latestRuns: EngineVerificationRunSummary[];
   latestStrictReviewerRun?: EngineVerificationRunSummary;
+}
+
+export interface CredibilityPackBenchmarkLedger {
+  savedRuns: number;
+  latestRuns: BenchmarkArtifactSummary[];
+  latestAdversarialRun?: BenchmarkArtifactSummary;
 }
 
 export interface CredibilityPack {
@@ -85,6 +93,9 @@ export interface CredibilityPack {
     engineEvidenceMinted: number;
     savedEngineRuns: number;
     latestStrictEngineRunStatus?: EngineVerificationReport["status"];
+    savedBenchmarkRuns: number;
+    latestAdversarialBenchmarkStatus: "missing" | "passed" | "failed";
+    latestAdversarialBenchmarkAccuracy?: number;
     reviewItems: number;
     criticalReviewItems: number;
     highReviewItems: number;
@@ -102,6 +113,7 @@ export interface CredibilityPack {
   };
   engineEvidence: EngineVerificationReport;
   engineRunLedger: CredibilityPackEngineRunLedger;
+  benchmarkLedger: CredibilityPackBenchmarkLedger;
   workspaceReview: {
     reviewId: string;
     summary: WorkspaceReview["summary"];
@@ -177,6 +189,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
     runner: input.runner
   });
   const engineRunLedger = summarizeEngineRunLedger(await listEngineVerificationRuns(status.root));
+  const benchmarkLedger = summarizeBenchmarkLedger(await listBenchmarkArtifacts(status.root));
   const review = await createWorkspaceReview({
     rootPath: status.root,
     maxRoutes: input.maxRoutes,
@@ -188,6 +201,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
   const warnings = credibilityWarnings({
     validation,
     engineEvidence,
+    benchmarkLedger,
     review
   });
   const statusLabel: CredibilityPackStatus = warnings.length === 0 ? "ready-for-review" : "blocked";
@@ -214,6 +228,9 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       engineEvidenceMinted: engineEvidence.evidenceMinted,
       savedEngineRuns: engineRunLedger.savedRuns,
       latestStrictEngineRunStatus: engineRunLedger.latestStrictReviewerRun?.status,
+      savedBenchmarkRuns: benchmarkLedger.savedRuns,
+      latestAdversarialBenchmarkStatus: adversarialBenchmarkStatus(benchmarkLedger.latestAdversarialRun),
+      latestAdversarialBenchmarkAccuracy: benchmarkLedger.latestAdversarialRun?.trustAccuracy,
       reviewItems: review.summary.totalItems,
       criticalReviewItems: review.summary.criticalItems,
       highReviewItems: review.summary.highItems,
@@ -223,6 +240,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
     validation: summarizeValidation(validation),
     engineEvidence,
     engineRunLedger,
+    benchmarkLedger,
     workspaceReview: {
       reviewId: review.reviewId,
       summary: review.summary,
@@ -239,6 +257,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       validation,
       engineEvidence,
       engineRunLedger,
+      benchmarkLedger,
       review,
       reviewerCommands
     }),
@@ -309,6 +328,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Workspace validation: ${pack.summary.validationPassed ? "passed" : "failed"} (${pack.summary.validationErrors} errors, ${pack.summary.validationWarnings} warnings)`,
     `- Engine evidence: ${pack.summary.engineStatus} (${pack.summary.concreteEngineGates} concrete gates, ${pack.summary.requiredEngineGates} required gates, ${pack.summary.engineEvidenceMinted} evidence records earned)`,
     `- Saved engine-run ledger: ${pack.summary.savedEngineRuns} saved${pack.summary.latestStrictEngineRunStatus ? ` (latest strict reviewer: ${pack.summary.latestStrictEngineRunStatus})` : ""}`,
+    `- Adversarial benchmark: ${formatAdversarialBenchmarkSummary(pack.summary.latestAdversarialBenchmarkStatus, pack.summary.latestAdversarialBenchmarkAccuracy)} (${pack.summary.savedBenchmarkRuns} saved benchmark run${pack.summary.savedBenchmarkRuns === 1 ? "" : "s"})`,
     `- Embedded artifact snapshot: ${pack.summary.snapshotFiles} files, ${pack.summary.snapshotBytes} bytes`,
     `- Open work queue: ${pack.summary.reviewItems} items (${pack.summary.criticalReviewItems} critical, ${pack.summary.highReviewItems} high)`,
     `- Reviewer action plan: ${pack.reviewerActionPlan.totalActions} actions (${pack.reviewerActionPlan.criticalActions} critical, ${pack.reviewerActionPlan.highActions} high)`,
@@ -317,6 +337,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     "",
     `- Validate workspace: \`${pack.reviewerCommands.validateWorkspace}\``,
     `- Verify engines: \`${pack.reviewerCommands.verifyEngines}\``,
+    `- Run adversarial benchmark: \`${pack.reviewerCommands.runAdversarialBenchmark}\``,
     `- Review open obligations: \`${pack.reviewerCommands.reviewWorkspace}\``,
     `- Reproduce this pack: \`${pack.reviewerCommands.reproducePack}\``,
     `- Docker core engines: \`${pack.reviewerCommands.dockerCoreEngines}\``,
@@ -387,6 +408,27 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     }
     lines.push("");
   }
+
+  lines.push("## Benchmark Ledger", "");
+  if (pack.benchmarkLedger.latestAdversarialRun) {
+    const run = pack.benchmarkLedger.latestAdversarialRun;
+    lines.push(
+      `Latest adversarial benchmark: \`${run.artifactId}\` (${run.passed}/${run.total}, ${((run.trustAccuracy ?? 0) * 100).toFixed(1)}%)`,
+      `Path: \`${run.path}\``,
+      ""
+    );
+  } else {
+    lines.push(
+      "No saved `ai-failure-seed` benchmark run was found. Run the adversarial benchmark command before asking a professor to review the workspace.",
+      ""
+    );
+  }
+  for (const run of pack.benchmarkLedger.latestRuns) {
+    lines.push(
+      `- \`${run.artifactId}\`: ${run.suiteId}, ${run.passed}/${run.total}, ${((run.trustAccuracy ?? 0) * 100).toFixed(1)}%, \`${run.path}\``
+    );
+  }
+  lines.push("");
 
   lines.push("## Top Open Work", "");
   if (pack.workspaceReview.topItems.length === 0) {
@@ -460,10 +502,39 @@ function summarizeEngineRunLedger(runs: EngineVerificationRunSummary[]): Credibi
   };
 }
 
+function summarizeBenchmarkLedger(artifacts: BenchmarkArtifactSummary[]): CredibilityPackBenchmarkLedger {
+  const runs = artifacts.filter((artifact) => artifact.kind === "run");
+  return {
+    savedRuns: runs.length,
+    latestRuns: runs.slice(0, 5),
+    latestAdversarialRun: runs.find((run) => run.suiteId === "ai-failure-seed")
+  };
+}
+
+function adversarialBenchmarkStatus(run: BenchmarkArtifactSummary | undefined): "missing" | "passed" | "failed" {
+  if (!run) {
+    return "missing";
+  }
+
+  return (run.failed ?? 0) === 0 ? "passed" : "failed";
+}
+
+function formatAdversarialBenchmarkSummary(
+  status: "missing" | "passed" | "failed",
+  accuracy: number | undefined
+): string {
+  if (status === "missing") {
+    return "missing";
+  }
+
+  return `${status}${accuracy === undefined ? "" : ` (${(accuracy * 100).toFixed(1)}%)`}`;
+}
+
 function createReviewerActionPlan(input: {
   validation: WorkspaceValidation;
   engineEvidence: EngineVerificationReport;
   engineRunLedger: CredibilityPackEngineRunLedger;
+  benchmarkLedger: CredibilityPackBenchmarkLedger;
   review: WorkspaceReview;
   reviewerCommands: CredibilityPackCommandSet;
 }): CredibilityPack["reviewerActionPlan"] {
@@ -535,6 +606,35 @@ function createReviewerActionPlan(input: {
     });
   }
 
+  const adversarialBenchmark = input.benchmarkLedger.latestAdversarialRun;
+  if (!adversarialBenchmark) {
+    pushAction({
+      category: "benchmark",
+      priority: "high",
+      title: "Run adversarial AI failure benchmark",
+      detail: "No saved `ai-failure-seed` benchmark run was found. Professor review should include a local run that catches fluent-but-wrong AI math behavior and preserves evidence-kind expectations.",
+      command: input.reviewerCommands.runAdversarialBenchmark,
+      closes: ["benchmark:ai-failure-seed", "adversarial-benchmark-ledger"],
+      source: {
+        kind: "benchmark-suite",
+        ref: "ai-failure-seed"
+      }
+    });
+  } else if ((adversarialBenchmark.failed ?? 0) > 0) {
+    pushAction({
+      category: "benchmark",
+      priority: "critical",
+      title: "Fix adversarial AI failure benchmark regressions",
+      detail: `Latest \`ai-failure-seed\` run ${adversarialBenchmark.artifactId} has ${adversarialBenchmark.failed ?? 0} failing case(s). Fix or explicitly triage before professor review.`,
+      command: input.reviewerCommands.runAdversarialBenchmark,
+      closes: ["benchmark:ai-failure-seed", `benchmark-run:${adversarialBenchmark.artifactId}`],
+      source: {
+        kind: "benchmark-run",
+        ref: adversarialBenchmark.path
+      }
+    });
+  }
+
   for (const item of input.review.items.slice(0, 8)) {
     pushAction({
       category: "workspace-review",
@@ -582,7 +682,7 @@ function reviewerActionRank(action: CredibilityPackActionItem): number {
     return 0;
   }
   if (action.category !== "engine") {
-    return 50;
+    return action.category === "benchmark" ? 46 : 50;
   }
 
   const engineRank: Record<string, number> = {
@@ -614,6 +714,7 @@ function isHostProcessBlocked(summary: string): boolean {
 function credibilityWarnings(input: {
   validation: WorkspaceValidation;
   engineEvidence: EngineVerificationReport;
+  benchmarkLedger: CredibilityPackBenchmarkLedger;
   review: WorkspaceReview;
 }): string[] {
   const warnings: string[] = [];
@@ -629,6 +730,13 @@ function credibilityWarnings(input: {
   if (input.engineEvidence.concretePassed !== input.engineEvidence.concreteTotal) {
     warnings.push(
       `Concrete engine smoke gates are incomplete: ${input.engineEvidence.concretePassed}/${input.engineEvidence.concreteTotal} passed.`
+    );
+  }
+  if (!input.benchmarkLedger.latestAdversarialRun) {
+    warnings.push("No saved `ai-failure-seed` adversarial benchmark run found.");
+  } else if ((input.benchmarkLedger.latestAdversarialRun.failed ?? 0) > 0) {
+    warnings.push(
+      `Latest \`ai-failure-seed\` adversarial benchmark run has ${input.benchmarkLedger.latestAdversarialRun.failed ?? 0} failing case(s).`
     );
   }
   if (input.review.summary.criticalItems > 0) {
@@ -679,6 +787,7 @@ function createReviewerCommands(input: {
   return {
     validateWorkspace: "truth-harness workspace validate .",
     verifyEngines: `truth-harness engines verify --write${engineSuffix}`,
+    runAdversarialBenchmark: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
     reviewWorkspace: "truth-harness workspace review .",
     reproducePack: `truth-harness workspace credibility-pack .${engineSuffix}`,
     dockerCoreEngines: "npm run docker:engines",

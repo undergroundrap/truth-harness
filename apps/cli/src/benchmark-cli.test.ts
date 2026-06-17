@@ -1488,7 +1488,7 @@ describe("benchmark CLI", () => {
         packStatus: string;
         packSummary: { requiredEngineGates: string };
         summary: { totalFiles: number };
-        reviewerCommands: { verifyBundle: string; verifyEngines: string; reproducePack: string };
+        reviewerCommands: { verifyBundle: string; verifyEngines: string; runAdversarialBenchmark: string; reproducePack: string };
       };
       result: { bundleDir: string; manifestPath: string; packMarkdownPath: string };
     };
@@ -1541,6 +1541,7 @@ describe("benchmark CLI", () => {
     expect(bundle.manifest.summary.totalFiles).toBeGreaterThan(0);
     expect(bundle.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
     expect(bundle.manifest.reviewerCommands.verifyEngines).toContain("--require-all-engines");
+    expect(bundle.manifest.reviewerCommands.runAdversarialBenchmark).toContain("ai-failure-seed");
     expect(bundle.manifest.reviewerCommands.reproducePack).toContain("--require-all-engines");
     expect(bundle.result.bundleDir.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
     expect(await readFile(bundle.result.manifestPath, "utf8")).toContain(bundle.manifest.bundleId);

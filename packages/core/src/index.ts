@@ -606,7 +606,9 @@ export type {
   CredibilityPack,
   CredibilityPackActionCategory,
   CredibilityPackActionItem,
+  CredibilityPackBenchmarkLedger,
   CredibilityPackCommandSet,
+  CredibilityPackEngineRunLedger,
   CredibilityPackReviewItem,
   CredibilityPackStatus,
   CredibilityPackWriteResult

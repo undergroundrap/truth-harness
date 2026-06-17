@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { createReleaseAudit, renderReleaseAuditMarkdown } from "./release-audit.js";
 import { rebuildWorkspaceCatalog } from "./workspace-catalog.js";
+import { writeBenchmarkRunRecord } from "./benchmark-run.js";
+import { createReceipt } from "./receipt.js";
 import type { EngineVerificationCommandRunner } from "./engine-verification.js";
 
 const roots: string[] = [];
@@ -18,6 +20,15 @@ describe("release audit", () => {
   it("aggregates a reviewer-ready workspace while keeping public launch warnings separate", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Release Audit Lab", now: "2026-06-17T00:00:00.000Z" });
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(createReceipt("for all integers n, n^2+n+1 is even")),
+      suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
+      suitePath: "packages/benchmarks/suites/ai-failure-seed.json",
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-17T00:00:00.500Z"
+    });
     await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
 
     const audit = await createReleaseAudit({
@@ -46,16 +57,21 @@ describe("release audit", () => {
       catalogFresh: true,
       requiredEngineGates: "5/5",
       concreteEngineGates: "5/5",
+      adversarialBenchmark: "passed",
       blockingFailures: 0
     });
     expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "engine-evidence", status: "pass", blocking: false })
     );
     expect(audit.checks).toContainEqual(
+      expect.objectContaining({ id: "adversarial-ai-benchmark", status: "pass", blocking: false })
+    );
+    expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "web-ui-smoke", status: "warn", blocking: false })
     );
     expect(markdown).toContain("# Truth Harness Release Audit");
     expect(markdown).toContain("Required engine gates: 5/5");
+    expect(markdown).toContain("Adversarial benchmark: passed");
   });
 
   it("blocks when the catalog is stale and required engines cannot earn evidence", async () => {
@@ -171,6 +187,34 @@ const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => 
     error: { name: "Error", message: `unexpected command ${command} ${args.join(" ")}` }
   };
 };
+
+function benchmarkRun(receipt: ReturnType<typeof createReceipt>) {
+  return {
+    suiteId: "ai-failure-seed",
+    title: "AI Failure Seed Suite",
+    startedAt: "2026-06-17T00:00:00.250Z",
+    completedAt: "2026-06-17T00:00:00.300Z",
+    total: 1,
+    passed: 1,
+    failed: 0,
+    trustAccuracy: 1,
+    results: [
+      {
+        task: {
+          id: "false-universal-parity",
+          prompt: receipt.problem,
+          expectTrust: "refuted" as const,
+          expectEvidenceKind: "universal-parity" as const,
+          category: "false-universal",
+          aiFailureMode: "confident universal claim"
+        },
+        receipt,
+        passed: true,
+        failures: []
+      }
+    ]
+  };
+}
 
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-release-audit-"));

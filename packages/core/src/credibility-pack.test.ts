@@ -7,6 +7,8 @@ import { rebuildWorkspaceCatalog, searchWorkspaceCatalog } from "./workspace-cat
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createCredibilityPack, writeCredibilityPack } from "./credibility-pack.js";
 import { writeEngineVerificationRun, type EngineVerificationCommandRunner } from "./engine-verification.js";
+import { writeBenchmarkRunRecord } from "./benchmark-run.js";
+import { createReceipt } from "./receipt.js";
 
 const roots: string[] = [];
 
@@ -41,6 +43,23 @@ describe("professor credibility pack", () => {
       replayCommand: "truth-harness engines verify --write --require-all-engines",
       runner: passingEngineRunner
     });
+    const adversarialReceipt = createReceipt("for all integers n, n^2+n+1 is even");
+    const adversarialBenchmark = await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(adversarialReceipt, {
+        suiteId: "ai-failure-seed",
+        title: "AI Failure Seed Suite",
+        expectTrust: "refuted",
+        expectEvidenceKind: "universal-parity",
+        category: "false-universal",
+        aiFailureMode: "confident universal claim"
+      }),
+      suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
+      suitePath: "packages/benchmarks/suites/ai-failure-seed.json",
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-16T00:00:45.000Z"
+    });
 
     const result = await writeCredibilityPack({
       rootPath: root,
@@ -69,6 +88,9 @@ describe("professor credibility pack", () => {
       engineEvidenceMinted: 3,
       savedEngineRuns: 1,
       latestStrictEngineRunStatus: "passed",
+      savedBenchmarkRuns: 1,
+      latestAdversarialBenchmarkStatus: "passed",
+      latestAdversarialBenchmarkAccuracy: 1,
       professorReady: true
     });
     expect(result.pack.embeddedSnapshot.entries.length).toBeGreaterThan(0);
@@ -77,13 +99,21 @@ describe("professor credibility pack", () => {
     );
     expect(result.markdown).toContain("Professor ready: yes");
     expect(result.markdown).toContain("Saved engine-run ledger: 1 saved");
+    expect(result.markdown).toContain("Adversarial benchmark: passed (100.0%)");
     expect(result.markdown).toContain("## Saved Engine Run Ledger");
     expect(result.markdown).toContain(strictEngineRun.record.runId);
+    expect(result.markdown).toContain("## Benchmark Ledger");
+    expect(result.markdown).toContain(adversarialBenchmark.record.benchmarkRunId);
     expect(result.markdown).toContain("Docker Lean fixture");
     expect(result.pack.engineRunLedger.latestStrictReviewerRun).toMatchObject({
       runId: strictEngineRun.record.runId,
       requiredTotal: 5,
       status: "passed"
+    });
+    expect(result.pack.benchmarkLedger.latestAdversarialRun).toMatchObject({
+      artifactId: adversarialBenchmark.record.benchmarkRunId,
+      suiteId: "ai-failure-seed",
+      failed: 0
     });
     expect(result.pack.reviewerActionPlan).toMatchObject({
       totalActions: 0,
@@ -96,6 +126,9 @@ describe("professor credibility pack", () => {
     expect(result.markdown).toContain("No open reviewer actions were generated");
     expect(result.pack.reviewerCommands.verifyEngines).toBe(
       "truth-harness engines verify --write --require-maxima --require-z3 --require-lean --maxima-command maxima-test --z3-command z3-test --lean-command lean-test --sage-command sage-test --smt-source constraints.smt2 --lean-source Proof.lean"
+    );
+    expect(result.pack.reviewerCommands.runAdversarialBenchmark).toBe(
+      "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures"
     );
 
     const json = await readFile(result.jsonPath, "utf8");
@@ -146,10 +179,11 @@ describe("professor credibility pack", () => {
     expect(pack.summary.professorReady).toBe(false);
     expect(pack.warnings).toContain("Required engine evidence gates are incomplete: 0/3 passed.");
     expect(pack.warnings).toContain("Concrete engine smoke gates are incomplete: 0/3 passed.");
+    expect(pack.warnings).toContain("No saved `ai-failure-seed` adversarial benchmark run found.");
     expect(pack.reviewerActionPlan).toMatchObject({
-      totalActions: 3,
+      totalActions: 4,
       criticalActions: 3,
-      highActions: 0
+      highActions: 1
     });
     expect(pack.reviewerActionPlan.actions).toContainEqual(
       expect.objectContaining({
@@ -170,6 +204,15 @@ describe("professor credibility pack", () => {
       expect.objectContaining({
         title: "Close required Lean proof fixture gate",
         closes: expect.arrayContaining(["required-engine:lean-proof-fixture"])
+      })
+    );
+    expect(pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({
+        category: "benchmark",
+        priority: "high",
+        title: "Run adversarial AI failure benchmark",
+        command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+        closes: expect.arrayContaining(["benchmark:ai-failure-seed"])
       })
     );
     expect(pack.reviewerActionPlan.actions.map((action) => action.detail).join("\n")).not.toContain("spawn");
@@ -275,6 +318,49 @@ const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => 
     error: { name: "Error", message: `unexpected command ${command} ${args.join(" ")}` }
   };
 };
+
+function benchmarkRun(
+  receipt: ReturnType<typeof createReceipt>,
+  options: {
+    suiteId?: string;
+    title?: string;
+    expectTrust?: ReturnType<typeof createReceipt>["trust"];
+    expectEvidenceKind?: ReturnType<typeof createReceipt>["evidenceProfile"]["kind"];
+    category?: string;
+    aiFailureMode?: string;
+    passed?: boolean;
+    failures?: string[];
+  } = {}
+) {
+  const expectedTrust = options.expectTrust ?? receipt.trust;
+  const passed = options.passed ?? true;
+
+  return {
+    suiteId: options.suiteId ?? "tiny-suite",
+    title: options.title ?? "Tiny Suite",
+    startedAt: "2026-06-16T00:00:40.000Z",
+    completedAt: "2026-06-16T00:00:41.000Z",
+    total: 1,
+    passed: passed ? 1 : 0,
+    failed: passed ? 0 : 1,
+    trustAccuracy: passed ? 1 : 0,
+    results: [
+      {
+        task: {
+          id: "adversarial-case",
+          prompt: receipt.problem,
+          expectTrust: expectedTrust,
+          expectEvidenceKind: options.expectEvidenceKind ?? receipt.evidenceProfile.kind,
+          category: options.category ?? "exact-computation",
+          aiFailureMode: options.aiFailureMode ?? "wrong arithmetic"
+        },
+        receipt,
+        passed,
+        failures: options.failures ?? []
+      }
+    ]
+  };
+}
 
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-credibility-pack-"));

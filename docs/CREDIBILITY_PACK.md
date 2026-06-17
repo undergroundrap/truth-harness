@@ -14,6 +14,7 @@ truth-harness workspace credibility-pack . --require-all-concrete
 truth-harness workspace credibility-pack . --require-all-engines
 truth-harness workspace credibility-pack . --dry-run --json
 truth-harness workspace credibility-actions . --require-all-engines --json
+truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures
 truth-harness workspace credibility-bundle .
 truth-harness workspace verify-credibility-bundle . .truth-harness/findings/<date>-<bundle-id>-credibility-bundle
 ```
@@ -39,10 +40,11 @@ npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/
 - Embedded local artifact snapshot with file hashes.
 - Concrete engine evidence report from `engines verify`.
 - Saved engine-run ledger summary from `.truth-harness/engine-runs`, including the latest strict all-engines reviewer run when one exists.
+- Saved benchmark ledger summary from `.truth-harness/benchmarks`, including the latest `ai-failure-seed` adversarial AI-failure run and its trust accuracy.
 - Workspace review queue with top open proof/check obligations. Normal unverified exploration and stronger-label upgrades stay visible as work, but they are not treated as release-critical defects unless they block a current claim boundary.
-- Structured reviewer action plan with priorities, close targets, and commands for validation, engine, and workspace-review blockers.
-- Exact reviewer commands for validation, writable engine checks, review, Docker core engines, the Lean proof fixture, and the heavier SageMath fixture.
-- Blocking warnings when validation fails, required engines are missing, concrete engine smoke gates are incomplete, or critical review items remain open.
+- Structured reviewer action plan with priorities, close targets, and commands for validation, engine, benchmark, and workspace-review blockers.
+- Exact reviewer commands for validation, writable engine checks, adversarial benchmarks, review, Docker core engines, the Lean proof fixture, and the heavier SageMath fixture.
+- Blocking warnings when validation fails, required engines are missing, concrete engine smoke gates are incomplete, the adversarial benchmark is missing/failing, or critical review items remain open.
 
 ## Portable Reviewer Bundle
 
@@ -85,6 +87,7 @@ A pack is `ready-for-review` only when:
 - workspace validation passes,
 - all concrete engine smoke gates pass,
 - every explicitly required engine gate passes,
+- the latest saved `ai-failure-seed` adversarial benchmark exists and has no failing cases,
 - the workspace review has no critical open items.
 
 Critical review items are reserved for product, evidence, or current-claim blockers. Open research routes that honestly remain `unverified` should appear as high-priority work, while upgrade obligations that would be needed before claiming a stronger label should appear below that. The queue should make the next honest move obvious without making the whole workspace look broken.
@@ -94,7 +97,8 @@ This status is intentionally conservative. A ready pack does not prove every cla
 When the pack is blocked, `reviewerActionPlan.actions` is the first queue a human reviewer or agent should inspect. Each action records:
 
 - the priority (`critical`, `high`, `medium`, or `low`),
-- the category (`validation`, `engine`, or `workspace-review`),
+- the category (`validation`, `engine`, `benchmark`, or `workspace-review`),
+- benchmark actions mean the reviewer packet is missing or failing the saved adversarial AI-failure suite,
 - the exact command to run,
 - the gate or artifact it closes.
 

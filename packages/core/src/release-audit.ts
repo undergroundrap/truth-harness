@@ -66,6 +66,7 @@ export interface ReleaseAudit {
     catalogFresh: boolean;
     requiredEngineGates: string;
     concreteEngineGates: string;
+    adversarialBenchmark: string;
     reviewItems: number;
     criticalReviewItems: number;
     sandboxAvailable: boolean;
@@ -81,6 +82,7 @@ export interface ReleaseAudit {
     validateWorkspace: string;
     credibilityPack: string;
     credibilityActions: string;
+    adversarialBenchmark: string;
     engineVerify: string;
     dockerEngines: string;
     dockerProof: string;
@@ -128,6 +130,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
       catalogFresh: false,
       requiredEngineGates: "0/0",
       concreteEngineGates: "0/0",
+      adversarialBenchmark: "missing",
       reviewItems: 0,
       criticalReviewItems: 0
     });
@@ -158,6 +161,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     validationCheck(credibilityPack),
     catalogCheck(catalog),
     engineCheck(credibilityPack, hasRequiredEngine(engineRequirements)),
+    adversarialBenchmarkCheck(credibilityPack),
     savedStrictEngineRunCheck(credibilityPack, input.requireSavedStrictEngineRun === true),
     reviewQueueCheck(credibilityPack),
     sandboxCheck(sandbox, input.requireSandbox === true),
@@ -178,6 +182,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     catalogFresh: catalog.readable && !catalog.stale,
     requiredEngineGates: credibilityPack.summary.requiredEngineGates,
     concreteEngineGates: credibilityPack.summary.concreteEngineGates,
+    adversarialBenchmark: credibilityPack.summary.latestAdversarialBenchmarkStatus,
     reviewItems: credibilityPack.summary.reviewItems,
     criticalReviewItems: credibilityPack.summary.criticalReviewItems
   });
@@ -202,6 +207,7 @@ export function renderReleaseAuditMarkdown(audit: ReleaseAudit): string {
     `- Catalog fresh: ${String(audit.summary.catalogFresh)}`,
     `- Required engine gates: ${audit.summary.requiredEngineGates}`,
     `- Concrete engine gates: ${audit.summary.concreteEngineGates}`,
+    `- Adversarial benchmark: ${audit.summary.adversarialBenchmark}`,
     `- Review queue: ${audit.summary.reviewItems} item(s), ${audit.summary.criticalReviewItems} critical`,
     `- Code-run sandbox: ${audit.summary.sandboxAvailable ? "available" : "not measured"}`,
     "",
@@ -261,6 +267,7 @@ function buildAudit(input: {
   catalogFresh: boolean;
   requiredEngineGates: string;
   concreteEngineGates: string;
+  adversarialBenchmark: string;
   reviewItems: number;
   criticalReviewItems: number;
 }): ReleaseAudit {
@@ -291,6 +298,7 @@ function buildAudit(input: {
       catalogFresh: input.catalogFresh,
       requiredEngineGates: input.requiredEngineGates,
       concreteEngineGates: input.concreteEngineGates,
+      adversarialBenchmark: input.adversarialBenchmark,
       reviewItems: input.reviewItems,
       criticalReviewItems: input.criticalReviewItems,
       sandboxAvailable: input.sandbox.available
@@ -491,6 +499,53 @@ function savedStrictEngineRunCheck(pack: CredibilityPack, required: boolean): Re
   });
 }
 
+function adversarialBenchmarkCheck(pack: CredibilityPack): ReleaseAuditCheck {
+  const status = pack.summary.latestAdversarialBenchmarkStatus;
+  const accuracy = pack.summary.latestAdversarialBenchmarkAccuracy;
+  const accuracyText = accuracy === undefined ? "unknown accuracy" : `${(accuracy * 100).toFixed(1)}% trust accuracy`;
+  if (status === "passed") {
+    return passCheck({
+      id: "adversarial-ai-benchmark",
+      title: "Adversarial AI benchmark",
+      summary: `Latest ai-failure-seed run passed with ${accuracyText}.`,
+      command: pack.reviewerCommands.runAdversarialBenchmark,
+      details: [
+        `${pack.summary.savedBenchmarkRuns} saved benchmark run(s) are present.`,
+        "The benchmark catches fluent-but-wrong AI math behavior and verifies expected evidence kinds."
+      ]
+    });
+  }
+
+  if (status === "failed") {
+    return failCheck({
+      id: "adversarial-ai-benchmark",
+      title: "Adversarial AI benchmark",
+      blocking: true,
+      summary: `Latest ai-failure-seed run failed with ${accuracyText}.`,
+      command: pack.reviewerCommands.runAdversarialBenchmark,
+      details: [
+        "Fix or explicitly triage failing adversarial benchmark cases before treating this workspace as professor-ready.",
+        ...pack.reviewerActionPlan.actions
+          .filter((action) => action.category === "benchmark")
+          .slice(0, 3)
+          .map((action) => action.detail)
+      ]
+    });
+  }
+
+  return failCheck({
+    id: "adversarial-ai-benchmark",
+    title: "Adversarial AI benchmark",
+    blocking: true,
+    summary: "No saved ai-failure-seed benchmark run was found.",
+    command: pack.reviewerCommands.runAdversarialBenchmark,
+    details: [
+      "Run and save the adversarial benchmark before serious review so reviewers can see the system catch AI-style math mistakes.",
+      "Benchmark records are evidence about system behavior; they do not prove future claims."
+    ]
+  });
+}
+
 function reviewQueueCheck(pack: CredibilityPack): ReleaseAuditCheck {
   if (pack.summary.criticalReviewItems > 0) {
     return failCheck({
@@ -592,6 +647,7 @@ function releaseAuditCommands(
     validateWorkspace: `truth-harness workspace validate ${quotedRoot}`,
     credibilityPack: `truth-harness workspace credibility-pack ${quotedRoot}${requirementFlags}`,
     credibilityActions: `truth-harness workspace credibility-actions ${quotedRoot}${requirementFlags}`,
+    adversarialBenchmark: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
     engineVerify: `truth-harness engines verify --write${requirementFlags}`,
     dockerEngines: "npm run docker:engines",
     dockerProof: "npm run docker:proof",

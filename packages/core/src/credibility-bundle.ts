@@ -62,6 +62,7 @@ export interface CredibilityBundleManifest {
     verifyBundle: string;
     validateWorkspace: string;
     verifyEngines: string;
+    runAdversarialBenchmark: string;
     reviewWorkspace: string;
     reproducePack: string;
   };
@@ -200,6 +201,7 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
       verifyBundle: `truth-harness workspace verify-credibility-bundle . ${toPortablePath(relative(status.root, bundleDir))}`,
       validateWorkspace: pack.reviewerCommands.validateWorkspace,
       verifyEngines: pack.reviewerCommands.verifyEngines,
+      runAdversarialBenchmark: pack.reviewerCommands.runAdversarialBenchmark,
       reviewWorkspace: pack.reviewerCommands.reviewWorkspace,
       reproducePack: pack.reviewerCommands.reproducePack
     },

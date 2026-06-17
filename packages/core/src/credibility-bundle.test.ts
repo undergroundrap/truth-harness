@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { EngineVerificationCommandRunner } from "./engine-verification.js";
+import { writeBenchmarkRunRecord } from "./benchmark-run.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { createReceipt } from "./receipt.js";
 import { rebuildWorkspaceCatalog, searchWorkspaceCatalog } from "./workspace-catalog.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { verifyCredibilityBundle, writeCredibilityBundle } from "./credibility-bundle.js";
@@ -19,6 +21,15 @@ describe("credibility reviewer bundle", () => {
   it("writes a portable bundle with copied artifacts, manifest hashes, and catalog visibility", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(createReceipt("for all integers n, n^2+n+1 is even")),
+      suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
+      suitePath: "packages/benchmarks/suites/ai-failure-seed.json",
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-16T00:00:30.000Z"
+    });
 
     const result = await writeCredibilityBundle({
       rootPath: root,
@@ -41,6 +52,7 @@ describe("credibility reviewer bundle", () => {
     expect(result.manifest.summary.artifactFiles).toBeGreaterThan(0);
     expect(result.manifest.generatedFiles).toHaveLength(3);
     expect(result.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
+    expect(result.manifest.reviewerCommands.runAdversarialBenchmark).toContain("ai-failure-seed");
     expect(await readFile(result.readmePath, "utf8")).toContain("Truth Harness Portable Reviewer Bundle");
 
     const verification = await verifyCredibilityBundle({
@@ -146,6 +158,34 @@ const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => 
     error: { name: "Error", message: `unexpected command ${command} ${args.join(" ")}` }
   };
 };
+
+function benchmarkRun(receipt: ReturnType<typeof createReceipt>) {
+  return {
+    suiteId: "ai-failure-seed",
+    title: "AI Failure Seed Suite",
+    startedAt: "2026-06-16T00:00:20.000Z",
+    completedAt: "2026-06-16T00:00:21.000Z",
+    total: 1,
+    passed: 1,
+    failed: 0,
+    trustAccuracy: 1,
+    results: [
+      {
+        task: {
+          id: "false-universal-parity",
+          prompt: receipt.problem,
+          expectTrust: "refuted" as const,
+          expectEvidenceKind: "universal-parity" as const,
+          category: "false-universal",
+          aiFailureMode: "confident universal claim"
+        },
+        receipt,
+        passed: true,
+        failures: []
+      }
+    ]
+  };
+}
 
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-credibility-bundle-"));
