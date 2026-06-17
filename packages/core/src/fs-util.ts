@@ -118,8 +118,15 @@ async function isLockContention(lockPath: string, error: NodeJS.ErrnoException):
     return true;
   }
 
-  if ((error.code === "EPERM" || error.code === "EACCES") && (await pathExists(lockPath))) {
-    return true;
+  if (error.code === "EPERM" || error.code === "EACCES") {
+    if (await pathExists(lockPath)) {
+      return true;
+    }
+
+    // Windows can report EPERM while another worker is between create/remove
+    // visibility states for the same lock path. Treat that as contention so
+    // concurrent writers retry instead of failing a valid workspace operation.
+    return process.platform === "win32";
   }
 
   return false;

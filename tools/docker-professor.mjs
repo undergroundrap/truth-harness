@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 
 function main() {
   ensureDockerEngine();
-  runDocker(["compose", "build", "truth-harness"], "build the Truth Harness Docker image");
+  runDocker(["compose", "build", "lean-proof"], "build the pinned Lean professor evidence image");
   runDocker(["compose", "run", "--rm", "professor-evidence"], "write professor evidence inside the no-network compose service");
 }
 

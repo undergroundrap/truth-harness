@@ -13,16 +13,16 @@ const steps = [
     args: ["apps/cli/dist/index.js", "workspace", "init", ".", "--name", "Truth Harness"]
   },
   {
-    label: "write Docker-core engine evidence",
+    label: "write concrete Maxima/Z3/Lean engine evidence",
     command: "node",
     args: [
       "apps/cli/dist/index.js",
       "engines",
       "verify",
       "--write",
-      "--require-docker-core",
+      "--require-all-concrete",
       "--timeout-ms",
-      "5000"
+      "30000"
     ]
   },
   {
@@ -45,7 +45,9 @@ const steps = [
       "workspace",
       "credibility-pack",
       ".",
-      "--require-docker-core",
+      "--require-all-concrete",
+      "--timeout-ms",
+      "30000",
       "--max-routes",
       "0",
       "--max-claims",
@@ -74,4 +76,4 @@ for (const step of steps) {
 console.log("");
 console.log("Professor evidence sequence completed.");
 console.log("Generated local engine, benchmark, and credibility-pack artifacts are under .truth-harness/.");
-console.log("Inspect the latest credibility pack before claiming reviewer-ready; stricter proof or all-engine gates may still block it.");
+console.log("Inspect the latest credibility pack before claiming reviewer-ready; optional all-engine gates may still block stricter review.");
