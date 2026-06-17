@@ -305,7 +305,9 @@ const state = {
   credibilityPackError: undefined,
   credibilityRunNextPlan: undefined,
   credibilityRunNextLoading: false,
+  credibilityRunNextSaving: false,
   credibilityRunNextError: undefined,
+  credibilityRunNextPaths: undefined,
   workspaceReadiness: undefined,
   catalogStatus: undefined,
   catalogSearch: undefined,
@@ -8155,6 +8157,7 @@ async function refreshCredibilityRunNext({ announce = true } = {}) {
     });
     const payload = await readLocalApiJson(response, "Local credibility run-next API failed.");
     state.credibilityRunNextPlan = payload.plan;
+    state.credibilityRunNextPaths = payload.paths;
     state.credibilityRunNextError = undefined;
     if (announce) {
       addActivity(
@@ -8167,12 +8170,61 @@ async function refreshCredibilityRunNext({ announce = true } = {}) {
     }
   } catch (error) {
     state.credibilityRunNextPlan = undefined;
+    state.credibilityRunNextPaths = undefined;
     state.credibilityRunNextError = error instanceof Error ? error.message : "Unknown credibility run-next failure.";
     if (announce) {
       addActivity("local-api", "Credibility reviewer action unavailable", state.credibilityRunNextError, "waiting");
     }
   } finally {
     state.credibilityRunNextLoading = false;
+    renderCredibilityPackPanel();
+  }
+}
+
+async function saveCredibilityRunNextFromUi(button) {
+  if (state.credibilityRunNextSaving) {
+    return;
+  }
+
+  state.credibilityRunNextSaving = true;
+  state.credibilityRunNextError = undefined;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Saving";
+  }
+  renderCredibilityPackPanel();
+
+  try {
+    const response = await fetch("/api/workspace-run-next", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        source: "credibility-actions",
+        requireAllEngines: true,
+        timeoutMs: 1500
+      })
+    });
+    const payload = await readLocalApiJson(response, "Local credibility run-next save failed.");
+    state.credibilityRunNextPlan = payload.plan;
+    state.credibilityRunNextPaths = payload.paths;
+    state.credibilityRunNextError = undefined;
+    addActivity(
+      "local-api",
+      "Saved credibility reviewer plan",
+      payload.activity?.[0]?.detail ?? `${payload.plan?.planId ?? "run-next plan"} saved under .truth-harness/findings.`,
+      workspaceRunNextTrust(payload.plan?.status),
+      payload.plan?.createdAt
+    );
+    void refreshCatalogStatus({ announce: false });
+    void refreshWorkspaceEvents({ announce: false });
+  } catch (error) {
+    state.credibilityRunNextError = error instanceof Error ? error.message : "Unknown credibility run-next save failure.";
+    addActivity("local-api", "Credibility reviewer plan save failed", state.credibilityRunNextError, "refuted");
+  } finally {
+    state.credibilityRunNextSaving = false;
     renderCredibilityPackPanel();
   }
 }
@@ -11301,6 +11353,9 @@ function renderCredibilityPackPanel() {
   credibilityPackPanel.querySelector(".plan-credibility-run-next")?.addEventListener("click", () => {
     void refreshCredibilityRunNext({ announce: true });
   });
+  credibilityPackPanel.querySelector(".save-credibility-run-next")?.addEventListener("click", (event) => {
+    void saveCredibilityRunNextFromUi(event.currentTarget);
+  });
   credibilityPackPanel.querySelector(".copy-credibility-run-next-command")?.addEventListener("click", (event) => {
     const target = event.currentTarget;
     void copyOrDownloadText({
@@ -11348,6 +11403,8 @@ function credibilityRunNextHtml() {
   const source = plan?.item?.kind === "credibility-action" ? "credibility-actions" : "report queue";
   const statusLabel = state.credibilityRunNextLoading ? "planning" : workspaceRunNextStatusLabel(status);
   const copyDisabled = !plan?.item?.command && state.credibilityRunNextLoading ? "disabled" : "";
+  const saveDisabled = state.credibilityRunNextLoading || state.credibilityRunNextSaving ? "disabled" : "";
+  const pathRows = credibilityRunNextPathRows(state.credibilityRunNextPaths);
 
   return `<section class="credibility-run-next-card" aria-label="Credibility run-next dry run">
     <div class="credibility-run-next-main">
@@ -11359,9 +11416,11 @@ function credibilityRunNextHtml() {
       <h5>${escapeHtml(title)}</h5>
       <p>${escapeHtml(summary)}</p>
       <code>${escapeHtml(command)}</code>
+      ${pathRows ? `<dl class="credibility-run-next-paths">${pathRows}</dl>` : ""}
     </div>
     <div class="credibility-run-next-actions">
       <button class="text-button compact-button plan-credibility-run-next" data-testid="plan-credibility-run-next" type="button" ${state.credibilityRunNextLoading ? "disabled" : ""}>${state.credibilityRunNextLoading ? "Planning" : "Plan next action"}</button>
+      <button class="text-button compact-button strong-action save-credibility-run-next" data-testid="save-credibility-run-next" type="button" ${saveDisabled}>${state.credibilityRunNextSaving ? "Saving" : "Save plan"}</button>
       <button class="text-button compact-button copy-credibility-run-next-command" data-testid="copy-credibility-run-next-command" data-command="${escapeHtml(command)}" type="button" ${copyDisabled}>Copy command</button>
     </div>
   </section>`;
@@ -11371,6 +11430,20 @@ function credibilityRunNextCommand() {
   return state.credibilityRunNextPlan?.item?.command ??
     state.credibilityRunNextPlan?.execution?.command ??
     "truth-harness workspace run-next . --source credibility-actions --json --require-all-engines";
+}
+
+function credibilityRunNextPathRows(paths) {
+  if (!paths?.json && !paths?.markdown) {
+    return "";
+  }
+
+  return [
+    ["Saved JSON", paths.json],
+    ["Saved Markdown", paths.markdown]
+  ]
+    .filter(([, value]) => value)
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd><code>${escapeHtml(value)}</code></dd></div>`)
+    .join("");
 }
 
 function credibilityPackSummaryRows(pack) {

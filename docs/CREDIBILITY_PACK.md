@@ -96,7 +96,7 @@ When the pack is blocked, `reviewerActionPlan.actions` is the first queue a huma
 - the exact command to run,
 - the gate or artifact it closes.
 
-The web Report tab renders the same action plan, exposes copy buttons for those commands, and can ask `/api/workspace-run-next?source=credibility-actions` for the next browser-safe reviewer plan. That web path is dry-run only; it shows and copies the same local command that CLI/MCP can execute through the shared gated planner.
+The web Report tab renders the same action plan, exposes copy buttons for those commands, and can ask `/api/workspace-run-next?source=credibility-actions` for the next browser-safe reviewer plan. That web path is dry-run only; it shows and copies the same local command that CLI/MCP can execute through the shared gated planner. The Report tab can also save the dry-run plan as JSON/Markdown under `.truth-harness/findings/`, creating an auditable intent packet before any agent or human runs the command.
 For automation or CI, use `truth-harness workspace credibility-actions . --json` to get a compact `truth-harness.credibility-actions.v0` payload. `--priority` and `--category` filter the queue without mutating workspace state.
 For bounded agent work, use `truth-harness workspace run-next . --source credibility-actions --json` to plan the first reviewer action through the shared autonomy contract. Adding `--execute-local` only runs supported local Truth Harness core APIs, such as writable engine verification runs; it does not execute shell strings.
 

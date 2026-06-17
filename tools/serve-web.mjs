@@ -209,6 +209,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "credibility-pack",
         "workspace-review-queue",
         "workspace-run-next-dry-run",
+        "workspace-run-next-save",
         "docker-verifier-guidance",
         "sandbox-status",
         "safety-center",
@@ -640,71 +641,40 @@ async function handleApiRequest(request, response, requestUrl) {
   }
 
   if (requestUrl.pathname === "/api/workspace-run-next" && request.method === "GET") {
-    if (isTruthyQueryParam(requestUrl.searchParams.get("executeLocal"))) {
-      writeApiError(
-        response,
-        400,
-        "The web run-next endpoint is dry-run only. Use the CLI or MCP executeLocal gate for bounded local execution.",
-        request
-      );
-      return;
-    }
-
-    const runNextSource = requestUrl.searchParams.get("source") ?? "workspace-review";
-    if (runNextSource !== "workspace-review" && runNextSource !== "credibility-actions") {
-      writeApiError(
-        response,
-        400,
-        "Unsupported run-next source. Use workspace-review or credibility-actions.",
-        request
-      );
-      return;
-    }
-
-    const {
-      createCredibilityPack,
-      createWorkspaceReview,
-      createWorkspaceReviewFromCredibilityPack,
-      createWorkspaceRunNextPlan
-    } = await loadCoreModule();
-    await ensureLocalWorkspace();
-    const credibilityInput = runNextSource === "credibility-actions"
-      ? credibilityPackInputFromValue({
-          requireAllEngines:
-            isTruthyQueryParam(requestUrl.searchParams.get("requireAllEngines")) ||
-            requestUrl.searchParams.get("mode") === "all-engines",
-          timeoutMs: requestUrl.searchParams.get("timeoutMs"),
-          maxRoutes: requestUrl.searchParams.get("maxRoutes"),
-          maxClaims: requestUrl.searchParams.get("maxClaims"),
-          maxSessions: requestUrl.searchParams.get("maxSessions")
-        })
-      : undefined;
-    const credibilityPack = credibilityInput ? await createCredibilityPack(credibilityInput) : undefined;
-    const review = credibilityPack
-      ? createWorkspaceReviewFromCredibilityPack({ rootPath: projectRoot, pack: credibilityPack })
-      : await createWorkspaceReview({ rootPath: projectRoot });
-    const plan = await createWorkspaceRunNextPlan({
-      rootPath: projectRoot,
-      review,
-      executeLocal: false
+    const payload = await createWebWorkspaceRunNextPayload({
+      source: requestUrl.searchParams.get("source"),
+      executeLocal: requestUrl.searchParams.get("executeLocal"),
+      requireAllEngines:
+        isTruthyQueryParam(requestUrl.searchParams.get("requireAllEngines")) ||
+        requestUrl.searchParams.get("mode") === "all-engines",
+      timeoutMs: requestUrl.searchParams.get("timeoutMs"),
+      maxRoutes: requestUrl.searchParams.get("maxRoutes"),
+      maxClaims: requestUrl.searchParams.get("maxClaims"),
+      maxSessions: requestUrl.searchParams.get("maxSessions")
     });
     writeJson(response, 200, {
       schemaVersion: "truth-harness.web-workspace-run-next-response.v0",
-      localOnly: true,
-      externalCalls: [],
-      source: runNextSource,
-      mode: credibilityInput?.engineRequirements ? "all-engines" : "default",
-      packSummary: credibilityPack
-        ? {
-            packId: credibilityPack.packId,
-            status: credibilityPack.status,
-            totalActions: credibilityPack.reviewerActionPlan.totalActions,
-            criticalActions: credibilityPack.reviewerActionPlan.criticalActions,
-            highActions: credibilityPack.reviewerActionPlan.highActions
-          }
-        : undefined,
-      plan
+      ...payload
     });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/workspace-run-next" && request.method === "POST") {
+    try {
+      const input = await readJsonBody(request);
+      const payload = await createWebWorkspaceRunNextPayload(input, { write: true });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-run-next-write-response.v0",
+        ...payload
+      });
+    } catch (error) {
+      writeApiError(
+        response,
+        error instanceof HttpError ? error.status : 400,
+        error instanceof Error ? error.message : "Workspace run-next plan could not be saved.",
+        request
+      );
+    }
     return;
   }
 
@@ -1573,6 +1543,74 @@ function readinessGate(input) {
   };
 }
 
+async function createWebWorkspaceRunNextPayload(value = {}, options = {}) {
+  if (isTruthyInputValue(value?.executeLocal)) {
+    throw new HttpError(
+      400,
+      "The web run-next endpoint is dry-run only. Use the CLI or MCP executeLocal gate for bounded local execution."
+    );
+  }
+
+  const runNextSource = optionalText(value?.source) ?? "workspace-review";
+  if (runNextSource !== "workspace-review" && runNextSource !== "credibility-actions") {
+    throw new HttpError(400, "Unsupported run-next source. Use workspace-review or credibility-actions.");
+  }
+
+  const {
+    createCredibilityPack,
+    createWorkspaceReview,
+    createWorkspaceReviewFromCredibilityPack,
+    createWorkspaceRunNextPlan,
+    writeWorkspaceRunNextPlan
+  } = await loadCoreModule();
+  await ensureLocalWorkspace();
+  const credibilityInput = runNextSource === "credibility-actions" ? credibilityPackInputFromValue(value) : undefined;
+  const credibilityPack = credibilityInput ? await createCredibilityPack(credibilityInput) : undefined;
+  const review = credibilityPack
+    ? createWorkspaceReviewFromCredibilityPack({ rootPath: projectRoot, pack: credibilityPack })
+    : await createWorkspaceReview({ rootPath: projectRoot });
+  const plan = await createWorkspaceRunNextPlan({
+    rootPath: projectRoot,
+    review,
+    executeLocal: false
+  });
+  const writeResult = options.write ? await writeWorkspaceRunNextPlan({ rootPath: projectRoot, plan }) : undefined;
+  const finalPlan = writeResult?.plan ?? plan;
+
+  return {
+    localOnly: true,
+    externalCalls: [],
+    source: runNextSource,
+    mode: credibilityInput?.engineRequirements ? "all-engines" : "default",
+    packSummary: credibilityPack
+      ? {
+          packId: credibilityPack.packId,
+          status: credibilityPack.status,
+          totalActions: credibilityPack.reviewerActionPlan.totalActions,
+          criticalActions: credibilityPack.reviewerActionPlan.criticalActions,
+          highActions: credibilityPack.reviewerActionPlan.highActions
+        }
+      : undefined,
+    plan: finalPlan,
+    paths: writeResult
+      ? {
+          json: writeResult.jsonPath,
+          markdown: writeResult.markdownPath
+        }
+      : undefined,
+    activity: writeResult
+      ? [
+          {
+            actor: "local-api",
+            action: "wrote-workspace-run-next-plan",
+            detail: `${finalPlan.planId} saved as a dry-run local run-next intent packet under .truth-harness/findings.`,
+            at: finalPlan.createdAt
+          }
+        ]
+      : undefined
+  };
+}
+
 function credibilityPackInputFromValue(value = {}) {
   const requireAllEngines = value?.requireAllEngines === true || value?.mode === "all-engines";
   return {
@@ -2396,6 +2434,10 @@ function isTruthyEnv(value) {
 
 function isTruthyQueryParam(value) {
   return /^(1|true|yes|on)$/iu.test(value ?? "");
+}
+
+function isTruthyInputValue(value) {
+  return value === true || (typeof value === "string" && isTruthyQueryParam(value));
 }
 
 function readJsonBody(request) {
