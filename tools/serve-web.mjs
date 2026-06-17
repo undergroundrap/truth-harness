@@ -2251,6 +2251,7 @@ function dockerVerifierGuidance(verification) {
     recommended,
     status: recommended ? "recommended" : "optional",
     commands: {
+      professor: "npm run docker:professor",
       engines: "npm run docker:engines",
       proof: "npm run docker:proof",
       verify: "npm run docker:verify"
@@ -2265,6 +2266,7 @@ function dockerVerifierGuidance(verification) {
     },
     notes: [
       "The web UI never runs Docker automatically; it only exposes copyable commands.",
+      "npm run docker:professor writes engine evidence, adversarial benchmark evidence, and a credibility pack inside the no-network compose service.",
       "npm run docker:engines runs concrete Maxima/Z3 evidence smoke checks inside the no-network compose service.",
       "npm run docker:proof runs the truth-harness compose service with no external network route after the dev image exists.",
       "npm run docker:verify builds and tests the verification image; image builds may download dependencies.",
@@ -2432,6 +2434,7 @@ async function readEngineEvidenceVerification() {
       evidenceMinted: 0,
       cases: [],
       docker: {
+        professorCommand: "npm run docker:professor",
         coreCommand: "npm run docker:engines",
         leanCommand: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean",
         verifyImageCommand: "npm run docker:verify",

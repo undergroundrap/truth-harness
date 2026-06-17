@@ -307,6 +307,23 @@ describe("web UI action contracts", () => {
     expect(styles).toContain("overflow-wrap: anywhere;");
   });
 
+  it("surfaces the no-network professor evidence Docker route", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('id="docker-professor-command"');
+    expect(html).toContain('data-command-key="professor"');
+    expect(html).toContain("npm run docker:professor");
+    expect(source).toContain('const professorCommand = commands.professor ?? "npm run docker:professor";');
+    expect(source).toContain('report.docker?.professorCommand ?? "npm run docker:professor"');
+    expect(source).toContain('data-testid="copy-professor-evidence-command"');
+    expect(styles).toContain(".docker-command-row.primary");
+    expect(styles).toContain(".engine-evidence-command-row.primary");
+  });
+
   it("keeps the activity log inside the parent scroll instead of a nested scroll trap", async () => {
     const styles = await readFile(appStylesPath, "utf8");
     const activityListStyles = styles.match(/\.activity-list \{[\s\S]*?\n\}/u)?.[0];

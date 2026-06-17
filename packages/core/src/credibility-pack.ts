@@ -26,6 +26,7 @@ export interface CredibilityPackCommandSet {
   runAdversarialBenchmark: string;
   reviewWorkspace: string;
   reproducePack: string;
+  dockerProfessorEvidence: string;
   dockerCoreEngines: string;
   dockerLeanFixture: string;
   dockerSageFixture: string;
@@ -340,6 +341,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Run adversarial benchmark: \`${pack.reviewerCommands.runAdversarialBenchmark}\``,
     `- Review open obligations: \`${pack.reviewerCommands.reviewWorkspace}\``,
     `- Reproduce this pack: \`${pack.reviewerCommands.reproducePack}\``,
+    `- Docker professor evidence: \`${pack.reviewerCommands.dockerProfessorEvidence}\``,
     `- Docker core engines: \`${pack.reviewerCommands.dockerCoreEngines}\``,
     `- Docker Lean fixture: \`${pack.reviewerCommands.dockerLeanFixture}\``,
     `- Docker Sage fixture: \`${pack.reviewerCommands.dockerSageFixture}\``,
@@ -801,6 +803,7 @@ function createReviewerCommands(input: {
     runAdversarialBenchmark: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
     reviewWorkspace: "truth-harness workspace review .",
     reproducePack: `truth-harness workspace credibility-pack .${engineSuffix}`,
+    dockerProfessorEvidence: "npm run docker:professor",
     dockerCoreEngines: "npm run docker:engines",
     dockerLeanFixture: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean",
     dockerSageFixture: "npm run docker:sage"

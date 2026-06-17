@@ -394,6 +394,7 @@ const claimReviewCommand = document.querySelector("#claim-review-command");
 const dockerVerifierPill = document.querySelector("#docker-verifier-pill");
 const dockerVerifierSummary = document.querySelector("#docker-verifier-summary");
 const dockerVerifierNotes = document.querySelector("#docker-verifier-notes");
+const dockerProfessorCommand = document.querySelector("#docker-professor-command");
 const dockerProofCommand = document.querySelector("#docker-proof-command");
 const dockerVerifyCommand = document.querySelector("#docker-verify-command");
 const dockerCopyCommands = document.querySelectorAll(".docker-copy-command");
@@ -9372,9 +9373,13 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
     ? guidance.recommended
     : totalCount === 0 || readyCount < totalCount;
   const commands = guidance.commands ?? {};
+  const professorCommand = commands.professor ?? "npm run docker:professor";
   const proofCommand = commands.proof ?? "npm run docker:proof";
   const verifyCommand = commands.verify ?? "npm run docker:verify";
 
+  if (dockerProfessorCommand) {
+    dockerProfessorCommand.textContent = professorCommand;
+  }
   if (dockerProofCommand) {
     dockerProofCommand.textContent = proofCommand;
   }
@@ -9382,6 +9387,9 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
     dockerVerifyCommand.textContent = verifyCommand;
   }
   dockerCopyCommands.forEach((button) => {
+    if (button.dataset.commandKey === "professor") {
+      button.dataset.command = professorCommand;
+    }
     if (button.dataset.commandKey === "proof") {
       button.dataset.command = proofCommand;
     }
@@ -9399,6 +9407,7 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
   const notes = Array.isArray(guidance.notes) && guidance.notes.length > 0
     ? guidance.notes
     : [
+        "npm run docker:professor writes the reviewer rehearsal artifacts in the no-network compose service.",
         "npm run docker:proof runs the truth-harness service with no external network route and records engine outputs only through normal receipts.",
         "npm run docker:verify builds and tests the verification image; builds may fetch dependencies if the image is not already cached.",
         "Docker status does not prove a claim. Only accepted Lean, Z3, or Maxima artifacts can satisfy their matching obligations."
@@ -9442,6 +9451,7 @@ function renderEngineEvidenceGate(payload = state.safetyStatus) {
 
   const cases = Array.isArray(report.cases) ? report.cases : [];
   const command = report.docker?.coreCommand ?? "npm run docker:engines";
+  const professorCommand = report.docker?.professorCommand ?? "npm run docker:professor";
   const leanCommand = report.docker?.leanCommand ?? "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean";
   const strictReviewerCommand = "truth-harness engines verify --write --require-all-engines";
   const statusClass = report.status === "passed" ? "exact" : report.status === "partial" ? "checked" : "waiting";
@@ -9483,6 +9493,13 @@ function renderEngineEvidenceGate(payload = state.safetyStatus) {
     </div>
   </div>
   <div class="engine-evidence-command-stack">
+    <div class="engine-evidence-command-row primary">
+      <div>
+        <span class="mini-label">Professor evidence rehearsal</span>
+        <code>${escapeHtml(professorCommand)}</code>
+      </div>
+      <button class="text-button compact-button copy-engine-evidence-command" data-testid="copy-professor-evidence-command" data-command="${escapeHtml(professorCommand)}" type="button">Copy professor</button>
+    </div>
     <div class="engine-evidence-command-row">
       <div>
         <span class="mini-label">Daily engine smoke</span>

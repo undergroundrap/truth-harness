@@ -15,6 +15,7 @@ truth-harness workspace credibility-pack . --require-all-engines
 truth-harness workspace credibility-pack . --dry-run --json
 truth-harness workspace credibility-actions . --require-all-engines --json
 truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures
+npm run docker:professor
 truth-harness workspace credibility-bundle .
 truth-harness workspace verify-credibility-bundle . .truth-harness/findings/<date>-<bundle-id>-credibility-bundle
 ```
@@ -44,6 +45,7 @@ npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/
 - Workspace review queue with top open proof/check obligations. Normal unverified exploration and stronger-label upgrades stay visible as work, but they are not treated as release-critical defects unless they block a current claim boundary.
 - Structured reviewer action plan with priorities, close targets, and commands for validation, engine, benchmark, and workspace-review blockers.
 - Exact reviewer commands for validation, writable engine checks, adversarial benchmarks, review, Docker core engines, the Lean proof fixture, and the heavier SageMath fixture.
+- A one-command Docker professor evidence route: `npm run docker:professor` builds the dev image, then writes Docker-core engine evidence, adversarial benchmark evidence, and a credibility pack from inside the no-network compose service.
 - Blocking warnings when validation fails, required engines are missing, concrete engine smoke gates are incomplete, the adversarial benchmark is missing/failing, or critical review items remain open.
 
 ## Portable Reviewer Bundle
@@ -103,6 +105,8 @@ When the pack is blocked, `reviewerActionPlan.actions` is the first queue a huma
 - the gate or artifact it closes.
 
 If a local host or agent sandbox reports `spawn EPERM` while launching Maxima, Z3, Lean, or SageMath, the action plan treats that as a host boundary problem rather than a mathematical result. Maxima/Z3 actions point to `npm run docker:engines`, Lean actions point to the pinned `lean-proof` compose service, and SageMath actions point to `npm run docker:sage`. Those Docker commands are still evidence gates, not truth shortcuts: the engines must earn their scoped labels inside the no-network runtime before any reviewer should trust the result.
+
+For the cleanest reviewer rehearsal, run `npm run docker:professor`. That command does not ask the web UI or an agent to run arbitrary shell code. It starts from a built Docker image, runs the professor evidence sequence in the no-network `professor-evidence` compose service, and stops before writing a reviewer packet if any earlier engine or benchmark evidence gate fails. The command completing is not the same thing as the workspace being reviewer-ready; the generated credibility pack is the authority on whether stricter proof or all-engine gates still block review.
 
 The web Report tab renders the same action plan, exposes copy buttons for those commands, and can ask `/api/workspace-run-next?source=credibility-actions` for the next browser-safe reviewer plan. That web path is dry-run only; it shows and copies the same local command that CLI/MCP can execute through the shared gated planner. The Report tab can also save the dry-run plan as JSON/Markdown under `.truth-harness/findings/`, creating an auditable intent packet before any agent or human runs the command.
 For automation or CI, use `truth-harness workspace credibility-actions . --json` to get a compact `truth-harness.credibility-actions.v0` payload. `--priority` and `--category` filter the queue without mutating workspace state.

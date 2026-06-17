@@ -77,6 +77,7 @@ describe("local web route ledger API", () => {
       localOnly: true,
       externalCalls: false,
       commands: {
+        professor: "npm run docker:professor",
         engines: "npm run docker:engines",
         proof: "npm run docker:proof",
         verify: "npm run docker:verify"
@@ -91,11 +92,15 @@ describe("local web route ledger API", () => {
     });
     expect(typeof statusPayload.dockerVerifier.recommended).toBe("boolean");
     expect(statusPayload.dockerVerifier.notes).toContain("The web UI never runs Docker automatically; it only exposes copyable commands.");
+    expect(statusPayload.dockerVerifier.notes).toContain(
+      "npm run docker:professor writes engine evidence, adversarial benchmark evidence, and a credibility pack inside the no-network compose service."
+    );
     expect(statusPayload.engineVerification).toMatchObject({
       schemaVersion: "truth-harness.engine-verification.v0",
       localOnly: true,
       networkAccess: "none",
       docker: {
+        professorCommand: "npm run docker:professor",
         coreCommand: "npm run docker:engines",
         verifyImageCommand: "npm run docker:verify",
         networkPolicy: "compose-core-no-network"

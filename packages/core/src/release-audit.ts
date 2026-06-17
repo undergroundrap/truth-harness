@@ -84,6 +84,7 @@ export interface ReleaseAudit {
     credibilityActions: string;
     adversarialBenchmark: string;
     engineVerify: string;
+    dockerProfessor: string;
     dockerEngines: string;
     dockerProof: string;
     dockerVerify: string;
@@ -674,6 +675,7 @@ function releaseAuditCommands(
     credibilityActions: `truth-harness workspace credibility-actions ${quotedRoot}${requirementFlags}`,
     adversarialBenchmark: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
     engineVerify: `truth-harness engines verify --write${requirementFlags}`,
+    dockerProfessor: "npm run docker:professor",
     dockerEngines: "npm run docker:engines",
     dockerProof: "npm run docker:proof",
     dockerVerify: "npm run docker:verify",

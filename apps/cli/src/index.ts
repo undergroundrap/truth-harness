@@ -5228,6 +5228,7 @@ function printEngineVerificationReport(
   console.log("");
   console.log("Docker routes:");
   console.log(`  Core no-network: ${report.docker.coreCommand}`);
+  console.log(`  Professor evidence: ${report.docker.professorCommand}`);
   console.log(`  Lean fixture: ${report.docker.leanCommand}`);
   console.log(`  Verify image: ${report.docker.verifyImageCommand}`);
 

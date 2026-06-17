@@ -113,6 +113,7 @@ export interface EngineVerificationReport {
   cases: EngineVerificationCase[];
   docker: {
     coreCommand: string;
+    professorCommand: string;
     leanCommand: string;
     sageCommand: string;
     verifyImageCommand: string;
@@ -231,6 +232,7 @@ export async function verifyEngineEvidence(input: EngineVerificationInput = {}):
     cases,
     docker: {
       coreCommand: "npm run docker:engines",
+      professorCommand: "npm run docker:professor",
       leanCommand: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean",
       sageCommand: "docker compose run --rm sage-math npm run cli -- engines verify --require-sage",
       verifyImageCommand: "npm run docker:verify",

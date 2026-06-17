@@ -4187,6 +4187,12 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   padding: 8px;
 }
 
+.docker-command-row.primary,
+.engine-evidence-command-row.primary {
+  border-color: rgba(125, 211, 168, 0.38);
+  background: rgba(12, 26, 20, 0.24);
+}
+
 .docker-command-row span {
   color: var(--muted);
   font-size: 11px;
