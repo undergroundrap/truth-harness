@@ -273,6 +273,10 @@ describe("engine evidence verification", () => {
     expect(parsed.report.evidenceMinted).toBe(3);
     expect(parsed.replay).toBe("truth-harness engines verify --write --require-all-concrete");
     expect(parsed.artifacts.json).toContain(".truth-harness/engine-runs/");
+    expect(result.markdown).toContain("## Evidence Ladder");
+    expect(result.markdown).toContain("| Maxima symbolic cross-check | required | earned evidence | Concrete `cross-checked` evidence earned");
+    expect(result.markdown).toContain("| cvc5 SMT-LIB check | optional | missing evidence | Optional evidence is missing;");
+    expect(result.markdown).toContain("- Reviewer meaning: Concrete `proved` evidence earned");
     expect(result.markdown).toContain("Engine Gates");
 
     const runs = await listEngineVerificationRuns(root);

@@ -33,6 +33,8 @@ import {
   createSymbolicCasCheckRecord,
   getCasBackendStatus,
   getCodeRunSandboxStatus,
+  engineVerificationCaseEvidenceMeaning,
+  engineVerificationCaseEvidenceTier,
   getEngineManifest,
   getLocalWorkspaceStatus,
   getWorkspaceCatalogStatus,
@@ -5300,7 +5302,8 @@ function printEngineVerificationReport(
     const marker = item.status === "passed" ? "PASS" : item.status === "missing" ? "MISS" : item.status === "not-required" ? "SKIP" : "FAIL";
     const required = item.required ? " required" : "";
     console.log(`  [${marker}] ${item.displayName}${required}`);
-    console.log(`    Trust: ${item.trust}; evidence: ${item.evidenceMinted ? "earned" : "not-earned"}`);
+    console.log(`    Trust: ${item.trust}; evidence: ${engineVerificationCaseEvidenceTier(item)}`);
+    console.log(`    Reviewer meaning: ${engineVerificationCaseEvidenceMeaning(item)}`);
     console.log(`    ${item.summary}`);
     console.log(`    Command: ${item.command}`);
     if (item.evidence?.backendVersion) {

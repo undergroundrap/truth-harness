@@ -422,6 +422,14 @@ export function renderEngineVerificationRunMarkdown(record: EngineVerificationRu
     "",
     `\`${record.replay}\``,
     "",
+    "## Evidence Ladder",
+    "",
+    "| Case | Gate | Evidence status | Reviewer meaning |",
+    "| --- | --- | --- | --- |",
+    ...record.report.cases.map((item) =>
+      `| ${markdownCell(item.displayName)} | ${item.required ? "required" : "optional"} | ${markdownCell(engineVerificationCaseEvidenceTier(item))} | ${markdownCell(engineVerificationCaseEvidenceMeaning(item))} |`
+    ),
+    "",
     "## Engine Gates",
     ""
   ];
@@ -433,6 +441,7 @@ export function renderEngineVerificationRunMarkdown(record: EngineVerificationRu
       `- Status: \`${item.status}\`${item.required ? " (required)" : ""}`,
       `- Trust: \`${item.trust}\``,
       `- Evidence minted: ${String(item.evidenceMinted)}`,
+      `- Reviewer meaning: ${engineVerificationCaseEvidenceMeaning(item)}`,
       `- Command: \`${item.command}\``,
       `- Summary: ${item.summary}`
     );
@@ -481,6 +490,38 @@ export function renderEngineVerificationRunMarkdown(record: EngineVerificationRu
   }
 
   return `${lines.join("\n")}\n`;
+}
+
+export function engineVerificationCaseEvidenceTier(item: EngineVerificationCase): string {
+  if (item.evidenceMinted) {
+    return "earned evidence";
+  }
+  if (item.status === "not-required") {
+    return "readiness/provenance only";
+  }
+  if (item.status === "missing") {
+    return "missing evidence";
+  }
+  return "failed evidence";
+}
+
+export function engineVerificationCaseEvidenceMeaning(item: EngineVerificationCase): string {
+  if (item.evidenceMinted) {
+    return `Concrete \`${item.trust}\` evidence earned for this fixture; replay it before citing the engine gate.`;
+  }
+  if (item.status === "not-required") {
+    return "A local backend may be available, but no concrete trust-label evidence was requested or earned in this run.";
+  }
+  if (item.status === "missing" && item.required) {
+    return "Required evidence is missing, so strict reviewer readiness fails closed.";
+  }
+  if (item.status === "missing") {
+    return "Optional evidence is missing; this is not a blocker, but no claim can cite this engine until a concrete run succeeds.";
+  }
+  if (item.required) {
+    return "Required evidence was attempted and failed, so strict reviewer readiness fails closed.";
+  }
+  return "Optional evidence was attempted and failed; do not cite this engine row as support.";
 }
 
 function maximaCase(
@@ -896,6 +937,10 @@ async function requireLocalWorkspace(
 
 function quote(value: string): string {
   return JSON.stringify(value);
+}
+
+function markdownCell(value: string): string {
+  return value.replace(/\|/gu, "\\|").replace(/\r?\n/gu, " ").trim();
 }
 
 function toPortablePath(path: string): string {

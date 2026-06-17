@@ -261,6 +261,8 @@ export { runWorkspaceStress } from "./workspace-stress.js";
 export { getEngineManifest } from "./engine-manifest.js";
 export {
   createEngineVerificationRunRecord,
+  engineVerificationCaseEvidenceMeaning,
+  engineVerificationCaseEvidenceTier,
   listEngineVerificationRuns,
   parseEngineVerificationRunJson,
   renderEngineVerificationRunMarkdown,
