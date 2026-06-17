@@ -1496,10 +1496,22 @@ describe("benchmark CLI", () => {
       (await runCli(["workspace", "verify-credibility-bundle", root, bundle.manifest.bundleId, "--json"])).stdout
     ) as {
       schemaVersion: string;
+      verificationId: string;
       bundleId: string;
       passed: boolean;
       sourceMatchesWorkspace: boolean;
       checkedBundleFiles: number;
+    };
+    const writtenVerify = JSON.parse(
+      (await runCli(["workspace", "verify-credibility-bundle", root, bundle.manifest.bundleId, "--write", "--json"])).stdout
+    ) as {
+      verification: {
+        schemaVersion: string;
+        verificationId: string;
+        bundleId: string;
+        passed: boolean;
+      };
+      paths: { json: string; markdown: string };
     };
     const humanBundle = await runCli([
       "workspace",
@@ -1547,11 +1559,21 @@ describe("benchmark CLI", () => {
     expect(await readFile(bundle.result.manifestPath, "utf8")).toContain(bundle.manifest.bundleId);
     expect(verifyById).toMatchObject({
       schemaVersion: "truth-harness.credibility-bundle-verification.v0",
+      verificationId: expect.stringMatching(/^cver_[a-f0-9]{16}$/u),
       bundleId: bundle.manifest.bundleId,
       passed: true,
       sourceMatchesWorkspace: true
     });
     expect(verifyById.checkedBundleFiles).toBe(bundle.manifest.summary.totalFiles);
+    expect(writtenVerify.verification).toMatchObject({
+      schemaVersion: "truth-harness.credibility-bundle-verification.v0",
+      verificationId: expect.stringMatching(/^cver_[a-f0-9]{16}$/u),
+      bundleId: bundle.manifest.bundleId,
+      passed: true
+    });
+    expect(existsSync(writtenVerify.paths.json)).toBe(true);
+    expect(existsSync(writtenVerify.paths.markdown)).toBe(true);
+    expect(await readFile(writtenVerify.paths.markdown, "utf8")).toContain(writtenVerify.verification.verificationId);
     expect(humanBundle.stdout).toContain("Truth Harness portable reviewer bundle");
     expect(humanBundle.stdout).toContain("Reviewer commands:");
     expect(humanVerify.stdout).toContain("Truth Harness credibility bundle verification");

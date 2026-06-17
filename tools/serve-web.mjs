@@ -369,13 +369,28 @@ async function handleApiRequest(request, response, requestUrl) {
     try {
       await ensureLocalWorkspace();
       const bundle = await readLatestCredibilityBundle();
+      let written;
+      if (bundle) {
+        const { writeCredibilityBundleVerification } = await loadCoreModule();
+        written = await writeCredibilityBundleVerification({
+          rootPath: projectRoot,
+          bundleRef: bundle.bundleRef
+        });
+      }
       writeJson(response, 200, {
         schemaVersion: "truth-harness.web-credibility-bundle-verify-response.v0",
         localOnly: true,
         externalCalls: [],
         latest: Boolean(bundle),
-        verifiedAt: new Date().toISOString(),
-        ...bundle
+        ...bundle,
+        verification: written?.verification ?? bundle?.verification,
+        verifiedAt: written?.verification.verifiedAt,
+        verificationPaths: written
+          ? {
+              json: written.jsonPath,
+              markdown: written.markdownPath
+            }
+          : undefined
       });
     } catch (error) {
       writeApiError(response, 409, error instanceof Error ? error.message : "Latest credibility bundle could not be verified.", request);

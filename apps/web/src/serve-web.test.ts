@@ -329,13 +329,20 @@ describe("local web route ledger API", () => {
       bundleRef: expect.stringContaining("-credibility-bundle"),
       verification: {
         schemaVersion: "truth-harness.credibility-bundle-verification.v0",
+        verificationId: expect.stringMatching(/^cver_[a-f0-9]{16}$/u),
         bundleId: bundle.manifest.bundleId,
         passed: true,
         sourceMatchesWorkspace: true
+      },
+      verificationPaths: {
+        json: expect.stringContaining(".truth-harness"),
+        markdown: expect.stringContaining(".truth-harness")
       }
     });
     expect(bundleVerifyPayload.verifiedAt).toEqual(expect.any(String));
     expect(bundleVerifyPayload.command).toContain("workspace verify-credibility-bundle");
+    expect(existsSync(bundleVerifyPayload.verificationPaths.json)).toBe(true);
+    expect(existsSync(bundleVerifyPayload.verificationPaths.markdown)).toBe(true);
 
     const bundleReadmeResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest/file?kind=readme`);
     expect(bundleReadmeResponse.status).toBe(200);

@@ -106,6 +106,8 @@ describe("web UI action contracts", () => {
     expect(source).toContain("/api/credibility-bundle/latest/archive.sha256");
     expect(source).toContain("Archive SHA-256");
     expect(source).toContain("Last web verify");
+    expect(source).toContain("Verification artifact");
+    expect(source).toContain("Saved ${payload.verification?.verificationId");
     expect(source).toContain("Verified Reviewer Bundle");
     expect(source).toContain("Professor Review Checklist");
     expect(source).toContain("Reviewer bundle verification command copied from the Report tab.");

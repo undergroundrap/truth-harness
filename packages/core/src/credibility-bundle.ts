@@ -103,6 +103,7 @@ export interface CredibilityBundleVerificationEntry {
 
 export interface CredibilityBundleVerification {
   schemaVersion: "truth-harness.credibility-bundle-verification.v0";
+  verificationId: string;
   bundleId: string;
   packId: string;
   verifiedAt: string;
@@ -116,6 +117,13 @@ export interface CredibilityBundleVerification {
   missingSourceFiles: CredibilityBundleVerificationEntry[];
   changedSourceFiles: CredibilityBundleVerificationEntry[];
   warnings: string[];
+}
+
+export interface CredibilityBundleVerificationWriteResult {
+  verification: CredibilityBundleVerification;
+  jsonPath: string;
+  markdownPath: string;
+  markdown: string;
 }
 
 const CREDIBILITY_BUNDLE_SCHEMA_VERSION = "truth-harness.credibility-bundle.v0" as const;
@@ -292,11 +300,12 @@ export async function verifyCredibilityBundle(input: VerifyCredibilityBundleInpu
     }
   }
 
-  return {
+  const verifiedAt = input.now ?? new Date().toISOString();
+  const verificationWithoutId = {
     schemaVersion: CREDIBILITY_BUNDLE_VERIFY_SCHEMA_VERSION,
     bundleId: manifest.bundleId,
     packId: manifest.packId,
-    verifiedAt: input.now ?? new Date().toISOString(),
+    verifiedAt,
     bundlePath: bundleDir,
     passed: missingBundleFiles.length === 0 && changedBundleFiles.length === 0,
     sourceMatchesWorkspace: missingSourceFiles.length === 0 && changedSourceFiles.length === 0,
@@ -311,6 +320,106 @@ export async function verifyCredibilityBundle(input: VerifyCredibilityBundleInpu
       "Source workspace drift is reported separately from bundle integrity because a valid exported bundle can outlive later local edits."
     ]
   };
+
+  return {
+    ...verificationWithoutId,
+    verificationId: `cver_${stableHash(verificationWithoutId).slice(0, 16)}`
+  };
+}
+
+export async function writeCredibilityBundleVerification(
+  input: VerifyCredibilityBundleInput
+): Promise<CredibilityBundleVerificationWriteResult> {
+  const status = await requireLocalWorkspace(input.rootPath);
+  const verification = await verifyCredibilityBundle({
+    ...input,
+    rootPath: status.root
+  });
+  const markdown = renderCredibilityBundleVerificationMarkdown(verification);
+  const findingsDir = resolve(status.root, status.manifest.directories.findings);
+  await mkdir(findingsDir, { recursive: true });
+  const baseName = `${verification.verifiedAt.slice(0, 10)}-${verification.verificationId}-credibility-bundle-verification`;
+  const jsonPath = join(findingsDir, `${baseName}.json`);
+  const markdownPath = join(findingsDir, `${baseName}.md`);
+
+  await writeJsonFileAtomic(jsonPath, verification);
+  await writeFileAtomic(markdownPath, markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "findings",
+    now: verification.verifiedAt,
+    staleReason: "credibility bundle verification written"
+  });
+
+  return {
+    verification,
+    jsonPath,
+    markdownPath,
+    markdown
+  };
+}
+
+export function renderCredibilityBundleVerificationMarkdown(verification: CredibilityBundleVerification): string {
+  const lines = [
+    "# Truth Harness Credibility Bundle Verification",
+    "",
+    `Verification: \`${verification.verificationId}\``,
+    `Bundle: \`${verification.bundleId}\``,
+    `Pack: \`${verification.packId}\``,
+    `Verified: ${verification.verifiedAt}`,
+    "",
+    "## Result",
+    "",
+    `- Bundle integrity: ${verification.passed ? "passed" : "failed"}`,
+    `- Source workspace drift: ${verification.sourceMatchesWorkspace ? "matches bundle" : "drifted"}`,
+    `- Bundle files checked: ${verification.checkedBundleFiles}`,
+    `- Source files checked: ${verification.checkedSourceFiles}`,
+    "",
+    "## Boundaries",
+    "",
+    ...verification.warnings.map((warning) => `- ${warning}`),
+    "",
+    "## Differences",
+    "",
+    `- Missing bundle files: ${verification.missingBundleFiles.length}`,
+    `- Changed bundle files: ${verification.changedBundleFiles.length}`,
+    `- Missing source files: ${verification.missingSourceFiles.length}`,
+    `- Changed source files: ${verification.changedSourceFiles.length}`,
+    ""
+  ];
+
+  appendVerificationEntries(lines, "Missing Bundle Files", verification.missingBundleFiles);
+  appendVerificationEntries(lines, "Changed Bundle Files", verification.changedBundleFiles);
+  appendVerificationEntries(lines, "Missing Source Files", verification.missingSourceFiles);
+  appendVerificationEntries(lines, "Changed Source Files", verification.changedSourceFiles);
+
+  return `${lines.join("\n").trim()}\n`;
+}
+
+function appendVerificationEntries(
+  lines: string[],
+  title: string,
+  entries: CredibilityBundleVerificationEntry[]
+): void {
+  if (entries.length === 0) {
+    return;
+  }
+
+  lines.push(`## ${title}`, "");
+  for (const entry of entries.slice(0, 25)) {
+    lines.push(`- \`${entry.path}\``);
+    if (entry.expectedSha256 && entry.actualSha256) {
+      lines.push(`  - expected: \`${entry.expectedSha256}\``);
+      lines.push(`  - actual: \`${entry.actualSha256}\``);
+    } else if (entry.expectedSha256) {
+      lines.push(`  - expected: \`${entry.expectedSha256}\``);
+    }
+  }
+  if (entries.length > 25) {
+    lines.push(`- ${entries.length - 25} additional entr${entries.length - 25 === 1 ? "y" : "ies"} omitted from this Markdown summary.`);
+  }
+  lines.push("");
 }
 
 function renderCredibilityBundleReadme(input: {

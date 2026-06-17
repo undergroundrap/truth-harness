@@ -8,7 +8,7 @@ import { initLocalWorkspace } from "./local-workspace.js";
 import { createReceipt } from "./receipt.js";
 import { rebuildWorkspaceCatalog, searchWorkspaceCatalog } from "./workspace-catalog.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
-import { verifyCredibilityBundle, writeCredibilityBundle } from "./credibility-bundle.js";
+import { verifyCredibilityBundle, writeCredibilityBundle, writeCredibilityBundleVerification } from "./credibility-bundle.js";
 
 const roots: string[] = [];
 
@@ -61,8 +61,22 @@ describe("credibility reviewer bundle", () => {
       now: "2026-06-16T00:02:00.000Z"
     });
     expect(verification.passed).toBe(true);
+    expect(verification.verificationId).toMatch(/^cver_[a-f0-9]{16}$/u);
     expect(verification.sourceMatchesWorkspace).toBe(true);
     expect(verification.checkedBundleFiles).toBe(result.manifest.summary.totalFiles);
+
+    const writtenVerification = await writeCredibilityBundleVerification({
+      rootPath: root,
+      bundleRef: result.manifest.bundleId,
+      now: "2026-06-16T00:03:00.000Z"
+    });
+    expect(writtenVerification.verification.schemaVersion).toBe("truth-harness.credibility-bundle-verification.v0");
+    expect(writtenVerification.verification.bundleId).toBe(result.manifest.bundleId);
+    expect(writtenVerification.verification.passed).toBe(true);
+    expect(writtenVerification.markdown).toContain("Truth Harness Credibility Bundle Verification");
+    expect(writtenVerification.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(writtenVerification.markdownPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(await readFile(writtenVerification.markdownPath, "utf8")).toContain(writtenVerification.verification.verificationId);
 
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
     expect(validation.passed).toBe(true);
@@ -73,6 +87,13 @@ describe("credibility reviewer bundle", () => {
         schemaVersion: "truth-harness.credibility-bundle.v0"
       })
     );
+    expect(validation.artifacts).toContainEqual(
+      expect.objectContaining({
+        kind: "findings",
+        artifactId: writtenVerification.verification.verificationId,
+        schemaVersion: "truth-harness.credibility-bundle-verification.v0"
+      })
+    );
 
     await rebuildWorkspaceCatalog({ rootPath: root });
     const search = await searchWorkspaceCatalog({ rootPath: root, query: result.manifest.bundleId });
@@ -80,6 +101,13 @@ describe("credibility reviewer bundle", () => {
       expect.objectContaining({
         kind: "findings",
         artifactId: result.manifest.bundleId
+      })
+    );
+    const verificationSearch = await searchWorkspaceCatalog({ rootPath: root, query: writtenVerification.verification.verificationId });
+    expect(verificationSearch.results).toContainEqual(
+      expect.objectContaining({
+        kind: "findings",
+        artifactId: writtenVerification.verification.verificationId
       })
     );
   });

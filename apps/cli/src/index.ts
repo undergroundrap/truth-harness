@@ -138,6 +138,7 @@ import {
   writeSymbolicCasCheckRecord,
   writeClaimLedgerRecord,
   writeCredibilityBundle,
+  writeCredibilityBundleVerification,
   writeCredibilityPack,
   writeCodeRun,
   writeEvidenceAudit,
@@ -3402,6 +3403,7 @@ workspace
   .argument("[bundle]", "Bundle id, bundle directory, or workspace-local bundle path")
   .option("--workspace <path>", "Project root path when only a bundle ref is passed", ".")
   .option("--json", "Print the full verification JSON")
+  .option("--write", "Write the verification JSON/Markdown into .truth-harness/findings")
   .option("--fail-on-bundle-change", "Exit non-zero if bundle files are missing or changed")
   .option("--fail-on-source-drift", "Exit non-zero if the current workspace no longer matches bundled source hashes")
   .action(
@@ -3411,6 +3413,7 @@ workspace
       options: {
         workspace: string;
         json?: boolean;
+        write?: boolean;
         failOnBundleChange?: boolean;
         failOnSourceDrift?: boolean;
       }
@@ -3420,15 +3423,25 @@ workspace
       }
       const workspacePath = bundle ? workspaceOrBundle : options.workspace;
       const bundleRef = bundle ?? workspaceOrBundle;
-      const verification = await verifyCredibilityBundle({
+      const written = options.write
+        ? await writeCredibilityBundleVerification({
+            rootPath: workspacePath,
+            bundleRef
+          })
+        : undefined;
+      const verification = written?.verification ?? await verifyCredibilityBundle({
         rootPath: workspacePath,
         bundleRef
       });
 
       if (options.json) {
-        printJson(verification);
+        printJson(written ? { verification, paths: { json: written.jsonPath, markdown: written.markdownPath } } : verification);
       } else {
         printCredibilityBundleVerification(verification);
+        if (written) {
+          console.log(`Saved verification JSON: ${written.jsonPath}`);
+          console.log(`Saved verification Markdown: ${written.markdownPath}`);
+        }
       }
 
       if (options.failOnBundleChange && !verification.passed) {
@@ -6880,6 +6893,7 @@ function printCredibilityBundle(result: CredibilityBundleWriteResult): void {
 
 function printCredibilityBundleVerification(verification: CredibilityBundleVerification): void {
   console.log("Truth Harness credibility bundle verification");
+  console.log(`Verification: ${verification.verificationId}`);
   console.log(`Bundle: ${verification.bundleId}`);
   console.log(`Pack: ${verification.packId}`);
   console.log(`Bundle integrity: ${verification.passed ? "passed" : "failed"}`);

@@ -8229,7 +8229,9 @@ async function verifyCredibilityBundleFromUi(button) {
     addActivity(
       "local-api",
       payload.latest ? "Verified reviewer bundle" : "No reviewer bundle to verify",
-      localApiSuccessMessage(payload, credibilityBundleActivitySummary(payload)),
+      payload.verificationPaths?.json
+        ? `Saved ${payload.verification?.verificationId ?? "bundle verification"} under .truth-harness/findings.`
+        : localApiSuccessMessage(payload, credibilityBundleActivitySummary(payload)),
       credibilityBundleTrust(payload),
       payload.verifiedAt
     );
@@ -11970,6 +11972,7 @@ function credibilityBundleCardHtml() {
         ["Source workspace", verification?.sourceMatchesWorkspace ? "matches bundle" : "drifted"],
         ["Files", `${verification?.checkedBundleFiles ?? manifest.summary?.totalFiles ?? 0} checked`],
         ["Last web verify", state.credibilityBundleVerifiedAt ? formatActivityTime(state.credibilityBundleVerifiedAt) : "not clicked"],
+        ["Verification artifact", payload?.verificationPaths?.json ? "saved to findings" : "not saved yet"],
         ["Archive SHA-256", archive?.sha256 ?? (state.credibilityArchiveLoading ? "calculating" : state.credibilityArchiveError ?? "not loaded")]
       ]
     : [
@@ -11991,6 +11994,7 @@ function credibilityBundleCardHtml() {
       ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${credibilityBundleValueHtml(value)}</dd></div>`).join("")}
     </dl>
     ${path ? `<small>Bundle path: <code>${escapeHtml(path)}</code></small>` : ""}
+    ${payload?.verificationPaths?.json ? `<small>Verification artifact: <code>${escapeHtml(payload.verificationPaths.json)}</code></small>` : ""}
     <div class="credibility-bundle-command">
       <code>${escapeHtml(command)}</code>
       <div class="credibility-bundle-actions">

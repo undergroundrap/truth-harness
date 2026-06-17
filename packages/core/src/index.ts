@@ -216,8 +216,10 @@ export {
   writeWorkspaceRunNextPlan
 } from "./workspace-run-next.js";
 export {
+  renderCredibilityBundleVerificationMarkdown,
   verifyCredibilityBundle,
-  writeCredibilityBundle
+  writeCredibilityBundle,
+  writeCredibilityBundleVerification
 } from "./credibility-bundle.js";
 export {
   createCredibilityPack,
@@ -597,6 +599,7 @@ export type {
   CredibilityBundleManifest,
   CredibilityBundleVerification,
   CredibilityBundleVerificationEntry,
+  CredibilityBundleVerificationWriteResult,
   CredibilityBundleWriteResult,
   VerifyCredibilityBundleInput,
   WriteCredibilityBundleInput
