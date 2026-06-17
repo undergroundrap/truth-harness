@@ -9142,9 +9142,10 @@ function releaseAuditBenchmarkCardHtml(audit) {
     : undefined;
   const packSummary = audit.credibilityPack?.summary ?? {};
   const latestRun = audit.credibilityPack?.benchmarkLedger?.latestAdversarialRun;
+  const receiptReplay = latestRun?.receiptReplays?.[0];
   const status = check?.status ?? (packSummary.latestAdversarialBenchmarkStatus === "passed" ? "pass" : "fail");
   const statusClass = status === "fail" ? "refuted" : status === "warn" ? "waiting" : "exact";
-  const command = check?.command ?? releaseAuditBenchmarkCommand(audit);
+  const command = latestRun?.replayCommand ?? check?.command ?? releaseAuditBenchmarkCommand(audit);
   const details = Array.isArray(check?.details)
     ? check.details.slice(0, 3).map((detail) => `<li>${escapeHtml(detail)}</li>`).join("")
     : "";
@@ -9152,7 +9153,8 @@ function releaseAuditBenchmarkCardHtml(audit) {
     ["Status", packSummary.latestAdversarialBenchmarkStatus ?? audit.summary?.adversarialBenchmark ?? "missing"],
     ["Trust accuracy", formatPercent(packSummary.latestAdversarialBenchmarkAccuracy)],
     ["Saved runs", String(packSummary.savedBenchmarkRuns ?? 0)],
-    ["Latest run", latestRun?.artifactId ?? "none"]
+    ["Latest run", latestRun?.artifactId ?? "none"],
+    ["Failed cases", String(latestRun?.failed ?? 0)]
   ];
 
   return `<section class="release-audit-benchmark-card benchmark-${escapeHtml(status)}">
@@ -9168,6 +9170,7 @@ function releaseAuditBenchmarkCardHtml(audit) {
       ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
     </dl>
     ${latestRun?.path ? `<small>Artifact: <code>${escapeHtml(latestRun.path)}</code></small>` : ""}
+    ${receiptReplay ? `<small>Receipt replay: <code>${escapeHtml(receiptReplay)}</code></small>` : ""}
     <div class="release-audit-benchmark-command">
       <code>${escapeHtml(command)}</code>
       <button class="text-button compact-button copy-release-benchmark-command" data-testid="copy-release-benchmark-command" data-command="${escapeHtml(command)}" type="button">Copy benchmark</button>
@@ -11721,8 +11724,9 @@ function renderCredibilityPackPanel() {
 function credibilityBenchmarkCardHtml(pack) {
   const summary = pack?.summary ?? {};
   const latestRun = pack?.benchmarkLedger?.latestAdversarialRun;
+  const receiptReplay = latestRun?.receiptReplays?.[0];
   const status = summary.latestAdversarialBenchmarkStatus ?? "missing";
-  const command = credibilityBenchmarkCommand(pack);
+  const command = latestRun?.replayCommand ?? credibilityBenchmarkCommand(pack);
   const statusClass = status === "passed" ? "exact" : status === "failed" ? "refuted" : "waiting";
   const label = status === "passed" ? "passing" : status === "failed" ? "regression" : "required";
   const detail = status === "passed"
@@ -11734,7 +11738,8 @@ function credibilityBenchmarkCardHtml(pack) {
     ["Status", status],
     ["Trust accuracy", formatPercent(summary.latestAdversarialBenchmarkAccuracy)],
     ["Saved runs", String(summary.savedBenchmarkRuns ?? 0)],
-    ["Latest run", latestRun?.artifactId ?? "none"]
+    ["Latest run", latestRun?.artifactId ?? "none"],
+    ["Failed cases", String(latestRun?.failed ?? 0)]
   ];
 
   return `<section class="credibility-benchmark-card benchmark-${escapeHtml(status)}">
@@ -11750,6 +11755,7 @@ function credibilityBenchmarkCardHtml(pack) {
       ${facts.map(([labelText, value]) => `<div><dt>${escapeHtml(labelText)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
     </dl>
     ${latestRun?.path ? `<small>Artifact: <code>${escapeHtml(latestRun.path)}</code></small>` : ""}
+    ${receiptReplay ? `<small>Receipt replay: <code>${escapeHtml(receiptReplay)}</code></small>` : ""}
     <div class="credibility-benchmark-command">
       <code>${escapeHtml(command)}</code>
       <button class="text-button compact-button copy-credibility-benchmark-command" data-testid="copy-credibility-benchmark-command" data-command="${escapeHtml(command)}" type="button">Copy benchmark</button>

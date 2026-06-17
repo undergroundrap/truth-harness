@@ -113,7 +113,9 @@ describe("professor credibility pack", () => {
     expect(result.pack.benchmarkLedger.latestAdversarialRun).toMatchObject({
       artifactId: adversarialBenchmark.record.benchmarkRunId,
       suiteId: "ai-failure-seed",
-      failed: 0
+      failed: 0,
+      replayCommand: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      receiptReplays: expect.arrayContaining([adversarialReceipt.replay])
     });
     expect(result.pack.reviewerActionPlan).toMatchObject({
       totalActions: 0,
@@ -124,6 +126,8 @@ describe("professor credibility pack", () => {
     expect(result.markdown).toContain("Reviewer action plan: 0 actions");
     expect(result.markdown).toContain("## Reviewer Action Plan");
     expect(result.markdown).toContain("No open reviewer actions were generated");
+    expect(result.markdown).toContain(`Replay: \`${adversarialBenchmark.record.replay.command}\``);
+    expect(result.markdown).toContain(`Receipt replay examples: \`${adversarialReceipt.replay}\``);
     expect(result.pack.reviewerCommands.verifyEngines).toBe(
       "truth-harness engines verify --write --require-maxima --require-z3 --require-lean --maxima-command maxima-test --z3-command z3-test --lean-command lean-test --sage-command sage-test --smt-source constraints.smt2 --lean-source Proof.lean"
     );

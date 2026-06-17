@@ -2036,11 +2036,11 @@ describe("benchmark CLI", () => {
     const failing = await runCli(["bench", "run", failingSuite, "--workspace", root, "--write", "--json", "--fail-on-failures"]);
     const passingJson = JSON.parse(passing.stdout) as {
       run: { failed: number };
-      result: { jsonPath: string };
+      result: { jsonPath: string; record: { command?: string; replay: { command?: string } } };
     };
     const failingJson = JSON.parse(failing.stdout) as {
       run: { failed: number };
-      result: { jsonPath: string };
+      result: { jsonPath: string; record: { command?: string; replay: { command?: string } } };
     };
     const listBeforeCompare = JSON.parse((await runCli(["bench", "list", root, "--json"])).stdout) as { total: number };
     const comparison = await runCli([
@@ -2062,6 +2062,10 @@ describe("benchmark CLI", () => {
 
     expect(passing.exitCode).toBe(0);
     expect(passingJson.run.failed).toBe(0);
+    expect(passingJson.result.record.command).toBe(
+      `truth-harness bench run ${passingSuite} --write --workspace ${root} --fail-on-failures`
+    );
+    expect(passingJson.result.record.replay.command).toBe(passingJson.result.record.command);
     expect(failing.exitCode).toBe(1);
     expect(failingJson.run.failed).toBe(1);
     expect(listBeforeCompare.total).toBe(2);

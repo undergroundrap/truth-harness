@@ -503,6 +503,7 @@ function adversarialBenchmarkCheck(pack: CredibilityPack): ReleaseAuditCheck {
   const status = pack.summary.latestAdversarialBenchmarkStatus;
   const accuracy = pack.summary.latestAdversarialBenchmarkAccuracy;
   const accuracyText = accuracy === undefined ? "unknown accuracy" : `${(accuracy * 100).toFixed(1)}% trust accuracy`;
+  const evidenceDetails = adversarialBenchmarkEvidenceDetails(pack);
   if (status === "passed") {
     return passCheck({
       id: "adversarial-ai-benchmark",
@@ -511,6 +512,7 @@ function adversarialBenchmarkCheck(pack: CredibilityPack): ReleaseAuditCheck {
       command: pack.reviewerCommands.runAdversarialBenchmark,
       details: [
         `${pack.summary.savedBenchmarkRuns} saved benchmark run(s) are present.`,
+        ...evidenceDetails,
         "The benchmark catches fluent-but-wrong AI math behavior and verifies expected evidence kinds."
       ]
     });
@@ -524,6 +526,7 @@ function adversarialBenchmarkCheck(pack: CredibilityPack): ReleaseAuditCheck {
       summary: `Latest ai-failure-seed run failed with ${accuracyText}.`,
       command: pack.reviewerCommands.runAdversarialBenchmark,
       details: [
+        ...evidenceDetails,
         "Fix or explicitly triage failing adversarial benchmark cases before treating this workspace as professor-ready.",
         ...pack.reviewerActionPlan.actions
           .filter((action) => action.category === "benchmark")
@@ -544,6 +547,28 @@ function adversarialBenchmarkCheck(pack: CredibilityPack): ReleaseAuditCheck {
       "Benchmark records are evidence about system behavior; they do not prove future claims."
     ]
   });
+}
+
+function adversarialBenchmarkEvidenceDetails(pack: CredibilityPack): string[] {
+  const run = pack.benchmarkLedger.latestAdversarialRun;
+  if (!run) {
+    return [];
+  }
+
+  const details = [
+    `Artifact: ${run.path}.`,
+    `Benchmark run id: ${run.artifactId}.`,
+    `Replay command: ${run.replayCommand ?? run.command ?? pack.reviewerCommands.runAdversarialBenchmark}.`
+  ];
+
+  if (run.receiptReplays && run.receiptReplays.length > 0) {
+    details.push(`Receipt replay example: ${run.receiptReplays[0]}.`);
+  }
+  if (run.failedCaseIds && run.failedCaseIds.length > 0) {
+    details.push(`Failing cases: ${run.failedCaseIds.join(", ")}.`);
+  }
+
+  return details;
 }
 
 function reviewQueueCheck(pack: CredibilityPack): ReleaseAuditCheck {

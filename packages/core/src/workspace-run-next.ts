@@ -1,5 +1,11 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import {
+  writeBenchmarkRunRecord,
+  type BenchmarkRunLike,
+  type BenchmarkRunTaskLike,
+  type BenchmarkRunTaskResultLike
+} from "./benchmark-run.js";
 import { createClaimReviewPacket } from "./claim-ledger.js";
 import type { CredibilityPack } from "./credibility-pack.js";
 import { writeSymbolicCasCheckRecord } from "./cas-backend.js";
@@ -7,9 +13,11 @@ import { writeEngineVerificationRun, type EngineVerificationRequirements } from 
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { writeLeanProofCheckRecord } from "./proof-backend.js";
+import { createReceipt } from "./receipt.js";
 import { readResearchSession } from "./research-session.js";
 import { writeSmtCheckRecord, type SmtBackendId } from "./smt-backend.js";
 import type { SympyOperation } from "./sympy.js";
+import type { Receipt, TrustLabel } from "./types.js";
 import {
   readVerifierRoute,
   satisfyVerifierRouteObligation,
@@ -82,6 +90,13 @@ export interface WorkspaceRunNextPlan {
   };
   stopConditions: string[];
   warnings: string[];
+}
+
+interface RunNextBenchmarkSuite {
+  id: string;
+  title: string;
+  description: string;
+  tasks: BenchmarkRunTaskLike[];
 }
 
 export async function createWorkspaceRunNextPlan(input: {
@@ -560,6 +575,46 @@ async function executeWorkspaceRunNextItem(
       };
     }
 
+    if (group === "bench" && action === "run") {
+      const suitePath = rest[0];
+      if (!suitePath || suitePath.includes("<") || suitePath.includes(">")) {
+        return blockedPlaceholderCommand(item.command, "benchmark-run");
+      }
+      if (options.write !== true) {
+        return {
+          status: "blocked",
+          kind: "benchmark-run",
+          command: item.command,
+          summary: "Benchmark run-next actions must include --write so the result becomes durable workspace evidence."
+        };
+      }
+
+      const resolvedSuitePath = resolveUnderRoot(workspace, suitePath);
+      const suite = parseRunNextBenchmarkSuite(JSON.parse(await readFile(resolvedSuitePath, "utf8")) as unknown);
+      const run = runRunNextBenchmarkSuite(suite);
+      const result = await writeBenchmarkRunRecord({
+        rootPath: workspace,
+        run,
+        suiteDescription: suite.description,
+        suitePath: toPortablePath(relative(workspace, resolvedSuitePath)),
+        command: item.command,
+        workingDirectory: workspace
+      });
+      const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
+      const failedText = result.record.totals.failed === 0
+        ? "no failing cases"
+        : `${result.record.totals.failed} failing case(s)`;
+      return {
+        status: "executed",
+        kind: "benchmark-run",
+        command: item.command,
+        evidenceRef: `benchmark:${evidenceRef}`,
+        attached: false,
+        summary: `Wrote benchmark run ${result.record.benchmarkRunId} for ${suite.id} with ${failedText}.`,
+        result: result.record
+      };
+    }
+
     if (group === "proof" && action === "check") {
       const sourcePath = rest[0];
       if (!sourcePath || sourcePath.includes("<") || sourcePath.includes(">")) {
@@ -867,6 +922,127 @@ function parseSmtBackendOption(value: string | true | undefined): SmtBackendId |
   }
 
   throw new Error(`Unsupported SMT backend ${JSON.stringify(value)}. Use z3 or cvc5.`);
+}
+
+function parseRunNextBenchmarkSuite(raw: unknown): RunNextBenchmarkSuite {
+  if (!isRecord(raw)) {
+    throw new Error("Benchmark suite must be a JSON object.");
+  }
+  if (typeof raw.id !== "string" || !raw.id.trim()) {
+    throw new Error("Benchmark suite requires a non-empty id.");
+  }
+  if (typeof raw.title !== "string" || !raw.title.trim()) {
+    throw new Error("Benchmark suite requires a non-empty title.");
+  }
+  if (typeof raw.description !== "string" || !raw.description.trim()) {
+    throw new Error("Benchmark suite requires a non-empty description.");
+  }
+  if (!Array.isArray(raw.tasks)) {
+    throw new Error("Benchmark suite requires a tasks array.");
+  }
+
+  return {
+    id: raw.id,
+    title: raw.title,
+    description: raw.description,
+    tasks: raw.tasks.map(parseRunNextBenchmarkTask)
+  };
+}
+
+function parseRunNextBenchmarkTask(raw: unknown, index: number): BenchmarkRunTaskLike {
+  if (!isRecord(raw)) {
+    throw new Error(`Benchmark task ${index} must be a JSON object.`);
+  }
+  if (typeof raw.id !== "string" || !raw.id.trim()) {
+    throw new Error(`Benchmark task ${index} requires a non-empty id.`);
+  }
+  if (typeof raw.prompt !== "string" || !raw.prompt.trim()) {
+    throw new Error(`Benchmark task ${index} requires a non-empty prompt.`);
+  }
+  if (!isTrustLabel(raw.expectTrust)) {
+    throw new Error(`Benchmark task ${index} has unsupported expectTrust ${JSON.stringify(raw.expectTrust)}.`);
+  }
+
+  return {
+    id: raw.id,
+    prompt: raw.prompt,
+    expectTrust: raw.expectTrust,
+    expectSummaryIncludes: optionalString(raw.expectSummaryIncludes, `Benchmark task ${index} expectSummaryIncludes`),
+    expectEvidenceKind: optionalString(raw.expectEvidenceKind, `Benchmark task ${index} expectEvidenceKind`) as
+      | Receipt["evidenceProfile"]["kind"]
+      | undefined,
+    category: optionalString(raw.category, `Benchmark task ${index} category`),
+    aiFailureMode: optionalString(raw.aiFailureMode, `Benchmark task ${index} aiFailureMode`)
+  };
+}
+
+function runRunNextBenchmarkSuite(suite: RunNextBenchmarkSuite): BenchmarkRunLike {
+  const startedAt = new Date().toISOString();
+  const results = suite.tasks.map(runRunNextBenchmarkTask);
+  const passed = results.filter((result) => result.passed).length;
+  const completedAt = new Date().toISOString();
+
+  return {
+    suiteId: suite.id,
+    title: suite.title,
+    startedAt,
+    completedAt,
+    total: results.length,
+    passed,
+    failed: results.length - passed,
+    trustAccuracy: results.length === 0 ? 1 : passed / results.length,
+    results
+  };
+}
+
+function runRunNextBenchmarkTask(task: BenchmarkRunTaskLike): BenchmarkRunTaskResultLike {
+  const receipt = createReceipt(task.prompt);
+  const failures: string[] = [];
+
+  if (!runNextTrustSatisfiesExpectation(receipt.trust, task.expectTrust)) {
+    failures.push(`Expected trust ${task.expectTrust}, received ${receipt.trust}`);
+  }
+  if (task.expectSummaryIncludes && !receipt.summary.includes(task.expectSummaryIncludes)) {
+    failures.push(`Expected summary to include ${JSON.stringify(task.expectSummaryIncludes)}`);
+  }
+  if (task.expectEvidenceKind && receipt.evidenceProfile.kind !== task.expectEvidenceKind) {
+    failures.push(`Expected evidence kind ${task.expectEvidenceKind}, received ${receipt.evidenceProfile.kind}`);
+  }
+
+  return {
+    task,
+    receipt,
+    passed: failures.length === 0,
+    failures
+  };
+}
+
+function runNextTrustSatisfiesExpectation(actual: TrustLabel, expected: TrustLabel): boolean {
+  return actual === expected || (expected === "exact-computed" && actual === "cross-checked");
+}
+
+function isTrustLabel(value: unknown): value is TrustLabel {
+  return (
+    value === "unverified" ||
+    value === "exact-computed" ||
+    value === "cross-checked" ||
+    value === "proved" ||
+    value === "refuted"
+  );
+}
+
+function optionalString(value: unknown, field: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`${field} must be a string when provided.`);
+  }
+  return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function parseSympyOperation(value: string): SympyOperation {

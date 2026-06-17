@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -127,6 +127,55 @@ describe("workspace run-next", () => {
         requiredPassed: 0
       }
     });
+  });
+
+  it("executes adversarial benchmark actions without shell execution", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    await writeBenchmarkSuite(root);
+    const review = minimalReview({
+      rootPath: root,
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      claimId: "claim_fake"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+    const pack = await createCredibilityPack({
+      rootPath: root,
+      now: "2026-06-14T00:03:00.000Z",
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      timeoutMs: 50
+    });
+
+    expect(plan.status).toBe("executed");
+    expect(plan.execution.kind).toBe("benchmark-run");
+    expect(plan.execution.evidenceRef).toContain("benchmark:.truth-harness/benchmarks/");
+    expect(plan.execution.summary).toContain("Wrote benchmark run");
+    expect(plan.execution.result).toMatchObject({
+      schemaVersion: "truth-harness.benchmark-run.v0",
+      suite: { suiteId: "ai-failure-seed" },
+      totals: { total: 1, passed: 1, failed: 0, trustAccuracy: 1 },
+      replay: {
+        command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures"
+      }
+    });
+    expect(pack.summary.latestAdversarialBenchmarkStatus).toBe("passed");
+    expect(pack.benchmarkLedger.latestAdversarialRun).toMatchObject({
+      suiteId: "ai-failure-seed",
+      failed: 0,
+      replayCommand: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      receiptReplays: expect.arrayContaining([
+        expect.stringContaining('truth-harness ask "for all integers n, n^2+n+1 is even" --json')
+      ])
+    });
+    expect(pack.markdown).toContain("Receipt replay examples:");
   });
 
   it("adapts credibility action queues into run-next plans", async () => {
@@ -297,4 +346,32 @@ async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-run-next-"));
   roots.push(root);
   return root;
+}
+
+async function writeBenchmarkSuite(root: string): Promise<void> {
+  const suiteDir = join(root, "packages", "benchmarks", "suites");
+  await mkdir(suiteDir, { recursive: true });
+  await writeFile(
+    join(suiteDir, "ai-failure-seed.json"),
+    JSON.stringify(
+      {
+        id: "ai-failure-seed",
+        title: "AI Failure Seed Suite",
+        description: "Curated fluent-but-wrong AI math failure suite.",
+        tasks: [
+          {
+            id: "false-universal-parity",
+            prompt: "for all integers n, n^2+n+1 is even",
+            expectTrust: "refuted",
+            expectEvidenceKind: "universal-parity",
+            category: "false-universal",
+            aiFailureMode: "confident universal claim"
+          }
+        ]
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
 }

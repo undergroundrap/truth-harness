@@ -20,7 +20,7 @@ describe("release audit", () => {
   it("aggregates a reviewer-ready workspace while keeping public launch warnings separate", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Release Audit Lab", now: "2026-06-17T00:00:00.000Z" });
-    await writeBenchmarkRunRecord({
+    const benchmark = await writeBenchmarkRunRecord({
       rootPath: root,
       run: benchmarkRun(createReceipt("for all integers n, n^2+n+1 is even")),
       suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
@@ -65,6 +65,16 @@ describe("release audit", () => {
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "adversarial-ai-benchmark", status: "pass", blocking: false })
+    );
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "adversarial-ai-benchmark",
+        details: expect.arrayContaining([
+          `Artifact: ${benchmark.jsonPath.replace(/\\/gu, "/").replace(`${root.replace(/\\/gu, "/")}/`, "")}.`,
+          `Benchmark run id: ${benchmark.record.benchmarkRunId}.`,
+          "Replay command: truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures."
+        ])
+      })
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "web-ui-smoke", status: "warn", blocking: false })

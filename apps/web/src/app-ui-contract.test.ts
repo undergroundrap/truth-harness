@@ -86,6 +86,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function credibilityBenchmarkCardHtml(pack)");
     expect(source).toContain('data-testid="copy-credibility-benchmark-command"');
     expect(source).toContain("Adversarial benchmark command copied from the credibility pack.");
+    expect(source).toContain("receiptReplays");
     expect(source).toContain("async function refreshCredibilityRunNext({ announce = true } = {})");
     expect(source).toContain("async function saveCredibilityRunNextFromUi(button)");
     expect(source).toContain("function credibilityRunNextHtml()");
@@ -133,6 +134,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("requireSavedStrictEngineRun");
     expect(source).toContain("requireSandbox");
     expect(source).toContain("adversarialBenchmark");
+    expect(source).toContain("Receipt replay:");
     expect(source).toContain("releaseAuditActivitySummary");
     expect(source).toContain(".copy-release-action-command");
     expect(source).toContain("Strict release-audit command copied from the Checks tab.");

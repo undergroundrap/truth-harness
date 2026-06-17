@@ -887,7 +887,7 @@ bench
           suitePath,
           runnerName: "truth-harness-cli",
           runnerAdapter: "local-receipt-engine",
-          command: `truth-harness bench run ${quoteCommandArg(suitePath)}`,
+          command: benchmarkRunReplayCommand(suitePath, options),
           workingDirectory: process.cwd()
         })
       : undefined;
@@ -8772,6 +8772,18 @@ function formatSigned(value: number): string {
 
 function formatSignedPercent(value: number): string {
   return `${value >= 0 ? "+" : ""}${(value * 100).toFixed(1)}%`;
+}
+
+function benchmarkRunReplayCommand(
+  suitePath: string,
+  options: { write?: boolean; failOnFailures?: boolean; workspace?: string }
+): string {
+  const flags = [
+    options.write ? "--write" : undefined,
+    options.workspace && options.workspace !== "." ? `--workspace ${quoteCommandArg(options.workspace)}` : undefined,
+    options.failOnFailures ? "--fail-on-failures" : undefined
+  ].filter(Boolean);
+  return `truth-harness bench run ${quoteCommandArg(suitePath)}${flags.length > 0 ? ` ${flags.join(" ")}` : ""}`;
 }
 
 function quoteCommandArg(value: string): string {

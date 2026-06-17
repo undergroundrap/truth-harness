@@ -148,6 +148,15 @@ describe("benchmark run records", () => {
     expect(artifacts).toHaveLength(3);
     expect(artifacts.map((artifact) => artifact.kind).sort()).toEqual(["comparison", "run", "run"]);
     expect(artifacts.find((artifact) => artifact.kind === "comparison")?.path).toContain(".truth-harness/benchmarks/");
+    expect(artifacts.find((artifact) => artifact.artifactId === current.record.benchmarkRunId)).toMatchObject({
+      replayCommand: "truth-harness bench run packages/benchmarks/suites/tiny.json",
+      replaySuitePath: "packages/benchmarks/suites/tiny.json",
+      deterministic: true,
+      receiptRunIds: [receipt.runId],
+      receiptReplays: [receipt.replay],
+      failedCaseIds: ["tiny-case"],
+      requiredNextChecks: expect.arrayContaining(["fix or explicitly triage failing benchmark cases"])
+    });
     expect(comparisons).toHaveLength(1);
     expect(comparisons[0]?.comparisonId).toBe(written.record.comparisonId);
     expect(validation.passed).toBe(true);

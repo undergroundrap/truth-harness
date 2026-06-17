@@ -415,6 +415,8 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     lines.push(
       `Latest adversarial benchmark: \`${run.artifactId}\` (${run.passed}/${run.total}, ${((run.trustAccuracy ?? 0) * 100).toFixed(1)}%)`,
       `Path: \`${run.path}\``,
+      `Replay: \`${run.replayCommand ?? run.command ?? pack.reviewerCommands.runAdversarialBenchmark}\``,
+      `Receipt replay examples: ${formatBenchmarkReceiptReplays(run.receiptReplays)}`,
       ""
     );
   } else {
@@ -468,6 +470,15 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
   }
 
   return `${lines.join("\n")}\n`;
+}
+
+function formatBenchmarkReceiptReplays(replays: string[] | undefined): string {
+  if (!replays || replays.length === 0) {
+    return "none recorded";
+  }
+
+  const rendered = replays.slice(0, 3).map((replay) => `\`${replay}\``).join(", ");
+  return replays.length > 3 ? `${rendered}, ...` : rendered;
 }
 
 function summarizeValidation(validation: WorkspaceValidation): CredibilityPack["validation"] {

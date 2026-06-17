@@ -239,6 +239,14 @@ export interface BenchmarkArtifactSummary {
   failed?: number;
   total?: number;
   trustAccuracy?: number;
+  command?: string;
+  replayCommand?: string;
+  replaySuitePath?: string;
+  deterministic?: boolean;
+  receiptRunIds?: string[];
+  receiptReplays?: string[];
+  failedCaseIds?: string[];
+  requiredNextChecks?: string[];
   verdict?: BenchmarkComparisonVerdict;
   baselineRunId?: string;
   currentRunId?: string;
@@ -1031,6 +1039,14 @@ function summarizeBenchmarkRunArtifact(
     failed: record.totals.failed,
     total: record.totals.total,
     trustAccuracy: record.totals.trustAccuracy,
+    command: record.command,
+    replayCommand: record.replay.command ?? record.command,
+    replaySuitePath: record.replay.suitePath,
+    deterministic: record.replay.deterministic,
+    receiptRunIds: uniqueStrings(record.cases.map((entry) => entry.receiptRunId)),
+    receiptReplays: uniqueStrings(record.cases.map((entry) => entry.receiptReplay)),
+    failedCaseIds: record.cases.filter((entry) => !entry.passed).map((entry) => entry.taskId),
+    requiredNextChecks: record.verificationBoundary.requiredNextChecks,
     warnings: record.warnings
   };
 }
@@ -1057,6 +1073,10 @@ function summarizeBenchmarkComparisonArtifact(
 
 function currentProjectId(baseline: BenchmarkRunRecord, current: BenchmarkRunRecord): string {
   return baseline.projectId === current.projectId ? current.projectId : current.projectId;
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim().length > 0))];
 }
 
 function formatSigned(value: number): string {
