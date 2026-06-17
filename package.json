@@ -15,7 +15,7 @@
     "docker:build": "docker compose build",
     "docker:check": "docker compose run --rm truth-harness npm run check",
     "docker:cli": "docker compose run --rm truth-harness npm run cli --",
-    "docker:engines": "docker compose build truth-harness && docker compose run --rm engine-smoke",
+    "docker:engines": "node tools/docker-engines.mjs",
     "docker:sage": "docker compose run --rm sage-math",
     "docker:mcp": "docker compose run --rm -i mcp",
     "docker:proof": "docker compose run --rm truth-harness npm run proof:launch:engines",

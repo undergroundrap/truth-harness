@@ -44,7 +44,7 @@ Run the smaller engine evidence smoke from the freshly built image with no runti
 npm run docker:engines
 ```
 
-This command differs from `truth-harness engines`: the manifest reports availability and trust boundaries, while `engines verify` runs concrete checks and reports which scoped labels were actually earned. The script builds the `truth-harness` image first, then runs the `engine-smoke` service without the repo bind mount or `node_modules` named volume so stale dev dependencies cannot affect the result. Use `truth-harness engines verify --json` when an agent needs a machine-readable gate report.
+This command differs from `truth-harness engines`: the manifest reports availability and trust boundaries, while `engines verify` runs concrete checks and reports which scoped labels were actually earned. The npm script first checks that the Docker engine is reachable, then builds the `truth-harness` image and runs the `engine-smoke` service without the repo bind mount or `node_modules` named volume so stale dev dependencies cannot affect the result. Use `truth-harness engines verify --json` when an agent needs a machine-readable gate report.
 
 If `workspace credibility-pack`, `workspace credibility-actions`, or `workspace release-audit` reports `spawn EPERM` for Maxima or Z3 on the host, use `npm run docker:engines` before assuming the engine itself is unavailable. That failure means the local OS or agent sandbox refused to launch the subprocess; the Docker gate replays the same concrete Maxima/Z3 evidence checks inside the no-network image.
 
