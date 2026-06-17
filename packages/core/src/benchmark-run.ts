@@ -11,6 +11,9 @@ export interface BenchmarkRunTaskLike {
   prompt: string;
   expectTrust: TrustLabel;
   expectSummaryIncludes?: string;
+  expectEvidenceKind?: Receipt["evidenceProfile"]["kind"];
+  category?: string;
+  aiFailureMode?: string;
 }
 
 export interface BenchmarkRunTaskResultLike {
@@ -35,8 +38,11 @@ export interface BenchmarkRunLike {
 export interface BenchmarkRunCaseRecord {
   taskId: string;
   prompt: string;
+  category?: string;
+  aiFailureMode?: string;
   expectedTrust: TrustLabel;
   expectedSummaryIncludes?: string;
+  expectedEvidenceKind?: Receipt["evidenceProfile"]["kind"];
   actualTrust: TrustLabel;
   receiptRunId: string;
   receiptCreatedAt: string;
@@ -609,7 +615,16 @@ export function renderBenchmarkRunMarkdown(record: BenchmarkRunRecord): string {
   lines.push("", "## Cases", "");
   for (const result of record.cases) {
     const status = result.passed ? "PASS" : "FAIL";
+    const context = [
+      result.category ? `category=${result.category}` : undefined,
+      result.aiFailureMode ? `failure-mode=${result.aiFailureMode}` : undefined,
+      result.expectedEvidenceKind ? `expected-evidence=${result.expectedEvidenceKind}` : undefined,
+      `actual-evidence=${result.evidenceKind}`
+    ].filter((part): part is string => Boolean(part));
     lines.push(`- ${status} \`${result.taskId}\`: ${result.actualTrust} - ${result.receiptSummary}`);
+    if (context.length > 0) {
+      lines.push(`  - ${context.join("; ")}`);
+    }
     for (const failure of result.failures) {
       lines.push(`  - ${failure}`);
     }
@@ -652,8 +667,11 @@ function toCaseRecord(result: BenchmarkRunTaskResultLike): BenchmarkRunCaseRecor
   return {
     taskId: requireText(result.task.id, "Benchmark task id is required."),
     prompt: requireText(result.task.prompt, "Benchmark task prompt is required."),
+    category: normalizeOptionalText(result.task.category),
+    aiFailureMode: normalizeOptionalText(result.task.aiFailureMode),
     expectedTrust: result.task.expectTrust,
     expectedSummaryIncludes: normalizeOptionalText(result.task.expectSummaryIncludes),
+    expectedEvidenceKind: result.task.expectEvidenceKind,
     actualTrust: receipt.trust,
     receiptRunId: receipt.runId,
     receiptCreatedAt: receipt.createdAt,

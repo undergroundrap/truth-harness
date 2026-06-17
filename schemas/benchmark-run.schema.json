@@ -216,11 +216,20 @@
           "type": "string",
           "minLength": 1
         },
+        "category": {
+          "type": "string"
+        },
+        "aiFailureMode": {
+          "type": "string"
+        },
         "expectedTrust": {
           "$ref": "#/$defs/trust"
         },
         "expectedSummaryIncludes": {
           "type": "string"
+        },
+        "expectedEvidenceKind": {
+          "$ref": "#/$defs/evidenceKind"
         },
         "actualTrust": {
           "$ref": "#/$defs/trust"
@@ -246,15 +255,7 @@
           "pattern": "^[a-f0-9]{64}$"
         },
         "evidenceKind": {
-          "enum": [
-            "exact-arithmetic",
-            "universal-parity",
-            "dimension-analysis",
-            "symbolic-cas",
-            "interval-bound",
-            "source-citation",
-            "unsupported"
-          ]
+          "$ref": "#/$defs/evidenceKind"
         },
         "backendIds": {
           "$ref": "#/$defs/stringArray"
@@ -285,6 +286,17 @@
         "cross-checked",
         "unverified",
         "refuted"
+      ]
+    },
+    "evidenceKind": {
+      "enum": [
+        "exact-arithmetic",
+        "universal-parity",
+        "dimension-analysis",
+        "symbolic-cas",
+        "interval-bound",
+        "source-citation",
+        "unsupported"
       ]
     },
     "privacy": {

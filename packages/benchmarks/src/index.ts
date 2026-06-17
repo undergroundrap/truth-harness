@@ -1,10 +1,15 @@
 import { createReceipt, type Receipt, type TrustLabel } from "@truth-harness/core";
 
+export type BenchmarkEvidenceKind = Receipt["evidenceProfile"]["kind"];
+
 export interface BenchmarkTask {
   id: string;
   prompt: string;
   expectTrust: TrustLabel;
   expectSummaryIncludes?: string;
+  expectEvidenceKind?: BenchmarkEvidenceKind;
+  category?: string;
+  aiFailureMode?: string;
 }
 
 export interface BenchmarkSuite {
@@ -86,6 +91,10 @@ function runTask(task: BenchmarkTask): BenchmarkTaskResult {
     failures.push(`Expected summary to include ${JSON.stringify(task.expectSummaryIncludes)}`);
   }
 
+  if (task.expectEvidenceKind && receipt.evidenceProfile.kind !== task.expectEvidenceKind) {
+    failures.push(`Expected evidence kind ${task.expectEvidenceKind}, received ${receipt.evidenceProfile.kind}`);
+  }
+
   return {
     task,
     receipt,
@@ -116,6 +125,21 @@ function parseBenchmarkTask(raw: unknown, index: number): BenchmarkTask {
     id: task.id,
     prompt: task.prompt,
     expectTrust: task.expectTrust as TrustLabel,
-    expectSummaryIncludes: task.expectSummaryIncludes
+    expectSummaryIncludes: task.expectSummaryIncludes,
+    expectEvidenceKind: parseOptionalString(task.expectEvidenceKind, `Task ${index} expectEvidenceKind`) as BenchmarkEvidenceKind | undefined,
+    category: parseOptionalString(task.category, `Task ${index} category`),
+    aiFailureMode: parseOptionalString(task.aiFailureMode, `Task ${index} aiFailureMode`)
   };
+}
+
+function parseOptionalString(value: unknown, field: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error(`${field} must be a string when provided`);
+  }
+
+  return value;
 }

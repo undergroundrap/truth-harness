@@ -6022,7 +6022,12 @@ function printBenchmarkRun(run: BenchmarkRun, outPath?: string, workspaceWrite?:
 
   for (const result of run.results) {
     const status = result.passed ? "PASS" : "FAIL";
-    console.log(`${status} ${result.task.id}: ${result.receipt.trust} - ${result.receipt.summary}`);
+    const context = [
+      result.task.category,
+      result.task.expectEvidenceKind ? `expected ${result.task.expectEvidenceKind}` : undefined,
+      `actual ${result.receipt.evidenceProfile.kind}`
+    ].filter((part): part is string => Boolean(part));
+    console.log(`${status} ${result.task.id}: ${result.receipt.trust} [${context.join("; ")}] - ${result.receipt.summary}`);
 
     for (const failure of result.failures) {
       console.log(`  ${failure}`);

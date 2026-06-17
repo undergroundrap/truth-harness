@@ -38,6 +38,7 @@
     "demo:recording": "node apps/cli/dist/index.js demo --require-symbolic-cross-check",
     "docker:demo": "docker compose run --rm truth-harness node apps/cli/dist/index.js demo --require-symbolic-cross-check",
     "demo:bench": "npm run cli -- bench run packages/benchmarks/suites/foundations-seed.json",
+    "demo:ai-failures": "npm run cli -- bench run packages/benchmarks/suites/ai-failure-seed.json",
     "demo:check": "npm run cli -- check docs/examples/strict-claims.md",
     "demo:physics": "npm run cli -- bench run packages/benchmarks/suites/physics-seed.json",
     "demo:parity": "npm run cli -- ask \"for all integers n, n^2+n is even\"",

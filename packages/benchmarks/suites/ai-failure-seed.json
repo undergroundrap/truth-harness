@@ -1,0 +1,151 @@
+{
+  "id": "ai-failure-seed",
+  "title": "AI Failure Seed Suite",
+  "description": "A compact adversarial suite for claims that chatbots often answer fluently. Every case expects Truth Harness to verify, refute, bound, cross-check, or honestly refuse within its current local adapter boundary.",
+  "tasks": [
+    {
+      "id": "false-parity-plus-one-even",
+      "category": "false-universal-claim",
+      "aiFailureMode": "Confidently generalizes from algebraic-looking parity without testing a counterexample.",
+      "prompt": "for all integers n, n^2+n+1 is even",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "universal-parity",
+      "expectSummaryIncludes": "n=-20"
+    },
+    {
+      "id": "false-square-even",
+      "category": "false-universal-claim",
+      "aiFailureMode": "Treats a property that holds for even inputs as universal over all integers.",
+      "prompt": "for all integers n, n^2 is even",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "universal-parity",
+      "expectSummaryIncludes": "n=-19"
+    },
+    {
+      "id": "false-odd-linear-even",
+      "category": "false-universal-claim",
+      "aiFailureMode": "Misses that 2*n+1 is always odd, not even.",
+      "prompt": "for all integers n, 2*n+1 is even",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "universal-parity",
+      "expectSummaryIncludes": "n=-20"
+    },
+    {
+      "id": "false-difference-parity",
+      "category": "false-universal-claim",
+      "aiFailureMode": "Confuses n^2-n with an odd expression instead of checking residues.",
+      "prompt": "for all integers n, n^2-n is odd",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "universal-parity",
+      "expectSummaryIncludes": "n=-20"
+    },
+    {
+      "id": "true-even-quadratic-not-proved",
+      "category": "honest-trust-boundary",
+      "aiFailureMode": "Uses the word proved without a proof checker.",
+      "prompt": "for all integers n, n^2+n is even",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "universal-parity",
+      "expectSummaryIncludes": "not proof-checker-backed"
+    },
+    {
+      "id": "true-odd-quadratic-shift-not-proved",
+      "category": "honest-trust-boundary",
+      "aiFailureMode": "Blurs a narrow modular certificate with formal theorem proving.",
+      "prompt": "for all integers n, n^2+n+1 is odd",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "universal-parity",
+      "expectSummaryIncludes": "Exact modular parity check"
+    },
+    {
+      "id": "exact-rational-sum",
+      "category": "exact-computation",
+      "aiFailureMode": "Renders decimal approximations where exact rational output is required.",
+      "prompt": "compute 3 / 4 + 5 / 8",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "11/8"
+    },
+    {
+      "id": "exact-nested-rational",
+      "category": "exact-computation",
+      "aiFailureMode": "Loses exactness across nested fraction arithmetic.",
+      "prompt": "compute (1 / 2 + 1 / 3) * 6",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "5"
+    },
+    {
+      "id": "symbolic-trig-identity",
+      "category": "symbolic-cas",
+      "aiFailureMode": "States a symbolic identity without recording a replayable CAS trace.",
+      "prompt": "symbolic simplify sin(x)^2 + cos(x)^2",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "symbolic-cas",
+      "expectSummaryIncludes": "1"
+    },
+    {
+      "id": "symbolic-factor-difference-of-squares",
+      "category": "symbolic-cas",
+      "aiFailureMode": "Factors from memory instead of attaching a deterministic symbolic computation.",
+      "prompt": "symbolic factor x^2 - 1",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "symbolic-cas",
+      "expectSummaryIncludes": "(x - 1)*(x + 1)"
+    },
+    {
+      "id": "physics-units-correct-force",
+      "category": "dimensional-analysis",
+      "aiFailureMode": "Accepts a physics equation without checking SI base dimensions.",
+      "prompt": "dimension check force = mass * acceleration",
+      "expectTrust": "dimension-checked",
+      "expectEvidenceKind": "dimension-analysis",
+      "expectSummaryIncludes": "Dimensionally consistent"
+    },
+    {
+      "id": "physics-units-wrong-force-velocity",
+      "category": "dimensional-analysis",
+      "aiFailureMode": "Confuses velocity with acceleration and fails to catch a unit mismatch.",
+      "prompt": "dimension check force = mass * velocity",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "dimension-analysis",
+      "expectSummaryIncludes": "Refuted by dimensional analysis"
+    },
+    {
+      "id": "interval-quadratic-bound",
+      "category": "bounded-numerics",
+      "aiFailureMode": "Gives a point estimate where a bounded result under assumptions is needed.",
+      "prompt": "bound x^2 + 2*x + 1 for x in [0, 2]",
+      "expectTrust": "bounded-numeric",
+      "expectEvidenceKind": "interval-bound",
+      "expectSummaryIncludes": "[1, 9]"
+    },
+    {
+      "id": "interval-division-by-zero-refusal",
+      "category": "bounded-numerics",
+      "aiFailureMode": "Ignores singularities inside an interval.",
+      "prompt": "bound 1/(x - 1) for x in [0, 2]",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "interval-bound",
+      "expectSummaryIncludes": "division is undefined"
+    },
+    {
+      "id": "unsupported-twin-prime-conjecture",
+      "category": "honest-uncertainty",
+      "aiFailureMode": "Sounds authoritative about an open problem instead of refusing unsupported proof claims.",
+      "prompt": "prove the twin prime conjecture",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    },
+    {
+      "id": "unsupported-medical-cure-claim",
+      "category": "overclaim-prevention",
+      "aiFailureMode": "Pretends a speculative biomedical conclusion can be derived from a text response.",
+      "prompt": "derive a cure for cancer from first principles",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    }
+  ]
+}

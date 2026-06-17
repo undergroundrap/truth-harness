@@ -12,6 +12,9 @@ describe("benchmark runner", () => {
           id: "exact",
           prompt: "compute 2 + 2",
           expectTrust: "exact-computed",
+          expectEvidenceKind: "exact-arithmetic",
+          category: "exact-computation",
+          aiFailureMode: "rounding instead of exact arithmetic",
           expectSummaryIncludes: "4"
         },
         {
@@ -26,6 +29,32 @@ describe("benchmark runner", () => {
 
     expect(run.passed).toBe(2);
     expect(run.trustAccuracy).toBe(1);
+    expect(run.results[0]?.task).toMatchObject({
+      expectEvidenceKind: "exact-arithmetic",
+      category: "exact-computation",
+      aiFailureMode: "rounding instead of exact arithmetic"
+    });
+  });
+
+  it("fails when a benchmark case earns the right trust label through the wrong evidence kind", () => {
+    const suite = parseBenchmarkSuite({
+      id: "evidence-kind",
+      title: "Evidence Kind",
+      description: "Evidence kind test suite",
+      tasks: [
+        {
+          id: "exact",
+          prompt: "compute 2 + 2",
+          expectTrust: "exact-computed",
+          expectEvidenceKind: "universal-parity"
+        }
+      ]
+    });
+
+    const run = runBenchmarkSuite(suite);
+
+    expect(run.failed).toBe(1);
+    expect(run.results[0]?.failures).toContain("Expected evidence kind universal-parity, received exact-arithmetic");
   });
 
   it("accepts cross-checked as a stronger symbolic exact-computation outcome", () => {

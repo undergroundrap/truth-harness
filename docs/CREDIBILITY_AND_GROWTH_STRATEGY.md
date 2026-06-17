@@ -90,7 +90,7 @@ The viral version should spread because it is useful and legible, not because it
 1. Paste any AI math answer and get a proof receipt.
 2. Shareable claim cards: claim, trust label, replay command, evidence graph, and counterexample if false.
 3. "AI math hallucination audit" posts that test popular models on tricky but fair problems.
-4. A public `false-claims-100` benchmark where models lose points for confident nonsense.
+4. A public `false-claims-100` benchmark where models lose points for confident nonsense. The current repo starts this path with `packages/benchmarks/suites/ai-failure-seed.json`, a 16-case local suite that checks trust labels and evidence kinds for false universal claims, exact arithmetic, symbolic CAS, dimensional checks, interval bounds, and honest unsupported prompts.
 5. A GitHub Action that checks Markdown, notebooks, or docs for replayable math claims.
 6. A Claude/Codex MCP demo where the agent asks Truth Harness to verify its own subclaims.
 7. A verified lesson mode where professors can export a teaching packet from the UI or CLI and students can inspect each step, replay command, trust label, and limitation behind it.

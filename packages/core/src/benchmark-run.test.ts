@@ -70,7 +70,15 @@ describe("benchmark run records", () => {
     expect(benchmarkRunFailsGate(result.record)).toBe(false);
     expect(result.record.cases[0]?.receiptRunId).toBe(receipt.runId);
     expect(result.record.cases[0]?.receiptHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.record.cases[0]).toMatchObject({
+      category: "exact-computation",
+      aiFailureMode: "wrong arithmetic",
+      expectedEvidenceKind: "exact-arithmetic",
+      evidenceKind: "exact-arithmetic"
+    });
     expect(result.markdown).toContain("## Replay");
+    expect(result.markdown).toContain("category=exact-computation");
+    expect(result.markdown).toContain("expected-evidence=exact-arithmetic");
     expect(parseBenchmarkRunRecordJson(JSON.stringify(result.record), "roundtrip").benchmarkRunId).toBe(
       result.record.benchmarkRunId
     );
@@ -189,7 +197,10 @@ function benchmarkRun(
         task: {
           id: "tiny-case",
           prompt: receipt.problem,
-          expectTrust: expectedTrust
+          expectTrust: expectedTrust,
+          expectEvidenceKind: receipt.evidenceProfile.kind,
+          category: "exact-computation",
+          aiFailureMode: "wrong arithmetic"
         },
         receipt,
         passed,
