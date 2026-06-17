@@ -37,6 +37,7 @@ npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/
 - Concrete engine evidence report from `engines verify`.
 - Saved engine-run ledger summary from `.truth-harness/engine-runs`, including the latest strict all-engines reviewer run when one exists.
 - Workspace review queue with top open proof/check obligations.
+- Structured reviewer action plan with priorities, close targets, and commands for validation, engine, and workspace-review blockers.
 - Exact reviewer commands for validation, writable engine checks, review, Docker core engines, and the Lean proof fixture.
 - Blocking warnings when validation fails, required engines are missing, concrete engine smoke gates are incomplete, or critical review items remain open.
 
@@ -83,6 +84,15 @@ A pack is `ready-for-review` only when:
 - the workspace review has no critical open items.
 
 This status is intentionally conservative. A ready pack does not prove every claim; it only says the workspace is coherent enough for external review.
+
+When the pack is blocked, `reviewerActionPlan.actions` is the first queue a human reviewer or agent should inspect. Each action records:
+
+- the priority (`critical`, `high`, `medium`, or `low`),
+- the category (`validation`, `engine`, or `workspace-review`),
+- the exact command to run,
+- the gate or artifact it closes.
+
+The web Report tab renders the same action plan and exposes copy buttons for those commands, so the browser, CLI, MCP, and exported Markdown all point at the same next steps.
 
 Maxima and SageMath CAS check records can support the narrow `cross-checked` label only when a concrete recorded agreement exists. Z3 and cvc5 SMT records can support the narrow `smt-checked` label only when the selected solver returns `sat` or `unsat` for a concrete SMT-LIB artifact. The default Docker core credibility gate currently requires Maxima and Z3 evidence. cvc5 is an optional second SMT solver gate through `--require-cvc5`; SageMath is available as a direct constrained CAS adapter and as the heavier no-network `sage-math` Docker gate through `--require-sage` or `npm run docker:sage`. Use `--require-all-engines` when a reviewer packet should fail unless Maxima, Z3, cvc5, Lean, and SageMath all earn their own scoped evidence. Credibility-pack reviewer commands now use `truth-harness engines verify --write ...` so reruns create durable `.truth-harness/engine-runs` records instead of transient terminal output. That stronger mode is still a smoke gate over representative fixtures, not proof of every workspace claim.
 

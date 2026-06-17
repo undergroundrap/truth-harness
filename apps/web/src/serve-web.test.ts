@@ -172,6 +172,18 @@ describe("local web route ledger API", () => {
       title: "Truth Harness Professor Credibility Pack"
     });
     expect(credibilityPayload.pack.summary.requiredEngineGates).toMatch(/\/5$/u);
+    expect(credibilityPayload.pack.reviewerActionPlan).toMatchObject({
+      totalActions: expect.any(Number),
+      criticalActions: expect.any(Number),
+      highActions: expect.any(Number),
+      actions: expect.any(Array)
+    });
+    expect(credibilityPayload.pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({
+        category: expect.stringMatching(/^(engine|workspace-review|validation)$/u),
+        command: expect.stringContaining("truth-harness")
+      })
+    );
     expect(credibilityPayload.pack.engineRunLedger.latestStrictReviewerRun).toMatchObject({
       runId: strictEngineRunWritePayload.run.runId,
       requiredTotal: 5
@@ -196,6 +208,7 @@ describe("local web route ledger API", () => {
       mode: "all-engines"
     });
     expect(credibilityWritePayload.pack.schemaVersion).toBe("truth-harness.credibility-pack.v0");
+    expect(credibilityWritePayload.pack.reviewerActionPlan.actions.length).toBeGreaterThan(0);
     expect(credibilityWritePayload.pack.reviewerCommands.verifyEngines).toContain("--write --require-all-engines");
     expect(credibilityWritePayload.paths.json).toContain(".truth-harness");
     expect(credibilityWritePayload.paths.markdown).toContain(".truth-harness");

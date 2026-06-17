@@ -4950,6 +4950,73 @@ textarea:focus-visible {
   white-space: normal;
 }
 
+.credibility-pack-action-plan {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.credibility-pack-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.credibility-pack-section-head strong {
+  color: #f2eadb;
+  font-size: 13px;
+}
+
+.credibility-pack-section-head span {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.credibility-pack-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #101010;
+  padding: 10px;
+}
+
+.credibility-pack-action.action-critical {
+  border-color: rgba(242, 139, 130, 0.38);
+}
+
+.credibility-pack-action.action-high {
+  border-color: rgba(230, 195, 106, 0.32);
+}
+
+.credibility-pack-action > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.credibility-pack-action strong {
+  color: #f1eadc;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.credibility-pack-action p,
+.credibility-pack-action small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .credibility-pack-warnings {
   display: grid;
   gap: 5px;

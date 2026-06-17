@@ -38,6 +38,22 @@ export interface CredibilityPackReviewItem {
   source: WorkspaceReviewItem["source"];
 }
 
+export type CredibilityPackActionCategory = "validation" | "engine" | "workspace-review";
+
+export interface CredibilityPackActionItem {
+  actionId: string;
+  category: CredibilityPackActionCategory;
+  priority: WorkspaceReviewItem["priority"];
+  title: string;
+  detail: string;
+  command: string;
+  closes: string[];
+  source: {
+    kind: string;
+    ref: string;
+  };
+}
+
 export interface CredibilityPackEngineRunLedger {
   savedRuns: number;
   latestRuns: EngineVerificationRunSummary[];
@@ -90,6 +106,12 @@ export interface CredibilityPack {
     summary: WorkspaceReview["summary"];
     autonomy: Pick<WorkspaceReview["autonomy"], "mode" | "canRunUnattended" | "suggestedBatchSize" | "nextCommand" | "stopConditions">;
     topItems: CredibilityPackReviewItem[];
+  };
+  reviewerActionPlan: {
+    totalActions: number;
+    criticalActions: number;
+    highActions: number;
+    actions: CredibilityPackActionItem[];
   };
   reviewerCommands: CredibilityPackCommandSet;
   limitations: string[];
@@ -212,6 +234,13 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       },
       topItems: review.items.slice(0, 8).map(toReviewItemSummary)
     },
+    reviewerActionPlan: createReviewerActionPlan({
+      validation,
+      engineEvidence,
+      engineRunLedger,
+      review,
+      reviewerCommands
+    }),
     reviewerCommands,
     limitations: [
       "This pack is a local reviewer packet. It does not prove every claim in the workspace.",
@@ -281,6 +310,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Saved engine-run ledger: ${pack.summary.savedEngineRuns} saved${pack.summary.latestStrictEngineRunStatus ? ` (latest strict reviewer: ${pack.summary.latestStrictEngineRunStatus})` : ""}`,
     `- Embedded artifact snapshot: ${pack.summary.snapshotFiles} files, ${pack.summary.snapshotBytes} bytes`,
     `- Open work queue: ${pack.summary.reviewItems} items (${pack.summary.criticalReviewItems} critical, ${pack.summary.highReviewItems} high)`,
+    `- Reviewer action plan: ${pack.reviewerActionPlan.totalActions} actions (${pack.reviewerActionPlan.criticalActions} critical, ${pack.reviewerActionPlan.highActions} high)`,
     "",
     "## Reviewer Commands",
     "",
@@ -291,9 +321,32 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Docker core engines: \`${pack.reviewerCommands.dockerCoreEngines}\``,
     `- Docker Lean fixture: \`${pack.reviewerCommands.dockerLeanFixture}\``,
     "",
-    "## Engine Gates",
+    "## Reviewer Action Plan",
     ""
   ];
+
+  if (pack.reviewerActionPlan.actions.length === 0) {
+    lines.push("No open reviewer actions were generated for this bounded pack.", "");
+  } else {
+    for (const item of pack.reviewerActionPlan.actions) {
+      lines.push(
+        `### ${item.title}`,
+        "",
+        `- Priority: \`${item.priority}\``,
+        `- Category: \`${item.category}\``,
+        `- Source: \`${item.source.kind}:${item.source.ref}\``,
+        `- Closes: ${item.closes.map((entry) => `\`${entry}\``).join(", ")}`,
+        `- Command: \`${item.command}\``,
+        `- Detail: ${item.detail}`,
+        ""
+      );
+    }
+  }
+
+  lines.push(
+    "## Engine Gates",
+    ""
+  );
 
   for (const item of pack.engineEvidence.cases) {
     lines.push(
@@ -403,6 +456,126 @@ function summarizeEngineRunLedger(runs: EngineVerificationRunSummary[]): Credibi
     latestRuns: runs.slice(0, 5),
     latestStrictReviewerRun: runs.find((run) => run.requiredTotal >= 5)
   };
+}
+
+function createReviewerActionPlan(input: {
+  validation: WorkspaceValidation;
+  engineEvidence: EngineVerificationReport;
+  engineRunLedger: CredibilityPackEngineRunLedger;
+  review: WorkspaceReview;
+  reviewerCommands: CredibilityPackCommandSet;
+}): CredibilityPack["reviewerActionPlan"] {
+  const actions: CredibilityPackActionItem[] = [];
+  const pushAction = (action: Omit<CredibilityPackActionItem, "actionId">) => {
+    const actionId = `cred_action_${stableHash(action).slice(0, 16)}`;
+    if (!actions.some((existing) => existing.actionId === actionId)) {
+      actions.push({
+        actionId,
+        ...action
+      });
+    }
+  };
+
+  if (!input.validation.passed) {
+    pushAction({
+      category: "validation",
+      priority: "critical",
+      title: "Fix workspace validation before review",
+      detail: `${input.validation.summary.errors} validation error(s) and ${input.validation.summary.warnings} warning(s) were found across ${input.validation.summary.checkedFiles} checked files.`,
+      command: input.reviewerCommands.validateWorkspace,
+      closes: ["workspace-validation"],
+      source: {
+        kind: "workspace-validation",
+        ref: input.validation.projectId
+      }
+    });
+  }
+
+  for (const item of input.engineEvidence.cases) {
+    if (item.status === "passed" || item.status === "not-required") {
+      continue;
+    }
+    if (!item.required && (item.id === "cvc5-smt-check" || item.id === "sage-symbolic-cross-check")) {
+      continue;
+    }
+
+    const priority: WorkspaceReviewItem["priority"] = item.required ? "critical" : "high";
+    pushAction({
+      category: "engine",
+      priority,
+      title: `${item.required ? "Close required" : "Close concrete"} ${item.displayName} gate`,
+      detail: `${reviewerEngineSummary(item.summary)} This gate currently reports ${item.status}; rerun the writable reviewer command after installing or fixing the backend.`,
+      command: input.reviewerCommands.verifyEngines,
+      closes: [
+        item.required ? `required-engine:${item.id}` : `concrete-engine:${item.id}`,
+        "engine-evidence"
+      ],
+      source: {
+        kind: "engine-case",
+        ref: item.id
+      }
+    });
+  }
+
+  if (!input.engineRunLedger.latestStrictReviewerRun && input.engineEvidence.requiredTotal >= 5) {
+    pushAction({
+      category: "engine",
+      priority: "high",
+      title: "Save a strict all-engines reviewer run",
+      detail: "The current pack requires all engines, but no saved strict all-engines run is present in `.truth-harness/engine-runs` yet.",
+      command: input.reviewerCommands.verifyEngines,
+      closes: ["strict-engine-run-ledger"],
+      source: {
+        kind: "engine-run-ledger",
+        ref: "latest-strict-reviewer-run"
+      }
+    });
+  }
+
+  for (const item of input.review.items.slice(0, 8)) {
+    pushAction({
+      category: "workspace-review",
+      priority: item.priority,
+      title: item.title,
+      detail: item.summary,
+      command: item.command,
+      closes: [
+        item.kind,
+        ...(item.routeId ? [`route:${item.routeId}`] : []),
+        ...(item.obligationId ? [`obligation:${item.obligationId}`] : []),
+        ...(item.claimId ? [`claim:${item.claimId}`] : [])
+      ],
+      source: {
+        kind: item.kind,
+        ref: item.source.ref
+      }
+    });
+  }
+
+  const sorted = actions.sort((left, right) => {
+    const priorityRank: Record<WorkspaceReviewItem["priority"], number> = {
+      critical: 0,
+      high: 1,
+      medium: 2,
+      low: 3
+    };
+    return priorityRank[left.priority] - priorityRank[right.priority] || left.title.localeCompare(right.title);
+  });
+
+  return {
+    totalActions: sorted.length,
+    criticalActions: sorted.filter((item) => item.priority === "critical").length,
+    highActions: sorted.filter((item) => item.priority === "high").length,
+    actions: sorted
+  };
+}
+
+function reviewerEngineSummary(summary: string): string {
+  if (/spawnSync\s+\S+\s+EPERM/iu.test(summary)) {
+    return "The local OS or sandbox blocked the engine process, so Truth Harness did not count this backend as reviewer evidence.";
+  }
+
+  return summary;
 }
 
 function credibilityWarnings(input: {

@@ -6357,6 +6357,10 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
   );
   console.log(`Embedded snapshot: ${pack.embeddedSnapshot.snapshotId} (${pack.summary.snapshotFiles} files)`);
   console.log(`Review queue: ${pack.summary.reviewItems} items (${pack.summary.criticalReviewItems} critical, ${pack.summary.highReviewItems} high)`);
+  console.log(
+    `Reviewer action plan: ${pack.reviewerActionPlan.totalActions} actions ` +
+      `(${pack.reviewerActionPlan.criticalActions} critical, ${pack.reviewerActionPlan.highActions} high)`
+  );
 
   console.log("");
   console.log("Reviewer commands:");
@@ -6364,6 +6368,16 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
   console.log(`  ${pack.reviewerCommands.verifyEngines}`);
   console.log(`  ${pack.reviewerCommands.reviewWorkspace}`);
   console.log(`  ${pack.reviewerCommands.reproducePack}`);
+
+  if (pack.reviewerActionPlan.actions.length > 0) {
+    console.log("");
+    console.log("Reviewer action plan:");
+    for (const item of pack.reviewerActionPlan.actions.slice(0, 6)) {
+      console.log(`  ${item.priority.toUpperCase()} ${item.category}: ${item.title}`);
+      console.log(`    closes ${item.closes.join(", ")}`);
+      console.log(`    ${item.command}`);
+    }
+  }
 
   if (pack.workspaceReview.topItems.length > 0) {
     console.log("");

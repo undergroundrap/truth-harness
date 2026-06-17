@@ -11189,6 +11189,7 @@ function renderCredibilityPackPanel() {
   const warningItems = credibilityPackWarnings(pack)
     .map((warning) => `<li>${escapeHtml(warning)}</li>`)
     .join("");
+  const actionItems = credibilityPackActionItemsHtml(pack);
   const pathRows = credibilityPackPathRows(state.credibilityPackPaths);
   const summaryRows = pack
     ? credibilityPackSummaryRows(pack)
@@ -11220,6 +11221,13 @@ function renderCredibilityPackPanel() {
       <span>Replayable command</span>
       <code>${escapeHtml(command)}</code>
     </div>
+    ${actionItems ? `<div class="credibility-pack-action-plan">
+      <div class="credibility-pack-section-head">
+        <strong>Reviewer Action Plan</strong>
+        <span>${escapeHtml(credibilityPackActionSummary(pack))}</span>
+      </div>
+      ${actionItems}
+    </div>` : ""}
     ${pathRows ? `<dl class="credibility-pack-paths">${pathRows}</dl>` : ""}
     ${warningItems ? `<ul class="credibility-pack-warnings">${warningItems}</ul>` : ""}
   `;
@@ -11241,6 +11249,21 @@ function renderCredibilityPackPanel() {
       copiedDetail: "Reviewer credibility-pack command copied from the Report tab.",
       fallbackTitle: "Downloaded credibility command",
       fallbackDetail: "the reviewer credibility-pack command was saved as a local text file instead."
+    });
+  });
+  credibilityPackPanel.querySelectorAll(".copy-credibility-action-command").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const target = event.currentTarget;
+      void copyOrDownloadText({
+        button: target,
+        text: `${target.dataset.command ?? ""}\n`,
+        filename: `truth-harness-reviewer-action-${safeFilenameTimestamp()}.txt`,
+        type: "text/plain",
+        copiedTitle: "Copied reviewer action",
+        copiedDetail: target.dataset.title ?? "Reviewer action command copied from the credibility pack.",
+        fallbackTitle: "Downloaded reviewer action",
+        fallbackDetail: "the reviewer action command was saved as a local text file instead."
+      });
     });
   });
 }
@@ -11274,6 +11297,32 @@ function credibilityPackWarnings(pack) {
     warnings.push("Reviewer packs are generated locally and do not call hosted models or external services.");
   }
   return [...new Set(warnings)];
+}
+
+function credibilityPackActionItemsHtml(pack) {
+  const actions = pack?.reviewerActionPlan?.actions ?? [];
+  if (actions.length === 0) {
+    return "";
+  }
+
+  return actions.slice(0, 6).map((item) => `<article class="credibility-pack-action action-${escapeHtml(item.priority)}">
+    <div>
+      <span class="mini-label">${escapeHtml(item.priority)} / ${escapeHtml(item.category)}</span>
+      <strong>${escapeHtml(item.title)}</strong>
+      <p>${escapeHtml(item.detail)}</p>
+      <small>Closes: ${escapeHtml((item.closes ?? []).join(", "))}</small>
+    </div>
+    <button class="text-button compact-button copy-credibility-action-command" data-command="${escapeHtml(item.command)}" data-title="${escapeHtml(item.title)}" type="button">Copy</button>
+  </article>`).join("");
+}
+
+function credibilityPackActionSummary(pack) {
+  const plan = pack?.reviewerActionPlan;
+  if (!plan) {
+    return "refresh pack";
+  }
+
+  return `${plan.totalActions} actions / ${plan.criticalActions} critical / ${plan.highActions} high`;
 }
 
 function credibilityPackPathRows(paths) {

@@ -599,6 +599,8 @@ export type {
 export type {
   CreateCredibilityPackInput,
   CredibilityPack,
+  CredibilityPackActionCategory,
+  CredibilityPackActionItem,
   CredibilityPackCommandSet,
   CredibilityPackReviewItem,
   CredibilityPackStatus,

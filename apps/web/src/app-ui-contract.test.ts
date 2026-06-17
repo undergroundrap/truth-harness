@@ -81,10 +81,16 @@ describe("web UI action contracts", () => {
     expect(source).toContain('data-testid="refresh-credibility-pack"');
     expect(source).toContain('data-testid="write-credibility-pack"');
     expect(source).toContain('data-testid="copy-credibility-pack-command"');
+    expect(source).toContain("function credibilityPackActionItemsHtml(pack)");
+    expect(source).toContain("function credibilityPackActionSummary(pack)");
+    expect(source).toContain(".copy-credibility-action-command");
     expect(source).toContain("truth-harness workspace credibility-pack . --require-all-engines");
     expect(source).toContain("Reviewer credibility-pack command copied from the Report tab.");
+    expect(source).toContain("Reviewer action command copied from the credibility pack.");
     expect(styles).toContain(".credibility-pack-panel");
     expect(styles).toContain(".credibility-pack-summary");
+    expect(styles).toContain(".credibility-pack-action-plan");
+    expect(styles).toContain(".credibility-pack-action");
     expect(styles).toContain("overflow-wrap: anywhere;");
   });
 

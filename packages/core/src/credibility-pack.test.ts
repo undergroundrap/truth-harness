@@ -85,6 +85,15 @@ describe("professor credibility pack", () => {
       requiredTotal: 5,
       status: "passed"
     });
+    expect(result.pack.reviewerActionPlan).toMatchObject({
+      totalActions: 0,
+      criticalActions: 0,
+      highActions: 0,
+      actions: []
+    });
+    expect(result.markdown).toContain("Reviewer action plan: 0 actions");
+    expect(result.markdown).toContain("## Reviewer Action Plan");
+    expect(result.markdown).toContain("No open reviewer actions were generated");
     expect(result.pack.reviewerCommands.verifyEngines).toBe("truth-harness engines verify --write --require-maxima --require-z3 --require-lean");
 
     const json = await readFile(result.jsonPath, "utf8");
@@ -135,6 +144,34 @@ describe("professor credibility pack", () => {
     expect(pack.summary.professorReady).toBe(false);
     expect(pack.warnings).toContain("Required engine evidence gates are incomplete: 0/3 passed.");
     expect(pack.warnings).toContain("Concrete engine smoke gates are incomplete: 0/3 passed.");
+    expect(pack.reviewerActionPlan).toMatchObject({
+      totalActions: 3,
+      criticalActions: 3,
+      highActions: 0
+    });
+    expect(pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({
+        category: "engine",
+        priority: "critical",
+        title: "Close required Maxima symbolic cross-check gate",
+        command: "truth-harness engines verify --write --require-maxima --require-z3 --require-lean",
+        closes: expect.arrayContaining(["required-engine:maxima-symbolic-cross-check", "engine-evidence"])
+      })
+    );
+    expect(pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({
+        title: "Close required Z3 SMT-LIB check gate",
+        closes: expect.arrayContaining(["required-engine:z3-smt-check"])
+      })
+    );
+    expect(pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({
+        title: "Close required Lean proof fixture gate",
+        closes: expect.arrayContaining(["required-engine:lean-proof-fixture"])
+      })
+    );
+    expect(pack.markdown).toContain("## Reviewer Action Plan");
+    expect(pack.markdown).toContain("Close required Maxima symbolic cross-check gate");
     expect(pack.markdown).toContain("## Blocking Warnings");
   });
 });
