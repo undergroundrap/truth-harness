@@ -6,7 +6,7 @@ import { initLocalWorkspace } from "./local-workspace.js";
 import { rebuildWorkspaceCatalog, searchWorkspaceCatalog } from "./workspace-catalog.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createCredibilityPack, writeCredibilityPack } from "./credibility-pack.js";
-import type { EngineVerificationCommandRunner } from "./engine-verification.js";
+import { writeEngineVerificationRun, type EngineVerificationCommandRunner } from "./engine-verification.js";
 
 const roots: string[] = [];
 
@@ -25,6 +25,22 @@ describe("professor credibility pack", () => {
   it("writes a reviewer packet with validation, engine evidence, review queue, and embedded artifact hashes", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+    const strictEngineRun = await writeEngineVerificationRun({
+      rootPath: root,
+      now: new Date("2026-06-16T00:00:30.000Z"),
+      requirements: { maxima: true, z3: true, cvc5: true, lean: true, sage: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      cvc5Command: "cvc5-test",
+      leanCommand: "lean-test",
+      sageCommand: "sage-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      replayCommand: "truth-harness engines verify --write --require-all-engines",
+      runner: passingEngineRunner
+    });
 
     const result = await writeCredibilityPack({
       rootPath: root,
@@ -51,6 +67,8 @@ describe("professor credibility pack", () => {
       concreteEngineGates: "3/3",
       requiredEngineGates: "3/3",
       engineEvidenceMinted: 3,
+      savedEngineRuns: 1,
+      latestStrictEngineRunStatus: "passed",
       professorReady: true
     });
     expect(result.pack.embeddedSnapshot.entries.length).toBeGreaterThan(0);
@@ -58,7 +76,16 @@ describe("professor credibility pack", () => {
       expect.objectContaining({ id: "lean-proof-fixture", trust: "proved", evidenceMinted: true })
     );
     expect(result.markdown).toContain("Professor ready: yes");
+    expect(result.markdown).toContain("Saved engine-run ledger: 1 saved");
+    expect(result.markdown).toContain("## Saved Engine Run Ledger");
+    expect(result.markdown).toContain(strictEngineRun.record.runId);
     expect(result.markdown).toContain("Docker Lean fixture");
+    expect(result.pack.engineRunLedger.latestStrictReviewerRun).toMatchObject({
+      runId: strictEngineRun.record.runId,
+      requiredTotal: 5,
+      status: "passed"
+    });
+    expect(result.pack.reviewerCommands.verifyEngines).toBe("truth-harness engines verify --write --require-maxima --require-z3 --require-lean");
 
     const json = await readFile(result.jsonPath, "utf8");
     expect(json).toContain(result.pack.packId);
@@ -125,14 +152,23 @@ const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => 
   if (command === "z3-test") {
     return { status: 0, stdout: "sat\n", stderr: "" };
   }
+  if (command === "cvc5-test" && args[0] === "--version") {
+    return { status: 0, stdout: "This is cvc5 version 1.1.2\n", stderr: "" };
+  }
+  if (command === "cvc5-test") {
+    return { status: 0, stdout: "sat\n", stderr: "" };
+  }
   if (command === "lean-test" && args[0] === "--version") {
     return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
   }
   if (command === "lean-test") {
     return { status: 0, stdout: "", stderr: "" };
   }
-  if (command === "sage-test") {
+  if (command === "sage-test" && args[0] === "--version") {
     return { status: 0, stdout: "SageMath version 10.6\n", stderr: "" };
+  }
+  if (command === "sage-test") {
+    return { status: 0, stdout: "TRUTH_HARNESS_SAGE_STATUS:passed:0\n", stderr: "" };
   }
 
   return {

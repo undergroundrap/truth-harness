@@ -6351,6 +6351,10 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
     `Engines: ${pack.summary.engineStatus} ` +
       `(${pack.summary.concreteEngineGates} concrete, ${pack.summary.requiredEngineGates} required, ${pack.summary.engineEvidenceMinted} evidence)`
   );
+  console.log(
+    `Saved engine runs: ${pack.summary.savedEngineRuns}` +
+      (pack.summary.latestStrictEngineRunStatus ? ` (latest strict reviewer: ${pack.summary.latestStrictEngineRunStatus})` : "")
+  );
   console.log(`Embedded snapshot: ${pack.embeddedSnapshot.snapshotId} (${pack.summary.snapshotFiles} files)`);
   console.log(`Review queue: ${pack.summary.reviewItems} items (${pack.summary.criticalReviewItems} critical, ${pack.summary.highReviewItems} high)`);
 

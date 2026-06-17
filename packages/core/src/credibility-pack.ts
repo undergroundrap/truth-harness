@@ -1,6 +1,13 @@
 import { mkdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { verifyEngineEvidence, type EngineVerificationCommandRunner, type EngineVerificationReport, type EngineVerificationRequirements } from "./engine-verification.js";
+import {
+  listEngineVerificationRuns,
+  verifyEngineEvidence,
+  type EngineVerificationCommandRunner,
+  type EngineVerificationReport,
+  type EngineVerificationRequirements,
+  type EngineVerificationRunSummary
+} from "./engine-verification.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
@@ -31,6 +38,12 @@ export interface CredibilityPackReviewItem {
   source: WorkspaceReviewItem["source"];
 }
 
+export interface CredibilityPackEngineRunLedger {
+  savedRuns: number;
+  latestRuns: EngineVerificationRunSummary[];
+  latestStrictReviewerRun?: EngineVerificationRunSummary;
+}
+
 export interface CredibilityPack {
   schemaVersion: "truth-harness.credibility-pack.v0";
   packId: string;
@@ -53,6 +66,8 @@ export interface CredibilityPack {
     concreteEngineGates: string;
     requiredEngineGates: string;
     engineEvidenceMinted: number;
+    savedEngineRuns: number;
+    latestStrictEngineRunStatus?: EngineVerificationReport["status"];
     reviewItems: number;
     criticalReviewItems: number;
     highReviewItems: number;
@@ -69,6 +84,7 @@ export interface CredibilityPack {
     issueCodes: string[];
   };
   engineEvidence: EngineVerificationReport;
+  engineRunLedger: CredibilityPackEngineRunLedger;
   workspaceReview: {
     reviewId: string;
     summary: WorkspaceReview["summary"];
@@ -137,6 +153,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
     requirements: input.engineRequirements,
     runner: input.runner
   });
+  const engineRunLedger = summarizeEngineRunLedger(await listEngineVerificationRuns(status.root));
   const review = await createWorkspaceReview({
     rootPath: status.root,
     maxRoutes: input.maxRoutes,
@@ -172,6 +189,8 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       concreteEngineGates: `${engineEvidence.concretePassed}/${engineEvidence.concreteTotal}`,
       requiredEngineGates: `${engineEvidence.requiredPassed}/${engineEvidence.requiredTotal}`,
       engineEvidenceMinted: engineEvidence.evidenceMinted,
+      savedEngineRuns: engineRunLedger.savedRuns,
+      latestStrictEngineRunStatus: engineRunLedger.latestStrictReviewerRun?.status,
       reviewItems: review.summary.totalItems,
       criticalReviewItems: review.summary.criticalItems,
       highReviewItems: review.summary.highItems,
@@ -180,6 +199,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
     embeddedSnapshot: snapshot,
     validation: summarizeValidation(validation),
     engineEvidence,
+    engineRunLedger,
     workspaceReview: {
       reviewId: review.reviewId,
       summary: review.summary,
@@ -258,6 +278,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Professor ready: ${pack.summary.professorReady ? "yes" : "no"}`,
     `- Workspace validation: ${pack.summary.validationPassed ? "passed" : "failed"} (${pack.summary.validationErrors} errors, ${pack.summary.validationWarnings} warnings)`,
     `- Engine evidence: ${pack.summary.engineStatus} (${pack.summary.concreteEngineGates} concrete gates, ${pack.summary.requiredEngineGates} required gates, ${pack.summary.engineEvidenceMinted} evidence records earned)`,
+    `- Saved engine-run ledger: ${pack.summary.savedEngineRuns} saved${pack.summary.latestStrictEngineRunStatus ? ` (latest strict reviewer: ${pack.summary.latestStrictEngineRunStatus})` : ""}`,
     `- Embedded artifact snapshot: ${pack.summary.snapshotFiles} files, ${pack.summary.snapshotBytes} bytes`,
     `- Open work queue: ${pack.summary.reviewItems} items (${pack.summary.criticalReviewItems} critical, ${pack.summary.highReviewItems} high)`,
     "",
@@ -285,6 +306,31 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
       `- Summary: ${item.summary}`,
       ""
     );
+  }
+
+  lines.push("## Saved Engine Run Ledger", "");
+  if (pack.engineRunLedger.savedRuns === 0) {
+    lines.push(
+      "No saved engine evidence runs were found. Run the reviewer command with `--write` to create a durable `.truth-harness/engine-runs` record.",
+      ""
+    );
+  } else {
+    if (pack.engineRunLedger.latestStrictReviewerRun) {
+      const strictRun = pack.engineRunLedger.latestStrictReviewerRun;
+      lines.push(
+        `Latest strict reviewer run: \`${strictRun.runId}\` (${strictRun.status}, ${strictRun.requiredPassed}/${strictRun.requiredTotal} required gates)`,
+        `Path: \`${strictRun.path}\``,
+        ""
+      );
+    } else {
+      lines.push("No saved strict all-engines reviewer run was found yet.", "");
+    }
+    for (const run of pack.engineRunLedger.latestRuns) {
+      lines.push(
+        `- \`${run.runId}\`: ${run.status}, ${run.concretePassed}/${run.concreteTotal} concrete, ${run.requiredPassed}/${run.requiredTotal} required, ${run.evidenceMinted} evidence records, \`${run.path}\``
+      );
+    }
+    lines.push("");
   }
 
   lines.push("## Top Open Work", "");
@@ -351,6 +397,14 @@ function toReviewItemSummary(item: WorkspaceReviewItem): CredibilityPackReviewIt
   };
 }
 
+function summarizeEngineRunLedger(runs: EngineVerificationRunSummary[]): CredibilityPackEngineRunLedger {
+  return {
+    savedRuns: runs.length,
+    latestRuns: runs.slice(0, 5),
+    latestStrictReviewerRun: runs.find((run) => run.requiredTotal >= 5)
+  };
+}
+
 function credibilityWarnings(input: {
   validation: WorkspaceValidation;
   engineEvidence: EngineVerificationReport;
@@ -395,7 +449,7 @@ function createReviewerCommands(requirements: EngineVerificationRequirements | u
 
   return {
     validateWorkspace: "truth-harness workspace validate .",
-    verifyEngines: `truth-harness engines verify${engineSuffix}`,
+    verifyEngines: `truth-harness engines verify --write${engineSuffix}`,
     reviewWorkspace: "truth-harness workspace review .",
     reproducePack: `truth-harness workspace credibility-pack .${engineSuffix}`,
     dockerCoreEngines: "npm run docker:engines",
