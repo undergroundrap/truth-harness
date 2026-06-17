@@ -28,6 +28,7 @@ import {
   createSimulationLogEntry,
   createSourceCitationReceipt,
   createTeachingPacket,
+  createReleaseAudit,
   createVerifierRoute,
   createSymbolicCasCheckRecord,
   getCasBackendStatus,
@@ -257,6 +258,7 @@ import {
   type ResearchSessionTaskUpdateWriteResult,
   type ResearchSessionWriteResult,
   type ResearchTaskStatus,
+  type ReleaseAudit,
   type ReplayResult,
   type SimulationKind,
   type SimulationLogEntry,
@@ -2951,6 +2953,95 @@ workspace
       process.exitCode = 1;
     }
   });
+
+workspace
+  .command("release-audit")
+  .description("Run the local release/professor-readiness audit without starting Docker or arbitrary code execution.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full release audit JSON")
+  .option("--mode <mode>", "prototype or public-review", "public-review")
+  .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
+  .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
+  .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
+  .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds", parsePositiveInteger, 3000)
+  .option("--maxima-command <command>", "Override Maxima executable for the symbolic cross-check")
+  .option("--sage-command <command>", "Override SageMath executable for the optional CAS readiness probe")
+  .option("--lean-command <command>", "Override Lean executable for the proof fixture")
+  .option("--z3-command <command>", "Override Z3 executable for the SMT check")
+  .option("--cvc5-command <command>", "Override cvc5 executable for the optional second SMT check")
+  .option("--smt-source <path>", "Workspace-local SMT-LIB source for SMT checks", "docs/examples/constraints.smt2")
+  .option("--lean-source <path>", "Workspace-local Lean source for the Lean fixture", "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean")
+  .option("--require-maxima", "Mark Maxima as required for release readiness")
+  .option("--require-z3", "Mark Z3 as required for release readiness")
+  .option("--require-cvc5", "Mark cvc5 as required for release readiness")
+  .option("--require-lean", "Mark Lean as required for release readiness")
+  .option("--require-sage", "Require SageMath to earn a constrained CAS cross-check")
+  .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
+  .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
+  .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates")
+  .option("--require-sandbox", "Block release readiness unless a measured code-run sandbox is available")
+  .option("--require-saved-strict-engine-run", "Require a saved all-engine reviewer run to have passed")
+  .option("--fail-on-blocked", "Exit non-zero if the release audit is blocked")
+  .action(
+    async (
+      path: string,
+      options: {
+        json?: boolean;
+        mode: string;
+        maxRoutes?: number;
+        maxClaims?: number;
+        maxSessions?: number;
+        timeoutMs: number;
+        maximaCommand?: string;
+        sageCommand?: string;
+        leanCommand?: string;
+        z3Command?: string;
+        cvc5Command?: string;
+        smtSource: string;
+        leanSource: string;
+        requireMaxima?: boolean;
+        requireZ3?: boolean;
+        requireCvc5?: boolean;
+        requireLean?: boolean;
+        requireSage?: boolean;
+        requireDockerCore?: boolean;
+        requireAllConcrete?: boolean;
+        requireAllEngines?: boolean;
+        requireSandbox?: boolean;
+        requireSavedStrictEngineRun?: boolean;
+        failOnBlocked?: boolean;
+      }
+    ) => {
+      const audit = await createReleaseAudit({
+        rootPath: path,
+        mode: parseReleaseAuditMode(options.mode),
+        maxRoutes: options.maxRoutes,
+        maxClaims: options.maxClaims,
+        maxSessions: options.maxSessions,
+        timeoutMs: options.timeoutMs,
+        maximaCommand: options.maximaCommand,
+        sageCommand: options.sageCommand,
+        leanCommand: options.leanCommand,
+        z3Command: options.z3Command,
+        cvc5Command: options.cvc5Command,
+        smtSourcePath: options.smtSource,
+        leanSourcePath: options.leanSource,
+        engineRequirements: engineRequirementsFromOptions(options),
+        requireSandbox: options.requireSandbox,
+        requireSavedStrictEngineRun: options.requireSavedStrictEngineRun
+      });
+
+      if (options.json) {
+        printJson(audit);
+      } else {
+        printReleaseAudit(audit);
+      }
+
+      if (options.failOnBlocked && audit.status === "blocked") {
+        process.exitCode = 1;
+      }
+    }
+  );
 
 workspace
   .command("stress")
@@ -6082,6 +6173,92 @@ function workspaceStatusHasProblems(status: LocalWorkspaceStatus): boolean {
   return status.exists && (status.missingDirectories.length > 0 || Boolean(status.manifestRepair));
 }
 
+function printReleaseAudit(audit: ReleaseAudit): void {
+  console.log("Truth Harness release audit");
+  console.log(`Status: ${audit.status}`);
+  console.log(`Mode: ${audit.mode}`);
+  console.log(`Professor ready: ${audit.professorReady ? "yes" : "no"}`);
+  console.log(`Public launch ready: ${audit.publicLaunchReady ? "yes" : "no"}`);
+  console.log(`Workspace: ${audit.workspacePath}`);
+  if (audit.projectId) {
+    console.log(`Project: ${audit.projectId}`);
+  }
+  console.log(
+    `Checks: ${audit.summary.passedChecks} pass, ${audit.summary.warningChecks} warn, ` +
+      `${audit.summary.failedChecks} fail (${audit.summary.blockingFailures} blocking)`
+  );
+  console.log(
+    `Validation/catalog: ${audit.summary.validationPassed ? "passed" : "failed"} / ` +
+      `${audit.summary.catalogFresh ? "fresh" : "stale-or-missing"}`
+  );
+  console.log(
+    `Engines: ${audit.summary.concreteEngineGates} concrete, ${audit.summary.requiredEngineGates} required`
+  );
+  console.log(
+    `Review queue: ${audit.summary.reviewItems} item(s), ${audit.summary.criticalReviewItems} critical`
+  );
+  console.log(`Code-run sandbox: ${audit.summary.sandboxAvailable ? "available" : "not measured"}`);
+
+  const failed = audit.checks.filter((check) => check.status === "fail");
+  const warnings = audit.checks.filter((check) => check.status === "warn");
+  const passed = audit.checks.filter((check) => check.status === "pass");
+
+  if (failed.length > 0) {
+    console.log("");
+    console.log("Blocking / failed checks:");
+    for (const check of failed) {
+      console.log(`  FAIL ${check.title}${check.blocking ? " (blocking)" : ""}`);
+      console.log(`    ${check.summary}`);
+      if (check.command) {
+        console.log(`    ${check.command}`);
+      }
+    }
+  }
+
+  if (warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const check of warnings) {
+      console.log(`  WARN ${check.title}`);
+      console.log(`    ${check.summary}`);
+      if (check.command) {
+        console.log(`    ${check.command}`);
+      }
+    }
+  }
+
+  if (passed.length > 0) {
+    console.log("");
+    console.log("Passing checks:");
+    for (const check of passed) {
+      console.log(`  PASS ${check.title}: ${check.summary}`);
+    }
+  }
+
+  if (audit.nextActions.length > 0) {
+    console.log("");
+    console.log("Next actions:");
+    for (const action of audit.nextActions) {
+      console.log(`  ${action}`);
+    }
+  }
+
+  console.log("");
+  console.log("Release commands:");
+  console.log(`  ${audit.commands.releaseAudit}`);
+  console.log(`  ${audit.commands.rebuildCatalog}`);
+  console.log(`  ${audit.commands.credibilityPack}`);
+  console.log(`  ${audit.commands.dockerEngines}`);
+  console.log(`  ${audit.commands.dockerProof}`);
+  console.log(`  ${audit.commands.dockerVerify}`);
+
+  console.log("");
+  console.log("Audit boundary:");
+  for (const limitation of audit.limitations) {
+    console.log(`  ${limitation}`);
+  }
+}
+
 function printWorkspaceRepair(result: LocalWorkspaceRepairResult): void {
   console.log(result.repaired ? "Repaired Truth Harness workspace" : "Truth Harness workspace already healthy");
   console.log(`Root: ${result.root}`);
@@ -8076,6 +8253,14 @@ function parseTrustLabel(value: string): TrustLabel {
   }
 
   throw new Error(`Unsupported trust label ${JSON.stringify(value)}.`);
+}
+
+function parseReleaseAuditMode(value: string): "prototype" | "public-review" {
+  if (value === "prototype" || value === "public-review") {
+    return value;
+  }
+
+  throw new Error(`Unsupported release audit mode ${JSON.stringify(value)}. Use prototype or public-review.`);
 }
 
 function parseSmtBackendOption(value: string): SmtBackendId {

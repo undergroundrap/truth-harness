@@ -64,6 +64,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("engine-evidence-verification");
     expect(statusPayload.capabilities).toContain("engine-evidence-runs");
     expect(statusPayload.capabilities).toContain("credibility-pack");
+    expect(statusPayload.capabilities).toContain("release-audit");
     expect(statusPayload.safety.webServer).toMatchObject({
       localHostGuard: true,
       sameOriginWritesOnly: true,
@@ -191,6 +192,38 @@ describe("local web route ledger API", () => {
     });
     expect(credibilityPayload.pack.reviewerCommands.verifyEngines).toContain("--write --require-all-engines");
     expect(credibilityPayload.pack.reviewerCommands.reproducePack).toContain("--require-all-engines");
+
+    const releaseAuditResponse = await fetch(
+      `${baseUrl}/api/release-audit?requireAllEngines=true&requireSavedStrictEngineRun=true&requireSandbox=true&timeoutMs=50`
+    );
+    expect(releaseAuditResponse.status).toBe(200);
+    const releaseAuditPayload = await releaseAuditResponse.json();
+    expectLocalApiSuccess(releaseAuditResponse, releaseAuditPayload);
+    expect(releaseAuditPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-release-audit-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      mode: "public-review"
+    });
+    expect(releaseAuditPayload.audit).toMatchObject({
+      schemaVersion: "truth-harness.release-audit.v0",
+      localOnly: true,
+      networkAccess: "none",
+      mode: "public-review"
+    });
+    expect(releaseAuditPayload.audit.commands.releaseAudit).toContain("--require-all-engines");
+    expect(releaseAuditPayload.audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "engine-evidence",
+        blocking: true
+      })
+    );
+    expect(releaseAuditPayload.audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "code-run-sandbox",
+        blocking: true
+      })
+    );
 
     const credibilityWriteResponse = await fetch(`${baseUrl}/api/credibility-pack`, {
       method: "POST",

@@ -1,0 +1,142 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { initLocalWorkspace } from "./local-workspace.js";
+import { createReleaseAudit, renderReleaseAuditMarkdown } from "./release-audit.js";
+import { rebuildWorkspaceCatalog } from "./workspace-catalog.js";
+import type { EngineVerificationCommandRunner } from "./engine-verification.js";
+
+const roots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
+  roots.length = 0;
+});
+
+describe("release audit", () => {
+  it("aggregates a reviewer-ready workspace while keeping public launch warnings separate", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Release Audit Lab", now: "2026-06-17T00:00:00.000Z" });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-17T00:00:02.000Z",
+      engineRequirements: { maxima: true, z3: true, cvc5: true, lean: true, sage: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      cvc5Command: "cvc5-test",
+      leanCommand: "lean-test",
+      sageCommand: "sage-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: passingEngineRunner
+    });
+    const markdown = renderReleaseAuditMarkdown(audit);
+
+    expect(audit.schemaVersion).toBe("truth-harness.release-audit.v0");
+    expect(audit.status).toBe("ready");
+    expect(audit.professorReady).toBe(true);
+    expect(audit.publicLaunchReady).toBe(false);
+    expect(audit.summary).toMatchObject({
+      validationPassed: true,
+      catalogFresh: true,
+      requiredEngineGates: "5/5",
+      concreteEngineGates: "5/5",
+      blockingFailures: 0
+    });
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({ id: "engine-evidence", status: "pass", blocking: false })
+    );
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({ id: "web-ui-smoke", status: "warn", blocking: false })
+    );
+    expect(markdown).toContain("# Truth Harness Release Audit");
+    expect(markdown).toContain("Required engine gates: 5/5");
+  });
+
+  it("blocks when the catalog is stale and required engines cannot earn evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Blocked Release Audit", now: "2026-06-17T00:00:00.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-17T00:00:02.000Z",
+      engineRequirements: { maxima: true, z3: true },
+      requireSavedStrictEngineRun: true,
+      requireSandbox: true,
+      maximaCommand: "missing-maxima",
+      z3Command: "missing-z3",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(check-sat)\n",
+      runner: () => ({
+        status: null,
+        stdout: "",
+        stderr: "",
+        error: { name: "Error", message: "spawn ENOENT" }
+      })
+    });
+
+    expect(audit.status).toBe("blocked");
+    expect(audit.professorReady).toBe(false);
+    expect(audit.summary.blockingFailures).toBeGreaterThanOrEqual(2);
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({ id: "catalog", status: "fail", blocking: true })
+    );
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({ id: "engine-evidence", status: "fail", blocking: true })
+    );
+    expect(audit.commands.releaseAudit).toContain("--require-saved-strict-engine-run");
+    expect(audit.commands.releaseAudit).toContain("--require-sandbox");
+    expect(audit.nextActions).toContain("truth-harness catalog rebuild .");
+  });
+});
+
+const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => {
+  if (command === "maxima-test" && args[0] === "--version") {
+    return { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" };
+  }
+  if (command === "maxima-test") {
+    return { status: 0, stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n", stderr: "" };
+  }
+  if (command === "z3-test" && args[0] === "-version") {
+    return { status: 0, stdout: "Z3 version 4.13.0\n", stderr: "" };
+  }
+  if (command === "z3-test") {
+    return { status: 0, stdout: "sat\n", stderr: "" };
+  }
+  if (command === "cvc5-test" && args[0] === "--version") {
+    return { status: 0, stdout: "This is cvc5 version 1.1.2\n", stderr: "" };
+  }
+  if (command === "cvc5-test") {
+    return { status: 0, stdout: "sat\n", stderr: "" };
+  }
+  if (command === "lean-test" && args[0] === "--version") {
+    return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+  }
+  if (command === "lean-test") {
+    return { status: 0, stdout: "", stderr: "" };
+  }
+  if (command === "sage-test" && args[0] === "--version") {
+    return { status: 0, stdout: "SageMath version 10.6\n", stderr: "" };
+  }
+  if (command === "sage-test") {
+    return { status: 0, stdout: "TRUTH_HARNESS_SAGE_STATUS:passed:0\n", stderr: "" };
+  }
+
+  return {
+    status: null,
+    stdout: "",
+    stderr: "",
+    error: { name: "Error", message: `unexpected command ${command} ${args.join(" ")}` }
+  };
+};
+
+async function tempRoot(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-release-audit-"));
+  roots.push(root);
+  return root;
+}

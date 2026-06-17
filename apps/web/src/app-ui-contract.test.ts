@@ -109,6 +109,32 @@ describe("web UI action contracts", () => {
     expect(styles).toContain("overflow-wrap: anywhere;");
   });
 
+  it("surfaces the strict release audit gate from the Checks tab", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('id="release-audit-gate"');
+    expect(source).toContain('fetch(`/api/release-audit?${params.toString()}`');
+    expect(source).toContain("function refreshReleaseAudit({ announce = true } = {})");
+    expect(source).toContain("function renderReleaseAuditGate()");
+    expect(source).toContain('data-testid="refresh-release-audit"');
+    expect(source).toContain('data-testid="copy-release-audit-command"');
+    expect(source).toContain("requireSavedStrictEngineRun");
+    expect(source).toContain("requireSandbox");
+    expect(source).toContain("releaseAuditActivitySummary");
+    expect(source).toContain(".copy-release-action-command");
+    expect(source).toContain("Strict release-audit command copied from the Checks tab.");
+    expect(source).toContain("Release-audit next action copied from the Checks tab.");
+    expect(styles).toContain(".release-audit-gate");
+    expect(styles).toContain(".release-audit-summary");
+    expect(styles).toContain(".release-audit-check-grid");
+    expect(styles).toContain(".release-audit-action");
+    expect(styles).toContain("overflow-wrap: anywhere;");
+  });
+
   it("clears focused queue state when closing the selected workspace action", async () => {
     const source = await readFile(appSourcePath, "utf8");
     const handler = source.match(/workspaceReviewAction\.querySelector\("\.close-workspace-action"\)[\s\S]*?workspaceReviewAction\.querySelector\("\.open-workspace-action-route"\)/u)?.[0];

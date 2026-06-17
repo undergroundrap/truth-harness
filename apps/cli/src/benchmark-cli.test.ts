@@ -1961,6 +1961,45 @@ describe("benchmark CLI", () => {
     expect(text.stdout).toContain("Stress boundary:");
   });
 
+  it("runs the release audit from the CLI and can fail a blocked gate", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--name", "CLI Release Audit Lab"]);
+
+    const result = await runCli([
+      "workspace",
+      "release-audit",
+      root,
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--max-sessions",
+      "0",
+      "--timeout-ms",
+      "50",
+      "--require-maxima",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--json",
+      "--fail-on-blocked"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      schemaVersion: string;
+      status: string;
+      summary: { blockingFailures: number; catalogFresh: boolean };
+      checks: Array<{ id: string; status: string; blocking: boolean }>;
+      commands: { rebuildCatalog: string; engineVerify: string };
+    };
+
+    expect(result.exitCode).toBe(1);
+    expect(json.schemaVersion).toBe("truth-harness.release-audit.v0");
+    expect(json.status).toBe("blocked");
+    expect(json.summary.blockingFailures).toBeGreaterThan(0);
+    expect(json.checks).toContainEqual(expect.objectContaining({ id: "engine-evidence", status: "fail", blocking: true }));
+    expect(json.commands.rebuildCatalog).toContain("truth-harness catalog rebuild");
+    expect(json.commands.engineVerify).toContain("--require-maxima");
+  });
+
   it("writes, lists, compares, and gates benchmark artifacts", async () => {
     const root = await tempRoot();
     const passingSuite = join(root, "passing-suite.json");

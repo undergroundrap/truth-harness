@@ -224,6 +224,10 @@ export {
   renderCredibilityPackMarkdown,
   writeCredibilityPack
 } from "./credibility-pack.js";
+export {
+  createReleaseAudit,
+  renderReleaseAuditMarkdown
+} from "./release-audit.js";
 export type {
   WorkspaceRunNextPlan,
   WorkspaceRunNextStatus,
@@ -607,6 +611,14 @@ export type {
   CredibilityPackStatus,
   CredibilityPackWriteResult
 } from "./credibility-pack.js";
+export type {
+  CreateReleaseAuditInput,
+  ReleaseAudit,
+  ReleaseAuditCheck,
+  ReleaseAuditCheckStatus,
+  ReleaseAuditMode,
+  ReleaseAuditStatus
+} from "./release-audit.js";
 export type {
   CreateVisualArtifactInput,
   VisualArtifact,

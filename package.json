@@ -32,6 +32,8 @@
     "workspace:archives": "npm run cli -- workspace archives .",
     "workspace:restore-preview": "npm run cli -- workspace restore-archive",
     "workspace:clean": "npm run cli -- workspace clean .",
+    "audit:release": "node apps/cli/dist/index.js workspace release-audit .",
+    "audit:release:gate": "node apps/cli/dist/index.js workspace release-audit . --require-all-engines --require-saved-strict-engine-run --require-sandbox --fail-on-blocked",
     "demo": "npm run cli -- demo",
     "demo:recording": "node apps/cli/dist/index.js demo --require-symbolic-cross-check",
     "docker:demo": "docker compose run --rm truth-harness node apps/cli/dist/index.js demo --require-symbolic-cross-check",

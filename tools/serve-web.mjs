@@ -210,6 +210,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "workspace-review-queue",
         "workspace-run-next-dry-run",
         "workspace-run-next-save",
+        "release-audit",
         "docker-verifier-guidance",
         "sandbox-status",
         "safety-center",
@@ -337,6 +338,36 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, 400, error instanceof Error ? error.message : "Credibility pack could not be written.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/release-audit" && request.method === "GET") {
+    try {
+      const { createReleaseAudit } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const input = releaseAuditInputFromValue({
+        mode: requestUrl.searchParams.get("mode"),
+        requireAllEngines:
+          isTruthyQueryParam(requestUrl.searchParams.get("requireAllEngines")) ||
+          requestUrl.searchParams.get("mode") === "all-engines",
+        requireSavedStrictEngineRun: isTruthyQueryParam(requestUrl.searchParams.get("requireSavedStrictEngineRun")),
+        requireSandbox: isTruthyQueryParam(requestUrl.searchParams.get("requireSandbox")),
+        timeoutMs: requestUrl.searchParams.get("timeoutMs"),
+        maxRoutes: requestUrl.searchParams.get("maxRoutes"),
+        maxClaims: requestUrl.searchParams.get("maxClaims"),
+        maxSessions: requestUrl.searchParams.get("maxSessions")
+      });
+      const audit = await createReleaseAudit(input);
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-release-audit-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        mode: audit.mode,
+        audit
+      });
+    } catch (error) {
+      writeApiError(response, 409, error instanceof Error ? error.message : "Release audit could not be created.", request);
     }
     return;
   }
@@ -1619,6 +1650,29 @@ function credibilityPackInputFromValue(value = {}) {
     maxRoutes: boundedPositiveNumberOrUndefined(value?.maxRoutes, 100),
     maxClaims: boundedPositiveNumberOrUndefined(value?.maxClaims, 100),
     maxSessions: boundedPositiveNumberOrUndefined(value?.maxSessions, 50),
+    engineRequirements: requireAllEngines
+      ? {
+          maxima: true,
+          z3: true,
+          cvc5: true,
+          lean: true,
+          sage: true
+        }
+      : undefined
+  };
+}
+
+function releaseAuditInputFromValue(value = {}) {
+  const requireAllEngines = value?.requireAllEngines === true || value?.mode === "all-engines";
+  return {
+    rootPath: projectRoot,
+    mode: value?.mode === "prototype" ? "prototype" : "public-review",
+    timeoutMs: boundedPositiveNumberOrUndefined(value?.timeoutMs, 10_000) ?? 1500,
+    maxRoutes: boundedPositiveNumberOrUndefined(value?.maxRoutes, 100),
+    maxClaims: boundedPositiveNumberOrUndefined(value?.maxClaims, 100),
+    maxSessions: boundedPositiveNumberOrUndefined(value?.maxSessions, 50),
+    requireSandbox: isTruthyInputValue(value?.requireSandbox),
+    requireSavedStrictEngineRun: isTruthyInputValue(value?.requireSavedStrictEngineRun),
     engineRequirements: requireAllEngines
       ? {
           maxima: true,

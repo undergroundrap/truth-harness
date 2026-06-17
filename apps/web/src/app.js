@@ -308,6 +308,9 @@ const state = {
   credibilityRunNextSaving: false,
   credibilityRunNextError: undefined,
   credibilityRunNextPaths: undefined,
+  releaseAudit: undefined,
+  releaseAuditLoading: false,
+  releaseAuditError: undefined,
   workspaceReadiness: undefined,
   catalogStatus: undefined,
   catalogSearch: undefined,
@@ -381,6 +384,7 @@ const matrixNextCommand = document.querySelector("#matrix-next-command");
 const checksWorkOrder = document.querySelector("#checks-work-order");
 const verificationMatrix = document.querySelector("#verification-matrix");
 const engineEvidenceGate = document.querySelector("#engine-evidence-gate");
+const releaseAuditGate = document.querySelector("#release-audit-gate");
 const claimReviewGate = document.querySelector("#claim-review-gate");
 const claimReviewStatus = document.querySelector("#claim-review-status");
 const claimReviewDecision = document.querySelector("#claim-review-decision");
@@ -1108,6 +1112,7 @@ render();
 void refreshWorkspaceEvents({ announce: false });
 void refreshSafetyStatus();
 void refreshEngineRuns({ announce: false });
+void refreshReleaseAudit({ announce: false });
 void refreshWorkspaceReadiness();
 void refreshWorkspaceMaintenance({ announce: false });
 void refreshCatalogStatus();
@@ -1198,6 +1203,7 @@ function render() {
   renderRunbook(receipt);
   renderWorkspaceRunNext();
   renderVerificationMatrix(receipt);
+  renderReleaseAuditGate();
   renderCapabilityLedger();
   renderMaintenancePanel();
   renderTaskDock(receipt);
@@ -8039,6 +8045,7 @@ async function saveEngineEvidenceRun(button, { requireAllEngines = false } = {})
       payload.run?.status === "passed" ? "passed" : "waiting",
       payload.run?.createdAt
     );
+    void refreshReleaseAudit({ announce: false });
   } catch (error) {
     state.engineRunsError = error instanceof Error ? error.message : "Unknown engine evidence run write failure.";
     addActivity("local-api", "Engine evidence save failed", state.engineRunsError, "refuted");
@@ -8128,6 +8135,7 @@ async function writeCredibilityPackFromUi(button) {
       payload.pack?.createdAt
     );
     void refreshCatalogStatus({ announce: false });
+    void refreshReleaseAudit({ announce: false });
   } catch (error) {
     state.credibilityPackError = error instanceof Error ? error.message : "Unknown credibility pack write failure.";
     addActivity("local-api", "Credibility pack write failed", state.credibilityPackError, "refuted");
@@ -8226,6 +8234,53 @@ async function saveCredibilityRunNextFromUi(button) {
   } finally {
     state.credibilityRunNextSaving = false;
     renderCredibilityPackPanel();
+  }
+}
+
+async function refreshReleaseAudit({ announce = true } = {}) {
+  if (!releaseAuditGate) {
+    return;
+  }
+
+  state.releaseAuditLoading = true;
+  state.releaseAuditError = undefined;
+  renderReleaseAuditGate();
+
+  try {
+    const params = new URLSearchParams({
+      mode: "public-review",
+      requireAllEngines: "true",
+      requireSavedStrictEngineRun: "true",
+      requireSandbox: "true",
+      timeoutMs: "1500"
+    });
+    const response = await fetch(`/api/release-audit?${params.toString()}`, {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local release audit API failed.");
+    state.releaseAudit = payload.audit;
+    state.releaseAuditError = undefined;
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded release audit",
+        localApiSuccessMessage(payload, releaseAuditActivitySummary(payload.audit)),
+        payload.audit?.status === "ready" ? "passed" : "waiting",
+        payload.audit?.createdAt
+      );
+    }
+  } catch (error) {
+    state.releaseAudit = undefined;
+    state.releaseAuditError = error instanceof Error ? error.message : "Unknown release audit failure.";
+    if (announce) {
+      addActivity("local-api", "Release audit unavailable", state.releaseAuditError, "waiting");
+    }
+  } finally {
+    state.releaseAuditLoading = false;
+    renderReleaseAuditGate();
   }
 }
 
@@ -8937,6 +8992,180 @@ function renderWorkspaceReadinessStatus(payload = state.workspaceReadiness) {
   workspaceReadinessNotes.innerHTML = (notes.length > 0 ? notes.slice(0, 5) : ["No workspace readiness notes returned."])
     .map((note) => `<li>${escapeHtml(note)}</li>`)
     .join("");
+}
+
+function renderReleaseAuditGate() {
+  if (!releaseAuditGate) {
+    return;
+  }
+
+  const audit = state.releaseAudit;
+  const status = state.releaseAuditError
+    ? "blocked"
+    : state.releaseAuditLoading
+      ? "checking"
+      : audit?.status ?? "not loaded";
+  const statusClass = releaseAuditStatusClass(status);
+  const command = audit?.commands?.releaseAudit ?? "truth-harness workspace release-audit . --require-all-engines";
+  const summary = audit?.summary ?? {};
+  const failedChecks = Array.isArray(audit?.checks)
+    ? audit.checks.filter((check) => check.status === "fail")
+    : [];
+  const warningChecks = Array.isArray(audit?.checks)
+    ? audit.checks.filter((check) => check.status === "warn")
+    : [];
+  const visibleChecks = [...failedChecks, ...warningChecks].slice(0, 5);
+  const nextActions = Array.isArray(audit?.nextActions) ? audit.nextActions.slice(0, 4) : [];
+  const rows = audit
+    ? [
+        ["Checks", `${summary.passedChecks ?? 0} pass / ${summary.warningChecks ?? 0} warn / ${summary.failedChecks ?? 0} fail`],
+        ["Engines", `${summary.requiredEngineGates ?? "0/5"} required / ${summary.concreteEngineGates ?? "0/5"} concrete`],
+        ["Review queue", `${summary.reviewItems ?? 0} open / ${summary.criticalReviewItems ?? 0} critical`],
+        ["Catalog", summary.catalogFresh ? "fresh" : "rebuild required"],
+        ["Sandbox", summary.sandboxAvailable ? "measured" : "not measured"],
+        ["Launch", audit.publicLaunchReady ? "public ready" : audit.professorReady ? "professor review ready" : "blocked"]
+      ]
+    : [
+        ["Mode", "public review"],
+        ["Engines", "strict all-engines required"],
+        ["Sandbox", "required"],
+        ["Status", state.releaseAuditError ?? "Refresh to inspect the current workspace."]
+      ];
+  const checkCards = visibleChecks
+    .map((check) => releaseAuditCheckCardHtml(check))
+    .join("");
+  const actionCards = nextActions
+    .map((action, index) => `<button class="release-audit-action copy-release-action-command" data-command="${escapeHtml(action)}" type="button">
+      <span>${index + 1}</span>
+      <code>${escapeHtml(action)}</code>
+    </button>`)
+    .join("");
+  const limitations = Array.isArray(audit?.limitations)
+    ? audit.limitations.slice(0, 3).map((limitation) => `<li>${escapeHtml(limitation)}</li>`).join("")
+    : "<li>Release audit loads locally and never starts Docker or external services from the browser.</li>";
+
+  releaseAuditGate.innerHTML = `
+    <div class="release-audit-head">
+      <div>
+        <span class="mini-label">project release gate</span>
+        <h3>Release Readiness Gate</h3>
+        <p>One local view of validation, catalog freshness, strict engine evidence, review queue, sandbox posture, and UI launch warnings.</p>
+      </div>
+      <span class="status-pill ${statusClass}">${escapeHtml(releaseAuditStatusLabel(status))}</span>
+    </div>
+    <dl class="release-audit-summary">
+      ${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+    </dl>
+    <div class="release-audit-toolbar">
+      <button class="text-button compact-button refresh-release-audit" data-testid="refresh-release-audit" type="button" ${state.releaseAuditLoading ? "disabled" : ""}>${state.releaseAuditLoading ? "Refreshing" : "Refresh gate"}</button>
+      <button class="text-button compact-button copy-release-command" data-testid="copy-release-audit-command" data-command="${escapeHtml(command)}" type="button">Copy audit command</button>
+    </div>
+    <div class="release-audit-command">
+      <span>Replayable audit</span>
+      <code>${escapeHtml(command)}</code>
+    </div>
+    ${checkCards ? `<div class="release-audit-check-grid">${checkCards}</div>` : `<p>No blocking or warning checks returned for this audit scope.</p>`}
+    ${actionCards ? `<details class="release-audit-details">
+      <summary>
+        <strong>Next Blocking Actions</strong>
+        <span>copyable for Codex, Claude, or terminal</span>
+      </summary>
+      <div class="release-audit-actions">${actionCards}</div>
+    </details>` : ""}
+    <details class="release-audit-details">
+      <summary>
+        <strong>Audit Boundary</strong>
+        <span>what this gate does not prove</span>
+      </summary>
+      <ul class="release-audit-limitations">${limitations}</ul>
+    </details>
+  `;
+
+  releaseAuditGate.querySelector(".refresh-release-audit")?.addEventListener("click", () => {
+    void refreshReleaseAudit({ announce: true });
+  });
+  releaseAuditGate.querySelector(".copy-release-command")?.addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    void copyOrDownloadText({
+      button,
+      text: `${button.dataset.command ?? command}\n`,
+      filename: `truth-harness-release-audit-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      copiedTitle: "Copied release audit command",
+      copiedDetail: "Strict release-audit command copied from the Checks tab.",
+      fallbackTitle: "Downloaded release audit command",
+      fallbackDetail: "the release-audit command was saved as a local text file instead."
+    });
+  });
+  releaseAuditGate.querySelectorAll(".copy-release-action-command").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const target = event.currentTarget;
+      void copyOrDownloadText({
+        button: target,
+        text: `${target.dataset.command ?? ""}\n`,
+        filename: `truth-harness-release-action-${safeFilenameTimestamp()}.txt`,
+        type: "text/plain",
+        copiedTitle: "Copied release action",
+        copiedDetail: "Release-audit next action copied from the Checks tab.",
+        fallbackTitle: "Downloaded release action",
+        fallbackDetail: "the release-audit next action was saved as a local text file instead."
+      });
+    });
+  });
+}
+
+function releaseAuditCheckCardHtml(check) {
+  const statusClass = check.status === "fail" ? "refuted" : check.status === "warn" ? "waiting" : "exact";
+  const command = check.command ? `<code>${escapeHtml(check.command)}</code>` : "";
+  const details = Array.isArray(check.details)
+    ? check.details.slice(0, 3).map((detail) => `<li>${escapeHtml(detail)}</li>`).join("")
+    : "";
+
+  return `<section class="release-audit-check ${escapeHtml(check.status)}">
+    <div class="release-audit-check-head">
+      <span class="task-state ${statusClass}"></span>
+      <strong>${escapeHtml(check.title)}</strong>
+      <small>${check.blocking ? "blocking" : check.status}</small>
+    </div>
+    <p>${escapeHtml(check.summary)}</p>
+    ${(command || details) ? `<details class="release-audit-mini-details">
+      <summary>Command and details</summary>
+      ${command}
+      ${details ? `<ul>${details}</ul>` : ""}
+    </details>` : ""}
+  </section>`;
+}
+
+function releaseAuditActivitySummary(audit) {
+  if (!audit) {
+    return "Release audit did not return a payload.";
+  }
+
+  const summary = audit.summary ?? {};
+  return `Release audit ${audit.status}; ${summary.blockingFailures ?? 0} blocking failure${summary.blockingFailures === 1 ? "" : "s"}, ${summary.criticalReviewItems ?? 0} critical queue item${summary.criticalReviewItems === 1 ? "" : "s"}.`;
+}
+
+function releaseAuditStatusLabel(status) {
+  if (status === "ready") {
+    return "ready";
+  }
+  if (status === "blocked") {
+    return "blocked";
+  }
+  if (status === "checking") {
+    return "checking";
+  }
+  return "not loaded";
+}
+
+function releaseAuditStatusClass(status) {
+  if (status === "ready") {
+    return "exact";
+  }
+  if (status === "blocked") {
+    return "refuted";
+  }
+  return "waiting";
 }
 
 function renderEngineReadinessStatus(payload) {
