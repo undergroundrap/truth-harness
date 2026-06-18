@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -6,6 +6,7 @@ import { writeBenchmarkComparisonRecord, writeBenchmarkRunRecord } from "./bench
 import { writeSymbolicCasCheckRecord, type CasBackendCommandRunner } from "./cas-backend.js";
 import { writeClaimChart } from "./claim-chart.js";
 import { writeCodeRun } from "./code-run.js";
+import { writeCredibilityPack } from "./credibility-pack.js";
 import { createExternalDisclosureLogEntry } from "./disclosure-log.js";
 import { writeEvidenceAudit } from "./evidence-audit.js";
 import { createExperimentLogEntry } from "./experiment-log.js";
@@ -226,6 +227,48 @@ describe("workspace artifact validation", () => {
         code: "invalid-artifact-schema",
         path: ".truth-harness/project.json"
       })
+    );
+  });
+
+  it("accepts legacy credibility packs that predate report-draft summary counters", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-10T00:00:00.000Z" });
+    const pack = await writeCredibilityPack({
+      rootPath: root,
+      now: "2026-06-10T00:01:00.000Z"
+    });
+    const legacyPack = JSON.parse(await readFile(pack.jsonPath, "utf8")) as {
+      summary: Record<string, unknown>;
+    };
+    delete legacyPack.summary.savedReportDrafts;
+    delete legacyPack.summary.reportDraftsNeedingAttention;
+    await writeFile(pack.jsonPath, `${JSON.stringify(legacyPack, null, 2)}\n`, "utf8");
+
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(validation.passed).toBe(true);
+    expect(validation.artifacts).toContainEqual(
+      expect.objectContaining({
+        kind: "findings",
+        path: expect.stringContaining("credibility-pack.json"),
+        valid: true
+      })
+    );
+  });
+
+  it("does not treat copied credibility-bundle payload artifacts as live workspace artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-10T00:00:00.000Z" });
+    await writeWorkspaceJson(root, "findings/2026-06-10-cbun_1111111111111111-credibility-bundle/artifacts/.truth-harness/receipts", "copied-invalid.json", {
+      schemaVersion: "truth-harness.receipt.v0",
+      runId: "copied_invalid"
+    });
+
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(validation.passed).toBe(true);
+    expect(validation.artifacts.map((artifact) => artifact.path)).not.toContain(
+      ".truth-harness/findings/2026-06-10-cbun_1111111111111111-credibility-bundle/artifacts/.truth-harness/receipts/copied-invalid.json"
     );
   });
 

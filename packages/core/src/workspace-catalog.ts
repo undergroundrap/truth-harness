@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import Database from "better-sqlite3";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { appendArtifactWriteEvent } from "./event-log.js";
+import { withWorkspaceLock } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import {
   validateWorkspaceArtifacts,
@@ -15,6 +16,7 @@ import type { TrustLabel } from "./types.js";
 
 export const WORKSPACE_CATALOG_SCHEMA_VERSION = "truth-harness.catalog.v0";
 export const WORKSPACE_CATALOG_FILE = "catalog.db";
+type RequiredLocalWorkspaceStatus = LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
 
 export interface WorkspaceCatalogRebuildInput {
   rootPath: string;
@@ -275,139 +277,141 @@ interface CatalogArtifactBundle {
 export async function rebuildWorkspaceCatalog(input: WorkspaceCatalogRebuildInput): Promise<WorkspaceCatalogRebuildResult> {
   const status = await requireLocalWorkspace(input.rootPath);
   const rebuiltAt = input.now ?? new Date().toISOString();
-  const validation = await validateWorkspaceArtifacts({
-    rootPath: status.root,
-    now: rebuiltAt
-  });
-  const catalogPath = workspaceCatalogPath(status);
-  await mkdir(dirname(catalogPath), { recursive: true });
+  return withWorkspaceLock(status.root, "workspace-catalog", async () => {
+    const validation = await validateWorkspaceArtifacts({
+      rootPath: status.root,
+      now: rebuiltAt
+    });
+    const catalogPath = workspaceCatalogPath(status);
+    await mkdir(dirname(catalogPath), { recursive: true });
 
-  const db = openCatalogDatabase(catalogPath);
-  try {
-    const artifacts = await Promise.all(
-      validation.artifacts.map(async (artifact) => catalogArtifactFromValidation(status.root, validation, artifact))
-    );
-    const refs = artifacts.flatMap((artifact) => artifact.refs);
-    const tagRows = artifacts.flatMap((artifact) => artifact.tags.map((tag) => ({ path: artifact.row.path, tag })));
-    const ftsRows = artifacts.map((artifact) => ({
-      path: artifact.row.path,
-      title: artifact.row.title ?? "",
-      body: artifact.body,
-      tags: artifact.tags.join(" ")
-    }));
+    const db = openCatalogDatabase(catalogPath);
+    try {
+      const artifacts = await Promise.all(
+        validation.artifacts.map(async (artifact) => catalogArtifactFromValidation(status.root, validation, artifact))
+      );
+      const refs = artifacts.flatMap((artifact) => artifact.refs);
+      const tagRows = artifacts.flatMap((artifact) => artifact.tags.map((tag) => ({ path: artifact.row.path, tag })));
+      const ftsRows = artifacts.map((artifact) => ({
+        path: artifact.row.path,
+        title: artifact.row.title ?? "",
+        body: artifact.body,
+        tags: artifact.tags.join(" ")
+      }));
 
-    const rebuild = db.transaction(() => {
-      createCatalogSchema(db);
-      db.prepare("DELETE FROM artifact_fts").run();
-      db.prepare("DELETE FROM artifact_refs").run();
-      db.prepare("DELETE FROM artifact_tags").run();
-      db.prepare("DELETE FROM routes").run();
-      db.prepare("DELETE FROM claims").run();
-      db.prepare("DELETE FROM artifacts").run();
-      db.prepare("DELETE FROM catalog_meta").run();
+      const rebuild = db.transaction(() => {
+        createCatalogSchema(db);
+        db.prepare("DELETE FROM artifact_fts").run();
+        db.prepare("DELETE FROM artifact_refs").run();
+        db.prepare("DELETE FROM artifact_tags").run();
+        db.prepare("DELETE FROM routes").run();
+        db.prepare("DELETE FROM claims").run();
+        db.prepare("DELETE FROM artifacts").run();
+        db.prepare("DELETE FROM catalog_meta").run();
 
-      const insertArtifact = db.prepare(
-        `INSERT INTO artifacts (
+        const insertArtifact = db.prepare(
+          `INSERT INTO artifacts (
           path, kind, artifact_id, schema_version, trust, title, summary, domain, status,
           created_at, updated_at, valid, issue_count, sha256, byte_length, mtime_ms
         ) VALUES (
           @path, @kind, @artifact_id, @schema_version, @trust, @title, @summary, @domain, @status,
           @created_at, @updated_at, @valid, @issue_count, @sha256, @byte_length, @mtime_ms
         )`
-      );
-      const insertClaim = db.prepare(
-        `INSERT INTO claims (
+        );
+        const insertClaim = db.prepare(
+          `INSERT INTO claims (
           claim_id, path, statement, domain, trust, status, ready_for_narrow_claim,
           blocking_obligations, created_at, updated_at
         ) VALUES (
           @claim_id, @path, @statement, @domain, @trust, @status, @ready_for_narrow_claim,
           @blocking_obligations, @created_at, @updated_at
         )`
-      );
-      const insertRoute = db.prepare(
-        `INSERT INTO routes (
+        );
+        const insertRoute = db.prepare(
+          `INSERT INTO routes (
           route_id, path, problem, final_trust, status, evidence_kind, open_obligations,
           critical_open_obligations, ready_for_narrow_claim, created_at
         ) VALUES (
           @route_id, @path, @problem, @final_trust, @status, @evidence_kind, @open_obligations,
           @critical_open_obligations, @ready_for_narrow_claim, @created_at
         )`
-      );
-      const insertTag = db.prepare("INSERT OR IGNORE INTO artifact_tags (path, tag) VALUES (@path, @tag)");
-      const insertRef = db.prepare(
-        `INSERT INTO artifact_refs (
+        );
+        const insertTag = db.prepare("INSERT OR IGNORE INTO artifact_tags (path, tag) VALUES (@path, @tag)");
+        const insertRef = db.prepare(
+          `INSERT INTO artifact_refs (
           from_path, to_ref, ref_kind, edge_kind, field_path, resolved
         ) VALUES (
           @from_path, @to_ref, @ref_kind, @edge_kind, @field_path, @resolved
         )`
-      );
-      const insertFts = db.prepare("INSERT INTO artifact_fts (path, title, body, tags) VALUES (@path, @title, @body, @tags)");
-      const insertMeta = db.prepare("INSERT INTO catalog_meta (key, value) VALUES (?, ?)");
+        );
+        const insertFts = db.prepare("INSERT INTO artifact_fts (path, title, body, tags) VALUES (@path, @title, @body, @tags)");
+        const insertMeta = db.prepare("INSERT INTO catalog_meta (key, value) VALUES (?, ?)");
 
-      for (const artifact of artifacts) {
-        insertArtifact.run(artifact.row);
-        if (artifact.claim) {
-          insertClaim.run(artifact.claim);
+        for (const artifact of artifacts) {
+          insertArtifact.run(artifact.row);
+          if (artifact.claim) {
+            insertClaim.run(artifact.claim);
+          }
+          if (artifact.route) {
+            insertRoute.run(artifact.route);
+          }
         }
-        if (artifact.route) {
-          insertRoute.run(artifact.route);
+        for (const tag of tagRows) {
+          insertTag.run(tag);
         }
-      }
-      for (const tag of tagRows) {
-        insertTag.run(tag);
-      }
-      for (const ref of refs) {
-        insertRef.run({
-          from_path: ref.fromPath,
-          to_ref: ref.toRef,
-          ref_kind: ref.refKind,
-          edge_kind: ref.edgeKind,
-          field_path: ref.fieldPath,
-          resolved: ref.resolved ? 1 : 0
-        });
-      }
-      for (const row of ftsRows) {
-        insertFts.run(row);
-      }
+        for (const ref of refs) {
+          insertRef.run({
+            from_path: ref.fromPath,
+            to_ref: ref.toRef,
+            ref_kind: ref.refKind,
+            edge_kind: ref.edgeKind,
+            field_path: ref.fieldPath,
+            resolved: ref.resolved ? 1 : 0
+          });
+        }
+        for (const row of ftsRows) {
+          insertFts.run(row);
+        }
 
-      insertMeta.run("schemaVersion", WORKSPACE_CATALOG_SCHEMA_VERSION);
-      insertMeta.run("projectId", status.manifest.projectId);
-      insertMeta.run("rebuiltAt", rebuiltAt);
-      insertMeta.run("artifactCount", String(artifacts.length));
-      insertMeta.run("claimCount", String(artifacts.filter((artifact) => artifact.claim).length));
-      insertMeta.run("routeCount", String(artifacts.filter((artifact) => artifact.route).length));
-      insertMeta.run("rootHash", sha256Text(status.root));
-    });
+        insertMeta.run("schemaVersion", WORKSPACE_CATALOG_SCHEMA_VERSION);
+        insertMeta.run("projectId", status.manifest.projectId);
+        insertMeta.run("rebuiltAt", rebuiltAt);
+        insertMeta.run("artifactCount", String(artifacts.length));
+        insertMeta.run("claimCount", String(artifacts.filter((artifact) => artifact.claim).length));
+        insertMeta.run("routeCount", String(artifacts.filter((artifact) => artifact.route).length));
+        insertMeta.run("rootHash", sha256Text(status.root));
+      });
 
-    rebuild();
+      rebuild();
 
-    return {
-      schemaVersion: "truth-harness.catalog-rebuild.v0",
-      catalogSchemaVersion: WORKSPACE_CATALOG_SCHEMA_VERSION,
-      rebuiltAt,
-      workspacePath: status.root,
-      catalogPath,
-      localOnly: true,
-      networkAccess: "none",
-      sourceOfTruth: "workspace-json",
-      artifactCount: artifacts.length,
-      validArtifacts: validation.summary.validFiles,
-      invalidArtifacts: validation.summary.invalidFiles,
-      claimCount: artifacts.filter((artifact) => artifact.claim).length,
-      routeCount: artifacts.filter((artifact) => artifact.route).length,
-      tagCount: tagRows.length,
-      refCount: refs.length,
-      ftsRows: ftsRows.length,
-      validation: {
-        passed: validation.passed,
-        errors: validation.summary.errors,
-        warnings: validation.summary.warnings
-      },
-      warnings: catalogWarnings()
-    };
-  } finally {
-    db.close();
-  }
+      return {
+        schemaVersion: "truth-harness.catalog-rebuild.v0",
+        catalogSchemaVersion: WORKSPACE_CATALOG_SCHEMA_VERSION,
+        rebuiltAt,
+        workspacePath: status.root,
+        catalogPath,
+        localOnly: true,
+        networkAccess: "none",
+        sourceOfTruth: "workspace-json",
+        artifactCount: artifacts.length,
+        validArtifacts: validation.summary.validFiles,
+        invalidArtifacts: validation.summary.invalidFiles,
+        claimCount: artifacts.filter((artifact) => artifact.claim).length,
+        routeCount: artifacts.filter((artifact) => artifact.route).length,
+        tagCount: tagRows.length,
+        refCount: refs.length,
+        ftsRows: ftsRows.length,
+        validation: {
+          passed: validation.passed,
+          errors: validation.summary.errors,
+          warnings: validation.summary.warnings
+        },
+        warnings: catalogWarnings()
+      };
+    } finally {
+      db.close();
+    }
+  });
 }
 
 export async function markWorkspaceCatalogStale(input: WorkspaceCatalogStaleInput): Promise<WorkspaceCatalogStaleResult> {
@@ -418,6 +422,22 @@ export async function markWorkspaceCatalogStale(input: WorkspaceCatalogStaleInpu
   const path = input.path ? normalizePortablePath(input.path) : undefined;
   const kind = input.kind ? safeText(input.kind) : undefined;
 
+  return withWorkspaceLock(status.root, "workspace-catalog", () =>
+    markWorkspaceCatalogStaleLocked({ status, catalogPath, staleAt, reason, path, kind })
+  );
+}
+
+interface MarkWorkspaceCatalogStaleLockedInput {
+  status: RequiredLocalWorkspaceStatus;
+  catalogPath: string;
+  staleAt: string;
+  reason: string;
+  path?: string;
+  kind?: string;
+}
+
+async function markWorkspaceCatalogStaleLocked(input: MarkWorkspaceCatalogStaleLockedInput): Promise<WorkspaceCatalogStaleResult> {
+  const { status, catalogPath, staleAt, reason, path, kind } = input;
   let exists = false;
   try {
     await stat(catalogPath);
@@ -512,6 +532,22 @@ export async function upsertWorkspaceCatalogArtifact(input: WorkspaceCatalogUpse
   const catalogPath = workspaceCatalogPath(status);
   const artifactPath = workspaceRelativePath(status.root, input.path);
 
+  return withWorkspaceLock(status.root, "workspace-catalog", () =>
+    upsertWorkspaceCatalogArtifactLocked({ status, catalogPath, artifactPath, input })
+  );
+}
+
+interface UpsertWorkspaceCatalogArtifactLockedInput {
+  status: RequiredLocalWorkspaceStatus;
+  catalogPath: string;
+  artifactPath: string;
+  input: WorkspaceCatalogUpsertInput;
+}
+
+async function upsertWorkspaceCatalogArtifactLocked(
+  lockedInput: UpsertWorkspaceCatalogArtifactLockedInput
+): Promise<WorkspaceCatalogUpsertResult> {
+  const { status, catalogPath, artifactPath, input } = lockedInput;
   let exists = false;
   try {
     await stat(catalogPath);

@@ -21,6 +21,7 @@ import { createSimulationLogEntry } from "./simulation-log.js";
 import {
   markWorkspaceCatalogStale,
   rebuildWorkspaceCatalog,
+  refreshWorkspaceCatalogArtifact,
   getWorkspaceCatalogStatus,
   searchWorkspaceCatalog,
   upsertWorkspaceCatalogArtifact
@@ -572,6 +573,32 @@ describe("workspace catalog", () => {
       }
     });
     await expect(searchWorkspaceCatalog({ rootPath: root, query: "fraction" })).rejects.toThrow("stale");
+  });
+
+  it("serializes concurrent catalog refreshes from multiple artifact writers", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-14T00:00:01.000Z" });
+
+    await Promise.all(
+      Array.from({ length: 8 }, async (_, index) => {
+        const fileName = `concurrent-${index + 1}.json`;
+        const receipt = createReceipt(`compute ${index + 1} / 2 + 1 / 2`);
+        await writeReceipt(root, fileName, receipt);
+        return refreshWorkspaceCatalogArtifact({
+          rootPath: root,
+          path: `.truth-harness/receipts/${fileName}`,
+          kind: "receipts",
+          now: `2026-06-14T00:00:${String(index + 2).padStart(2, "0")}.000Z`
+        });
+      })
+    );
+
+    const status = await getWorkspaceCatalogStatus(root, { checkFiles: true });
+    const search = await searchWorkspaceCatalog({ rootPath: root, kind: "receipts", limit: 20 });
+
+    expect(status.stale).toBe(false);
+    expect(search.results.filter((result) => result.path.includes("concurrent-"))).toHaveLength(8);
   });
 
   it("does not index vault plaintext and escapes hostile-looking FTS queries", async () => {

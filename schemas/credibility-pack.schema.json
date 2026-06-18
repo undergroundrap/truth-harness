@@ -79,8 +79,6 @@
         "savedEngineRuns",
         "savedBenchmarkRuns",
         "latestAdversarialBenchmarkStatus",
-        "savedReportDrafts",
-        "reportDraftsNeedingAttention",
         "reviewItems",
         "criticalReviewItems",
         "highReviewItems",

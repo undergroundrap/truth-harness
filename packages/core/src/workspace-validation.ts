@@ -444,7 +444,7 @@ async function validateWorkspaceDirectories(
 
   for (const [directory, path] of Object.entries(status.manifest.directories) as Array<[LocalWorkspaceDirectory, string]>) {
     const rule = DIRECTORY_RULES[directory] ?? { kind: directory };
-    const files = await listJsonFiles(resolve(status.root, path));
+    const files = filterValidationFiles(directory, status.root, await listJsonFiles(resolve(status.root, path)));
     if (directory === "receipts") {
       artifacts.push(...(await validateReceiptFiles(status.root, files, rule, issues)));
       continue;
@@ -454,6 +454,18 @@ async function validateWorkspaceDirectories(
   }
 
   return artifacts.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function filterValidationFiles(directory: LocalWorkspaceDirectory, root: string, files: string[]): string[] {
+  if (directory !== "findings") {
+    return files;
+  }
+
+  return files.filter((file) => !isPortableBundlePayloadPath(toPortablePath(relative(root, file))));
+}
+
+function isPortableBundlePayloadPath(path: string): boolean {
+  return /^\.truth-harness\/findings\/[^/]+-credibility-bundle\/artifacts\/\.truth-harness\//u.test(path);
 }
 
 async function validateReceiptFiles(

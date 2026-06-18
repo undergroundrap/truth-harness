@@ -20,7 +20,6 @@
     "embeddedSnapshotId",
     "files",
     "generatedFiles",
-    "reportDrafts",
     "summary",
     "reviewerCommands",
     "limitations",
@@ -106,9 +105,7 @@
         "generatedBytes",
         "totalBytes",
         "copiedSnapshotFiles",
-        "skippedBundleFiles",
-        "reportDrafts",
-        "reportDraftFiles"
+        "skippedBundleFiles"
       ],
       "properties": {
         "artifactFiles": { "type": "integer", "minimum": 0 },
