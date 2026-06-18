@@ -6,6 +6,7 @@ import { validateJsonSchema } from "./json-schema-validation.js";
 
 const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
 const schemaCache = new Map<string, Promise<unknown>>();
+const SCHEMA_FILE_PATTERN = /^[A-Za-z0-9._-]+\.json$/u;
 
 export async function assertJsonSchemaBeforeWrite(input: {
   value: unknown;
@@ -27,12 +28,21 @@ export async function assertJsonSchemaBeforeWrite(input: {
 }
 
 export function loadLocalJsonSchema(schemaFile: string): Promise<unknown> {
-  const cached = schemaCache.get(schemaFile);
+  const safeSchemaFile = requireSafeSchemaFile(schemaFile);
+  const cached = schemaCache.get(safeSchemaFile);
   if (cached) {
     return cached;
   }
 
-  const loaded = readFile(resolve(SCHEMAS_DIR, schemaFile), "utf8").then((raw) => parseJsonWithOptionalBom(raw));
-  schemaCache.set(schemaFile, loaded);
+  const loaded = readFile(resolve(SCHEMAS_DIR, safeSchemaFile), "utf8").then((raw) => parseJsonWithOptionalBom(raw));
+  schemaCache.set(safeSchemaFile, loaded);
   return loaded;
+}
+
+function requireSafeSchemaFile(schemaFile: string): string {
+  if (!SCHEMA_FILE_PATTERN.test(schemaFile)) {
+    throw new Error(`Schema file must be a checked-in JSON schema filename, received ${JSON.stringify(schemaFile)}.`);
+  }
+
+  return schemaFile;
 }
