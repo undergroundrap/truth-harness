@@ -7478,6 +7478,10 @@ function printWorkspaceRunNextList(plans: WorkspaceRunNextSummary[]): void {
     if (plan.rationaleExecutionBoundary) {
       console.log(`  Boundary: ${plan.rationaleExecutionBoundary}`);
     }
+    console.log(
+      `  Resume: ${plan.resumeDecision.status} (${plan.resumeDecision.safeToResume ? "safe" : "hold"})`
+    );
+    console.log(`  Resume command: ${plan.resumeDecision.nextCommand}`);
     if (plan.sourceSnapshotId) {
       console.log(
         `  Source snapshot: ${plan.sourceSnapshotId}${plan.sourceSnapshotPath ? ` (${plan.sourceSnapshotPath})` : ""}`

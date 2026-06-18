@@ -798,7 +798,12 @@ describe("workspace run-next", () => {
         rationaleCandidateEvidenceRef: "proof:.truth-harness/proofs/candidate.json",
         rationaleExecutionBoundary: expect.stringContaining("Dry-run only"),
         sourceSnapshotId: parsed.sourceSnapshot?.snapshotId,
-        sourceSnapshotPath: parsed.sourceSnapshot?.path
+        sourceSnapshotPath: parsed.sourceSnapshot?.path,
+        resumeDecision: expect.objectContaining({
+          safeToResume: false,
+          status: "verify-snapshot-first",
+          action: "verify-source-snapshot"
+        })
       })
     );
     const verifiedList = await listWorkspaceRunNextPlans(root, {
@@ -813,7 +818,12 @@ describe("workspace run-next", () => {
         sourceSnapshotChanged: 0,
         sourceSnapshotMissing: 0,
         sourceSnapshotIgnoredAdded: 2,
-        sourceSnapshotDriftSummary: expect.stringContaining("still matches")
+        sourceSnapshotDriftSummary: expect.stringContaining("still matches"),
+        resumeDecision: expect.objectContaining({
+          safeToResume: true,
+          status: "safe-to-resume",
+          action: "run-selected-command"
+        })
       })
     );
     expect(await readWorkspaceRunNextPlan(root, result.plan.planId)).toMatchObject({
@@ -880,7 +890,12 @@ describe("workspace run-next", () => {
         planId: result.plan.planId,
         sourceSnapshotStatus: "drifted",
         sourceSnapshotAdded: 1,
-        sourceSnapshotDriftSummary: expect.stringContaining("1 added")
+        sourceSnapshotDriftSummary: expect.stringContaining("1 added"),
+        resumeDecision: expect.objectContaining({
+          safeToResume: false,
+          status: "rerun-run-next",
+          action: "rerun-workspace-run-next"
+        })
       })
     );
     const driftedInspection = await inspectWorkspaceRunNextPlan(root, result.plan.planId, {

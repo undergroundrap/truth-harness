@@ -450,6 +450,8 @@ describe("Truth Harness MCP server", () => {
         arguments: {}
       });
       expect(firstText(workspaceRunNextList.content)).toContain(workspaceRunNextJson.plan.planId);
+      expect(firstText(workspaceRunNextList.content)).toContain("\"resumeDecision\"");
+      expect(firstText(workspaceRunNextList.content)).toContain("\"verify-snapshot-first\"");
 
       const workspaceRunNextShow = await client.callTool({
         name: "truth_harness_workspace_run_next_show",

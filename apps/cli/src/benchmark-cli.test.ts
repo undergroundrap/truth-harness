@@ -1900,6 +1900,12 @@ describe("benchmark CLI", () => {
         sourceSnapshotStatus?: string;
         sourceSnapshotAdded?: number;
         sourceSnapshotIgnoredAdded?: number;
+        resumeDecision: {
+          safeToResume: boolean;
+          status: string;
+          action: string;
+          nextCommand: string;
+        };
       }>;
     };
     const listedPlan = planListPayload.plans.find((plan) => plan.planId === writtenDryRunPayload.plan.planId);
@@ -1920,22 +1926,35 @@ describe("benchmark CLI", () => {
       rationaleSource: "claim-blocker / high",
       rationaleExecutionBoundary: expect.stringContaining("Dry-run only"),
       sourceSnapshotId: writtenDryRunPayload.plan.sourceSnapshot?.snapshotId,
-      sourceSnapshotPath: writtenDryRunPayload.plan.sourceSnapshot?.path
+      sourceSnapshotPath: writtenDryRunPayload.plan.sourceSnapshot?.path,
+      resumeDecision: {
+        safeToResume: false,
+        status: "verify-snapshot-first",
+        action: "verify-source-snapshot",
+        nextCommand: expect.stringContaining("show-run-next")
+      }
     });
     expect(humanList.exitCode).toBe(0);
     expect(humanList.stdout).toContain(`Target: ${writtenClaim.claim.claimId}`);
     expect(humanList.stdout).toContain("Source: claim-blocker / high");
     expect(humanList.stdout).toContain("Boundary: Dry-run only");
+    expect(humanList.stdout).toContain("Resume: verify-snapshot-first (hold)");
     expect(humanList.stdout).toContain(`Source snapshot: ${writtenDryRunPayload.plan.sourceSnapshot?.snapshotId}`);
     expect(verifiedPlanList.exitCode).toBe(0);
     expect(verifiedListedPlan).toMatchObject({
       planId: writtenDryRunPayload.plan.planId,
       sourceSnapshotStatus: "verified",
       sourceSnapshotAdded: 0,
-      sourceSnapshotIgnoredAdded: 2
+      sourceSnapshotIgnoredAdded: 2,
+      resumeDecision: {
+        safeToResume: true,
+        status: "safe-to-resume",
+        action: "run-selected-command"
+      }
     });
     expect(verifiedHumanList.exitCode).toBe(0);
     expect(verifiedHumanList.stdout).toContain("Snapshot drift: verified");
+    expect(verifiedHumanList.stdout).toContain("Resume: safe-to-resume (safe)");
     const shownById = await runCli([
       "workspace",
       "show-run-next",

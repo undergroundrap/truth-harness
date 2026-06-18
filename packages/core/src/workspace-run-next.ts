@@ -129,6 +129,7 @@ export interface WorkspaceRunNextSummary {
   sourceSnapshotAdded?: number;
   sourceSnapshotIgnoredAdded?: number;
   sourceSnapshotDriftSummary?: string;
+  resumeDecision: WorkspaceRunNextResumeDecision;
 }
 
 export interface WorkspaceRunNextRationale {
@@ -644,7 +645,7 @@ function tryParseWorkspaceRunNextJson(raw: string): WorkspaceRunNextPlan | undef
 function summarizeWorkspaceRunNextPlan(
   plan: WorkspaceRunNextPlan,
   path: string,
-  sourceSnapshotStatus: Partial<WorkspaceRunNextSummary> = {}
+  sourceSnapshotCheck?: WorkspaceRunNextSourceSnapshotCheck
 ): WorkspaceRunNextSummary {
   const rationale = plan.rationale ?? workspaceRunNextRationaleFor(plan);
 
@@ -672,7 +673,8 @@ function summarizeWorkspaceRunNextPlan(
     sourceSnapshotPath: plan.sourceSnapshot?.path,
     sourceSnapshotFiles: plan.sourceSnapshot?.totalFiles,
     sourceSnapshotBytes: plan.sourceSnapshot?.totalBytes,
-    ...sourceSnapshotStatus
+    resumeDecision: createWorkspaceRunNextResumeDecision(plan, sourceSnapshotCheck),
+    ...(sourceSnapshotCheck ?? {})
   };
 }
 
@@ -681,7 +683,7 @@ async function verifyRunNextSourceSnapshot(
   plan: WorkspaceRunNextPlan,
   planPath: string,
   now?: string
-): Promise<Partial<WorkspaceRunNextSummary>> {
+): Promise<WorkspaceRunNextSourceSnapshotCheck> {
   if (!plan.sourceSnapshot?.snapshotId) {
     return {
       sourceSnapshotStatus: "not-recorded",
