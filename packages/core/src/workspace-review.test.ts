@@ -83,6 +83,14 @@ describe("workspace review", () => {
     if (!proofGate) {
       throw new Error("Expected a linked proof validation gate.");
     }
+    await addResearchSessionCheckpoint({
+      rootPath: root,
+      sessionRef: harness.session.sessionId,
+      summary: "Earlier unverified proof attempt should not outrank accepted proof evidence.",
+      evidenceRefs: [{ kind: "proof", ref: ".truth-harness/proofs/unverified-attempt.json", trust: "unverified" }],
+      nextChecks: ["Attach accepted proof evidence when available."],
+      now: "2026-06-18T00:01:30.000Z"
+    });
     await writeFile(join(root, "scoped.lean"), "theorem scoped_fixture : True := by trivial\n", "utf8");
     const proofRunner: ProofBackendCommandRunner = (_command, args) => {
       if (args[0] === "--version") {
@@ -112,22 +120,28 @@ describe("workspace review", () => {
       rootPath: root,
       now: "2026-06-18T00:04:00.000Z"
     });
-
-    expect(review.items).toContainEqual(
-      expect.objectContaining({
-        kind: "validation-gate",
-        sessionId: harness.session.sessionId,
-        validationGateId: proofGate.gateId,
-        command: `truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`,
-        candidateEvidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })],
-        evidenceSlots: expect.arrayContaining([
-          expect.objectContaining({
-            attachCommand: `truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`
-          })
-        ]),
-        agentPacket: expect.stringContaining(`Attach command: truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`)
-      })
+    const item = review.items.find(
+      (candidate) => candidate.kind === "validation-gate" && candidate.validationGateId === proofGate.gateId
     );
+
+    expect(item).toMatchObject({
+      kind: "validation-gate",
+      sessionId: harness.session.sessionId,
+      validationGateId: proofGate.gateId,
+      command: `truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`,
+      evidenceSlots: expect.arrayContaining([
+        expect.objectContaining({
+          attachCommand: `truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`
+        })
+      ]),
+      agentPacket: expect.stringContaining(`Attach command: truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`)
+    });
+    expect(item?.candidateEvidenceRefs?.[0]).toMatchObject({ kind: "proof", ref: proofRef, trust: "proved" });
+    expect(item?.candidateEvidenceRefs?.[1]).toMatchObject({
+      kind: "proof",
+      ref: ".truth-harness/proofs/unverified-attempt.json",
+      trust: "unverified"
+    });
   });
 
   it("orders route obligations and blocked claims into a local work queue", async () => {

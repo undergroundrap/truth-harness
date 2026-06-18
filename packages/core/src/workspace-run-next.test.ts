@@ -348,6 +348,14 @@ describe("workspace run-next", () => {
       throw new Error("Expected a linked math validation plan with a proof gate.");
     }
 
+    await addResearchSessionCheckpoint({
+      rootPath: root,
+      sessionRef: harness.session.sessionId,
+      summary: "Earlier unverified proof attempt should not outrank accepted proof evidence.",
+      evidenceRefs: [{ kind: "proof", ref: ".truth-harness/proofs/unverified-attempt.json", trust: "unverified" }],
+      nextChecks: ["Attach accepted proof evidence when available."],
+      now: "2026-06-18T00:01:30.000Z"
+    });
     await mkdir(join(root, "proofs"), { recursive: true });
     await writeFile(join(root, "proofs", "candidate.lean"), "theorem candidate_fixture : True := by trivial\n", "utf8");
     const proofRunner: ProofBackendCommandRunner = (_command, args) => {
@@ -391,8 +399,17 @@ describe("workspace run-next", () => {
 
     expect(review.items[0]).toMatchObject({
       kind: "validation-gate",
-      command: `truth-harness validation attach ${validationPlan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`,
-      candidateEvidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })]
+      command: `truth-harness validation attach ${validationPlan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`
+    });
+    expect(review.items[0]?.candidateEvidenceRefs?.[0]).toMatchObject({
+      kind: "proof",
+      ref: proofRef,
+      trust: "proved"
+    });
+    expect(review.items[0]?.candidateEvidenceRefs?.[1]).toMatchObject({
+      kind: "proof",
+      ref: ".truth-harness/proofs/unverified-attempt.json",
+      trust: "unverified"
     });
     expect(executed).toMatchObject({
       status: "executed",

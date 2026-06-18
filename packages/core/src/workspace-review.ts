@@ -566,7 +566,92 @@ function candidateEvidenceRefsForValidationGate(
     checkpoint.evidenceRefs.forEach(collect);
   }
 
-  return candidates;
+  return rankValidationEvidenceCandidates(candidates, gate);
+}
+
+function rankValidationEvidenceCandidates(
+  candidates: ValidationEvidenceRef[],
+  gate: ValidationGate
+): ValidationEvidenceRef[] {
+  return candidates
+    .map((ref, index) => ({ ref, index }))
+    .sort((left, right) => {
+      const trust = validationEvidenceTrustRank(right.ref) - validationEvidenceTrustRank(left.ref);
+      if (trust !== 0) {
+        return trust;
+      }
+
+      const kind = validationEvidenceKindRank(right.ref, gate) - validationEvidenceKindRank(left.ref, gate);
+      if (kind !== 0) {
+        return kind;
+      }
+
+      return left.index - right.index;
+    })
+    .map((candidate) => candidate.ref);
+}
+
+function validationEvidenceTrustRank(ref: ValidationEvidenceRef): number {
+  switch (ref.trust) {
+    case "refuted":
+      return 100;
+    case "proved":
+      return 95;
+    case "cross-checked":
+      return 90;
+    case "smt-checked":
+      return 85;
+    case "exact-computed":
+      return 80;
+    case "dimension-checked":
+      return 75;
+    case "source-cited":
+      return 70;
+    case "bounded-numeric":
+      return 65;
+    case "unverified":
+      return 10;
+    default:
+      return 0;
+  }
+}
+
+function validationEvidenceKindRank(ref: ValidationEvidenceRef, gate: ValidationGate): number {
+  if (gate.kind === "proof") {
+    if (ref.kind === "proof") {
+      return 50;
+    }
+    if (ref.kind === "smt") {
+      return 45;
+    }
+    if (ref.kind === "cas") {
+      return 40;
+    }
+    if (ref.kind === "route") {
+      return 35;
+    }
+    if (ref.kind === "receipt") {
+      return 30;
+    }
+  }
+  if (gate.kind === "source-citation" || gate.kind === "literature-record" || gate.kind === "prior-art") {
+    if (ref.kind === "source" || ref.kind === "literature") {
+      return 50;
+    }
+    if (ref.kind === "review" || ref.kind === "audit") {
+      return 40;
+    }
+  }
+  if (gate.kind === "expert-review" || gate.kind === "wet-lab" || gate.kind === "preclinical" || gate.kind === "clinical" || gate.kind === "safety" || gate.kind === "ethics" || gate.kind === "regulatory" || gate.kind === "patent-legal") {
+    if (ref.kind === "review") {
+      return 50;
+    }
+    if (ref.kind === "source" || ref.kind === "literature") {
+      return 35;
+    }
+  }
+
+  return 10;
 }
 
 function isEvidenceCandidateForValidationGate(ref: ValidationEvidenceRef, gate: ValidationGate): boolean {
