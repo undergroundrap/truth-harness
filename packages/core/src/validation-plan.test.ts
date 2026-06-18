@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -172,6 +172,140 @@ describe("validation plans", () => {
       expect.objectContaining({ kind: "route", ref: weakRoute.route.routeId, trust: "unverified" })
     );
     expect(weakAttachment.message).toContain("remains open");
+
+    const mismatchPlan = await writeValidationPlan({
+      rootPath: root,
+      claim: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      now: "2026-06-18T00:06:00.000Z"
+    });
+    const mismatchGate = mismatchPlan.plan.gates.find((candidate) => candidate.kind === "proof");
+    if (!mismatchGate) {
+      throw new Error("Expected a mismatch proof gate.");
+    }
+    const unrelatedRoute = await writeVerifierRoute({
+      rootPath: root,
+      problem: "2 + 2",
+      now: new Date("2026-06-18T00:07:00.000Z")
+    });
+    const mismatchAttachment = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: mismatchPlan.plan.planId,
+      gateId: mismatchGate.gateId,
+      evidenceRef: {
+        kind: "route",
+        ref: unrelatedRoute.route.routeId
+      },
+      now: "2026-06-18T00:08:00.000Z"
+    });
+
+    expect(unrelatedRoute.route.finalTrust).toBe("exact-computed");
+    expect(mismatchAttachment.satisfied).toBe(false);
+    expect(mismatchAttachment.gate.status).toBe("in-progress");
+    expect(mismatchAttachment.message).toContain("not scoped to this validation claim");
+    expect(mismatchAttachment.gate.nextChecks.join(" ")).toContain("does not match validation claim");
+  });
+
+  it("does not close validation proof gates from unscoped direct proof artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const unscopedProofRef = ".truth-harness/proofs/accepted-unscoped-proof.json";
+    const scopedProofRef = ".truth-harness/proofs/accepted-scoped-proof.json";
+    await mkdir(join(root, ".truth-harness", "proofs"), { recursive: true });
+
+    const acceptedProof = {
+      schemaVersion: "truth-harness.proof-check.v0",
+      checkId: "proof_2222222222222222",
+      createdAt: "2026-06-18T01:00:00.000Z",
+      backend: {
+        id: "lean",
+        displayName: "Lean proof checker",
+        adapter: "local-lean-subprocess",
+        role: "proof-checker",
+        acceptedProofChecker: true,
+        command: "lean",
+        args: ["claim.lean"],
+        exitCode: 0
+      },
+      source: {
+        path: "claim.lean",
+        sha256: "2222222222222222222222222222222222222222222222222222222222222222",
+        byteLength: 32
+      },
+      status: "accepted",
+      trust: "proved",
+      proofCheckerBacked: true,
+      localOnly: true,
+      networkAccess: "none",
+      replay: "truth-harness proof check claim.lean --write --json",
+      limitations: ["Unit-test proof fixture."],
+      warnings: []
+    };
+    await writeFile(join(root, unscopedProofRef), `${JSON.stringify(acceptedProof, null, 2)}\n`, "utf8");
+    await writeFile(
+      join(root, scopedProofRef),
+      `${JSON.stringify(
+        {
+          ...acceptedProof,
+          checkId: "proof_3333333333333333",
+          source: {
+            ...acceptedProof.source,
+            sha256: "3333333333333333333333333333333333333333333333333333333333333333"
+          },
+          scope: {
+            statement: "The accepted Lean proof proves the informal claim."
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const unscopedPlan = await writeValidationPlan({
+      rootPath: root,
+      claim: "The accepted Lean proof proves the informal claim.",
+      domains: ["math"],
+      now: "2026-06-18T01:05:00.000Z"
+    });
+    const unscopedGate = unscopedPlan.plan.gates.find((gate) => gate.kind === "proof");
+    if (!unscopedGate) {
+      throw new Error("Expected an unscoped proof gate.");
+    }
+    const unscopedAttachment = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: unscopedPlan.plan.planId,
+      gateId: unscopedGate.gateId,
+      evidenceRef: { kind: "proof", ref: unscopedProofRef },
+      now: "2026-06-18T01:06:00.000Z"
+    });
+
+    expect(unscopedAttachment.evidence.trust).toBe("proved");
+    expect(unscopedAttachment.satisfied).toBe(false);
+    expect(unscopedAttachment.gate.status).toBe("in-progress");
+    expect(unscopedAttachment.gate.nextChecks.join(" ")).toContain("no machine-checkable claim boundary");
+
+    const scopedPlan = await writeValidationPlan({
+      rootPath: root,
+      claim: "The accepted Lean proof proves the informal claim.",
+      domains: ["math"],
+      now: "2026-06-18T01:07:00.000Z"
+    });
+    const scopedGate = scopedPlan.plan.gates.find((gate) => gate.kind === "proof");
+    if (!scopedGate) {
+      throw new Error("Expected a scoped proof gate.");
+    }
+    const scopedAttachment = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: scopedPlan.plan.planId,
+      gateId: scopedGate.gateId,
+      evidenceRef: { kind: "proof", ref: scopedProofRef },
+      now: "2026-06-18T01:08:00.000Z"
+    });
+
+    expect(scopedAttachment.satisfied).toBe(true);
+    expect(scopedAttachment.gate.status).toBe("satisfied");
+    expect(scopedAttachment.evidence.claimScope).toMatchObject({ status: "matched" });
   });
 
   it("requires prior art, claim charts, reduction-to-practice, and patent legal review for invention claims", async () => {

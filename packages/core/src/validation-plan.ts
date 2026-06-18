@@ -195,6 +195,12 @@ export interface ResolvedValidationGateEvidence extends ValidationEvidenceRef {
   schemaVersion?: string;
   artifactId?: string;
   status?: string;
+  claimScope?: {
+    status: "matched" | "missing" | "mismatch";
+    expected: string;
+    actual?: string;
+    reason: string;
+  };
   route?: {
     routeId: string;
     status: VerifierRoute["status"];
@@ -362,8 +368,8 @@ export async function attachValidationGateEvidence(
   }
 
   const gate = plan.gates[gateIndex];
-  const evidence = await resolveValidationGateEvidence(status.root, input.evidenceRef);
-  const assessment = assessValidationGateEvidence(gate, evidence);
+  const evidence = await resolveValidationGateEvidence(status.root, plan, input.evidenceRef);
+  const assessment = assessValidationGateEvidence(plan, gate, evidence);
   const attachedEvidence = normalizeEvidenceRefs([
     {
       kind: input.evidenceRef.kind,
@@ -1080,6 +1086,7 @@ async function resolveValidationPlanFile(
 
 async function resolveValidationGateEvidence(
   root: string,
+  plan: ValidationPlan,
   evidenceRef: ValidationEvidenceRef
 ): Promise<ResolvedValidationGateEvidence> {
   if (evidenceRef.kind === "route") {
@@ -1091,6 +1098,7 @@ async function resolveValidationGateEvidence(
       schemaVersion: route.schemaVersion,
       artifactId: route.routeId,
       status: route.status,
+      claimScope: validationClaimScopeFromText(plan, route.normalizedProblem, "Verifier route problem"),
       route: {
         routeId: route.routeId,
         status: route.status,
@@ -1113,6 +1121,7 @@ async function resolveValidationGateEvidence(
         schemaVersion: receipt.schemaVersion,
         artifactId: receipt.runId,
         status: receipt.trust,
+        claimScope: validationClaimScopeFromText(plan, receipt.normalizedProblem, "Receipt problem"),
         nextChecks: receipt.trust === "unverified"
           ? ["Receipt is unverified; attach stronger proof, SMT, CAS, or route evidence before closing this gate."]
           : []
@@ -1128,6 +1137,7 @@ async function resolveValidationGateEvidence(
         schemaVersion: record.schemaVersion,
         artifactId: record.checkId,
         status: record.status,
+        claimScope: validationClaimScopeFromText(plan, record.scope?.statement, "Proof-check statement boundary"),
         nextChecks: record.status === "accepted"
           ? []
           : ["Proof check was not accepted; attach an accepted proof-check record before closing this gate."]
@@ -1185,11 +1195,13 @@ async function resolveValidationGateEvidence(
 }
 
 function assessValidationGateEvidence(
+  plan: ValidationPlan,
   gate: ValidationGate,
   evidence: ResolvedValidationGateEvidence
 ): { status: ValidationGateStatus; nextChecks: string[]; message: string } {
   if (gate.kind === "proof") {
-    if (evidence.trust === "refuted") {
+    const scopeCheck = validationClaimScopeCheck(plan, evidence);
+    if (evidence.trust === "refuted" && scopeCheck.matches) {
       return {
         status: "blocked",
         nextChecks: [
@@ -1205,6 +1217,7 @@ function assessValidationGateEvidence(
         evidence.kind === "proof" ||
         evidence.kind === "smt" ||
         evidence.kind === "cas") &&
+      scopeCheck.matches &&
       (evidence.trust === "proved" ||
         evidence.trust === "exact-computed" ||
         evidence.trust === "smt-checked" ||
@@ -1214,6 +1227,23 @@ function assessValidationGateEvidence(
         status: "satisfied",
         nextChecks: [],
         message: `Validation proof gate ${gate.gateId} satisfied by ${evidence.trust} ${evidence.kind} evidence.`
+      };
+    }
+
+    if (
+      evidence.trust === "proved" ||
+      evidence.trust === "exact-computed" ||
+      evidence.trust === "smt-checked" ||
+      evidence.trust === "cross-checked" ||
+      evidence.trust === "refuted"
+    ) {
+      return {
+        status: gate.status === "missing" || gate.status === "planned" ? "in-progress" : gate.status,
+        nextChecks: [
+          scopeCheck.nextCheck,
+          ...evidence.nextChecks
+        ],
+        message: `Validation proof gate ${gate.gateId} received ${evidence.trust} ${evidence.kind} evidence, but the evidence is not scoped to this validation claim.`
       };
     }
 
@@ -1260,6 +1290,76 @@ function assessValidationGateEvidence(
     nextChecks: evidence.nextChecks.length > 0 ? evidence.nextChecks : gate.nextChecks,
     message: `Evidence ${evidence.kind}:${evidence.ref} attached to validation gate ${gate.gateId}; gate remains ${gate.status}.`
   };
+}
+
+function validationClaimScopeCheck(
+  plan: ValidationPlan,
+  evidence: ResolvedValidationGateEvidence
+): { matches: boolean; nextCheck: string } {
+  if (evidence.claimScope?.status === "matched") {
+    return {
+      matches: true,
+      nextCheck: ""
+    };
+  }
+
+  if (evidence.kind === "cas" || evidence.kind === "smt") {
+    return {
+      matches: false,
+      nextCheck:
+        `Attach this ${evidence.kind.toUpperCase()} evidence through a verifier route or add a machine-checkable claim boundary for validation plan ${plan.planId}.`
+    };
+  }
+
+  if (evidence.claimScope?.status === "mismatch") {
+    return {
+      matches: false,
+      nextCheck: evidence.claimScope.reason
+    };
+  }
+
+  return {
+    matches: false,
+    nextCheck:
+      `Evidence ${evidence.kind}:${evidence.ref} has no machine-checkable claim boundary for validation plan ${plan.planId}; attach a matching route or scoped proof/check before closing this gate.`
+  };
+}
+
+function validationClaimScopeFromText(
+  plan: ValidationPlan,
+  actual: string | undefined,
+  source: string
+): ResolvedValidationGateEvidence["claimScope"] {
+  const expected = normalizeValidationClaimText(plan.claim);
+  const actualNormalized = normalizeValidationClaimText(actual ?? "");
+  if (!actualNormalized) {
+    return {
+      status: "missing",
+      expected,
+      reason: `${source} is missing; cannot prove it matches validation plan ${plan.planId}.`
+    };
+  }
+
+  if (actualNormalized === expected) {
+    return {
+      status: "matched",
+      expected,
+      actual: actualNormalized,
+      reason: `${source} matches validation plan ${plan.planId}.`
+    };
+  }
+
+  return {
+    status: "mismatch",
+    expected,
+    actual: actualNormalized,
+    reason:
+      `${source} ${JSON.stringify(actualNormalized)} does not match validation claim ${JSON.stringify(expected)} for plan ${plan.planId}.`
+  };
+}
+
+function normalizeValidationClaimText(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
 }
 
 async function readValidationEvidenceArtifactJson(root: string, ref: string): Promise<{ raw: string } | undefined> {
