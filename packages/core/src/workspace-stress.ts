@@ -5,6 +5,7 @@ import { createClaimLedgerGraph, listClaimRecords, writeClaimLedgerRecord } from
 import { writeJsonFileAtomic } from "./fs-util.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { createReceipt } from "./receipt.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { TrustLabel } from "./types.js";
 import { writeVerifierRoute } from "./verifier-route.js";
@@ -125,6 +126,11 @@ export async function runWorkspaceStress(input: WorkspaceStressInput): Promise<W
     const receipt = createReceipt(stressReceiptProblem(index));
     const fileName = `${createdAt.slice(0, 10)}-${stressId}-receipt-${String(index + 1).padStart(5, "0")}-${receipt.runId}.json`;
     const jsonPath = join(receiptsDir, fileName);
+    await assertJsonSchemaBeforeWrite({
+      value: receipt,
+      schemaFile: "receipt.schema.json",
+      artifactName: "Workspace stress receipt"
+    });
     await writeJsonFileAtomic(jsonPath, receipt);
     receiptRefs.push(toPortablePath(relative(workspace.root, jsonPath)));
   }
