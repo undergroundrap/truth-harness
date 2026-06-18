@@ -7340,6 +7340,26 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
   }
 
   console.log("");
+  console.log("Why this action:");
+  console.log(`  Target: ${workspaceRunNextCliTarget(plan.item)}`);
+  console.log(`  Source: ${plan.item ? `${plan.item.kind} / ${plan.item.priority}` : "workspace-review"}`);
+  console.log(
+    `  Candidate evidence: ${
+      plan.execution.evidenceRef ?? workspaceRunNextEvidenceFromCommand(plan.item?.command ?? plan.execution.command) ?? "none selected"
+    }`
+  );
+  console.log(
+    `  Boundary: ${
+      plan.dryRun
+        ? "dry-run only; use CLI/MCP execution gates for local work"
+        : "bounded in-process execution"
+    }`
+  );
+  if (plan.stopConditions[0]) {
+    console.log(`  First stop: ${plan.stopConditions[0]}`);
+  }
+
+  console.log("");
   console.log(`Execution: ${plan.execution.status} (${plan.execution.kind})`);
   console.log(`  ${plan.execution.summary}`);
   if (plan.execution.evidenceRef) {
@@ -7354,6 +7374,30 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
   for (const condition of plan.stopConditions) {
     console.log(`  ${condition}`);
   }
+}
+
+function workspaceRunNextCliTarget(item: WorkspaceRunNextPlan["item"]): string {
+  if (!item) {
+    return "no open workspace review item";
+  }
+  if (item.validationGateId) {
+    return `validation ${item.validationGateKind ?? "gate"} ${item.validationGateId}`;
+  }
+  if (item.obligationId) {
+    return `${item.obligationKind ?? "obligation"} ${item.obligationId}`;
+  }
+  return item.claimId ?? item.routeId ?? item.reportId ?? item.sessionId ?? "workspace queue";
+}
+
+function workspaceRunNextEvidenceFromCommand(command: string | undefined): string | undefined {
+  if (!command) {
+    return undefined;
+  }
+  const match = command.match(/--evidence\s+("[^"]+"|'[^']+'|\S+)/u);
+  if (!match) {
+    return undefined;
+  }
+  return match[1].replace(/^["']|["']$/gu, "");
 }
 
 function printWorkspaceRunNextList(plans: WorkspaceRunNextSummary[]): void {

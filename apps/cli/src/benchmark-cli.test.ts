@@ -1908,6 +1908,10 @@ describe("benchmark CLI", () => {
     expect(human.stdout).toContain("Truth Harness workspace run-next");
     expect(human.stdout).toContain("Plan:");
     expect(human.stdout).toContain("Dry run: true");
+    expect(human.stdout).toContain("Why this action:");
+    expect(human.stdout).toContain(`Target: ${writtenClaim.claim.claimId}`);
+    expect(human.stdout).toContain("Source: claim-blocker / high");
+    expect(human.stdout).toContain("Candidate evidence: none selected");
     expect(human.stdout).toContain("Execution: planned (dry-run)");
   });
 
@@ -2075,6 +2079,15 @@ describe("benchmark CLI", () => {
       nextChecks: ["Attach the proof artifact to the linked validation gate."],
       now: "2026-06-18T00:03:00.000Z"
     });
+    const humanDryRun = await runCli([
+      "workspace",
+      "run-next",
+      root,
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0"
+    ]);
 
     const executed = await runCli([
       "workspace",
@@ -2102,6 +2115,10 @@ describe("benchmark CLI", () => {
       };
     };
 
+    expect(humanDryRun.exitCode).toBe(0);
+    expect(humanDryRun.stdout).toContain("Why this action:");
+    expect(humanDryRun.stdout).toContain(`Target: validation proof ${proofGate.gateId}`);
+    expect(humanDryRun.stdout).toContain(`Candidate evidence: proof:${proofRef}`);
     expect(executed.exitCode).toBe(0);
     expect(plan.status).toBe("executed");
     expect(plan.item).toMatchObject({
