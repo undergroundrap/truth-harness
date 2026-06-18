@@ -7418,6 +7418,18 @@ function printWorkspaceRunNextList(plans: WorkspaceRunNextSummary[]): void {
     if (plan.itemTitle) {
       console.log(`  Item: ${plan.itemPriority ?? "n/a"} ${plan.itemKind ?? "item"} - ${plan.itemTitle}`);
     }
+    if (plan.rationaleTarget) {
+      console.log(`  Target: ${plan.rationaleTarget}`);
+    }
+    if (plan.rationaleSource) {
+      console.log(`  Source: ${plan.rationaleSource}`);
+    }
+    if (plan.rationaleCandidateEvidenceRef) {
+      console.log(`  Candidate evidence: ${plan.rationaleCandidateEvidenceRef}`);
+    }
+    if (plan.rationaleExecutionBoundary) {
+      console.log(`  Boundary: ${plan.rationaleExecutionBoundary}`);
+    }
   }
 }
 

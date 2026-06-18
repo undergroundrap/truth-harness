@@ -1878,16 +1878,32 @@ describe("benchmark CLI", () => {
     const planList = await runCli(["workspace", "run-nexts", root, "--json"]);
     const planListPayload = JSON.parse(planList.stdout) as {
       total: number;
-      plans: Array<{ planId: string; path: string; dryRun: boolean; executionKind: string }>;
+      plans: Array<{
+        planId: string;
+        path: string;
+        dryRun: boolean;
+        executionKind: string;
+        rationaleTarget?: string;
+        rationaleSource?: string;
+        rationaleExecutionBoundary?: string;
+      }>;
     };
     const listedPlan = planListPayload.plans.find((plan) => plan.planId === writtenDryRunPayload.plan.planId);
+    const humanList = await runCli(["workspace", "run-nexts", root]);
     expect(planList.exitCode).toBe(0);
     expect(planListPayload.total).toBeGreaterThanOrEqual(1);
     expect(listedPlan).toMatchObject({
       planId: writtenDryRunPayload.plan.planId,
       dryRun: true,
-      executionKind: "dry-run"
+      executionKind: "dry-run",
+      rationaleTarget: writtenClaim.claim.claimId,
+      rationaleSource: "claim-blocker / high",
+      rationaleExecutionBoundary: expect.stringContaining("Dry-run only")
     });
+    expect(humanList.exitCode).toBe(0);
+    expect(humanList.stdout).toContain(`Target: ${writtenClaim.claim.claimId}`);
+    expect(humanList.stdout).toContain("Source: claim-blocker / high");
+    expect(humanList.stdout).toContain("Boundary: Dry-run only");
     const shownById = await runCli([
       "workspace",
       "show-run-next",

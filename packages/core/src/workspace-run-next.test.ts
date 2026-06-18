@@ -777,7 +777,10 @@ describe("workspace run-next", () => {
         planId: result.plan.planId,
         path: expect.stringContaining(`${result.plan.planId}-workspace-run-next.json`),
         dryRun: true,
-        executionKind: "dry-run"
+        executionKind: "dry-run",
+        rationaleTarget: "validation proof gate_proof_run_next_test",
+        rationaleCandidateEvidenceRef: "proof:.truth-harness/proofs/candidate.json",
+        rationaleExecutionBoundary: expect.stringContaining("Dry-run only")
       })
     );
     expect(await readWorkspaceRunNextPlan(root, result.plan.planId)).toMatchObject({

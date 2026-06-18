@@ -67,6 +67,10 @@ export interface WorkspaceRunNextSummary {
   itemPriority?: WorkspaceReviewItem["priority"];
   executionKind: string;
   executionStatus: WorkspaceRunNextStatus;
+  rationaleTarget?: string;
+  rationaleSource?: string;
+  rationaleCandidateEvidenceRef?: string;
+  rationaleExecutionBoundary?: string;
 }
 
 export interface WorkspaceRunNextRationale {
@@ -518,6 +522,8 @@ function tryParseWorkspaceRunNextJson(raw: string): WorkspaceRunNextPlan | undef
 }
 
 function summarizeWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan, path: string): WorkspaceRunNextSummary {
+  const rationale = plan.rationale ?? workspaceRunNextRationaleFor(plan);
+
   return {
     schemaVersion: plan.schemaVersion,
     planId: plan.planId,
@@ -533,7 +539,11 @@ function summarizeWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan, path: string)
     itemKind: plan.item?.kind,
     itemPriority: plan.item?.priority,
     executionKind: plan.execution.kind,
-    executionStatus: plan.execution.status
+    executionStatus: plan.execution.status,
+    rationaleTarget: rationale.target,
+    rationaleSource: rationale.source,
+    rationaleCandidateEvidenceRef: rationale.candidateEvidenceRef,
+    rationaleExecutionBoundary: rationale.executionBoundary
   };
 }
 
