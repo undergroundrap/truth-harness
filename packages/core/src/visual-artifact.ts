@@ -1,10 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -157,9 +156,6 @@ export interface VisualArtifactSummary {
   tags: string[];
 }
 
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let visualArtifactSchemaCache: Promise<unknown> | undefined;
-
 export async function createVisualArtifact(input: CreateVisualArtifactInput): Promise<VisualArtifact> {
   const status = await requireLocalWorkspace(input.rootPath);
   const createdAt = input.now ?? new Date().toISOString();
@@ -234,25 +230,11 @@ export async function writeVisualArtifact(input: CreateVisualArtifactInput): Pro
 }
 
 async function assertVisualArtifactSchema(visual: VisualArtifact): Promise<void> {
-  const schema = await loadVisualArtifactSchema();
-  const serializedVisual = parseJsonWithOptionalBom(JSON.stringify(visual));
-  const issues = validateJsonSchema(serializedVisual, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Visual artifact failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadVisualArtifactSchema(): Promise<unknown> {
-  visualArtifactSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "visual-artifact.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return visualArtifactSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: visual,
+    schemaFile: "visual-artifact.schema.json",
+    artifactName: "Visual artifact"
+  });
 }
 
 export async function listVisualArtifacts(rootPath: string): Promise<VisualArtifactSummary[]> {

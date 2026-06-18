@@ -1,10 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -94,8 +93,6 @@ export interface InventionLogWriteResult {
 }
 
 const INVENTION_SCHEMA_VERSION = "truth-harness.invention.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let inventionSchemaCache: Promise<unknown> | undefined;
 
 export function isInventionValidationStage(value: string): value is InventionValidationStage {
   return (INVENTION_VALIDATION_STAGES as readonly string[]).includes(value);
@@ -164,25 +161,11 @@ export async function createInventionLogEntry(input: CreateInventionLogInput): P
 }
 
 async function assertInventionSchema(entry: InventionLogEntry): Promise<void> {
-  const schema = await loadInventionSchema();
-  const serializedEntry = parseJsonWithOptionalBom(JSON.stringify(entry));
-  const issues = validateJsonSchema(serializedEntry, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Invention log entry failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadInventionSchema(): Promise<unknown> {
-  inventionSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "invention-log.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return inventionSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: entry,
+    schemaFile: "invention-log.schema.json",
+    artifactName: "Invention log entry"
+  });
 }
 
 export async function listInventionLogEntries(rootPath: string): Promise<InventionLogEntry[]> {

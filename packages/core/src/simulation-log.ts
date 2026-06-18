@@ -1,10 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -99,8 +98,6 @@ export interface SimulationLogWriteResult {
 }
 
 const SIMULATION_SCHEMA_VERSION = "truth-harness.simulation.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let simulationSchemaCache: Promise<unknown> | undefined;
 
 export function isSimulationKind(value: string): value is SimulationKind {
   return (SIMULATION_KINDS as readonly string[]).includes(value);
@@ -173,25 +170,11 @@ export async function createSimulationLogEntry(input: CreateSimulationLogInput):
 }
 
 async function assertSimulationSchema(entry: SimulationLogEntry): Promise<void> {
-  const schema = await loadSimulationSchema();
-  const serializedEntry = parseJsonWithOptionalBom(JSON.stringify(entry));
-  const issues = validateJsonSchema(serializedEntry, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Simulation log entry failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadSimulationSchema(): Promise<unknown> {
-  simulationSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "simulation-log.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return simulationSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: entry,
+    schemaFile: "simulation-log.schema.json",
+    artifactName: "Simulation log entry"
+  });
 }
 
 export async function listSimulationLogEntries(rootPath: string): Promise<SimulationLogEntry[]> {
