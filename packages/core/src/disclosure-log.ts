@@ -1,17 +1,23 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const EXTERNAL_DISCLOSURE_STATUSES = ["planned", "sent", "received", "cancelled"] as const;
+const DISCLOSURE_SCHEMA_VERSION = "truth-harness.disclosure.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let disclosureLogSchemaCache: Promise<unknown> | undefined;
 
 export type ExternalDisclosureStatus = (typeof EXTERNAL_DISCLOSURE_STATUSES)[number];
 
 export interface ExternalDisclosureLogEntry {
-  schemaVersion: "truth-harness.disclosure.v0";
+  schemaVersion: typeof DISCLOSURE_SCHEMA_VERSION;
   disclosureId: string;
   projectId: string;
   createdAt: string;
@@ -92,7 +98,7 @@ export async function createExternalDisclosureLogEntry(
   };
   const disclosureId = `dis_${stableHash(entryWithoutId).slice(0, 16)}`;
   const entry: ExternalDisclosureLogEntry = {
-    schemaVersion: "truth-harness.disclosure.v0",
+    schemaVersion: DISCLOSURE_SCHEMA_VERSION,
     disclosureId,
     ...entryWithoutId,
     updatedAt: createdAt,
@@ -118,9 +124,10 @@ export async function createExternalDisclosureLogEntry(
     })
   };
 
+  await assertDisclosureLogSchema(entry);
   const disclosuresDir = resolve(status.root, manifest.directories.disclosures);
-  await mkdir(disclosuresDir, { recursive: true });
   const path = join(disclosuresDir, `${entry.createdAt.slice(0, 10)}-${entry.disclosureId}.json`);
+  await mkdir(disclosuresDir, { recursive: true });
   await writeJsonFileAtomic(path, entry);
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
@@ -131,6 +138,28 @@ export async function createExternalDisclosureLogEntry(
   });
 
   return { entry, path };
+}
+
+async function assertDisclosureLogSchema(entry: ExternalDisclosureLogEntry): Promise<void> {
+  const schema = await loadDisclosureLogSchema();
+  const serializedEntry = parseJsonWithOptionalBom(JSON.stringify(entry));
+  const issues = validateJsonSchema(serializedEntry, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Disclosure log entry failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadDisclosureLogSchema(): Promise<unknown> {
+  disclosureLogSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "disclosure-log.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return disclosureLogSchemaCache;
 }
 
 export async function listExternalDisclosureLogEntries(rootPath: string): Promise<ExternalDisclosureLogEntry[]> {
@@ -152,11 +181,11 @@ export async function listExternalDisclosureLogEntries(rootPath: string): Promis
   const entries = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => JSON.parse(await readFile(join(disclosuresDir, file), "utf8")) as ExternalDisclosureLogEntry)
+      .map(async (file) => parseJsonWithOptionalBom(await readFile(join(disclosuresDir, file), "utf8")) as ExternalDisclosureLogEntry)
   );
 
   return entries
-    .filter((entry) => entry.schemaVersion === "truth-harness.disclosure.v0")
+    .filter((entry) => entry.schemaVersion === DISCLOSURE_SCHEMA_VERSION)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 

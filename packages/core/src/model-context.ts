@@ -1,6 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
@@ -9,6 +12,9 @@ import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 export const MODEL_CONTEXT_TARGETS = ["hosted-model", "local-model", "external-service"] as const;
 export const MODEL_CONTEXT_APPROVAL_STATUSES = ["not-approved", "approved"] as const;
 export const MODEL_CONTEXT_DISCLOSURE_STATUSES = ["not-required", "required-not-created", "planned", "sent", "cancelled"] as const;
+const MODEL_CONTEXT_SCHEMA_VERSION = "truth-harness.model-context.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let modelContextSchemaCache: Promise<unknown> | undefined;
 
 export type ModelContextTarget = (typeof MODEL_CONTEXT_TARGETS)[number];
 export type ModelContextApprovalStatus = (typeof MODEL_CONTEXT_APPROVAL_STATUSES)[number];
@@ -21,7 +27,7 @@ export interface ModelContextSection {
 }
 
 export interface ModelContextPacket {
-  schemaVersion: "truth-harness.model-context.v0";
+  schemaVersion: typeof MODEL_CONTEXT_SCHEMA_VERSION;
   packetId: string;
   projectId: string;
   createdAt: string;
@@ -164,7 +170,7 @@ export async function createModelContext(input: CreateModelContextInput): Promis
   };
   const packetId = `ctx_${stableHash(packetWithoutId).slice(0, 16)}`;
   const packetWithoutMarkdown = {
-    schemaVersion: "truth-harness.model-context.v0" as const,
+    schemaVersion: MODEL_CONTEXT_SCHEMA_VERSION,
     packetId,
     ...packetWithoutId
   };
@@ -178,11 +184,12 @@ export async function createModelContext(input: CreateModelContextInput): Promis
 export async function writeModelContext(input: CreateModelContextInput): Promise<ModelContextWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
   const packet = await createModelContext(input);
+  await assertModelContextSchema(packet);
   const contextsDir = resolve(status.root, status.manifest.directories["model-contexts"]);
-  await mkdir(contextsDir, { recursive: true });
   const baseName = `${packet.createdAt.slice(0, 10)}-${packet.packetId}`;
   const jsonPath = join(contextsDir, `${baseName}.json`);
   const markdownPath = join(contextsDir, `${baseName}.md`);
+  await mkdir(contextsDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, packet);
   await writeFileAtomic(markdownPath, packet.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -199,6 +206,28 @@ export async function writeModelContext(input: CreateModelContextInput): Promise
     markdownPath,
     markdown: packet.markdown
   };
+}
+
+async function assertModelContextSchema(packet: ModelContextPacket): Promise<void> {
+  const schema = await loadModelContextSchema();
+  const serializedPacket = parseJsonWithOptionalBom(JSON.stringify(packet));
+  const issues = validateJsonSchema(serializedPacket, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Model context packet failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadModelContextSchema(): Promise<unknown> {
+  modelContextSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "model-context.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return modelContextSchemaCache;
 }
 
 export async function listModelContexts(rootPath: string): Promise<ModelContextPacket[]> {
@@ -220,11 +249,11 @@ export async function listModelContexts(rootPath: string): Promise<ModelContextP
   const packets = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => JSON.parse(await readFile(join(contextsDir, file), "utf8")) as ModelContextPacket)
+      .map(async (file) => parseJsonWithOptionalBom(await readFile(join(contextsDir, file), "utf8")) as ModelContextPacket)
   );
 
   return packets
-    .filter((packet) => packet.schemaVersion === "truth-harness.model-context.v0")
+    .filter((packet) => packet.schemaVersion === MODEL_CONTEXT_SCHEMA_VERSION)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 

@@ -64,6 +64,22 @@ describe("model context packets", () => {
     expect(packets[0]?.packetId).toBe(result.packet.packetId);
   });
 
+  it("rejects malformed model context packets before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+
+    await expect(
+      writeModelContext({
+        rootPath: root,
+        service: "OpenAI",
+        purpose: "Reject malformed selected-context metadata before durable write.",
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("Model context packet failed JSON Schema validation before write");
+
+    await expect(listModelContexts(root)).resolves.toEqual([]);
+  });
+
   it("warns on unapproved sensitive hosted context and keeps local model packets disclosure-free", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);

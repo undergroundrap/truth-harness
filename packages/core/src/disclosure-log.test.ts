@@ -66,6 +66,24 @@ describe("external disclosure logs", () => {
     expect(entries[0]?.disclosureId).toBe(result.entry.disclosureId);
   });
 
+  it("rejects malformed disclosure log entries before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+
+    await expect(
+      createExternalDisclosureLogEntry({
+        rootPath: root,
+        service: "OpenAI",
+        purpose: "Reject malformed disclosure metadata before durable write.",
+        dataClasses: ["selected prompt"],
+        contextSummary: "A selected model prompt packet.",
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("Disclosure log entry failed JSON Schema validation before write");
+
+    await expect(listExternalDisclosureLogEntries(root)).resolves.toEqual([]);
+  });
+
   it("warns when disclosure metadata implies risky external context", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);
