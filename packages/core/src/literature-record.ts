@@ -1,6 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
@@ -54,7 +57,7 @@ export interface LiteratureIdentifier {
 }
 
 export interface LiteratureRecord {
-  schemaVersion: "truth-harness.literature.v0";
+  schemaVersion: typeof LITERATURE_RECORD_SCHEMA_VERSION;
   recordId: string;
   projectId: string;
   createdAt: string;
@@ -118,6 +121,10 @@ export interface LiteratureRecordWriteResult {
   markdown: string;
 }
 
+const LITERATURE_RECORD_SCHEMA_VERSION = "truth-harness.literature.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let literatureRecordSchemaCache: Promise<unknown> | undefined;
+
 export function isLiteratureRecordKind(value: string): value is LiteratureRecordKind {
   return (LITERATURE_RECORD_KINDS as readonly string[]).includes(value);
 }
@@ -169,7 +176,7 @@ export async function createLiteratureRecord(input: CreateLiteratureRecordInput)
   const recordId = `lit_${stableHash(recordWithoutId).slice(0, 16)}`;
   const reviewBoundary = reviewBoundaryFor({ kind, status: recordStatus, title, summary, keyClaims, relevance, nextChecks });
   const record: LiteratureRecord = {
-    schemaVersion: "truth-harness.literature.v0",
+    schemaVersion: LITERATURE_RECORD_SCHEMA_VERSION,
     recordId,
     ...recordWithoutId,
     updatedAt: createdAt,
@@ -197,6 +204,7 @@ export async function createLiteratureRecord(input: CreateLiteratureRecordInput)
 export async function writeLiteratureRecord(input: CreateLiteratureRecordInput): Promise<LiteratureRecordWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
   const record = await createLiteratureRecord(input);
+  await assertLiteratureRecordSchema(record);
   const literatureDir = resolve(status.root, status.manifest.directories.literature);
   await mkdir(literatureDir, { recursive: true });
   const baseName = `${record.createdAt.slice(0, 10)}-${record.recordId}`;
@@ -221,6 +229,28 @@ export async function writeLiteratureRecord(input: CreateLiteratureRecordInput):
   };
 }
 
+async function assertLiteratureRecordSchema(record: LiteratureRecord): Promise<void> {
+  const schema = await loadLiteratureRecordSchema();
+  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
+  const issues = validateJsonSchema(serializedRecord, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Literature record failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadLiteratureRecordSchema(): Promise<unknown> {
+  literatureRecordSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "literature-record.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return literatureRecordSchemaCache;
+}
+
 export async function listLiteratureRecords(rootPath: string): Promise<LiteratureRecord[]> {
   const status = await requireLocalWorkspace(rootPath);
   const literatureDir = resolve(status.root, status.manifest.directories.literature);
@@ -240,11 +270,11 @@ export async function listLiteratureRecords(rootPath: string): Promise<Literatur
   const records = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => JSON.parse(await readFile(join(literatureDir, file), "utf8")) as LiteratureRecord)
+      .map(async (file) => parseJsonWithOptionalBom(await readFile(join(literatureDir, file), "utf8")) as LiteratureRecord)
   );
 
   return records
-    .filter((record) => record.schemaVersion === "truth-harness.literature.v0")
+    .filter((record) => record.schemaVersion === LITERATURE_RECORD_SCHEMA_VERSION)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
