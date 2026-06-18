@@ -383,6 +383,12 @@ describe("workspace review", () => {
       ])
     });
     expect(item?.command).not.toContain("truth-harness claim add");
+    expect(review.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "claim-blocker",
+        claimId: oldClaim.claim.claimId
+      })
+    );
   });
 
   it("keeps stronger-label upgrades below current route blockers", async () => {

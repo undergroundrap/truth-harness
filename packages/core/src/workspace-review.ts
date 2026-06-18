@@ -181,11 +181,12 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const validationPlans = await listValidationPlans(status.root);
   const claimsByRouteRef = claimsByRouteEvidence(claims);
   const claimsByStatementKey = claimsByReviewStatementKey(claims);
+  const supersededClaimIds = supersededClaimIdSet(claims);
   const routes = await Promise.all(routeSummaries.map((route) => readVerifierRoute(status.root, route.routeId)));
   const items = attachAgentPackets(sortReviewItems([
     ...sessions.flatMap((session) => linkedValidationGateItems(status.root, session, validationPlans)),
     ...routes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef, claimsByStatementKey)),
-    ...claims.flatMap((claim) => claimReviewItems(status.root, claim)),
+    ...claims.flatMap((claim) => claimReviewItems(status.root, claim, supersededClaimIds)),
     ...reportDrafts.map((report) => reportDraftReviewItem(status.root, report)),
     ...sessions.flatMap((session) => sessionReviewItems(status.root, session))
   ]));
@@ -879,8 +880,12 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
-function claimReviewItems(workspacePath: string, claim: ClaimLedgerRecord): WorkspaceReviewItem[] {
-  if (claim.finalization.readyForNarrowClaim || claim.status !== "active") {
+function claimReviewItems(
+  workspacePath: string,
+  claim: ClaimLedgerRecord,
+  supersededClaimIds: Set<string>
+): WorkspaceReviewItem[] {
+  if (claim.finalization.readyForNarrowClaim || claim.status !== "active" || supersededClaimIds.has(claim.claimId)) {
     return [];
   }
 
@@ -1029,7 +1034,7 @@ function claimsByRouteEvidence(claims: ClaimLedgerRecord[]): Map<string, ClaimLe
 
 function claimsByReviewStatementKey(claims: ClaimLedgerRecord[]): Map<string, ClaimLedgerRecord[]> {
   const map = new Map<string, ClaimLedgerRecord[]>();
-  const supersededClaimIds = new Set(claims.flatMap((claim) => claim.supersedes ?? []));
+  const supersededClaimIds = supersededClaimIdSet(claims);
   for (const claim of claims) {
     if (claim.status !== "active" || supersededClaimIds.has(claim.claimId)) {
       continue;
@@ -1048,6 +1053,10 @@ function claimsByReviewStatementKey(claims: ClaimLedgerRecord[]): Map<string, Cl
   }
 
   return map;
+}
+
+function supersededClaimIdSet(claims: ClaimLedgerRecord[]): Set<string> {
+  return new Set(claims.flatMap((claim) => claim.supersedes ?? []));
 }
 
 function firstEquivalentClaim(routeProblem: string, claimsByStatementKey: Map<string, ClaimLedgerRecord[]>): ClaimLedgerRecord | undefined {
