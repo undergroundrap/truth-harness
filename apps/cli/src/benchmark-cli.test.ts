@@ -1,10 +1,12 @@
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { createReceipt } from "@truth-harness/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "../../../packages/core/src/proof-backend.js";
 import { writeReportDraft } from "../../../packages/core/src/report-draft.js";
+import { addResearchSessionCheckpoint } from "../../../packages/core/src/research-session.js";
 import { program } from "./index.js";
 
 const roots: string[] = [];
@@ -2025,6 +2027,100 @@ describe("benchmark CLI", () => {
       validationGateKind: "proof"
     });
     expect(plan.item?.command).toContain("truth-harness verify");
+  });
+
+  it("executes candidate validation evidence through workspace run-next CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    const harness = await runCli([
+      "research",
+      "harness",
+      "3 / 4 + 5 / 8",
+      "--workspace",
+      root,
+      "--domain",
+      "math",
+      "--json"
+    ]);
+    const harnessJson = JSON.parse(harness.stdout) as {
+      session: { sessionId: string };
+      validationPlan?: { plan: { planId: string; gates: Array<{ gateId: string; kind: string }> } };
+    };
+    const proofGate = harnessJson.validationPlan?.plan.gates.find((gate) => gate.kind === "proof");
+    if (!proofGate || !harnessJson.validationPlan) {
+      throw new Error("Expected a CLI research harness validation proof gate.");
+    }
+    await mkdir(join(root, "proofs"), { recursive: true });
+    await writeFile(join(root, "proofs", "candidate.lean"), "theorem candidate_fixture : True := by trivial\n", "utf8");
+    const proofRunner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+      }
+
+      return { status: 0, stdout: "", stderr: "" };
+    };
+    const proof = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "proofs/candidate.lean",
+      scope: { statement: "3 / 4 + 5 / 8" },
+      runner: proofRunner,
+      now: new Date("2026-06-18T00:02:00.000Z")
+    });
+    const proofRef = relative(root, proof.jsonPath).replace(/\\/gu, "/");
+    await addResearchSessionCheckpoint({
+      rootPath: root,
+      sessionRef: harnessJson.session.sessionId,
+      summary: "Accepted proof artifact is ready for validation gate attachment.",
+      evidenceRefs: [{ kind: "proof", ref: proofRef, trust: "proved" }],
+      nextChecks: ["Attach the proof artifact to the linked validation gate."],
+      now: "2026-06-18T00:03:00.000Z"
+    });
+
+    const executed = await runCli([
+      "workspace",
+      "run-next",
+      root,
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--execute-local",
+      "--json"
+    ]);
+    const plan = JSON.parse(executed.stdout) as {
+      status: string;
+      item?: { command: string; validationGateId?: string };
+      execution: {
+        kind: string;
+        evidenceRef?: string;
+        result?: {
+          validationGate?: {
+            satisfied: boolean;
+            gate: { gateId: string; status: string };
+          };
+        };
+      };
+    };
+
+    expect(executed.exitCode).toBe(0);
+    expect(plan.status).toBe("executed");
+    expect(plan.item).toMatchObject({
+      validationGateId: proofGate.gateId,
+      command: `truth-harness validation attach ${harnessJson.validationPlan.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`
+    });
+    expect(plan.execution).toMatchObject({
+      kind: "validation-attach",
+      evidenceRef: `proof:${proofRef}`,
+      result: {
+        validationGate: {
+          satisfied: true,
+          gate: {
+            gateId: proofGate.gateId,
+            status: "satisfied"
+          }
+        }
+      }
+    });
   });
 
   it("plans credibility reviewer actions through workspace run-next", async () => {
