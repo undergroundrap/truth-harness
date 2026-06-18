@@ -180,6 +180,7 @@ export {
   verifyVaultEntry
 } from "./vault.js";
 export {
+  attachValidationGateEvidence,
   createValidationPlan,
   isValidationGateKind,
   isValidationGateStatus,
@@ -561,7 +562,10 @@ export type {
   VaultVerifyResult
 } from "./vault.js";
 export type {
+  AttachValidationGateEvidenceInput,
+  AttachValidationGateEvidenceResult,
   CreateValidationPlanInput,
+  ResolvedValidationGateEvidence,
   ValidationEvidenceRef,
   ValidationGate,
   ValidationGateInput,

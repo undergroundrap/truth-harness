@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { createEvidenceAudit, type EvidenceAudit, type EvidenceAuditClaimType } from "./evidence-audit.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
@@ -8,6 +8,7 @@ import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus 
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
+import { readVerifierRoute, type VerifierRoute } from "./verifier-route.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const VALIDATION_PLAN_DOMAINS = [
@@ -175,6 +176,42 @@ export interface ValidationPlanWriteResult {
   markdown: string;
 }
 
+export interface AttachValidationGateEvidenceInput {
+  rootPath: string;
+  planRef: string;
+  gateId: string;
+  evidenceRef: ValidationEvidenceRef;
+  now?: string | Date;
+}
+
+export interface ResolvedValidationGateEvidence extends ValidationEvidenceRef {
+  schemaVersion?: string;
+  artifactId?: string;
+  status?: string;
+  route?: {
+    routeId: string;
+    status: VerifierRoute["status"];
+    finalTrust: TrustLabel;
+    evidenceKind: VerifierRoute["evidenceKind"];
+    nextActions: string[];
+  };
+  nextChecks: string[];
+}
+
+export interface AttachValidationGateEvidenceResult {
+  plan: ValidationPlan;
+  gate: ValidationGate;
+  evidence: ResolvedValidationGateEvidence;
+  jsonPath: string;
+  markdownPath: string;
+  markdown: string;
+  changed: boolean;
+  closed: boolean;
+  satisfied: boolean;
+  blocked: boolean;
+  message: string;
+}
+
 export function isValidationPlanDomain(value: string): value is ValidationPlanDomain {
   return (VALIDATION_PLAN_DOMAINS as readonly string[]).includes(value);
 }
@@ -300,6 +337,91 @@ export async function listValidationPlans(rootPath: string): Promise<ValidationP
   return plans
     .filter((plan) => plan.schemaVersion === VALIDATION_PLAN_SCHEMA_VERSION)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export async function attachValidationGateEvidence(
+  input: AttachValidationGateEvidenceInput
+): Promise<AttachValidationGateEvidenceResult> {
+  const status = await requireLocalWorkspace(input.rootPath);
+  const { jsonPath, markdownPath } = await resolveValidationPlanFile(status, input.planRef);
+  const plan = parseJsonWithOptionalBom(await readFile(jsonPath, "utf8")) as ValidationPlan;
+  if (plan.schemaVersion !== VALIDATION_PLAN_SCHEMA_VERSION) {
+    throw new Error(`Validation plan ${input.planRef} has unsupported schema version.`);
+  }
+
+  const gateIndex = plan.gates.findIndex((gate) => gate.gateId === input.gateId);
+  if (gateIndex === -1) {
+    throw new Error(`No validation gate found for id ${input.gateId} in plan ${plan.planId}.`);
+  }
+
+  const gate = plan.gates[gateIndex];
+  const evidence = await resolveValidationGateEvidence(status.root, input.evidenceRef);
+  const assessment = assessValidationGateEvidence(gate, evidence);
+  const attachedEvidence = normalizeEvidenceRefs([
+    {
+      kind: input.evidenceRef.kind,
+      ref: input.evidenceRef.ref,
+      trust: evidence.trust,
+      summary: input.evidenceRef.summary ?? evidence.summary
+    }
+  ])[0];
+  const updatedGate: ValidationGate = {
+    ...gate,
+    status: assessment.status,
+    evidenceRefs: mergeValidationEvidenceRefs(gate.evidenceRefs, attachedEvidence ? [attachedEvidence] : []),
+    nextChecks: assessment.nextChecks
+  };
+  const gates = plan.gates.map((candidate, index) => (index === gateIndex ? updatedGate : candidate));
+  const updatedAt = normalizeDate(input.now);
+  const readiness = readinessFor(plan.audit, gates);
+  const planWithoutMarkdown: Omit<ValidationPlan, "markdown"> = {
+    ...plan,
+    updatedAt,
+    evidenceRefs: mergeValidationEvidenceRefs(plan.evidenceRefs, attachedEvidence ? [attachedEvidence] : []),
+    gates,
+    readiness,
+    recommendedClaimLanguage: recommendedClaimLanguageFor({
+      claim: plan.claim,
+      domains: plan.domains,
+      audit: plan.audit,
+      readiness
+    }),
+    warnings: warningsFor({
+      domains: plan.domains,
+      audit: plan.audit,
+      gates,
+      readiness
+    })
+  };
+  const updatedPlan: ValidationPlan = {
+    ...planWithoutMarkdown,
+    markdown: renderValidationPlanMarkdown(planWithoutMarkdown)
+  };
+
+  await assertValidationPlanSchema(updatedPlan);
+  await writeJsonFileAtomic(jsonPath, updatedPlan);
+  await writeFileAtomic(markdownPath, updatedPlan.markdown, "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath: status.root,
+    path: relative(status.root, jsonPath),
+    kind: "validation",
+    now: updatedAt,
+    staleReason: `validation gate ${updatedGate.status}`
+  });
+
+  return {
+    plan: updatedPlan,
+    gate: updatedGate,
+    evidence,
+    jsonPath,
+    markdownPath,
+    markdown: updatedPlan.markdown,
+    changed: true,
+    closed: updatedGate.status === "satisfied" || updatedGate.status === "blocked" || updatedGate.status === "not-applicable",
+    satisfied: updatedGate.status === "satisfied",
+    blocked: updatedGate.status === "blocked",
+    message: assessment.message
+  };
 }
 
 export function renderValidationPlanMarkdown(plan: Omit<ValidationPlan, "markdown">): string {
@@ -685,7 +807,7 @@ function mergeGates(gates: ValidationGate[]): ValidationGate[] {
   return merged;
 }
 
-function readinessFor(audit: EvidenceAudit, gates: ValidationGate[]): ValidationPlan["readiness"] {
+function readinessFor(audit: Pick<EvidenceAudit, "verdict">, gates: ValidationGate[]): ValidationPlan["readiness"] {
   const blockingGateCount = gates.filter((gate) => gate.blocking && gate.status !== "satisfied" && gate.status !== "not-applicable").length;
   const missingGateCount = gates.filter((gate) => gate.status === "missing").length;
   const inProgressGateCount = gates.filter((gate) => gate.status === "planned" || gate.status === "in-progress").length;
@@ -828,7 +950,7 @@ function toAuditEvidenceRefs(refs: ValidationEvidenceRef[]): InventionEvidenceRe
 function recommendedClaimLanguageFor(input: {
   claim: string;
   domains: ValidationPlanDomain[];
-  audit: EvidenceAudit;
+  audit: Pick<EvidenceAudit, "verdict">;
   readiness: ValidationPlan["readiness"];
 }): string {
   if (input.readiness.status === "blocked-refuted") {
@@ -856,7 +978,7 @@ function recommendedClaimLanguageFor(input: {
 
 function warningsFor(input: {
   domains: ValidationPlanDomain[];
-  audit: EvidenceAudit;
+  audit: Pick<EvidenceAudit, "verdict">;
   gates: ValidationGate[];
   readiness: ValidationPlan["readiness"];
 }): string[] {
@@ -912,6 +1034,176 @@ async function requireLocalWorkspace(rootPath: string): Promise<LocalWorkspaceSt
   }
 
   return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
+}
+
+async function resolveValidationPlanFile(
+  status: LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> },
+  planRef: string
+): Promise<{ jsonPath: string; markdownPath: string }> {
+  let jsonPath: string;
+  if (/^plan_[a-f0-9]{16}$/u.test(planRef)) {
+    const validationDir = resolve(status.root, status.manifest.directories.validation);
+    const files = await readdir(validationDir);
+    const matches = await Promise.all(
+      files
+        .filter((file) => file.endsWith(".json"))
+        .map(async (file) => {
+          const path = join(validationDir, file);
+          const plan = parseJsonWithOptionalBom(await readFile(path, "utf8")) as ValidationPlan;
+          return plan.schemaVersion === VALIDATION_PLAN_SCHEMA_VERSION && plan.planId === planRef ? path : undefined;
+        })
+    );
+    jsonPath = matches.find((path): path is string => Boolean(path)) ?? "";
+    if (!jsonPath) {
+      throw new Error(`No validation plan found for id ${planRef}.`);
+    }
+  } else {
+    jsonPath = resolveWorkspacePath(status.root, planRef);
+  }
+
+  if (!jsonPath.endsWith(".json")) {
+    throw new Error(`Validation plan ref must resolve to a JSON artifact: ${planRef}.`);
+  }
+
+  return {
+    jsonPath,
+    markdownPath: jsonPath.replace(/\.json$/u, ".md")
+  };
+}
+
+async function resolveValidationGateEvidence(
+  root: string,
+  evidenceRef: ValidationEvidenceRef
+): Promise<ResolvedValidationGateEvidence> {
+  if (evidenceRef.kind === "route") {
+    const route = await readVerifierRoute(root, evidenceRef.ref);
+    return {
+      ...evidenceRef,
+      trust: route.finalTrust,
+      summary: evidenceRef.summary ?? `Verifier route ${route.routeId} ended with ${route.finalTrust}.`,
+      schemaVersion: route.schemaVersion,
+      artifactId: route.routeId,
+      status: route.status,
+      route: {
+        routeId: route.routeId,
+        status: route.status,
+        finalTrust: route.finalTrust,
+        evidenceKind: route.evidenceKind,
+        nextActions: route.nextActions
+      },
+      nextChecks: route.nextActions
+    };
+  }
+
+  return {
+    ...evidenceRef,
+    summary: evidenceRef.summary ?? `${evidenceRef.kind}:${evidenceRef.ref} attached for validation review.`,
+    nextChecks: ["Review this evidence against the exact validation gate before closing it."]
+  };
+}
+
+function assessValidationGateEvidence(
+  gate: ValidationGate,
+  evidence: ResolvedValidationGateEvidence
+): { status: ValidationGateStatus; nextChecks: string[]; message: string } {
+  if (gate.kind === "proof") {
+    if (evidence.trust === "refuted") {
+      return {
+        status: "blocked",
+        nextChecks: [
+          "Record this route as a refutation or revise the claim; do not continue trying to prove the refuted statement."
+        ],
+        message: `Validation proof gate ${gate.gateId} is blocked by refuting evidence ${evidence.kind}:${evidence.ref}.`
+      };
+    }
+
+    if (
+      evidence.kind === "route" &&
+      (evidence.trust === "proved" ||
+        evidence.trust === "exact-computed" ||
+        evidence.trust === "smt-checked" ||
+        evidence.trust === "cross-checked")
+    ) {
+      return {
+        status: "satisfied",
+        nextChecks: [],
+        message: `Validation proof gate ${gate.gateId} satisfied by ${evidence.trust} route evidence.`
+      };
+    }
+
+    return {
+      status: gate.status === "missing" || gate.status === "planned" ? "in-progress" : gate.status,
+      nextChecks: evidence.nextChecks.length > 0
+        ? evidence.nextChecks
+        : ["Attach proved, exact-computed, SMT-checked, cross-checked, or refuting route evidence for this exact claim."],
+      message: `Validation proof gate ${gate.gateId} received ${evidence.trust ?? "untrusted"} evidence, but remains open.`
+    };
+  }
+
+  if (gate.kind === "benchmark" && evidence.kind === "benchmark") {
+    return {
+      status: "satisfied",
+      nextChecks: [],
+      message: `Validation benchmark gate ${gate.gateId} satisfied by benchmark evidence.`
+    };
+  }
+
+  if (
+    (gate.kind === "source-citation" || gate.kind === "literature-record" || gate.kind === "prior-art") &&
+    (evidence.kind === "source" || evidence.kind === "literature")
+  ) {
+    return {
+      status: gate.kind === "prior-art" ? "in-progress" : "satisfied",
+      nextChecks: gate.kind === "prior-art"
+        ? ["Review closest prior art and claim novelty boundaries before treating this as complete."]
+        : [],
+      message: `Validation ${gate.kind} gate ${gate.gateId} updated from local source evidence.`
+    };
+  }
+
+  return {
+    status: gate.status === "missing" ? "in-progress" : gate.status,
+    nextChecks: evidence.nextChecks.length > 0 ? evidence.nextChecks : gate.nextChecks,
+    message: `Evidence ${evidence.kind}:${evidence.ref} attached to validation gate ${gate.gateId}; gate remains ${gate.status}.`
+  };
+}
+
+function mergeValidationEvidenceRefs(
+  existing: ValidationEvidenceRef[],
+  additions: ValidationEvidenceRef[]
+): ValidationEvidenceRef[] {
+  const seen = new Set<string>();
+  const merged: ValidationEvidenceRef[] = [];
+
+  for (const ref of [...existing, ...additions]) {
+    const key = `${ref.kind}:${ref.ref}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(ref);
+  }
+
+  return merged;
+}
+
+function normalizeDate(value: string | Date | undefined): string {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  return value ?? new Date().toISOString();
+}
+
+function resolveWorkspacePath(root: string, path: string): string {
+  const target = resolve(root, path);
+  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
+
+  if (target !== root && !target.startsWith(rootWithSep)) {
+    throw new Error(`Validation plan path escapes workspace root: ${JSON.stringify(path)}`);
+  }
+
+  return target;
 }
 
 function titleFromClaim(claim: string): string {

@@ -4,8 +4,15 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createSimulationLogEntry } from "./simulation-log.js";
 import { writeExpertReview } from "./expert-review.js";
-import { createValidationPlan, listValidationPlans, renderValidationPlanMarkdown, writeValidationPlan } from "./validation-plan.js";
+import {
+  attachValidationGateEvidence,
+  createValidationPlan,
+  listValidationPlans,
+  renderValidationPlanMarkdown,
+  writeValidationPlan
+} from "./validation-plan.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { writeVerifierRoute } from "./verifier-route.js";
 
 const tempRoots: string[] = [];
 
@@ -93,6 +100,78 @@ describe("validation plans", () => {
     ).rejects.toThrow("Validation plan failed JSON Schema validation before write");
 
     await expect(listValidationPlans(root)).resolves.toEqual([]);
+  });
+
+  it("updates proof gates from concrete verifier route evidence without trusting weak evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const written = await writeValidationPlan({
+      rootPath: root,
+      claim: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      now: "2026-06-18T00:00:00.000Z"
+    });
+    const proofGate = written.plan.gates.find((gate) => gate.kind === "proof");
+    if (!proofGate) {
+      throw new Error("Expected a proof gate.");
+    }
+
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "3 / 4 + 5 / 8",
+      now: new Date("2026-06-18T00:01:00.000Z")
+    });
+    const attached = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: written.plan.planId,
+      gateId: proofGate.gateId,
+      evidenceRef: {
+        kind: "route",
+        ref: route.route.routeId
+      },
+      now: "2026-06-18T00:02:00.000Z"
+    });
+
+    expect(attached.satisfied).toBe(true);
+    expect(attached.gate).toMatchObject({
+      status: "satisfied",
+      evidenceRefs: [expect.objectContaining({ kind: "route", ref: route.route.routeId, trust: "exact-computed" })]
+    });
+    expect(attached.plan.readiness.satisfiedGateCount).toBeGreaterThan(written.plan.readiness.satisfiedGateCount);
+    expect(attached.markdown).toContain("route:");
+
+    const weakPlan = await writeValidationPlan({
+      rootPath: root,
+      claim: "Explain the unresolved deterministic robotics invariant.",
+      domains: ["math"],
+      now: "2026-06-18T00:03:00.000Z"
+    });
+    const weakGate = weakPlan.plan.gates.find((gate) => gate.kind === "proof");
+    if (!weakGate) {
+      throw new Error("Expected a weak proof gate.");
+    }
+    const weakRoute = await writeVerifierRoute({
+      rootPath: root,
+      problem: "Explain the unresolved deterministic robotics invariant.",
+      now: new Date("2026-06-18T00:04:00.000Z")
+    });
+    const weakAttachment = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: weakPlan.plan.planId,
+      gateId: weakGate.gateId,
+      evidenceRef: {
+        kind: "route",
+        ref: weakRoute.route.routeId
+      },
+      now: "2026-06-18T00:05:00.000Z"
+    });
+
+    expect(weakAttachment.satisfied).toBe(false);
+    expect(weakAttachment.gate.status).toBe("in-progress");
+    expect(weakAttachment.gate.evidenceRefs).toContainEqual(
+      expect.objectContaining({ kind: "route", ref: weakRoute.route.routeId, trust: "unverified" })
+    );
+    expect(weakAttachment.message).toContain("remains open");
   });
 
   it("requires prior art, claim charts, reduction-to-practice, and patent legal review for invention claims", async () => {

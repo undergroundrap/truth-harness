@@ -21,6 +21,7 @@ import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { writeSmtCheckRecord, type SmtBackendId } from "./smt-backend.js";
 import type { SympyOperation } from "./sympy.js";
 import type { Receipt, TrustLabel } from "./types.js";
+import { attachValidationGateEvidence, type AttachValidationGateEvidenceResult } from "./validation-plan.js";
 import {
   readVerifierRoute,
   satisfyVerifierRouteObligation,
@@ -405,7 +406,7 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
     `- Summary: ${plan.execution.summary}`,
     ...(plan.execution.command ? [`- Command: \`${plan.execution.command}\``] : []),
     ...(plan.execution.evidenceRef ? [`- Evidence ref: \`${plan.execution.evidenceRef}\``] : []),
-    ...(typeof plan.execution.attached === "boolean" ? [`- Attached to route: \`${String(plan.execution.attached)}\``] : []),
+    ...(typeof plan.execution.attached === "boolean" ? [`- Attached: \`${String(plan.execution.attached)}\``] : []),
     "",
     "## Stop Conditions",
     "",
@@ -552,6 +553,20 @@ async function executeWorkspaceRunNextItem(
         smtReviewPolicy: options["require-independent-smt"] === true ? "independent" : "single"
       });
       const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
+      const validationGateAttachment =
+        item.validationPlanId && item.validationGateId
+          ? await attachValidationGateEvidence({
+              rootPath: workspace,
+              planRef: item.validationPlanId,
+              gateId: item.validationGateId,
+              evidenceRef: {
+                kind: "route",
+                ref: result.route.routeId,
+                trust: result.route.finalTrust,
+                summary: `Verifier route final trust: ${result.route.finalTrust}.`
+              }
+            })
+          : undefined;
       const checkpoint = item.sessionId
         ? await addResearchSessionCheckpoint({
             rootPath: workspace,
@@ -565,12 +580,10 @@ async function executeWorkspaceRunNextItem(
                 summary: `Verifier route final trust: ${result.route.finalTrust}.`
               }
             ],
-            decisions: ["Treat the verifier route as evidence for review; do not close the validation gate until the required evidence is attached and rechecked."],
-            nextChecks: [
-              item.validationPlanId && item.validationGateId
-                ? `Attach route:${result.route.routeId} to validation ${item.validationPlanId} gate ${item.validationGateId} if it satisfies the gate.`
-                : `Review route:${result.route.routeId} against the validation gate.`
-            ]
+            decisions: [validationGateAttachment?.message ?? "Treat the verifier route as evidence for review; no linked validation gate target was present."],
+            nextChecks: validationGateAttachment
+              ? nextChecksForValidationAttachment(validationGateAttachment)
+              : [`Review route:${result.route.routeId} against the validation gate.`]
           })
         : undefined;
 
@@ -579,11 +592,25 @@ async function executeWorkspaceRunNextItem(
         kind: "verifier-route",
         command: item.command,
         evidenceRef: `route:${evidenceRef}`,
-        attached: Boolean(checkpoint),
+        attached: Boolean(checkpoint || validationGateAttachment),
         summary: checkpoint
-          ? `Wrote verifier route ${result.route.routeId} and checkpointed session ${item.sessionId}.`
+          ? `Wrote verifier route ${result.route.routeId}, ${validationGateAttachmentSummary(validationGateAttachment)}, and checkpointed session ${item.sessionId}.`
           : `Wrote verifier route ${result.route.routeId}.`,
-        result: { route: result.route, checkpoint: checkpoint?.checkpoint }
+        result: {
+          route: result.route,
+          validationGate: validationGateAttachment
+            ? {
+                planId: validationGateAttachment.plan.planId,
+                gateId: validationGateAttachment.gate.gateId,
+                status: validationGateAttachment.gate.status,
+                closed: validationGateAttachment.closed,
+                satisfied: validationGateAttachment.satisfied,
+                blocked: validationGateAttachment.blocked,
+                message: validationGateAttachment.message
+              }
+            : undefined,
+          checkpoint: checkpoint?.checkpoint
+        }
       };
     }
 
@@ -905,6 +932,40 @@ async function maybeAttachRouteEvidence(
       }`
     };
   }
+}
+
+function validationGateAttachmentSummary(attachment: AttachValidationGateEvidenceResult | undefined): string {
+  if (!attachment) {
+    return "did not update a validation gate";
+  }
+
+  if (attachment.satisfied) {
+    return `satisfied validation gate ${attachment.gate.gateId}`;
+  }
+
+  if (attachment.blocked) {
+    return `blocked validation gate ${attachment.gate.gateId} with refuting evidence`;
+  }
+
+  return `updated validation gate ${attachment.gate.gateId} to ${attachment.gate.status}`;
+}
+
+function nextChecksForValidationAttachment(attachment: AttachValidationGateEvidenceResult): string[] {
+  if (attachment.satisfied) {
+    return [
+      `Validation gate ${attachment.gate.gateId} is satisfied; rerun workspace run-next to choose the next open blocker.`
+    ];
+  }
+
+  if (attachment.blocked) {
+    return [
+      `Validation gate ${attachment.gate.gateId} is blocked by local evidence; revise or record the refuted claim before continuing.`
+    ];
+  }
+
+  return attachment.gate.nextChecks.length > 0
+    ? attachment.gate.nextChecks
+    : [`Validation gate ${attachment.gate.gateId} remains open; attach stronger evidence before strengthening the claim.`];
 }
 
 function parseLocalTruthHarnessCommand(command: string): { ok: true; args: string[] } | { ok: false; reason: string } {

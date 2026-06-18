@@ -8,6 +8,7 @@ import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeReportDraft } from "./report-draft.js";
 import { readResearchSession, writeResearchHarness } from "./research-session.js";
+import { listValidationPlans } from "./validation-plan.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import {
   createWorkspaceReviewFromCredibilityPack,
@@ -82,9 +83,60 @@ describe("workspace run-next", () => {
       attached: true
     });
     expect(executed.execution.evidenceRef).toContain("route:.truth-harness/routes/");
+    expect(executed.execution.result).toMatchObject({
+      validationGate: {
+        planId: harness.validationPlan?.plan.planId,
+        status: "in-progress",
+        closed: false,
+        satisfied: false,
+        blocked: false
+      }
+    });
     expect(reopened.evidenceRefs).toContainEqual(
       expect.objectContaining({ kind: "route", ref: expect.stringMatching(/^route_[a-f0-9]{16}$/u) })
     );
+  });
+
+  it("closes a linked validation proof gate when run-next writes satisfying route evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-18T00:02:00.000Z"
+    });
+    const executed = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-18T00:03:00.000Z"
+    });
+    const plans = await listValidationPlans(root);
+    const updatedPlan = plans.find((plan) => plan.planId === harness.validationPlan?.plan.planId);
+    const proofGate = updatedPlan?.gates.find((gate) => gate.kind === "proof");
+
+    expect(executed.execution).toMatchObject({
+      kind: "verifier-route",
+      attached: true,
+      result: {
+        validationGate: {
+          planId: harness.validationPlan?.plan.planId,
+          status: "satisfied",
+          closed: true,
+          satisfied: true,
+          blocked: false
+        }
+      }
+    });
+    expect(proofGate).toMatchObject({
+      status: "satisfied",
+      evidenceRefs: [expect.objectContaining({ kind: "route", trust: "exact-computed" })]
+    });
   });
 
   it("executes bounded local actions without honoring command workspace overrides", async () => {
