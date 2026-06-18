@@ -86,6 +86,15 @@ describe("research sessions", () => {
     expect(result.validationPlan?.plan.evidenceRefs).toContainEqual(
       expect.objectContaining({ kind: "session", ref: result.session.sessionId })
     );
+    expect(result.session.evidenceRefs).toContainEqual(
+      expect.objectContaining({ kind: "validation", ref: result.validationPlan?.plan.planId })
+    );
+    expect(result.session.checkpoints).toContainEqual(
+      expect.objectContaining({
+        summary: "Created the initial linked validation plan for this hard-problem harness.",
+        evidenceRefs: [expect.objectContaining({ kind: "validation", ref: result.validationPlan?.plan.planId })]
+      })
+    );
     expect(result.session.budgets.maxUnverifiedFinalClaims).toBe(0);
     expect(result.session.modelPolicy.selectedContextOnly).toBe(true);
     expect(result.session.reviewBoundary.expertReviewRequired).toBe(true);

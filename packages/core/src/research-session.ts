@@ -287,9 +287,27 @@ export async function writeResearchHarness(input: CreateResearchHarnessInput): P
     ],
     now: input.now
   });
+  const linkedSession = await addResearchSessionCheckpoint({
+    rootPath: input.rootPath,
+    sessionRef: sessionResult.session.sessionId,
+    summary: "Created the initial linked validation plan for this hard-problem harness.",
+    evidenceRefs: [
+      {
+        kind: "validation",
+        ref: validationPlan.plan.planId,
+        summary: "Initial validation gates for this hard-problem harness."
+      }
+    ],
+    decisions: ["Do not strengthen the objective beyond the linked validation gates."],
+    nextChecks: ["Close the blocking validation gates with local evidence refs before making stronger claims."],
+    now: input.now
+  });
 
   return {
-    ...sessionResult,
+    session: linkedSession.session,
+    jsonPath: linkedSession.jsonPath,
+    markdownPath: linkedSession.markdownPath,
+    markdown: linkedSession.markdown,
     validationPlan
   };
 }
