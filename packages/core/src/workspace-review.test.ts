@@ -118,6 +118,7 @@ describe("workspace review", () => {
         kind: "validation-gate",
         sessionId: harness.session.sessionId,
         validationGateId: proofGate.gateId,
+        command: `truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`,
         candidateEvidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })],
         evidenceSlots: expect.arrayContaining([
           expect.objectContaining({

@@ -512,6 +512,8 @@ function validationGateItem(
   plan: ValidationPlan,
   gate: ValidationGate
 ): WorkspaceReviewItem {
+  const candidateEvidenceRefs = candidateEvidenceRefsForValidationGate(session, gate);
+
   return {
     itemId: itemIdFor({
       kind: "validation-gate",
@@ -524,12 +526,12 @@ function validationGateItem(
     priority: priorityForValidationGate(gate),
     title: `Validation gate: ${gate.kind}`,
     summary: `${plan.title} - ${gate.description} Current status: ${gate.status}.`,
-    command: commandForValidationGate(workspacePath, session, plan, gate),
+    command: commandForValidationGate(workspacePath, session, plan, gate, candidateEvidenceRefs),
     sessionId: session.sessionId,
     validationPlanId: plan.planId,
     validationGateId: gate.gateId,
     validationGateKind: gate.kind,
-    candidateEvidenceRefs: candidateEvidenceRefsForValidationGate(session, gate),
+    candidateEvidenceRefs,
     domain: plan.domains[0],
     createdAt: plan.updatedAt,
     source: {
@@ -654,8 +656,14 @@ function commandForValidationGate(
   workspacePath: string,
   session: ResearchSession,
   plan: ValidationPlan,
-  gate: ValidationGate
+  gate: ValidationGate,
+  candidateEvidenceRefs: ValidationEvidenceRef[] = []
 ): string {
+  const candidate = candidateEvidenceRefs[0];
+  if (candidate) {
+    return validationGateAttachCommandForEvidence(plan.planId, gate.gateId, candidate);
+  }
+
   if (gate.kind === "proof") {
     return `truth-harness verify ${quoteCommandArg(plan.claim)} --write --workspace ${quoteCommandArg(workspacePath)} --json`;
   }
@@ -1509,8 +1517,16 @@ function validationGateAttachCommand(item: WorkspaceReviewItem): string | undefi
     return `truth-harness validation attach ${quoteCommandArg(item.validationPlanId)} ${quoteCommandArg(item.validationGateId)} --evidence <kind:path-or-id> --json`;
   }
 
+  return validationGateAttachCommandForEvidence(item.validationPlanId, item.validationGateId, evidence);
+}
+
+function validationGateAttachCommandForEvidence(
+  validationPlanId: string,
+  validationGateId: string,
+  evidence: ValidationEvidenceRef
+): string {
   const evidenceArg = formatValidationEvidenceArg(evidence);
-  return `truth-harness validation attach ${quoteCommandArg(item.validationPlanId)} ${quoteCommandArg(item.validationGateId)} --evidence ${quoteCommandArg(evidenceArg)} --json`;
+  return `truth-harness validation attach ${quoteCommandArg(validationPlanId)} ${quoteCommandArg(validationGateId)} --evidence ${quoteCommandArg(evidenceArg)} --json`;
 }
 
 function formatValidationEvidenceArg(ref: ValidationEvidenceRef): string {

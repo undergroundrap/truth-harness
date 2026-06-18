@@ -8,7 +8,7 @@ import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
 import { writeReportDraft } from "./report-draft.js";
-import { readResearchSession, writeResearchHarness } from "./research-session.js";
+import { addResearchSessionCheckpoint, readResearchSession, writeResearchHarness } from "./research-session.js";
 import { listValidationPlans } from "./validation-plan.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import {
@@ -331,6 +331,89 @@ describe("workspace run-next", () => {
         nextChecks: [expect.stringContaining("rerun workspace run-next")]
       })
     );
+  });
+
+  it("executes generated candidate-evidence validation attach actions", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const validationPlan = harness.validationPlan?.plan;
+    const proofGate = validationPlan?.gates.find((gate) => gate.kind === "proof");
+    if (!validationPlan || !proofGate) {
+      throw new Error("Expected a linked math validation plan with a proof gate.");
+    }
+
+    await mkdir(join(root, "proofs"), { recursive: true });
+    await writeFile(join(root, "proofs", "candidate.lean"), "theorem candidate_fixture : True := by trivial\n", "utf8");
+    const proofRunner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+      }
+
+      return { status: 0, stdout: "", stderr: "" };
+    };
+    const proof = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "proofs/candidate.lean",
+      scope: { statement: "3 / 4 + 5 / 8" },
+      runner: proofRunner,
+      now: new Date("2026-06-18T00:02:00.000Z")
+    });
+    const proofRef = relative(root, proof.jsonPath).replace(/\\/gu, "/");
+    await addResearchSessionCheckpoint({
+      rootPath: root,
+      sessionRef: harness.session.sessionId,
+      summary: "Accepted proof artifact is ready for validation gate attachment.",
+      evidenceRefs: [{ kind: "proof", ref: proofRef, trust: "proved" }],
+      nextChecks: ["Attach the proof artifact to the linked validation gate."],
+      now: "2026-06-18T00:03:00.000Z"
+    });
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-18T00:04:00.000Z"
+    });
+
+    const executed = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-18T00:05:00.000Z"
+    });
+    const plans = await listValidationPlans(root);
+    const updatedGate = plans
+      .find((candidate) => candidate.planId === validationPlan.planId)
+      ?.gates.find((gate) => gate.gateId === proofGate.gateId);
+
+    expect(review.items[0]).toMatchObject({
+      kind: "validation-gate",
+      command: `truth-harness validation attach ${validationPlan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`,
+      candidateEvidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })]
+    });
+    expect(executed).toMatchObject({
+      status: "executed",
+      execution: {
+        kind: "validation-attach",
+        evidenceRef: `proof:${proofRef}`,
+        result: {
+          validationGate: {
+            satisfied: true,
+            gate: {
+              gateId: proofGate.gateId,
+              status: "satisfied"
+            }
+          }
+        }
+      }
+    });
+    expect(updatedGate).toMatchObject({
+      status: "satisfied",
+      evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })]
+    });
   });
 
   it("blocks validation attach commands that target a different review gate", async () => {
