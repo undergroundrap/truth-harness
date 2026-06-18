@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   expectArray,
   expectConst,
@@ -10,11 +11,13 @@ import {
   expectRecord,
   formatValidationError,
   isRecord,
+  parseJsonWithOptionalBom,
   parseJsonObject
 } from "./artifact-record-validation.js";
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { createReceipt, type CreateReceiptOptions } from "./receipt.js";
@@ -23,6 +26,10 @@ import { parseSmtCheckRecord } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
 import type { Receipt, ReceiptEvidenceProfile, TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
+
+const VERIFIER_ROUTE_SCHEMA_VERSION = "truth-harness.verifier-route.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let verifierRouteSchemaCache: Promise<unknown> | undefined;
 
 export type VerifierRouteStatus = "verified" | "refuted" | "unverified";
 export type VerifierRouteStepStatus = "used" | "blocked" | "planned";
@@ -97,7 +104,7 @@ export interface ProofObligation {
 }
 
 export interface VerifierRoute {
-  schemaVersion: "truth-harness.verifier-route.v0";
+  schemaVersion: typeof VERIFIER_ROUTE_SCHEMA_VERSION;
   routeId: string;
   createdAt: string;
   localOnly: true;
@@ -236,7 +243,7 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
   }).slice(0, 16)}`;
 
   return {
-    schemaVersion: "truth-harness.verifier-route.v0",
+    schemaVersion: VERIFIER_ROUTE_SCHEMA_VERSION,
     routeId,
     createdAt,
     localOnly: true,
@@ -334,14 +341,15 @@ export async function writeVerifierRoute(input: WriteVerifierRouteInput): Promis
     smtRunner: input.smtRunner,
     casRunner: input.casRunner
   });
+  await assertVerifierRouteSchema(route);
   const routesDir = resolve(status.root, status.manifest.directories.routes);
-  await mkdir(routesDir, { recursive: true });
 
   const baseName = `${route.createdAt.slice(0, 10)}-${route.routeId}`;
   const jsonPath = join(routesDir, `${baseName}.json`);
   const markdownPath = join(routesDir, `${baseName}.md`);
   const markdown = renderVerifierRouteMarkdown(route);
 
+  await mkdir(routesDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, route);
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -358,6 +366,28 @@ export async function writeVerifierRoute(input: WriteVerifierRouteInput): Promis
     markdownPath,
     markdown
   };
+}
+
+async function assertVerifierRouteSchema(route: VerifierRoute): Promise<void> {
+  const schema = await loadVerifierRouteSchema();
+  const serializedRoute = parseJsonWithOptionalBom(JSON.stringify(route));
+  const issues = validateJsonSchema(serializedRoute, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Verifier route failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadVerifierRouteSchema(): Promise<unknown> {
+  verifierRouteSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "verifier-route.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return verifierRouteSchemaCache;
 }
 
 export async function listVerifierRoutes(rootPath: string): Promise<VerifierRouteSummary[]> {
@@ -444,6 +474,7 @@ export async function satisfyVerifierRouteObligation(
     ),
     nextActions: updateRouteNextActions(route.nextActions, updatedObligation)
   };
+  await assertVerifierRouteSchema(updatedRoute);
   const markdown = renderVerifierRouteMarkdown(updatedRoute);
 
   await writeJsonFileAtomic(jsonPath, updatedRoute);
@@ -1409,8 +1440,8 @@ function isTrustLabel(value: string): value is TrustLabel {
 function parseVerifierRouteJson(raw: string, sourcePath: string): VerifierRoute {
   const parsed = parseJsonObject(raw, sourcePath, "Verifier route");
   const issues: string[] = [];
-  if (parsed.schemaVersion !== "truth-harness.verifier-route.v0") {
-    issues.push(`$.schemaVersion must equal "truth-harness.verifier-route.v0"`);
+  if (parsed.schemaVersion !== VERIFIER_ROUTE_SCHEMA_VERSION) {
+    issues.push(`$.schemaVersion must equal "${VERIFIER_ROUTE_SCHEMA_VERSION}"`);
   }
   expectPattern(parsed, "routeId", /^route_[a-f0-9]{16}$/u, "$.routeId", issues);
   expectDateTime(parsed, "createdAt", "$.createdAt", issues);

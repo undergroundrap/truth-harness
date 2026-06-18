@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -328,6 +328,27 @@ describe("verifier route", () => {
     expect(validation.summary.byKind.routes).toBe(1);
   });
 
+  it("rejects malformed verifier routes before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-12T00:00:00.000Z"
+    });
+
+    await expect(
+      writeVerifierRoute({
+        rootPath: root,
+        problem: "",
+        now: new Date("2026-06-12T00:00:00.000Z"),
+        maximaCommand: "truth-harness-missing-maxima-command",
+        leanCommand: "truth-harness-missing-lean-command",
+        z3Command: "truth-harness-missing-z3-command",
+        timeoutMs: 50
+      })
+    ).rejects.toThrow("Verifier route failed JSON Schema validation before write");
+
+    await expect(listVerifierRoutes(root)).resolves.toEqual([]);
+  });
+
   it("forwards cvc5 command overrides into written verifier route manifests", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {
@@ -563,6 +584,73 @@ describe("verifier route", () => {
       satisfactionSummary: "Independent cross-check evidence satisfies this obligation."
     });
     expect(validation.passed).toBe(true);
+  });
+
+  it("rejects malformed updated routes before overwriting the route ledger", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-12T00:00:00.000Z"
+    });
+    const runner: CasBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Maxima 5.47.0\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n",
+        stderr: ""
+      };
+    };
+    const routeWrite = await writeVerifierRoute({
+      rootPath: root,
+      problem: "prove the Riemann hypothesis",
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const obligation = routeWrite.route.proofObligations.find((candidate) => candidate.kind === "independent-check");
+    const casWrite = await writeSymbolicCasCheckRecord({
+      rootPath: root,
+      prompt: {
+        operation: "simplify",
+        expression: "sin(x)^2 + cos(x)^2",
+        variable: "x"
+      },
+      result: "1",
+      maximaCommand: "maxima-test",
+      now: new Date("2026-06-12T00:01:00.000Z"),
+      runner
+    });
+    const casRef = relative(root, casWrite.jsonPath);
+    const looseRoute = JSON.parse(await readFile(routeWrite.jsonPath, "utf8")) as Record<string, unknown>;
+    looseRoute.legacyLooseField = "must not be preserved into a valid route rewrite";
+    await writeFile(routeWrite.jsonPath, `${JSON.stringify(looseRoute, null, 2)}\n`, "utf8");
+
+    await expect(
+      satisfyVerifierRouteObligation({
+        rootPath: root,
+        routeRef: routeWrite.route.routeId,
+        obligationId: obligation?.obligationId ?? "",
+        evidenceRef: { kind: "cas", ref: casRef },
+        now: new Date("2026-06-12T00:02:00.000Z")
+      })
+    ).rejects.toThrow("Verifier route failed JSON Schema validation before write");
+
+    const stillLoose = JSON.parse(await readFile(routeWrite.jsonPath, "utf8")) as Record<string, unknown>;
+    expect(stillLoose.legacyLooseField).toBe("must not be preserved into a valid route rewrite");
+    expect(stillLoose.proofObligations).toContainEqual(
+      expect.objectContaining({
+        obligationId: obligation?.obligationId,
+        status: "open"
+      })
+    );
   });
 
   it("refuses malformed CAS JSON even when it claims cross-checked", async () => {
