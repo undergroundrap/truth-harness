@@ -1,6 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
@@ -35,7 +38,7 @@ export interface SimulationScalar {
 }
 
 export interface SimulationLogEntry {
-  schemaVersion: "truth-harness.simulation.v0";
+  schemaVersion: typeof SIMULATION_SCHEMA_VERSION;
   simulationId: string;
   projectId: string;
   createdAt: string;
@@ -95,6 +98,10 @@ export interface SimulationLogWriteResult {
   path: string;
 }
 
+const SIMULATION_SCHEMA_VERSION = "truth-harness.simulation.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let simulationSchemaCache: Promise<unknown> | undefined;
+
 export function isSimulationKind(value: string): value is SimulationKind {
   return (SIMULATION_KINDS as readonly string[]).includes(value);
 }
@@ -140,7 +147,7 @@ export async function createSimulationLogEntry(input: CreateSimulationLogInput):
   const simulationId = `sim_${stableHash(entryWithoutId).slice(0, 16)}`;
   const validationBoundary = validationBoundaryFor({ stage, kind, nextChecks });
   const entry: SimulationLogEntry = {
-    schemaVersion: "truth-harness.simulation.v0",
+    schemaVersion: SIMULATION_SCHEMA_VERSION,
     simulationId,
     ...entryWithoutId,
     updatedAt: createdAt,
@@ -148,6 +155,7 @@ export async function createSimulationLogEntry(input: CreateSimulationLogInput):
     privacy: manifest.privacy,
     warnings: warningsFor({ stage, assumptions, uncertainty, limitations, nextChecks })
   };
+  await assertSimulationSchema(entry);
 
   const simulationsDir = resolve(status.root, manifest.directories.simulations);
   await mkdir(simulationsDir, { recursive: true });
@@ -162,6 +170,28 @@ export async function createSimulationLogEntry(input: CreateSimulationLogInput):
   });
 
   return { entry, path };
+}
+
+async function assertSimulationSchema(entry: SimulationLogEntry): Promise<void> {
+  const schema = await loadSimulationSchema();
+  const serializedEntry = parseJsonWithOptionalBom(JSON.stringify(entry));
+  const issues = validateJsonSchema(serializedEntry, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Simulation log entry failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadSimulationSchema(): Promise<unknown> {
+  simulationSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "simulation-log.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return simulationSchemaCache;
 }
 
 export async function listSimulationLogEntries(rootPath: string): Promise<SimulationLogEntry[]> {
@@ -183,11 +213,11 @@ export async function listSimulationLogEntries(rootPath: string): Promise<Simula
   const entries = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => JSON.parse(await readFile(join(simulationsDir, file), "utf8")) as SimulationLogEntry)
+      .map(async (file) => parseJsonWithOptionalBom(await readFile(join(simulationsDir, file), "utf8")) as SimulationLogEntry)
   );
 
   return entries
-    .filter((entry) => entry.schemaVersion === "truth-harness.simulation.v0")
+    .filter((entry) => entry.schemaVersion === SIMULATION_SCHEMA_VERSION)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 

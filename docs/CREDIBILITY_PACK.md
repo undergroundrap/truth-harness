@@ -29,6 +29,7 @@ The evidence-audit writers validate against `evidence-audit.schema.json` before 
 The experiment-log writer validates against `experiment-log.schema.json` before saving experiment evidence, so wet-lab, field, preclinical, clinical, and bench provenance cannot enter the workspace with malformed identity or review boundaries.
 The expert-review writer validates against `expert-review.schema.json` before saving human review records, so professor, domain expert, clinical, regulatory, safety, and patent/legal reviews cannot be persisted with malformed reviewer scope or project identity.
 The literature-record writer validates against `literature-record.schema.json` before saving source metadata, so citations, prior art, papers, datasets, and local corpus notes cannot enter the evidence ledger with malformed project identity or review boundaries.
+The simulation-log writer validates against `simulation-log.schema.json` before saving computational evidence, so physics, molecular, statistical, agentic, and numeric simulations cannot become durable evidence with malformed model scope, validation boundaries, or workspace identity.
 
 When using the npm wrapper, pass command flags after an extra separator so npm does not consume them:
 
