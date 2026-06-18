@@ -1,6 +1,5 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import type { CodeRunRecord } from "./code-run.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
@@ -9,12 +8,12 @@ import type { ExperimentLogEntry } from "./experiment-log.js";
 import type { ExpertReviewRecord } from "./expert-review.js";
 import type { ExternalDisclosureLogEntry } from "./disclosure-log.js";
 import type { InventionEvidenceRef } from "./invention-log.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import type { LiteratureRecord } from "./literature-record.js";
 import type { NotebookRunRecord } from "./notebook-run.js";
 import type { SimulationLogEntry } from "./simulation-log.js";
 import type { VaultEnvelope, VaultEnvelopeSummary } from "./vault.js";
 import { parseReceiptJson, ReceiptValidationError } from "./receipt-validation.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, Receipt, TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -117,8 +116,6 @@ export interface EvidenceAuditReportWriteResult {
 }
 
 const EVIDENCE_AUDIT_SCHEMA_VERSION = "truth-harness.evidence-audit.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let evidenceAuditSchemaCache: Promise<unknown> | undefined;
 
 export async function createEvidenceAudit(input: CreateEvidenceAuditInput): Promise<EvidenceAudit> {
   const status = await requireLocalWorkspace(input.rootPath);
@@ -205,25 +202,11 @@ export async function writeEvidenceAuditReport(input: CreateEvidenceAuditInput):
 }
 
 async function assertEvidenceAuditSchema(audit: EvidenceAudit): Promise<void> {
-  const schema = await loadEvidenceAuditSchema();
-  const serializedAudit = parseJsonWithOptionalBom(JSON.stringify(audit));
-  const issues = validateJsonSchema(serializedAudit, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Evidence audit failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadEvidenceAuditSchema(): Promise<unknown> {
-  evidenceAuditSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "evidence-audit.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return evidenceAuditSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: audit,
+    schemaFile: "evidence-audit.schema.json",
+    artifactName: "Evidence audit"
+  });
 }
 
 export async function listEvidenceAudits(rootPath: string): Promise<EvidenceAudit[]> {

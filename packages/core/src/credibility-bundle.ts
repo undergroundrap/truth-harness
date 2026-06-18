@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { copyFile, mkdir, readFile, readdir, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import {
   createCredibilityPack,
@@ -10,8 +9,8 @@ import {
   type CredibilityPackStatus
 } from "./credibility-pack.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -150,9 +149,6 @@ export interface CredibilityBundleVerificationWriteResult {
 
 const CREDIBILITY_BUNDLE_SCHEMA_VERSION = "truth-harness.credibility-bundle.v0" as const;
 const CREDIBILITY_BUNDLE_VERIFY_SCHEMA_VERSION = "truth-harness.credibility-bundle-verification.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let credibilityBundleSchemaCache: Promise<unknown> | undefined;
-let credibilityBundleVerificationSchemaCache: Promise<unknown> | undefined;
 
 export async function writeCredibilityBundle(input: WriteCredibilityBundleInput): Promise<CredibilityBundleWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
@@ -430,47 +426,19 @@ export function renderCredibilityBundleVerificationMarkdown(verification: Credib
 }
 
 async function assertCredibilityBundleManifestSchema(manifest: CredibilityBundleManifest): Promise<void> {
-  const schema = await loadCredibilityBundleSchema();
-  const serializedManifest = parseJsonWithOptionalBom(JSON.stringify(manifest));
-  const issues = validateJsonSchema(serializedManifest, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Credibility bundle manifest failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
+  await assertJsonSchemaBeforeWrite({
+    value: manifest,
+    schemaFile: "credibility-bundle.schema.json",
+    artifactName: "Credibility bundle manifest"
+  });
 }
 
 async function assertCredibilityBundleVerificationSchema(verification: CredibilityBundleVerification): Promise<void> {
-  const schema = await loadCredibilityBundleVerificationSchema();
-  const serializedVerification = parseJsonWithOptionalBom(JSON.stringify(verification));
-  const issues = validateJsonSchema(serializedVerification, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Credibility bundle verification failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadCredibilityBundleSchema(): Promise<unknown> {
-  credibilityBundleSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "credibility-bundle.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return credibilityBundleSchemaCache;
-}
-
-function loadCredibilityBundleVerificationSchema(): Promise<unknown> {
-  credibilityBundleVerificationSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "credibility-bundle-verification.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return credibilityBundleVerificationSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: verification,
+    schemaFile: "credibility-bundle-verification.schema.json",
+    artifactName: "Credibility bundle verification"
+  });
 }
 
 function appendVerificationEntries(

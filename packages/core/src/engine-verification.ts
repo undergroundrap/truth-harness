@@ -1,6 +1,5 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
 import {
   expectArray,
   expectConst,
@@ -22,9 +21,9 @@ import {
   type SymbolicCasCheckResult
 } from "./cas-backend.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { checkLeanProofArtifact, type LeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import { checkSmtLibArtifact, type SmtBackendCommandRunner, type SmtCheckRecord } from "./smt-backend.js";
 import type { SymbolicPrompt } from "./sympy.js";
@@ -190,8 +189,6 @@ const DEFAULT_SYMBOLIC_PROMPT: SymbolicPrompt = {
 const DEFAULT_SYMBOLIC_RESULT = "1";
 const DEFAULT_SMT_SOURCE = "docs/examples/constraints.smt2";
 const DEFAULT_LEAN_SOURCE = "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean";
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let engineRunSchemaCache: Promise<unknown> | undefined;
 
 export async function verifyEngineEvidence(input: EngineVerificationInput = {}): Promise<EngineVerificationReport> {
   const rootPath = resolve(input.rootPath ?? ".");
@@ -340,25 +337,11 @@ export async function writeEngineVerificationRun(
 }
 
 async function assertEngineVerificationRunSchema(record: EngineVerificationRunRecord): Promise<void> {
-  const schema = await loadEngineRunSchema();
-  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
-  const issues = validateJsonSchema(serializedRecord, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Engine verification run failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadEngineRunSchema(): Promise<unknown> {
-  engineRunSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "engine-run.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return engineRunSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: record,
+    schemaFile: "engine-run.schema.json",
+    artifactName: "Engine verification run"
+  });
 }
 
 export async function listEngineVerificationRuns(rootPath: string): Promise<EngineVerificationRunSummary[]> {

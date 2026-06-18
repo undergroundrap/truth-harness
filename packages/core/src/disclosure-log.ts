@@ -1,18 +1,15 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const EXTERNAL_DISCLOSURE_STATUSES = ["planned", "sent", "received", "cancelled"] as const;
 const DISCLOSURE_SCHEMA_VERSION = "truth-harness.disclosure.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let disclosureLogSchemaCache: Promise<unknown> | undefined;
 
 export type ExternalDisclosureStatus = (typeof EXTERNAL_DISCLOSURE_STATUSES)[number];
 
@@ -141,25 +138,11 @@ export async function createExternalDisclosureLogEntry(
 }
 
 async function assertDisclosureLogSchema(entry: ExternalDisclosureLogEntry): Promise<void> {
-  const schema = await loadDisclosureLogSchema();
-  const serializedEntry = parseJsonWithOptionalBom(JSON.stringify(entry));
-  const issues = validateJsonSchema(serializedEntry, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Disclosure log entry failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadDisclosureLogSchema(): Promise<unknown> {
-  disclosureLogSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "disclosure-log.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return disclosureLogSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: entry,
+    schemaFile: "disclosure-log.schema.json",
+    artifactName: "Disclosure log entry"
+  });
 }
 
 export async function listExternalDisclosureLogEntries(rootPath: string): Promise<ExternalDisclosureLogEntry[]> {

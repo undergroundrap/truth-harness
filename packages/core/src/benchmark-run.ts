@@ -1,10 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, Receipt, TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -256,10 +255,6 @@ export interface BenchmarkArtifactSummary {
   warnings: string[];
 }
 
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let benchmarkRunSchemaCache: Promise<unknown> | undefined;
-let benchmarkComparisonSchemaCache: Promise<unknown> | undefined;
-
 export function benchmarkRunFailsGate(run: BenchmarkRunLike | BenchmarkRunRecord): boolean {
   return benchmarkRunFailedCount(run) > 0;
 }
@@ -362,25 +357,11 @@ export async function writeBenchmarkRunRecord(input: CreateBenchmarkRunRecordInp
 }
 
 async function assertBenchmarkRunSchema(record: BenchmarkRunRecord): Promise<void> {
-  const schema = await loadBenchmarkRunSchema();
-  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
-  const issues = validateJsonSchema(serializedRecord, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Benchmark run failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadBenchmarkRunSchema(): Promise<unknown> {
-  benchmarkRunSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "benchmark-run.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return benchmarkRunSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: record,
+    schemaFile: "benchmark-run.schema.json",
+    artifactName: "Benchmark run"
+  });
 }
 
 export function parseBenchmarkRunRecordJson(raw: string, source = "benchmark run record"): BenchmarkRunRecord {
@@ -479,25 +460,11 @@ export async function writeBenchmarkComparisonRecord(
 }
 
 async function assertBenchmarkComparisonSchema(record: BenchmarkComparisonRecord): Promise<void> {
-  const schema = await loadBenchmarkComparisonSchema();
-  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
-  const issues = validateJsonSchema(serializedRecord, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Benchmark comparison failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadBenchmarkComparisonSchema(): Promise<unknown> {
-  benchmarkComparisonSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "benchmark-comparison.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return benchmarkComparisonSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: record,
+    schemaFile: "benchmark-comparison.schema.json",
+    artifactName: "Benchmark comparison"
+  });
 }
 
 export async function listBenchmarkComparisonRecords(rootPath: string): Promise<BenchmarkComparisonRecord[]> {
