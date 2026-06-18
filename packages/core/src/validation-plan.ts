@@ -1,11 +1,16 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
+import { parseBenchmarkRunRecordJson } from "./benchmark-run.js";
+import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { createEvidenceAudit, type EvidenceAudit, type EvidenceAuditClaimType } from "./evidence-audit.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import type { InventionEvidenceRef } from "./invention-log.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { parseLeanProofCheckRecord } from "./proof-backend.js";
+import { parseReceiptJson } from "./receipt-validation.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
+import { parseSmtCheckRecord } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { readVerifierRoute, type VerifierRoute } from "./verifier-route.js";
@@ -76,6 +81,8 @@ export interface ValidationEvidenceRef {
     | "code-run"
     | "benchmark"
     | "cas"
+    | "proof"
+    | "smt"
     | "disclosure"
     | "simulation"
     | "experiment"
@@ -1095,6 +1102,81 @@ async function resolveValidationGateEvidence(
     };
   }
 
+  const artifact = await readValidationEvidenceArtifactJson(root, evidenceRef.ref);
+  if (artifact) {
+    if (evidenceRef.kind === "receipt") {
+      const receipt = parseReceiptJson(artifact.raw, evidenceRef.ref);
+      return {
+        ...evidenceRef,
+        trust: receipt.trust,
+        summary: evidenceRef.summary ?? receipt.summary,
+        schemaVersion: receipt.schemaVersion,
+        artifactId: receipt.runId,
+        status: receipt.trust,
+        nextChecks: receipt.trust === "unverified"
+          ? ["Receipt is unverified; attach stronger proof, SMT, CAS, or route evidence before closing this gate."]
+          : []
+      };
+    }
+
+    if (evidenceRef.kind === "proof") {
+      const record = parseLeanProofCheckRecord(artifact.raw, evidenceRef.ref);
+      return {
+        ...evidenceRef,
+        trust: record.trust,
+        summary: evidenceRef.summary ?? `Lean proof check status: ${record.status}.`,
+        schemaVersion: record.schemaVersion,
+        artifactId: record.checkId,
+        status: record.status,
+        nextChecks: record.status === "accepted"
+          ? []
+          : ["Proof check was not accepted; attach an accepted proof-check record before closing this gate."]
+      };
+    }
+
+    if (evidenceRef.kind === "smt") {
+      const record = parseSmtCheckRecord(artifact.raw, evidenceRef.ref);
+      return {
+        ...evidenceRef,
+        trust: record.trust,
+        summary: evidenceRef.summary ?? `SMT check status: ${record.status}.`,
+        schemaVersion: record.schemaVersion,
+        artifactId: record.checkId,
+        status: record.status,
+        nextChecks: record.trust === "smt-checked"
+          ? []
+          : ["SMT solver did not produce a sat/unsat check; attach solver-backed SMT evidence before closing this gate."]
+      };
+    }
+
+    if (evidenceRef.kind === "cas") {
+      const record = parseSymbolicCasCheckRecord(artifact.raw, evidenceRef.ref);
+      return {
+        ...evidenceRef,
+        trust: record.trust,
+        summary: evidenceRef.summary ?? `CAS check status: ${record.status}.`,
+        schemaVersion: record.schemaVersion,
+        artifactId: record.checkId,
+        status: record.status,
+        nextChecks: record.trust === "cross-checked"
+          ? []
+          : ["CAS evidence is not cross-checked; attach agreeing independent CAS or stronger evidence before closing this gate."]
+      };
+    }
+
+    if (evidenceRef.kind === "benchmark") {
+      const record = parseBenchmarkRunRecordJson(artifact.raw, evidenceRef.ref);
+      return {
+        ...evidenceRef,
+        summary: evidenceRef.summary ?? `Benchmark run ${record.benchmarkRunId}: ${record.totals.passed}/${record.totals.total} cases passed.`,
+        schemaVersion: record.schemaVersion,
+        artifactId: record.benchmarkRunId,
+        status: record.totals.failed === 0 ? "passed" : "failed",
+        nextChecks: record.totals.failed === 0 ? [] : ["Benchmark run has failed cases; review failures before closing this gate."]
+      };
+    }
+  }
+
   return {
     ...evidenceRef,
     summary: evidenceRef.summary ?? `${evidenceRef.kind}:${evidenceRef.ref} attached for validation review.`,
@@ -1118,7 +1200,11 @@ function assessValidationGateEvidence(
     }
 
     if (
-      evidence.kind === "route" &&
+      (evidence.kind === "route" ||
+        evidence.kind === "receipt" ||
+        evidence.kind === "proof" ||
+        evidence.kind === "smt" ||
+        evidence.kind === "cas") &&
       (evidence.trust === "proved" ||
         evidence.trust === "exact-computed" ||
         evidence.trust === "smt-checked" ||
@@ -1127,7 +1213,7 @@ function assessValidationGateEvidence(
       return {
         status: "satisfied",
         nextChecks: [],
-        message: `Validation proof gate ${gate.gateId} satisfied by ${evidence.trust} route evidence.`
+        message: `Validation proof gate ${gate.gateId} satisfied by ${evidence.trust} ${evidence.kind} evidence.`
       };
     }
 
@@ -1141,6 +1227,14 @@ function assessValidationGateEvidence(
   }
 
   if (gate.kind === "benchmark" && evidence.kind === "benchmark") {
+    if (evidence.status !== "passed") {
+      return {
+        status: gate.status === "missing" ? "in-progress" : gate.status,
+        nextChecks: evidence.nextChecks,
+        message: `Validation benchmark gate ${gate.gateId} received benchmark evidence, but failed cases keep it open.`
+      };
+    }
+
     return {
       status: "satisfied",
       nextChecks: [],
@@ -1166,6 +1260,21 @@ function assessValidationGateEvidence(
     nextChecks: evidence.nextChecks.length > 0 ? evidence.nextChecks : gate.nextChecks,
     message: `Evidence ${evidence.kind}:${evidence.ref} attached to validation gate ${gate.gateId}; gate remains ${gate.status}.`
   };
+}
+
+async function readValidationEvidenceArtifactJson(root: string, ref: string): Promise<{ raw: string } | undefined> {
+  let path: string;
+  try {
+    path = resolveWorkspacePath(root, ref);
+  } catch {
+    return undefined;
+  }
+
+  try {
+    return { raw: await readFile(path, "utf8") };
+  } catch {
+    return undefined;
+  }
 }
 
 function mergeValidationEvidenceRefs(

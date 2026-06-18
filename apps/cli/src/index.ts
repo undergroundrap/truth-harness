@@ -10,6 +10,7 @@ import {
   checkClaimFile,
   checkLeanProofArtifact,
   checkSmtLibArtifact,
+  attachValidationGateEvidence,
   archiveLocalWorkspace,
   cleanLocalWorkspace,
   createBenchmarkComparisonRecord,
@@ -290,6 +291,7 @@ import {
   type VerifierRouteWriteResult,
   type ValidationEvidenceRef,
   type ValidationGateInput,
+  type AttachValidationGateEvidenceResult,
   type ValidationPlan,
   type ValidationPlanDomain,
   type ValidationPlanWriteResult,
@@ -1938,7 +1940,7 @@ validation
   .option("--title <title>", "Short validation plan title")
   .option("--objective <text>", "Validation objective")
   .option("--domain <domain>", "math, source, literature, simulation, experiment, biomedical, clinical, safety, regulatory, patent, engineering, software, physics, or general. Repeatable", collectRepeated, [])
-  .option("--evidence <ref>", "Evidence ref, optionally prefixed as receipt:path, route:id, simulation:id, experiment:id, review:id, audit:id, snapshot:id, claim-chart:id, literature:id, or source:path", collectRepeated, [])
+  .option("--evidence <ref>", "Evidence ref, optionally prefixed as receipt:path, route:id, proof:path, smt:path, cas:path, simulation:id, experiment:id, review:id, audit:id, snapshot:id, claim-chart:id, literature:id, or source:path", collectRepeated, [])
   .option("--gate <gate>", "Manual gate as kind:description or description; repeatable", collectRepeated, [])
   .option("--preview", "Derive the validation plan without writing files")
   .option("--json", "Print the full validation plan JSON")
@@ -1996,6 +1998,40 @@ validation
 
     printValidationPlanList(plans);
   });
+
+validation
+  .command("attach")
+  .description("Attach local evidence to a validation gate and conservatively update the gate status.")
+  .argument("<plan>", "Validation plan id or workspace-local JSON path")
+  .argument("<gate>", "Validation gate id")
+  .requiredOption("--evidence <ref>", "Evidence ref such as route:id, receipt:path, proof:path, smt:path, cas:path, benchmark:path, source:path, or literature:path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--json", "Print the full validation-gate attachment JSON")
+  .action(
+    async (
+      planRef: string,
+      gateId: string,
+      options: {
+        workspace: string;
+        evidence: string;
+        json?: boolean;
+      }
+    ) => {
+      const result = await attachValidationGateEvidence({
+        rootPath: options.workspace,
+        planRef,
+        gateId,
+        evidenceRef: parseValidationEvidenceRef(options.evidence)
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printValidationGateAttachment(result);
+    }
+  );
 
 const research = program
   .command("research")
@@ -8062,6 +8098,29 @@ function printValidationPlanList(plans: ValidationPlan[]): void {
   }
 }
 
+function printValidationGateAttachment(result: AttachValidationGateEvidenceResult): void {
+  console.log(`Validation gate ${result.gate.gateId}`);
+  console.log(`Plan: ${result.plan.planId}`);
+  console.log(`Gate status: ${result.gate.status}`);
+  console.log(`Closed: ${String(result.closed)}`);
+  console.log(`Satisfied: ${String(result.satisfied)}`);
+  console.log(`Blocked: ${String(result.blocked)}`);
+  console.log(`Evidence: ${result.evidence.kind}:${result.evidence.ref}${result.evidence.trust ? ` (${result.evidence.trust})` : ""}`);
+  console.log(`Readiness: ${result.plan.readiness.status}`);
+  console.log(`JSON: ${result.jsonPath}`);
+  console.log(`Markdown: ${result.markdownPath}`);
+  console.log("");
+  console.log(result.message);
+
+  if (result.gate.nextChecks.length > 0) {
+    console.log("");
+    console.log("Next checks:");
+    for (const check of result.gate.nextChecks) {
+      console.log(`  ${check}`);
+    }
+  }
+}
+
 function printResearchSessionWrite(result: ResearchSessionWriteResult): void {
   console.log(`Wrote research session ${result.session.sessionId}`);
   console.log(`JSON: ${result.jsonPath}`);
@@ -8912,6 +8971,8 @@ function parseValidationEvidenceRef(value: string): ValidationEvidenceRef {
     maybeKind === "code-run" ||
     maybeKind === "benchmark" ||
     maybeKind === "cas" ||
+    maybeKind === "proof" ||
+    maybeKind === "smt" ||
     maybeKind === "disclosure" ||
     maybeKind === "simulation" ||
     maybeKind === "experiment" ||

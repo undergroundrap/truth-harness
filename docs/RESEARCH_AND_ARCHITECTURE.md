@@ -693,6 +693,7 @@ Current MCP tools:
 | `truth_harness_evidence_audit_list` | List local evidence audits. |
 | `truth_harness_validation_plan` | Create or write local validation-gate plans before stronger discovery, biomedical, patent, simulation, or engineering claims. |
 | `truth_harness_validation_plan_list` | List local validation plans. |
+| `truth_harness_validation_gate_attach` | Attach validated route, receipt, proof, SMT, CAS, benchmark, source, or literature evidence to a specific validation-plan gate and conservatively update that gate. |
 | `truth_harness_model_context_prepare` | Prepare a local selected-context packet before hosted model, local model, or external service collaboration. |
 | `truth_harness_model_context_list` | List local model-context packets. |
 | `truth_harness_disclosure_log` | Write local audit records for selected context sent to external models/services. |

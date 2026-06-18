@@ -82,6 +82,9 @@ npm run cli -- workspace init --name "Local Math Lab"
 npm run cli -- workspace status
 npm run cli -- workspace repair
 npm run cli -- research harness "Investigate deterministic math and physics verification for AI-generated robotics simulation code." --domain math --domain physics --domain code
+npm run cli -- validation plan "3 / 4 + 5 / 8" --domain math --write
+npm run cli -- verify "3 / 4 + 5 / 8" --write
+npm run cli -- validation attach <plan_id> <gate_id> --evidence route:<route_id>
 npm run workspace:repair-artifacts:preview
 npm run cli -- workspace repair-artifacts
 npm run workspace:clean
@@ -224,7 +227,7 @@ Vault commands encrypt workspace-local files into `.truth-harness/vault/` with A
 
 Audit commands classify a claim against local evidence refs and write `truth-harness.evidence-audit.v0` records plus optional Markdown reports. They flag missing evidence, biomedical/patent/simulation overclaims, narrow proof scope, and required next checks before an agent or human presents a claim as true.
 
-Validation plan commands write `truth-harness.validation-plan.v0` records into `.truth-harness/validation/`. They turn an audited claim into explicit gates such as proof, source citation, simulation review, wet-lab work, replication, preclinical/clinical validation, safety, ethics, regulatory review, prior art, claim charts, reduction to practice, and patent legal review. They are local checklists, not proof that those gates are satisfied.
+Validation plan commands write `truth-harness.validation-plan.v0` records into `.truth-harness/validation/`. They turn an audited claim into explicit gates such as proof, source citation, simulation review, wet-lab work, replication, preclinical/clinical validation, safety, ethics, regulatory review, prior art, claim charts, reduction to practice, and patent legal review. They are local checklists, not proof that those gates are satisfied. Use `truth-harness validation attach <plan> <gate> --evidence route:<route_id>` when a verifier route, receipt, proof-check, SMT-check, CAS-check, benchmark run, source, or literature artifact should be evaluated against a specific gate. Direct artifact refs such as `proof:.truth-harness/proofs/<file>.json`, `smt:.truth-harness/smt/<file>.json`, `cas:.truth-harness/cas/<file>.json`, `receipt:.truth-harness/receipts/<file>.json`, and `benchmark:.truth-harness/benchmarks/<file>.json` are parsed through their normal validators before they can affect the gate. Strong matching evidence can satisfy a gate, refuting evidence can block it, and weak or unrelated evidence remains attached as in-progress review material with next checks.
 
 Workspace snapshot commands write `truth-harness.workspace-snapshot.v0` records into `.truth-harness/snapshots/`. They hash local artifacts, extract schema/id metadata, and let humans or agents verify whether evidence changed, disappeared, or was added since a prior research checkpoint. Snapshots verify provenance and drift; they do not prove scientific, mathematical, medical, regulatory, or legal truth.
 

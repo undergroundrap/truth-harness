@@ -69,6 +69,7 @@ import {
   handleTruthHarnessSourceIngest,
   handleTruthHarnessSourceSearch,
   handleTruthHarnessValidationPlan,
+  handleTruthHarnessValidationGateAttach,
   handleTruthHarnessValidationPlanList,
   handleTruthHarnessVaultList,
   handleTruthHarnessVaultSeal,
@@ -2538,6 +2539,8 @@ export function createTruthHarnessMcpServer(): McpServer {
       "code-run",
       "benchmark",
       "cas",
+      "proof",
+      "smt",
       "disclosure",
       "simulation",
       "experiment",
@@ -2672,6 +2675,29 @@ export function createTruthHarnessMcpServer(): McpServer {
       }
     },
     async ({ workspacePath }) => toolJson(await handleTruthHarnessValidationPlanList({ workspacePath }))
+  );
+
+  server.registerTool(
+    "truth_harness_validation_gate_attach",
+    {
+      title: "Attach Validation Gate Evidence",
+      description:
+        "Attach a local evidence artifact to an exact validation-plan gate and conservatively update the gate status. Satisfying, refuting, and weak evidence are distinguished; this tool never upgrades trust by assertion.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        planRef: z.string().min(1).describe("Validation plan id or workspace-local validation-plan JSON path."),
+        gateId: z.string().min(1).describe("Validation gate id to update."),
+        evidenceRef: validationEvidenceRefSchema.describe("Local evidence ref to attach, such as route:id, proof:path, smt:path, cas:path, receipt:path, benchmark:path, source:path, or literature:path.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTruthHarnessValidationGateAttach(input))
   );
 
   const researchEvidenceRefSchema = z.object({

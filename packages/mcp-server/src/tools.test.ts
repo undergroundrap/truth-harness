@@ -67,6 +67,7 @@ import {
   handleTruthHarnessSourceCite,
   handleTruthHarnessSourceIngest,
   handleTruthHarnessSourceSearch,
+  handleTruthHarnessValidationGateAttach,
   handleTruthHarnessValidationPlan,
   handleTruthHarnessValidationPlanList,
   handleTruthHarnessVaultList,
@@ -1727,6 +1728,47 @@ describe("MCP tool handlers", () => {
     expect(preview.written === false ? preview.plan.gates.find((gate) => gate.kind === "wet-lab")?.status : "").toBe("missing");
     expect(list.total).toBe(1);
     expect(list.plans[0]?.readiness.status).toBe("not-ready");
+  });
+
+  it("attaches validation gate evidence for agents", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Validation Attach Lab" });
+    const write = await handleTruthHarnessValidationPlan({
+      claim: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      write: true
+    });
+    if (write.written !== true) {
+      throw new Error("Expected written validation plan.");
+    }
+    const proofGate = write.result.plan.gates.find((gate) => gate.kind === "proof");
+    if (!proofGate) {
+      throw new Error("Expected proof gate.");
+    }
+    const route = await handleTruthHarnessVerify({
+      problem: "3 / 4 + 5 / 8",
+      write: true
+    });
+    const attached = await handleTruthHarnessValidationGateAttach({
+      planRef: write.result.plan.planId,
+      gateId: proofGate.gateId,
+      evidenceRef: {
+        kind: "route",
+        ref: route.route.routeId
+      }
+    });
+
+    expect(route.route.finalTrust).toBe("exact-computed");
+    expect(attached).toMatchObject({
+      satisfied: true,
+      blocked: false,
+      gate: {
+        status: "satisfied",
+        evidenceRefs: [expect.objectContaining({ kind: "route", ref: route.route.routeId, trust: "exact-computed" })]
+      }
+    });
+    expect(attached.message).toContain("satisfied");
   });
 
   it("writes and lists invention logs for agents", async () => {

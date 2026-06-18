@@ -2517,6 +2517,81 @@ describe("benchmark CLI", () => {
     expect(list.total).toBe(1);
     expect(validationList.total).toBe(1);
   });
+
+  it("attaches verifier route evidence to validation gates from the CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    const planResult = await runCli([
+      "validation",
+      "plan",
+      "3 / 4 + 5 / 8",
+      "--workspace",
+      root,
+      "--domain",
+      "math",
+      "--json"
+    ]);
+    const planJson = JSON.parse(planResult.stdout) as {
+      plan: {
+        planId: string;
+        gates: Array<{ gateId: string; kind: string; status: string }>;
+      };
+    };
+    const proofGate = planJson.plan.gates.find((gate) => gate.kind === "proof");
+    if (!proofGate) {
+      throw new Error("Expected validation plan to include a proof gate.");
+    }
+    const route = await runCli([
+      "verify",
+      "3 / 4 + 5 / 8",
+      "--workspace",
+      root,
+      "--write",
+      "--json"
+    ]);
+    const routeJson = JSON.parse(route.stdout) as {
+      route: { routeId: string; finalTrust: string };
+    };
+    const attach = await runCli([
+      "validation",
+      "attach",
+      planJson.plan.planId,
+      proofGate.gateId,
+      "--workspace",
+      root,
+      "--evidence",
+      `route:${routeJson.route.routeId}`,
+      "--json"
+    ]);
+    const attached = JSON.parse(attach.stdout) as {
+      satisfied: boolean;
+      blocked: boolean;
+      gate: { status: string; evidenceRefs: Array<{ kind: string; ref: string; trust?: string }> };
+      message: string;
+    };
+    const human = await runCli([
+      "validation",
+      "attach",
+      planJson.plan.planId,
+      proofGate.gateId,
+      "--workspace",
+      root,
+      "--evidence",
+      `route:${routeJson.route.routeId}`
+    ]);
+
+    expect(routeJson.route.finalTrust).toBe("exact-computed");
+    expect(attached).toMatchObject({
+      satisfied: true,
+      blocked: false,
+      gate: {
+        status: "satisfied",
+        evidenceRefs: [expect.objectContaining({ kind: "route", ref: routeJson.route.routeId, trust: "exact-computed" })]
+      }
+    });
+    expect(attached.message).toContain("satisfied");
+    expect(human.stdout).toContain("Gate status: satisfied");
+  });
 });
 
 async function runCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {

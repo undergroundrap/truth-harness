@@ -137,6 +137,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_source_cite",
         "truth_harness_source_ingest",
         "truth_harness_source_search",
+        "truth_harness_validation_gate_attach",
         "truth_harness_validation_plan",
         "truth_harness_validation_plan_list",
         "truth_harness_vault_list",

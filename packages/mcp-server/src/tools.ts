@@ -3,6 +3,7 @@ import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseBenchmarkSuite, runBenchmarkSuite, type BenchmarkRun } from "@truth-harness/benchmarks";
 import {
+  attachValidationGateEvidence,
   benchmarkComparisonFailsGate,
   benchmarkRunFailsGate,
   checkLeanProofArtifact,
@@ -221,6 +222,7 @@ import {
   type SmtCheckSummary,
   type SmtCheckWriteResult,
   type SmtProblemSolveResult,
+  type AttachValidationGateEvidenceResult,
   type ValidationEvidenceRef,
   type ValidationGateInput,
   type ValidationPlan,
@@ -993,6 +995,13 @@ export type TruthHarnessValidationPlanOutput =
 
 export interface TruthHarnessValidationPlanListInput {
   workspacePath?: string;
+}
+
+export interface TruthHarnessValidationGateAttachInput {
+  workspacePath?: string;
+  planRef: string;
+  gateId: string;
+  evidenceRef: ValidationEvidenceRef;
 }
 
 export interface TruthHarnessResearchSessionStartInput {
@@ -2385,6 +2394,17 @@ export async function handleTruthHarnessValidationPlanList(input: TruthHarnessVa
     total: plans.length,
     plans
   };
+}
+
+export async function handleTruthHarnessValidationGateAttach(
+  input: TruthHarnessValidationGateAttachInput
+): Promise<AttachValidationGateEvidenceResult> {
+  return attachValidationGateEvidence({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    planRef: input.planRef,
+    gateId: input.gateId,
+    evidenceRef: input.evidenceRef
+  });
 }
 
 export async function handleTruthHarnessResearchSessionStart(
