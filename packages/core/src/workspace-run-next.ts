@@ -1,5 +1,7 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import {
   writeBenchmarkRunRecord,
   type BenchmarkRunLike,
@@ -11,6 +13,7 @@ import type { CredibilityPack } from "./credibility-pack.js";
 import { writeSymbolicCasCheckRecord } from "./cas-backend.js";
 import { writeEngineVerificationRun, type EngineVerificationRequirements } from "./engine-verification.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { writeLeanProofCheckRecord } from "./proof-backend.js";
 import { readReportDraft } from "./report-draft.js";
@@ -29,6 +32,9 @@ import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 import type { WorkspaceReview, WorkspaceReviewItem } from "./workspace-review.js";
 
 export type WorkspaceRunNextStatus = "planned" | "executed" | "blocked";
+const WORKSPACE_RUN_NEXT_SCHEMA_VERSION = "truth-harness.workspace-run-next.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let workspaceRunNextSchemaCache: Promise<unknown> | undefined;
 
 export interface WorkspaceRunNextWriteResult {
   plan: WorkspaceRunNextPlan;
@@ -38,7 +44,7 @@ export interface WorkspaceRunNextWriteResult {
 }
 
 export interface WorkspaceRunNextSummary {
-  schemaVersion: "truth-harness.workspace-run-next.v0";
+  schemaVersion: typeof WORKSPACE_RUN_NEXT_SCHEMA_VERSION;
   planId: string;
   createdAt: string;
   path: string;
@@ -56,7 +62,7 @@ export interface WorkspaceRunNextSummary {
 }
 
 export interface WorkspaceRunNextPlan {
-  schemaVersion: "truth-harness.workspace-run-next.v0";
+  schemaVersion: typeof WORKSPACE_RUN_NEXT_SCHEMA_VERSION;
   planId: string;
   createdAt: string;
   workspacePath: string;
@@ -111,7 +117,7 @@ export async function createWorkspaceRunNextPlan(input: {
   const planId = workspaceRunNextPlanId(createdAt, input.review.reviewId);
   const nextItem = input.review.items.find((item) => item.itemId === input.review.autonomy.nextItemId) ?? input.review.items[0];
   const basePlan: WorkspaceRunNextPlan = {
-    schemaVersion: "truth-harness.workspace-run-next.v0",
+    schemaVersion: WORKSPACE_RUN_NEXT_SCHEMA_VERSION,
     planId,
     createdAt,
     workspacePath: input.rootPath,
@@ -247,12 +253,13 @@ export async function writeWorkspaceRunNextPlan(input: {
     ...input.plan,
     workspacePath: status.root
   };
+  await assertWorkspaceRunNextPlanSchema(plan);
   const findingsDir = resolve(status.root, status.manifest.directories.findings);
-  await mkdir(findingsDir, { recursive: true });
   const baseName = `${plan.createdAt.slice(0, 10)}-${plan.planId}-workspace-run-next`;
   const jsonPath = join(findingsDir, `${baseName}.json`);
   const markdownPath = join(findingsDir, `${baseName}.md`);
   const markdown = renderWorkspaceRunNextMarkdown(plan);
+  await mkdir(findingsDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, plan);
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -269,6 +276,28 @@ export async function writeWorkspaceRunNextPlan(input: {
     markdownPath,
     markdown
   };
+}
+
+async function assertWorkspaceRunNextPlanSchema(plan: WorkspaceRunNextPlan): Promise<void> {
+  const schema = await loadWorkspaceRunNextSchema();
+  const serializedPlan = parseJsonWithOptionalBom(JSON.stringify(plan));
+  const issues = validateJsonSchema(serializedPlan, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Workspace run-next plan failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadWorkspaceRunNextSchema(): Promise<unknown> {
+  workspaceRunNextSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "workspace-run-next.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return workspaceRunNextSchemaCache;
 }
 
 export async function listWorkspaceRunNextPlans(rootPath: string): Promise<WorkspaceRunNextSummary[]> {
@@ -336,7 +365,7 @@ export async function readWorkspaceRunNextPlan(rootPath: string, planRef: string
 
 export function parseWorkspaceRunNextJson(raw: string): WorkspaceRunNextPlan {
   const plan = JSON.parse(raw) as WorkspaceRunNextPlan;
-  if (plan.schemaVersion !== "truth-harness.workspace-run-next.v0") {
+  if (plan.schemaVersion !== WORKSPACE_RUN_NEXT_SCHEMA_VERSION) {
     throw new Error(`Unsupported workspace run-next schema: ${JSON.stringify(plan.schemaVersion)}`);
   }
   if (!isWorkspaceRunNextPlanId(plan.planId)) {

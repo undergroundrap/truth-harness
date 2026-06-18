@@ -1,7 +1,10 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { listClaimRecords, type ClaimLedgerRecord } from "./claim-ledger.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { listReportDrafts, type ReportDraftSummary } from "./report-draft.js";
 import {
@@ -157,6 +160,8 @@ export interface WorkspaceReviewSummary {
 }
 
 const WORKSPACE_REVIEW_SCHEMA_VERSION = "truth-harness.workspace-review.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let workspaceReviewSchemaCache: Promise<unknown> | undefined;
 
 export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): Promise<WorkspaceReview> {
   const status = await requireLocalWorkspace(input.rootPath);
@@ -214,11 +219,12 @@ export async function writeWorkspaceReview(input: CreateWorkspaceReviewInput): P
     ...input,
     rootPath: status.root
   });
+  await assertWorkspaceReviewSchema(review);
   const findingsDir = resolve(status.root, status.manifest.directories.findings);
-  await mkdir(findingsDir, { recursive: true });
   const baseName = `${review.createdAt.slice(0, 10)}-${review.reviewId}-workspace-review`;
   const jsonPath = join(findingsDir, `${baseName}.json`);
   const markdownPath = join(findingsDir, `${baseName}.md`);
+  await mkdir(findingsDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, review);
   await writeFileAtomic(markdownPath, review.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -235,6 +241,28 @@ export async function writeWorkspaceReview(input: CreateWorkspaceReviewInput): P
     markdownPath,
     markdown: review.markdown
   };
+}
+
+async function assertWorkspaceReviewSchema(review: WorkspaceReview): Promise<void> {
+  const schema = await loadWorkspaceReviewSchema();
+  const serializedReview = parseJsonWithOptionalBom(JSON.stringify(review));
+  const issues = validateJsonSchema(serializedReview, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Workspace review failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadWorkspaceReviewSchema(): Promise<unknown> {
+  workspaceReviewSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "workspace-review.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return workspaceReviewSchemaCache;
 }
 
 export async function listWorkspaceReviews(rootPath: string): Promise<WorkspaceReviewSummary[]> {

@@ -343,6 +343,34 @@ describe("workspace run-next", () => {
       })
     );
   });
+
+  it("rejects malformed run-next handoff packets before writing findings", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    const review = minimalReview({
+      rootPath: root,
+      command: "truth-harness proof check docs/examples/trivial.lean --write",
+      claimId: "claim_fake"
+    });
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+
+    await expect(
+      writeWorkspaceRunNextPlan({
+        rootPath: root,
+        plan: {
+          ...plan,
+          createdAt: "not-a-date"
+        }
+      })
+    ).rejects.toThrow("Workspace run-next plan failed JSON Schema validation before write");
+
+    await expect(listWorkspaceRunNextPlans(root)).resolves.toEqual([]);
+  });
 });
 
 function minimalReview(input: {

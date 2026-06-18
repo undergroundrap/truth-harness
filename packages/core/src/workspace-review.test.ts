@@ -592,6 +592,22 @@ describe("workspace review", () => {
       })
     );
   });
+
+  it("rejects malformed review handoff packets before writing findings", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+
+    await expect(
+      writeWorkspaceReview({
+        rootPath: root,
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("Workspace review failed JSON Schema validation before write");
+
+    await expect(listWorkspaceReviews(root)).resolves.toEqual([]);
+  });
 });
 
 async function tempRoot(): Promise<string> {
