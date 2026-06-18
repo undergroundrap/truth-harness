@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { initLocalWorkspace } from "./local-workspace.js";
+import { initLocalWorkspace, LOCAL_WORKSPACE_DIR, LOCAL_WORKSPACE_MANIFEST } from "./local-workspace.js";
 import { rebuildWorkspaceCatalog, searchWorkspaceCatalog } from "./workspace-catalog.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createCredibilityPack, writeCredibilityPack } from "./credibility-pack.js";
@@ -184,6 +184,31 @@ describe("professor credibility pack", () => {
         issueCodes: expect.arrayContaining(["invalid-artifact-schema"])
       })
     );
+  });
+
+  it("rejects malformed credibility packs before writing reviewer artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+    const manifestPath = join(root, LOCAL_WORKSPACE_DIR, LOCAL_WORKSPACE_MANIFEST);
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    manifest.projectId = "";
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    await expect(
+      writeCredibilityPack({
+        rootPath: root,
+        now: "2026-06-16T00:01:00.000Z",
+        runner: () => ({
+          status: null,
+          stdout: "",
+          stderr: "",
+          error: { name: "Error", message: "spawn ENOENT" }
+        })
+      })
+    ).rejects.toThrow("Credibility pack failed JSON Schema validation before write");
+
+    const findings = await readdir(join(root, LOCAL_WORKSPACE_DIR, "findings"));
+    expect(findings.filter((file) => file.includes("credibility-pack"))).toEqual([]);
   });
 
   it("blocks the packet when concrete engine gates are missing", async () => {

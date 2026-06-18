@@ -1,5 +1,7 @@
-import { mkdir } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { mkdir, readFile } from "node:fs/promises";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { listBenchmarkArtifacts, type BenchmarkArtifactSummary } from "./benchmark-run.js";
 import {
   engineVerificationCaseEvidenceMeaning,
@@ -12,6 +14,7 @@ import {
   type EngineVerificationRunSummary
 } from "./engine-verification.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
@@ -84,7 +87,7 @@ export interface CredibilityPackEngineEvidenceLadderEntry {
 }
 
 export interface CredibilityPack {
-  schemaVersion: "truth-harness.credibility-pack.v0";
+  schemaVersion: typeof CREDIBILITY_PACK_SCHEMA_VERSION;
   packId: string;
   title: string;
   createdAt: string;
@@ -178,6 +181,8 @@ export interface CredibilityPackWriteResult {
 }
 
 const CREDIBILITY_PACK_SCHEMA_VERSION = "truth-harness.credibility-pack.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let credibilityPackSchemaCache: Promise<unknown> | undefined;
 
 export async function createCredibilityPack(input: CreateCredibilityPackInput): Promise<CredibilityPack> {
   const status = await requireLocalWorkspace(input.rootPath);
@@ -310,6 +315,7 @@ export async function writeCredibilityPack(input: CreateCredibilityPackInput): P
     ...input,
     rootPath: status.root
   });
+  await assertCredibilityPackSchema(pack);
   const findingsDir = resolve(status.root, status.manifest.directories.findings);
   await mkdir(findingsDir, { recursive: true });
   const baseName = `${pack.createdAt.slice(0, 10)}-${pack.packId}-credibility-pack`;
@@ -332,6 +338,28 @@ export async function writeCredibilityPack(input: CreateCredibilityPackInput): P
     markdownPath,
     markdown: pack.markdown
   };
+}
+
+async function assertCredibilityPackSchema(pack: CredibilityPack): Promise<void> {
+  const schema = await loadCredibilityPackSchema();
+  const serializedPack = parseJsonWithOptionalBom(JSON.stringify(pack));
+  const issues = validateJsonSchema(serializedPack, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Credibility pack failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadCredibilityPackSchema(): Promise<unknown> {
+  credibilityPackSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "credibility-pack.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return credibilityPackSchemaCache;
 }
 
 export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markdown">): string {
