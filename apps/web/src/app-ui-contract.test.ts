@@ -85,9 +85,16 @@ describe("web UI action contracts", () => {
     expect(source).toContain("async function refreshReportDrafts({ announce = true } = {})");
     expect(source).toContain("async function openSavedReportDraft(reportId)");
     expect(source).toContain("function renderSavedReportDraftPreview(payload)");
+    expect(source).toContain("function reportDraftIntegritySummary(drafts)");
+    expect(source).toContain("function reportDraftIntegritySummaryHtml(drafts)");
+    expect(source).toContain("function reportDraftReviewCommand(item)");
     expect(source).toContain("function currentReportDocument(receipt)");
     expect(source).toContain("function reportDraftPayload(receipt)");
     expect(source).toContain("function renderReportSaveStatus(receipt = receiptStore.get(state.receiptKey))");
+    expect(source).toContain("copy-report-draft-command");
+    expect(source).toContain("copy-report-drafts-command");
+    expect(source).toContain("Saved report draft integrity command copied from the Report tab.");
+    expect(source).toContain("Truth Harness verifies the Markdown a human reads against the SHA-256");
     expect(source).toContain("Saved report draft");
     expect(source).toContain("Opened saved report draft");
     expect(source).toContain("Report save failed");
@@ -180,7 +187,10 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".credibility-pack-panel");
     expect(styles).toContain(".report-save-status");
     expect(styles).toContain(".report-drafts-panel");
+    expect(styles).toContain(".report-draft-integrity");
     expect(styles).toContain(".report-draft-row");
+    expect(styles).toContain(".report-draft-side");
+    expect(styles).toContain(".saved-report-integrity");
     expect(styles).toContain(".credibility-pack-summary");
     expect(styles).toContain(".credibility-bundle-card");
     expect(styles).toContain(".credibility-bundle-facts");

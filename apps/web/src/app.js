@@ -12725,12 +12725,13 @@ function renderReportDraftHistory(receipt = receiptStore.get(state.receiptKey)) 
   if (showCurrentReportButton) {
     showCurrentReportButton.disabled = !state.openedReportDraft;
   }
+  const integrity = reportDraftIntegritySummary(drafts);
   reportDraftsStatus.textContent = state.reportDraftsLoading
     ? "loading local report drafts..."
     : state.reportDraftsError
       ? `report history unavailable: ${state.reportDraftsError}`
       : drafts.length > 0
-        ? `${drafts.length} saved local report draft${drafts.length === 1 ? "" : "s"}`
+        ? `${drafts.length} saved; ${integrity.needsReview} needing integrity review`
         : "no saved report drafts yet";
 
   if (state.reportDraftsError) {
@@ -12748,29 +12749,143 @@ function renderReportDraftHistory(receipt = receiptStore.get(state.receiptKey)) 
     return;
   }
 
-  reportDraftList.innerHTML = drafts
+  reportDraftList.innerHTML = `${reportDraftIntegritySummaryHtml(drafts)}${drafts
     .map((item) => reportDraftHistoryRowHtml(item, receipt))
-    .join("");
+    .join("")}`;
+}
+
+function reportDraftIntegritySummary(drafts) {
+  return drafts.reduce((summary, item) => {
+    const status = reportDraftIntegrityStatus(item);
+    summary.total += 1;
+    summary[status] = (summary[status] ?? 0) + 1;
+    if (status !== "verified") {
+      summary.needsReview += 1;
+    }
+    return summary;
+  }, {
+    total: 0,
+    verified: 0,
+    "sha-mismatch": 0,
+    missing: 0,
+    unknown: 0,
+    needsReview: 0
+  });
+}
+
+function reportDraftIntegrityStatus(item) {
+  if (item?.markdownVerified === true || item?.markdownStatus === "verified") {
+    return "verified";
+  }
+  if (
+    item?.markdownVerified === false &&
+    typeof item?.markdownSha256 === "string" &&
+    typeof item?.report?.markdownSha256 === "string" &&
+    item.markdownSha256 !== item.report.markdownSha256
+  ) {
+    return "sha-mismatch";
+  }
+  if (item?.markdownStatus === "missing") {
+    return "missing";
+  }
+  if (item?.markdownStatus === "sha-mismatch") {
+    return "sha-mismatch";
+  }
+  return "unknown";
+}
+
+function reportDraftIntegritySummaryHtml(drafts) {
+  const summary = reportDraftIntegritySummary(drafts);
+  const healthy = summary.needsReview === 0;
+  const command = "truth-harness workspace reports .";
+  const rows = [
+    ["Verified", summary.verified, "hash matches JSON"],
+    ["Mismatched", summary["sha-mismatch"], "edited after save"],
+    ["Missing", summary.missing, "Markdown sidecar gone"],
+    ["Unknown", summary.unknown, "needs local read"]
+  ];
+
+  return `<section class="report-draft-integrity ${healthy ? "verified" : "attention"}">
+    <div>
+      <span class="mini-label">report integrity</span>
+      <strong>${healthy ? "All saved drafts match their JSON sidecars." : `${summary.needsReview} saved draft${summary.needsReview === 1 ? "" : "s"} need review before sharing.`}</strong>
+      <p>Truth Harness verifies the Markdown a human reads against the SHA-256 and byte length stored in the report-draft JSON receipt.</p>
+    </div>
+    <dl>
+      ${rows.map(([label, count, detail]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(String(count))}<small>${escapeHtml(detail)}</small></dd></div>`).join("")}
+    </dl>
+    <button class="text-button compact-button copy-report-drafts-command" data-command="${escapeHtml(command)}" type="button">Copy review command</button>
+  </section>`;
+}
+
+function reportDraftIntegrityLabel(status) {
+  switch (status) {
+    case "verified":
+      return "hash verified";
+    case "sha-mismatch":
+      return "sha mismatch";
+    case "missing":
+      return "markdown missing";
+    default:
+      return "needs review";
+  }
+}
+
+function reportDraftIntegrityClass(status) {
+  if (status === "verified") {
+    return "exact";
+  }
+  if (status === "unknown") {
+    return "waiting";
+  }
+  return "refuted";
+}
+
+function reportDraftReviewCommand(item) {
+  const reportId = item?.report?.reportId;
+  return reportId ? `truth-harness workspace report ${reportId} . --json` : "truth-harness workspace reports .";
+}
+
+function reportDraftIntegrityDetail(item) {
+  const status = reportDraftIntegrityStatus(item);
+  if (status === "verified") {
+    return "Markdown hash and byte length match the saved JSON receipt.";
+  }
+  if (status === "missing") {
+    return "The JSON receipt exists, but the Markdown a reviewer would read is missing.";
+  }
+  if (status === "sha-mismatch") {
+    return "The Markdown changed after save; regenerate or inspect before sharing.";
+  }
+  return "Open this draft locally before relying on it.";
 }
 
 function reportDraftHistoryRowHtml(item, receipt) {
   const report = item.report ?? {};
   const active = state.openedReportDraft?.report?.reportId === report.reportId;
   const current = receipt?.runId && report.receiptRunId === receipt.runId;
-  const verified = item.markdownVerified === true;
-  const statusClass = verified ? "exact" : "refuted";
-  const statusText = verified ? "hash verified" : item.markdownStatus ?? "needs review";
+  const status = reportDraftIntegrityStatus(item);
+  const statusClass = reportDraftIntegrityClass(status);
+  const statusText = reportDraftIntegrityLabel(status);
   const title = report.title ?? report.reportId ?? "Saved report draft";
   const createdAt = report.createdAt ? formatActivityTime(report.createdAt) : "local draft";
   const markdownPath = item.paths?.relativeMarkdown ?? report.paths?.markdown ?? "local markdown path not recorded";
-  return `<button class="report-draft-row ${active ? "active" : ""}" data-report-id="${escapeHtml(report.reportId ?? "")}" type="button">
-    <span>
-      <strong>${escapeHtml(title)}</strong>
-      <small>${escapeHtml(createdAt)} - ${escapeHtml(report.trust ?? "unlabeled")}${current ? " - current receipt" : ""}</small>
+  const command = reportDraftReviewCommand(item);
+  return `<article class="report-draft-row ${active ? "active" : ""}" data-report-id="${escapeHtml(report.reportId ?? "")}">
+    <div class="report-draft-main">
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <small>${escapeHtml(createdAt)} - ${escapeHtml(report.trust ?? "unlabeled")}${current ? " - current receipt" : ""}</small>
+      </div>
       <code>${escapeHtml(markdownPath)}</code>
-    </span>
-    <span class="report-draft-status ${statusClass}">${escapeHtml(statusText)}</span>
-  </button>`;
+      <p>${escapeHtml(reportDraftIntegrityDetail(item))}</p>
+    </div>
+    <div class="report-draft-side">
+      <span class="report-draft-status ${statusClass}">${escapeHtml(statusText)}</span>
+      <button class="text-button compact-button open-report-draft" data-report-id="${escapeHtml(report.reportId ?? "")}" type="button">Open</button>
+      <button class="text-button compact-button copy-report-draft-command" data-report-id="${escapeHtml(report.reportId ?? "")}" data-command="${escapeHtml(command)}" type="button">Copy command</button>
+    </div>
+  </article>`;
 }
 
 async function refreshReportDrafts({ announce = true } = {}) {
@@ -12847,7 +12962,11 @@ function showCurrentReportDraft() {
 
 function renderSavedReportDraftPreview(payload) {
   const report = payload.report ?? {};
-  const verified = payload.markdownVerified === true;
+  const status = reportDraftIntegrityStatus(payload);
+  const verified = status === "verified";
+  const statusClass = reportDraftIntegrityClass(status);
+  const statusLabel = reportDraftIntegrityLabel(status);
+  const command = reportDraftReviewCommand({ report });
   const warnings = Array.isArray(report.warnings) ? report.warnings : [];
   reportPreview.innerHTML = `
     <header class="saved-report-header">
@@ -12855,15 +12974,27 @@ function renderSavedReportDraftPreview(payload) {
         <h2>${escapeHtml(report.title ?? "Saved Report Draft")}</h2>
         <p>${escapeHtml(report.summary ?? "Saved local Markdown report draft.")}</p>
       </div>
-      <span class="status-pill ${verified ? "exact" : "refuted"}">${verified ? "hash verified" : "hash needs review"}</span>
+      <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
     </header>
+    <section class="saved-report-integrity ${verified ? "verified" : "attention"}">
+      <div>
+        <span class="mini-label">saved draft integrity</span>
+        <strong>${verified ? "Markdown matches the JSON receipt." : "Review this draft before sharing."}</strong>
+        <p>${escapeHtml(reportDraftIntegrityDetail(payload))}</p>
+      </div>
+      <code>${escapeHtml(command)}</code>
+    </section>
     <dl class="report-facts">
       <div><dt>Report ID</dt><dd><code>${escapeHtml(report.reportId ?? "not recorded")}</code></dd></div>
       <div><dt>Created</dt><dd>${escapeHtml(report.createdAt ?? "not recorded")}</dd></div>
       <div><dt>Trust</dt><dd>${escapeHtml(report.trust ?? "unlabeled")}</dd></div>
       <div><dt>Receipt</dt><dd><code>${escapeHtml(report.receiptRunId ?? "not recorded")}</code></dd></div>
+      <div><dt>Markdown status</dt><dd>${escapeHtml(statusLabel)}</dd></div>
       <div><dt>Markdown SHA-256</dt><dd><code>${escapeHtml(payload.markdownSha256 ?? report.markdownSha256 ?? "not recorded")}</code></dd></div>
+      <div><dt>Expected SHA-256</dt><dd><code>${escapeHtml(report.markdownSha256 ?? "not recorded")}</code></dd></div>
+      <div><dt>Byte length</dt><dd>${escapeHtml(String(report.markdownByteLength ?? "not recorded"))}</dd></div>
       <div><dt>Markdown path</dt><dd><code>${escapeHtml(payload.paths?.relativeMarkdown ?? report.paths?.markdown ?? "not recorded")}</code></dd></div>
+      <div><dt>JSON path</dt><dd><code>${escapeHtml(payload.paths?.relativeJson ?? report.paths?.json ?? "not recorded")}</code></dd></div>
     </dl>
     ${warnings.length > 0 ? `<ul class="report-sublist">${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>` : ""}
     <section class="saved-report-markdown">${renderMarkdownSubset(payload.markdown ?? "")}</section>
@@ -14555,12 +14686,27 @@ refreshReportDraftsButton?.addEventListener("click", () => {
 showCurrentReportButton?.addEventListener("click", showCurrentReportDraft);
 
 reportDraftList?.addEventListener("click", (event) => {
-  const button = event.target.closest(".report-draft-row[data-report-id]");
-  if (!button) {
+  const copyButton = event.target.closest(".copy-report-draft-command, .copy-report-drafts-command");
+  if (copyButton) {
+    copyOrDownloadText({
+      text: `${copyButton.dataset.command ?? "truth-harness workspace reports ."}\n`,
+      filename: `truth-harness-report-draft-command-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      button: copyButton,
+      copiedTitle: "Copied report draft command",
+      copiedDetail: "Saved report draft integrity command copied from the Report tab.",
+      fallbackTitle: "Downloaded report draft command",
+      fallbackDetail: "the report draft integrity command was saved as a local text file instead."
+    });
     return;
   }
 
-  void openSavedReportDraft(button.dataset.reportId);
+  const openButton = event.target.closest(".open-report-draft");
+  const row = event.target.closest(".report-draft-row[data-report-id]");
+  const reportId = openButton?.dataset.reportId ?? row?.dataset.reportId;
+  if (reportId) {
+    void openSavedReportDraft(reportId);
+  }
 });
 
 copyReportButton.addEventListener("click", () => {
