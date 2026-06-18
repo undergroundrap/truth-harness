@@ -49,7 +49,7 @@ npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/
 - Embedded local artifact snapshot with file hashes.
 - Concrete engine evidence report from `engines verify`.
 - Structured engine evidence ladder that separates required/optional gates, earned/missing/failed evidence, and the plain-English reviewer meaning for each engine row.
-- Saved engine-run ledger summary from `.truth-harness/engine-runs`, including the latest strict all-engines reviewer run when one exists.
+- Saved engine-run ledger summary from `.truth-harness/engine-runs`, including the latest no-network Docker professor run and the latest strict all-engines reviewer run when they exist.
 - Engine-run records validate against `engine-run.schema.json` before they are saved, so reviewer packets cannot cite malformed or non-replayable engine evidence ledger entries.
 - Saved benchmark ledger summary from `.truth-harness/benchmarks`, including the latest `ai-failure-seed` adversarial AI-failure run, artifact path, trust accuracy, replay command, and sample receipt replay commands.
 - Benchmark run and comparison records validate against their schemas before saving, so adversarial demo scores and regression verdicts cannot become citable reviewer evidence if the local ledger shape is malformed.
@@ -106,8 +106,8 @@ All MCP tools are local-only. The actions tool is read-only and returns the unre
 A pack is `ready-for-review` only when:
 
 - workspace validation passes,
-- all concrete engine smoke gates pass,
-- every explicitly required engine gate passes,
+- all concrete engine smoke gates pass, or recoverable host probe gaps are covered by a saved passing no-network Docker professor/all-engine run for the same capabilities,
+- every explicitly required engine gate passes, or recoverable host probe gaps are covered by a saved passing no-network Docker professor/all-engine run for the same required capabilities,
 - the latest saved `ai-failure-seed` adversarial benchmark exists and has no failing cases,
 - saved report draft Markdown files match the SHA-256 recorded in their JSON sidecars,
 - the workspace review has no critical open items.
@@ -125,7 +125,7 @@ When the pack is blocked, `reviewerActionPlan.actions` is the first queue a huma
 - the exact command to run,
 - the gate or artifact it closes.
 
-If a local host or agent sandbox reports `spawn EPERM` while launching Maxima, Z3, Lean, or SageMath, the action plan treats that as a host boundary problem rather than a mathematical result. Maxima/Z3 actions point to `npm run docker:engines`, Lean actions point to the pinned `lean-proof` compose service, and SageMath actions point to `npm run docker:sage`. Those Docker commands are still evidence gates, not truth shortcuts: the engines must earn their scoped labels inside the no-network runtime before any reviewer should trust the result.
+If a local host or agent sandbox reports `spawn EPERM` or `spawn ENOENT` while launching Maxima, Z3, Lean, or SageMath, the action plan treats that as a host boundary problem rather than a mathematical result. Maxima/Z3 actions point to `npm run docker:engines`, Lean actions point to the pinned `lean-proof` compose service, and SageMath actions point to `npm run docker:sage`. If a saved no-network Docker professor run already proves Maxima/Z3/Lean availability for the same scope, the pack and release audit cite that durable engine-run record instead of repeatedly blocking on missing Windows host binaries. Those Docker commands are still evidence gates, not truth shortcuts: the engines must earn their scoped labels inside the no-network runtime before any reviewer should trust the result.
 
 For the cleanest reviewer rehearsal, run `npm run docker:professor`. That command does not ask the web UI or an agent to run arbitrary shell code. It starts from the pinned Lean Docker image, runs the professor evidence sequence in the no-network `professor-evidence` compose service, and stops before writing the portable reviewer bundle if any earlier engine, benchmark, or pack-readiness gate fails. When it succeeds, it verifies the bundle hashes and source-workspace match immediately. The generated credibility pack is still the authority on whether optional all-engine gates or unresolved review actions block stricter review.
 

@@ -283,6 +283,77 @@ describe("professor credibility pack", () => {
     expect(pack.markdown).toContain("## Blocking Warnings");
   });
 
+  it("accepts saved Docker professor engine evidence when host probes are unavailable", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+    const professorEngineRun = await writeEngineVerificationRun({
+      rootPath: root,
+      now: new Date("2026-06-16T00:00:30.000Z"),
+      requirements: { maxima: true, z3: true, lean: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      leanCommand: "lean-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      replayCommand: "npm run docker:professor",
+      runner: passingEngineRunner
+    });
+    const adversarialReceipt = createReceipt("for all integers n, n^2+n+1 is even");
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(adversarialReceipt, {
+        suiteId: "ai-failure-seed",
+        title: "AI Failure Seed Suite",
+        expectTrust: "refuted",
+        expectEvidenceKind: "universal-parity",
+        category: "false-universal",
+        aiFailureMode: "confident universal claim"
+      }),
+      suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
+      suitePath: "packages/benchmarks/suites/ai-failure-seed.json",
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-16T00:00:45.000Z"
+    });
+
+    const pack = await createCredibilityPack({
+      rootPath: root,
+      now: "2026-06-16T00:01:00.000Z",
+      engineRequirements: { maxima: true, z3: true, lean: true },
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: () => ({
+        status: null,
+        stdout: "",
+        stderr: "",
+        error: { name: "Error", message: "spawn ENOENT" }
+      })
+    });
+
+    expect(pack.status).toBe("ready-for-review");
+    expect(pack.summary).toMatchObject({
+      engineStatus: "failed",
+      concreteEngineGates: "0/3",
+      requiredEngineGates: "0/3",
+      latestProfessorEngineRunStatus: "passed",
+      latestAdversarialBenchmarkStatus: "passed",
+      professorReady: true
+    });
+    expect(pack.engineRunLedger.latestProfessorReviewerRun).toMatchObject({
+      runId: professorEngineRun.record.runId,
+      status: "passed",
+      requiredTotal: 3
+    });
+    expect(pack.warnings).not.toContain("Required engine evidence gates are incomplete: 0/3 passed.");
+    expect(pack.warnings).not.toContain("Concrete engine smoke gates are incomplete: 0/3 passed.");
+    expect(pack.reviewerActionPlan.actions.filter((action) => action.category === "engine")).toEqual([]);
+    expect(pack.markdown).toContain("Saved engine-run ledger: 1 saved (latest professor Docker: passed)");
+  });
+
   it("blocks professor readiness when saved report drafts fail integrity checks", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });

@@ -437,8 +437,23 @@ function engineCheck(pack: CredibilityPack, required: boolean): ReleaseAuditChec
     ...detail,
     ...engineEvidenceGuidance(pack)
   ];
+  const savedRunCoversHostGaps = engineEvidenceHostGapsCoveredBySavedRun(pack, required);
 
   if (required && pack.summary.engineStatus !== "passed") {
+    if (savedRunCoversHostGaps) {
+      return passCheck({
+        id: "engine-evidence",
+        title: "Required engine evidence",
+        summary: "Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking.",
+        command: pack.reviewerCommands.dockerProfessorEvidence,
+        details: [
+          ...detail,
+          ...savedEngineCoverageDetails(pack),
+          "Current host probes did not earn all required engine evidence, but the durable saved run covers the same required capabilities."
+        ]
+      });
+    }
+
     return failCheck({
       id: "engine-evidence",
       title: "Required engine evidence",
@@ -449,6 +464,20 @@ function engineCheck(pack: CredibilityPack, required: boolean): ReleaseAuditChec
     });
   }
   if (!required && pack.summary.engineStatus !== "passed") {
+    if (savedRunCoversHostGaps) {
+      return passCheck({
+        id: "engine-evidence",
+        title: "Engine evidence",
+        summary: "Saved no-network Docker engine evidence covers the concrete engine gates for this audit scope.",
+        command: pack.reviewerCommands.dockerProfessorEvidence,
+        details: [
+          ...detail,
+          ...savedEngineCoverageDetails(pack),
+          "Host probes are allowed to be unavailable when a replayable no-network Docker engine run already covers the same capabilities."
+        ]
+      });
+    }
+
     return warnCheck({
       id: "engine-evidence",
       title: "Engine evidence",
@@ -465,6 +494,46 @@ function engineCheck(pack: CredibilityPack, required: boolean): ReleaseAuditChec
     command: pack.reviewerCommands.verifyEngines,
     details: detail
   });
+}
+
+function engineEvidenceHostGapsCoveredBySavedRun(pack: CredibilityPack, requiredOnly: boolean): boolean {
+  const gaps = pack.engineEvidence.cases.filter((entry) => {
+    if (entry.status === "passed" || entry.status === "not-required") {
+      return false;
+    }
+    if (requiredOnly) {
+      return entry.required;
+    }
+    if (!entry.required && (entry.id === "cvc5-smt-check" || entry.id === "sage-symbolic-cross-check")) {
+      return false;
+    }
+    return true;
+  });
+
+  return gaps.length > 0 && gaps.every((entry) => savedEngineRunCoversCapability(pack, entry.capabilityId));
+}
+
+function savedEngineRunCoversCapability(pack: CredibilityPack, capabilityId: string): boolean {
+  const runs = [
+    pack.engineRunLedger.latestProfessorReviewerRun,
+    pack.engineRunLedger.latestStrictReviewerRun,
+    ...pack.engineRunLedger.latestRuns
+  ].filter((run): run is NonNullable<typeof run> => run !== undefined);
+
+  return runs.some((run) => run.status === "passed" && run.tags.includes(capabilityId));
+}
+
+function savedEngineCoverageDetails(pack: CredibilityPack): string[] {
+  const details: string[] = [];
+  const professor = pack.engineRunLedger.latestProfessorReviewerRun;
+  const strict = pack.engineRunLedger.latestStrictReviewerRun;
+  if (professor?.status === "passed") {
+    details.push(`Saved professor Docker run ${professor.runId} passed with ${professor.requiredPassed}/${professor.requiredTotal} required gates.`);
+  }
+  if (strict?.status === "passed" && strict.runId !== professor?.runId) {
+    details.push(`Saved strict all-engine run ${strict.runId} passed with ${strict.requiredPassed}/${strict.requiredTotal} required gates.`);
+  }
+  return details.length > 0 ? details : ["A saved passing engine run covers the missing host capability."];
 }
 
 function preferredEngineEvidenceCommand(pack: CredibilityPack): string {

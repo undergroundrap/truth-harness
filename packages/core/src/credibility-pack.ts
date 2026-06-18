@@ -65,6 +65,7 @@ export interface CredibilityPackActionItem {
 export interface CredibilityPackEngineRunLedger {
   savedRuns: number;
   latestRuns: EngineVerificationRunSummary[];
+  latestProfessorReviewerRun?: EngineVerificationRunSummary;
   latestStrictReviewerRun?: EngineVerificationRunSummary;
 }
 
@@ -109,6 +110,7 @@ export interface CredibilityPack {
     engineEvidenceMinted: number;
     savedEngineRuns: number;
     latestStrictEngineRunStatus?: EngineVerificationReport["status"];
+    latestProfessorEngineRunStatus?: EngineVerificationReport["status"];
     savedBenchmarkRuns: number;
     latestAdversarialBenchmarkStatus: "missing" | "passed" | "failed";
     latestAdversarialBenchmarkAccuracy?: number;
@@ -222,6 +224,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
   const warnings = credibilityWarnings({
     validation,
     engineEvidence,
+    engineRunLedger,
     benchmarkLedger,
     review
   });
@@ -249,6 +252,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       engineEvidenceMinted: engineEvidence.evidenceMinted,
       savedEngineRuns: engineRunLedger.savedRuns,
       latestStrictEngineRunStatus: engineRunLedger.latestStrictReviewerRun?.status,
+      latestProfessorEngineRunStatus: engineRunLedger.latestProfessorReviewerRun?.status,
       savedBenchmarkRuns: benchmarkLedger.savedRuns,
       latestAdversarialBenchmarkStatus: adversarialBenchmarkStatus(benchmarkLedger.latestAdversarialRun),
       latestAdversarialBenchmarkAccuracy: benchmarkLedger.latestAdversarialRun?.trustAccuracy,
@@ -360,7 +364,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Professor ready: ${pack.summary.professorReady ? "yes" : "no"}`,
     `- Workspace validation: ${pack.summary.validationPassed ? "passed" : "failed"} (${pack.summary.validationErrors} errors, ${pack.summary.validationWarnings} warnings)`,
     `- Engine evidence: ${pack.summary.engineStatus} (${pack.summary.concreteEngineGates} concrete gates, ${pack.summary.requiredEngineGates} required gates, ${pack.summary.engineEvidenceMinted} evidence records earned)`,
-    `- Saved engine-run ledger: ${pack.summary.savedEngineRuns} saved${pack.summary.latestStrictEngineRunStatus ? ` (latest strict reviewer: ${pack.summary.latestStrictEngineRunStatus})` : ""}`,
+    `- Saved engine-run ledger: ${pack.summary.savedEngineRuns} saved${savedEngineRunLedgerLabel(pack)}`,
     `- Adversarial benchmark: ${formatAdversarialBenchmarkSummary(pack.summary.latestAdversarialBenchmarkStatus, pack.summary.latestAdversarialBenchmarkAccuracy)} (${pack.summary.savedBenchmarkRuns} saved benchmark run${pack.summary.savedBenchmarkRuns === 1 ? "" : "s"})`,
     `- Saved report drafts: ${formatReportDraftSummary(pack.summary.savedReportDrafts, pack.summary.reportDraftsNeedingAttention)}`,
     `- Embedded artifact snapshot: ${pack.summary.snapshotFiles} files, ${pack.summary.snapshotBytes} bytes`,
@@ -558,6 +562,7 @@ function summarizeEngineRunLedger(runs: EngineVerificationRunSummary[]): Credibi
   return {
     savedRuns: runs.length,
     latestRuns: runs.slice(0, 5),
+    latestProfessorReviewerRun: runs.find(isPassedProfessorEngineRun),
     latestStrictReviewerRun: runs.find((run) => run.requiredTotal >= 5)
   };
 }
@@ -648,6 +653,9 @@ function createReviewerActionPlan(input: {
 
   for (const item of input.engineEvidence.cases) {
     if (item.status === "passed" || item.status === "not-required") {
+      continue;
+    }
+    if (caseGapIsCoveredBySavedRun(item, input.engineRunLedger)) {
       continue;
     }
     if (!item.required && (item.id === "cvc5-smt-check" || item.id === "sage-symbolic-cross-check")) {
@@ -800,6 +808,7 @@ function markdownCell(value: string): string {
 function credibilityWarnings(input: {
   validation: WorkspaceValidation;
   engineEvidence: EngineVerificationReport;
+  engineRunLedger: CredibilityPackEngineRunLedger;
   benchmarkLedger: CredibilityPackBenchmarkLedger;
   review: WorkspaceReview;
 }): string[] {
@@ -808,12 +817,21 @@ function credibilityWarnings(input: {
   if (!input.validation.passed) {
     warnings.push(`Workspace validation failed with ${input.validation.summary.errors} error(s).`);
   }
-  if (input.engineEvidence.requiredTotal > 0 && input.engineEvidence.requiredPassed !== input.engineEvidence.requiredTotal) {
+  const requiredGaps = input.engineEvidence.cases.filter((entry) => entry.required && entry.status !== "passed");
+  const concreteGaps = concreteEngineCases(input.engineEvidence).filter((entry) => entry.status !== "passed");
+  if (
+    input.engineEvidence.requiredTotal > 0 &&
+    input.engineEvidence.requiredPassed !== input.engineEvidence.requiredTotal &&
+    !requiredGaps.every((entry) => caseGapIsCoveredBySavedRun(entry, input.engineRunLedger))
+  ) {
     warnings.push(
       `Required engine evidence gates are incomplete: ${input.engineEvidence.requiredPassed}/${input.engineEvidence.requiredTotal} passed.`
     );
   }
-  if (input.engineEvidence.concretePassed !== input.engineEvidence.concreteTotal) {
+  if (
+    input.engineEvidence.concretePassed !== input.engineEvidence.concreteTotal &&
+    !concreteGaps.every((entry) => caseGapIsCoveredBySavedRun(entry, input.engineRunLedger))
+  ) {
     warnings.push(
       `Concrete engine smoke gates are incomplete: ${input.engineEvidence.concretePassed}/${input.engineEvidence.concreteTotal} passed.`
     );
@@ -911,6 +929,62 @@ function reviewerEngineActionCommand(
     case "cvc5-smt-check":
       return commands.verifyEngines;
   }
+}
+
+const PROFESSOR_ENGINE_CAPABILITIES = ["maxima-cas", "z3-smt-solver", "lean-proof-checker"] as const;
+
+function savedEngineRunLedgerLabel(pack: Pick<CredibilityPack, "summary">): string {
+  const labels: string[] = [];
+  if (pack.summary.latestProfessorEngineRunStatus) {
+    labels.push(`latest professor Docker: ${pack.summary.latestProfessorEngineRunStatus}`);
+  }
+  if (pack.summary.latestStrictEngineRunStatus) {
+    labels.push(`latest strict reviewer: ${pack.summary.latestStrictEngineRunStatus}`);
+  }
+  return labels.length > 0 ? ` (${labels.join(", ")})` : "";
+}
+
+function concreteEngineCases(report: EngineVerificationReport): EngineVerificationReport["cases"] {
+  return report.cases.filter((entry) => {
+    if (entry.id === "sage-symbolic-cross-check" || entry.id === "cvc5-smt-check") {
+      return entry.required;
+    }
+    return true;
+  });
+}
+
+function caseGapIsCoveredBySavedRun(
+  item: EngineVerificationReport["cases"][number],
+  ledger: CredibilityPackEngineRunLedger
+): boolean {
+  if (item.status === "passed" || item.status === "not-required") {
+    return true;
+  }
+  if (!isRecoverableEngineProbeGap(item)) {
+    return false;
+  }
+  return hasPassedSavedRunForCapabilities(ledger, [item.capabilityId]);
+}
+
+function hasPassedSavedRunForCapabilities(ledger: CredibilityPackEngineRunLedger, capabilities: readonly string[]): boolean {
+  const candidates = [
+    ledger.latestProfessorReviewerRun,
+    ledger.latestStrictReviewerRun,
+    ...ledger.latestRuns
+  ].filter((run): run is EngineVerificationRunSummary => run !== undefined);
+
+  return candidates.some((run) =>
+    run.status === "passed" &&
+    capabilities.every((capability) => run.tags.includes(capability))
+  );
+}
+
+function isPassedProfessorEngineRun(run: EngineVerificationRunSummary): boolean {
+  return run.status === "passed" && PROFESSOR_ENGINE_CAPABILITIES.every((capability) => run.tags.includes(capability));
+}
+
+function isRecoverableEngineProbeGap(item: EngineVerificationReport["cases"][number]): boolean {
+  return item.status === "missing" || isHostProcessBlocked(item.summary) || /\bspawn(?:Sync)?\b.*\bENOENT\b/iu.test(item.summary);
 }
 
 function reviewerEngineActionDetail(

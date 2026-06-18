@@ -54,7 +54,7 @@ npm run docker:engines
 
 This command differs from `truth-harness engines`: the manifest reports availability and trust boundaries, while `engines verify` runs concrete checks and reports which scoped labels were actually earned. The npm script first checks that the Docker engine is reachable, then builds the `truth-harness` image and runs the `engine-smoke` service without the repo bind mount or `node_modules` named volume so stale dev dependencies cannot affect the result. Use `truth-harness engines verify --json` when an agent needs a machine-readable gate report.
 
-If `workspace credibility-pack`, `workspace credibility-actions`, or `workspace release-audit` reports `spawn EPERM` for Maxima or Z3 on the host, use `npm run docker:engines` before assuming the engine itself is unavailable. That failure means the local OS or agent sandbox refused to launch the subprocess; the Docker gate replays the same concrete Maxima/Z3 evidence checks inside the no-network image.
+If `workspace credibility-pack`, `workspace credibility-actions`, or `workspace release-audit` reports `spawn EPERM` or `spawn ENOENT` for Maxima, Z3, or Lean on the host, use the Docker gates before assuming the engine itself is unavailable. `npm run docker:engines` replays the concrete Maxima/Z3 checks inside the no-network image, and `npm run docker:professor` writes a durable Maxima/Z3/Lean professor evidence run plus benchmark and reviewer packet. Release audit can cite that saved no-network run as professor-review evidence even when the Windows host has no matching engine binaries installed.
 
 Run the pinned Lean proof fixture in the separate Lean image:
 

@@ -7,7 +7,7 @@ import { createReleaseAudit, renderReleaseAuditMarkdown } from "./release-audit.
 import { rebuildWorkspaceCatalog } from "./workspace-catalog.js";
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
 import { createReceipt } from "./receipt.js";
-import type { EngineVerificationCommandRunner } from "./engine-verification.js";
+import { writeEngineVerificationRun, type EngineVerificationCommandRunner } from "./engine-verification.js";
 import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchSession } from "./research-session.js";
 
@@ -327,6 +327,79 @@ describe("release audit", () => {
     );
     expect(audit.nextActions).toContain("npm run docker:engines");
     expect(audit.nextActions[0]).toBe("npm run docker:engines");
+  });
+
+  it("uses saved Docker professor evidence when host engine probes are unavailable", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Saved Docker Audit", now: "2026-06-17T00:00:00.000Z" });
+    const engineRun = await writeEngineVerificationRun({
+      rootPath: root,
+      now: new Date("2026-06-17T00:00:00.250Z"),
+      requirements: { maxima: true, z3: true, lean: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      leanCommand: "lean-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      replayCommand: "npm run docker:professor",
+      runner: passingEngineRunner
+    });
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(createReceipt("for all integers n, n^2+n+1 is even")),
+      suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
+      suitePath: "packages/benchmarks/suites/ai-failure-seed.json",
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-17T00:00:00.500Z"
+    });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-17T00:00:02.000Z",
+      engineRequirements: { maxima: true, z3: true, lean: true },
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: () => ({
+        status: null,
+        stdout: "",
+        stderr: "",
+        error: { name: "Error", message: "spawn ENOENT" }
+      })
+    });
+    const markdown = renderReleaseAuditMarkdown(audit);
+
+    expect(audit.status).toBe("ready");
+    expect(audit.professorReady).toBe(true);
+    expect(audit.summary).toMatchObject({
+      validationPassed: true,
+      catalogFresh: true,
+      requiredEngineGates: "0/3",
+      concreteEngineGates: "0/3",
+      adversarialBenchmark: "passed",
+      blockingFailures: 0
+    });
+    expect(audit.credibilityPack?.summary.latestProfessorEngineRunStatus).toBe("passed");
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "engine-evidence",
+        status: "pass",
+        blocking: false,
+        command: "npm run docker:professor",
+        summary: "Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking.",
+        details: expect.arrayContaining([
+          `Saved professor Docker run ${engineRun.record.runId} passed with 3/3 required gates.`,
+          "Current host probes did not earn all required engine evidence, but the durable saved run covers the same required capabilities."
+        ])
+      })
+    );
+    expect(audit.nextActions).not.toContain("truth-harness engines verify --write --require-all-concrete");
+    expect(markdown).toContain("Saved no-network Docker engine evidence covers the required gates");
   });
 });
 
