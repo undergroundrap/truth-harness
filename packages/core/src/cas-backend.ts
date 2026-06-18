@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   expectBoolean,
   expectConst,
@@ -11,9 +12,11 @@ import {
   expectRecord,
   expectStringArray,
   formatValidationError,
+  parseJsonWithOptionalBom,
   parseJsonObject
 } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import type { SymbolicPrompt } from "./sympy.js";
 import type { TrustLabel } from "./types.js";
@@ -134,7 +137,7 @@ export interface SymbolicCasCheckResult {
 }
 
 export type SymbolicCasCheckRecord = Omit<SymbolicCasCheckResult, "schemaVersion"> & {
-  schemaVersion: "truth-harness.cas-check.v0";
+  schemaVersion: typeof CAS_CHECK_SCHEMA_VERSION;
   replay: string;
 };
 
@@ -165,6 +168,8 @@ export interface SymbolicCasCheckSummary {
 }
 
 const DEFAULT_TIMEOUT_MS = 3000;
+const CAS_CHECK_SCHEMA_VERSION = "truth-harness.cas-check.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
 const MAXIMA_MARKER = "TRUTH_HARNESS_MAXIMA_STATUS:";
 const SAGE_MARKER = "TRUTH_HARNESS_SAGE_STATUS:";
 const ALLOWED_SYMBOLIC_IDENTIFIERS = new Set([
@@ -186,6 +191,7 @@ const ALLOWED_SYMBOLIC_IDENTIFIERS = new Set([
   "tan",
   "tanh"
 ]);
+let casCheckSchemaCache: Promise<unknown> | undefined;
 
 export function getCasBackendStatus(options: CasBackendStatusOptions = {}): CasBackendStatusReport {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -503,7 +509,7 @@ export function createSymbolicCasCheckRecord(input: SymbolicCasCheckRecordInput)
 
   return {
     ...check,
-    schemaVersion: "truth-harness.cas-check.v0",
+    schemaVersion: CAS_CHECK_SCHEMA_VERSION,
     replay
   };
 }
@@ -523,13 +529,14 @@ export async function writeSymbolicCasCheckRecord(
     runner: input.runner,
     replayCommand: casCheckReplayCommand(input, true)
   });
+  await assertCasCheckSchema(record);
   const casDir = resolve(status.root, status.manifest.directories.cas);
-  await mkdir(casDir, { recursive: true });
   const baseName = `${record.createdAt.slice(0, 10)}-${record.checkId}`;
   const jsonPath = join(casDir, `${baseName}.json`);
   const markdownPath = join(casDir, `${baseName}.md`);
   const markdown = renderSymbolicCasCheckMarkdown(record);
 
+  await mkdir(casDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, record);
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -546,6 +553,28 @@ export async function writeSymbolicCasCheckRecord(
     markdownPath,
     markdown
   };
+}
+
+async function assertCasCheckSchema(record: SymbolicCasCheckRecord): Promise<void> {
+  const schema = await loadCasCheckSchema();
+  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
+  const issues = validateJsonSchema(serializedRecord, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `CAS check record failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadCasCheckSchema(): Promise<unknown> {
+  casCheckSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "cas-check.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return casCheckSchemaCache;
 }
 
 export async function listSymbolicCasChecks(rootPath: string): Promise<SymbolicCasCheckSummary[]> {
@@ -581,8 +610,8 @@ export async function listSymbolicCasChecks(rootPath: string): Promise<SymbolicC
 export function parseSymbolicCasCheckRecord(raw: string, sourcePath = "CAS check record"): SymbolicCasCheckRecord {
   const parsed = parseJsonObject(raw, sourcePath, "CAS check");
   const issues: string[] = [];
-  if (parsed.schemaVersion !== "truth-harness.cas-check.v0") {
-    issues.push(`$.schemaVersion must equal "truth-harness.cas-check.v0"`);
+  if (parsed.schemaVersion !== CAS_CHECK_SCHEMA_VERSION) {
+    issues.push(`$.schemaVersion must equal "${CAS_CHECK_SCHEMA_VERSION}"`);
   }
   expectPattern(parsed, "checkId", /^cas_[a-f0-9]{16}$/u, "$.checkId", issues);
   expectDateTime(parsed, "createdAt", "$.createdAt", issues);

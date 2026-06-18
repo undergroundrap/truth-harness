@@ -324,6 +324,42 @@ describe("Maxima symbolic cross-check", () => {
     expect(validation.summary.byKind.cas).toBe(1);
   });
 
+  it("rejects malformed CAS check records before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
+    const runner: CasBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Maxima 5.47.0\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n",
+        stderr: ""
+      };
+    };
+
+    await expect(
+      writeSymbolicCasCheckRecord({
+        rootPath: root,
+        prompt: {
+          operation: "simplify",
+          expression: "sin(x)^2 + cos(x)^2",
+          variable: "x"
+        },
+        result: "",
+        maximaCommand: "maxima-test",
+        now: new Date("2026-06-12T00:05:00.000Z"),
+        runner
+      })
+    ).rejects.toThrow("CAS check record failed JSON Schema validation before write");
+    await expect(listSymbolicCasChecks(root)).resolves.toEqual([]);
+  });
+
   it("fails closed when independent CAS disagrees", () => {
     const runner: CasBackendCommandRunner = (_command, args) => {
       if (args[0] === "--version") {
