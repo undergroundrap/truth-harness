@@ -17,7 +17,7 @@
     "verify:native": "npm run check:native",
     "docker:build": "docker compose build",
     "docker:check": "docker compose run --rm truth-harness npm run check:native",
-    "docker:cli": "docker compose run --rm truth-harness npm run cli --",
+    "docker:cli": "docker compose run --rm truth-harness node apps/cli/dist/index.js",
     "docker:engines": "node tools/docker-engines.mjs",
     "docker:professor": "node tools/docker-professor.mjs",
     "docker:sage": "docker compose run --rm sage-math",

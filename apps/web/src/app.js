@@ -7479,11 +7479,11 @@ function focusedEvidenceArtifacts() {
 
 function heldBackEvidenceNextCommand(artifact) {
   if (artifact.status === "solver-unavailable" && artifact.kind === "smt") {
-    return `npm run docker:cli -- smt check ${artifact.sourcePath ?? "<source.smt2>"} --write`;
+    return dockerCliCommand(`smt check ${artifact.sourcePath ?? "<source.smt2>"} --write`);
   }
 
   if (artifact.status === "solver-unavailable" && artifact.kind === "cas") {
-    return `npm run docker:cli -- cas check --operation ${artifact.operation ?? "simplify"} --expression "${truncateForCommand(artifact.expression ?? "<expression>", 48)}" --result "${truncateForCommand(artifact.result ?? "<result>", 32)}" --write`;
+    return dockerCliCommand(`cas check --operation ${artifact.operation ?? "simplify"} --expression "${truncateForCommand(artifact.expression ?? "<expression>", 48)}" --result "${truncateForCommand(artifact.result ?? "<result>", 32)}" --write`);
   }
 
   return "Review the mismatch or rerun with an independent checker before attaching evidence.";
@@ -7609,8 +7609,49 @@ function focusedEngineStatus(target) {
 
 function dockerizeFocusedCommand(command) {
   return command.startsWith("truth-harness ")
-    ? `npm run docker:cli -- ${command.slice("truth-harness ".length)}`
+    ? dockerCliCommand(command.slice("truth-harness ".length))
     : "npm run docker:proof";
+}
+
+function dockerCliCommand(commandTail) {
+  const trimmed = String(commandTail).trim();
+  const optionIndex = firstCliOptionIndex(trimmed);
+  if (optionIndex < 0) {
+    return `npm run docker:cli -- ${trimmed}`;
+  }
+
+  return `npm run docker:cli -- ${trimmed.slice(0, optionIndex).trimEnd()} -- ${trimmed.slice(optionIndex).trimStart()}`;
+}
+
+function firstCliOptionIndex(commandTail) {
+  let quote = "";
+  let escaped = false;
+  for (let index = 0; index < commandTail.length - 2; index += 1) {
+    const char = commandTail[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = "";
+      }
+      continue;
+    }
+    if (char === "\"" || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (/\s/u.test(char) && commandTail[index + 1] === "-" && commandTail[index + 2] === "-") {
+      return index + 1;
+    }
+  }
+
+  return -1;
 }
 
 function selectedWorkspaceReviewItem() {

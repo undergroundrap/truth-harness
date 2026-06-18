@@ -87,6 +87,13 @@ docker compose run --rm truth-harness npm run cli -- proof project .
 docker compose run --rm truth-harness npm run cli -- code sandbox-status --json
 ```
 
+The npm convenience wrapper calls the compiled CLI inside the same compose service. When the command has CLI flags, put a second `--` before the first flag so npm forwards it to Truth Harness instead of treating it as npm config:
+
+```bash
+npm run docker:cli -- smt check docs/examples/constraints.smt2 -- --write
+npm run docker:cli -- cas check -- --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write
+```
+
 Run the local web workbench:
 
 ```bash

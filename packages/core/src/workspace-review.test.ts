@@ -259,7 +259,7 @@ describe("workspace review", () => {
         kind: "claim-blocker",
         domain: "biology",
         priority: "high",
-        command: expect.stringContaining("truth-harness claim review"),
+        command: expect.stringContaining("truth-harness verify"),
         acceptanceCriteria: expect.arrayContaining([
           "Run the claim review and resolve the named open check.",
           "Do not finalize the claim until open blockers are represented in the ledger."
@@ -280,6 +280,45 @@ describe("workspace review", () => {
     expect(review.markdown).toContain("| Autonomy mode | `human-review-gated` |");
     expect(review.markdown).toContain("  - Acceptance:");
     expect(review.markdown).toContain("Workspace review is a local planning queue");
+  });
+
+  it("promotes executable claim-review actions over passive claim review packets", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const claim = await writeClaimLedgerRecord({
+      rootPath: root,
+      title: "Unverified arithmetic lemma",
+      statement: "\\operatorname{lcm}(4,8) = 8",
+      domain: "math",
+      now: "2026-06-13T00:01:00.000Z"
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 0,
+      maxClaims: 1,
+      maxSessions: 0,
+      now: "2026-06-13T00:02:00.000Z"
+    });
+    const item = review.items.find((candidate) => candidate.kind === "claim-blocker");
+
+    expect(item).toMatchObject({
+      kind: "claim-blocker",
+      claimId: claim.claim.claimId,
+      command: expect.stringContaining("truth-harness verify")
+    });
+    expect(item?.command).toContain("--write");
+    expect(item?.command).toContain(`--workspace ${root}`);
+    expect(item?.command).not.toContain("truth-harness claim review");
+    expect(item?.evidenceSlots).toContainEqual(
+      expect.objectContaining({
+        slotId: "claim-supporting-evidence",
+        suggestedCommand: item?.command
+      })
+    );
+    expect(review.autonomy.nextCommand).toBe(item?.command);
   });
 
   it("prefers evidence-writing route obligations over passive inspection commands", async () => {

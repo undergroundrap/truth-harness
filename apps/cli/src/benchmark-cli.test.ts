@@ -1823,7 +1823,7 @@ describe("benchmark CLI", () => {
       status: string;
       mode: string;
       item?: { kind: string; claimId?: string };
-      execution: { status: string; kind: string; summary: string; result: { claimId: string } };
+      execution: { status: string; kind: string; summary: string; evidenceRef?: string; result: { route?: { routeId: string } } };
       networkAccess: string;
     };
     const writtenDryRunPayload = JSON.parse(writtenDryRun.stdout) as {
@@ -1855,7 +1855,8 @@ describe("benchmark CLI", () => {
       kind: "claim-blocker",
       claimId: writtenClaim.claim.claimId
     });
-    expect(dryPlan.item?.command).toContain("truth-harness claim review");
+    expect(dryPlan.item?.command).toContain("truth-harness verify");
+    expect(dryPlan.item?.command).toContain("--write");
     expect(dryPlan.execution).toMatchObject({
       status: "planned",
       kind: "dry-run"
@@ -1870,8 +1871,9 @@ describe("benchmark CLI", () => {
     expect(executedPlan.status).toBe("executed");
     expect(executedPlan.networkAccess).toBe("none");
     expect(executedPlan.execution.status).toBe("executed");
-    expect(executedPlan.execution.kind).toBe("claim-review");
-    expect(executedPlan.execution.result.claimId).toBe(writtenClaim.claim.claimId);
+    expect(executedPlan.execution.kind).toBe("verifier-route");
+    expect(executedPlan.execution.evidenceRef).toMatch(/^route:/u);
+    expect(executedPlan.execution.result.route?.routeId).toMatch(/^route_/u);
     expect(writtenDryRun.exitCode).toBe(0);
     expect(writtenDryRunPayload.written).toBe(true);
     expect(writtenDryRunPayload.plan).toMatchObject({

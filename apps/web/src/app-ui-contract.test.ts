@@ -39,6 +39,17 @@ describe("web UI action contracts", () => {
     expect(source).toContain('fallbackTitle: "Downloaded engine command"');
   });
 
+  it("formats Docker CLI fallback commands so npm preserves verifier flags", async () => {
+    const source = await readFile(appSourcePath, "utf8");
+
+    expect(source).toContain("function dockerCliCommand(commandTail)");
+    expect(source).toContain("function firstCliOptionIndex(commandTail)");
+    expect(source).toContain("return dockerCliCommand(`smt check");
+    expect(source).toContain("return dockerCliCommand(`cas check");
+    expect(source).toContain("npm run docker:cli -- ${trimmed.slice(0, optionIndex).trimEnd()} -- ${trimmed.slice(optionIndex).trimStart()}");
+    expect(source).not.toContain("npm run docker:cli -- smt check ${artifact.sourcePath ?? \"<source.smt2>\"} --write");
+  });
+
   it("surfaces concrete engine evidence gates separately from readiness probes", async () => {
     const [html, source, styles] = await Promise.all([
       readFile(appHtmlPath, "utf8"),

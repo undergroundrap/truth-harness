@@ -1214,13 +1214,13 @@ describe("MCP tool handlers", () => {
     });
     expect(verifiedRunNextList.plans[0]).toMatchObject({
       planId: writtenDryRun.plan.planId,
-      sourceSnapshotStatus: "verified",
-      sourceSnapshotAdded: 0,
+      sourceSnapshotStatus: "drifted",
+      sourceSnapshotAdded: 2,
       sourceSnapshotIgnoredAdded: 2,
       resumeDecision: {
-        safeToResume: true,
-        status: "safe-to-resume",
-        action: "run-selected-command"
+        safeToResume: false,
+        status: "rerun-run-next",
+        action: "rerun-workspace-run-next"
       }
     });
     const shownRunNext = await handleTruthHarnessWorkspaceRunNextShow({
@@ -1241,22 +1241,25 @@ describe("MCP tool handlers", () => {
         planId: writtenDryRun.plan.planId
       },
       resumeDecision: {
-        safeToResume: true,
-        status: "safe-to-resume",
-        action: "run-selected-command"
+        safeToResume: false,
+        status: "rerun-run-next",
+        action: "rerun-workspace-run-next"
       },
       sourceSnapshot: {
-        sourceSnapshotStatus: "verified",
-        sourceSnapshotAdded: 0,
+        sourceSnapshotStatus: "drifted",
+        sourceSnapshotAdded: 2,
         sourceSnapshotIgnoredAdded: 2
       }
     });
     expect(executed.dryRun).toBe(false);
     expect(executed.status).toBe("executed");
     expect(executed.execution.status).toBe("executed");
-    expect(executed.execution.kind).toBe("claim-review");
+    expect(executed.execution.kind).toBe("verifier-route");
+    expect(executed.execution.evidenceRef).toMatch(/^route:/u);
     expect(executed.execution.result).toMatchObject({
-      claimId: claim.claim.claimId
+      route: {
+        routeId: expect.stringMatching(/^route_/u)
+      }
     });
     expect(executed.warnings.join(" ")).toContain("never executes shell strings");
   });

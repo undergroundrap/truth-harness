@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
-import { listClaimRecords, type ClaimLedgerRecord } from "./claim-ledger.js";
+import { createClaimReviewPacket, listClaimRecords, type ClaimLedgerRecord } from "./claim-ledger.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { listReportDrafts, type ReportDraftSummary } from "./report-draft.js";
@@ -183,10 +183,13 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const claimsByStatementKey = claimsByReviewStatementKey(claims);
   const supersededClaimIds = supersededClaimIdSet(claims);
   const routes = await Promise.all(routeSummaries.map((route) => readVerifierRoute(status.root, route.routeId)));
+  const claimItems = (await Promise.all(
+    claims.map((claim) => claimReviewItems(status.root, claim, supersededClaimIds))
+  )).flat();
   const items = attachAgentPackets(sortReviewItems([
     ...sessions.flatMap((session) => linkedValidationGateItems(status.root, session, validationPlans)),
     ...routes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef, claimsByStatementKey)),
-    ...claims.flatMap((claim) => claimReviewItems(status.root, claim, supersededClaimIds)),
+    ...claimItems,
     ...reportDrafts.map((report) => reportDraftReviewItem(status.root, report)),
     ...sessions.flatMap((session) => sessionReviewItems(status.root, session))
   ]));
@@ -896,16 +899,18 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
-function claimReviewItems(
+async function claimReviewItems(
   workspacePath: string,
   claim: ClaimLedgerRecord,
   supersededClaimIds: Set<string>
-): WorkspaceReviewItem[] {
+): Promise<WorkspaceReviewItem[]> {
   if (claim.finalization.readyForNarrowClaim || claim.status !== "active" || supersededClaimIds.has(claim.claimId)) {
     return [];
   }
 
   const openChecks = claim.finalization.openChecks ?? [];
+  const reviewCommand = `truth-harness claim review ${quoteCommandArg(claim.claimId)} --workspace ${quoteCommandArg(workspacePath)} --json`;
+  const command = await preferredClaimBlockerCommand(workspacePath, claim.claimId, reviewCommand);
   return [
     {
       itemId: itemIdFor({
@@ -917,7 +922,7 @@ function claimReviewItems(
       priority: priorityForClaim(claim),
       title: `Review blocked claim: ${claim.title}`,
       summary: openChecks[0] ?? claim.finalization.summary,
-      command: `truth-harness claim review ${quoteCommandArg(claim.claimId)} --workspace ${quoteCommandArg(workspacePath)} --json`,
+      command,
       claimId: claim.claimId,
       domain: claim.domain,
       trust: claim.trust,
@@ -928,6 +933,23 @@ function claimReviewItems(
       }
     }
   ];
+}
+
+async function preferredClaimBlockerCommand(workspacePath: string, claimId: string, fallbackCommand: string): Promise<string> {
+  try {
+    const packet = await createClaimReviewPacket({ rootPath: workspacePath, claimRef: claimId });
+    const action = packet.nextActions.find((nextAction) =>
+      typeof nextAction.command === "string" && isActionableClaimReviewCommand(nextAction.command)
+    );
+
+    return action?.command ?? fallbackCommand;
+  } catch {
+    return fallbackCommand;
+  }
+}
+
+function isActionableClaimReviewCommand(command: string): boolean {
+  return writesVerifierEvidence(command) || /^truth-harness\s+source\s+cite\b/u.test(command);
 }
 
 function sessionReviewItems(workspacePath: string, session: ResearchSession): WorkspaceReviewItem[] {
@@ -1397,6 +1419,9 @@ function actionabilityRank(item: WorkspaceReviewItem): number {
 
 function writesVerifierEvidence(command: string): boolean {
   return (
+    /^truth-harness\s+verify\b/u.test(command) &&
+    hasCliFlag(command, "--write")
+  ) || (
     /^truth-harness\s+(?:smt|cas|proof)\s+check\b/u.test(command) &&
     hasCliFlag(command, "--write")
   ) || /^truth-harness\s+validation\s+attach\b/u.test(command);
