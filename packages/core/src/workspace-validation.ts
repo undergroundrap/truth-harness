@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,7 +38,9 @@ export interface WorkspaceValidationIssue {
     | "trusted-receipt-without-backend"
     | "non-local-first-receipt"
     | "external-call-without-disclosure"
-    | "non-replayable-receipt";
+    | "non-replayable-receipt"
+    | "report-draft-markdown-missing"
+    | "report-draft-markdown-mismatch";
   path: string;
   message: string;
 }
@@ -720,6 +723,7 @@ async function validateWorkspaceReferences(
     }
 
     validateExternalDisclosurePolicy(parsed, artifact, index, issues);
+    await validateReportDraftSidecarPolicy(root, parsed, artifact, issues);
     await validateVerifierRouteObligationPolicy(root, parsed, artifact, index, issues);
   }
 }
@@ -801,6 +805,68 @@ function validateModelContextPolicy(
       code: "unresolved-disclosure-ref",
       path: artifact.path,
       message: `$.disclosure.disclosureRef references missing local disclosure ${disclosureRef}.`
+    });
+  }
+}
+
+async function validateReportDraftSidecarPolicy(
+  root: string,
+  value: unknown,
+  artifact: WorkspaceValidationArtifact,
+  issues: WorkspaceValidationIssue[]
+): Promise<void> {
+  if (artifact.kind !== "findings" || !isRecord(value) || value.schemaVersion !== "truth-harness.report-draft.v0") {
+    return;
+  }
+
+  const paths = isRecord(value.paths) ? value.paths : undefined;
+  const markdownPath = typeof paths?.markdown === "string" ? paths.markdown : undefined;
+  const expectedSha256 = typeof value.markdownSha256 === "string" ? value.markdownSha256 : undefined;
+  const expectedByteLength =
+    typeof value.markdownByteLength === "number" ? value.markdownByteLength : undefined;
+  if (!markdownPath || !expectedSha256 || expectedByteLength === undefined) {
+    return;
+  }
+
+  const resolvedMarkdownPath = resolveWorkspaceRelativePath(root, markdownPath);
+  if (!resolvedMarkdownPath) {
+    pushArtifactIssue(artifact, issues, {
+      severity: "error",
+      code: "report-draft-markdown-missing",
+      path: artifact.path,
+      message: `$.paths.markdown points outside the workspace or cannot be resolved: ${JSON.stringify(markdownPath)}.`
+    });
+    return;
+  }
+
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(resolvedMarkdownPath);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code !== "ENOENT") {
+      throw error;
+    }
+
+    pushArtifactIssue(artifact, issues, {
+      severity: "error",
+      code: "report-draft-markdown-missing",
+      path: artifact.path,
+      message: `$.paths.markdown references missing report draft Markdown ${markdownPath}.`
+    });
+    return;
+  }
+
+  const actualSha256 = sha256(bytes);
+  if (actualSha256 !== expectedSha256 || bytes.length !== expectedByteLength) {
+    pushArtifactIssue(artifact, issues, {
+      severity: "error",
+      code: "report-draft-markdown-mismatch",
+      path: artifact.path,
+      message:
+        `Report draft Markdown ${markdownPath} does not match its JSON sidecar: ` +
+        `expected sha256 ${expectedSha256} and ${expectedByteLength} bytes, ` +
+        `found sha256 ${actualSha256} and ${bytes.length} bytes.`
     });
   }
 }
@@ -1240,6 +1306,18 @@ function looksLikePathReference(ref: string): boolean {
 function normalizeReferencePath(ref: string): string {
   const withoutFragment = (ref.split("#", 1)[0] ?? ref).replace(/\\/g, "/");
   return withoutFragment.startsWith("./") ? withoutFragment.slice(2) : withoutFragment;
+}
+
+function resolveWorkspaceRelativePath(root: string, path: string): string | undefined {
+  const normalized = normalizeReferencePath(path);
+  const resolvedRoot = resolve(root);
+  const resolvedPath = resolve(resolvedRoot, normalized);
+  const rootPrefix = resolvedRoot.endsWith(sep) ? resolvedRoot : `${resolvedRoot}${sep}`;
+  return resolvedPath === resolvedRoot || resolvedPath.startsWith(rootPrefix) ? resolvedPath : undefined;
+}
+
+function sha256(bytes: Buffer): string {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 function formatReference(ref: WorkspaceReference): string {

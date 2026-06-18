@@ -17,6 +17,7 @@ import { writeLiteratureRecord } from "./literature-record.js";
 import { writeModelContext } from "./model-context.js";
 import { writeNotebookRun } from "./notebook-run.js";
 import { createReceipt } from "./receipt.js";
+import { writeReportDraft } from "./report-draft.js";
 import { writeResearchSession } from "./research-session.js";
 import { createSimulationLogEntry } from "./simulation-log.js";
 import { writeSmtCheckRecord, type SmtBackendCommandRunner } from "./smt-backend.js";
@@ -702,6 +703,61 @@ describe("workspace artifact validation", () => {
       artifactId: "sim_1234567890abcdef",
       issueCodes: expect.arrayContaining(["invalid-artifact-schema"])
     });
+  });
+
+  it("fails report draft JSON when the human-facing Markdown sidecar is missing or tampered", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const draft = await writeReportDraft({
+      rootPath: root,
+      title: "Reviewer packet",
+      markdown: "# Reviewer packet\n\nThis is the report text a human reviewer reads.\n",
+      now: "2026-06-10T02:00:00.000Z"
+    });
+
+    const baseline = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(baseline.passed).toBe(true);
+    expect(baseline.artifacts).toContainEqual(
+      expect.objectContaining({
+        kind: "findings",
+        artifactId: draft.report.reportId,
+        schemaVersion: "truth-harness.report-draft.v0",
+        issueCodes: []
+      })
+    );
+
+    await writeFile(draft.paths.markdown, "# Reviewer packet\n\nEdited after the JSON sidecar was written.\n", "utf8");
+
+    const tampered = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(tampered.passed).toBe(false);
+    expect(tampered.issues).toContainEqual(
+      expect.objectContaining({
+        severity: "error",
+        code: "report-draft-markdown-mismatch",
+        path: draft.paths.relativeJson,
+        message: expect.stringContaining("does not match its JSON sidecar")
+      })
+    );
+    expect(tampered.artifacts.find((artifact) => artifact.artifactId === draft.report.reportId)).toMatchObject({
+      valid: false,
+      issueCodes: expect.arrayContaining(["report-draft-markdown-mismatch"])
+    });
+
+    await rm(draft.paths.markdown, { force: true });
+
+    const missing = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(missing.passed).toBe(false);
+    expect(missing.issues).toContainEqual(
+      expect.objectContaining({
+        severity: "error",
+        code: "report-draft-markdown-missing",
+        path: draft.paths.relativeJson,
+        message: expect.stringContaining("references missing report draft Markdown")
+      })
+    );
   });
 
   it("fails workspace records with dangling local evidence refs", async () => {

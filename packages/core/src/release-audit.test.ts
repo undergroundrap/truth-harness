@@ -223,7 +223,7 @@ describe("release audit", () => {
     expect(audit.status).toBe("blocked");
     expect(audit.professorReady).toBe(false);
     expect(audit.summary).toMatchObject({
-      validationPassed: true,
+      validationPassed: false,
       catalogFresh: true,
       requiredEngineGates: "3/3",
       concreteEngineGates: "3/3",
