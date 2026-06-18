@@ -1,6 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
@@ -8,6 +11,9 @@ import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const NOTEBOOK_RUN_KINDS = ["notebook", "script", "pipeline", "test", "analysis", "simulation", "other"] as const;
 export const NOTEBOOK_RUN_STATUSES = ["planned", "completed", "failed", "reproduced", "superseded"] as const;
+const NOTEBOOK_RUN_SCHEMA_VERSION = "truth-harness.notebook-run.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let notebookRunSchemaCache: Promise<unknown> | undefined;
 
 export type NotebookRunKind = (typeof NOTEBOOK_RUN_KINDS)[number];
 export type NotebookRunStatus = (typeof NOTEBOOK_RUN_STATUSES)[number];
@@ -20,7 +26,7 @@ export interface NotebookRunValue {
 }
 
 export interface NotebookRunRecord {
-  schemaVersion: "truth-harness.notebook-run.v0";
+  schemaVersion: typeof NOTEBOOK_RUN_SCHEMA_VERSION;
   runRecordId: string;
   projectId: string;
   createdAt: string;
@@ -164,7 +170,7 @@ export async function createNotebookRun(input: CreateNotebookRunInput): Promise<
     nextChecks
   });
   const record: NotebookRunRecord = {
-    schemaVersion: "truth-harness.notebook-run.v0",
+    schemaVersion: NOTEBOOK_RUN_SCHEMA_VERSION,
     runRecordId,
     ...recordWithoutId,
     updatedAt: createdAt,
@@ -191,12 +197,13 @@ export async function createNotebookRun(input: CreateNotebookRunInput): Promise<
 export async function writeNotebookRun(input: CreateNotebookRunInput): Promise<NotebookRunWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
   const record = await createNotebookRun(input);
+  await assertNotebookRunSchema(record);
   const runsDir = resolve(status.root, status.manifest.directories["notebook-runs"]);
-  await mkdir(runsDir, { recursive: true });
   const baseName = `${record.createdAt.slice(0, 10)}-${record.runRecordId}`;
   const jsonPath = join(runsDir, `${baseName}.json`);
   const markdownPath = join(runsDir, `${baseName}.md`);
   const markdown = renderNotebookRunMarkdown(record);
+  await mkdir(runsDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, record);
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -213,6 +220,28 @@ export async function writeNotebookRun(input: CreateNotebookRunInput): Promise<N
     markdownPath,
     markdown
   };
+}
+
+async function assertNotebookRunSchema(record: NotebookRunRecord): Promise<void> {
+  const schema = await loadNotebookRunSchema();
+  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
+  const issues = validateJsonSchema(serializedRecord, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Notebook run record failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadNotebookRunSchema(): Promise<unknown> {
+  notebookRunSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "notebook-run.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return notebookRunSchemaCache;
 }
 
 export async function listNotebookRuns(rootPath: string): Promise<NotebookRunRecord[]> {
@@ -234,11 +263,11 @@ export async function listNotebookRuns(rootPath: string): Promise<NotebookRunRec
   const records = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => JSON.parse(await readFile(join(runsDir, file), "utf8")) as NotebookRunRecord)
+      .map(async (file) => parseJsonWithOptionalBom(await readFile(join(runsDir, file), "utf8")) as NotebookRunRecord)
   );
 
   return records
-    .filter((record) => record.schemaVersion === "truth-harness.notebook-run.v0")
+    .filter((record) => record.schemaVersion === NOTEBOOK_RUN_SCHEMA_VERSION)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 

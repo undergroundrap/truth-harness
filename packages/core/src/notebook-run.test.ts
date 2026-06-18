@@ -71,6 +71,25 @@ describe("notebook run records", () => {
     expect(records[0]?.runRecordId).toBe(result.record.runRecordId);
   });
 
+  it("rejects malformed notebook run records before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+
+    await expect(
+      writeNotebookRun({
+        rootPath: root,
+        purpose: "Reject malformed notebook provenance metadata before durable write.",
+        command: "jupyter nbconvert --execute analysis.ipynb",
+        notebookRefs: ["analysis.ipynb"],
+        outputRefs: ["artifacts/analysis.json"],
+        limitations: ["Fixture only."],
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("Notebook run record failed JSON Schema validation before write");
+
+    await expect(listNotebookRuns(root)).resolves.toEqual([]);
+  });
+
   it("warns when run metadata is not replayable yet", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);
