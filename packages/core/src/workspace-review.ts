@@ -21,9 +21,11 @@ import {
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
+import { listValidationPlans, type ValidationGate, type ValidationPlan } from "./validation-plan.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export type WorkspaceReviewItemKind =
+  | "validation-gate"
   | "route-obligation"
   | "route-ready-claim"
   | "claim-blocker"
@@ -48,6 +50,8 @@ export interface WorkspaceReviewEvidenceSlot {
     obligationId?: string;
     claimId?: string;
     sessionId?: string;
+    validationPlanId?: string;
+    validationGateId?: string;
   };
 }
 
@@ -63,6 +67,9 @@ export interface WorkspaceReviewItem {
   obligationKind?: ProofObligation["kind"];
   claimId?: string;
   sessionId?: string;
+  validationPlanId?: string;
+  validationGateId?: string;
+  validationGateKind?: string;
   taskId?: string;
   checkpointId?: string;
   reportId?: string;
@@ -167,9 +174,11 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const claims = (await listClaimRecords(status.root)).slice(0, input.maxClaims ?? 200);
   const sessions = (await listResearchSessions(status.root)).slice(0, input.maxSessions ?? 100);
   const reportDrafts = await listReportDrafts({ rootPath: status.root, limit: input.maxReports ?? 50 });
+  const validationPlans = await listValidationPlans(status.root);
   const claimsByRouteRef = claimsByRouteEvidence(claims);
   const routes = await Promise.all(routeSummaries.map((route) => readVerifierRoute(status.root, route.routeId)));
   const items = attachAgentPackets(sortReviewItems([
+    ...sessions.flatMap((session) => linkedValidationGateItems(status.root, session, validationPlans)),
     ...routes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef)),
     ...claims.flatMap((claim) => claimReviewItems(status.root, claim)),
     ...reportDrafts.map((report) => reportDraftReviewItem(status.root, report)),
@@ -453,6 +462,98 @@ function isWorkspaceReviewId(value: string): boolean {
 
 function toPortablePath(value: string): string {
   return value.split(sep).join("/");
+}
+
+function linkedValidationGateItems(
+  workspacePath: string,
+  session: ResearchSession,
+  validationPlans: ValidationPlan[]
+): WorkspaceReviewItem[] {
+  const plans = linkedValidationPlansForSession(session, validationPlans);
+  return plans.flatMap((plan) =>
+    openValidationGates(plan).map((gate) => validationGateItem(workspacePath, session, plan, gate))
+  );
+}
+
+function linkedValidationPlansForSession(session: ResearchSession, validationPlans: ValidationPlan[]): ValidationPlan[] {
+  const linkedPlanRefs = new Set<string>();
+  for (const ref of session.evidenceRefs) {
+    if (ref.kind === "validation") {
+      linkedPlanRefs.add(ref.ref);
+    }
+  }
+  for (const checkpoint of session.checkpoints) {
+    for (const ref of checkpoint.evidenceRefs) {
+      if (ref.kind === "validation") {
+        linkedPlanRefs.add(ref.ref);
+      }
+    }
+  }
+
+  return validationPlans.filter((plan) => {
+    if (linkedPlanRefs.has(plan.planId)) {
+      return true;
+    }
+
+    return plan.evidenceRefs.some((ref) => ref.kind === "session" && ref.ref === session.sessionId);
+  });
+}
+
+function openValidationGates(plan: ValidationPlan): ValidationGate[] {
+  return plan.gates.filter((gate) => gate.status !== "satisfied" && gate.status !== "not-applicable");
+}
+
+function validationGateItem(
+  workspacePath: string,
+  session: ResearchSession,
+  plan: ValidationPlan,
+  gate: ValidationGate
+): WorkspaceReviewItem {
+  return {
+    itemId: itemIdFor({
+      kind: "validation-gate",
+      sessionId: session.sessionId,
+      planId: plan.planId,
+      gateId: gate.gateId,
+      status: gate.status
+    }),
+    kind: "validation-gate",
+    priority: priorityForValidationGate(gate),
+    title: `Validation gate: ${gate.kind}`,
+    summary: `${plan.title} - ${gate.description} Current status: ${gate.status}.`,
+    command: commandForValidationGate(workspacePath, session, plan, gate),
+    sessionId: session.sessionId,
+    validationPlanId: plan.planId,
+    validationGateId: gate.gateId,
+    validationGateKind: gate.kind,
+    domain: plan.domains[0],
+    createdAt: plan.updatedAt,
+    source: {
+      label: "linked validation plan",
+      ref: `${session.sessionId}:${plan.planId}:${gate.gateId}`
+    }
+  };
+}
+
+function commandForValidationGate(
+  workspacePath: string,
+  session: ResearchSession,
+  plan: ValidationPlan,
+  gate: ValidationGate
+): string {
+  if (gate.kind === "proof") {
+    return `truth-harness verify ${quoteCommandArg(plan.claim)} --write --workspace ${quoteCommandArg(workspacePath)} --json`;
+  }
+
+  if (gate.kind === "source-citation" || gate.kind === "prior-art") {
+    return `truth-harness source search ${quoteCommandArg(plan.claim)} --workspace ${quoteCommandArg(workspacePath)} --json`;
+  }
+
+  if (gate.kind === "benchmark") {
+    return `truth-harness bench run packages/benchmarks/suites/foundations-seed.json --write --workspace ${quoteCommandArg(workspacePath)} --json`;
+  }
+
+  return `truth-harness research show ${quoteCommandArg(session.sessionId)} --workspace ${quoteCommandArg(workspacePath)} --json`;
 }
 
 function routeReviewItems(
@@ -901,6 +1002,22 @@ function priorityForClaim(claim: ClaimLedgerRecord): WorkspaceReviewPriority {
   return "medium";
 }
 
+function priorityForValidationGate(gate: ValidationGate): WorkspaceReviewPriority {
+  if (gate.status === "blocked" || gate.kind === "proof") {
+    return gate.blocking ? "critical" : "high";
+  }
+
+  if (gate.blocking) {
+    return "high";
+  }
+
+  if (gate.status === "missing" || gate.status === "planned") {
+    return "medium";
+  }
+
+  return "low";
+}
+
 function priorityForSessionTask(task: ResearchSessionTask): WorkspaceReviewPriority {
   if (task.status === "blocked" || task.status === "doing") {
     return "high";
@@ -916,11 +1033,26 @@ function sortReviewItems(items: WorkspaceReviewItem[]): WorkspaceReviewItem[] {
     medium: 2,
     low: 3
   };
+  const kindRank: Record<WorkspaceReviewItemKind, number> = {
+    "validation-gate": 0,
+    "route-obligation": 1,
+    "claim-blocker": 2,
+    "report-draft-review": 3,
+    "session-task": 4,
+    "session-next-check": 5,
+    "route-ready-claim": 6,
+    "credibility-action": 7
+  };
 
   return [...items].sort((left, right) => {
     const priority = rank[left.priority] - rank[right.priority];
     if (priority !== 0) {
       return priority;
+    }
+
+    const kind = kindRank[left.kind] - kindRank[right.kind];
+    if (kind !== 0) {
+      return kind;
     }
 
     return (right.createdAt ?? "").localeCompare(left.createdAt ?? "");
@@ -942,6 +1074,25 @@ function attachAgentPackets(items: WorkspaceReviewItem[]): WorkspaceReviewItem[]
 }
 
 function workspaceReviewEvidenceSlots(item: WorkspaceReviewItem): WorkspaceReviewEvidenceSlot[] {
+  if (item.kind === "validation-gate") {
+    return [
+      {
+        slotId: `validation-${item.validationGateKind ?? "gate"}-evidence`,
+        label: "Validation gate evidence",
+        required: true,
+        status: "open",
+        description: "Attach the evidence artifact required by this linked validation gate before strengthening the research claim.",
+        acceptedArtifacts: acceptedArtifactsForValidationGate(item.validationGateKind),
+        suggestedCommand: item.command,
+        attachTo: {
+          sessionId: item.sessionId,
+          validationPlanId: item.validationPlanId,
+          validationGateId: item.validationGateId
+        }
+      }
+    ];
+  }
+
   if (item.kind === "route-obligation") {
     return [routeObligationEvidenceSlot(item)];
   }
@@ -1027,6 +1178,41 @@ function workspaceReviewEvidenceSlots(item: WorkspaceReviewItem): WorkspaceRevie
   return [];
 }
 
+function acceptedArtifactsForValidationGate(kind: string | undefined): string[] {
+  switch (kind) {
+    case "proof":
+      return [
+        "truth-harness verify <claim> --write",
+        ".truth-harness/routes/*.json",
+        ".truth-harness/receipts/*.json",
+        ".truth-harness/proofs/*.json",
+        ".truth-harness/smt/*.json",
+        ".truth-harness/cas/*.json"
+      ];
+    case "source-citation":
+    case "literature-record":
+    case "prior-art":
+      return [".truth-harness/indexes/*.json", ".truth-harness/literature/*.json", "source-cited local refs"];
+    case "notebook-run":
+      return [".truth-harness/notebook-runs/*.json"];
+    case "code-run":
+      return [".truth-harness/code-runs/*.json"];
+    case "simulation-log":
+    case "simulation-review":
+      return [".truth-harness/simulations/*.json", ".truth-harness/reviews/*.json"];
+    case "benchmark":
+      return [".truth-harness/benchmarks/*.json"];
+    case "expert-review":
+    case "safety":
+    case "patent-legal":
+      return [".truth-harness/reviews/*.json"];
+    case "workspace-snapshot":
+      return [".truth-harness/snapshots/*.json"];
+    default:
+      return [".truth-harness/**/*.json", "local evidence refs matching the validation gate"];
+  }
+}
+
 function routeObligationEvidenceSlot(item: WorkspaceReviewItem): WorkspaceReviewEvidenceSlot {
   const attachTo = {
     routeId: item.routeId,
@@ -1093,6 +1279,12 @@ function workspaceReviewAcceptanceCriteria(item: WorkspaceReviewItem): string[] 
       "Attach the resulting proof, solver, CAS, or review artifact to the route.",
       "Keep any final claim inside the route problem, checker output, and limitations."
     );
+  } else if (item.kind === "validation-gate") {
+    criteria.push(
+      "Open the linked validation plan and close this exact gate before broadening the research claim.",
+      "Produce or attach the required local evidence artifact listed in the evidence slot.",
+      "Checkpoint the owning research session with the new evidence ref and any remaining blocker."
+    );
   } else if (item.kind === "route-ready-claim") {
     criteria.push(
       "Record a narrow claim that cites this route as evidence.",
@@ -1158,6 +1350,8 @@ function workspaceReviewAgentPacket(
     `Route: ${item.routeId ?? "n/a"}`,
     `Claim: ${item.claimId ?? "n/a"}`,
     `Session: ${item.sessionId ?? "n/a"}`,
+    `Validation plan: ${item.validationPlanId ?? "n/a"}`,
+    `Validation gate: ${item.validationGateId ?? "n/a"} (${item.validationGateKind ?? "n/a"})`,
     `Report: ${item.reportId ?? "n/a"}`,
     `Obligation: ${item.obligationId ?? "n/a"}`,
     `Trust: ${item.trust ?? "n/a"}`,
@@ -1198,7 +1392,9 @@ function formatEvidenceSlotTarget(slot: WorkspaceReviewEvidenceSlot): string {
     target.routeId ? `route:${target.routeId}` : undefined,
     target.obligationId ? `obligation:${target.obligationId}` : undefined,
     target.claimId ? `claim:${target.claimId}` : undefined,
-    target.sessionId ? `session:${target.sessionId}` : undefined
+    target.sessionId ? `session:${target.sessionId}` : undefined,
+    target.validationPlanId ? `validation:${target.validationPlanId}` : undefined,
+    target.validationGateId ? `gate:${target.validationGateId}` : undefined
   ].filter(Boolean).join(" ") || "local workspace artifact";
 }
 

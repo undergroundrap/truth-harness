@@ -1974,6 +1974,59 @@ describe("benchmark CLI", () => {
     expect(markdownOnly.stdout.trim()).toBe(markdown.trim());
   });
 
+  it("prioritizes linked validation gates in workspace run-next", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    const harness = await runCli([
+      "research",
+      "harness",
+      "Prove or refute the reusable invariant for a deterministic robotics simulation kernel.",
+      "--workspace",
+      root,
+      "--domain",
+      "math",
+      "--domain",
+      "physics",
+      "--domain",
+      "code",
+      "--json"
+    ]);
+    const harnessJson = JSON.parse(harness.stdout) as {
+      session: { sessionId: string };
+      validationPlan?: { plan: { planId: string } };
+    };
+    const runNext = await runCli([
+      "workspace",
+      "run-next",
+      root,
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--json"
+    ]);
+    const plan = JSON.parse(runNext.stdout) as {
+      item?: {
+        kind: string;
+        priority: string;
+        sessionId?: string;
+        validationPlanId?: string;
+        validationGateKind?: string;
+        command: string;
+      };
+    };
+
+    expect(runNext.exitCode).toBe(0);
+    expect(plan.item).toMatchObject({
+      kind: "validation-gate",
+      priority: "critical",
+      sessionId: harnessJson.session.sessionId,
+      validationPlanId: harnessJson.validationPlan?.plan.planId,
+      validationGateKind: "proof"
+    });
+    expect(plan.item?.command).toContain("truth-harness verify");
+  });
+
   it("plans credibility reviewer actions through workspace run-next", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);

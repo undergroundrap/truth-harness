@@ -60,6 +60,7 @@
         "itemId": { "type": "string", "minLength": 1 },
         "kind": {
           "enum": [
+            "validation-gate",
             "route-obligation",
             "route-ready-claim",
             "claim-blocker",
@@ -80,6 +81,9 @@
         "obligationKind": { "type": "string" },
         "claimId": { "type": "string" },
         "sessionId": { "type": "string" },
+        "validationPlanId": { "type": "string" },
+        "validationGateId": { "type": "string" },
+        "validationGateKind": { "type": "string" },
         "reportId": { "type": "string" }
       },
       "additionalProperties": false

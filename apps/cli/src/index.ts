@@ -7294,6 +7294,12 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
     if (plan.item.reportId) {
       console.log(`  Report: ${plan.item.reportId}`);
     }
+    if (plan.item.validationPlanId) {
+      console.log(`  Validation plan: ${plan.item.validationPlanId}`);
+    }
+    if (plan.item.validationGateId) {
+      console.log(`  Validation gate: ${plan.item.validationGateId}`);
+    }
     console.log(`  Command: ${plan.item.command}`);
   }
 

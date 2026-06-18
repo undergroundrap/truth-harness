@@ -1209,6 +1209,33 @@ describe("MCP tool handlers", () => {
     expect(executed.warnings.join(" ")).toContain("never executes shell strings");
   });
 
+  it("prioritizes linked validation gates for agent run-next calls", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Validation Gate Run Next Lab" });
+    const harness = await handleTruthHarnessResearchHarnessStart({
+      objective: "Prove or refute the reusable invariant for a deterministic robotics simulation kernel.",
+      domains: ["math", "physics", "code"]
+    });
+
+    const plan = await handleTruthHarnessWorkspaceRunNext({
+      maxRoutes: 0,
+      maxClaims: 0
+    });
+    if ("written" in plan) {
+      throw new Error("Expected plain run-next plan without write=true.");
+    }
+
+    expect(plan.item).toMatchObject({
+      kind: "validation-gate",
+      priority: "critical",
+      sessionId: harness.session.sessionId,
+      validationPlanId: harness.validationPlan?.plan.planId,
+      validationGateKind: "proof"
+    });
+    expect(plan.item?.command).toContain("truth-harness verify");
+  });
+
   it("plans credibility reviewer actions through run-next", async () => {
     const root = await tempRoot();
     process.env.TRUTH_HARNESS_ROOT = root;

@@ -16,7 +16,7 @@ import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-work
 import { writeLeanProofCheckRecord } from "./proof-backend.js";
 import { readReportDraft } from "./report-draft.js";
 import { createReceipt } from "./receipt.js";
-import { readResearchSession } from "./research-session.js";
+import { addResearchSessionCheckpoint, readResearchSession } from "./research-session.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { writeSmtCheckRecord, type SmtBackendId } from "./smt-backend.js";
 import type { SympyOperation } from "./sympy.js";
@@ -24,6 +24,7 @@ import type { Receipt, TrustLabel } from "./types.js";
 import {
   readVerifierRoute,
   satisfyVerifierRouteObligation,
+  writeVerifierRoute,
   type SatisfyVerifierRouteObligationResult,
   type VerifierRouteEvidenceRef
 } from "./verifier-route.js";
@@ -82,6 +83,9 @@ export interface WorkspaceRunNextPlan {
     | "obligationKind"
     | "claimId"
     | "sessionId"
+    | "validationPlanId"
+    | "validationGateId"
+    | "validationGateKind"
     | "reportId"
   >;
   execution: {
@@ -388,6 +392,10 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
     ...(item?.obligationId ? [`- Obligation: \`${item.obligationId}\` (${item.obligationKind ?? "evidence"})`] : []),
     ...(item?.claimId ? [`- Claim: \`${item.claimId}\``] : []),
     ...(item?.sessionId ? [`- Session: \`${item.sessionId}\``] : []),
+    ...(item?.validationPlanId ? [`- Validation plan: \`${item.validationPlanId}\``] : []),
+    ...(item?.validationGateId
+      ? [`- Validation gate: \`${item.validationGateId}\` (${item.validationGateKind ?? "gate"})`]
+      : []),
     ...(item?.reportId ? [`- Report: \`${item.reportId}\``] : []),
     "",
     "## Execution",
@@ -486,6 +494,9 @@ function workspaceRunNextItemSummary(item: WorkspaceReviewItem): WorkspaceRunNex
     obligationKind: item.obligationKind,
     claimId: item.claimId,
     sessionId: item.sessionId,
+    validationPlanId: item.validationPlanId,
+    validationGateId: item.validationGateId,
+    validationGateKind: item.validationGateKind,
     reportId: item.reportId
   };
 }
@@ -515,6 +526,67 @@ async function executeWorkspaceRunNextItem(
   const timeoutMs = parseOptionalPositiveIntegerOption(options["timeout-ms"], 3000);
 
   try {
+    if (group === "verify") {
+      const problem = positionalArgsBeforeFirstOption([action, ...rest]).join(" ").trim();
+      if (!problem) {
+        throw new Error("Missing problem for verifier route.");
+      }
+      if (options.write !== true) {
+        return {
+          status: "blocked",
+          kind: "verifier-route",
+          command: item.command,
+          summary: "Validation-gate verifier actions must include --write so the result becomes durable route evidence."
+        };
+      }
+
+      const result = await writeVerifierRoute({
+        rootPath: workspace,
+        problem,
+        timeoutMs,
+        maximaCommand: optionString(options["maxima-command"]),
+        sageCommand: optionString(options["sage-command"]),
+        leanCommand: optionString(options["lean-command"]),
+        z3Command: optionString(options["z3-command"]),
+        cvc5Command: optionString(options["cvc5-command"]),
+        smtReviewPolicy: options["require-independent-smt"] === true ? "independent" : "single"
+      });
+      const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
+      const checkpoint = item.sessionId
+        ? await addResearchSessionCheckpoint({
+            rootPath: workspace,
+            sessionRef: item.sessionId,
+            summary: `Ran verifier route ${result.route.routeId} for validation gate ${item.validationGateId ?? "unknown"}.`,
+            evidenceRefs: [
+              {
+                kind: "route",
+                ref: result.route.routeId,
+                trust: result.route.finalTrust,
+                summary: `Verifier route final trust: ${result.route.finalTrust}.`
+              }
+            ],
+            decisions: ["Treat the verifier route as evidence for review; do not close the validation gate until the required evidence is attached and rechecked."],
+            nextChecks: [
+              item.validationPlanId && item.validationGateId
+                ? `Attach route:${result.route.routeId} to validation ${item.validationPlanId} gate ${item.validationGateId} if it satisfies the gate.`
+                : `Review route:${result.route.routeId} against the validation gate.`
+            ]
+          })
+        : undefined;
+
+      return {
+        status: "executed",
+        kind: "verifier-route",
+        command: item.command,
+        evidenceRef: `route:${evidenceRef}`,
+        attached: Boolean(checkpoint),
+        summary: checkpoint
+          ? `Wrote verifier route ${result.route.routeId} and checkpointed session ${item.sessionId}.`
+          : `Wrote verifier route ${result.route.routeId}.`,
+        result: { route: result.route, checkpoint: checkpoint?.checkpoint }
+      };
+    }
+
     if (group === "claim" && action === "review") {
       const claimRef = rest[0];
       if (!claimRef) {
@@ -933,6 +1005,17 @@ function commandOptionMap(args: string[]): Record<string, string | true> {
   }
 
   return options;
+}
+
+function positionalArgsBeforeFirstOption(args: Array<string | undefined>): string[] {
+  const positional: string[] = [];
+  for (const token of args) {
+    if (!token || token.startsWith("--")) {
+      break;
+    }
+    positional.push(token);
+  }
+  return positional;
 }
 
 function parseOptionalPositiveIntegerOption(value: string | true | undefined, fallback: number): number {

@@ -7,6 +7,7 @@ import { createCredibilityPack } from "./credibility-pack.js";
 import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeReportDraft } from "./report-draft.js";
+import { readResearchSession, writeResearchHarness } from "./research-session.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import {
   createWorkspaceReviewFromCredibilityPack,
@@ -15,7 +16,7 @@ import {
   readWorkspaceRunNextPlan,
   writeWorkspaceRunNextPlan
 } from "./workspace-run-next.js";
-import type { WorkspaceReview } from "./workspace-review.js";
+import { createWorkspaceReview, type WorkspaceReview } from "./workspace-review.js";
 
 const roots: string[] = [];
 
@@ -25,6 +26,67 @@ afterEach(async () => {
 });
 
 describe("workspace run-next", () => {
+  it("prioritizes linked validation-plan gates before generic session work", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "Prove or refute the reusable invariant for a deterministic robotics simulation kernel.",
+      domains: ["math", "physics", "code"],
+      tasks: ["Tune the future renderer after proof gates are closed."],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-18T00:02:00.000Z"
+    });
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-18T00:03:00.000Z"
+    });
+
+    expect(review.items[0]).toMatchObject({
+      kind: "validation-gate",
+      priority: "critical",
+      sessionId: harness.session.sessionId,
+      validationPlanId: harness.validationPlan?.plan.planId,
+      validationGateKind: "proof"
+    });
+    expect(review.items[0]?.evidenceSlots?.[0]).toMatchObject({
+      label: "Validation gate evidence",
+      attachTo: {
+        sessionId: harness.session.sessionId,
+        validationPlanId: harness.validationPlan?.plan.planId
+      }
+    });
+    expect(plan.item).toMatchObject({
+      kind: "validation-gate",
+      validationPlanId: harness.validationPlan?.plan.planId,
+      validationGateKind: "proof"
+    });
+    expect(plan.item?.command).toContain("truth-harness verify");
+
+    const executed = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-18T00:04:00.000Z"
+    });
+    const reopened = await readResearchSession(root, harness.session.sessionId);
+
+    expect(executed.status).toBe("executed");
+    expect(executed.execution).toMatchObject({
+      kind: "verifier-route",
+      attached: true
+    });
+    expect(executed.execution.evidenceRef).toContain("route:.truth-harness/routes/");
+    expect(reopened.evidenceRefs).toContainEqual(
+      expect.objectContaining({ kind: "route", ref: expect.stringMatching(/^route_[a-f0-9]{16}$/u) })
+    );
+  });
+
   it("executes bounded local actions without honoring command workspace overrides", async () => {
     const root = await tempRoot();
     const outsideRoot = await tempRoot();
