@@ -180,6 +180,7 @@
           "$ref": "#/$defs/stringArray"
         },
         "suggestedCommand": { "type": "string" },
+        "attachCommand": { "type": "string" },
         "attachTo": {
           "type": "object",
           "properties": {

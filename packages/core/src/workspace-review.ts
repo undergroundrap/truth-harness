@@ -45,6 +45,7 @@ export interface WorkspaceReviewEvidenceSlot {
   description: string;
   acceptedArtifacts: string[];
   suggestedCommand?: string;
+  attachCommand?: string;
   attachTo?: {
     routeId?: string;
     obligationId?: string;
@@ -1084,6 +1085,7 @@ function workspaceReviewEvidenceSlots(item: WorkspaceReviewItem): WorkspaceRevie
         description: "Attach the evidence artifact required by this linked validation gate before strengthening the research claim.",
         acceptedArtifacts: acceptedArtifactsForValidationGate(item.validationGateKind),
         suggestedCommand: item.command,
+        attachCommand: validationGateAttachCommand(item),
         attachTo: {
           sessionId: item.sessionId,
           validationPlanId: item.validationPlanId,
@@ -1370,6 +1372,7 @@ function workspaceReviewAgentPacket(
       : evidenceSlots.flatMap((slot) => [
         `- ${slot.label} (${slot.status}${slot.required ? ", required" : ""})`,
         `  - Accepts: ${slot.acceptedArtifacts.join("; ")}`,
+        ...(slot.attachCommand ? [`  - Attach command: ${slot.attachCommand}`] : []),
         `  - Attach to: ${formatEvidenceSlotTarget(slot)}`
       ])),
     "",
@@ -1380,6 +1383,14 @@ function workspaceReviewAgentPacket(
   ];
 
   return lines.join("\n");
+}
+
+function validationGateAttachCommand(item: WorkspaceReviewItem): string | undefined {
+  if (!item.validationPlanId || !item.validationGateId) {
+    return undefined;
+  }
+
+  return `truth-harness validation attach ${quoteCommandArg(item.validationPlanId)} ${quoteCommandArg(item.validationGateId)} --evidence <kind:path-or-id> --json`;
 }
 
 function formatEvidenceSlotTarget(slot: WorkspaceReviewEvidenceSlot): string {

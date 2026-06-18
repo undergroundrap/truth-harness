@@ -5313,6 +5313,7 @@ function workspaceReviewEvidenceSlotsHtml(item) {
     <small>Accepts: ${escapeHtml((slot.acceptedArtifacts ?? []).join("; ") || "local replayable artifact")}</small>
     <small>Attach to: ${escapeHtml(workspaceReviewSlotTargetText(slot))}</small>
     ${slot.suggestedCommand ? `<code>${escapeHtml(slot.suggestedCommand)}</code>` : ""}
+    ${slot.attachCommand ? `<small>Attach command</small><code>${escapeHtml(slot.attachCommand)}</code>` : ""}
   </article>`).join("");
 }
 
@@ -5326,7 +5327,9 @@ function workspaceReviewSlotTargetText(slot) {
     target.routeId ? `route:${target.routeId}` : undefined,
     target.obligationId ? `obligation:${target.obligationId}` : undefined,
     target.claimId ? `claim:${target.claimId}` : undefined,
-    target.sessionId ? `session:${target.sessionId}` : undefined
+    target.sessionId ? `session:${target.sessionId}` : undefined,
+    target.validationPlanId ? `validation:${target.validationPlanId}` : undefined,
+    target.validationGateId ? `gate:${target.validationGateId}` : undefined
   ].filter(Boolean).join(" ") || "local workspace artifact";
 }
 

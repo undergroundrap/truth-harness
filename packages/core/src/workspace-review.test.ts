@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeReportDraft } from "./report-draft.js";
-import { addResearchSessionCheckpoint, writeResearchSession } from "./research-session.js";
+import { addResearchSessionCheckpoint, writeResearchHarness, writeResearchSession } from "./research-session.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createWorkspaceReview, listWorkspaceReviews, readWorkspaceReview, writeWorkspaceReview } from "./workspace-review.js";
 import { writeVerifierRoute } from "./verifier-route.js";
@@ -22,6 +22,49 @@ describe("workspace review", () => {
     const root = await tempRoot();
 
     await expect(createWorkspaceReview({ rootPath: root })).rejects.toThrow("No Truth Harness workspace found");
+  });
+
+  it("exposes validation gate attach commands in evidence slots", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-18T00:00:00.000Z"
+    });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const proofGate = harness.validationPlan?.plan.gates.find((gate) => gate.kind === "proof");
+    if (!proofGate) {
+      throw new Error("Expected a linked proof validation gate.");
+    }
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-18T00:02:00.000Z"
+    });
+
+    expect(review.items).toContainEqual(
+      expect.objectContaining({
+        kind: "validation-gate",
+        sessionId: harness.session.sessionId,
+        validationPlanId: harness.validationPlan?.plan.planId,
+        validationGateId: proofGate.gateId,
+        evidenceSlots: expect.arrayContaining([
+          expect.objectContaining({
+            slotId: "validation-proof-evidence",
+            attachCommand: `truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence <kind:path-or-id> --json`,
+            attachTo: expect.objectContaining({
+              sessionId: harness.session.sessionId,
+              validationPlanId: harness.validationPlan?.plan.planId,
+              validationGateId: proofGate.gateId
+            })
+          })
+        ]),
+        agentPacket: expect.stringContaining("Attach command: truth-harness validation attach")
+      })
+    );
   });
 
   it("orders route obligations and blocked claims into a local work queue", async () => {

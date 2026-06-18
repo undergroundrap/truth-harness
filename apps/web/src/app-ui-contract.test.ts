@@ -19,6 +19,15 @@ describe("web UI action contracts", () => {
     expect(handler).not.toContain("renderWorkspaceReview();");
   });
 
+  it("renders validation evidence attach commands and targets in workspace review slots", async () => {
+    const source = await readFile(appSourcePath, "utf8");
+
+    expect(source).toContain("slot.attachCommand");
+    expect(source).toContain("Attach command");
+    expect(source).toContain("target.validationPlanId");
+    expect(source).toContain("target.validationGateId");
+  });
+
   it("keeps focused engine readiness commands copyable from the checks work order", async () => {
     const source = await readFile(appSourcePath, "utf8");
 
