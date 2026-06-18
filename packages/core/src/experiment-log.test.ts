@@ -1,9 +1,9 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createExperimentLogEntry, listExperimentLogEntries } from "./experiment-log.js";
-import { initLocalWorkspace } from "./local-workspace.js";
+import { initLocalWorkspace, LOCAL_WORKSPACE_DIR, LOCAL_WORKSPACE_MANIFEST } from "./local-workspace.js";
 
 const roots: string[] = [];
 
@@ -61,6 +61,29 @@ describe("experiment logs", () => {
     expect(result.entry.warnings[0]).toContain("do not by themselves establish safety");
     expect(entries).toHaveLength(1);
     expect(entries[0]?.experimentId).toBe(result.entry.experimentId);
+  });
+
+  it("rejects malformed experiment records before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      displayName: "Experiment Lab",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+    const manifestPath = join(root, LOCAL_WORKSPACE_DIR, LOCAL_WORKSPACE_MANIFEST);
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    manifest.projectId = "";
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    await expect(
+      createExperimentLogEntry({
+        rootPath: root,
+        question: "This malformed workspace should not mint experiment evidence.",
+        now: "2026-06-08T01:00:00.000Z"
+      })
+    ).rejects.toThrow("Experiment log entry failed JSON Schema validation before write");
+
+    const experiments = await readdir(join(root, LOCAL_WORKSPACE_DIR, "experiments"));
+    expect(experiments).toEqual([]);
   });
 
   it("warns when biological experiment records omit review and data metadata", async () => {

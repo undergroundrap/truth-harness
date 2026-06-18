@@ -1,6 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
@@ -40,7 +43,7 @@ export interface ExperimentMeasurement {
 }
 
 export interface ExperimentLogEntry {
-  schemaVersion: "truth-harness.experiment.v0";
+  schemaVersion: typeof EXPERIMENT_SCHEMA_VERSION;
   experimentId: string;
   projectId: string;
   createdAt: string;
@@ -108,6 +111,10 @@ export interface ExperimentLogWriteResult {
   path: string;
 }
 
+const EXPERIMENT_SCHEMA_VERSION = "truth-harness.experiment.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let experimentSchemaCache: Promise<unknown> | undefined;
+
 export function isExperimentKind(value: string): value is ExperimentKind {
   return (EXPERIMENT_KINDS as readonly string[]).includes(value);
 }
@@ -163,7 +170,7 @@ export async function createExperimentLogEntry(input: CreateExperimentLogInput):
   };
   const experimentId = `exp_${stableHash(entryWithoutId).slice(0, 16)}`;
   const entry: ExperimentLogEntry = {
-    schemaVersion: "truth-harness.experiment.v0",
+    schemaVersion: EXPERIMENT_SCHEMA_VERSION,
     experimentId,
     ...entryWithoutId,
     updatedAt: createdAt,
@@ -171,6 +178,7 @@ export async function createExperimentLogEntry(input: CreateExperimentLogInput):
     privacy: manifest.privacy,
     warnings: warningsFor(entryWithoutId)
   };
+  await assertExperimentSchema(entry);
 
   const experimentsDir = resolve(status.root, manifest.directories.experiments);
   await mkdir(experimentsDir, { recursive: true });
@@ -185,6 +193,28 @@ export async function createExperimentLogEntry(input: CreateExperimentLogInput):
   });
 
   return { entry, path };
+}
+
+async function assertExperimentSchema(entry: ExperimentLogEntry): Promise<void> {
+  const schema = await loadExperimentSchema();
+  const serializedEntry = parseJsonWithOptionalBom(JSON.stringify(entry));
+  const issues = validateJsonSchema(serializedEntry, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Experiment log entry failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadExperimentSchema(): Promise<unknown> {
+  experimentSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "experiment-log.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return experimentSchemaCache;
 }
 
 export async function listExperimentLogEntries(rootPath: string): Promise<ExperimentLogEntry[]> {
@@ -206,11 +236,11 @@ export async function listExperimentLogEntries(rootPath: string): Promise<Experi
   const entries = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => JSON.parse(await readFile(join(experimentsDir, file), "utf8")) as ExperimentLogEntry)
+      .map(async (file) => parseJsonWithOptionalBom(await readFile(join(experimentsDir, file), "utf8")) as ExperimentLogEntry)
   );
 
   return entries
-    .filter((entry) => entry.schemaVersion === "truth-harness.experiment.v0")
+    .filter((entry) => entry.schemaVersion === EXPERIMENT_SCHEMA_VERSION)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
