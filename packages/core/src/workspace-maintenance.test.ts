@@ -139,6 +139,14 @@ describe("workspace maintenance", () => {
     expect(archive.files[0]?.sha256).toMatch(/^[a-f0-9]{64}$/u);
     expect(await pathExists(archivedReceiptFile)).toBe(true);
     expect(await pathExists(archiveManifest)).toBe(true);
+    const archiveManifestJson = JSON.parse(await readFile(archiveManifest, "utf8")) as {
+      schemaVersion: string;
+      reason: string;
+      files: Array<{ sha256: string }>;
+    };
+    expect(archiveManifestJson.schemaVersion).toBe("truth-harness.workspace-archive-manifest.v0");
+    expect(archiveManifestJson.reason).toBe("fresh start test");
+    expect(archiveManifestJson.files[0]?.sha256).toBe(archive.files[0]?.sha256);
     const archives = await listLocalWorkspaceArchives({ rootPath: root });
     expect(archives.total).toBe(1);
     expect(archives.damaged).toBe(0);

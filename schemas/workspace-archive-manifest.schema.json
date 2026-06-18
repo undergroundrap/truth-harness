@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/workspace-archive-manifest.schema.json",
+  "title": "Truth Harness Workspace Archive Manifest",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "archiveId",
+    "createdAt",
+    "root",
+    "workspaceDir",
+    "targets",
+    "resolvedDirectories",
+    "reason",
+    "entries",
+    "files"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.workspace-archive-manifest.v0"
+    },
+    "archiveId": {
+      "type": "string",
+      "pattern": "^archive_[0-9A-Za-z_]+$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspaceDir": {
+      "type": "string",
+      "minLength": 1
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/cleanTarget"
+      }
+    },
+    "resolvedDirectories": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/workspaceDirectory"
+      }
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/archiveEntry"
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/archiveFile"
+      }
+    }
+  },
+  "$defs": {
+    "cleanTarget": {
+      "enum": [
+        "scratch",
+        "generated",
+        "evidence",
+        "all",
+        "receipts",
+        "claims",
+        "artifacts",
+        "events",
+        "indexes",
+        "findings",
+        "inventions",
+        "cas",
+        "proofs",
+        "smt",
+        "engine-runs",
+        "benchmarks",
+        "disclosures",
+        "simulations",
+        "patents",
+        "experiments",
+        "vault",
+        "audits",
+        "snapshots",
+        "sessions",
+        "reviews",
+        "validation",
+        "literature",
+        "notebook-runs",
+        "code-runs",
+        "model-contexts",
+        "visuals",
+        "routes"
+      ]
+    },
+    "workspaceDirectory": {
+      "enum": [
+        "receipts",
+        "claims",
+        "artifacts",
+        "events",
+        "indexes",
+        "findings",
+        "inventions",
+        "cas",
+        "proofs",
+        "smt",
+        "engine-runs",
+        "benchmarks",
+        "disclosures",
+        "simulations",
+        "patents",
+        "experiments",
+        "vault",
+        "audits",
+        "snapshots",
+        "sessions",
+        "reviews",
+        "validation",
+        "literature",
+        "notebook-runs",
+        "code-runs",
+        "model-contexts",
+        "visuals",
+        "routes"
+      ]
+    },
+    "archiveEntry": {
+      "type": "object",
+      "required": ["directory", "sourcePath", "archivePath", "exists", "files", "bytes", "copied"],
+      "properties": {
+        "directory": {
+          "$ref": "#/$defs/workspaceDirectory"
+        },
+        "sourcePath": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/"
+        },
+        "archivePath": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/archives/"
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "copied": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "archiveFile": {
+      "type": "object",
+      "required": ["directory", "sourcePath", "archivePath", "bytes", "sha256"],
+      "properties": {
+        "directory": {
+          "$ref": "#/$defs/workspaceDirectory"
+        },
+        "sourcePath": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/"
+        },
+        "archivePath": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/archives/"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

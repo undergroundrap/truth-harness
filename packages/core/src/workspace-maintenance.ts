@@ -10,6 +10,7 @@ import {
   type LocalWorkspaceDirectory,
   type LocalWorkspaceManifest
 } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { renderVisualArtifactMarkdown, type VisualArtifact } from "./visual-artifact.js";
 
 export type WorkspaceCleanGroup = "scratch" | "generated" | "evidence" | "all";
@@ -87,6 +88,19 @@ export interface WorkspaceArchiveResult {
   archivedFiles: number;
   archivedBytes: number;
   warnings: string[];
+}
+
+interface WorkspaceArchiveManifest {
+  schemaVersion: "truth-harness.workspace-archive-manifest.v0";
+  archiveId: string;
+  createdAt: string;
+  root: string;
+  workspaceDir: string;
+  targets: WorkspaceCleanTarget[];
+  resolvedDirectories: LocalWorkspaceDirectory[];
+  reason: string;
+  entries: WorkspaceArchiveEntry[];
+  files: WorkspaceArchiveFileEntry[];
 }
 
 export interface WorkspaceArchiveSummary {
@@ -328,7 +342,7 @@ export async function archiveLocalWorkspace(input: {
     });
   }
 
-  const manifest = {
+  const manifest: WorkspaceArchiveManifest = {
     schemaVersion: "truth-harness.workspace-archive-manifest.v0",
     archiveId,
     createdAt: now,
@@ -336,11 +350,16 @@ export async function archiveLocalWorkspace(input: {
     workspaceDir: status.workspaceDir,
     targets,
     resolvedDirectories: directories,
-    reason: input.reason ?? "local workspace maintenance archive",
+    reason: normalizeOptionalText(input.reason) ?? "local workspace maintenance archive",
     entries,
     files
   };
   const manifestPath = join(archiveDir, "archive-manifest.json");
+  await assertJsonSchemaBeforeWrite({
+    value: manifest,
+    schemaFile: "workspace-archive-manifest.schema.json",
+    artifactName: "Workspace archive manifest"
+  });
   await writeJsonFileAtomic(manifestPath, manifest);
 
   return {
@@ -574,6 +593,11 @@ async function repairLegacyRouteManifests(
     );
 
     if (!dryRun) {
+      await assertJsonSchemaBeforeWrite({
+        value: parsed,
+        schemaFile: "verifier-route.schema.json",
+        artifactName: "Repaired verifier route"
+      });
       await writeJsonFileAtomic(filePath, parsed);
     }
 
@@ -634,6 +658,11 @@ async function repairPromptVisualSourceRefs(
     if (!dryRun) {
       const visual = parsed as unknown as VisualArtifact;
       parsed.markdown = renderVisualArtifactMarkdown(visual);
+      await assertJsonSchemaBeforeWrite({
+        value: parsed,
+        schemaFile: "visual-artifact.schema.json",
+        artifactName: "Repaired visual artifact"
+      });
       await writeJsonFileAtomic(filePath, parsed);
       const markdownPath = replaceExtension(filePath, ".md");
       if (await pathExists(markdownPath)) {
@@ -1077,6 +1106,11 @@ function replaceExtension(filePath: string, nextExtension: string): string {
 function addUniqueWarning(existing: unknown, warning: string): string[] {
   const warnings = Array.isArray(existing) ? existing.filter((value): value is string => typeof value === "string") : [];
   return warnings.includes(warning) ? warnings : [...warnings, warning];
+}
+
+function normalizeOptionalText(value: string | undefined): string | undefined {
+  const normalized = value?.trim().replace(/\s+/g, " ");
+  return normalized ? normalized : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
