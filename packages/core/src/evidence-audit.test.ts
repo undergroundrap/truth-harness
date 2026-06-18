@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -12,7 +12,7 @@ import {
   writeEvidenceAudit,
   writeEvidenceAuditReport
 } from "./evidence-audit.js";
-import { initLocalWorkspace } from "./local-workspace.js";
+import { initLocalWorkspace, LOCAL_WORKSPACE_DIR, LOCAL_WORKSPACE_MANIFEST } from "./local-workspace.js";
 
 const roots: string[] = [];
 
@@ -113,6 +113,26 @@ describe("evidence audits", () => {
     expect(report.markdown).toContain("This audit classifies local evidence posture.");
     expect(list).toHaveLength(2);
     expect(list.some((audit) => audit.auditId === written.audit.auditId)).toBe(true);
+  });
+
+  it("rejects malformed evidence audits before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Audit Lab", now: "2026-06-08T00:00:00.000Z" });
+    const manifestPath = join(root, LOCAL_WORKSPACE_DIR, LOCAL_WORKSPACE_MANIFEST);
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    manifest.projectId = "";
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    await expect(
+      writeEvidenceAuditReport({
+        rootPath: root,
+        claim: "This malformed workspace should not mint an evidence audit.",
+        now: "2026-06-08T00:02:00.000Z"
+      })
+    ).rejects.toThrow("Evidence audit failed JSON Schema validation before write");
+
+    const audits = await readdir(join(root, LOCAL_WORKSPACE_DIR, "audits"));
+    expect(audits).toEqual([]);
   });
 
   it("reports missing evidence refs without silently trusting them", async () => {
