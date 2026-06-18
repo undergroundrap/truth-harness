@@ -1,6 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, Receipt, TrustLabel } from "./types.js";
@@ -253,6 +256,10 @@ export interface BenchmarkArtifactSummary {
   warnings: string[];
 }
 
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let benchmarkRunSchemaCache: Promise<unknown> | undefined;
+let benchmarkComparisonSchemaCache: Promise<unknown> | undefined;
+
 export function benchmarkRunFailsGate(run: BenchmarkRunLike | BenchmarkRunRecord): boolean {
   return benchmarkRunFailedCount(run) > 0;
 }
@@ -330,11 +337,12 @@ export async function writeBenchmarkRunRecord(input: CreateBenchmarkRunRecordInp
   const status = await requireLocalWorkspace(input.rootPath);
   const record = await createBenchmarkRunRecord(input);
   const benchmarksDir = resolve(status.root, status.manifest.directories.benchmarks);
-  await mkdir(benchmarksDir, { recursive: true });
   const baseName = `${record.createdAt.slice(0, 10)}-${record.benchmarkRunId}`;
   const jsonPath = join(benchmarksDir, `${baseName}.json`);
   const markdownPath = join(benchmarksDir, `${baseName}.md`);
   const markdown = renderBenchmarkRunMarkdown(record);
+  await assertBenchmarkRunSchema(record);
+  await mkdir(benchmarksDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, record);
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -351,6 +359,28 @@ export async function writeBenchmarkRunRecord(input: CreateBenchmarkRunRecordInp
     markdownPath,
     markdown
   };
+}
+
+async function assertBenchmarkRunSchema(record: BenchmarkRunRecord): Promise<void> {
+  const schema = await loadBenchmarkRunSchema();
+  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
+  const issues = validateJsonSchema(serializedRecord, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Benchmark run failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadBenchmarkRunSchema(): Promise<unknown> {
+  benchmarkRunSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "benchmark-run.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return benchmarkRunSchemaCache;
 }
 
 export function parseBenchmarkRunRecordJson(raw: string, source = "benchmark run record"): BenchmarkRunRecord {
@@ -424,11 +454,12 @@ export async function writeBenchmarkComparisonRecord(
     privacy: status.manifest.privacy
   });
   const benchmarksDir = resolve(status.root, status.manifest.directories.benchmarks);
-  await mkdir(benchmarksDir, { recursive: true });
   const baseName = `${record.createdAt.slice(0, 10)}-${record.comparisonId}`;
   const jsonPath = join(benchmarksDir, `${baseName}.json`);
   const markdownPath = join(benchmarksDir, `${baseName}.md`);
   const markdown = renderBenchmarkComparisonMarkdown(record);
+  await assertBenchmarkComparisonSchema(record);
+  await mkdir(benchmarksDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, record);
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -445,6 +476,28 @@ export async function writeBenchmarkComparisonRecord(
     markdownPath,
     markdown
   };
+}
+
+async function assertBenchmarkComparisonSchema(record: BenchmarkComparisonRecord): Promise<void> {
+  const schema = await loadBenchmarkComparisonSchema();
+  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
+  const issues = validateJsonSchema(serializedRecord, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Benchmark comparison failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadBenchmarkComparisonSchema(): Promise<unknown> {
+  benchmarkComparisonSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "benchmark-comparison.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return benchmarkComparisonSchemaCache;
 }
 
 export async function listBenchmarkComparisonRecords(rootPath: string): Promise<BenchmarkComparisonRecord[]> {

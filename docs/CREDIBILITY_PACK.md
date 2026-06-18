@@ -45,6 +45,7 @@ npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/
 - Saved engine-run ledger summary from `.truth-harness/engine-runs`, including the latest strict all-engines reviewer run when one exists.
 - Engine-run records validate against `engine-run.schema.json` before they are saved, so reviewer packets cannot cite malformed or non-replayable engine evidence ledger entries.
 - Saved benchmark ledger summary from `.truth-harness/benchmarks`, including the latest `ai-failure-seed` adversarial AI-failure run, artifact path, trust accuracy, replay command, and sample receipt replay commands.
+- Benchmark run and comparison records validate against their schemas before saving, so adversarial demo scores and regression verdicts cannot become citable reviewer evidence if the local ledger shape is malformed.
 - Saved report draft summary from `.truth-harness/findings`, including how many human-facing Markdown drafts exist and whether any need integrity review before sharing.
 - Workspace review queue with top open proof/check obligations. Normal unverified exploration and stronger-label upgrades stay visible as work, but they are not treated as release-critical defects unless they block a current claim boundary.
 - Structured reviewer action plan with priorities, close targets, and commands for validation, engine, benchmark, and workspace-review blockers.

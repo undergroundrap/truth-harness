@@ -163,6 +163,62 @@ describe("benchmark run records", () => {
     expect(validation.summary.byKind.benchmarks).toBe(3);
   });
 
+  it("validates benchmark run JSON before writing sidecars", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      displayName: "Benchmark Lab",
+      now: "2026-06-10T00:00:00.000Z"
+    });
+    const receipt = createReceipt("compute 2 + 2");
+
+    await expect(
+      writeBenchmarkRunRecord({
+        rootPath: root,
+        run: benchmarkRun(receipt),
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("$.createdAt must be a valid date-time string");
+
+    await expect(listBenchmarkArtifacts(root)).resolves.toEqual([]);
+  });
+
+  it("validates benchmark comparison JSON before writing sidecars", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      displayName: "Benchmark Compare Lab",
+      now: "2026-06-10T00:00:00.000Z"
+    });
+    const receipt = createReceipt("compute 2 + 2");
+    const baseline = await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(receipt),
+      suitePath: "packages/benchmarks/suites/tiny.json",
+      command: "truth-harness bench run packages/benchmarks/suites/tiny.json",
+      now: "2026-06-10T01:00:00.000Z"
+    });
+    const current = await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(receipt),
+      suitePath: "packages/benchmarks/suites/tiny.json",
+      command: "truth-harness bench run packages/benchmarks/suites/tiny.json",
+      now: "2026-06-10T01:05:00.000Z"
+    });
+
+    await expect(
+      writeBenchmarkComparisonRecord({
+        rootPath: root,
+        baseline: baseline.record,
+        current: current.record,
+        baselineRef: baseline.jsonPath,
+        currentRef: current.jsonPath,
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("$.createdAt must be a valid date-time string");
+
+    await expect(listBenchmarkComparisonRecords(root)).resolves.toEqual([]);
+    await expect(listBenchmarkArtifacts(root)).resolves.toHaveLength(2);
+  });
+
   it("warns when benchmark replay metadata is incomplete", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);
