@@ -8,7 +8,7 @@ import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeReportDraft } from "./report-draft.js";
 import { readResearchSession, writeResearchHarness } from "./research-session.js";
-import { listValidationPlans } from "./validation-plan.js";
+import { listValidationPlans, writeValidationPlan } from "./validation-plan.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import {
   createWorkspaceReviewFromCredibilityPack,
@@ -136,6 +136,84 @@ describe("workspace run-next", () => {
     expect(proofGate).toMatchObject({
       status: "satisfied",
       evidenceRefs: [expect.objectContaining({ kind: "route", trust: "exact-computed" })]
+    });
+  });
+
+  it("attaches direct proof-check artifacts to linked validation gates without overclaiming", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const validation = await writeValidationPlan({
+      rootPath: root,
+      claim: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const proofGate = validation.plan.gates.find((gate) => gate.kind === "proof");
+    if (!proofGate) {
+      throw new Error("Expected a proof gate in math validation plan.");
+    }
+    await mkdir(join(root, "proofs"), { recursive: true });
+    await writeFile(join(root, "proofs", "scoped.lean"), "theorem scoped_fixture : True := by trivial\n", "utf8");
+    const review = minimalReview({
+      rootPath: root,
+      command:
+        'truth-harness proof check proofs/scoped.lean --write --statement "3 / 4 + 5 / 8" --lean-command truth-harness-missing-lean --timeout-ms 50',
+      claimId: "claim_validation_test",
+      kind: "validation-gate",
+      validationPlanId: validation.plan.planId,
+      validationGateId: proofGate.gateId,
+      validationGateKind: proofGate.kind,
+      domain: "math"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-18T00:02:00.000Z"
+    });
+    const plans = await listValidationPlans(root);
+    const updatedPlan = plans.find((candidate) => candidate.planId === validation.plan.planId);
+    const updatedGate = updatedPlan?.gates.find((gate) => gate.gateId === proofGate.gateId);
+
+    expect(plan.status).toBe("executed");
+    expect(plan.execution).toMatchObject({
+      kind: "proof-check",
+      attached: true,
+      result: {
+        proof: {
+          trust: "unverified",
+          status: "backend-unavailable",
+          scope: {
+            statement: "3 / 4 + 5 / 8"
+          }
+        },
+        attachment: {
+          validationGate: {
+            satisfied: false,
+            blocked: false,
+            gate: {
+              gateId: proofGate.gateId,
+              status: "in-progress"
+            },
+            evidence: {
+              kind: "proof",
+              trust: "unverified",
+              claimScope: {
+                status: "matched"
+              }
+            }
+          }
+        }
+      }
+    });
+    expect(plan.execution.summary).toContain("remains open");
+    expect(updatedGate).toMatchObject({
+      status: "in-progress",
+      evidenceRefs: [expect.objectContaining({ kind: "proof", trust: "unverified" })],
+      nextChecks: expect.arrayContaining([
+        "Proof check was not accepted; attach an accepted proof-check record before closing this gate."
+      ])
     });
   });
 
@@ -493,6 +571,11 @@ function minimalReview(input: {
   claimId: string;
   kind?: WorkspaceReview["items"][number]["kind"];
   reportId?: string;
+  validationPlanId?: string;
+  validationGateId?: string;
+  validationGateKind?: string;
+  sessionId?: string;
+  domain?: string;
 }): WorkspaceReview {
   const kind = input.kind ?? "claim-blocker";
   return {
@@ -551,7 +634,11 @@ function minimalReview(input: {
         command: input.command,
         claimId: input.claimId,
         reportId: input.reportId,
-        domain: "finance",
+        validationPlanId: input.validationPlanId,
+        validationGateId: input.validationGateId,
+        validationGateKind: input.validationGateKind,
+        sessionId: input.sessionId,
+        domain: input.domain ?? "finance",
         trust: "unverified",
         source: {
           label: "claim ledger",

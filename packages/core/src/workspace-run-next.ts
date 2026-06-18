@@ -21,7 +21,11 @@ import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { writeSmtCheckRecord, type SmtBackendId } from "./smt-backend.js";
 import type { SympyOperation } from "./sympy.js";
 import type { Receipt, TrustLabel } from "./types.js";
-import { attachValidationGateEvidence, type AttachValidationGateEvidenceResult } from "./validation-plan.js";
+import {
+  attachValidationGateEvidence,
+  type AttachValidationGateEvidenceResult,
+  type ValidationEvidenceRef
+} from "./validation-plan.js";
 import {
   readVerifierRoute,
   satisfyVerifierRouteObligation,
@@ -764,7 +768,7 @@ async function executeWorkspaceRunNextItem(
         timeoutMs
       });
       const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
-      const attachment = await maybeAttachRouteEvidence(workspace, item, {
+      const attachment = await attachRunNextVerifierEvidence(workspace, item, {
         kind: "proof",
         ref: evidenceRef,
         trust: result.record.trust,
@@ -796,7 +800,7 @@ async function executeWorkspaceRunNextItem(
         timeoutMs
       });
       const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
-      const attachment = await maybeAttachRouteEvidence(workspace, item, {
+      const attachment = await attachRunNextVerifierEvidence(workspace, item, {
         kind: "smt",
         ref: evidenceRef,
         trust: result.record.trust,
@@ -837,7 +841,7 @@ async function executeWorkspaceRunNextItem(
         timeoutMs
       });
       const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
-      const attachment = await maybeAttachRouteEvidence(workspace, item, {
+      const attachment = await attachRunNextVerifierEvidence(workspace, item, {
         kind: "cas",
         ref: evidenceRef,
         trust: result.record.trust,
@@ -932,6 +936,70 @@ async function maybeAttachRouteEvidence(
       }`
     };
   }
+}
+
+async function maybeAttachValidationGateEvidence(
+  workspace: string,
+  item: WorkspaceReviewItem,
+  evidenceRef: ValidationEvidenceRef
+): Promise<{ attached: boolean; summary: string; result?: AttachValidationGateEvidenceResult }> {
+  if (!item.validationPlanId || !item.validationGateId) {
+    return {
+      attached: false,
+      summary: `No validation gate target was present for ${evidenceRef.kind}:${evidenceRef.ref}.`
+    };
+  }
+
+  try {
+    const result = await attachValidationGateEvidence({
+      rootPath: workspace,
+      planRef: item.validationPlanId,
+      gateId: item.validationGateId,
+      evidenceRef
+    });
+    return {
+      attached: true,
+      summary: result.message,
+      result
+    };
+  } catch (error) {
+    return {
+      attached: false,
+      summary: `Wrote ${evidenceRef.kind}:${evidenceRef.ref}, but did not update validation gate ${item.validationGateId}: ${
+        error instanceof Error ? error.message : "attachment failed"
+      }`
+    };
+  }
+}
+
+async function attachRunNextVerifierEvidence(
+  workspace: string,
+  item: WorkspaceReviewItem,
+  evidenceRef: VerifierRouteEvidenceRef & ValidationEvidenceRef
+): Promise<{
+  attached: boolean;
+  summary: string;
+  result: {
+    route?: SatisfyVerifierRouteObligationResult;
+    validationGate?: AttachValidationGateEvidenceResult;
+  };
+}> {
+  const route = await maybeAttachRouteEvidence(workspace, item, evidenceRef);
+  const validationGate = await maybeAttachValidationGateEvidence(workspace, item, evidenceRef);
+  const summaries = [route, validationGate]
+    .filter((attachment) => attachment.attached)
+    .map((attachment) => attachment.summary);
+
+  return {
+    attached: route.attached || validationGate.attached,
+    summary: summaries.length > 0
+      ? summaries.join(" ")
+      : `Wrote ${evidenceRef.kind}:${evidenceRef.ref}. ${route.summary} ${validationGate.summary}`,
+    result: {
+      route: route.result,
+      validationGate: validationGate.result
+    }
+  };
 }
 
 function validationGateAttachmentSummary(attachment: AttachValidationGateEvidenceResult | undefined): string {
