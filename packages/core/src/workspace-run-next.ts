@@ -19,6 +19,7 @@ import { createReceipt } from "./receipt.js";
 import {
   addResearchSessionCheckpoint,
   readResearchSession,
+  type ResearchEvidenceRef,
   type ResearchSessionCheckpointWriteResult
 } from "./research-session.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
@@ -637,6 +638,74 @@ async function executeWorkspaceRunNextItem(
       };
     }
 
+    if (group === "validation" && action === "attach") {
+      const planRef = rest[0];
+      const gateId = rest[1];
+      const evidence = optionString(options.evidence);
+      if (
+        !planRef ||
+        !gateId ||
+        !evidence ||
+        planRef.includes("<") ||
+        planRef.includes(">") ||
+        gateId.includes("<") ||
+        gateId.includes(">") ||
+        evidence.includes("<") ||
+        evidence.includes(">")
+      ) {
+        return blockedPlaceholderCommand(item.command, "validation-attach");
+      }
+      if (item.validationPlanId && item.validationPlanId !== planRef) {
+        return {
+          status: "blocked",
+          kind: "validation-attach",
+          command: item.command,
+          summary: `Validation attach command targets ${planRef}, but the review item targets ${item.validationPlanId}.`
+        };
+      }
+      if (item.validationGateId && item.validationGateId !== gateId) {
+        return {
+          status: "blocked",
+          kind: "validation-attach",
+          command: item.command,
+          summary: `Validation attach command targets ${gateId}, but the review item targets ${item.validationGateId}.`
+        };
+      }
+
+      const evidenceRef = parseRunNextValidationEvidenceRef(evidence);
+      const validationGate = await attachValidationGateEvidence({
+        rootPath: workspace,
+        planRef,
+        gateId,
+        evidenceRef
+      });
+      const checkpointEvidenceRef: ValidationEvidenceRef = {
+        kind: validationGate.evidence.kind,
+        ref: validationGate.evidence.ref,
+        trust: validationGate.evidence.trust,
+        summary: validationGate.evidence.summary
+      };
+      const checkpoint = await maybeCheckpointResearchSessionEvidence(workspace, item, checkpointEvidenceRef, {
+        route: { attached: false, summary: "No route obligation target was present for validation attach." },
+        validationGate: { attached: true, summary: validationGate.message, result: validationGate }
+      });
+      const summary = checkpoint.attached
+        ? `${validationGate.message} ${checkpoint.summary}`
+        : validationGate.message;
+      return {
+        status: "executed",
+        kind: "validation-attach",
+        command: item.command,
+        evidenceRef: `${evidenceRef.kind}:${evidenceRef.ref}`,
+        attached: true,
+        summary,
+        result: {
+          validationGate,
+          checkpoint: checkpoint.result?.checkpoint
+        }
+      };
+    }
+
     if (group === "route" && action === "show") {
       const routeRef = rest[0];
       if (!routeRef) {
@@ -1015,7 +1084,7 @@ async function attachRunNextVerifierEvidence(
 async function maybeCheckpointResearchSessionEvidence(
   workspace: string,
   item: WorkspaceReviewItem,
-  evidenceRef: VerifierRouteEvidenceRef & ValidationEvidenceRef,
+  evidenceRef: ValidationEvidenceRef,
   attachments: {
     route: { attached: boolean; summary: string; result?: SatisfyVerifierRouteObligationResult };
     validationGate: { attached: boolean; summary: string; result?: AttachValidationGateEvidenceResult };
@@ -1035,12 +1104,7 @@ async function maybeCheckpointResearchSessionEvidence(
       sessionRef: item.sessionId,
       summary: `Ran ${evidenceRef.kind} checker evidence for ${item.validationGateId ?? item.obligationId ?? "workspace review item"}.`,
       evidenceRefs: [
-        {
-          kind: evidenceRef.kind,
-          ref: evidenceRef.ref,
-          trust: evidenceRef.trust,
-          summary: evidenceRef.summary
-        }
+        toResearchEvidenceRef(evidenceRef)
       ],
       decisions: [
         validationAttachment?.message ??
@@ -1065,6 +1129,24 @@ async function maybeCheckpointResearchSessionEvidence(
       }`
     };
   }
+}
+
+function toResearchEvidenceRef(evidenceRef: ValidationEvidenceRef): ResearchEvidenceRef {
+  if (evidenceRef.kind === "session") {
+    return {
+      kind: "other",
+      ref: `session:${evidenceRef.ref}`,
+      trust: evidenceRef.trust,
+      summary: evidenceRef.summary
+    };
+  }
+
+  return {
+    kind: evidenceRef.kind,
+    ref: evidenceRef.ref,
+    trust: evidenceRef.trust,
+    summary: evidenceRef.summary
+  };
 }
 
 function validationGateAttachmentSummary(attachment: AttachValidationGateEvidenceResult | undefined): string {
@@ -1235,6 +1317,52 @@ function parseSmtBackendOption(value: string | true | undefined): SmtBackendId |
   }
 
   throw new Error(`Unsupported SMT backend ${JSON.stringify(value)}. Use z3 or cvc5.`);
+}
+
+function parseRunNextValidationEvidenceRef(value: string): ValidationEvidenceRef {
+  const separator = value.indexOf(":");
+  if (separator <= 0) {
+    return { kind: "other", ref: value };
+  }
+
+  const maybeKind = value.slice(0, separator);
+  const ref = value.slice(separator + 1);
+  if (isRunNextValidationEvidenceKind(maybeKind)) {
+    return { kind: maybeKind, ref };
+  }
+
+  return { kind: "other", ref: value };
+}
+
+function isRunNextValidationEvidenceKind(value: string): value is ValidationEvidenceRef["kind"] {
+  return (
+    value === "receipt" ||
+    value === "artifact" ||
+    value === "source" ||
+    value === "literature" ||
+    value === "notebook" ||
+    value === "notebook-run" ||
+    value === "code-run" ||
+    value === "benchmark" ||
+    value === "cas" ||
+    value === "proof" ||
+    value === "smt" ||
+    value === "disclosure" ||
+    value === "simulation" ||
+    value === "experiment" ||
+    value === "vault" ||
+    value === "audit" ||
+    value === "snapshot" ||
+    value === "session" ||
+    value === "review" ||
+    value === "validation" ||
+    value === "model-context" ||
+    value === "route" ||
+    value === "invention" ||
+    value === "claim-chart" ||
+    value === "discovery-package" ||
+    value === "other"
+  );
 }
 
 function parseRunNextBenchmarkSuite(raw: unknown): RunNextBenchmarkSuite {

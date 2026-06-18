@@ -1,11 +1,12 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { createCredibilityPack } from "./credibility-pack.js";
 import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
 import { writeReportDraft } from "./report-draft.js";
 import { readResearchSession, writeResearchHarness } from "./research-session.js";
 import { listValidationPlans } from "./validation-plan.js";
@@ -230,6 +231,146 @@ describe("workspace run-next", () => {
         decisions: [expect.stringContaining("remains open")]
       })
     );
+  });
+
+  it("executes validation attach commands for existing scoped proof artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const validationPlan = harness.validationPlan?.plan;
+    const proofGate = validationPlan?.gates.find((gate) => gate.kind === "proof");
+    if (!validationPlan || !proofGate) {
+      throw new Error("Expected a linked math validation plan with a proof gate.");
+    }
+
+    await mkdir(join(root, "proofs"), { recursive: true });
+    await writeFile(join(root, "proofs", "scoped.lean"), "theorem scoped_fixture : True := by trivial\n", "utf8");
+    const proofRunner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+      }
+
+      return { status: 0, stdout: "", stderr: "" };
+    };
+    const proof = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "proofs/scoped.lean",
+      scope: { statement: "3 / 4 + 5 / 8" },
+      runner: proofRunner,
+      now: new Date("2026-06-18T00:02:00.000Z")
+    });
+    const proofRef = relative(root, proof.jsonPath).replace(/\\/gu, "/");
+    const review = minimalReview({
+      rootPath: root,
+      command: `truth-harness validation attach ${validationPlan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`,
+      claimId: "claim_validation_attach_test",
+      kind: "validation-gate",
+      validationPlanId: validationPlan.planId,
+      validationGateId: proofGate.gateId,
+      validationGateKind: proofGate.kind,
+      sessionId: harness.session.sessionId,
+      domain: "math"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-18T00:03:00.000Z"
+    });
+    const updatedPlans = await listValidationPlans(root);
+    const updatedGate = updatedPlans
+      .find((candidate) => candidate.planId === validationPlan.planId)
+      ?.gates.find((gate) => gate.gateId === proofGate.gateId);
+    const updatedSession = await readResearchSession(root, harness.session.sessionId);
+
+    expect(plan.status).toBe("executed");
+    expect(plan.execution).toMatchObject({
+      kind: "validation-attach",
+      evidenceRef: `proof:${proofRef}`,
+      attached: true,
+      result: {
+        validationGate: {
+          satisfied: true,
+          blocked: false,
+          gate: {
+            gateId: proofGate.gateId,
+            status: "satisfied",
+            evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })]
+          },
+          evidence: {
+            kind: "proof",
+            trust: "proved",
+            claimScope: {
+              status: "matched"
+            }
+          }
+        },
+        checkpoint: {
+          summary: `Ran proof checker evidence for ${proofGate.gateId}.`,
+          evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })]
+        }
+      }
+    });
+    expect(plan.execution.summary).toContain("satisfied by proved proof evidence");
+    expect(plan.execution.summary).toContain(`Checkpointed research session ${harness.session.sessionId}.`);
+    expect(updatedGate).toMatchObject({
+      status: "satisfied",
+      evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })]
+    });
+    expect(updatedSession.evidenceRefs).toContainEqual(expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" }));
+    expect(updatedSession.checkpoints).toContainEqual(
+      expect.objectContaining({
+        summary: `Ran proof checker evidence for ${proofGate.gateId}.`,
+        evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })],
+        nextChecks: [expect.stringContaining("rerun workspace run-next")]
+      })
+    );
+  });
+
+  it("blocks validation attach commands that target a different review gate", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const validationPlan = harness.validationPlan?.plan;
+    const proofGate = validationPlan?.gates.find((gate) => gate.kind === "proof");
+    if (!validationPlan || !proofGate) {
+      throw new Error("Expected a linked math validation plan with a proof gate.");
+    }
+    const review = minimalReview({
+      rootPath: root,
+      command: `truth-harness validation attach ${validationPlan.planId} gate_wrong --evidence proof:.truth-harness/proofs/example.json --json`,
+      claimId: "claim_validation_attach_mismatch_test",
+      kind: "validation-gate",
+      validationPlanId: validationPlan.planId,
+      validationGateId: proofGate.gateId,
+      validationGateKind: proofGate.kind,
+      sessionId: harness.session.sessionId,
+      domain: "math"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-18T00:02:00.000Z"
+    });
+
+    expect(plan.status).toBe("blocked");
+    expect(plan.execution).toMatchObject({
+      kind: "validation-attach",
+      summary: `Validation attach command targets gate_wrong, but the review item targets ${proofGate.gateId}.`
+    });
   });
 
   it("executes bounded local actions without honoring command workspace overrides", async () => {
