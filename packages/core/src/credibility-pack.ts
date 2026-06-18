@@ -755,6 +755,7 @@ function createReviewerActionPlan(input: {
     return (
       priorityRank[left.priority] - priorityRank[right.priority] ||
       reviewerActionRank(left) - reviewerActionRank(right) ||
+      reviewerActionabilityRank(left) - reviewerActionabilityRank(right) ||
       left.title.localeCompare(right.title)
     );
   });
@@ -784,6 +785,35 @@ function reviewerActionRank(action: CredibilityPackActionItem): number {
     "latest-strict-reviewer-run": 45
   };
   return engineRank[action.source.ref] ?? 49;
+}
+
+function reviewerActionabilityRank(action: CredibilityPackActionItem): number {
+  if (writesVerifierEvidenceCommand(action.command)) {
+    return 0;
+  }
+  if (isPassiveReviewerCommand(action.command)) {
+    return 2;
+  }
+  return 1;
+}
+
+function writesVerifierEvidenceCommand(command: string): boolean {
+  return (
+    /^truth-harness\s+(?:smt|cas|proof)\s+check\b/u.test(command) &&
+    hasCliFlag(command, "--write")
+  ) || /^truth-harness\s+validation\s+attach\b/u.test(command);
+}
+
+function isPassiveReviewerCommand(command: string): boolean {
+  return /^truth-harness\s+(?:route show|claim review|cas backends|smt backends|proof backends|research show|workspace report)\b/u.test(command);
+}
+
+function hasCliFlag(command: string, flag: string): boolean {
+  return new RegExp(`(?:^|\\s)${escapeRegExp(flag)}(?:\\s|=|$)`, "u").test(command);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function reviewerEngineSummary(summary: string): string {

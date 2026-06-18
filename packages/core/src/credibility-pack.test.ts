@@ -10,6 +10,7 @@ import { writeEngineVerificationRun, type EngineVerificationCommandRunner } from
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
 import { createReceipt } from "./receipt.js";
 import { writeReportDraft } from "./report-draft.js";
+import { writeVerifierRoute } from "./verifier-route.js";
 
 const roots: string[] = [];
 
@@ -352,6 +353,59 @@ describe("professor credibility pack", () => {
     expect(pack.warnings).not.toContain("Concrete engine smoke gates are incomplete: 0/3 passed.");
     expect(pack.reviewerActionPlan.actions.filter((action) => action.category === "engine")).toEqual([]);
     expect(pack.markdown).toContain("Saved engine-run ledger: 1 saved (latest professor Docker: passed)");
+  });
+
+  it("orders reviewer actions toward evidence-writing commands before passive inspection", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+    await writeVerifierRoute({
+      rootPath: root,
+      problem: "solve integer constraints x > 0 and x < 3",
+      now: new Date("2026-06-16T00:00:20.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(createReceipt("for all integers n, n^2+n+1 is even"), {
+        suiteId: "ai-failure-seed",
+        title: "AI Failure Seed Suite",
+        expectTrust: "refuted",
+        expectEvidenceKind: "universal-parity",
+        category: "false-universal",
+        aiFailureMode: "confident universal claim"
+      }),
+      suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
+      suitePath: "packages/benchmarks/suites/ai-failure-seed.json",
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-16T00:00:45.000Z"
+    });
+
+    const pack = await createCredibilityPack({
+      rootPath: root,
+      now: "2026-06-16T00:01:00.000Z",
+      engineRequirements: { maxima: true, z3: true, lean: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      leanCommand: "lean-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: passingEngineRunner
+    });
+    const workspaceActions = pack.reviewerActionPlan.actions.filter((action) => action.category === "workspace-review");
+
+    expect(workspaceActions[0]).toMatchObject({
+      title: "SMT encoding obligation"
+    });
+    expect(workspaceActions[0]?.command).toMatch(/^truth-harness smt check\b.*--write/u);
+    expect(workspaceActions.findIndex((action) => /^truth-harness smt check\b/u.test(action.command))).toBeLessThan(
+      workspaceActions.findIndex((action) => /^truth-harness route show\b/u.test(action.command))
+    );
   });
 
   it("blocks professor readiness when saved report drafts fail integrity checks", async () => {

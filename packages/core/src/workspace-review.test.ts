@@ -282,6 +282,41 @@ describe("workspace review", () => {
     expect(review.markdown).toContain("Workspace review is a local planning queue");
   });
 
+  it("prefers evidence-writing route obligations over passive inspection commands", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "solve integer constraints x > 0 and x < 3",
+      now: new Date("2026-06-13T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-13T00:02:00.000Z"
+    });
+    const routeItems = review.items.filter(
+      (item) => item.kind === "route-obligation" && item.routeId === route.route.routeId
+    );
+    const evidenceCommandIndex = routeItems.findIndex((item) => /^truth-harness smt check\b/u.test(item.command));
+    const passiveCommandIndex = routeItems.findIndex((item) => /^truth-harness route show\b/u.test(item.command));
+
+    expect(evidenceCommandIndex).toBeGreaterThanOrEqual(0);
+    expect(passiveCommandIndex).toBeGreaterThanOrEqual(0);
+    expect(evidenceCommandIndex).toBeLessThan(passiveCommandIndex);
+    expect(routeItems[evidenceCommandIndex]?.command).toContain("--write");
+    expect(review.autonomy.nextCommand).toBe(routeItems[evidenceCommandIndex]?.command);
+  });
+
   it("does not ask for a ready-route claim after a claim cites that route", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {

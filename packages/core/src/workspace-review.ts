@@ -1376,8 +1376,34 @@ function sortReviewItems(items: WorkspaceReviewItem[]): WorkspaceReviewItem[] {
       return kind;
     }
 
+    const actionability = actionabilityRank(left) - actionabilityRank(right);
+    if (actionability !== 0) {
+      return actionability;
+    }
+
     return (right.createdAt ?? "").localeCompare(left.createdAt ?? "");
   });
+}
+
+function actionabilityRank(item: WorkspaceReviewItem): number {
+  if (writesVerifierEvidence(item.command)) {
+    return 0;
+  }
+  if (isPassiveInspectionCommand(item.command)) {
+    return 2;
+  }
+  return 1;
+}
+
+function writesVerifierEvidence(command: string): boolean {
+  return (
+    /^truth-harness\s+(?:smt|cas|proof)\s+check\b/u.test(command) &&
+    hasCliFlag(command, "--write")
+  ) || /^truth-harness\s+validation\s+attach\b/u.test(command);
+}
+
+function isPassiveInspectionCommand(command: string): boolean {
+  return /^truth-harness\s+(?:route show|claim review|cas backends|smt backends|proof backends|research show|workspace report)\b/u.test(command);
 }
 
 function attachAgentPackets(items: WorkspaceReviewItem[]): WorkspaceReviewItem[] {
