@@ -1,6 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { withWorkspaceLock, writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
@@ -21,6 +24,8 @@ export const RESEARCH_SESSION_DOMAINS = [
 
 export const RESEARCH_TASK_STATUSES = ["todo", "doing", "blocked", "done"] as const;
 const RESEARCH_SESSION_SCHEMA_VERSION = "truth-harness.research-session.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let researchSessionSchemaCache: Promise<unknown> | undefined;
 
 export type ResearchSessionDomain = (typeof RESEARCH_SESSION_DOMAINS)[number];
 export type ResearchTaskStatus = (typeof RESEARCH_TASK_STATUSES)[number];
@@ -76,7 +81,7 @@ export interface ResearchSessionCheckpoint {
 }
 
 export interface ResearchSession {
-  schemaVersion: "truth-harness.research-session.v0";
+  schemaVersion: typeof RESEARCH_SESSION_SCHEMA_VERSION;
   sessionId: string;
   projectId: string;
   createdAt: string;
@@ -269,6 +274,7 @@ export async function addResearchSessionCheckpoint(
       ...updated,
       markdown: renderResearchSessionMarkdown(updated)
     };
+    await assertResearchSessionSchema(sessionWithMarkdown);
     const markdownPath = path.replace(/\.json$/u, ".md");
 
     await writeJsonFileAtomic(path, sessionWithMarkdown);
@@ -337,6 +343,7 @@ export async function updateResearchSessionTask(
       ...updated,
       markdown: renderResearchSessionMarkdown(updated)
     };
+    await assertResearchSessionSchema(sessionWithMarkdown);
     const markdownPath = path.replace(/\.json$/u, ".md");
 
     await writeJsonFileAtomic(path, sessionWithMarkdown);
@@ -534,12 +541,13 @@ async function writeSessionFiles(
   sessionsDirectory: string,
   session: ResearchSession
 ): Promise<ResearchSessionWriteResult> {
+  await assertResearchSessionSchema(session);
   const sessionsDir = resolve(root, sessionsDirectory);
-  await mkdir(sessionsDir, { recursive: true });
   const baseName = `${session.createdAt.slice(0, 10)}-${session.sessionId}`;
   const jsonPath = join(sessionsDir, `${baseName}.json`);
   const markdownPath = join(sessionsDir, `${baseName}.md`);
 
+  await mkdir(sessionsDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, session);
   await writeFileAtomic(markdownPath, session.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -556,6 +564,28 @@ async function writeSessionFiles(
     markdownPath,
     markdown: session.markdown
   };
+}
+
+async function assertResearchSessionSchema(session: ResearchSession): Promise<void> {
+  const schema = await loadResearchSessionSchema();
+  const serializedSession = parseJsonWithOptionalBom(JSON.stringify(session));
+  const issues = validateJsonSchema(serializedSession, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Research session failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadResearchSessionSchema(): Promise<unknown> {
+  researchSessionSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "research-session.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return researchSessionSchemaCache;
 }
 
 async function readResearchSessionRef(

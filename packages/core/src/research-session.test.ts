@@ -100,6 +100,45 @@ describe("research sessions", () => {
     expect(shownByPath.sessionId).toBe(write.session.sessionId);
   });
 
+  it("rejects malformed research sessions before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-08T00:00:00.000Z" });
+
+    await expect(
+      writeResearchSession({
+        rootPath: root,
+        objective: "Track a malformed research session write boundary.",
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("Research session failed JSON Schema validation before write");
+
+    await expect(listResearchSessions(root)).resolves.toEqual([]);
+  });
+
+  it("rejects malformed checkpoint updates before rewriting session history", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-08T00:00:00.000Z" });
+    const write = await writeResearchSession({
+      rootPath: root,
+      objective: "Keep malformed agent checkpoints out of durable session history.",
+      domains: ["math"],
+      now: "2026-06-08T00:10:00.000Z"
+    });
+
+    await expect(
+      addResearchSessionCheckpoint({
+        rootPath: root,
+        sessionRef: write.session.sessionId,
+        summary: "This checkpoint has malformed metadata.",
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("Research session failed JSON Schema validation before write");
+
+    const shown = await readResearchSession(root, write.session.sessionId);
+    expect(shown.updatedAt).toBe("2026-06-08T00:10:00.000Z");
+    expect(shown.checkpoints).toEqual([]);
+  });
+
   it("updates research-session tasks with evidence-gated statuses", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-13T00:00:00.000Z" });
