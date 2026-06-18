@@ -345,6 +345,41 @@ describe("SMT backend status", () => {
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.smt).toBe(1);
   });
+
+  it("rejects malformed SMT check records before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "SMT Lab" });
+    await writeFile(
+      join(root, "constraints.smt2"),
+      "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n(get-model)\n",
+      "utf8"
+    );
+    const runner: SmtBackendCommandRunner = (_command, args) => {
+      if (args[0] === "-version") {
+        return {
+          status: 0,
+          stdout: "Z3 version 4.13.0\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "sat\n(\n  (define-fun x () Int\n    \n)\n)\n",
+        stderr: ""
+      };
+    };
+
+    await expect(
+      writeSmtCheckRecord({
+        rootPath: root,
+        sourcePath: "constraints.smt2",
+        queryName: "malformed_model_value",
+        runner
+      })
+    ).rejects.toThrow("SMT check record failed JSON Schema validation before write");
+    await expect(listSmtChecks(root)).resolves.toEqual([]);
+  });
 });
 
 async function tempRoot(): Promise<string> {

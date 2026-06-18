@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   expectBoolean,
   expectConst,
@@ -14,9 +15,11 @@ import {
   expectStringArray,
   formatValidationError,
   isRecord,
+  parseJsonWithOptionalBom,
   parseJsonObject
 } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import type { TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -115,7 +118,7 @@ export interface SmtCheckInput {
 }
 
 export interface SmtCheckRecord {
-  schemaVersion: "truth-harness.smt-check.v0";
+  schemaVersion: typeof SMT_CHECK_SCHEMA_VERSION;
   checkId: string;
   createdAt: string;
   backend: {
@@ -183,6 +186,9 @@ export interface SmtCheckSummary {
 }
 
 const DEFAULT_TIMEOUT_MS = 3000;
+const SMT_CHECK_SCHEMA_VERSION = "truth-harness.smt-check.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let smtCheckSchemaCache: Promise<unknown> | undefined;
 
 export function getSmtBackendStatus(options: SmtBackendStatusOptions = {}): SmtBackendStatusReport {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -242,7 +248,7 @@ export function checkSmtLibArtifact(input: SmtCheckInput): SmtCheckRecord {
   });
   const checkArgs = smtCheckArgs(backendId, sourcePath);
   const base = {
-    schemaVersion: "truth-harness.smt-check.v0" as const,
+    schemaVersion: SMT_CHECK_SCHEMA_VERSION,
     createdAt,
     backend: {
       id: backendId,
@@ -400,13 +406,14 @@ export async function writeSmtCheckRecord(input: WriteSmtCheckInput): Promise<Sm
     runner: input.runner,
     replayCommand: `truth-harness smt check ${quoteCommandArg(sourceRef)} --backend ${input.backend ?? "z3"} --write --json`
   });
+  await assertSmtCheckSchema(record);
   const smtDir = resolve(status.root, status.manifest.directories.smt);
-  await mkdir(smtDir, { recursive: true });
   const baseName = `${record.createdAt.slice(0, 10)}-${record.checkId}`;
   const jsonPath = join(smtDir, `${baseName}.json`);
   const markdownPath = join(smtDir, `${baseName}.md`);
   const markdown = renderSmtCheckMarkdown(record);
 
+  await mkdir(smtDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, record);
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -423,6 +430,28 @@ export async function writeSmtCheckRecord(input: WriteSmtCheckInput): Promise<Sm
     markdownPath,
     markdown
   };
+}
+
+async function assertSmtCheckSchema(record: SmtCheckRecord): Promise<void> {
+  const schema = await loadSmtCheckSchema();
+  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
+  const issues = validateJsonSchema(serializedRecord, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `SMT check record failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadSmtCheckSchema(): Promise<unknown> {
+  smtCheckSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "smt-check.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return smtCheckSchemaCache;
 }
 
 export async function listSmtChecks(rootPath: string): Promise<SmtCheckSummary[]> {
@@ -458,8 +487,8 @@ export async function listSmtChecks(rootPath: string): Promise<SmtCheckSummary[]
 export function parseSmtCheckRecord(raw: string, sourcePath = "SMT check record"): SmtCheckRecord {
   const parsed = parseJsonObject(raw, sourcePath, "SMT check");
   const issues: string[] = [];
-  if (parsed.schemaVersion !== "truth-harness.smt-check.v0") {
-    issues.push(`$.schemaVersion must equal "truth-harness.smt-check.v0"`);
+  if (parsed.schemaVersion !== SMT_CHECK_SCHEMA_VERSION) {
+    issues.push(`$.schemaVersion must equal "${SMT_CHECK_SCHEMA_VERSION}"`);
   }
   expectPattern(parsed, "checkId", /^smt_[a-f0-9]{16}$/u, "$.checkId", issues);
   expectDateTime(parsed, "createdAt", "$.createdAt", issues);
