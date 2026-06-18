@@ -1,8 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import {
   expectBoolean,
   expectConst,
@@ -19,8 +18,8 @@ import {
   parseJsonWithOptionalBom
 } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import type { TrustLabel } from "./types.js";
 import { writeVisualArtifact, type VisualArtifactWriteResult } from "./visual-artifact.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -186,8 +185,6 @@ export interface LeanProofCheckSummary {
 
 const DEFAULT_TIMEOUT_MS = 3000;
 const PROOF_CHECK_SCHEMA_VERSION = "truth-harness.proof-check.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let proofCheckSchemaCache: Promise<unknown> | undefined;
 
 export function getProofBackendStatus(options: ProofBackendStatusOptions = {}): ProofBackendStatusReport {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -427,25 +424,11 @@ export async function writeLeanProofCheckRecord(input: WriteLeanProofCheckInput)
 }
 
 async function assertProofCheckSchema(record: LeanProofCheckRecord): Promise<void> {
-  const schema = await loadProofCheckSchema();
-  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
-  const issues = validateJsonSchema(serializedRecord, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Proof-check record failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadProofCheckSchema(): Promise<unknown> {
-  proofCheckSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "proof-check.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return proofCheckSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: record,
+    schemaFile: "proof-check.schema.json",
+    artifactName: "Proof-check record"
+  });
 }
 
 export async function listLeanProofChecks(rootPath: string): Promise<LeanProofCheckSummary[]> {

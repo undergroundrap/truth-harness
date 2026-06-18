@@ -1,8 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import {
   expectBoolean,
   expectConst,
@@ -19,8 +18,8 @@ import {
   parseJsonObject
 } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import type { TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
@@ -187,8 +186,6 @@ export interface SmtCheckSummary {
 
 const DEFAULT_TIMEOUT_MS = 3000;
 const SMT_CHECK_SCHEMA_VERSION = "truth-harness.smt-check.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let smtCheckSchemaCache: Promise<unknown> | undefined;
 
 export function getSmtBackendStatus(options: SmtBackendStatusOptions = {}): SmtBackendStatusReport {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -433,25 +430,11 @@ export async function writeSmtCheckRecord(input: WriteSmtCheckInput): Promise<Sm
 }
 
 async function assertSmtCheckSchema(record: SmtCheckRecord): Promise<void> {
-  const schema = await loadSmtCheckSchema();
-  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
-  const issues = validateJsonSchema(serializedRecord, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `SMT check record failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadSmtCheckSchema(): Promise<unknown> {
-  smtCheckSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "smt-check.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return smtCheckSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: record,
+    schemaFile: "smt-check.schema.json",
+    artifactName: "SMT check record"
+  });
 }
 
 export async function listSmtChecks(rootPath: string): Promise<SmtCheckSummary[]> {

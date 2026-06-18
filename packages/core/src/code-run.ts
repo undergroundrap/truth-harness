@@ -2,13 +2,12 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { arch, platform } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { getCodeRunSandboxStatus, sandboxMeasurementForStatus, type CodeRunSandboxMeasurement } from "./sandbox.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
@@ -205,13 +204,11 @@ const DEFAULT_MAX_CONCURRENT_CODE_RUNS = 2;
 const MAX_TIMEOUT_MS = 120000;
 const MAX_OUTPUT_BYTES = 1048576;
 const CODE_RUN_SCHEMA_VERSION = "truth-harness.code-run.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
 const SHELL_LAUNCHERS = new Set(["cmd", "powershell", "pwsh", "bash", "sh", "zsh", "fish", "wscript", "cscript", "mshta"]);
 const NETWORK_COMMANDS = new Set(["curl", "wget", "ssh", "scp", "sftp", "ftp", "telnet", "nc", "ncat", "netcat", "rsync"]);
 const DESTRUCTIVE_COMMANDS = new Set(["rm", "rmdir", "del", "erase", "format", "shutdown", "reboot", "diskpart"]);
 const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "pip", "pip3", "cargo"]);
 const workspaceRunQueues = new Map<string, CodeRunQueueState>();
-let codeRunSchemaCache: Promise<unknown> | undefined;
 
 interface CodeRunQueueState {
   active: number;
@@ -352,23 +349,11 @@ export async function writeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRunW
 }
 
 async function assertCodeRunSchema(record: CodeRunRecord): Promise<void> {
-  const schema = await loadCodeRunSchema();
-  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
-  const issues = validateJsonSchema(serializedRecord, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Code run record failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadCodeRunSchema(): Promise<unknown> {
-  codeRunSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "code-run.schema.json"), "utf8").then((raw) => parseJsonWithOptionalBom(raw));
-  return codeRunSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: record,
+    schemaFile: "code-run.schema.json",
+    artifactName: "Code run record"
+  });
 }
 
 export async function listCodeRuns(rootPath: string): Promise<CodeRunSummary[]> {

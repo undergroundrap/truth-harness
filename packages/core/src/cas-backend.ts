@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import {
   expectBoolean,
   expectConst,
@@ -16,8 +15,8 @@ import {
   parseJsonObject
 } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import type { SymbolicPrompt } from "./sympy.js";
 import type { TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -169,7 +168,6 @@ export interface SymbolicCasCheckSummary {
 
 const DEFAULT_TIMEOUT_MS = 3000;
 const CAS_CHECK_SCHEMA_VERSION = "truth-harness.cas-check.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
 const MAXIMA_MARKER = "TRUTH_HARNESS_MAXIMA_STATUS:";
 const SAGE_MARKER = "TRUTH_HARNESS_SAGE_STATUS:";
 const ALLOWED_SYMBOLIC_IDENTIFIERS = new Set([
@@ -191,7 +189,6 @@ const ALLOWED_SYMBOLIC_IDENTIFIERS = new Set([
   "tan",
   "tanh"
 ]);
-let casCheckSchemaCache: Promise<unknown> | undefined;
 
 export function getCasBackendStatus(options: CasBackendStatusOptions = {}): CasBackendStatusReport {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -556,25 +553,11 @@ export async function writeSymbolicCasCheckRecord(
 }
 
 async function assertCasCheckSchema(record: SymbolicCasCheckRecord): Promise<void> {
-  const schema = await loadCasCheckSchema();
-  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
-  const issues = validateJsonSchema(serializedRecord, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `CAS check record failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadCasCheckSchema(): Promise<unknown> {
-  casCheckSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "cas-check.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return casCheckSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: record,
+    schemaFile: "cas-check.schema.json",
+    artifactName: "CAS check record"
+  });
 }
 
 export async function listSymbolicCasChecks(rootPath: string): Promise<SymbolicCasCheckSummary[]> {
