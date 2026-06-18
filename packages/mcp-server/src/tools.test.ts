@@ -1,7 +1,12 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { createReceipt, writeReportDraft } from "@truth-harness/core";
+import { join, relative } from "node:path";
+import {
+  createReceipt,
+  writeLeanProofCheckRecord,
+  writeReportDraft,
+  type ProofBackendCommandRunner
+} from "@truth-harness/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   handleTruthHarnessAsk,
@@ -1235,6 +1240,78 @@ describe("MCP tool handlers", () => {
       validationGateKind: "proof"
     });
     expect(plan.item?.command).toContain("truth-harness verify");
+  });
+
+  it("executes candidate validation evidence through agent run-next calls", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Candidate Gate Run Next Lab" });
+    const harness = await handleTruthHarnessResearchHarnessStart({
+      objective: "3 / 4 + 5 / 8",
+      domains: ["math"]
+    });
+    const validationPlan = harness.validationPlan?.plan;
+    const proofGate = validationPlan?.gates.find((gate) => gate.kind === "proof");
+    if (!validationPlan || !proofGate) {
+      throw new Error("Expected research harness to create a proof validation gate.");
+    }
+
+    await mkdir(join(root, "proofs"), { recursive: true });
+    await writeFile(join(root, "proofs", "candidate.lean"), "theorem candidate_fixture : True := by trivial\n", "utf8");
+    const proofRunner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+      }
+
+      return { status: 0, stdout: "", stderr: "" };
+    };
+    const proof = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "proofs/candidate.lean",
+      scope: { statement: "3 / 4 + 5 / 8" },
+      runner: proofRunner,
+      now: new Date("2026-06-18T00:04:00.000Z")
+    });
+    const proofRef = relative(root, proof.jsonPath).replace(/\\/gu, "/");
+    await handleTruthHarnessResearchSessionCheckpoint({
+      sessionRef: harness.session.sessionId,
+      summary: "Accepted proof artifact is ready for validation gate attachment.",
+      evidenceRefs: [{ kind: "proof", ref: proofRef, trust: "proved" }],
+      nextChecks: ["Attach the proof artifact to the linked validation gate."]
+    });
+
+    const executed = await handleTruthHarnessWorkspaceRunNext({
+      maxRoutes: 0,
+      maxClaims: 0,
+      executeLocal: true
+    });
+    if ("written" in executed) {
+      throw new Error("Expected plain run-next plan without write=true.");
+    }
+
+    expect(executed).toMatchObject({
+      status: "executed",
+      dryRun: false,
+      item: {
+        kind: "validation-gate",
+        validationGateId: proofGate.gateId,
+        command: `truth-harness validation attach ${validationPlan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`
+      },
+      execution: {
+        status: "executed",
+        kind: "validation-attach",
+        evidenceRef: `proof:${proofRef}`,
+        result: {
+          validationGate: {
+            satisfied: true,
+            gate: {
+              gateId: proofGate.gateId,
+              status: "satisfied"
+            }
+          }
+        }
+      }
+    });
   });
 
   it("plans credibility reviewer actions through run-next", async () => {
