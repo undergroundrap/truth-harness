@@ -69,6 +69,15 @@ export interface WorkspaceRunNextSummary {
   executionStatus: WorkspaceRunNextStatus;
 }
 
+export interface WorkspaceRunNextRationale {
+  target: string;
+  source: string;
+  candidateEvidenceRef?: string;
+  executionBoundary: string;
+  firstStopCondition?: string;
+  firstWarning?: string;
+}
+
 export interface WorkspaceRunNextPlan {
   schemaVersion: typeof WORKSPACE_RUN_NEXT_SCHEMA_VERSION;
   planId: string;
@@ -107,6 +116,7 @@ export interface WorkspaceRunNextPlan {
     attached?: boolean;
     result?: unknown;
   };
+  rationale?: WorkspaceRunNextRationale;
   stopConditions: string[];
   warnings: string[];
 }
@@ -154,7 +164,7 @@ export async function createWorkspaceRunNextPlan(input: {
   };
 
   if (!nextItem) {
-    return {
+    return withWorkspaceRunNextRationale({
       ...basePlan,
       status: "blocked",
       execution: {
@@ -162,15 +172,15 @@ export async function createWorkspaceRunNextPlan(input: {
         kind: "no-open-item",
         summary: "No open local work item is available."
       }
-    };
+    });
   }
 
   if (!input.executeLocal) {
-    return basePlan;
+    return withWorkspaceRunNextRationale(basePlan);
   }
 
   if (!input.review.autonomy.canRunUnattended) {
-    return {
+    return withWorkspaceRunNextRationale({
       ...basePlan,
       status: "blocked",
       execution: {
@@ -179,15 +189,15 @@ export async function createWorkspaceRunNextPlan(input: {
         command: nextItem.command,
         summary: "The autonomy contract does not allow unattended local work."
       }
-    };
+    });
   }
 
   const execution = await executeWorkspaceRunNextItem(input.rootPath, nextItem);
-  return {
+  return withWorkspaceRunNextRationale({
     ...basePlan,
     status: execution.status,
     execution
-  };
+  });
 }
 
 export function createWorkspaceReviewFromCredibilityPack(input: {
@@ -442,28 +452,40 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
 }
 
 function workspaceRunNextWhyRows(plan: WorkspaceRunNextPlan): Array<[string, string]> {
-  const item = plan.item;
-  const evidenceRef = plan.execution.evidenceRef ?? evidenceRefFromRunNextCommand(item?.command ?? plan.execution.command);
-  const target = item
-    ? workspaceRunNextTarget(item)
-    : "No open workspace review item.";
-  const source = item
-    ? `${item.kind} / ${item.priority}`
-    : "workspace-review";
-  const boundary = plan.dryRun
-    ? "Dry-run only; execute through CLI/MCP with explicit local execution approval."
-    : "Executed through the bounded in-process run-next planner.";
+  const rationale = plan.rationale ?? workspaceRunNextRationaleFor(plan);
   return [
-    ["Target", target],
-    ["Source", source],
-    ["Candidate evidence", evidenceRef ?? "No candidate evidence ref selected."],
-    ["Execution boundary", boundary],
-    ["First stop condition", plan.stopConditions[0] ?? "No stop condition recorded."],
-    ["First warning", plan.warnings[0] ?? "No warning recorded."]
+    ["Target", rationale.target],
+    ["Source", rationale.source],
+    ["Candidate evidence", rationale.candidateEvidenceRef ?? "No candidate evidence ref selected."],
+    ["Execution boundary", rationale.executionBoundary],
+    ["First stop condition", rationale.firstStopCondition ?? "No stop condition recorded."],
+    ["First warning", rationale.firstWarning ?? "No warning recorded."]
   ];
 }
 
-function workspaceRunNextTarget(item: WorkspaceRunNextPlan["item"]): string {
+function withWorkspaceRunNextRationale(plan: WorkspaceRunNextPlan): WorkspaceRunNextPlan {
+  return {
+    ...plan,
+    rationale: workspaceRunNextRationaleFor(plan)
+  };
+}
+
+function workspaceRunNextRationaleFor(plan: WorkspaceRunNextPlan): WorkspaceRunNextRationale {
+  const item = plan.item;
+  const candidateEvidenceRef = plan.execution.evidenceRef ?? evidenceRefFromRunNextCommand(item?.command ?? plan.execution.command);
+  return {
+    target: workspaceRunNextTarget(item),
+    source: item ? `${item.kind} / ${item.priority}` : "workspace-review",
+    ...(candidateEvidenceRef ? { candidateEvidenceRef } : {}),
+    executionBoundary: plan.dryRun
+      ? "Dry-run only; execute through CLI/MCP with explicit local execution approval."
+      : "Executed through the bounded in-process run-next planner.",
+    ...(plan.stopConditions[0] ? { firstStopCondition: plan.stopConditions[0] } : {}),
+    ...(plan.warnings[0] ? { firstWarning: plan.warnings[0] } : {})
+  };
+}
+
+function workspaceRunNextTarget(item: WorkspaceRunNextPlan["item"] | undefined): string {
   if (!item) {
     return "No open workspace review item.";
   }

@@ -118,6 +118,34 @@
       },
       "additionalProperties": false
     },
+    "rationale": {
+      "type": "object",
+      "required": ["target", "source", "executionBoundary"],
+      "properties": {
+        "target": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "candidateEvidenceRef": {
+          "type": "string"
+        },
+        "executionBoundary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "firstStopCondition": {
+          "type": "string"
+        },
+        "firstWarning": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "stopConditions": {
       "$ref": "#/$defs/stringArray"
     },

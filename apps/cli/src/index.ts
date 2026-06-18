@@ -7339,24 +7339,15 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
     console.log(`  Command: ${plan.item.command}`);
   }
 
+  const rationale = workspaceRunNextCliRationale(plan);
   console.log("");
   console.log("Why this action:");
-  console.log(`  Target: ${workspaceRunNextCliTarget(plan.item)}`);
-  console.log(`  Source: ${plan.item ? `${plan.item.kind} / ${plan.item.priority}` : "workspace-review"}`);
-  console.log(
-    `  Candidate evidence: ${
-      plan.execution.evidenceRef ?? workspaceRunNextEvidenceFromCommand(plan.item?.command ?? plan.execution.command) ?? "none selected"
-    }`
-  );
-  console.log(
-    `  Boundary: ${
-      plan.dryRun
-        ? "dry-run only; use CLI/MCP execution gates for local work"
-        : "bounded in-process execution"
-    }`
-  );
-  if (plan.stopConditions[0]) {
-    console.log(`  First stop: ${plan.stopConditions[0]}`);
+  console.log(`  Target: ${rationale.target}`);
+  console.log(`  Source: ${rationale.source}`);
+  console.log(`  Candidate evidence: ${rationale.candidateEvidenceRef ?? "none selected"}`);
+  console.log(`  Boundary: ${rationale.executionBoundary}`);
+  if (rationale.firstStopCondition) {
+    console.log(`  First stop: ${rationale.firstStopCondition}`);
   }
 
   console.log("");
@@ -7374,6 +7365,19 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
   for (const condition of plan.stopConditions) {
     console.log(`  ${condition}`);
   }
+}
+
+function workspaceRunNextCliRationale(plan: WorkspaceRunNextPlan): NonNullable<WorkspaceRunNextPlan["rationale"]> {
+  return plan.rationale ?? {
+    target: workspaceRunNextCliTarget(plan.item),
+    source: plan.item ? `${plan.item.kind} / ${plan.item.priority}` : "workspace-review",
+    candidateEvidenceRef: plan.execution.evidenceRef ?? workspaceRunNextEvidenceFromCommand(plan.item?.command ?? plan.execution.command),
+    executionBoundary: plan.dryRun
+      ? "dry-run only; use CLI/MCP execution gates for local work"
+      : "bounded in-process execution",
+    firstStopCondition: plan.stopConditions[0],
+    firstWarning: plan.warnings[0]
+  };
 }
 
 function workspaceRunNextCliTarget(item: WorkspaceRunNextPlan["item"]): string {

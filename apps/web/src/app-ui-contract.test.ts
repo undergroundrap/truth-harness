@@ -460,6 +460,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function refreshWorkspaceRunNext({ announce = true } = {})");
     expect(source).toContain("function renderWorkspaceRunNext()");
     expect(source).toContain("function workspaceRunNextDetailsRows(plan, command)");
+    expect(source).toContain("plan?.rationale");
     expect(source).toContain("evidenceRefFromCommand(command)");
     expect(source).toContain("copyWorkspaceRunNextCommand");
     expect(source).not.toContain("workspace-run-next?executeLocal=true");

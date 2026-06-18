@@ -1791,6 +1791,7 @@ describe("benchmark CLI", () => {
       mode: string;
       item?: { kind: string; claimId?: string; command: string };
       execution: { status: string; kind: string; summary: string };
+      rationale?: { target?: string; source?: string; executionBoundary?: string };
     };
     const executed = await runCli([
       "workspace",
@@ -1851,6 +1852,11 @@ describe("benchmark CLI", () => {
       status: "planned",
       kind: "dry-run"
     });
+    expect(dryPlan.rationale).toMatchObject({
+      target: writtenClaim.claim.claimId,
+      source: "claim-blocker / high"
+    });
+    expect(dryPlan.rationale?.executionBoundary).toContain("Dry-run only");
     expect(executed.exitCode).toBe(0);
     expect(executedPlan.dryRun).toBe(false);
     expect(executedPlan.status).toBe("executed");

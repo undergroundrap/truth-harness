@@ -755,12 +755,22 @@ describe("workspace run-next", () => {
     expect(result.markdown).toContain("| Target | validation proof gate_proof_run_next_test |");
     expect(result.markdown).toContain("| Candidate evidence | proof:.truth-harness/proofs/candidate.json |");
     expect(result.markdown).toContain("It is not proof, not a trust-label upgrade");
-    const parsed = JSON.parse(await readFile(result.jsonPath, "utf8")) as { schemaVersion?: string; planId?: string; dryRun?: boolean };
+    const parsed = JSON.parse(await readFile(result.jsonPath, "utf8")) as {
+      schemaVersion?: string;
+      planId?: string;
+      dryRun?: boolean;
+      rationale?: { target?: string; candidateEvidenceRef?: string; executionBoundary?: string };
+    };
     expect(parsed).toMatchObject({
       schemaVersion: "truth-harness.workspace-run-next.v0",
       planId: result.plan.planId,
-      dryRun: true
+      dryRun: true,
+      rationale: {
+        target: "validation proof gate_proof_run_next_test",
+        candidateEvidenceRef: "proof:.truth-harness/proofs/candidate.json"
+      }
     });
+    expect(parsed.rationale?.executionBoundary).toContain("Dry-run only");
     const list = await listWorkspaceRunNextPlans(root);
     expect(list).toContainEqual(
       expect.objectContaining({

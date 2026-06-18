@@ -6961,6 +6961,19 @@ function setWorkspaceRunNextDetails(rows) {
 }
 
 function workspaceRunNextDetailsRows(plan, command) {
+  if (plan?.rationale) {
+    return [
+      ["Target", plan.rationale.target],
+      ["Source", plan.rationale.source],
+      ["Evidence", plan.rationale.candidateEvidenceRef],
+      ["Session", plan.item?.sessionId],
+      ["Execution", plan.execution?.kind ?? "dry-run"],
+      ["Boundary", plan.rationale.executionBoundary],
+      ["Stop", plan.rationale.firstStopCondition],
+      ["Warning", plan.rationale.firstWarning]
+    ];
+  }
+
   const item = plan?.item;
   const execution = plan?.execution;
   const evidence = execution?.evidenceRef ?? evidenceRefFromCommand(command);
