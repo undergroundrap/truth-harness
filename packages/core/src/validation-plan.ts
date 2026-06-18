@@ -1,8 +1,11 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { createEvidenceAudit, type EvidenceAudit, type EvidenceAuditClaimType } from "./evidence-audit.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import type { InventionEvidenceRef } from "./invention-log.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
@@ -55,6 +58,9 @@ export const VALIDATION_GATE_KINDS = [
 
 export const VALIDATION_GATE_STATUSES = ["missing", "planned", "in-progress", "satisfied", "blocked", "not-applicable"] as const;
 export const VALIDATION_READINESS = ["blocked-refuted", "not-ready", "ready-for-review", "ready-for-narrow-claim"] as const;
+const VALIDATION_PLAN_SCHEMA_VERSION = "truth-harness.validation-plan.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let validationPlanSchemaCache: Promise<unknown> | undefined;
 
 export type ValidationPlanDomain = (typeof VALIDATION_PLAN_DOMAINS)[number];
 export type ValidationGateKind = (typeof VALIDATION_GATE_KINDS)[number];
@@ -113,7 +119,7 @@ export interface ValidationGate {
 }
 
 export interface ValidationPlan {
-  schemaVersion: "truth-harness.validation-plan.v0";
+  schemaVersion: typeof VALIDATION_PLAN_SCHEMA_VERSION;
   planId: string;
   projectId: string;
   createdAt: string;
@@ -226,7 +232,7 @@ export async function createValidationPlan(input: CreateValidationPlanInput): Pr
   };
   const planId = `plan_${stableHash(planWithoutId).slice(0, 16)}`;
   const planWithoutMarkdown = {
-    schemaVersion: "truth-harness.validation-plan.v0" as const,
+    schemaVersion: VALIDATION_PLAN_SCHEMA_VERSION,
     planId,
     ...planWithoutId
   };
@@ -240,11 +246,12 @@ export async function createValidationPlan(input: CreateValidationPlanInput): Pr
 export async function writeValidationPlan(input: CreateValidationPlanInput): Promise<ValidationPlanWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
   const plan = await createValidationPlan(input);
+  await assertValidationPlanSchema(plan);
   const validationDir = resolve(status.root, status.manifest.directories.validation);
-  await mkdir(validationDir, { recursive: true });
   const baseName = `${plan.createdAt.slice(0, 10)}-${plan.planId}`;
   const jsonPath = join(validationDir, `${baseName}.json`);
   const markdownPath = join(validationDir, `${baseName}.md`);
+  await mkdir(validationDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, plan);
   await writeFileAtomic(markdownPath, plan.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -261,6 +268,28 @@ export async function writeValidationPlan(input: CreateValidationPlanInput): Pro
     markdownPath,
     markdown: plan.markdown
   };
+}
+
+async function assertValidationPlanSchema(plan: ValidationPlan): Promise<void> {
+  const schema = await loadValidationPlanSchema();
+  const serializedPlan = parseJsonWithOptionalBom(JSON.stringify(plan));
+  const issues = validateJsonSchema(serializedPlan, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Validation plan failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadValidationPlanSchema(): Promise<unknown> {
+  validationPlanSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "validation-plan.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return validationPlanSchemaCache;
 }
 
 export async function listValidationPlans(rootPath: string): Promise<ValidationPlan[]> {
@@ -282,11 +311,11 @@ export async function listValidationPlans(rootPath: string): Promise<ValidationP
   const plans = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => JSON.parse(await readFile(join(validationDir, file), "utf8")) as ValidationPlan)
+      .map(async (file) => parseJsonWithOptionalBom(await readFile(join(validationDir, file), "utf8")) as ValidationPlan)
   );
 
   return plans
-    .filter((plan) => plan.schemaVersion === "truth-harness.validation-plan.v0")
+    .filter((plan) => plan.schemaVersion === VALIDATION_PLAN_SCHEMA_VERSION)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 

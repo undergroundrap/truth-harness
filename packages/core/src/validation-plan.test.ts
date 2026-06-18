@@ -79,6 +79,22 @@ describe("validation plans", () => {
     expect(listed[0]?.planId).toBe(written.plan.planId);
   });
 
+  it("rejects malformed validation plans before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+
+    await expect(
+      writeValidationPlan({
+        rootPath: root,
+        claim: "A malformed validation plan should never become durable reviewer guidance.",
+        domains: ["math"],
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("Validation plan failed JSON Schema validation before write");
+
+    await expect(listValidationPlans(root)).resolves.toEqual([]);
+  });
+
   it("requires prior art, claim charts, reduction-to-practice, and patent legal review for invention claims", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);
