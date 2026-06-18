@@ -15,6 +15,7 @@ import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import {
   createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
+  inspectWorkspaceRunNextPlan,
   listWorkspaceRunNextPlans,
   readWorkspaceRunNextPlan,
   writeWorkspaceRunNextPlan
@@ -822,6 +823,24 @@ describe("workspace run-next", () => {
     expect(await readWorkspaceRunNextPlan(root, list[0]?.path ?? "")).toMatchObject({
       planId: result.plan.planId
     });
+    const inspected = await inspectWorkspaceRunNextPlan(root, result.plan.planId, {
+      verifySnapshot: true,
+      now: "2026-06-14T00:03:30.000Z"
+    });
+    expect(inspected).toMatchObject({
+      schemaVersion: "truth-harness.workspace-run-next-inspection.v0",
+      path: expect.stringContaining(`${result.plan.planId}-workspace-run-next.json`),
+      plan: {
+        planId: result.plan.planId
+      },
+      sourceSnapshot: {
+        sourceSnapshotStatus: "verified",
+        sourceSnapshotAdded: 0,
+        sourceSnapshotChanged: 0,
+        sourceSnapshotMissing: 0,
+        sourceSnapshotIgnoredAdded: 2
+      }
+    });
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
     expect(validation.passed).toBe(true);
     expect(validation.artifacts).toContainEqual(
@@ -857,6 +876,15 @@ describe("workspace run-next", () => {
         sourceSnapshotDriftSummary: expect.stringContaining("1 added")
       })
     );
+    const driftedInspection = await inspectWorkspaceRunNextPlan(root, result.plan.planId, {
+      verifySnapshot: true,
+      now: "2026-06-14T00:04:30.000Z"
+    });
+    expect(driftedInspection.sourceSnapshot).toMatchObject({
+      sourceSnapshotStatus: "drifted",
+      sourceSnapshotAdded: 1,
+      sourceSnapshotDriftSummary: expect.stringContaining("1 added")
+    });
 
     const tamperedPlan = JSON.parse(await readFile(result.jsonPath, "utf8")) as Record<string, unknown>;
     tamperedPlan.localOnly = false;

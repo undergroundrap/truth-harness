@@ -1212,8 +1212,26 @@ describe("MCP tool handlers", () => {
     const shownRunNext = await handleTruthHarnessWorkspaceRunNextShow({
       planRef: writtenDryRun.plan.planId
     });
+    if ("plan" in shownRunNext) {
+      throw new Error("Expected plain run-next plan without verifySnapshot.");
+    }
     expect(shownRunNext.planId).toBe(writtenDryRun.plan.planId);
     expect(shownRunNext.warnings.join(" ")).toContain("never executes shell strings");
+    const shownRunNextWithSnapshot = await handleTruthHarnessWorkspaceRunNextShow({
+      planRef: writtenDryRun.plan.planId,
+      verifySnapshot: true
+    });
+    expect(shownRunNextWithSnapshot).toMatchObject({
+      schemaVersion: "truth-harness.workspace-run-next-inspection.v0",
+      plan: {
+        planId: writtenDryRun.plan.planId
+      },
+      sourceSnapshot: {
+        sourceSnapshotStatus: "verified",
+        sourceSnapshotAdded: 0,
+        sourceSnapshotIgnoredAdded: 2
+      }
+    });
     expect(executed.dryRun).toBe(false);
     expect(executed.status).toBe("executed");
     expect(executed.execution.status).toBe("executed");

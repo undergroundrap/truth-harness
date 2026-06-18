@@ -459,6 +459,20 @@ describe("Truth Harness MCP server", () => {
       });
       expect(firstText(workspaceRunNextShow.content)).toContain("\"schemaVersion\": \"truth-harness.workspace-run-next.v0\"");
 
+      const workspaceRunNextShowWithSnapshot = await client.callTool({
+        name: "truth_harness_workspace_run_next_show",
+        arguments: {
+          planRef: workspaceRunNextJson.plan.planId,
+          verifySnapshot: true
+        }
+      });
+      const workspaceRunNextShowWithSnapshotText = firstText(workspaceRunNextShowWithSnapshot.content);
+      expect(workspaceRunNextShowWithSnapshot.isError).not.toBe(true);
+      expect(workspaceRunNextShowWithSnapshotText).toContain(
+        "\"schemaVersion\": \"truth-harness.workspace-run-next-inspection.v0\""
+      );
+      expect(workspaceRunNextShowWithSnapshotText).toContain("\"sourceSnapshotStatus\": \"verified\"");
+
       const workspaceReviewList = await client.callTool({
         name: "truth_harness_workspace_review_list",
         arguments: {}

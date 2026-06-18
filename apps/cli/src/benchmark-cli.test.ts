@@ -1948,6 +1948,27 @@ describe("benchmark CLI", () => {
       planId: writtenDryRunPayload.plan.planId,
       dryRun: true
     });
+    const shownByIdWithSnapshot = await runCli([
+      "workspace",
+      "show-run-next",
+      writtenDryRunPayload.plan.planId,
+      "--workspace",
+      root,
+      "--verify-snapshot",
+      "--json"
+    ]);
+    expect(JSON.parse(shownByIdWithSnapshot.stdout)).toMatchObject({
+      schemaVersion: "truth-harness.workspace-run-next-inspection.v0",
+      plan: {
+        planId: writtenDryRunPayload.plan.planId,
+        dryRun: true
+      },
+      sourceSnapshot: {
+        sourceSnapshotStatus: "verified",
+        sourceSnapshotAdded: 0,
+        sourceSnapshotIgnoredAdded: 2
+      }
+    });
     const shownByPath = await runCli([
       "workspace",
       "show-run-next",
@@ -1959,6 +1980,16 @@ describe("benchmark CLI", () => {
     expect(JSON.parse(shownByPath.stdout)).toMatchObject({
       planId: writtenDryRunPayload.plan.planId
     });
+    const shownHumanWithSnapshot = await runCli([
+      "workspace",
+      "show-run-next",
+      writtenDryRunPayload.plan.planId,
+      "--workspace",
+      root,
+      "--verify-snapshot"
+    ]);
+    expect(shownHumanWithSnapshot.stdout).toContain("Source snapshot check:");
+    expect(shownHumanWithSnapshot.stdout).toContain("Status: verified");
     expect(human.stdout).toContain("Truth Harness workspace run-next");
     expect(human.stdout).toContain("Plan:");
     expect(human.stdout).toContain("Dry run: true");

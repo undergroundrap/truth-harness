@@ -44,6 +44,7 @@ import {
   ingestLocalCorpus,
   initLocalWorkspace,
   addResearchSessionCheckpoint,
+  inspectWorkspaceRunNextPlan,
   listClaimRecords,
   listBenchmarkArtifacts,
   listSymbolicCasChecks,
@@ -249,6 +250,7 @@ import {
   type TrustLabel,
   type WorkspaceValidation,
   type WorkspaceGraph,
+  type WorkspaceRunNextInspection,
   type WorkspaceRunNextPlan,
   type WorkspaceRunNextSummary,
   type WorkspaceRunNextWriteResult,
@@ -647,6 +649,7 @@ export interface TruthHarnessWorkspaceRunNextListInput {
 export interface TruthHarnessWorkspaceRunNextShowInput {
   workspacePath?: string;
   planRef: string;
+  verifySnapshot?: boolean;
 }
 
 export interface TruthHarnessWorkspaceReviewListInput {
@@ -1878,8 +1881,13 @@ export async function handleTruthHarnessWorkspaceRunNextList(input: TruthHarness
 
 export async function handleTruthHarnessWorkspaceRunNextShow(
   input: TruthHarnessWorkspaceRunNextShowInput
-): Promise<WorkspaceRunNextPlan> {
-  return readWorkspaceRunNextPlan(resolveWorkspaceRoot(input.workspacePath), input.planRef);
+): Promise<WorkspaceRunNextPlan | WorkspaceRunNextInspection> {
+  const rootPath = resolveWorkspaceRoot(input.workspacePath);
+  if (input.verifySnapshot) {
+    return inspectWorkspaceRunNextPlan(rootPath, input.planRef, { verifySnapshot: true });
+  }
+
+  return readWorkspaceRunNextPlan(rootPath, input.planRef);
 }
 
 export async function handleTruthHarnessWorkspaceReviewList(input: TruthHarnessWorkspaceReviewListInput): Promise<{

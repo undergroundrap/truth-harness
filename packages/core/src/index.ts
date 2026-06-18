@@ -212,6 +212,7 @@ export {
 export {
   createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
+  inspectWorkspaceRunNextPlan,
   listWorkspaceRunNextPlans,
   parseWorkspaceRunNextJson,
   readWorkspaceRunNextPlan,
@@ -242,6 +243,8 @@ export {
 } from "./report-draft.js";
 export type {
   WorkspaceRunNextPlan,
+  WorkspaceRunNextInspection,
+  WorkspaceRunNextSourceSnapshotCheck,
   WorkspaceRunNextStatus,
   WorkspaceRunNextSummary,
   WorkspaceRunNextWriteResult

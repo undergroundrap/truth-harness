@@ -1557,14 +1557,19 @@ export function createTruthHarnessMcpServer(): McpServer {
           .string()
           .optional()
           .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
-        planRef: z.string().min(1).describe("Plan id such as wrn_<hash> or workspace-local JSON path.")
+        planRef: z.string().min(1).describe("Plan id such as wrn_<hash> or workspace-local JSON path."),
+        verifySnapshot: z
+          .boolean()
+          .optional()
+          .describe("When true, verify the plan's source snapshot and include drift status.")
       },
       annotations: {
         readOnlyHint: true,
         openWorldHint: false
       }
     },
-    async ({ workspacePath, planRef }) => toolJson(await handleTruthHarnessWorkspaceRunNextShow({ workspacePath, planRef }))
+    async ({ workspacePath, planRef, verifySnapshot }) =>
+      toolJson(await handleTruthHarnessWorkspaceRunNextShow({ workspacePath, planRef, verifySnapshot }))
   );
 
   server.registerTool(

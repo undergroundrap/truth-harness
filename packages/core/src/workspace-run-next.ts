@@ -66,6 +66,24 @@ export interface WorkspaceRunNextListOptions {
   now?: string;
 }
 
+export type WorkspaceRunNextSourceSnapshotCheck = Pick<
+  WorkspaceRunNextSummary,
+  | "sourceSnapshotStatus"
+  | "sourceSnapshotVerifiedAt"
+  | "sourceSnapshotMissing"
+  | "sourceSnapshotChanged"
+  | "sourceSnapshotAdded"
+  | "sourceSnapshotIgnoredAdded"
+  | "sourceSnapshotDriftSummary"
+>;
+
+export interface WorkspaceRunNextInspection {
+  schemaVersion: "truth-harness.workspace-run-next-inspection.v0";
+  plan: WorkspaceRunNextPlan;
+  path: string;
+  sourceSnapshot?: WorkspaceRunNextSourceSnapshotCheck;
+}
+
 export interface WorkspaceRunNextSummary {
   schemaVersion: typeof WORKSPACE_RUN_NEXT_SCHEMA_VERSION;
   planId: string;
@@ -395,6 +413,32 @@ export async function listWorkspaceRunNextPlans(
 
 export async function readWorkspaceRunNextPlan(rootPath: string, planRef: string): Promise<WorkspaceRunNextPlan> {
   const status = await requireRunNextWorkspace(rootPath);
+  return (await readWorkspaceRunNextPlanWithPath(status, planRef)).plan;
+}
+
+export async function inspectWorkspaceRunNextPlan(
+  rootPath: string,
+  planRef: string,
+  options: { verifySnapshot?: boolean; now?: string } = {}
+): Promise<WorkspaceRunNextInspection> {
+  const status = await requireRunNextWorkspace(rootPath);
+  const { plan, path } = await readWorkspaceRunNextPlanWithPath(status, planRef);
+  const sourceSnapshot = options.verifySnapshot
+    ? await verifyRunNextSourceSnapshot(status.root, plan, path, options.now)
+    : undefined;
+
+  return {
+    schemaVersion: "truth-harness.workspace-run-next-inspection.v0",
+    plan,
+    path,
+    ...(sourceSnapshot ? { sourceSnapshot } : {})
+  };
+}
+
+async function readWorkspaceRunNextPlanWithPath(
+  status: LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> },
+  planRef: string
+): Promise<{ plan: WorkspaceRunNextPlan; path: string }> {
   const ref = requireText(planRef, "Workspace run-next plan ref is required.");
 
   if (isWorkspaceRunNextPlanId(ref)) {
@@ -415,14 +459,21 @@ export async function readWorkspaceRunNextPlan(rootPath: string, planRef: string
       const path = join(findingsDir, file);
       const plan = tryParseWorkspaceRunNextJson(await readFile(path, "utf8"));
       if (plan?.planId === ref) {
-        return plan;
+        return {
+          plan,
+          path: toPortablePath(relative(status.root, path))
+        };
       }
     }
 
     throw new Error(`Workspace run-next plan not found: ${ref}`);
   }
 
-  return parseWorkspaceRunNextJson(await readFile(resolveUnderRoot(status.root, ref), "utf8"));
+  const path = resolveUnderRoot(status.root, ref);
+  return {
+    plan: parseWorkspaceRunNextJson(await readFile(path, "utf8")),
+    path: toPortablePath(relative(status.root, path))
+  };
 }
 
 export function parseWorkspaceRunNextJson(raw: string): WorkspaceRunNextPlan {

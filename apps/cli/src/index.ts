@@ -70,6 +70,7 @@ import {
   isValidationGateKind,
   isValidationPlanDomain,
   inspectLeanProject,
+  inspectWorkspaceRunNextPlan,
   listBenchmarkArtifacts,
   listSymbolicCasChecks,
   listClaimCharts,
@@ -105,7 +106,6 @@ import {
   readReportDraft,
   readResearchSession,
   readVisualArtifact,
-  readWorkspaceRunNextPlan,
   readWorkspaceReview,
   readVerifierRoute,
   renderReceipt,
@@ -305,6 +305,7 @@ import {
   type TrustLabel,
   type WorkspaceValidation,
   type WorkspaceGraph,
+  type WorkspaceRunNextInspection,
   type WorkspaceRunNextPlan,
   type WorkspaceRunNextSummary,
   type WorkspaceReview,
@@ -3754,16 +3755,22 @@ workspace
   .description("Show a persisted workspace run-next plan by plan id or workspace-local JSON path.")
   .argument("<plan>", "Plan id such as wrn_<hash> or workspace-local JSON path")
   .option("--workspace <path>", "Project root path", ".")
+  .option("--verify-snapshot", "Verify the plan's source snapshot and include drift status")
   .option("--json", "Print the full workspace run-next plan JSON")
-  .action(async (planRef: string, options: { workspace: string; json?: boolean }) => {
-    const plan = await readWorkspaceRunNextPlan(options.workspace, planRef);
+  .action(async (planRef: string, options: { workspace: string; verifySnapshot?: boolean; json?: boolean }) => {
+    const inspection = await inspectWorkspaceRunNextPlan(options.workspace, planRef, {
+      verifySnapshot: Boolean(options.verifySnapshot)
+    });
 
     if (options.json) {
-      printJson(plan);
+      printJson(options.verifySnapshot ? inspection : inspection.plan);
       return;
     }
 
-    printWorkspaceRunNextPlan(plan);
+    printWorkspaceRunNextPlan(inspection.plan);
+    if (inspection.sourceSnapshot) {
+      printWorkspaceRunNextSnapshotCheck(inspection.sourceSnapshot);
+    }
   });
 
 workspace
@@ -7371,6 +7378,29 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
   console.log("Stop conditions:");
   for (const condition of plan.stopConditions) {
     console.log(`  ${condition}`);
+  }
+}
+
+function printWorkspaceRunNextSnapshotCheck(check: NonNullable<WorkspaceRunNextInspection["sourceSnapshot"]>): void {
+  console.log("");
+  console.log("Source snapshot check:");
+  console.log(`  Status: ${check.sourceSnapshotStatus ?? "unknown"}`);
+  if (
+    typeof check.sourceSnapshotMissing === "number" ||
+    typeof check.sourceSnapshotChanged === "number" ||
+    typeof check.sourceSnapshotAdded === "number"
+  ) {
+    console.log(
+      `  Drift: ${check.sourceSnapshotMissing ?? 0} missing, ${check.sourceSnapshotChanged ?? 0} changed, ${
+        check.sourceSnapshotAdded ?? 0
+      } added`
+    );
+  }
+  if (typeof check.sourceSnapshotIgnoredAdded === "number") {
+    console.log(`  Ignored handoff files: ${check.sourceSnapshotIgnoredAdded}`);
+  }
+  if (check.sourceSnapshotDriftSummary) {
+    console.log(`  ${check.sourceSnapshotDriftSummary}`);
   }
 }
 
