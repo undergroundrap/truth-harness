@@ -1,13 +1,12 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { parseReceiptJson } from "./receipt-validation.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { parseSmtCheckRecord } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
@@ -15,8 +14,6 @@ import { readVerifierRoute, verifierRouteReadiness } from "./verifier-route.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 const CLAIM_SCHEMA_VERSION = "truth-harness.claim.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let claimLedgerSchemaCache: Promise<unknown> | undefined;
 
 export const CLAIM_LEDGER_DOMAINS = [
   "math",
@@ -347,25 +344,11 @@ export async function writeClaimLedgerRecord(input: CreateClaimLedgerRecordInput
 }
 
 async function assertClaimLedgerSchema(claim: ClaimLedgerRecord): Promise<void> {
-  const schema = await loadClaimLedgerSchema();
-  const serializedClaim = parseJsonWithOptionalBom(JSON.stringify(claim));
-  const issues = validateJsonSchema(serializedClaim, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Claim ledger record failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadClaimLedgerSchema(): Promise<unknown> {
-  claimLedgerSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "claim-ledger.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return claimLedgerSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: claim,
+    schemaFile: "claim-ledger.schema.json",
+    artifactName: "Claim ledger record"
+  });
 }
 
 export async function listClaimRecords(rootPath: string): Promise<ClaimLedgerRecord[]> {

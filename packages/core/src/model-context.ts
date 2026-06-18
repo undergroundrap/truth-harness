@@ -1,10 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -13,8 +12,6 @@ export const MODEL_CONTEXT_TARGETS = ["hosted-model", "local-model", "external-s
 export const MODEL_CONTEXT_APPROVAL_STATUSES = ["not-approved", "approved"] as const;
 export const MODEL_CONTEXT_DISCLOSURE_STATUSES = ["not-required", "required-not-created", "planned", "sent", "cancelled"] as const;
 const MODEL_CONTEXT_SCHEMA_VERSION = "truth-harness.model-context.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let modelContextSchemaCache: Promise<unknown> | undefined;
 
 export type ModelContextTarget = (typeof MODEL_CONTEXT_TARGETS)[number];
 export type ModelContextApprovalStatus = (typeof MODEL_CONTEXT_APPROVAL_STATUSES)[number];
@@ -209,25 +206,11 @@ export async function writeModelContext(input: CreateModelContextInput): Promise
 }
 
 async function assertModelContextSchema(packet: ModelContextPacket): Promise<void> {
-  const schema = await loadModelContextSchema();
-  const serializedPacket = parseJsonWithOptionalBom(JSON.stringify(packet));
-  const issues = validateJsonSchema(serializedPacket, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Model context packet failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadModelContextSchema(): Promise<unknown> {
-  modelContextSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "model-context.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return modelContextSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: packet,
+    schemaFile: "model-context.schema.json",
+    artifactName: "Model context packet"
+  });
 }
 
 export async function listModelContexts(rootPath: string): Promise<ModelContextPacket[]> {

@@ -1,6 +1,5 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import {
   expectArray,
   expectConst,
@@ -17,19 +16,17 @@ import {
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { createReceipt, type CreateReceiptOptions } from "./receipt.js";
 import { parseReceiptJson } from "./receipt-validation.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { parseSmtCheckRecord } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
 import type { Receipt, ReceiptEvidenceProfile, TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 const VERIFIER_ROUTE_SCHEMA_VERSION = "truth-harness.verifier-route.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let verifierRouteSchemaCache: Promise<unknown> | undefined;
 
 export type VerifierRouteStatus = "verified" | "refuted" | "unverified";
 export type VerifierRouteStepStatus = "used" | "blocked" | "planned";
@@ -369,25 +366,11 @@ export async function writeVerifierRoute(input: WriteVerifierRouteInput): Promis
 }
 
 async function assertVerifierRouteSchema(route: VerifierRoute): Promise<void> {
-  const schema = await loadVerifierRouteSchema();
-  const serializedRoute = parseJsonWithOptionalBom(JSON.stringify(route));
-  const issues = validateJsonSchema(serializedRoute, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Verifier route failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadVerifierRouteSchema(): Promise<unknown> {
-  verifierRouteSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "verifier-route.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return verifierRouteSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: route,
+    schemaFile: "verifier-route.schema.json",
+    artifactName: "Verifier route"
+  });
 }
 
 export async function listVerifierRoutes(rootPath: string): Promise<VerifierRouteSummary[]> {
