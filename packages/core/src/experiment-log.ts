@@ -1,10 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -112,8 +111,6 @@ export interface ExperimentLogWriteResult {
 }
 
 const EXPERIMENT_SCHEMA_VERSION = "truth-harness.experiment.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let experimentSchemaCache: Promise<unknown> | undefined;
 
 export function isExperimentKind(value: string): value is ExperimentKind {
   return (EXPERIMENT_KINDS as readonly string[]).includes(value);
@@ -196,25 +193,11 @@ export async function createExperimentLogEntry(input: CreateExperimentLogInput):
 }
 
 async function assertExperimentSchema(entry: ExperimentLogEntry): Promise<void> {
-  const schema = await loadExperimentSchema();
-  const serializedEntry = parseJsonWithOptionalBom(JSON.stringify(entry));
-  const issues = validateJsonSchema(serializedEntry, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Experiment log entry failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadExperimentSchema(): Promise<unknown> {
-  experimentSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "experiment-log.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return experimentSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: entry,
+    schemaFile: "experiment-log.schema.json",
+    artifactName: "Experiment log entry"
+  });
 }
 
 export async function listExperimentLogEntries(rootPath: string): Promise<ExperimentLogEntry[]> {

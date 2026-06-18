@@ -1,10 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -139,8 +138,6 @@ export interface ExpertReviewWriteResult {
 }
 
 const EXPERT_REVIEW_SCHEMA_VERSION = "truth-harness.expert-review.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let expertReviewSchemaCache: Promise<unknown> | undefined;
 
 export function isExpertReviewKind(value: string): value is ExpertReviewKind {
   return (EXPERT_REVIEW_KINDS as readonly string[]).includes(value);
@@ -236,25 +233,11 @@ export async function writeExpertReview(input: CreateExpertReviewInput): Promise
 }
 
 async function assertExpertReviewSchema(review: ExpertReviewRecord): Promise<void> {
-  const schema = await loadExpertReviewSchema();
-  const serializedReview = parseJsonWithOptionalBom(JSON.stringify(review));
-  const issues = validateJsonSchema(serializedReview, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Expert review record failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadExpertReviewSchema(): Promise<unknown> {
-  expertReviewSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "expert-review.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return expertReviewSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: review,
+    schemaFile: "expert-review.schema.json",
+    artifactName: "Expert review record"
+  });
 }
 
 export async function listExpertReviews(rootPath: string): Promise<ExpertReviewRecord[]> {

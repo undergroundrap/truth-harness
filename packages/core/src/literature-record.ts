@@ -1,10 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -122,8 +121,6 @@ export interface LiteratureRecordWriteResult {
 }
 
 const LITERATURE_RECORD_SCHEMA_VERSION = "truth-harness.literature.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let literatureRecordSchemaCache: Promise<unknown> | undefined;
 
 export function isLiteratureRecordKind(value: string): value is LiteratureRecordKind {
   return (LITERATURE_RECORD_KINDS as readonly string[]).includes(value);
@@ -230,25 +227,11 @@ export async function writeLiteratureRecord(input: CreateLiteratureRecordInput):
 }
 
 async function assertLiteratureRecordSchema(record: LiteratureRecord): Promise<void> {
-  const schema = await loadLiteratureRecordSchema();
-  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
-  const issues = validateJsonSchema(serializedRecord, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Literature record failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadLiteratureRecordSchema(): Promise<unknown> {
-  literatureRecordSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "literature-record.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return literatureRecordSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: record,
+    schemaFile: "literature-record.schema.json",
+    artifactName: "Literature record"
+  });
 }
 
 export async function listLiteratureRecords(rootPath: string): Promise<LiteratureRecord[]> {
