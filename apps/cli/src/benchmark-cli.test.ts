@@ -404,6 +404,66 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.provedRequiresAcceptedProofCheckerRun).toBe(true);
   });
 
+  it("prints engine readiness without upgrading status probes into evidence", async () => {
+    const result = await runCli([
+      "engines",
+      "readiness",
+      "--json",
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--sage-command",
+      "truth-harness-missing-sage-command",
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
+      "--cvc5-command",
+      "truth-harness-missing-cvc5-command"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      schemaVersion: string;
+      status: string;
+      summary: { readyClaimClasses: number; readyTrustLabels: string[]; missingExternalEngines: string[] };
+      gates: Array<{ id: string; status: string; missingClaimClasses: string[] }>;
+      claimClasses: Array<{ id: string; status: string; targetTrust: string; missingCapabilityIds: string[] }>;
+      trustBoundary: { readinessDoesNotMintEvidence: boolean; provedRequiresAcceptedProofCheckerRun: boolean };
+    };
+
+    expect(result.exitCode).toBe(0);
+    expect(json.schemaVersion).toBe("truth-harness.engine-readiness.v0");
+    expect(json.status).toBe("research-core-ready");
+    expect(json.summary.readyClaimClasses).toBeGreaterThan(0);
+    expect(json.summary.readyTrustLabels).toEqual(expect.arrayContaining(["exact-computed", "refuted"]));
+    expect(json.summary.missingExternalEngines).toEqual(
+      expect.arrayContaining(["Maxima independent CAS", "Lean proof checker", "Z3 SMT solver"])
+    );
+    expect(json.gates).toContainEqual(
+      expect.objectContaining({
+        id: "math-core",
+        status: "ready"
+      })
+    );
+    expect(json.gates).toContainEqual(
+      expect.objectContaining({
+        id: "professor-review",
+        status: "blocked",
+        missingClaimClasses: ["independent-cas-cross-check", "smt-constraint-check", "accepted-proof-checking"]
+      })
+    );
+    expect(json.claimClasses).toContainEqual(
+      expect.objectContaining({
+        id: "accepted-proof-checking",
+        status: "blocked",
+        targetTrust: "proved",
+        missingCapabilityIds: ["lean-proof-checker"]
+      })
+    );
+    expect(json.trustBoundary.readinessDoesNotMintEvidence).toBe(true);
+    expect(json.trustBoundary.provedRequiresAcceptedProofCheckerRun).toBe(true);
+  });
+
   it("writes and lists engine evidence runs from the CLI", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);

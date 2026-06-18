@@ -260,6 +260,10 @@ export { renderGraphvizVisualArtifact, renderPlotlyVisualArtifact } from "./visu
 export { runWorkspaceStress } from "./workspace-stress.js";
 export { getEngineManifest } from "./engine-manifest.js";
 export {
+  createEngineReadinessReport,
+  createEngineReadinessReportFromManifest
+} from "./engine-readiness.js";
+export {
   createEngineVerificationRunRecord,
   engineVerificationCaseEvidenceMeaning,
   engineVerificationCaseEvidenceTier,
@@ -711,6 +715,13 @@ export type {
   EngineManifest,
   EngineManifestOptions
 } from "./engine-manifest.js";
+export type {
+  EngineReadinessClaimClass,
+  EngineReadinessGate,
+  EngineReadinessGateStatus,
+  EngineReadinessReport,
+  EngineReadinessStatus
+} from "./engine-readiness.js";
 export type {
   EngineVerificationCase,
   EngineVerificationCaseId,

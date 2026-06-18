@@ -53,6 +53,7 @@ docker compose run --rm truth-harness npm run cli -- bench run packages/benchmar
 docker compose run --rm truth-harness npm run cli -- workspace credibility-pack . -- --require-docker-core
 docker compose run --rm truth-harness npm run cli -- ask "symbolic simplify sin(x)^2 + cos(x)^2"
 docker compose run --rm truth-harness npm run cli -- cas backends
+docker compose run --rm truth-harness npm run cli -- engines readiness
 docker compose run --rm truth-harness npm run cli -- cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write
 docker compose run --rm sage-math
 docker compose run --rm truth-harness npm run cli -- smt backends
@@ -124,6 +125,9 @@ npm run cli -- proof check docs/examples/trivial.lean
 npm run cli -- proof check docs/examples/trivial.lean --write
 npm run cli -- proof list
 npm run cli -- proof visual <proof_check_id>
+npm run engines:readiness
+npm run cli -- engines verify
+npm run engines:verify:all
 npm run cli -- smt backends
 npm run cli -- smt check docs/examples/constraints.smt2
 npm run cli -- smt check docs/examples/constraints.smt2 -- --backend cvc5
@@ -156,7 +160,7 @@ The first web surface lives at [apps/web](apps/web). It is a local workbench she
 
 The web inspector also calls localhost `/api/status` to show safety and verification-engine readiness. It reports the measured code-run sandbox boundary plus local Maxima, SageMath, Lean, Z3, and cvc5 availability probes. These probes are readiness checks only: they never mint `cross-checked`, `smt-checked`, or `proved` by themselves. Those labels still require a concrete replayable CAS agreement run, SMT solver run, or accepted Lean proof-check artifact. The Checks tab mirrors the strict local release gate through `/api/release-audit`, showing validation status, catalog freshness, required engine evidence with gate-by-gate reviewer meanings, saved strict engine-run posture, saved adversarial benchmark posture, saved report draft integrity, research-session continuity, review blockers, sandbox state, replayable commands, and next blocking actions without running Docker or external services from the browser.
 
-The engine manifest also exposes the agent contract for future high-performance work: determinism class, primitive semantics, replay requirements, drift risks, and stable JSON diagnostics for each capability. `truth-harness engines verify --json` is the companion evidence report for agents: it records which concrete engine checks earned scoped labels and which gates failed closed. `npm run engines:verify:all` is the local strict reviewer shortcut for the full Maxima/Z3/cvc5/Lean/Sage gate. That is the bridge from today's exact math receipts to later Rust kernels, rigorous numerics, simulation records, and differential-fuzzing oracles without pretending stochastic output or AI-generated code is truth by itself.
+The engine manifest also exposes the agent contract for future high-performance work: determinism class, primitive semantics, replay requirements, drift risks, and stable JSON diagnostics for each capability. `npm run engines:readiness` is the reviewer-facing summary of what this installation can responsibly support today: built-in research-core labels, blocked professor-review labels, missing external engines, agent-autonomy safety gates, and planned-but-not-trusted adapters. Readiness never mints evidence. `truth-harness engines verify --json` is the companion evidence report for agents: it records which concrete engine checks earned scoped labels and which gates failed closed. `npm run engines:verify:all` is the local strict reviewer shortcut for the full Maxima/Z3/cvc5/Lean/Sage gate. That is the bridge from today's exact math receipts to later Rust kernels, rigorous numerics, simulation records, and differential-fuzzing oracles without pretending stochastic output or AI-generated code is truth by itself.
 
 The Docker image installs Maxima through Debian's ECL-backed `maxima-sage` package and Z3 so the containerized web UI and CLI can show real CAS/SMT readiness without changing the host machine. `npm run docker:proof` uses `proof:launch:engines`, which runs the standard launch proof suite, requires a concrete Maxima CAS agreement for `sin(x)^2 + cos(x)^2 = 1`, and then requires `docs/examples/constraints.smt2` to return a concrete `smt-checked` result through Z3. `npm run docker:engines` is the smaller engine evidence smoke: it builds the dev image, then runs `truth-harness engines verify --require-maxima --require-z3` inside an image-pure no-network compose service so stale bind-mounted dependency volumes cannot affect the result. Full SageMath is intentionally kept out of the default dev image because it is large; use `docker compose run --rm sage-math` or `npm run docker:sage` when a reviewer wants the heavier pinned Sage CAS gate. Lean is also separate; configure `TRUTH_HARNESS_LEAN`, or use the `lean-proof` Docker target/service for the pinned fixture. `docker compose run --rm lean-proof` builds an image with Lean `leanprover/lean4:v4.12.0`, then checks `docs/examples/lean-fixture` with no runtime network; `docker compose run --rm lean-proof npm run cli -- engines verify --require-lean` runs the same fixture through the engine evidence report. See [docs/LEAN_PROOF_LANE.md](docs/LEAN_PROOF_LANE.md) for the Lean/Lake/mathlib path.
 

@@ -22,6 +22,7 @@ import {
   createExperimentLogEntry,
   createExternalDisclosureLogEntry,
   createInventionLogEntry,
+  createEngineReadinessReport,
   createModelContext,
   createNotebookRun,
   createReceipt,
@@ -189,6 +190,7 @@ import {
   type WorkspaceEventListResult,
   type CodeRunSummary,
   type EngineManifest,
+  type EngineReadinessReport,
   type EngineVerificationReport,
   type EngineVerificationRequirements,
   type EngineVerificationRunSummary,
@@ -4257,6 +4259,59 @@ const engines = program
   );
 
 engines
+  .command("readiness")
+  .description("Summarize which trust labels this local installation can responsibly support today.")
+  .option("--json", "Print the full engine readiness JSON")
+  .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 1500)
+  .option("--maxima-command <command>", "Override Maxima executable for this probe")
+  .option("--sage-command <command>", "Override SageMath executable for this probe")
+  .option("--lean-command <command>", "Override Lean executable for this probe")
+  .option("--z3-command <command>", "Override Z3 executable for this probe")
+  .option("--cvc5-command <command>", "Override cvc5 executable for this probe")
+  .action(
+    (options: {
+      json?: boolean;
+      timeoutMs: number;
+      maximaCommand?: string;
+      sageCommand?: string;
+      leanCommand?: string;
+      z3Command?: string;
+      cvc5Command?: string;
+    }, command: Command) => {
+      const parentOptions = engines.opts<{
+        json?: boolean;
+        timeoutMs?: number;
+        maximaCommand?: string;
+        sageCommand?: string;
+        leanCommand?: string;
+        z3Command?: string;
+        cvc5Command?: string;
+      }>();
+      const report = createEngineReadinessReport({
+        timeoutMs:
+          command.getOptionValueSource("timeoutMs") === "default" &&
+          engines.getOptionValueSource("timeoutMs") !== "default" &&
+          parentOptions.timeoutMs !== undefined
+            ? parentOptions.timeoutMs
+            : options.timeoutMs,
+        maximaCommand: options.maximaCommand ?? parentCliStringOption("maximaCommand", parentOptions.maximaCommand),
+        sageCommand: options.sageCommand ?? parentCliStringOption("sageCommand", parentOptions.sageCommand),
+        leanCommand: options.leanCommand ?? parentCliStringOption("leanCommand", parentOptions.leanCommand),
+        z3Command: options.z3Command ?? parentCliStringOption("z3Command", parentOptions.z3Command),
+        cvc5Command: options.cvc5Command ?? parentCliStringOption("cvc5Command", parentOptions.cvc5Command)
+      });
+      const json = Boolean(options.json || parentOptions.json);
+
+      if (json) {
+        printJson(report);
+        return;
+      }
+
+      printEngineReadinessReport(report);
+    }
+  );
+
+engines
   .command("verify")
   .description("Run concrete local engine evidence checks without minting fake trust.")
   .option("--json", "Print the full engine verification JSON")
@@ -5247,6 +5302,86 @@ function printEngineManifest(manifest: EngineManifest): void {
     for (const warning of manifest.warnings) {
       console.log(`  ${warning}`);
     }
+  }
+}
+
+function printEngineReadinessReport(report: EngineReadinessReport): void {
+  console.log("Truth Harness engine readiness");
+  console.log(`Status: ${report.status}`);
+  console.log(`Manifest: ${report.manifestStatus}`);
+  console.log(`Claim classes: ${report.summary.readyClaimClasses}/${report.summary.totalClaimClasses} ready`);
+  console.log(`Capabilities: ${report.summary.readyCapabilities}/${report.summary.totalCapabilities} ready`);
+  console.log(
+    `Trust labels ready today: ${
+      report.summary.readyTrustLabels.length > 0 ? report.summary.readyTrustLabels.join(", ") : "none"
+    }`
+  );
+  console.log(`Network: ${report.networkAccess}`);
+
+  console.log("");
+  console.log("Readiness gates:");
+  for (const gate of report.gates) {
+    const marker = gate.status === "ready" ? "READY" : "BLOCKED";
+    console.log(`  [${marker}] ${gate.title}`);
+    console.log(`    ${gate.summary}`);
+    if (gate.missingClaimClasses.length > 0) {
+      console.log(`    Missing: ${gate.missingClaimClasses.join(", ")}`);
+    }
+  }
+
+  console.log("");
+  console.log("Claim support:");
+  for (const claimClass of report.claimClasses) {
+    const marker = readinessMarker(claimClass.status);
+    console.log(`  [${marker}] ${claimClass.displayName}`);
+    console.log(`    Lane: ${claimClass.lane}; trust: ${claimClass.targetTrust}; support: ${claimClass.supportKind}`);
+    console.log(`    Evidence rule: ${claimClass.evidenceRule}`);
+    if (claimClass.readyCapabilityIds.length > 0) {
+      console.log(`    Ready capabilities: ${claimClass.readyCapabilityIds.join(", ")}`);
+    }
+    if (claimClass.missingCapabilityIds.length > 0) {
+      console.log(`    Missing capabilities: ${claimClass.missingCapabilityIds.join(", ")}`);
+    }
+    if (claimClass.recommendedCommand) {
+      console.log(`    Command: ${claimClass.recommendedCommand}`);
+    }
+  }
+
+  console.log("");
+  console.log("Trust boundary:");
+  console.log("  Readiness does not mint evidence.");
+  console.log("  AI output is not evidence.");
+  console.log("  `proved` requires an accepted proof-checker run.");
+  console.log("  Professor-ready claims require concrete engine runs, not status probes.");
+  console.log("  Hard science and engineering claims still require domain validation.");
+
+  if (report.recommendedNextActions.length > 0) {
+    console.log("");
+    console.log("Recommended next actions:");
+    for (const action of report.recommendedNextActions) {
+      console.log(`  ${action}`);
+    }
+  }
+
+  if (report.warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const warning of report.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function readinessMarker(status: EngineReadinessReport["claimClasses"][number]["status"]): string {
+  switch (status) {
+    case "ready":
+      return "READY";
+    case "degraded":
+      return "PARTIAL";
+    case "planned":
+      return "PLAN";
+    case "blocked":
+      return "BLOCK";
   }
 }
 
