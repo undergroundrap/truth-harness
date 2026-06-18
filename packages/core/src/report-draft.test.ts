@@ -56,6 +56,26 @@ describe("saved report drafts", () => {
     expect(read.report.warnings).toEqual(written.report.warnings);
   });
 
+  it("validates report draft JSON before writing sidecars", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+
+    await expect(
+      writeReportDraft({
+        rootPath: root,
+        title: "Invalid timestamp draft",
+        markdown: "# Invalid timestamp draft\n",
+        now: "not-a-date"
+      })
+    ).rejects.toMatchObject({
+      name: "ReportDraftError",
+      status: 500,
+      message: expect.stringContaining("$.createdAt must be a valid date-time string")
+    });
+
+    await expect(listReportDrafts({ rootPath: root })).resolves.toEqual([]);
+  });
+
   it("keeps tampered Markdown readable but marks the draft unverified", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
