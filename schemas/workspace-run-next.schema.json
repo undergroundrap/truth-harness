@@ -146,6 +146,29 @@
       },
       "additionalProperties": false
     },
+    "sourceSnapshot": {
+      "type": "object",
+      "required": ["snapshotId", "path", "totalFiles", "totalBytes"],
+      "properties": {
+        "snapshotId": {
+          "type": "string",
+          "pattern": "^snap_[a-f0-9]{16}$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "totalFiles": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
     "stopConditions": {
       "$ref": "#/$defs/stringArray"
     },

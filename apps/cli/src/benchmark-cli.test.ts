@@ -1825,7 +1825,12 @@ describe("benchmark CLI", () => {
     };
     const writtenDryRunPayload = JSON.parse(writtenDryRun.stdout) as {
       written: boolean;
-      plan: { schemaVersion: string; planId: string; dryRun: boolean };
+      plan: {
+        schemaVersion: string;
+        planId: string;
+        dryRun: boolean;
+        sourceSnapshot?: { snapshotId: string; path: string };
+      };
       result: { jsonPath: string; markdownPath: string; markdown: string };
     };
     const human = await runCli([
@@ -1868,7 +1873,11 @@ describe("benchmark CLI", () => {
     expect(writtenDryRunPayload.written).toBe(true);
     expect(writtenDryRunPayload.plan).toMatchObject({
       schemaVersion: "truth-harness.workspace-run-next.v0",
-      dryRun: true
+      dryRun: true,
+      sourceSnapshot: {
+        snapshotId: expect.stringMatching(/^snap_[a-f0-9]{16}$/u),
+        path: expect.stringContaining(".truth-harness/snapshots/")
+      }
     });
     expect(writtenDryRunPayload.result.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
     expect(writtenDryRunPayload.result.markdownPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
@@ -1886,6 +1895,8 @@ describe("benchmark CLI", () => {
         rationaleTarget?: string;
         rationaleSource?: string;
         rationaleExecutionBoundary?: string;
+        sourceSnapshotId?: string;
+        sourceSnapshotPath?: string;
       }>;
     };
     const listedPlan = planListPayload.plans.find((plan) => plan.planId === writtenDryRunPayload.plan.planId);
@@ -1898,12 +1909,15 @@ describe("benchmark CLI", () => {
       executionKind: "dry-run",
       rationaleTarget: writtenClaim.claim.claimId,
       rationaleSource: "claim-blocker / high",
-      rationaleExecutionBoundary: expect.stringContaining("Dry-run only")
+      rationaleExecutionBoundary: expect.stringContaining("Dry-run only"),
+      sourceSnapshotId: writtenDryRunPayload.plan.sourceSnapshot?.snapshotId,
+      sourceSnapshotPath: writtenDryRunPayload.plan.sourceSnapshot?.path
     });
     expect(humanList.exitCode).toBe(0);
     expect(humanList.stdout).toContain(`Target: ${writtenClaim.claim.claimId}`);
     expect(humanList.stdout).toContain("Source: claim-blocker / high");
     expect(humanList.stdout).toContain("Boundary: Dry-run only");
+    expect(humanList.stdout).toContain(`Source snapshot: ${writtenDryRunPayload.plan.sourceSnapshot?.snapshotId}`);
     const shownById = await runCli([
       "workspace",
       "show-run-next",

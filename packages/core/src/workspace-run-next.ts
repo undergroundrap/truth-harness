@@ -39,6 +39,7 @@ import {
   type VerifierRouteEvidenceRef
 } from "./verifier-route.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
+import { writeWorkspaceSnapshot } from "./workspace-snapshot.js";
 import type { WorkspaceReview, WorkspaceReviewItem } from "./workspace-review.js";
 
 export type WorkspaceRunNextStatus = "planned" | "executed" | "blocked";
@@ -49,6 +50,13 @@ export interface WorkspaceRunNextWriteResult {
   jsonPath: string;
   markdownPath: string;
   markdown: string;
+}
+
+export interface WorkspaceRunNextSourceSnapshot {
+  snapshotId: string;
+  path: string;
+  totalFiles: number;
+  totalBytes: number;
 }
 
 export interface WorkspaceRunNextSummary {
@@ -71,6 +79,10 @@ export interface WorkspaceRunNextSummary {
   rationaleSource?: string;
   rationaleCandidateEvidenceRef?: string;
   rationaleExecutionBoundary?: string;
+  sourceSnapshotId?: string;
+  sourceSnapshotPath?: string;
+  sourceSnapshotFiles?: number;
+  sourceSnapshotBytes?: number;
 }
 
 export interface WorkspaceRunNextRationale {
@@ -121,6 +133,7 @@ export interface WorkspaceRunNextPlan {
     result?: unknown;
   };
   rationale?: WorkspaceRunNextRationale;
+  sourceSnapshot?: WorkspaceRunNextSourceSnapshot;
   stopConditions: string[];
   warnings: string[];
 }
@@ -274,9 +287,23 @@ export async function writeWorkspaceRunNextPlan(input: {
   plan: WorkspaceRunNextPlan;
 }): Promise<WorkspaceRunNextWriteResult> {
   const status = await requireRunNextWorkspace(input.rootPath);
-  const plan: WorkspaceRunNextPlan = {
+  const basePlan: WorkspaceRunNextPlan = {
     ...input.plan,
     workspacePath: status.root
+  };
+  await assertWorkspaceRunNextPlanSchema(basePlan);
+  const snapshot = await writeWorkspaceSnapshot({
+    rootPath: status.root,
+    now: input.plan.createdAt
+  });
+  const plan: WorkspaceRunNextPlan = {
+    ...basePlan,
+    sourceSnapshot: {
+      snapshotId: snapshot.snapshot.snapshotId,
+      path: toPortablePath(relative(status.root, snapshot.path)),
+      totalFiles: snapshot.snapshot.summary.totalFiles,
+      totalBytes: snapshot.snapshot.summary.totalBytes
+    }
   };
   await assertWorkspaceRunNextPlanSchema(plan);
   const findingsDir = resolve(status.root, status.manifest.directories.findings);
@@ -399,6 +426,9 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
     `| Plan | \`${plan.planId}\` |`,
     `| Review | \`${plan.reviewId}\` |`,
     `| Created | ${escapeMarkdownTable(plan.createdAt)} |`,
+    ...(plan.sourceSnapshot
+      ? [`| Source snapshot | \`${plan.sourceSnapshot.snapshotId}\` (${escapeMarkdownTable(plan.sourceSnapshot.path)}) |`]
+      : []),
     `| Local only | \`${String(plan.localOnly)}\` |`,
     `| Network | \`${plan.networkAccess}\` |`,
     `| Dry run | \`${String(plan.dryRun)}\` |`,
@@ -543,7 +573,11 @@ function summarizeWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan, path: string)
     rationaleTarget: rationale.target,
     rationaleSource: rationale.source,
     rationaleCandidateEvidenceRef: rationale.candidateEvidenceRef,
-    rationaleExecutionBoundary: rationale.executionBoundary
+    rationaleExecutionBoundary: rationale.executionBoundary,
+    sourceSnapshotId: plan.sourceSnapshot?.snapshotId,
+    sourceSnapshotPath: plan.sourceSnapshot?.path,
+    sourceSnapshotFiles: plan.sourceSnapshot?.totalFiles,
+    sourceSnapshotBytes: plan.sourceSnapshot?.totalBytes
   };
 }
 

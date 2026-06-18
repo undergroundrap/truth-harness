@@ -575,7 +575,16 @@ describe("Truth Harness MCP server", () => {
         name: "truth_harness_workspace_snapshot_list",
         arguments: {}
       });
-      expect(firstText(snapshotListResult.content)).toContain("\"total\": 1");
+      const snapshotListPayload = JSON.parse(firstText(snapshotListResult.content)) as {
+        total: number;
+        snapshots: Array<{ snapshotId: string }>;
+      };
+      expect(snapshotListPayload.total).toBeGreaterThanOrEqual(1);
+      expect(snapshotListPayload.snapshots).toContainEqual(
+        expect.objectContaining({
+          snapshotId: JSON.parse(snapshotText).snapshot.snapshotId
+        })
+      );
 
       const snapshotVerifyResult = await client.callTool({
         name: "truth_harness_workspace_snapshot_verify",

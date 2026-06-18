@@ -3710,11 +3710,12 @@ workspace
             plan
           })
         : undefined;
+      const outputPlan = writeResult?.plan ?? plan;
 
       if (options.json) {
-        printJson(writeResult ? { plan, written: true, result: writeResult } : plan);
+        printJson(writeResult ? { plan: outputPlan, written: true, result: writeResult } : outputPlan);
       } else {
-        printWorkspaceRunNextPlan(plan);
+        printWorkspaceRunNextPlan(outputPlan);
         if (writeResult) {
           console.log("");
           console.log("Written:");
@@ -7322,6 +7323,9 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
   console.log(`Status: ${plan.status}`);
   console.log(`Dry run: ${String(plan.dryRun)}`);
   console.log(`Network: ${plan.networkAccess}`);
+  if (plan.sourceSnapshot) {
+    console.log(`Source snapshot: ${plan.sourceSnapshot.snapshotId} (${plan.sourceSnapshot.path})`);
+  }
 
   if (plan.item) {
     console.log("");
@@ -7429,6 +7433,11 @@ function printWorkspaceRunNextList(plans: WorkspaceRunNextSummary[]): void {
     }
     if (plan.rationaleExecutionBoundary) {
       console.log(`  Boundary: ${plan.rationaleExecutionBoundary}`);
+    }
+    if (plan.sourceSnapshotId) {
+      console.log(
+        `  Source snapshot: ${plan.sourceSnapshotId}${plan.sourceSnapshotPath ? ` (${plan.sourceSnapshotPath})` : ""}`
+      );
     }
   }
 }

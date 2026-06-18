@@ -10,6 +10,7 @@ import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./pro
 import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, readResearchSession, writeResearchHarness } from "./research-session.js";
 import { listValidationPlans } from "./validation-plan.js";
+import { listWorkspaceSnapshots } from "./workspace-snapshot.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import {
   createWorkspaceReviewFromCredibilityPack,
@@ -760,6 +761,7 @@ describe("workspace run-next", () => {
       planId?: string;
       dryRun?: boolean;
       rationale?: { target?: string; candidateEvidenceRef?: string; executionBoundary?: string };
+      sourceSnapshot?: { snapshotId?: string; path?: string; totalFiles?: number; totalBytes?: number };
     };
     expect(parsed).toMatchObject({
       schemaVersion: "truth-harness.workspace-run-next.v0",
@@ -771,6 +773,19 @@ describe("workspace run-next", () => {
       }
     });
     expect(parsed.rationale?.executionBoundary).toContain("Dry-run only");
+    expect(parsed.sourceSnapshot).toMatchObject({
+      snapshotId: expect.stringMatching(/^snap_[a-f0-9]{16}$/u),
+      path: expect.stringContaining(".truth-harness/snapshots/"),
+      totalFiles: expect.any(Number),
+      totalBytes: expect.any(Number)
+    });
+    const snapshots = await listWorkspaceSnapshots(root);
+    expect(snapshots).toContainEqual(
+      expect.objectContaining({
+        snapshotId: parsed.sourceSnapshot?.snapshotId,
+        path: parsed.sourceSnapshot?.path
+      })
+    );
     const list = await listWorkspaceRunNextPlans(root);
     expect(list).toContainEqual(
       expect.objectContaining({
@@ -780,7 +795,9 @@ describe("workspace run-next", () => {
         executionKind: "dry-run",
         rationaleTarget: "validation proof gate_proof_run_next_test",
         rationaleCandidateEvidenceRef: "proof:.truth-harness/proofs/candidate.json",
-        rationaleExecutionBoundary: expect.stringContaining("Dry-run only")
+        rationaleExecutionBoundary: expect.stringContaining("Dry-run only"),
+        sourceSnapshotId: parsed.sourceSnapshot?.snapshotId,
+        sourceSnapshotPath: parsed.sourceSnapshot?.path
       })
     );
     expect(await readWorkspaceRunNextPlan(root, result.plan.planId)).toMatchObject({
