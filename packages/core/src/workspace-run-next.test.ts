@@ -7,6 +7,7 @@ import { createCredibilityPack } from "./credibility-pack.js";
 import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeReportDraft } from "./report-draft.js";
+import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import {
   createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
@@ -306,6 +307,17 @@ describe("workspace run-next", () => {
     expect(await readWorkspaceRunNextPlan(root, list[0]?.path ?? "")).toMatchObject({
       planId: result.plan.planId
     });
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+    expect(validation.passed).toBe(true);
+    expect(validation.artifacts).toContainEqual(
+      expect.objectContaining({
+        kind: "findings",
+        artifactId: result.plan.planId,
+        schemaVersion: "truth-harness.workspace-run-next.v0",
+        expectedSchemaVersion: "truth-harness.workspace-run-next.v0",
+        issueCodes: []
+      })
+    );
     const events = await listWorkspaceEvents(root, 10);
     expect(events.events).toContainEqual(
       expect.objectContaining({
@@ -314,6 +326,20 @@ describe("workspace run-next", () => {
         artifactId: result.plan.planId,
         localOnly: true,
         networkAccess: "none"
+      })
+    );
+
+    const tamperedPlan = JSON.parse(await readFile(result.jsonPath, "utf8")) as Record<string, unknown>;
+    tamperedPlan.localOnly = false;
+    await writeFile(result.jsonPath, `${JSON.stringify(tamperedPlan, null, 2)}\n`, "utf8");
+    const tamperedValidation = await validateWorkspaceArtifacts({ rootPath: root });
+    expect(tamperedValidation.passed).toBe(false);
+    expect(tamperedValidation.artifacts).toContainEqual(
+      expect.objectContaining({
+        kind: "findings",
+        artifactId: result.plan.planId,
+        schemaVersion: "truth-harness.workspace-run-next.v0",
+        issueCodes: expect.arrayContaining(["invalid-artifact-schema"])
       })
     );
   });

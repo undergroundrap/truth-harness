@@ -297,6 +297,16 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
     kind: "findings",
     knownVariants: [
       {
+        schemaVersion: "truth-harness.workspace-review.v0",
+        schemaFile: "workspace-review.schema.json",
+        idKey: "reviewId"
+      },
+      {
+        schemaVersion: "truth-harness.workspace-run-next.v0",
+        schemaFile: "workspace-run-next.schema.json",
+        idKey: "planId"
+      },
+      {
         schemaVersion: "truth-harness.credibility-pack.v0",
         schemaFile: "credibility-pack.schema.json",
         idKey: "packId"

@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/workspace-run-next.schema.json",
+  "title": "Truth Harness Workspace Run-Next Plan",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "planId",
+    "createdAt",
+    "workspacePath",
+    "localOnly",
+    "networkAccess",
+    "dryRun",
+    "status",
+    "mode",
+    "reviewId",
+    "execution",
+    "stopConditions",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.workspace-run-next.v0"
+    },
+    "planId": {
+      "type": "string",
+      "pattern": "^wrn_[a-f0-9]{8}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "workspacePath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "mode": {
+      "enum": ["idle", "local-verifier-loop", "human-review-gated"]
+    },
+    "reviewId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "item": {
+      "type": "object",
+      "required": ["itemId", "kind", "priority", "title", "summary", "command"],
+      "properties": {
+        "itemId": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": [
+            "route-obligation",
+            "route-ready-claim",
+            "claim-blocker",
+            "report-draft-review",
+            "session-task",
+            "session-next-check",
+            "credibility-action"
+          ]
+        },
+        "priority": {
+          "enum": ["critical", "high", "medium", "low"]
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "command": { "type": "string", "minLength": 1 },
+        "routeId": { "type": "string" },
+        "obligationId": { "type": "string" },
+        "obligationKind": { "type": "string" },
+        "claimId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "reportId": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": "object",
+      "required": ["status", "kind", "summary"],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "command": {
+          "type": "string"
+        },
+        "evidenceRef": {
+          "type": "string"
+        },
+        "attached": {
+          "type": "boolean"
+        },
+        "result": {
+          "type": ["object", "array", "string", "number", "boolean", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "stopConditions": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "status": {
+      "enum": ["planned", "executed", "blocked"]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

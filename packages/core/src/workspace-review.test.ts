@@ -548,7 +548,8 @@ describe("workspace review", () => {
     const reviews = await listWorkspaceReviews(root);
     const shownById = await readWorkspaceReview(root, result.review.reviewId);
     const shownByPath = await readWorkspaceReview(root, result.jsonPath);
-    const stored = JSON.parse(await readFile(result.jsonPath, "utf8")) as { schemaVersion: string; reviewId: string };
+    const originalReviewJson = await readFile(result.jsonPath, "utf8");
+    const stored = JSON.parse(originalReviewJson) as { schemaVersion: string; reviewId: string };
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
     expect(result.review.reviewId).toMatch(/^wrev_[a-f0-9]{16}$/u);
@@ -567,6 +568,29 @@ describe("workspace review", () => {
     expect(shownByPath.reviewId).toBe(result.review.reviewId);
     expect(result.markdown).toContain(`| Review | \`${result.review.reviewId}\` |`);
     expect(validation.passed).toBe(true);
+    expect(validation.artifacts).toContainEqual(
+      expect.objectContaining({
+        kind: "findings",
+        artifactId: result.review.reviewId,
+        schemaVersion: "truth-harness.workspace-review.v0",
+        expectedSchemaVersion: "truth-harness.workspace-review.v0",
+        issueCodes: []
+      })
+    );
+
+    const tamperedReview = JSON.parse(originalReviewJson) as Record<string, unknown>;
+    tamperedReview.networkAccess = "optional";
+    await writeFile(result.jsonPath, `${JSON.stringify(tamperedReview, null, 2)}\n`, "utf8");
+    const tamperedValidation = await validateWorkspaceArtifacts({ rootPath: root });
+    expect(tamperedValidation.passed).toBe(false);
+    expect(tamperedValidation.artifacts).toContainEqual(
+      expect.objectContaining({
+        kind: "findings",
+        artifactId: result.review.reviewId,
+        schemaVersion: "truth-harness.workspace-review.v0",
+        issueCodes: expect.arrayContaining(["invalid-artifact-schema"])
+      })
+    );
   });
 });
 

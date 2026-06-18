@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/workspace-review.schema.json",
+  "title": "Truth Harness Workspace Review",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "reviewId",
+    "projectId",
+    "createdAt",
+    "workspacePath",
+    "localOnly",
+    "networkAccess",
+    "privacy",
+    "summary",
+    "autonomy",
+    "items",
+    "warnings",
+    "markdown"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.workspace-review.v0"
+    },
+    "reviewId": {
+      "type": "string",
+      "pattern": "^wrev_[a-f0-9]{16}$"
+    },
+    "projectId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "workspacePath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "routes",
+        "claims",
+        "sessions",
+        "reportDrafts",
+        "totalItems",
+        "routeObligations",
+        "readyRoutesWithoutClaims",
+        "blockedClaims",
+        "reportDraftReviewItems",
+        "reportDraftsNeedingAttention",
+        "sessionTasks",
+        "sessionNextChecks",
+        "criticalItems",
+        "highItems",
+        "mediumItems",
+        "lowItems"
+      ],
+      "properties": {
+        "routes": { "type": "integer", "minimum": 0 },
+        "claims": { "type": "integer", "minimum": 0 },
+        "sessions": { "type": "integer", "minimum": 0 },
+        "reportDrafts": { "type": "integer", "minimum": 0 },
+        "totalItems": { "type": "integer", "minimum": 0 },
+        "routeObligations": { "type": "integer", "minimum": 0 },
+        "readyRoutesWithoutClaims": { "type": "integer", "minimum": 0 },
+        "blockedClaims": { "type": "integer", "minimum": 0 },
+        "reportDraftReviewItems": { "type": "integer", "minimum": 0 },
+        "reportDraftsNeedingAttention": { "type": "integer", "minimum": 0 },
+        "sessionTasks": { "type": "integer", "minimum": 0 },
+        "sessionNextChecks": { "type": "integer", "minimum": 0 },
+        "criticalItems": { "type": "integer", "minimum": 0 },
+        "highItems": { "type": "integer", "minimum": 0 },
+        "mediumItems": { "type": "integer", "minimum": 0 },
+        "lowItems": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "autonomy": {
+      "$ref": "#/$defs/autonomy"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "markdown": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "item": {
+      "type": "object",
+      "required": ["itemId", "kind", "priority", "title", "summary", "command", "source"],
+      "properties": {
+        "itemId": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": [
+            "route-obligation",
+            "route-ready-claim",
+            "claim-blocker",
+            "report-draft-review",
+            "session-task",
+            "session-next-check",
+            "credibility-action"
+          ]
+        },
+        "priority": {
+          "$ref": "#/$defs/priority"
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "command": { "type": "string", "minLength": 1 },
+        "routeId": { "type": "string" },
+        "obligationId": { "type": "string" },
+        "obligationKind": { "type": "string" },
+        "claimId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "taskId": { "type": "string" },
+        "checkpointId": { "type": "string" },
+        "reportId": { "type": "string" },
+        "domain": { "type": "string" },
+        "trust": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "evidenceSlots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceSlot"
+          }
+        },
+        "acceptanceCriteria": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "agentPacket": { "type": "string" },
+        "source": {
+          "type": "object",
+          "required": ["label", "ref"],
+          "properties": {
+            "label": { "type": "string", "minLength": 1 },
+            "ref": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidenceSlot": {
+      "type": "object",
+      "required": ["slotId", "label", "required", "status", "description", "acceptedArtifacts"],
+      "properties": {
+        "slotId": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "status": {
+          "enum": ["open", "satisfied", "not-required"]
+        },
+        "description": { "type": "string", "minLength": 1 },
+        "acceptedArtifacts": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "suggestedCommand": { "type": "string" },
+        "attachTo": {
+          "type": "object",
+          "properties": {
+            "routeId": { "type": "string" },
+            "obligationId": { "type": "string" },
+            "claimId": { "type": "string" },
+            "sessionId": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "autonomy": {
+      "type": "object",
+      "required": [
+        "mode",
+        "canRunUnattended",
+        "suggestedBatchSize",
+        "allowedActions",
+        "blockedActions",
+        "stopConditions",
+        "requiredArtifacts",
+        "humanReviewRequiredFor",
+        "agentPacket"
+      ],
+      "properties": {
+        "mode": {
+          "enum": ["idle", "local-verifier-loop", "human-review-gated"]
+        },
+        "canRunUnattended": { "type": "boolean" },
+        "suggestedBatchSize": { "type": "integer", "minimum": 0 },
+        "nextItemId": { "type": "string" },
+        "nextCommand": { "type": "string" },
+        "allowedActions": { "$ref": "#/$defs/stringArray" },
+        "blockedActions": { "$ref": "#/$defs/stringArray" },
+        "stopConditions": { "$ref": "#/$defs/stringArray" },
+        "requiredArtifacts": { "$ref": "#/$defs/stringArray" },
+        "humanReviewRequiredFor": { "$ref": "#/$defs/stringArray" },
+        "agentPacket": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["mode", "localFirst", "networkAccess", "dataResidency", "externalDisclosures"],
+      "properties": {
+        "mode": { "enum": ["local-only", "external-calls"] },
+        "localFirst": { "const": true },
+        "networkAccess": { "enum": ["none", "optional", "required", "unknown"] },
+        "dataResidency": { "const": "local-workspace" },
+        "externalDisclosures": { "type": "array" }
+      },
+      "additionalProperties": true
+    },
+    "priority": {
+      "enum": ["critical", "high", "medium", "low"]
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
