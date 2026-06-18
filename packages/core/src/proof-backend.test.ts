@@ -291,6 +291,40 @@ describe("proof backend status", () => {
     expect(validation.summary.byKind.proofs).toBe(1);
   });
 
+  it("rejects malformed proof-check records before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Malformed Proof Check Lab" });
+    await writeFile(join(root, "trivial.lean"), "example : True := by trivial\n", "utf8");
+    const runner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Lean (version 4.12.0)\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "",
+        stderr: ""
+      };
+    };
+
+    await expect(
+      writeLeanProofCheckRecord({
+        rootPath: root,
+        sourcePath: "trivial.lean",
+        scope: {
+          routeId: "not-a-route-id"
+        },
+        runner
+      })
+    ).rejects.toThrow("Proof-check record failed JSON Schema validation before write");
+
+    await expect(listLeanProofChecks(root)).resolves.toEqual([]);
+  });
+
   it("writes visual artifacts from proof-check records without upgrading trust", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Proof Visual Lab" });

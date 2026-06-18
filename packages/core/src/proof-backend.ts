@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   expectBoolean,
   expectConst,
@@ -14,9 +15,11 @@ import {
   expectStringArray,
   formatValidationError,
   isRecord,
-  parseJsonObject
+  parseJsonObject,
+  parseJsonWithOptionalBom
 } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import type { TrustLabel } from "./types.js";
 import { writeVisualArtifact, type VisualArtifactWriteResult } from "./visual-artifact.js";
@@ -101,7 +104,7 @@ export interface LeanProofCheckInput {
 }
 
 export interface LeanProofCheckRecord {
-  schemaVersion: "truth-harness.proof-check.v0";
+  schemaVersion: typeof PROOF_CHECK_SCHEMA_VERSION;
   checkId: string;
   createdAt: string;
   backend: {
@@ -182,6 +185,9 @@ export interface LeanProofCheckSummary {
 }
 
 const DEFAULT_TIMEOUT_MS = 3000;
+const PROOF_CHECK_SCHEMA_VERSION = "truth-harness.proof-check.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let proofCheckSchemaCache: Promise<unknown> | undefined;
 
 export function getProofBackendStatus(options: ProofBackendStatusOptions = {}): ProofBackendStatusReport {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -236,7 +242,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
   });
   const proofArgs = [sourcePath];
   const base = {
-    schemaVersion: "truth-harness.proof-check.v0" as const,
+    schemaVersion: PROOF_CHECK_SCHEMA_VERSION,
     createdAt,
     backend: {
       id: "lean" as const,
@@ -395,12 +401,13 @@ export async function writeLeanProofCheckRecord(input: WriteLeanProofCheckInput)
     replayCommand: `truth-harness proof check ${quoteCommandArg(sourceRef)} --write --json`
   });
   const proofsDir = resolve(status.root, status.manifest.directories.proofs);
-  await mkdir(proofsDir, { recursive: true });
+  await assertProofCheckSchema(record);
   const baseName = `${record.createdAt.slice(0, 10)}-${record.checkId}`;
   const jsonPath = join(proofsDir, `${baseName}.json`);
   const markdownPath = join(proofsDir, `${baseName}.md`);
   const markdown = renderLeanProofCheckMarkdown(record);
 
+  await mkdir(proofsDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, record);
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -417,6 +424,28 @@ export async function writeLeanProofCheckRecord(input: WriteLeanProofCheckInput)
     markdownPath,
     markdown
   };
+}
+
+async function assertProofCheckSchema(record: LeanProofCheckRecord): Promise<void> {
+  const schema = await loadProofCheckSchema();
+  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
+  const issues = validateJsonSchema(serializedRecord, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Proof-check record failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadProofCheckSchema(): Promise<unknown> {
+  proofCheckSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "proof-check.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return proofCheckSchemaCache;
 }
 
 export async function listLeanProofChecks(rootPath: string): Promise<LeanProofCheckSummary[]> {
@@ -517,8 +546,8 @@ export async function writeLeanProofCheckVisualArtifact(input: LeanProofVisualIn
 export function parseLeanProofCheckRecord(raw: string, sourcePath = "proof-check record"): LeanProofCheckRecord {
   const parsed = parseJsonObject(raw, sourcePath, "Proof-check");
   const issues: string[] = [];
-  if (parsed.schemaVersion !== "truth-harness.proof-check.v0") {
-    issues.push(`$.schemaVersion must equal "truth-harness.proof-check.v0"`);
+  if (parsed.schemaVersion !== PROOF_CHECK_SCHEMA_VERSION) {
+    issues.push(`$.schemaVersion must equal "${PROOF_CHECK_SCHEMA_VERSION}"`);
   }
   expectPattern(parsed, "checkId", /^proof_[a-f0-9]{16}$/u, "$.checkId", issues);
   expectDateTime(parsed, "createdAt", "$.createdAt", issues);
