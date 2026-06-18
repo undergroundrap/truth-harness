@@ -181,6 +181,69 @@ describe("proof backend status", () => {
     expect(record.limitations.join(" ")).toContain("does not refute the claim");
   });
 
+  it("does not mint proved for Lean-accepted sources with sorry placeholders", () => {
+    const runner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Lean (version 4.12.0)\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "",
+        stderr: "declaration uses 'sorry'"
+      };
+    };
+
+    const record = checkLeanProofArtifact({
+      sourcePath: "proofs/placeholder.lean",
+      sourceText: "example : 1 + 1 = 3 := by sorry\n",
+      runner
+    });
+
+    expect(record.status).toBe("rejected");
+    expect(record.trust).toBe("unverified");
+    expect(record.proofCheckerBacked).toBe(false);
+    expect(record.limitations.join(" ")).toContain("contains `sorry`");
+    expect(record.warnings.join(" ")).toContain("Lean success is necessary but not sufficient");
+  });
+
+  it("does not mint proved for Lean-accepted sources with local axioms", () => {
+    const runner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Lean (version 4.12.0)\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "",
+        stderr: ""
+      };
+    };
+
+    const record = checkLeanProofArtifact({
+      sourcePath: "proofs/axiom.lean",
+      sourceText: [
+        "-- comments mentioning sorry should not matter",
+        "axiom fake : False",
+        "example : False := fake"
+      ].join("\n"),
+      runner
+    });
+
+    expect(record.status).toBe("rejected");
+    expect(record.trust).toBe("unverified");
+    expect(record.proofCheckerBacked).toBe(false);
+    expect(record.limitations.join(" ")).toContain("local `axiom`");
+  });
+
   it("does not run a proof check when the accepted backend is unavailable", () => {
     const calls: string[][] = [];
     const runner: ProofBackendCommandRunner = (_command, args) => {

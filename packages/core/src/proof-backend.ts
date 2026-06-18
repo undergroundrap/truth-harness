@@ -290,6 +290,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
   const stdout = singleLine(result.stdout);
   const stderr = singleLine(result.stderr);
   const errorText = result.error ? `${result.error.name ? `${result.error.name}: ` : ""}${result.error.message}` : undefined;
+  const sourceSafetyFindings = leanSourceSafetyFindings(input.sourceText);
 
   if (result.error && isMissingExecutable(result.error)) {
     return withCheckId({
@@ -333,6 +334,29 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       ],
       warnings: [
         "The proof artifact was not accepted by an accepted proof checker. Treat the claim as unverified."
+      ]
+    });
+  }
+
+  if (result.status === 0 && sourceSafetyFindings.length > 0) {
+    return withCheckId({
+      ...base,
+      backend: {
+        ...base.backend,
+        exitCode: result.status
+      },
+      status: "rejected",
+      trust: "unverified",
+      proofCheckerBacked: false,
+      stdout,
+      stderr,
+      limitations: [
+        "Lean accepted the source file, but Truth Harness found proof placeholders or local assumptions in the checked source.",
+        "This record cannot support a `proved` trust label until the proof source removes those placeholders or assumptions.",
+        ...sourceSafetyFindings
+      ],
+      warnings: [
+        "Lean success is necessary but not sufficient for Truth Harness `proved`: the checked source must not contain `sorry`, `admit`, local `axiom`, or local `constant` declarations."
       ]
     });
   }
@@ -860,6 +884,27 @@ function singleLine(value: string): string {
 function sha256(value: unknown): string {
   const text = typeof value === "string" ? value : JSON.stringify(value);
   return createHash("sha256").update(text).digest("hex");
+}
+
+function leanSourceSafetyFindings(sourceText: string): string[] {
+  const source = stripLeanCommentsAndStrings(sourceText);
+  const findings = [
+    [/\bsorry\b/u, "The proof source contains `sorry`, which can mask an incomplete proof."],
+    [/\badmit\b/u, "The proof source contains `admit`, which can mask an incomplete proof."],
+    [/\baxiom\b/u, "The proof source declares a local `axiom`, which introduces an unproved assumption."],
+    [/\bconstant\b/u, "The proof source declares a local `constant`, which can introduce an unchecked assumption."]
+  ] as const;
+
+  return findings
+    .filter(([pattern]) => pattern.test(source))
+    .map(([, message]) => message);
+}
+
+function stripLeanCommentsAndStrings(sourceText: string): string {
+  return sourceText
+    .replace(/--.*$/gmu, "")
+    .replace(/\/-[\s\S]*?-\//gu, "")
+    .replace(/"([^"\\]|\\.)*"/gu, "\"\"");
 }
 
 function normalizeProofCheckScope(scope: LeanProofCheckScope | undefined): LeanProofCheckScope | undefined {
