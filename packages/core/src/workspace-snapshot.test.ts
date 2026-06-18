@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -106,6 +106,35 @@ describe("workspace snapshots", () => {
     expect(verification.changed[0]?.expectedSha256).not.toBe(verification.changed[0]?.actualSha256);
     expect(verification.missing.map((entry) => entry.path)).toEqual([".truth-harness/artifacts/missing.json"]);
     expect(verification.addedSinceSnapshot.map((entry) => entry.path)).toEqual([".truth-harness/artifacts/added.json"]);
+  });
+
+  it("fails closed before writing malformed snapshot artifacts", async () => {
+    const root = await tempRoot();
+    const initialized = await initLocalWorkspace(root, { now: "2026-06-08T00:00:00.000Z" });
+    await writeFile(
+      initialized.manifestPath,
+      `${JSON.stringify(
+        {
+          ...initialized.manifest,
+          privacy: {
+            ...initialized.manifest.privacy,
+            networkAccess: "unknown"
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    await expect(
+      writeWorkspaceSnapshot({
+        rootPath: root,
+        now: "2026-06-08T01:00:00.000Z"
+      })
+    ).rejects.toThrow("Workspace snapshot failed JSON Schema validation before write");
+
+    expect(await readdir(join(root, ".truth-harness", "snapshots"))).toEqual([]);
   });
 });
 

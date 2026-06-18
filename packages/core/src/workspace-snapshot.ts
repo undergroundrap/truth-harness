@@ -9,6 +9,7 @@ import {
   type LocalWorkspaceDirectory,
   type LocalWorkspaceStatus
 } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -151,6 +152,11 @@ export async function writeWorkspaceSnapshot(input: CreateWorkspaceSnapshotInput
   const snapshotsDir = resolve(status.root, status.manifest.directories.snapshots);
   await mkdir(snapshotsDir, { recursive: true });
   const path = join(snapshotsDir, `${snapshot.createdAt.slice(0, 10)}-${snapshot.snapshotId}.json`);
+  await assertJsonSchemaBeforeWrite({
+    value: snapshot,
+    schemaFile: "workspace-snapshot.schema.json",
+    artifactName: "Workspace snapshot"
+  });
   await writeJsonFileAtomic(path, snapshot);
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
