@@ -6,6 +6,14 @@ Truth Harness exposes a local stdio MCP server so Claude, Codex, and other MCP c
 
 ## Build First
 
+Default verification is Docker-first:
+
+```bash
+npm run verify:default
+```
+
+Use that before claiming the tree is ready for reviewer/demo work. It runs the no-network Docker engine smoke and then the full build/test suite inside compose. If Docker Desktop is not reachable, report that blocker explicitly. `npm run verify:native` and `npm run check` can help during development, but they are not the public credibility gate.
+
 ```bash
 npm install
 npm run build

@@ -18,6 +18,14 @@ Use this before demos or before asking another agent to trust the local tree. It
 
 ## Day-To-Day Container Commands
 
+Use the Docker-first default verification command when another agent, a reviewer, or a demo needs to trust the local tree:
+
+```bash
+npm run verify:default
+```
+
+It runs the no-runtime-network Maxima/Z3 engine evidence smoke and then the full TypeScript build/test suite inside the compose service. If Docker Desktop is not running, the command fails instead of silently downgrading to host execution. `npm run verify:native` is available for development fallback only; do not cite it as the public credibility gate.
+
 Build the reusable dev image:
 
 ```bash
@@ -27,7 +35,7 @@ docker compose build
 Run the normal verification gate with no runtime network:
 
 ```bash
-docker compose run --rm truth-harness npm run check
+docker compose run --rm truth-harness npm run check:native
 ```
 
 Run the public launch proof suite plus the engine-backed CAS and SMT gates with no runtime network:

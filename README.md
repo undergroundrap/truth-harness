@@ -31,6 +31,14 @@ The current MVP is local-first by default. Receipt metadata records `local-only`
 
 For agent-facing work, demos, and anything that may execute code, prefer Docker first. The image keeps Node, Python, SymPy, Maxima, Z3, and npm dependencies out of your host environment. Optional heavier or second-opinion engines such as SageMath and cvc5 are gated separately. The CLI and MCP compose runtimes disable network access; the web runtime publishes only to `127.0.0.1` so your browser can reach the local workbench.
 
+Default verification for this repo:
+
+```bash
+npm run verify:default
+```
+
+That command runs the no-network Docker Maxima/Z3 engine smoke and then the full build/test suite inside the compose service. If Docker Desktop is not running, it should fail clearly; use `npm run verify:native` only as a fallback and do not treat it as the public credibility path.
+
 Highest-safety verification, with no repo bind mount during the checks:
 
 ```bash
@@ -44,7 +52,7 @@ Day-to-day container workflow:
 
 ```bash
 docker compose build
-docker compose run --rm truth-harness npm run check
+docker compose run --rm truth-harness npm run check:native
 docker compose run --rm truth-harness npm run cli -- demo
 npm run docker:demo
 docker compose run --rm truth-harness npm run proof:launch:engines
