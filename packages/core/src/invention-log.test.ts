@@ -1,9 +1,9 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createInventionLogEntry, listInventionLogEntries } from "./invention-log.js";
-import { initLocalWorkspace, LOCAL_WORKSPACE_DIR } from "./local-workspace.js";
+import { initLocalWorkspace, LOCAL_WORKSPACE_DIR, LOCAL_WORKSPACE_MANIFEST } from "./local-workspace.js";
 
 const roots: string[] = [];
 
@@ -59,6 +59,33 @@ describe("invention log", () => {
     expect(result.entry.patent.legalConclusion).toBe("not-a-legal-opinion");
     expect(result.entry.safety.overclaimWarnings).toContain("Do not describe this as a proven discovery yet.");
     expect(JSON.parse(await readFile(result.path, "utf8")).entryId).toBe(result.entry.entryId);
+  });
+
+  it("rejects malformed invention logs before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      displayName: "Discovery Lab",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+    const manifestPath = join(root, LOCAL_WORKSPACE_DIR, LOCAL_WORKSPACE_MANIFEST);
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    manifest.projectId = "";
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    await expect(
+      createInventionLogEntry({
+        rootPath: root,
+        hypothesis: "This malformed workspace should not mint invention provenance.",
+        noveltyNotes: ["Validation should fail before persistence."],
+        priorArtNotes: ["No durable record should be created."],
+        risks: ["Malformed project identity."],
+        nextChecks: ["Restore a valid workspace identity."],
+        now: "2026-06-08T01:30:00.000Z"
+      })
+    ).rejects.toThrow("Invention log entry failed JSON Schema validation before write");
+
+    const inventions = await readdir(join(root, LOCAL_WORKSPACE_DIR, "inventions"));
+    expect(inventions).toEqual([]);
   });
 
   it("lists invention logs newest first", async () => {

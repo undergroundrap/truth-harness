@@ -1,6 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
@@ -44,7 +47,7 @@ export interface InventionEvidenceRef {
 }
 
 export interface InventionLogEntry {
-  schemaVersion: "truth-harness.invention.v0";
+  schemaVersion: typeof INVENTION_SCHEMA_VERSION;
   entryId: string;
   projectId: string;
   createdAt: string;
@@ -90,6 +93,10 @@ export interface InventionLogWriteResult {
   path: string;
 }
 
+const INVENTION_SCHEMA_VERSION = "truth-harness.invention.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let inventionSchemaCache: Promise<unknown> | undefined;
+
 export function isInventionValidationStage(value: string): value is InventionValidationStage {
   return (INVENTION_VALIDATION_STAGES as readonly string[]).includes(value);
 }
@@ -124,7 +131,7 @@ export async function createInventionLogEntry(input: CreateInventionLogInput): P
   };
   const entryId = `inv_${stableHash(entryWithoutId).slice(0, 16)}`;
   const entry: InventionLogEntry = {
-    schemaVersion: "truth-harness.invention.v0",
+    schemaVersion: INVENTION_SCHEMA_VERSION,
     entryId,
     ...entryWithoutId,
     updatedAt: createdAt,
@@ -139,6 +146,7 @@ export async function createInventionLogEntry(input: CreateInventionLogInput): P
       overclaimWarnings: overclaimWarningsFor(validationStage)
     }
   };
+  await assertInventionSchema(entry);
 
   const inventionsDir = resolve(status.root, manifest.directories.inventions);
   await mkdir(inventionsDir, { recursive: true });
@@ -153,6 +161,28 @@ export async function createInventionLogEntry(input: CreateInventionLogInput): P
   });
 
   return { entry, path };
+}
+
+async function assertInventionSchema(entry: InventionLogEntry): Promise<void> {
+  const schema = await loadInventionSchema();
+  const serializedEntry = parseJsonWithOptionalBom(JSON.stringify(entry));
+  const issues = validateJsonSchema(serializedEntry, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Invention log entry failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadInventionSchema(): Promise<unknown> {
+  inventionSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "invention-log.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return inventionSchemaCache;
 }
 
 export async function listInventionLogEntries(rootPath: string): Promise<InventionLogEntry[]> {
@@ -175,11 +205,11 @@ export async function listInventionLogEntries(rootPath: string): Promise<Inventi
   const entries = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => JSON.parse(await readFile(join(inventionsDir, file), "utf8")) as InventionLogEntry)
+      .map(async (file) => parseJsonWithOptionalBom(await readFile(join(inventionsDir, file), "utf8")) as InventionLogEntry)
   );
 
   return entries
-    .filter((entry) => entry.schemaVersion === "truth-harness.invention.v0")
+    .filter((entry) => entry.schemaVersion === INVENTION_SCHEMA_VERSION)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
