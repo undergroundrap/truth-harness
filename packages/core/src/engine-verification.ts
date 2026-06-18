@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   expectArray,
   expectConst,
@@ -10,6 +11,7 @@ import {
   expectRecord,
   expectStringArray,
   formatValidationError,
+  parseJsonWithOptionalBom,
   parseJsonObject
 } from "./artifact-record-validation.js";
 import {
@@ -20,6 +22,7 @@ import {
   type SymbolicCasCheckResult
 } from "./cas-backend.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { checkLeanProofArtifact, type LeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
 import { stableHash } from "./stable-hash.js";
@@ -187,6 +190,8 @@ const DEFAULT_SYMBOLIC_PROMPT: SymbolicPrompt = {
 const DEFAULT_SYMBOLIC_RESULT = "1";
 const DEFAULT_SMT_SOURCE = "docs/examples/constraints.smt2";
 const DEFAULT_LEAN_SOURCE = "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean";
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let engineRunSchemaCache: Promise<unknown> | undefined;
 
 export async function verifyEngineEvidence(input: EngineVerificationInput = {}): Promise<EngineVerificationReport> {
   const rootPath = resolve(input.rootPath ?? ".");
@@ -305,7 +310,6 @@ export async function writeEngineVerificationRun(
   record.replay = input.replayCommand ?? record.replay;
 
   const engineRunsDir = resolve(status.root, status.manifest.directories["engine-runs"]);
-  await mkdir(engineRunsDir, { recursive: true });
   const baseName = `${record.createdAt.slice(0, 10)}-${record.runId}`;
   const jsonPath = join(engineRunsDir, `${baseName}.json`);
   const markdownPath = join(engineRunsDir, `${baseName}.md`);
@@ -315,6 +319,8 @@ export async function writeEngineVerificationRun(
   };
   const markdown = renderEngineVerificationRunMarkdown(record);
 
+  await assertEngineVerificationRunSchema(record);
+  await mkdir(engineRunsDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, record);
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -331,6 +337,28 @@ export async function writeEngineVerificationRun(
     markdownPath,
     markdown
   };
+}
+
+async function assertEngineVerificationRunSchema(record: EngineVerificationRunRecord): Promise<void> {
+  const schema = await loadEngineRunSchema();
+  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
+  const issues = validateJsonSchema(serializedRecord, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Engine verification run failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadEngineRunSchema(): Promise<unknown> {
+  engineRunSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "engine-run.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return engineRunSchemaCache;
 }
 
 export async function listEngineVerificationRuns(rootPath: string): Promise<EngineVerificationRunSummary[]> {

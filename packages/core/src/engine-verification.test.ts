@@ -288,4 +288,26 @@ describe("engine evidence verification", () => {
       evidenceMinted: 3
     });
   });
+
+  it("validates durable engine-run JSON before writing sidecars", async () => {
+    const root = await mkdtemp(join(tmpdir(), "truth-harness-engine-run-invalid-"));
+    await initLocalWorkspace(root, { now: "2026-06-15T00:00:00.000Z" });
+    const runner: EngineVerificationCommandRunner = () => ({
+      status: null,
+      stdout: "",
+      stderr: "",
+      error: { name: "Error", message: "missing" }
+    });
+
+    await expect(
+      writeEngineVerificationRun({
+        rootPath: root,
+        now: new Date("2026-06-15T00:00:00.000Z"),
+        replayCommand: "",
+        runner
+      })
+    ).rejects.toThrow("$.replay must have length >= 1");
+
+    await expect(listEngineVerificationRuns(root)).resolves.toEqual([]);
+  });
 });
