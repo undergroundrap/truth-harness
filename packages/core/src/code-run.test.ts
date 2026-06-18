@@ -97,6 +97,32 @@ describe("code run records", () => {
     expect(validation.summary.byKind["code-runs"]).toBe(1);
   });
 
+  it("rejects malformed code-run records before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const runner: CodeRunCommandRunner = () => ({
+      exitCode: 0,
+      stdout: "ok\n",
+      stderr: "",
+      durationMs: 1
+    });
+
+    await expect(
+      writeCodeRun({
+        rootPath: root,
+        purpose: "Reject malformed code execution metadata before durable write.",
+        command: "fixture-runner",
+        policy: {
+          allowedExecutables: ["fixture-runner"]
+        },
+        runner,
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("Code run record failed JSON Schema validation before write");
+
+    await expect(listCodeRuns(root)).resolves.toEqual([]);
+  });
+
   it("records non-zero exits without pretending they are positive evidence", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);

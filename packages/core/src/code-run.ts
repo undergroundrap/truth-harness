@@ -2,8 +2,11 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { arch, platform } from "node:os";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { getCodeRunSandboxStatus, sandboxMeasurementForStatus, type CodeRunSandboxMeasurement } from "./sandbox.js";
 import { stableHash } from "./stable-hash.js";
@@ -100,7 +103,7 @@ export interface CodeRunPrivacyMetadata {
 }
 
 export interface CodeRunRecord {
-  schemaVersion: "truth-harness.code-run.v0";
+  schemaVersion: typeof CODE_RUN_SCHEMA_VERSION;
   runId: string;
   projectId: string;
   createdAt: string;
@@ -201,11 +204,14 @@ const DEFAULT_MAX_OUTPUT_BYTES = 65536;
 const DEFAULT_MAX_CONCURRENT_CODE_RUNS = 2;
 const MAX_TIMEOUT_MS = 120000;
 const MAX_OUTPUT_BYTES = 1048576;
+const CODE_RUN_SCHEMA_VERSION = "truth-harness.code-run.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
 const SHELL_LAUNCHERS = new Set(["cmd", "powershell", "pwsh", "bash", "sh", "zsh", "fish", "wscript", "cscript", "mshta"]);
 const NETWORK_COMMANDS = new Set(["curl", "wget", "ssh", "scp", "sftp", "ftp", "telnet", "nc", "ncat", "netcat", "rsync"]);
 const DESTRUCTIVE_COMMANDS = new Set(["rm", "rmdir", "del", "erase", "format", "shutdown", "reboot", "diskpart"]);
 const PACKAGE_MANAGERS = new Set(["npm", "pnpm", "yarn", "bun", "pip", "pip3", "cargo"]);
 const workspaceRunQueues = new Map<string, CodeRunQueueState>();
+let codeRunSchemaCache: Promise<unknown> | undefined;
 
 interface CodeRunQueueState {
   active: number;
@@ -310,7 +316,7 @@ export async function executeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRu
   };
 
   return {
-    schemaVersion: "truth-harness.code-run.v0",
+    schemaVersion: CODE_RUN_SCHEMA_VERSION,
     runId: `code_run_${stableHash(recordWithoutId).slice(0, 16)}`,
     ...recordWithoutId
   };
@@ -319,13 +325,14 @@ export async function executeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRu
 export async function writeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRunWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
   const record = await executeCodeRun(input);
+  await assertCodeRunSchema(record);
   const runsDir = resolve(status.root, status.manifest.directories["code-runs"]);
-  await mkdir(runsDir, { recursive: true });
   const baseName = `${record.createdAt.slice(0, 10)}-${record.runId}`;
   const jsonPath = join(runsDir, `${baseName}.json`);
   const markdownPath = join(runsDir, `${baseName}.md`);
   const markdown = renderCodeRunMarkdown(record);
 
+  await mkdir(runsDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, record);
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -342,6 +349,26 @@ export async function writeCodeRun(input: ExecuteCodeRunInput): Promise<CodeRunW
     markdownPath,
     markdown
   };
+}
+
+async function assertCodeRunSchema(record: CodeRunRecord): Promise<void> {
+  const schema = await loadCodeRunSchema();
+  const serializedRecord = parseJsonWithOptionalBom(JSON.stringify(record));
+  const issues = validateJsonSchema(serializedRecord, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Code run record failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadCodeRunSchema(): Promise<unknown> {
+  codeRunSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "code-run.schema.json"), "utf8").then((raw) => parseJsonWithOptionalBom(raw));
+  return codeRunSchemaCache;
 }
 
 export async function listCodeRuns(rootPath: string): Promise<CodeRunSummary[]> {
@@ -1013,12 +1040,12 @@ function resolveWorkspacePath(root: string, path: string): string {
 function summarizeCodeRun(root: string, path: string, raw: string): CodeRunSummary | undefined {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw) as unknown;
+    parsed = parseJsonWithOptionalBom(raw);
   } catch {
     return undefined;
   }
 
-  if (!isRecord(parsed) || parsed.schemaVersion !== "truth-harness.code-run.v0") {
+  if (!isRecord(parsed) || parsed.schemaVersion !== CODE_RUN_SCHEMA_VERSION) {
     return undefined;
   }
 
