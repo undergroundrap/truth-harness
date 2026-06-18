@@ -71,6 +71,21 @@ describe("local workspace", () => {
     expect(status.missingDirectories).toEqual([]);
   });
 
+  it("fails closed before writing malformed workspace manifests", async () => {
+    const root = await tempRoot();
+
+    await expect(
+      initLocalWorkspace(root, {
+        displayName: "",
+        now: "2026-06-08T00:00:00.000Z"
+      })
+    ).rejects.toThrow("Workspace manifest failed JSON Schema validation before write");
+
+    await expect(readFile(join(root, ".truth-harness", "project.json"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+  });
+
   it("reports a missing workspace before initialization", async () => {
     const root = await tempRoot();
     const status = await getLocalWorkspaceStatus(root);

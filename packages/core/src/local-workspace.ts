@@ -2,6 +2,7 @@ import { mkdir, readFile, stat } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeJsonFileAtomic } from "./fs-util.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 
@@ -322,6 +323,11 @@ async function repairManifestIfNeeded(
 }
 
 async function writeManifest(path: string, manifest: LocalWorkspaceManifest): Promise<void> {
+  await assertJsonSchemaBeforeWrite({
+    value: manifest,
+    schemaFile: "workspace-manifest.schema.json",
+    artifactName: "Workspace manifest"
+  });
   await writeJsonFileAtomic(path, manifest);
 }
 
