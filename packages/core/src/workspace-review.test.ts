@@ -319,6 +319,72 @@ describe("workspace review", () => {
     expect(review.summary.readyRoutesWithoutClaims).toBe(0);
   });
 
+  it("reviews equivalent ready-route claims instead of creating duplicates", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "compute 3 / 4 + 5 / 8",
+      now: new Date("2026-06-13T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const oldClaim = await writeClaimLedgerRecord({
+      rootPath: root,
+      title: "3 / 4 + 5 / 8",
+      statement: "\\frac{3}{4}+\\frac{5}{8} = \\frac{11}{8}",
+      domain: "math",
+      now: "2026-06-13T00:02:00.000Z"
+    });
+    const claim = await writeClaimLedgerRecord({
+      rootPath: root,
+      title: "3 / 4 + 5 / 8",
+      statement: "\\frac{3}{4}+\\frac{5}{8} = \\frac{11}{8}",
+      domain: "math",
+      supersedes: [oldClaim.claim.claimId],
+      now: "2026-06-13T00:02:30.000Z"
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 10,
+      maxSessions: 0,
+      now: "2026-06-13T00:03:00.000Z"
+    });
+    const item = review.items.find(
+      (candidate) => candidate.kind === "route-ready-claim" && candidate.routeId === route.route.routeId
+    );
+
+    expect(item).toMatchObject({
+      kind: "route-ready-claim",
+      title: "Link ready route to an existing claim",
+      routeId: route.route.routeId,
+      claimId: claim.claim.claimId,
+      command: expect.stringContaining(`truth-harness claim review ${claim.claim.claimId}`),
+      summary: expect.stringContaining("equivalent claim"),
+      acceptanceCriteria: expect.arrayContaining([
+        "Review the existing equivalent claim and link or supersede it with this ready route.",
+        "Do not create a duplicate claim for the same scoped statement."
+      ]),
+      evidenceSlots: expect.arrayContaining([
+        expect.objectContaining({
+          label: "Claim ledger link",
+          acceptedArtifacts: expect.arrayContaining(["truth-harness claim review"]),
+          attachTo: expect.objectContaining({
+            routeId: route.route.routeId,
+            claimId: claim.claim.claimId
+          })
+        })
+      ])
+    });
+    expect(item?.command).not.toContain("truth-harness claim add");
+  });
+
   it("keeps stronger-label upgrades below current route blockers", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {

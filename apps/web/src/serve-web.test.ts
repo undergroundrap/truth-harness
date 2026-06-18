@@ -771,14 +771,16 @@ describe("local web route ledger API", () => {
       expect.objectContaining({
         kind: "route-ready-claim",
         routeId: receiptPayload.route.routeId,
-        command: expect.stringContaining("truth-harness claim add"),
+        claimId: receiptClaimPayload.claim.claimId,
+        command: expect.stringContaining(`truth-harness claim review ${receiptClaimPayload.claim.claimId}`),
         acceptanceCriteria: expect.arrayContaining([
-          "Record a narrow claim that cites this route as evidence."
+          "Review the existing equivalent claim and link or supersede it with this ready route.",
+          "Do not create a duplicate claim for the same scoped statement."
         ]),
         evidenceSlots: expect.arrayContaining([
           expect.objectContaining({
             slotId: "claim-ledger-record",
-            suggestedCommand: expect.stringContaining("truth-harness claim add")
+            suggestedCommand: expect.stringContaining(`truth-harness claim review ${receiptClaimPayload.claim.claimId}`)
           })
         ]),
         agentPacket: expect.stringContaining("# Truth Harness Workspace Action")

@@ -180,10 +180,11 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const reportDrafts = await listReportDrafts({ rootPath: status.root, limit: input.maxReports ?? 50 });
   const validationPlans = await listValidationPlans(status.root);
   const claimsByRouteRef = claimsByRouteEvidence(claims);
+  const claimsByStatementKey = claimsByReviewStatementKey(claims);
   const routes = await Promise.all(routeSummaries.map((route) => readVerifierRoute(status.root, route.routeId)));
   const items = attachAgentPackets(sortReviewItems([
     ...sessions.flatMap((session) => linkedValidationGateItems(status.root, session, validationPlans)),
-    ...routes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef)),
+    ...routes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef, claimsByStatementKey)),
     ...claims.flatMap((claim) => claimReviewItems(status.root, claim)),
     ...reportDrafts.map((report) => reportDraftReviewItem(status.root, report)),
     ...sessions.flatMap((session) => sessionReviewItems(status.root, session))
@@ -768,7 +769,8 @@ function commandForValidationGate(
 function routeReviewItems(
   workspacePath: string,
   route: VerifierRoute,
-  claimsByRouteRef: Map<string, ClaimLedgerRecord[]>
+  claimsByRouteRef: Map<string, ClaimLedgerRecord[]>,
+  claimsByStatementKey: Map<string, ClaimLedgerRecord[]>
 ): WorkspaceReviewItem[] {
   const readiness = verifierRouteReadiness(route);
   const openObligations = (route.proofObligations ?? []).filter((obligation) => obligation.status === "open");
@@ -776,17 +778,26 @@ function routeReviewItems(
   const hasClaim = (claimsByRouteRef.get(route.routeId)?.length ?? 0) > 0;
 
   if (readiness.readyForNarrowClaim && !hasClaim) {
+    const equivalentClaim = firstEquivalentClaim(route.problem, claimsByStatementKey);
+    const command = equivalentClaim
+      ? `truth-harness claim review ${quoteCommandArg(equivalentClaim.claimId)} --workspace ${quoteCommandArg(workspacePath)} --json`
+      : `truth-harness claim add ${quoteCommandArg(route.problem)} --workspace ${quoteCommandArg(workspacePath)} --evidence ${quoteCommandArg(`route:${route.routeId}`)} --trust ${quoteCommandArg(readiness.strongestTrust)} --json`;
+
     items.push({
       itemId: itemIdFor({
         kind: "route-ready-claim",
-        routeId: route.routeId
+        routeId: route.routeId,
+        claimId: equivalentClaim?.claimId
       }),
       kind: "route-ready-claim",
       priority: "low",
-      title: "Record a narrow claim from a ready route",
-      summary: `Verifier route ${route.routeId} is ready only as a narrow ${readiness.strongestTrust} claim, but no claim ledger record cites it yet.`,
-      command: `truth-harness claim add ${quoteCommandArg(route.problem)} --workspace ${quoteCommandArg(workspacePath)} --evidence ${quoteCommandArg(`route:${route.routeId}`)} --trust ${quoteCommandArg(readiness.strongestTrust)} --json`,
+      title: equivalentClaim ? "Link ready route to an existing claim" : "Record a narrow claim from a ready route",
+      summary: equivalentClaim
+        ? `Verifier route ${route.routeId} is ready as ${readiness.strongestTrust}; equivalent claim ${equivalentClaim.claimId} exists but does not cite this route yet. Review or supersede it instead of creating a duplicate claim.`
+        : `Verifier route ${route.routeId} is ready only as a narrow ${readiness.strongestTrust} claim, but no claim ledger record cites it yet.`,
+      command,
       routeId: route.routeId,
+      claimId: equivalentClaim?.claimId,
       trust: readiness.strongestTrust,
       createdAt: route.createdAt,
       source: {
@@ -1014,6 +1025,71 @@ function claimsByRouteEvidence(claims: ClaimLedgerRecord[]): Map<string, ClaimLe
   }
 
   return map;
+}
+
+function claimsByReviewStatementKey(claims: ClaimLedgerRecord[]): Map<string, ClaimLedgerRecord[]> {
+  const map = new Map<string, ClaimLedgerRecord[]>();
+  const supersededClaimIds = new Set(claims.flatMap((claim) => claim.supersedes ?? []));
+  for (const claim of claims) {
+    if (claim.status !== "active" || supersededClaimIds.has(claim.claimId)) {
+      continue;
+    }
+
+    const claimKeys = [
+      ...reviewStatementKeys(claim.normalizedStatement || claim.statement),
+      ...reviewStatementKeys(claim.title)
+    ];
+
+    for (const key of uniqueSorted(claimKeys)) {
+      const bucket = map.get(key) ?? [];
+      bucket.push(claim);
+      map.set(key, bucket);
+    }
+  }
+
+  return map;
+}
+
+function firstEquivalentClaim(routeProblem: string, claimsByStatementKey: Map<string, ClaimLedgerRecord[]>): ClaimLedgerRecord | undefined {
+  for (const key of reviewStatementKeys(routeProblem)) {
+    const claim = claimsByStatementKey.get(key)?.[0];
+    if (claim) {
+      return claim;
+    }
+  }
+
+  return undefined;
+}
+
+function reviewStatementKeys(value: string): string[] {
+  const normalized = value.replace(/\s+/gu, " ").trim().toLowerCase();
+  if (!normalized) {
+    return [];
+  }
+
+  const latexReadable = normalized
+    .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/gu, "$1/$2")
+    .replace(/\\operatorname\{([^{}]+)\}/gu, "$1")
+    .replace(/\\[,;:! ]/gu, " ")
+    .replace(/\\/gu, " ");
+  const candidates = uniqueSorted([normalized, latexReadable]).flatMap((candidate) => {
+    const withoutComputePrefix = candidate.replace(/^(?:compute|calculate|evaluate)\s+/u, "");
+
+    return [
+      candidate,
+      withoutComputePrefix,
+      withoutComputePrefix.split(/\s*=\s*/u)[0] ?? withoutComputePrefix
+    ];
+  });
+
+  return uniqueSorted(candidates.flatMap((candidate) => {
+    const compactOperators = candidate
+      .replace(/\s*([+\-*/^=(),<>])\s*/gu, "$1")
+      .replace(/\s+/gu, " ")
+      .trim();
+
+    return [candidate.trim(), compactOperators].filter(Boolean);
+  }));
 }
 
 function summarizeItems(input: {
@@ -1319,17 +1395,24 @@ function workspaceReviewEvidenceSlots(item: WorkspaceReviewItem): WorkspaceRevie
   }
 
   if (item.kind === "route-ready-claim") {
+    const hasExistingEquivalentClaim = Boolean(item.claimId);
+
     return [
       {
         slotId: "claim-ledger-record",
-        label: "Claim ledger record",
+        label: hasExistingEquivalentClaim ? "Claim ledger link" : "Claim ledger record",
         required: true,
         status: "open",
-        description: "A narrow local claim must cite the ready verifier route without upgrading its trust label.",
-        acceptedArtifacts: ["truth-harness claim add", ".truth-harness/claims/*.json"],
+        description: hasExistingEquivalentClaim
+          ? "An existing equivalent claim should be reviewed and linked to this route, or superseded without upgrading its trust label."
+          : "A narrow local claim must cite the ready verifier route without upgrading its trust label.",
+        acceptedArtifacts: hasExistingEquivalentClaim
+          ? ["truth-harness claim review", "truth-harness claim add --supersedes", ".truth-harness/claims/*.json"]
+          : ["truth-harness claim add", ".truth-harness/claims/*.json"],
         suggestedCommand: item.command,
         attachTo: {
-          routeId: item.routeId
+          routeId: item.routeId,
+          claimId: item.claimId
         }
       }
     ];
@@ -1507,11 +1590,19 @@ function workspaceReviewAcceptanceCriteria(item: WorkspaceReviewItem): string[] 
       "Checkpoint the owning research session with the new evidence ref and any remaining blocker."
     );
   } else if (item.kind === "route-ready-claim") {
-    criteria.push(
-      "Record a narrow claim that cites this route as evidence.",
-      "Use the route's strongest trust label without upgrading it.",
-      "Leave broader claims open until independent obligations are satisfied."
-    );
+    if (item.claimId) {
+      criteria.push(
+        "Review the existing equivalent claim and link or supersede it with this ready route.",
+        "Do not create a duplicate claim for the same scoped statement.",
+        "Use the route's strongest trust label without upgrading it."
+      );
+    } else {
+      criteria.push(
+        "Record a narrow claim that cites this route as evidence.",
+        "Use the route's strongest trust label without upgrading it.",
+        "Leave broader claims open until independent obligations are satisfied."
+      );
+    }
   } else if (item.kind === "claim-blocker") {
     criteria.push(
       "Run the claim review and resolve the named open check.",
