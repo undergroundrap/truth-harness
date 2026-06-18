@@ -837,12 +837,17 @@ function routeObligationItem(workspacePath: string, route: VerifierRoute, obliga
 }
 
 function commandForRouteObligation(workspacePath: string, route: VerifierRoute, obligation: ProofObligation): string {
+  const inspectRouteCommand = `truth-harness route show ${quoteCommandArg(route.routeId)} --workspace ${quoteCommandArg(workspacePath)} --json`;
+  if (proofCommandNeedsConcreteSource(obligation.command)) {
+    return inspectRouteCommand;
+  }
+
   const scopedCommand = scopedProofCommand(obligation.command, route.routeId, obligation.obligationId, obligation.statement);
   if (scopedCommand) {
     return scopedCommand;
   }
 
-  return obligation.command ?? `truth-harness route show ${quoteCommandArg(route.routeId)} --workspace ${quoteCommandArg(workspacePath)} --json`;
+  return obligation.command ?? inspectRouteCommand;
 }
 
 function scopedProofCommand(
@@ -870,6 +875,17 @@ function scopedProofCommand(
   }
 
   return scoped;
+}
+
+function proofCommandNeedsConcreteSource(command: string | undefined): boolean {
+  if (!command?.startsWith("truth-harness proof check ")) {
+    return false;
+  }
+
+  return (
+    command.includes("<workspace-local.lean>") ||
+    /^truth-harness proof check\s+(?:"docs[\\/]examples[\\/]trivial\.lean"|docs[\\/]examples[\\/]trivial\.lean)(?:\s|$)/u.test(command)
+  );
 }
 
 function hasCliFlag(command: string, flag: string): boolean {

@@ -9,7 +9,7 @@ import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchHarness, writeResearchSession } from "./research-session.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createWorkspaceReview, listWorkspaceReviews, readWorkspaceReview, writeWorkspaceReview } from "./workspace-review.js";
-import { verifierRouteStatementBoundaryHash, writeVerifierRoute } from "./verifier-route.js";
+import { writeVerifierRoute } from "./verifier-route.js";
 
 const roots: string[] = [];
 
@@ -473,12 +473,12 @@ describe("workspace review", () => {
     expect(item).toMatchObject({
       kind: "route-obligation",
       routeId: route.route.routeId,
-      priority: "low"
+      priority: "low",
+      command: `truth-harness route show ${route.route.routeId} --workspace ${root} --json`
     });
-    expect(item?.command).toContain(`--route ${route.route.routeId}`);
-    expect(item?.command).toContain(`--obligation ${obligationId}`);
-    expect(item?.command).toContain(`--statement ${JSON.stringify(statement)}`);
-    expect(item?.command).toContain(`--statement-hash ${verifierRouteStatementBoundaryHash(statement)}`);
+    expect(item?.command).not.toContain("docs/examples/trivial.lean");
+    expect(item?.command).not.toContain(`--obligation ${obligationId}`);
+    expect(item?.agentPacket).toContain("Accepted proof-check artifact");
   });
 
   it("creates a local verifier autonomy contract for non-high-stakes work", async () => {
