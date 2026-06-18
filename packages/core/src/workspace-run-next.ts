@@ -16,7 +16,11 @@ import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-work
 import { writeLeanProofCheckRecord } from "./proof-backend.js";
 import { readReportDraft } from "./report-draft.js";
 import { createReceipt } from "./receipt.js";
-import { addResearchSessionCheckpoint, readResearchSession } from "./research-session.js";
+import {
+  addResearchSessionCheckpoint,
+  readResearchSession,
+  type ResearchSessionCheckpointWriteResult
+} from "./research-session.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { writeSmtCheckRecord, type SmtBackendId } from "./smt-backend.js";
 import type { SympyOperation } from "./sympy.js";
@@ -982,24 +986,85 @@ async function attachRunNextVerifierEvidence(
   result: {
     route?: SatisfyVerifierRouteObligationResult;
     validationGate?: AttachValidationGateEvidenceResult;
+    checkpoint?: ResearchSessionCheckpointWriteResult["checkpoint"];
   };
 }> {
   const route = await maybeAttachRouteEvidence(workspace, item, evidenceRef);
   const validationGate = await maybeAttachValidationGateEvidence(workspace, item, evidenceRef);
-  const summaries = [route, validationGate]
+  const checkpoint = await maybeCheckpointResearchSessionEvidence(workspace, item, evidenceRef, {
+    route,
+    validationGate
+  });
+  const summaries = [route, validationGate, checkpoint]
     .filter((attachment) => attachment.attached)
     .map((attachment) => attachment.summary);
 
   return {
-    attached: route.attached || validationGate.attached,
+    attached: route.attached || validationGate.attached || checkpoint.attached,
     summary: summaries.length > 0
       ? summaries.join(" ")
-      : `Wrote ${evidenceRef.kind}:${evidenceRef.ref}. ${route.summary} ${validationGate.summary}`,
+      : `Wrote ${evidenceRef.kind}:${evidenceRef.ref}. ${route.summary} ${validationGate.summary} ${checkpoint.summary}`,
     result: {
       route: route.result,
-      validationGate: validationGate.result
+      validationGate: validationGate.result,
+      checkpoint: checkpoint.result?.checkpoint
     }
   };
+}
+
+async function maybeCheckpointResearchSessionEvidence(
+  workspace: string,
+  item: WorkspaceReviewItem,
+  evidenceRef: VerifierRouteEvidenceRef & ValidationEvidenceRef,
+  attachments: {
+    route: { attached: boolean; summary: string; result?: SatisfyVerifierRouteObligationResult };
+    validationGate: { attached: boolean; summary: string; result?: AttachValidationGateEvidenceResult };
+  }
+): Promise<{ attached: boolean; summary: string; result?: ResearchSessionCheckpointWriteResult }> {
+  if (!item.sessionId) {
+    return {
+      attached: false,
+      summary: `No research-session target was present for ${evidenceRef.kind}:${evidenceRef.ref}.`
+    };
+  }
+
+  try {
+    const validationAttachment = attachments.validationGate.result;
+    const checkpoint = await addResearchSessionCheckpoint({
+      rootPath: workspace,
+      sessionRef: item.sessionId,
+      summary: `Ran ${evidenceRef.kind} checker evidence for ${item.validationGateId ?? item.obligationId ?? "workspace review item"}.`,
+      evidenceRefs: [
+        {
+          kind: evidenceRef.kind,
+          ref: evidenceRef.ref,
+          trust: evidenceRef.trust,
+          summary: evidenceRef.summary
+        }
+      ],
+      decisions: [
+        validationAttachment?.message ??
+          attachments.route.result?.message ??
+          `Recorded ${evidenceRef.kind}:${evidenceRef.ref} as local evidence for review.`
+      ],
+      nextChecks: validationAttachment
+        ? nextChecksForValidationAttachment(validationAttachment)
+        : [`Review ${evidenceRef.kind}:${evidenceRef.ref} against the targeted route or validation gate before strengthening the claim.`]
+    });
+
+    return {
+      attached: true,
+      summary: `Checkpointed research session ${item.sessionId}.`,
+      result: checkpoint
+    };
+  } catch (error) {
+    return {
+      attached: false,
+      summary: `Did not checkpoint research session ${item.sessionId}: ${
+        error instanceof Error ? error.message : "checkpoint failed"
+      }`
+    };
+  }
 }
 
 function validationGateAttachmentSummary(attachment: AttachValidationGateEvidenceResult | undefined): string {

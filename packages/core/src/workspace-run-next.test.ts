@@ -8,7 +8,7 @@ import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeReportDraft } from "./report-draft.js";
 import { readResearchSession, writeResearchHarness } from "./research-session.js";
-import { listValidationPlans, writeValidationPlan } from "./validation-plan.js";
+import { listValidationPlans } from "./validation-plan.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import {
   createWorkspaceReviewFromCredibilityPack,
@@ -142,13 +142,14 @@ describe("workspace run-next", () => {
   it("attaches direct proof-check artifacts to linked validation gates without overclaiming", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
-    const validation = await writeValidationPlan({
+    const harness = await writeResearchHarness({
       rootPath: root,
-      claim: "3 / 4 + 5 / 8",
+      objective: "3 / 4 + 5 / 8",
       domains: ["math"],
       now: "2026-06-18T00:01:00.000Z"
     });
-    const proofGate = validation.plan.gates.find((gate) => gate.kind === "proof");
+    const validationPlan = harness.validationPlan?.plan;
+    const proofGate = validationPlan?.gates.find((gate) => gate.kind === "proof");
     if (!proofGate) {
       throw new Error("Expected a proof gate in math validation plan.");
     }
@@ -160,9 +161,10 @@ describe("workspace run-next", () => {
         'truth-harness proof check proofs/scoped.lean --write --statement "3 / 4 + 5 / 8" --lean-command truth-harness-missing-lean --timeout-ms 50',
       claimId: "claim_validation_test",
       kind: "validation-gate",
-      validationPlanId: validation.plan.planId,
+      validationPlanId: validationPlan?.planId,
       validationGateId: proofGate.gateId,
       validationGateKind: proofGate.kind,
+      sessionId: harness.session.sessionId,
       domain: "math"
     });
 
@@ -173,8 +175,9 @@ describe("workspace run-next", () => {
       now: "2026-06-18T00:02:00.000Z"
     });
     const plans = await listValidationPlans(root);
-    const updatedPlan = plans.find((candidate) => candidate.planId === validation.plan.planId);
+    const updatedPlan = plans.find((candidate) => candidate.planId === validationPlan?.planId);
     const updatedGate = updatedPlan?.gates.find((gate) => gate.gateId === proofGate.gateId);
+    const updatedSession = await readResearchSession(root, harness.session.sessionId);
 
     expect(plan.status).toBe("executed");
     expect(plan.execution).toMatchObject({
@@ -203,6 +206,10 @@ describe("workspace run-next", () => {
                 status: "matched"
               }
             }
+          },
+          checkpoint: {
+            summary: `Ran proof checker evidence for ${proofGate.gateId}.`,
+            evidenceRefs: [expect.objectContaining({ kind: "proof", trust: "unverified" })]
           }
         }
       }
@@ -215,6 +222,14 @@ describe("workspace run-next", () => {
         "Proof check was not accepted; attach an accepted proof-check record before closing this gate."
       ])
     });
+    expect(updatedSession.evidenceRefs).toContainEqual(expect.objectContaining({ kind: "proof", trust: "unverified" }));
+    expect(updatedSession.checkpoints).toContainEqual(
+      expect.objectContaining({
+        summary: `Ran proof checker evidence for ${proofGate.gateId}.`,
+        evidenceRefs: [expect.objectContaining({ kind: "proof", trust: "unverified" })],
+        decisions: [expect.stringContaining("remains open")]
+      })
+    );
   });
 
   it("executes bounded local actions without honoring command workspace overrides", async () => {

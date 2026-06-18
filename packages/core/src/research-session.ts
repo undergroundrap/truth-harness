@@ -45,6 +45,8 @@ export interface ResearchEvidenceRef {
     | "code-run"
     | "benchmark"
     | "cas"
+    | "proof"
+    | "smt"
     | "disclosure"
     | "simulation"
     | "experiment"
