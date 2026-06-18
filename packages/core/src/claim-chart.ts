@@ -3,6 +3,7 @@ import { join, relative, resolve } from "node:path";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { listInventionLogEntries, type InventionEvidenceRef, type InventionLogEntry } from "./invention-log.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -146,6 +147,11 @@ export async function writeClaimChart(input: CreateClaimChartInput): Promise<Cla
   const baseName = `${chart.createdAt.slice(0, 10)}-${chart.entryId}-${chart.chartId}`;
   const jsonPath = join(patentsDir, `${baseName}.json`);
   const markdownPath = join(patentsDir, `${baseName}.md`);
+  await assertJsonSchemaBeforeWrite({
+    value: chart,
+    schemaFile: "claim-chart.schema.json",
+    artifactName: "Claim chart"
+  });
   await writeJsonFileAtomic(jsonPath, chart);
   await writeFileAtomic(markdownPath, chart.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({

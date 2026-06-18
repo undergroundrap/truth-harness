@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -99,6 +99,47 @@ describe("claim charts", () => {
     expect(chart.validation.reductionToPracticeClaimed).toBe(false);
     expect(chart.legal.warnings.join("\n")).toContain("No reduction-to-practice refs were recorded");
     expect(chart.markdown).toContain("not-a-legal-opinion");
+  });
+
+  it("fails closed before writing malformed claim-chart artifacts", async () => {
+    const root = await tempRoot();
+    const initialized = await initLocalWorkspace(root, {
+      displayName: "Malformed Claim Chart Lab",
+      now: "2026-06-08T00:00:00.000Z"
+    });
+    const invention = await createInventionLogEntry({
+      rootPath: root,
+      title: "Privacy metadata regression",
+      hypothesis: "Claim charts must not persist if workspace provenance metadata is malformed.",
+      now: "2026-06-08T01:00:00.000Z"
+    });
+    await writeFile(
+      initialized.manifestPath,
+      `${JSON.stringify(
+        {
+          ...initialized.manifest,
+          privacy: {
+            ...initialized.manifest.privacy,
+            networkAccess: "unknown"
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    await expect(
+      writeClaimChart({
+        rootPath: root,
+        entryId: invention.entry.entryId,
+        elements: [{ text: "A claim chart with invalid inherited privacy metadata." }],
+        now: "2026-06-08T02:00:00.000Z"
+      })
+    ).rejects.toThrow("Claim chart failed JSON Schema validation before write");
+
+    const patentFiles = await readdir(join(root, ".truth-harness", "patents"));
+    expect(patentFiles.filter((file) => file.endsWith(".json") || file.endsWith(".md"))).toEqual([]);
   });
 });
 
