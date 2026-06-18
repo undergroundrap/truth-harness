@@ -1,8 +1,10 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { parseReceiptJson } from "./receipt-validation.js";
@@ -11,6 +13,10 @@ import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { readVerifierRoute, verifierRouteReadiness } from "./verifier-route.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
+
+const CLAIM_SCHEMA_VERSION = "truth-harness.claim.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let claimLedgerSchemaCache: Promise<unknown> | undefined;
 
 export const CLAIM_LEDGER_DOMAINS = [
   "math",
@@ -85,7 +91,7 @@ export interface ClaimVerificationStep {
 }
 
 export interface ClaimLedgerRecord {
-  schemaVersion: "truth-harness.claim.v0";
+  schemaVersion: typeof CLAIM_SCHEMA_VERSION;
   claimId: string;
   projectId: string;
   createdAt: string;
@@ -288,7 +294,7 @@ export async function createClaimLedgerRecord(input: CreateClaimLedgerRecordInpu
   };
   const claimId = `claim_${stableHash(recordWithoutId).slice(0, 16)}`;
   const baseClaim = {
-    schemaVersion: "truth-harness.claim.v0" as const,
+    schemaVersion: CLAIM_SCHEMA_VERSION,
     claimId,
     ...recordWithoutId,
     updatedAt: createdAt,
@@ -315,12 +321,13 @@ export async function createClaimLedgerRecord(input: CreateClaimLedgerRecordInpu
 export async function writeClaimLedgerRecord(input: CreateClaimLedgerRecordInput): Promise<ClaimLedgerWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
   const claim = await createClaimLedgerRecord(input);
+  await assertClaimLedgerSchema(claim);
   const claimsDir = resolve(status.root, status.manifest.directories.claims);
-  await mkdir(claimsDir, { recursive: true });
   const baseName = `${claim.createdAt.slice(0, 10)}-${claim.claimId}`;
   const jsonPath = join(claimsDir, `${baseName}.json`);
   const markdownPath = join(claimsDir, `${baseName}.md`);
 
+  await mkdir(claimsDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, claim);
   await writeFileAtomic(markdownPath, claim.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
@@ -337,6 +344,28 @@ export async function writeClaimLedgerRecord(input: CreateClaimLedgerRecordInput
     markdownPath,
     markdown: claim.markdown
   };
+}
+
+async function assertClaimLedgerSchema(claim: ClaimLedgerRecord): Promise<void> {
+  const schema = await loadClaimLedgerSchema();
+  const serializedClaim = parseJsonWithOptionalBom(JSON.stringify(claim));
+  const issues = validateJsonSchema(serializedClaim, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Claim ledger record failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadClaimLedgerSchema(): Promise<unknown> {
+  claimLedgerSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "claim-ledger.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return claimLedgerSchemaCache;
 }
 
 export async function listClaimRecords(rootPath: string): Promise<ClaimLedgerRecord[]> {
@@ -362,7 +391,7 @@ export async function listClaimRecords(rootPath: string): Promise<ClaimLedgerRec
   );
 
   return claims
-    .filter((claim) => claim.schemaVersion === "truth-harness.claim.v0")
+    .filter((claim) => claim.schemaVersion === CLAIM_SCHEMA_VERSION)
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
@@ -627,7 +656,7 @@ async function readClaimRecordRef(
     for (const file of files.filter((candidate) => candidate.endsWith(".json"))) {
       const path = join(claimsDir, file);
       const claim = parseJsonWithOptionalBom(await readFile(path, "utf8")) as ClaimLedgerRecord;
-      if (claim.schemaVersion === "truth-harness.claim.v0" && claim.claimId === ref) {
+      if (claim.schemaVersion === CLAIM_SCHEMA_VERSION && claim.claimId === ref) {
         return { claim, path };
       }
     }

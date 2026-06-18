@@ -80,6 +80,21 @@ describe("claim ledger", () => {
     expect(validation.summary.byKind.claims).toBe(2);
   });
 
+  it("rejects malformed claim records before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
+
+    await expect(
+      writeClaimLedgerRecord({
+        rootPath: root,
+        statement: "A claim with malformed record metadata must not enter the ledger.",
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("Claim ledger record failed JSON Schema validation before write");
+
+    await expect(listClaimRecords(root)).resolves.toEqual([]);
+  });
+
   it("reads BOM-prefixed claim records through list, direct read, and review paths", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
