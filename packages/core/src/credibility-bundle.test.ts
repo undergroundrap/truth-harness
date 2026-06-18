@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -205,6 +205,58 @@ describe("credibility reviewer bundle", () => {
     expect(verification.changedSourceFiles).toHaveLength(0);
   });
 
+  it("validates bundle manifests before writing the reviewer manifest", async () => {
+    const root = await tempRoot();
+    const workspace = await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+    await writeFile(
+      workspace.manifestPath,
+      `${JSON.stringify(
+        {
+          ...workspace.manifest,
+          privacy: {
+            ...workspace.manifest.privacy,
+            networkAccess: "impossible"
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    await expect(
+      writeCredibilityBundle({
+        rootPath: root,
+        now: "2026-06-16T00:01:00.000Z",
+        runner: passingEngineRunner
+      })
+    ).rejects.toThrow("$.privacy.networkAccess must be one of");
+
+    const findingsFiles = await listFindingsFiles(root);
+    expect(findingsFiles.some((file) => file.endsWith("manifest.json"))).toBe(false);
+  });
+
+  it("validates bundle verification JSON before writing sidecars", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+    const bundle = await writeCredibilityBundle({
+      rootPath: root,
+      now: "2026-06-16T00:01:00.000Z",
+      runner: passingEngineRunner
+    });
+
+    await expect(
+      writeCredibilityBundleVerification({
+        rootPath: root,
+        bundleRef: bundle.manifest.bundleId,
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("$.verifiedAt must be a valid date-time string");
+
+    const findingsFiles = await listFindingsFiles(root);
+    expect(findingsFiles.some((file) => file.includes("credibility-bundle-verification"))).toBe(false);
+  });
+
   it("skips prior reviewer bundles so repeated exports do not recursively grow", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
@@ -326,6 +378,37 @@ async function writeReportDraftFixture(root: string) {
     relativeJson,
     relativeMarkdown
   };
+}
+
+async function listFindingsFiles(root: string): Promise<string[]> {
+  const findingsDir = join(root, ".truth-harness", "findings");
+  const files: string[] = [];
+
+  async function walk(directory: string, prefix = ""): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code === "ENOENT") {
+        return;
+      }
+      throw error;
+    }
+
+    for (const entry of entries) {
+      const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await walk(path, relativePath);
+      } else if (entry.isFile()) {
+        files.push(relativePath);
+      }
+    }
+  }
+
+  await walk(findingsDir);
+  return files.sort();
 }
 
 async function tempRoot(): Promise<string> {
