@@ -115,6 +115,39 @@ describe("local corpus", () => {
     expect(beta.hits[0]?.path).toBe("beta.md");
   });
 
+  it("fails closed before writing malformed local corpus indexes", async () => {
+    const root = await tempRoot();
+    const initialized = await initLocalWorkspace(root, { now: "2026-06-08T00:00:00.000Z" });
+    await writeFile(join(root, "notes.md"), "# Notes\n\nA local source note.", "utf8");
+    await writeFile(
+      initialized.manifestPath,
+      `${JSON.stringify(
+        {
+          ...initialized.manifest,
+          privacy: {
+            ...initialized.manifest.privacy,
+            networkAccess: "unknown"
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    await expect(
+      ingestLocalCorpus({
+        rootPath: root,
+        paths: ["notes.md"],
+        now: "2026-06-08T01:00:00.000Z"
+      })
+    ).rejects.toThrow("Local corpus index failed JSON Schema validation before write");
+
+    await expect(readFile(join(root, LOCAL_WORKSPACE_DIR, "indexes", LOCAL_CORPUS_INDEX), "utf8")).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+  });
+
   it("rejects corpus paths outside the workspace root", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-08T00:00:00.000Z" });

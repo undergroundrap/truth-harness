@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { withWorkspaceLock, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, LOCAL_WORKSPACE_DIR, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 
@@ -132,6 +133,11 @@ export async function ingestLocalCorpus(input: LocalCorpusIngestInput): Promise<
     };
 
     await mkdir(resolve(status.root, status.manifest.directories.indexes), { recursive: true });
+    await assertJsonSchemaBeforeWrite({
+      value: nextIndex,
+      schemaFile: "local-corpus.schema.json",
+      artifactName: "Local corpus index"
+    });
     await writeJsonFileAtomic(indexPath, nextIndex);
 
     return {
