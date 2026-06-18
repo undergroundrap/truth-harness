@@ -1,6 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
@@ -69,7 +72,7 @@ export interface ExpertReviewEvidenceRef {
 }
 
 export interface ExpertReviewRecord {
-  schemaVersion: "truth-harness.expert-review.v0";
+  schemaVersion: typeof EXPERT_REVIEW_SCHEMA_VERSION;
   reviewId: string;
   projectId: string;
   createdAt: string;
@@ -135,6 +138,10 @@ export interface ExpertReviewWriteResult {
   markdown: string;
 }
 
+const EXPERT_REVIEW_SCHEMA_VERSION = "truth-harness.expert-review.v0" as const;
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let expertReviewSchemaCache: Promise<unknown> | undefined;
+
 export function isExpertReviewKind(value: string): value is ExpertReviewKind {
   return (EXPERT_REVIEW_KINDS as readonly string[]).includes(value);
 }
@@ -188,7 +195,7 @@ export async function createExpertReview(input: CreateExpertReviewInput): Promis
   };
   const reviewId = `review_${stableHash(reviewWithoutId).slice(0, 16)}`;
   const review: Omit<ExpertReviewRecord, "markdown"> = {
-    schemaVersion: "truth-harness.expert-review.v0",
+    schemaVersion: EXPERT_REVIEW_SCHEMA_VERSION,
     reviewId,
     ...reviewWithoutId,
     updatedAt: createdAt
@@ -203,6 +210,7 @@ export async function createExpertReview(input: CreateExpertReviewInput): Promis
 export async function writeExpertReview(input: CreateExpertReviewInput): Promise<ExpertReviewWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
   const review = await createExpertReview(input);
+  await assertExpertReviewSchema(review);
   const reviewsDir = resolve(status.root, status.manifest.directories.reviews);
   await mkdir(reviewsDir, { recursive: true });
   const baseName = `${review.createdAt.slice(0, 10)}-${review.reviewId}`;
@@ -227,6 +235,28 @@ export async function writeExpertReview(input: CreateExpertReviewInput): Promise
   };
 }
 
+async function assertExpertReviewSchema(review: ExpertReviewRecord): Promise<void> {
+  const schema = await loadExpertReviewSchema();
+  const serializedReview = parseJsonWithOptionalBom(JSON.stringify(review));
+  const issues = validateJsonSchema(serializedReview, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Expert review record failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadExpertReviewSchema(): Promise<unknown> {
+  expertReviewSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "expert-review.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return expertReviewSchemaCache;
+}
+
 export async function listExpertReviews(rootPath: string): Promise<ExpertReviewRecord[]> {
   const status = await requireLocalWorkspace(rootPath);
   const reviewsDir = resolve(status.root, status.manifest.directories.reviews);
@@ -246,11 +276,11 @@ export async function listExpertReviews(rootPath: string): Promise<ExpertReviewR
   const reviews = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => JSON.parse(await readFile(join(reviewsDir, file), "utf8")) as ExpertReviewRecord)
+      .map(async (file) => parseJsonWithOptionalBom(await readFile(join(reviewsDir, file), "utf8")) as ExpertReviewRecord)
   );
 
   return reviews
-    .filter((review) => review.schemaVersion === "truth-harness.expert-review.v0")
+    .filter((review) => review.schemaVersion === EXPERT_REVIEW_SCHEMA_VERSION)
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 

@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { initLocalWorkspace } from "./local-workspace.js";
+import { initLocalWorkspace, LOCAL_WORKSPACE_DIR, LOCAL_WORKSPACE_MANIFEST } from "./local-workspace.js";
 import { createExpertReview, listExpertReviews, writeExpertReview } from "./expert-review.js";
 
 const roots: string[] = [];
@@ -71,6 +71,29 @@ describe("expert reviews", () => {
     expect(write.review.warnings.join("\n")).toContain("not a patentability guarantee");
     expect(list).toHaveLength(1);
     expect(list[0]?.reviewId).toBe(write.review.reviewId);
+  });
+
+  it("rejects malformed expert review records before writing artifacts", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-08T00:00:00.000Z" });
+    const manifestPath = join(root, LOCAL_WORKSPACE_DIR, LOCAL_WORKSPACE_MANIFEST);
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+    manifest.projectId = "";
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    await expect(
+      writeExpertReview({
+        rootPath: root,
+        subject: "Malformed workspace expert review",
+        reviewerRole: "math professor",
+        limitations: ["Local validation should reject this before persistence."],
+        requiredNextChecks: ["Restore a valid workspace identity."],
+        now: "2026-06-08T00:30:00.000Z"
+      })
+    ).rejects.toThrow("Expert review record failed JSON Schema validation before write");
+
+    const reviews = await readdir(join(root, LOCAL_WORKSPACE_DIR, "reviews"));
+    expect(reviews).toEqual([]);
   });
 });
 

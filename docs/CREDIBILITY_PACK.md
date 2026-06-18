@@ -27,6 +27,7 @@ Claim records, verifier routes, proof-check records, CAS-check records, SMT-chec
 The credibility-pack writer validates reviewer packets against `credibility-pack.schema.json` before saving them, so a corrupt manifest, malformed engine ladder, or broken reviewer action plan cannot become the packet a professor is asked to trust.
 The evidence-audit writers validate against `evidence-audit.schema.json` before saving JSON or Markdown reports, so overclaim reviews and missing-evidence summaries cannot enter the reviewer ledger with malformed provenance.
 The experiment-log writer validates against `experiment-log.schema.json` before saving experiment evidence, so wet-lab, field, preclinical, clinical, and bench provenance cannot enter the workspace with malformed identity or review boundaries.
+The expert-review writer validates against `expert-review.schema.json` before saving human review records, so professor, domain expert, clinical, regulatory, safety, and patent/legal reviews cannot be persisted with malformed reviewer scope or project identity.
 
 When using the npm wrapper, pass command flags after an extra separator so npm does not consume them:
 
