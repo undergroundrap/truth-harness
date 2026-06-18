@@ -24,6 +24,7 @@ import {
   handleTruthHarnessCodeRunList,
   handleTruthHarnessCodeSandboxStatus,
   handleTruthHarnessDiscoveryPackage,
+  handleTruthHarnessEngineReadiness,
   handleTruthHarnessEngineManifest,
   handleTruthHarnessEvidenceAudit,
   handleTruthHarnessEvidenceAuditList,
@@ -438,6 +439,38 @@ describe("MCP tool handlers", () => {
       })
     );
     expect(result.trustBoundary.statusProbeIsNotEvidence).toBe(true);
+  });
+
+  it("reports reviewer-facing engine readiness for agents without minting evidence", () => {
+    const result = handleTruthHarnessEngineReadiness({
+      maximaCommand: "truth-harness-missing-maxima-command",
+      sageCommand: "truth-harness-missing-sage-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      cvc5Command: "truth-harness-missing-cvc5-command",
+      timeoutMs: 50
+    });
+
+    expect(result.schemaVersion).toBe("truth-harness.engine-readiness.v0");
+    expect(result.localOnly).toBe(true);
+    expect(result.networkAccess).toBe("none");
+    expect(result.status).toBe("research-core-ready");
+    expect(result.summary.readyTrustLabels).toEqual(expect.arrayContaining(["exact-computed", "refuted"]));
+    expect(result.gates).toContainEqual(
+      expect.objectContaining({
+        id: "math-core",
+        status: "ready"
+      })
+    );
+    expect(result.gates).toContainEqual(
+      expect.objectContaining({
+        id: "professor-review",
+        status: "blocked",
+        missingClaimClasses: ["independent-cas-cross-check", "smt-constraint-check", "accepted-proof-checking"]
+      })
+    );
+    expect(result.trustBoundary.readinessDoesNotMintEvidence).toBe(true);
+    expect(result.trustBoundary.professorReadyRequiresConcreteEngineRuns).toBe(true);
   });
 
   it("writes and reads claim ledger records for agents", async () => {

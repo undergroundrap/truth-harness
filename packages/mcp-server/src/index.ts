@@ -25,6 +25,7 @@ import {
   handleTruthHarnessCodeRunList,
   handleTruthHarnessCodeSandboxStatus,
   handleTruthHarnessDiscoveryPackage,
+  handleTruthHarnessEngineReadiness,
   handleTruthHarnessEngineManifest,
   handleTruthHarnessEvidenceAudit,
   handleTruthHarnessEvidenceAuditList,
@@ -743,6 +744,49 @@ export function createTruthHarnessMcpServer(): McpServer {
       }
     },
     async (input) => toolJson(handleTruthHarnessEngineManifest(input))
+  );
+
+  server.registerTool(
+    "truth_harness_engine_readiness",
+    {
+      title: "Engine Readiness Report",
+      description:
+        "Return the reviewer-facing local engine readiness report: which trust labels this installation can responsibly support today, which professor-review gates are blocked, which agent-autonomy gates are unsafe, and which adapters remain planned but untrusted. This is readiness only; it never mints evidence.",
+      inputSchema: {
+        maximaCommand: z
+          .string()
+          .optional()
+          .describe("Maxima executable path or command for this readiness probe."),
+        sageCommand: z
+          .string()
+          .optional()
+          .describe("SageMath executable path or command for this readiness probe."),
+        leanCommand: z
+          .string()
+          .optional()
+          .describe("Lean executable path or command for this readiness probe."),
+        z3Command: z
+          .string()
+          .optional()
+          .describe("Z3 executable path or command for this readiness probe."),
+        cvc5Command: z
+          .string()
+          .optional()
+          .describe("cvc5 executable path or command for this readiness probe."),
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .max(10000)
+          .optional()
+          .describe("Local backend version-probe timeout in milliseconds. Defaults to 1500.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(handleTruthHarnessEngineReadiness(input))
   );
 
   server.registerTool(

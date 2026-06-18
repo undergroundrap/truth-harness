@@ -156,6 +156,7 @@ async function handleApiRequest(request, response, requestUrl) {
   if (requestUrl.pathname === "/api/status" && request.method === "GET") {
     const codeRunSandbox = await readCodeRunSandboxStatus();
     const engineManifest = await readEngineManifest();
+    const engineReadiness = await readEngineReadiness();
     const verification = await readVerificationEngineStatus();
     const engineVerification = await readEngineEvidenceVerification();
     const mcpCodeRunExposed = isTruthyEnv(process.env.TRUTH_HARNESS_ALLOW_CODE_RUN);
@@ -187,6 +188,7 @@ async function handleApiRequest(request, response, requestUrl) {
         }
       },
       engineManifest,
+      engineReadiness,
       verification,
       engineVerification,
       dockerVerifier: dockerVerifierGuidance(verification),
@@ -206,6 +208,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "workspace-events",
         "validation-plan",
         "engine-manifest",
+        "engine-readiness-report",
         "verification-readiness",
         "engine-evidence-verification",
         "engine-evidence-runs",
@@ -2997,6 +3000,46 @@ async function readEngineManifest() {
       },
       warnings: [
         `Engine manifest unavailable: ${error instanceof Error ? error.message : "unknown error"}`
+      ]
+    };
+  }
+}
+
+async function readEngineReadiness() {
+  try {
+    const { createEngineReadinessReport } = await loadCoreModule();
+    return createEngineReadinessReport({ timeoutMs: 1500 });
+  } catch (error) {
+    return {
+      schemaVersion: "truth-harness.engine-readiness.v0",
+      createdAt: new Date().toISOString(),
+      localOnly: true,
+      networkAccess: "none",
+      status: "blocked",
+      manifestStatus: "missing",
+      summary: {
+        readyClaimClasses: 0,
+        totalClaimClasses: 0,
+        blockedClaimClasses: 0,
+        plannedClaimClasses: 0,
+        readyCapabilities: 0,
+        totalCapabilities: 0,
+        readyTrustLabels: [],
+        missingExternalEngines: []
+      },
+      gates: [],
+      claimClasses: [],
+      trustBoundary: {
+        aiOutputIsNotEvidence: true,
+        statusProbeIsNotEvidence: true,
+        readinessDoesNotMintEvidence: true,
+        professorReadyRequiresConcreteEngineRuns: true,
+        provedRequiresAcceptedProofCheckerRun: true,
+        hardProblemsRequireDomainValidation: true
+      },
+      recommendedNextActions: ["Run `npm run engines:readiness` after the core module builds successfully."],
+      warnings: [
+        `Engine readiness unavailable: ${error instanceof Error ? error.message : "unknown error"}`
       ]
     };
   }

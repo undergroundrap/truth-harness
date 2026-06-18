@@ -39,6 +39,7 @@ describe("web UI action contracts", () => {
 
     expect(html).toContain('id="engine-evidence-gate"');
     expect(source).toContain("function renderEngineEvidenceGate(payload = state.safetyStatus)");
+    expect(source).toContain("payload.engineReadiness");
     expect(source).toContain("payload.engineVerification");
     expect(source).toContain('fetch("/api/engine-runs"');
     expect(source).toContain("function refreshEngineRuns({ announce = true } = {})");
@@ -56,7 +57,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain('data-testid="copy-engine-evidence-command"');
     expect(source).toContain("function engineEvidenceSummary(payload)");
     expect(source).toContain("focusedEngineEvidenceCase(target)");
-    expect(source).toContain("Status probes do not mint evidence, truth labels, or proof.");
+    expect(source).toContain("Readiness does not mint evidence, truth labels, or proof.");
     expect(styles).toContain(".engine-evidence-gate");
     expect(styles).toContain(".engine-evidence-command-stack");
     expect(styles).toContain(".engine-evidence-saved-grid");

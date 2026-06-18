@@ -30,6 +30,7 @@ import {
   createWorkspaceRunNextPlan,
   createWorkspaceGraph,
   createSymbolicCasCheckRecord,
+  createEngineReadinessReport,
   getCasBackendStatus,
   isClaimLedgerDomain,
   isClaimLedgerStatus,
@@ -147,6 +148,7 @@ import {
   type DiscoveryPackage,
   type DiscoveryPackageWriteResult,
   type EngineManifest,
+  type EngineReadinessReport,
   type EngineVerificationRequirements,
   type EvidenceAudit,
   type EvidenceAuditReportWriteResult,
@@ -309,6 +311,8 @@ export interface TruthHarnessEngineManifestInput {
   z3Command?: string;
   cvc5Command?: string;
 }
+
+export interface TruthHarnessEngineReadinessInput extends TruthHarnessEngineManifestInput {}
 
 export interface TruthHarnessClaimAddInput {
   workspacePath?: string;
@@ -1268,6 +1272,17 @@ export async function handleTruthHarnessRouteSatisfy(
 
 export function handleTruthHarnessEngineManifest(input: TruthHarnessEngineManifestInput = {}): EngineManifest {
   return getEngineManifest({
+    timeoutMs: input.timeoutMs,
+    maximaCommand: input.maximaCommand,
+    sageCommand: input.sageCommand,
+    leanCommand: input.leanCommand,
+    z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command
+  });
+}
+
+export function handleTruthHarnessEngineReadiness(input: TruthHarnessEngineReadinessInput = {}): EngineReadinessReport {
+  return createEngineReadinessReport({
     timeoutMs: input.timeoutMs,
     maximaCommand: input.maximaCommand,
     sageCommand: input.sageCommand,

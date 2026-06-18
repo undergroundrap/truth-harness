@@ -65,6 +65,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("workspace-run-next-save");
     expect(statusPayload.capabilities).toContain("workspace-maintenance");
     expect(statusPayload.capabilities).toContain("engine-evidence-verification");
+    expect(statusPayload.capabilities).toContain("engine-readiness-report");
     expect(statusPayload.capabilities).toContain("engine-evidence-runs");
     expect(statusPayload.capabilities).toContain("credibility-pack");
     expect(statusPayload.capabilities).toContain("credibility-bundle-latest");
@@ -121,6 +122,16 @@ describe("local web route ledger API", () => {
       }
     });
     expect(Array.isArray(statusPayload.engineVerification.cases)).toBe(true);
+    expect(statusPayload.engineReadiness).toMatchObject({
+      schemaVersion: "truth-harness.engine-readiness.v0",
+      localOnly: true,
+      networkAccess: "none",
+      trustBoundary: {
+        readinessDoesNotMintEvidence: true,
+        professorReadyRequiresConcreteEngineRuns: true
+      }
+    });
+    expect(Array.isArray(statusPayload.engineReadiness.gates)).toBe(true);
 
     const reportMarkdown = "# Saved Report\n\nEvery result is replayable.\n";
     const reportSaveResponse = await fetch(`${baseUrl}/api/reports`, {

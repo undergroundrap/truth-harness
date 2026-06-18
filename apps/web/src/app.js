@@ -7985,7 +7985,7 @@ async function refreshSafetyStatus() {
       "local-api",
       "Loaded engine readiness",
       localApiSuccessMessage(payload, engineReadinessSummary(payload)),
-      payload.verification?.readyCount > 0 ? "passed" : "waiting"
+      payload.engineReadiness?.summary?.readyClaimClasses > 0 || payload.verification?.readyCount > 0 ? "passed" : "waiting"
     );
     addActivity(
       "local-api",
@@ -9480,46 +9480,79 @@ function renderEngineReadinessStatus(payload) {
     return;
   }
 
+  const readinessReport = payload.engineReadiness;
   const readiness = payload.verification ?? {};
   const manifest = payload.engineManifest ?? {};
   const evidence = payload.engineVerification ?? {};
   const engines = Array.isArray(readiness.engines) ? readiness.engines : [];
+  const gates = Array.isArray(readinessReport?.gates) ? readinessReport.gates : [];
+  const readyTrustLabels = Array.isArray(readinessReport?.summary?.readyTrustLabels)
+    ? readinessReport.summary.readyTrustLabels
+    : [];
   const totalCount = Number.isFinite(readiness.totalCount) ? readiness.totalCount : engines.length;
   const readyCount = Number.isFinite(readiness.readyCount)
     ? readiness.readyCount
     : engines.filter((engine) => engine.status === "available").length;
+  const readyClaimClasses = Number.isFinite(readinessReport?.summary?.readyClaimClasses)
+    ? readinessReport.summary.readyClaimClasses
+    : undefined;
+  const totalClaimClasses = Number.isFinite(readinessReport?.summary?.totalClaimClasses)
+    ? readinessReport.summary.totalClaimClasses
+    : undefined;
   const manifestReadyCount = Number.isFinite(manifest.readyCount) ? manifest.readyCount : 0;
   const manifestTotalCount = Number.isFinite(manifest.totalCount) ? manifest.totalCount : 0;
   const nativeCount = Number.isFinite(manifest.nativeCount) ? manifest.nativeCount : 0;
   const plannedCount = Number.isFinite(manifest.plannedCount) ? manifest.plannedCount : 0;
   const allReady = totalCount > 0 && readyCount === totalCount;
   const anyReady = readyCount > 0;
+  const reportStatus = readinessReport?.status;
   const rows = [
+    ["Readiness", formatSafetyPhrase(reportStatus ?? "checking")],
+    readyClaimClasses !== undefined && totalClaimClasses !== undefined
+      ? ["Claim classes", `${readyClaimClasses}/${totalClaimClasses} responsibly supported`]
+      : undefined,
+    readyTrustLabels.length > 0
+      ? ["Trust labels", readyTrustLabels.map((label) => `<code>${escapeHtml(label)}</code>`).join(" ")]
+      : undefined,
     ["Adapters", `${readyCount}/${totalCount} verification backends`],
     ["Manifest", `${manifestReadyCount}/${manifestTotalCount} active capabilities`],
     ["Evidence gate", `${evidence.concretePassed ?? 0}/${evidence.concreteTotal ?? 0} concrete checks`],
     ["Native", `${nativeCount} local kernels`],
     ["Roadmap", `${plannedCount} planned adapters`],
+    ...gates.map((gate) => [
+      gate.title ?? gate.id ?? "Gate",
+      `<span>${escapeHtml(formatSafetyPhrase(gate.status ?? "unknown"))}</span><small>${escapeHtml(gate.summary ?? "")}</small>`
+    ]),
     ...engines.map((engine) => [
       engine.lane ?? engine.displayName ?? "Backend",
       engineReadinessValue(engine)
     ])
-  ];
+  ].filter(Boolean);
 
-  engineReadinessPill.textContent = allReady ? "all ready" : anyReady ? `${readyCount}/${totalCount} ready` : "install engines";
-  engineReadinessPill.className = `status-pill ${allReady ? "exact" : anyReady ? "checked" : "waiting"}`;
+  engineReadinessPill.textContent = engineReadinessStatusLabel(reportStatus, {
+    allReady,
+    anyReady,
+    readyCount,
+    totalCount
+  });
+  engineReadinessPill.className = `status-pill ${engineReadinessStatusClass(reportStatus, { allReady, anyReady })}`;
   engineReadinessDetails.innerHTML = rows
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`)
     .join("");
 
   const boundaryNotes = [
-    "Status probes do not mint evidence, truth labels, or proof.",
+    "Readiness does not mint evidence, truth labels, or proof.",
+    readinessReport?.trustBoundary?.professorReadyRequiresConcreteEngineRuns
+      ? "Professor-ready claims require concrete engine runs, not status probes."
+      : undefined,
     evidence.evidenceMinted !== undefined
       ? `Concrete engine gate minted ${evidence.evidenceMinted} replayable evidence record${evidence.evidenceMinted === 1 ? "" : "s"}.`
       : undefined,
+    ...(Array.isArray(readinessReport?.recommendedNextActions) ? readinessReport.recommendedNextActions : []),
     ...engines
       .filter((engine) => engine.status !== "available")
       .map((engine) => `${engine.displayName ?? engine.id ?? "Backend"}: ${engine.note ?? "not available"}`),
+    ...(Array.isArray(readinessReport?.warnings) ? readinessReport.warnings : []),
     ...(Array.isArray(evidence.warnings) ? evidence.warnings : []),
     ...engines
       .filter((engine) => engine.status === "available")
@@ -9859,8 +9892,23 @@ function safetyStatusSummary(payload) {
 }
 
 function engineReadinessSummary(payload) {
+  const report = payload?.engineReadiness;
   const readiness = payload?.verification;
   const manifest = payload?.engineManifest;
+  if (report) {
+    const summary = report.summary ?? {};
+    const gates = Array.isArray(report.gates) ? report.gates : [];
+    const blockedGates = gates
+      .filter((gate) => gate.status !== "ready")
+      .map((gate) => gate.title ?? gate.id)
+      .filter(Boolean);
+    return `${formatSafetyPhrase(report.status)}; ${summary.readyClaimClasses ?? 0}/${summary.totalClaimClasses ?? 0} claim classes responsibly supported; ready labels: ${
+      Array.isArray(summary.readyTrustLabels) && summary.readyTrustLabels.length > 0
+        ? summary.readyTrustLabels.join(", ")
+        : "none"
+    }. ${blockedGates.length > 0 ? `Blocked gates: ${blockedGates.join(", ")}.` : "All readiness gates are open."}`;
+  }
+
   if (!readiness) {
     return "No verification engine readiness metadata returned.";
   }
@@ -9895,6 +9943,36 @@ function engineEvidenceSummary(payload) {
   const evidenceMinted = Number.isFinite(report.evidenceMinted) ? report.evidenceMinted : 0;
   const warnings = Array.isArray(report.warnings) ? report.warnings.length : 0;
   return `${concretePassed}/${concreteTotal} concrete engine evidence checks passed; ${evidenceMinted} replayable evidence records minted; ${warnings} warnings.`;
+}
+
+function engineReadinessStatusLabel(status, fallback) {
+  switch (status) {
+    case "professor-ready":
+      return "professor ready";
+    case "research-core-ready":
+      return "research core";
+    case "partial":
+      return "partial";
+    case "blocked":
+      return "blocked";
+    default:
+      return fallback.allReady ? "all ready" : fallback.anyReady ? `${fallback.readyCount}/${fallback.totalCount} ready` : "install engines";
+  }
+}
+
+function engineReadinessStatusClass(status, fallback) {
+  switch (status) {
+    case "professor-ready":
+      return "exact";
+    case "research-core-ready":
+      return "checked";
+    case "blocked":
+      return "refuted";
+    case "partial":
+      return "waiting";
+    default:
+      return fallback.allReady ? "exact" : fallback.anyReady ? "checked" : "waiting";
+  }
 }
 
 function workspaceReadinessSummary(readiness) {

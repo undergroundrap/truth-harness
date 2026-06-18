@@ -97,6 +97,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_disclosure_log",
         "truth_harness_discovery_package",
         "truth_harness_engine_manifest",
+        "truth_harness_engine_readiness",
         "truth_harness_evidence_audit",
         "truth_harness_evidence_audit_list",
         "truth_harness_experiment_list",
@@ -240,6 +241,22 @@ describe("Truth Harness MCP server", () => {
       expect(engineManifestText).toContain("\"schemaVersion\": \"truth-harness.engine-manifest.v0\"");
       expect(engineManifestText).toContain("\"id\": \"local-rational-arithmetic\"");
       expect(engineManifestText).toContain("\"statusProbeIsNotEvidence\": true");
+
+      const engineReadiness = await client.callTool({
+        name: "truth_harness_engine_readiness",
+        arguments: {
+          maximaCommand: "truth-harness-missing-maxima-command",
+          sageCommand: "truth-harness-missing-sage-command",
+          leanCommand: "truth-harness-missing-lean-command",
+          z3Command: "truth-harness-missing-z3-command",
+          cvc5Command: "truth-harness-missing-cvc5-command",
+          timeoutMs: 50
+        }
+      });
+      const engineReadinessText = firstText(engineReadiness.content);
+      expect(engineReadinessText).toContain("\"schemaVersion\": \"truth-harness.engine-readiness.v0\"");
+      expect(engineReadinessText).toContain("\"id\": \"professor-review\"");
+      expect(engineReadinessText).toContain("\"readinessDoesNotMintEvidence\": true");
 
       const proofBackends = await client.callTool({
         name: "truth_harness_proof_backends",
