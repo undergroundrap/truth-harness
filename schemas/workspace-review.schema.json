@@ -137,6 +137,12 @@
         "validationPlanId": { "type": "string" },
         "validationGateId": { "type": "string" },
         "validationGateKind": { "type": "string" },
+        "candidateEvidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        },
         "taskId": { "type": "string" },
         "checkpointId": { "type": "string" },
         "reportId": { "type": "string" },
@@ -162,6 +168,17 @@
           },
           "additionalProperties": false
         }
+      },
+      "additionalProperties": false
+    },
+    "evidenceRef": {
+      "type": "object",
+      "required": ["kind", "ref"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "ref": { "type": "string", "minLength": 1 },
+        "trust": { "type": "string" },
+        "summary": { "type": "string" }
       },
       "additionalProperties": false
     },

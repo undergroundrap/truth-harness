@@ -1,9 +1,10 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
 import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchHarness, writeResearchSession } from "./research-session.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
@@ -63,6 +64,67 @@ describe("workspace review", () => {
           })
         ]),
         agentPacket: expect.stringContaining("Attach command: truth-harness validation attach")
+      })
+    );
+  });
+
+  it("renders concrete validation attach commands for candidate session evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-18T00:00:00.000Z"
+    });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const proofGate = harness.validationPlan?.plan.gates.find((gate) => gate.kind === "proof");
+    if (!proofGate) {
+      throw new Error("Expected a linked proof validation gate.");
+    }
+    await writeFile(join(root, "scoped.lean"), "theorem scoped_fixture : True := by trivial\n", "utf8");
+    const proofRunner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+      }
+
+      return { status: 0, stdout: "", stderr: "" };
+    };
+    const proof = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "scoped.lean",
+      scope: { statement: "3 / 4 + 5 / 8" },
+      runner: proofRunner,
+      now: new Date("2026-06-18T00:02:00.000Z")
+    });
+    const proofRef = relative(root, proof.jsonPath).replace(/\\/gu, "/");
+    await addResearchSessionCheckpoint({
+      rootPath: root,
+      sessionRef: harness.session.sessionId,
+      summary: "Accepted proof artifact is ready for validation gate attachment.",
+      evidenceRefs: [{ kind: "proof", ref: proofRef, trust: "proved" }],
+      nextChecks: ["Attach the proof artifact to the linked validation gate."],
+      now: "2026-06-18T00:03:00.000Z"
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-18T00:04:00.000Z"
+    });
+
+    expect(review.items).toContainEqual(
+      expect.objectContaining({
+        kind: "validation-gate",
+        sessionId: harness.session.sessionId,
+        validationGateId: proofGate.gateId,
+        candidateEvidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })],
+        evidenceSlots: expect.arrayContaining([
+          expect.objectContaining({
+            attachCommand: `truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`
+          })
+        ]),
+        agentPacket: expect.stringContaining(`Attach command: truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`)
       })
     );
   });

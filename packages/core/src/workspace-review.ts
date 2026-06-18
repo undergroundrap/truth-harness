@@ -16,12 +16,13 @@ import {
   listResearchSessions,
   type ResearchSession,
   type ResearchSessionCheckpoint,
+  type ResearchEvidenceRef,
   type ResearchSessionTask
 } from "./research-session.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
-import { listValidationPlans, type ValidationGate, type ValidationPlan } from "./validation-plan.js";
+import { listValidationPlans, type ValidationEvidenceRef, type ValidationGate, type ValidationPlan } from "./validation-plan.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export type WorkspaceReviewItemKind =
@@ -71,6 +72,7 @@ export interface WorkspaceReviewItem {
   validationPlanId?: string;
   validationGateId?: string;
   validationGateKind?: string;
+  candidateEvidenceRefs?: ValidationEvidenceRef[];
   taskId?: string;
   checkpointId?: string;
   reportId?: string;
@@ -527,6 +529,7 @@ function validationGateItem(
     validationPlanId: plan.planId,
     validationGateId: gate.gateId,
     validationGateKind: gate.kind,
+    candidateEvidenceRefs: candidateEvidenceRefsForValidationGate(session, gate),
     domain: plan.domains[0],
     createdAt: plan.updatedAt,
     source: {
@@ -534,6 +537,117 @@ function validationGateItem(
       ref: `${session.sessionId}:${plan.planId}:${gate.gateId}`
     }
   };
+}
+
+function candidateEvidenceRefsForValidationGate(
+  session: ResearchSession,
+  gate: ValidationGate
+): ValidationEvidenceRef[] {
+  const attached = new Set(gate.evidenceRefs.map((ref) => validationEvidenceKey(ref)));
+  const candidates: ValidationEvidenceRef[] = [];
+  const seen = new Set<string>();
+  const collect = (ref: ResearchEvidenceRef): void => {
+    const candidate = toValidationEvidenceRef(ref);
+    if (!candidate || !isEvidenceCandidateForValidationGate(candidate, gate)) {
+      return;
+    }
+    const key = validationEvidenceKey(candidate);
+    if (attached.has(key) || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    candidates.push(candidate);
+  };
+
+  session.evidenceRefs.forEach(collect);
+  for (const checkpoint of session.checkpoints) {
+    checkpoint.evidenceRefs.forEach(collect);
+  }
+
+  return candidates;
+}
+
+function isEvidenceCandidateForValidationGate(ref: ValidationEvidenceRef, gate: ValidationGate): boolean {
+  if (gate.kind === "proof") {
+    return ref.kind === "proof" || ref.kind === "smt" || ref.kind === "cas" || ref.kind === "route" || ref.kind === "receipt";
+  }
+  if (gate.kind === "source-citation" || gate.kind === "literature-record" || gate.kind === "prior-art") {
+    return ref.kind === "source" || ref.kind === "literature" || ref.kind === "review" || ref.kind === "audit";
+  }
+  if (gate.kind === "benchmark") {
+    return ref.kind === "benchmark";
+  }
+  if (gate.kind === "notebook-run") {
+    return ref.kind === "notebook-run" || ref.kind === "notebook";
+  }
+  if (gate.kind === "code-run") {
+    return ref.kind === "code-run" || ref.kind === "benchmark";
+  }
+  if (gate.kind === "simulation-log" || gate.kind === "simulation-review") {
+    return ref.kind === "simulation" || ref.kind === "review";
+  }
+  if (gate.kind === "experiment-record" || gate.kind === "experiment-replication") {
+    return ref.kind === "experiment" || ref.kind === "review";
+  }
+  if (gate.kind === "expert-review" || gate.kind === "wet-lab" || gate.kind === "preclinical" || gate.kind === "clinical" || gate.kind === "safety" || gate.kind === "ethics" || gate.kind === "regulatory" || gate.kind === "patent-legal") {
+    return ref.kind === "review" || ref.kind === "source" || ref.kind === "literature";
+  }
+  if (gate.kind === "claim-chart") {
+    return ref.kind === "claim-chart" || ref.kind === "invention";
+  }
+  if (gate.kind === "workspace-snapshot" || gate.kind === "replay") {
+    return ref.kind === "snapshot" || ref.kind === "receipt" || ref.kind === "route";
+  }
+
+  return ref.kind !== "session" && ref.kind !== "validation";
+}
+
+function toValidationEvidenceRef(ref: ResearchEvidenceRef): ValidationEvidenceRef | undefined {
+  if (!isValidationEvidenceKind(ref.kind)) {
+    return undefined;
+  }
+
+  return {
+    kind: ref.kind,
+    ref: ref.ref,
+    trust: ref.trust,
+    summary: ref.summary
+  };
+}
+
+function isValidationEvidenceKind(value: string): value is ValidationEvidenceRef["kind"] {
+  return (
+    value === "receipt" ||
+    value === "artifact" ||
+    value === "source" ||
+    value === "literature" ||
+    value === "notebook" ||
+    value === "notebook-run" ||
+    value === "code-run" ||
+    value === "benchmark" ||
+    value === "cas" ||
+    value === "proof" ||
+    value === "smt" ||
+    value === "disclosure" ||
+    value === "simulation" ||
+    value === "experiment" ||
+    value === "vault" ||
+    value === "audit" ||
+    value === "snapshot" ||
+    value === "session" ||
+    value === "review" ||
+    value === "validation" ||
+    value === "model-context" ||
+    value === "route" ||
+    value === "invention" ||
+    value === "claim-chart" ||
+    value === "discovery-package" ||
+    value === "other"
+  );
+}
+
+function validationEvidenceKey(ref: ValidationEvidenceRef): string {
+  return `${ref.kind}:${ref.ref}`;
 }
 
 function commandForValidationGate(
@@ -1390,7 +1504,17 @@ function validationGateAttachCommand(item: WorkspaceReviewItem): string | undefi
     return undefined;
   }
 
-  return `truth-harness validation attach ${quoteCommandArg(item.validationPlanId)} ${quoteCommandArg(item.validationGateId)} --evidence <kind:path-or-id> --json`;
+  const evidence = item.candidateEvidenceRefs?.[0];
+  if (!evidence) {
+    return `truth-harness validation attach ${quoteCommandArg(item.validationPlanId)} ${quoteCommandArg(item.validationGateId)} --evidence <kind:path-or-id> --json`;
+  }
+
+  const evidenceArg = formatValidationEvidenceArg(evidence);
+  return `truth-harness validation attach ${quoteCommandArg(item.validationPlanId)} ${quoteCommandArg(item.validationGateId)} --evidence ${quoteCommandArg(evidenceArg)} --json`;
+}
+
+function formatValidationEvidenceArg(ref: ValidationEvidenceRef): string {
+  return `${ref.kind}:${ref.ref}`;
 }
 
 function formatEvidenceSlotTarget(slot: WorkspaceReviewEvidenceSlot): string {
