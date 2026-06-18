@@ -60,6 +60,11 @@ export interface WorkspaceRunNextSourceSnapshot {
 }
 
 export type WorkspaceRunNextSourceSnapshotStatus = "not-recorded" | "verified" | "drifted" | "missing";
+export type WorkspaceRunNextResumeStatus = "safe-to-resume" | "verify-snapshot-first" | "rerun-run-next";
+export type WorkspaceRunNextResumeAction =
+  | "run-selected-command"
+  | "verify-source-snapshot"
+  | "rerun-workspace-run-next";
 
 export interface WorkspaceRunNextListOptions {
   verifySnapshots?: boolean;
@@ -82,6 +87,15 @@ export interface WorkspaceRunNextInspection {
   plan: WorkspaceRunNextPlan;
   path: string;
   sourceSnapshot?: WorkspaceRunNextSourceSnapshotCheck;
+  resumeDecision: WorkspaceRunNextResumeDecision;
+}
+
+export interface WorkspaceRunNextResumeDecision {
+  safeToResume: boolean;
+  status: WorkspaceRunNextResumeStatus;
+  action: WorkspaceRunNextResumeAction;
+  reason: string;
+  nextCommand: string;
 }
 
 export interface WorkspaceRunNextSummary {
@@ -431,6 +445,7 @@ export async function inspectWorkspaceRunNextPlan(
     schemaVersion: "truth-harness.workspace-run-next-inspection.v0",
     plan,
     path,
+    resumeDecision: createWorkspaceRunNextResumeDecision(plan, sourceSnapshot),
     ...(sourceSnapshot ? { sourceSnapshot } : {})
   };
 }
@@ -715,6 +730,54 @@ function isRunNextSelfAddedPath(planPath: string, addedPath: string): boolean {
   return planPath.endsWith(".json") && addedPath === planPath.replace(/\.json$/u, ".md");
 }
 
+function createWorkspaceRunNextResumeDecision(
+  plan: WorkspaceRunNextPlan,
+  sourceSnapshot: WorkspaceRunNextSourceSnapshotCheck | undefined
+): WorkspaceRunNextResumeDecision {
+  if (!sourceSnapshot) {
+    return {
+      safeToResume: false,
+      status: "verify-snapshot-first",
+      action: "verify-source-snapshot",
+      reason: "This handoff has not been checked against its source workspace snapshot in this inspection.",
+      nextCommand: `truth-harness workspace show-run-next ${quoteCommandArg(plan.planId)} --workspace ${quoteCommandArg(
+        plan.workspacePath
+      )} --verify-snapshot --json`
+    };
+  }
+
+  if (sourceSnapshot.sourceSnapshotStatus !== "verified") {
+    return {
+      safeToResume: false,
+      status: "rerun-run-next",
+      action: "rerun-workspace-run-next",
+      reason:
+        sourceSnapshot.sourceSnapshotDriftSummary ??
+        `Source snapshot status is ${sourceSnapshot.sourceSnapshotStatus ?? "unknown"}, so the saved handoff should not be resumed.`,
+      nextCommand: `truth-harness workspace run-next ${quoteCommandArg(plan.workspacePath)} --json`
+    };
+  }
+
+  const selectedCommand = plan.item?.command ?? plan.execution.command;
+  if (plan.status !== "planned" || !plan.dryRun || !selectedCommand) {
+    return {
+      safeToResume: false,
+      status: "rerun-run-next",
+      action: "rerun-workspace-run-next",
+      reason: "The source snapshot is verified, but this saved packet is not a pending dry-run handoff with a selected command.",
+      nextCommand: `truth-harness workspace run-next ${quoteCommandArg(plan.workspacePath)} --json`
+    };
+  }
+
+  return {
+    safeToResume: true,
+    status: "safe-to-resume",
+    action: "run-selected-command",
+    reason: "The source workspace snapshot still matches, and this packet is a pending dry-run handoff.",
+    nextCommand: selectedCommand
+  };
+}
+
 function resolveUnderRoot(root: string, path: string): string {
   const target = resolve(root, path);
   const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
@@ -737,6 +800,10 @@ function requireText(value: string | undefined, message: string): string {
 
 function isWorkspaceRunNextPlanId(value: string): boolean {
   return /^wrn_[a-f0-9]{8}$/u.test(value);
+}
+
+function quoteCommandArg(value: string): string {
+  return /^[A-Za-z0-9_./\\:-]+$/u.test(value) ? value : JSON.stringify(value);
 }
 
 function toPortablePath(value: string): string {

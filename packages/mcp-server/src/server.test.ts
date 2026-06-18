@@ -472,6 +472,8 @@ describe("Truth Harness MCP server", () => {
         "\"schemaVersion\": \"truth-harness.workspace-run-next-inspection.v0\""
       );
       expect(workspaceRunNextShowWithSnapshotText).toContain("\"sourceSnapshotStatus\": \"verified\"");
+      expect(workspaceRunNextShowWithSnapshotText).toContain("\"safeToResume\": true");
+      expect(workspaceRunNextShowWithSnapshotText).toContain("\"status\": \"safe-to-resume\"");
 
       const workspaceReviewList = await client.callTool({
         name: "truth_harness_workspace_review_list",

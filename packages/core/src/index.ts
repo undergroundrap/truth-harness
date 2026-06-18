@@ -244,6 +244,9 @@ export {
 export type {
   WorkspaceRunNextPlan,
   WorkspaceRunNextInspection,
+  WorkspaceRunNextResumeAction,
+  WorkspaceRunNextResumeDecision,
+  WorkspaceRunNextResumeStatus,
   WorkspaceRunNextSourceSnapshotCheck,
   WorkspaceRunNextStatus,
   WorkspaceRunNextSummary,

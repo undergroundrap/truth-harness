@@ -1226,6 +1226,11 @@ describe("MCP tool handlers", () => {
       plan: {
         planId: writtenDryRun.plan.planId
       },
+      resumeDecision: {
+        safeToResume: true,
+        status: "safe-to-resume",
+        action: "run-selected-command"
+      },
       sourceSnapshot: {
         sourceSnapshotStatus: "verified",
         sourceSnapshotAdded: 0,

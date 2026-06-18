@@ -833,6 +833,13 @@ describe("workspace run-next", () => {
       plan: {
         planId: result.plan.planId
       },
+      resumeDecision: {
+        safeToResume: true,
+        status: "safe-to-resume",
+        action: "run-selected-command",
+        nextCommand:
+          "truth-harness validation attach vpl_run_next_test gate_proof_run_next_test --evidence proof:.truth-harness/proofs/candidate.json --json"
+      },
       sourceSnapshot: {
         sourceSnapshotStatus: "verified",
         sourceSnapshotAdded: 0,
@@ -884,6 +891,12 @@ describe("workspace run-next", () => {
       sourceSnapshotStatus: "drifted",
       sourceSnapshotAdded: 1,
       sourceSnapshotDriftSummary: expect.stringContaining("1 added")
+    });
+    expect(driftedInspection.resumeDecision).toMatchObject({
+      safeToResume: false,
+      status: "rerun-run-next",
+      action: "rerun-workspace-run-next",
+      nextCommand: `truth-harness workspace run-next ${root} --json`
     });
 
     const tamperedPlan = JSON.parse(await readFile(result.jsonPath, "utf8")) as Record<string, unknown>;

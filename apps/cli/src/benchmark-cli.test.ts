@@ -1963,6 +1963,11 @@ describe("benchmark CLI", () => {
         planId: writtenDryRunPayload.plan.planId,
         dryRun: true
       },
+      resumeDecision: {
+        safeToResume: true,
+        status: "safe-to-resume",
+        action: "run-selected-command"
+      },
       sourceSnapshot: {
         sourceSnapshotStatus: "verified",
         sourceSnapshotAdded: 0,
@@ -1990,6 +1995,9 @@ describe("benchmark CLI", () => {
     ]);
     expect(shownHumanWithSnapshot.stdout).toContain("Source snapshot check:");
     expect(shownHumanWithSnapshot.stdout).toContain("Status: verified");
+    expect(shownHumanWithSnapshot.stdout).toContain("Resume decision:");
+    expect(shownHumanWithSnapshot.stdout).toContain("Safe to resume: yes");
+    expect(shownHumanWithSnapshot.stdout).toContain("Action: run-selected-command");
     expect(human.stdout).toContain("Truth Harness workspace run-next");
     expect(human.stdout).toContain("Plan:");
     expect(human.stdout).toContain("Dry run: true");

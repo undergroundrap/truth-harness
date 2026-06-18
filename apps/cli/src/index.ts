@@ -3771,6 +3771,7 @@ workspace
     if (inspection.sourceSnapshot) {
       printWorkspaceRunNextSnapshotCheck(inspection.sourceSnapshot);
     }
+    printWorkspaceRunNextResumeDecision(inspection.resumeDecision);
   });
 
 workspace
@@ -7402,6 +7403,16 @@ function printWorkspaceRunNextSnapshotCheck(check: NonNullable<WorkspaceRunNextI
   if (check.sourceSnapshotDriftSummary) {
     console.log(`  ${check.sourceSnapshotDriftSummary}`);
   }
+}
+
+function printWorkspaceRunNextResumeDecision(decision: WorkspaceRunNextInspection["resumeDecision"]): void {
+  console.log("");
+  console.log("Resume decision:");
+  console.log(`  Safe to resume: ${decision.safeToResume ? "yes" : "no"}`);
+  console.log(`  Status: ${decision.status}`);
+  console.log(`  Action: ${decision.action}`);
+  console.log(`  Reason: ${decision.reason}`);
+  console.log(`  Next command: ${decision.nextCommand}`);
 }
 
 function workspaceRunNextCliRationale(plan: WorkspaceRunNextPlan): NonNullable<WorkspaceRunNextPlan["rationale"]> {
