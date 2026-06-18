@@ -464,6 +464,7 @@ const workspaceRunNextStatus = document.querySelector("#workspace-run-next-statu
 const workspaceRunNextTitle = document.querySelector("#workspace-run-next-title");
 const workspaceRunNextSummary = document.querySelector("#workspace-run-next-summary");
 const workspaceRunNextCommand = document.querySelector("#workspace-run-next-command");
+const workspaceRunNextDetails = document.querySelector("#workspace-run-next-details");
 const refreshRunNextButton = document.querySelector("#refresh-run-next");
 const copyRunNextCommandButton = document.querySelector("#copy-run-next-command");
 const researchNotes = document.querySelector("#research-notes");
@@ -6908,6 +6909,10 @@ function renderWorkspaceRunNext() {
     workspaceRunNextTitle.textContent = "Local next-action planner unavailable.";
     workspaceRunNextSummary.textContent = workspaceRunNextError;
     workspaceRunNextCommand.textContent = "truth-harness workspace run-next . --json";
+    setWorkspaceRunNextDetails([
+      ["Boundary", "Planner failed before any local action could be selected."],
+      ["Fallback", "Use CLI or MCP run-next after checking the local API."]
+    ]);
     if (copyRunNextCommandButton) {
       copyRunNextCommandButton.disabled = false;
     }
@@ -6920,6 +6925,10 @@ function renderWorkspaceRunNext() {
     workspaceRunNextTitle.textContent = "Loading local queue plan.";
     workspaceRunNextSummary.textContent = "Truth Harness will ask the local planner for the next safe action without executing it in the browser.";
     workspaceRunNextCommand.textContent = "GET /api/workspace-run-next";
+    setWorkspaceRunNextDetails([
+      ["Boundary", "Browser planning is dry-run only."],
+      ["Execution", "CLI/MCP gates are required before local work runs."]
+    ]);
     if (copyRunNextCommandButton) {
       copyRunNextCommandButton.disabled = true;
     }
@@ -6934,9 +6943,58 @@ function renderWorkspaceRunNext() {
   workspaceRunNextTitle.textContent = item?.title ?? "No open local work item.";
   workspaceRunNextSummary.textContent = workspaceRunNextPlan.execution?.summary ?? "Browser-visible planning only; use CLI/MCP gates for bounded local execution.";
   workspaceRunNextCommand.textContent = command;
+  setWorkspaceRunNextDetails(workspaceRunNextDetailsRows(workspaceRunNextPlan, command));
   if (copyRunNextCommandButton) {
     copyRunNextCommandButton.disabled = !command;
   }
+}
+
+function setWorkspaceRunNextDetails(rows) {
+  if (!workspaceRunNextDetails) {
+    return;
+  }
+
+  workspaceRunNextDetails.innerHTML = rows
+    .filter((row) => row[1])
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
+    .join("");
+}
+
+function workspaceRunNextDetailsRows(plan, command) {
+  const item = plan?.item;
+  const execution = plan?.execution;
+  const evidence = execution?.evidenceRef ?? evidenceRefFromCommand(command);
+  const gate = item?.validationGateId
+    ? `${item.validationGateKind ?? "gate"} ${item.validationGateId}`
+    : item?.obligationId
+      ? `${item.obligationKind ?? "obligation"} ${item.obligationId}`
+      : item?.claimId ?? item?.routeId ?? item?.reportId ?? "workspace queue";
+  const source = [item?.kind, item?.priority].filter(Boolean).join(" / ");
+  const boundary = plan?.dryRun
+    ? "Browser shows the local plan only; CLI/MCP must opt into execution."
+    : "Executed through the bounded in-process run-next planner.";
+
+  return [
+    ["Target", gate],
+    ["Source", source || "workspace-review"],
+    ["Evidence", evidence],
+    ["Session", item?.sessionId],
+    ["Execution", execution?.kind ?? "dry-run"],
+    ["Boundary", boundary],
+    ["Stop", plan?.stopConditions?.[0]],
+    ["Warning", plan?.warnings?.[0]]
+  ];
+}
+
+function evidenceRefFromCommand(command) {
+  if (!command) {
+    return undefined;
+  }
+  const match = command.match(/--evidence\s+("[^"]+"|'[^']+'|\S+)/u);
+  if (!match) {
+    return undefined;
+  }
+  return match[1].replace(/^["']|["']$/gu, "");
 }
 
 function workspaceRunNextStatusLabel(status) {

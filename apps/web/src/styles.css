@@ -3670,15 +3670,45 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 .workspace-run-next-card code {
   display: block;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--line-soft);
   border-radius: 7px;
   background: #0b0b0b;
   color: #eadfca;
   padding: 8px 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
   font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.workspace-run-next-details {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 2px 0 0;
+}
+
+.workspace-run-next-details div {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #11100e;
+  padding: 8px 9px;
+}
+
+.workspace-run-next-details dt {
+  margin: 0 0 3px;
+  color: #9d968b;
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.workspace-run-next-details dd {
+  margin: 0;
+  color: #efe7d8;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .workspace-run-next-actions {
@@ -3796,6 +3826,10 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   .workspace-run-next-card,
   .runbook-utility-row {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-run-next-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .runbook-facts {

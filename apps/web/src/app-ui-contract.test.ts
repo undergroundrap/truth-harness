@@ -453,14 +453,18 @@ describe("web UI action contracts", () => {
 
     expect(html).toContain('id="workspace-run-next-card"');
     expect(html).toContain('id="workspace-run-next-command"');
+    expect(html).toContain('id="workspace-run-next-details"');
     expect(html).toContain('id="refresh-run-next"');
     expect(html).toContain('id="copy-run-next-command"');
     expect(source).toContain('fetch("/api/workspace-run-next"');
     expect(source).toContain("function refreshWorkspaceRunNext({ announce = true } = {})");
     expect(source).toContain("function renderWorkspaceRunNext()");
+    expect(source).toContain("function workspaceRunNextDetailsRows(plan, command)");
+    expect(source).toContain("evidenceRefFromCommand(command)");
     expect(source).toContain("copyWorkspaceRunNextCommand");
     expect(source).not.toContain("workspace-run-next?executeLocal=true");
     expect(styles).toContain(".workspace-run-next-card");
+    expect(styles).toContain(".workspace-run-next-details");
     expect(styles).toContain("overflow-wrap: anywhere;");
   });
 
