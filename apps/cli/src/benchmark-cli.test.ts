@@ -2406,6 +2406,51 @@ describe("benchmark CLI", () => {
       })
     );
   });
+
+  it("starts a hard-problem research harness from the CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+
+    const result = await runCli([
+      "research",
+      "harness",
+      "Investigate deterministic math and physics verification for AI-generated robotics simulation code.",
+      "--workspace",
+      root,
+      "--domain",
+      "math",
+      "--domain",
+      "physics",
+      "--domain",
+      "code",
+      "--task",
+      "Pick the first falsifiable benchmark.",
+      "--json"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      session: {
+        schemaVersion: string;
+        tasks: Array<{ title: string }>;
+        budgets: { maxUnverifiedFinalClaims: number };
+      };
+      markdown: string;
+    };
+    const taskTitles = json.session.tasks.map((task) => task.title);
+    const list = JSON.parse((await runCli(["research", "list", root, "--json"])).stdout) as { total: number };
+
+    expect(result.exitCode).toBe(0);
+    expect(json.session.schemaVersion).toBe("truth-harness.research-session.v0");
+    expect(taskTitles).toContain(
+      "Run `truth-harness engines readiness` and record which trust labels this machine can responsibly support."
+    );
+    expect(taskTitles).toContain(
+      "Never label a result `proved` unless an accepted proof checker verifies the concrete proof artifact."
+    );
+    expect(taskTitles).toContain("Pick the first falsifiable benchmark.");
+    expect(json.session.budgets.maxUnverifiedFinalClaims).toBe(0);
+    expect(json.markdown).toContain("truth-harness engines readiness");
+    expect(list.total).toBe(1);
+  });
 });
 
 async function runCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {

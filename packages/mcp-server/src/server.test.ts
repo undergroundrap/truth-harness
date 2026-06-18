@@ -119,6 +119,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_replay",
         "truth_harness_report_list",
         "truth_harness_report_read",
+        "truth_harness_research_harness_start",
         "truth_harness_research_session_checkpoint",
         "truth_harness_research_session_list",
         "truth_harness_research_session_show",
@@ -712,6 +713,22 @@ describe("Truth Harness MCP server", () => {
       const researchShowText = firstText(researchShowResult.content);
       expect(researchShowText).toContain("\"schemaVersion\": \"truth-harness.research-session.v0\"");
       expect(researchShowText).toContain("\"checkpoints\": [");
+
+      const researchHarnessResult = await client.callTool({
+        name: "truth_harness_research_harness_start",
+        arguments: {
+          title: "Hard problem harness",
+          objective: "Investigate deterministic math and physics verification for AI-generated robotics simulation code.",
+          domains: ["math", "physics", "code"],
+          tasks: ["Identify the first benchmark that would falsify the design."]
+        }
+      });
+      const researchHarnessText = firstText(researchHarnessResult.content);
+      expect(researchHarnessResult.isError).not.toBe(true);
+      expect(researchHarnessText).toContain("\"schemaVersion\": \"truth-harness.research-session.v0\"");
+      expect(researchHarnessText).toContain("truth-harness engines readiness");
+      expect(researchHarnessText).toContain("Never label a result `proved` unless an accepted proof checker verifies the concrete proof artifact.");
+      expect(researchHarnessText).toContain("Identify the first benchmark that would falsify the design.");
 
       const workspaceGraphResult = await client.callTool({
         name: "truth_harness_workspace_graph",

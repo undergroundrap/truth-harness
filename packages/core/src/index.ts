@@ -118,6 +118,7 @@ export {
 } from "./invention-log.js";
 export {
   addResearchSessionCheckpoint,
+  createResearchHarnessTasks,
   createResearchSession,
   isResearchSessionDomain,
   isResearchTaskStatus,
@@ -128,6 +129,7 @@ export {
   RESEARCH_SESSION_DOMAINS,
   RESEARCH_TASK_STATUSES,
   updateResearchSessionTask,
+  writeResearchHarness,
   writeResearchSession
 } from "./research-session.js";
 export {
@@ -498,6 +500,7 @@ export type {
   InventionValidationStage
 } from "./invention-log.js";
 export type {
+  CreateResearchHarnessInput,
   CreateResearchSessionInput,
   ResearchEvidenceRef,
   ResearchSession,

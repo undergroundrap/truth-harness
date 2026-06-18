@@ -157,6 +157,7 @@ import {
   writeLiteratureRecord,
   writeModelContext,
   writeNotebookRun,
+  writeResearchHarness,
   writeResearchSession,
   writeValidationPlan,
   writeVerifierRoute,
@@ -1998,6 +1999,70 @@ validation
 const research = program
   .command("research")
   .description("Manage local-first research sessions for long agentic investigations.");
+
+research
+  .command("harness")
+  .description("Start a hard-problem research harness with conservative verification lanes.")
+  .argument("<objective...>", "Hard research objective")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--title <title>", "Short research session title")
+  .option("--domain <domain>", "math, physics, code, biomedical, materials, energy, climate, patent, learning, or general. Repeatable", collectRepeated, [])
+  .option("--hypothesis <text>", "Hypothesis to track; repeatable", collectRepeated, [])
+  .option("--claim <text>", "Claim to verify; repeatable", collectRepeated, [])
+  .option("--evidence <ref>", "Evidence ref, optionally prefixed as receipt:path, simulation:id, audit:id, snapshot:id, literature:id, or source:path", collectRepeated, [])
+  .option("--snapshot <ref>", "Workspace snapshot id or path; repeatable", collectRepeated, [])
+  .option("--task <text>", "Additional research task; repeatable", collectRepeated, [])
+  .option("--no-default-tasks", "Only use tasks supplied with --task")
+  .option("--max-depth <count>", "Maximum recursive investigation depth", parsePositiveInteger)
+  .option("--max-branches <count>", "Maximum branches per node", parsePositiveInteger)
+  .option("--max-tool-calls <count>", "Maximum tool calls before review", parsePositiveInteger)
+  .option("--max-wall-minutes <count>", "Maximum wall minutes before review", parsePositiveInteger)
+  .option("--json", "Print the full research harness JSON")
+  .action(
+    async (
+      objectiveTokens: string[],
+      options: {
+        workspace: string;
+        title?: string;
+        domain: string[];
+        hypothesis: string[];
+        claim: string[];
+        evidence: string[];
+        snapshot: string[];
+        task: string[];
+        defaultTasks?: boolean;
+        maxDepth?: number;
+        maxBranches?: number;
+        maxToolCalls?: number;
+        maxWallMinutes?: number;
+        json?: boolean;
+      }
+    ) => {
+      const result = await writeResearchHarness({
+        rootPath: options.workspace,
+        title: options.title,
+        objective: objectiveTokens.join(" "),
+        domains: options.domain.map(parseResearchSessionDomain),
+        hypotheses: options.hypothesis,
+        claims: options.claim,
+        evidenceRefs: options.evidence.map(parseResearchEvidenceRef),
+        snapshotRefs: options.snapshot,
+        tasks: options.task,
+        includeDefaultTasks: options.defaultTasks !== false,
+        maxDepth: options.maxDepth,
+        maxBranches: options.maxBranches,
+        maxToolCalls: options.maxToolCalls,
+        maxWallMinutes: options.maxWallMinutes
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printResearchSessionWrite(result);
+    }
+  );
 
 research
   .command("start")

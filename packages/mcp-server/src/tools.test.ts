@@ -49,6 +49,7 @@ import {
   handleTruthHarnessReportRead,
   handleTruthHarnessRenderReceipt,
   handleTruthHarnessReplay,
+  handleTruthHarnessResearchHarnessStart,
   handleTruthHarnessResearchSessionCheckpoint,
   handleTruthHarnessResearchSessionList,
   handleTruthHarnessResearchSessionShow,
@@ -1444,6 +1445,31 @@ describe("MCP tool handlers", () => {
       })
     );
     expect(validation.passed).toBe(true);
+  });
+
+  it("starts a hard-problem research harness for agents", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Hard Problem Harness Lab" });
+
+    const harness = await handleTruthHarnessResearchHarnessStart({
+      objective: "Investigate deterministic math and physics verification for AI-generated robotics simulation code.",
+      domains: ["math", "physics", "code"],
+      tasks: ["Pick the first falsifiable benchmark."]
+    });
+    const list = await handleTruthHarnessResearchSessionList({});
+
+    expect(harness.session.schemaVersion).toBe("truth-harness.research-session.v0");
+    expect(harness.session.tasks.map((task) => task.title)).toContain(
+      "Run `truth-harness engines readiness` and record which trust labels this machine can responsibly support."
+    );
+    expect(harness.session.tasks.map((task) => task.title)).toContain(
+      "Never label a result `proved` unless an accepted proof checker verifies the concrete proof artifact."
+    );
+    expect(harness.session.tasks.map((task) => task.title)).toContain("Pick the first falsifiable benchmark.");
+    expect(harness.session.budgets.maxUnverifiedFinalClaims).toBe(0);
+    expect(harness.markdown).toContain("truth-harness engines readiness");
+    expect(list.total).toBe(1);
   });
 
   it("writes and lists expert review records for agents", async () => {

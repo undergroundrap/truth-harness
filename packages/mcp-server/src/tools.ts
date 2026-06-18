@@ -111,6 +111,7 @@ import {
   writeLiteratureRecord,
   writeModelContext,
   writeNotebookRun,
+  writeResearchHarness,
   writeResearchSession,
   writeValidationPlan,
   writeVerifierRoute,
@@ -1007,6 +1008,10 @@ export interface TruthHarnessResearchSessionStartInput {
   maxBranches?: number;
   maxToolCalls?: number;
   maxWallMinutes?: number;
+}
+
+export interface TruthHarnessResearchHarnessStartInput extends TruthHarnessResearchSessionStartInput {
+  includeDefaultTasks?: boolean;
 }
 
 export interface TruthHarnessResearchSessionCheckpointInput {
@@ -2391,6 +2396,27 @@ export async function handleTruthHarnessResearchSessionStart(
     evidenceRefs: input.evidenceRefs,
     snapshotRefs: input.snapshotRefs,
     tasks: input.tasks,
+    maxDepth: input.maxDepth,
+    maxBranches: input.maxBranches,
+    maxToolCalls: input.maxToolCalls,
+    maxWallMinutes: input.maxWallMinutes
+  });
+}
+
+export async function handleTruthHarnessResearchHarnessStart(
+  input: TruthHarnessResearchHarnessStartInput
+): Promise<ResearchSessionWriteResult> {
+  return writeResearchHarness({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    title: input.title,
+    objective: input.objective,
+    domains: input.domains,
+    hypotheses: input.hypotheses,
+    claims: input.claims,
+    evidenceRefs: input.evidenceRefs,
+    snapshotRefs: input.snapshotRefs,
+    tasks: input.tasks,
+    includeDefaultTasks: input.includeDefaultTasks,
     maxDepth: input.maxDepth,
     maxBranches: input.maxBranches,
     maxToolCalls: input.maxToolCalls,

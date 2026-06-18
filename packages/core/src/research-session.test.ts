@@ -5,10 +5,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import { initLocalWorkspace } from "./local-workspace.js";
 import {
   addResearchSessionCheckpoint,
+  createResearchHarnessTasks,
   createResearchSession,
   listResearchSessions,
   readResearchSession,
   updateResearchSessionTask,
+  writeResearchHarness,
   writeResearchSession
 } from "./research-session.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
@@ -56,6 +58,54 @@ describe("research sessions", () => {
     expect(session.tasks).toHaveLength(2);
     expect(session.markdown).toContain("# Research Session: Cancer pathway hypothesis");
     expect(session.markdown).toContain("Do not describe biomedical hypotheses as cures");
+  });
+
+  it("starts a hard-problem harness with default verification lanes and no overclaim path", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+
+    const result = await writeResearchHarness({
+      rootPath: root,
+      objective:
+        "Investigate a deterministic math and physics validation layer for AI-generated robotics simulation code.",
+      domains: ["math", "physics", "code"],
+      tasks: ["Identify the first reusable lemma or benchmark that would change the design."],
+      now: "2026-06-18T00:10:00.000Z"
+    });
+    const taskTitles = result.session.tasks.map((task) => task.title);
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+
+    expect(result.session.schemaVersion).toBe("truth-harness.research-session.v0");
+    expect(result.session.budgets.maxUnverifiedFinalClaims).toBe(0);
+    expect(result.session.modelPolicy.selectedContextOnly).toBe(true);
+    expect(result.session.reviewBoundary.expertReviewRequired).toBe(true);
+    expect(taskTitles).toContain("Create validation plans for candidate claims before trying to strengthen them.");
+    expect(taskTitles).toContain(
+      "Run `truth-harness engines readiness` and record which trust labels this machine can responsibly support."
+    );
+    expect(taskTitles).toContain(
+      "Never label a result `proved` unless an accepted proof checker verifies the concrete proof artifact."
+    );
+    expect(taskTitles).toContain(
+      "Record units, dimensional checks, governing equations, numerical assumptions, and simulation boundaries before interpreting any physics result."
+    );
+    expect(taskTitles).toContain(
+      "Turn generated code into tests, benchmarks, fuzz cases, static checks, and replayable build records before trusting it."
+    );
+    expect(taskTitles).toContain("Identify the first reusable lemma or benchmark that would change the design.");
+    expect(result.markdown).toContain("truth-harness engines readiness");
+    expect(validation.passed).toBe(true);
+  });
+
+  it("can generate a compact custom harness task list without default lanes", () => {
+    const tasks = createResearchHarnessTasks({
+      objective: "Investigate a cancer literature hypothesis with prior-art implications.",
+      domains: ["biomedical", "patent"],
+      includeDefaultTasks: false,
+      tasks: ["Write the exact review question.", "Write the exact review question."]
+    });
+
+    expect(tasks).toEqual(["Write the exact review question."]);
   });
 
   it("writes, lists, and checkpoints sessions with merged evidence refs", async () => {

@@ -135,6 +135,10 @@ export interface CreateResearchSessionInput {
   now?: string;
 }
 
+export interface CreateResearchHarnessInput extends CreateResearchSessionInput {
+  includeDefaultTasks?: boolean;
+}
+
 export interface ResearchSessionWriteResult {
   session: ResearchSession;
   jsonPath: string;
@@ -232,6 +236,42 @@ export async function writeResearchSession(input: CreateResearchSessionInput): P
   const status = await requireLocalWorkspace(input.rootPath);
   const session = await createResearchSession(input);
   return writeSessionFiles(status.root, status.manifest.directories.sessions, session);
+}
+
+export async function writeResearchHarness(input: CreateResearchHarnessInput): Promise<ResearchSessionWriteResult> {
+  const objective = requireText(input.objective, "Research harness objective is required.");
+  const domains = normalizeDomains(input.domains, objective);
+  return writeResearchSession({
+    ...input,
+    objective,
+    title: normalizeOptionalText(input.title) ?? titleFromObjective(objective),
+    domains,
+    tasks: createResearchHarnessTasks({
+      objective,
+      domains,
+      tasks: input.tasks,
+      includeDefaultTasks: input.includeDefaultTasks
+    })
+  });
+}
+
+export function createResearchHarnessTasks(input: {
+  objective: string;
+  domains?: ResearchSessionDomain[];
+  tasks?: string[];
+  includeDefaultTasks?: boolean;
+}): string[] {
+  const objective = requireText(input.objective, "Research harness objective is required.");
+  const domains = normalizeDomains(input.domains, objective);
+  const tasks =
+    input.includeDefaultTasks === false
+      ? normalizeStringList(input.tasks ?? [])
+      : [
+          ...coreResearchHarnessTasks(),
+          ...domains.flatMap((domain) => researchHarnessDomainTasks(domain)),
+          ...normalizeStringList(input.tasks ?? [])
+        ];
+  return mergeStrings([], tasks);
 }
 
 export async function addResearchSessionCheckpoint(
@@ -603,6 +643,74 @@ function tryParseResearchSessionJson(raw: string): ResearchSession | undefined {
     return parseResearchSessionJson(raw);
   } catch {
     return undefined;
+  }
+}
+
+function coreResearchHarnessTasks(): string[] {
+  return [
+    "Narrow the objective into falsifiable claims with explicit definitions, assumptions, scope, and non-goals.",
+    "Create validation plans for candidate claims before trying to strengthen them.",
+    "Run `truth-harness engines readiness` and record which trust labels this machine can responsibly support.",
+    "Route each math, code, data, or simulation subclaim through the smallest local verifier first.",
+    "Attach every useful output as evidence: receipts, routes, CAS records, SMT records, proof checks, benchmark runs, source records, simulations, snapshots, or explicit unverified status.",
+    "Prepare model-context packets with only selected local context before asking hosted models; log every disclosure.",
+    "Checkpoint failed attempts, counterexamples, uncertainty, and branch decisions before continuing.",
+    "Draft a reviewer packet only after evidence refs satisfy the relevant validation-plan gates."
+  ];
+}
+
+function researchHarnessDomainTasks(domain: ResearchSessionDomain): string[] {
+  switch (domain) {
+    case "math":
+      return [
+        "Formalize core mathematical statements before solving; prefer exact arithmetic, symbolic CAS cross-checks, SMT checks, and Lean proof artifacts where applicable.",
+        "Never label a result `proved` unless an accepted proof checker verifies the concrete proof artifact."
+      ];
+    case "physics":
+      return [
+        "Record units, dimensional checks, governing equations, numerical assumptions, and simulation boundaries before interpreting any physics result.",
+        "Separate simulation evidence from real-world physical validation."
+      ];
+    case "code":
+      return [
+        "Turn generated code into tests, benchmarks, fuzz cases, static checks, and replayable build records before trusting it.",
+        "Treat performance claims as benchmark evidence only when environment, inputs, and versions are recorded."
+      ];
+    case "biomedical":
+      return [
+        "Separate mechanism hypotheses, computational evidence, literature evidence, wet-lab evidence, preclinical evidence, clinical evidence, and regulatory status.",
+        "Do not describe biomedical hypotheses as cures, safe, effective, or clinically validated without appropriate expert and real-world validation."
+      ];
+    case "materials":
+      return [
+        "Track material assumptions, property targets, simulation settings, uncertainty bounds, and experimental validation needs.",
+        "Separate computational candidates from synthesized or measured materials."
+      ];
+    case "energy":
+      return [
+        "Track conservation laws, efficiency boundaries, units, lifecycle assumptions, and experimental validation requirements.",
+        "Flag any claim that sounds like free energy, perpetual motion, or unsupported efficiency beyond measured evidence."
+      ];
+    case "climate":
+      return [
+        "Record model scope, datasets, assumptions, uncertainty ranges, causal boundaries, and source provenance before drawing climate conclusions.",
+        "Separate scenario projections from observed measurements and policy recommendations."
+      ];
+    case "patent":
+      return [
+        "Maintain invention logs, dated evidence refs, prior-art searches, claim charts, and reduction-to-practice boundaries.",
+        "Treat patent drafting as legal-review support, not automated patentability or freedom-to-operate advice."
+      ];
+    case "learning":
+      return [
+        "Generate audience-level explanations only from verified or explicitly labeled evidence.",
+        "Keep lesson simplifications traceable to the exact receipt, proof, source, or validation plan they summarize."
+      ];
+    case "general":
+      return [
+        "Classify each emerging subproblem into a stronger lane before making domain-specific claims.",
+        "Keep unsupported ideas in the hypothesis bucket until a concrete verifier, source, experiment, or expert review can check them."
+      ];
   }
 }
 

@@ -50,6 +50,7 @@ import {
   handleTruthHarnessReportRead,
   handleTruthHarnessRenderReceipt,
   handleTruthHarnessReplay,
+  handleTruthHarnessResearchHarnessStart,
   handleTruthHarnessResearchSessionCheckpoint,
   handleTruthHarnessResearchSessionList,
   handleTruthHarnessResearchSessionShow,
@@ -2717,6 +2718,45 @@ export function createTruthHarnessMcpServer(): McpServer {
       .optional(),
     summary: z.string().optional()
   });
+
+  server.registerTool(
+    "truth_harness_research_harness_start",
+    {
+      title: "Start Hard Problem Harness",
+      description:
+        "Start a private local research session preloaded with conservative hard-problem verification lanes: narrow claims, validation plans, engine readiness, local verifier routing, model-context disclosure, checkpoints, and reviewer packets. This creates a runbook; it does not prove or validate the objective.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        title: z.string().optional().describe("Short research harness title."),
+        objective: z.string().min(1).describe("Hard research objective or moonshot question."),
+        domains: z
+          .array(z.enum(["math", "physics", "code", "biomedical", "materials", "energy", "climate", "patent", "learning", "general"]))
+          .optional()
+          .describe("Research domains. If omitted, domains are inferred from the objective."),
+        hypotheses: z.array(z.string().min(1)).optional().describe("Hypotheses to track."),
+        claims: z.array(z.string().min(1)).optional().describe("Claims that must be verified, refuted, sourced, or labeled."),
+        evidenceRefs: z.array(researchEvidenceRefSchema).optional().describe("Initial local evidence refs."),
+        snapshotRefs: z.array(z.string().min(1)).optional().describe("Workspace snapshot ids or paths."),
+        tasks: z.array(z.string().min(1)).optional().describe("Additional concrete research tasks."),
+        includeDefaultTasks: z
+          .boolean()
+          .optional()
+          .describe("Defaults to true. When false, only supplied tasks are included."),
+        maxDepth: z.number().int().positive().optional(),
+        maxBranches: z.number().int().positive().optional(),
+        maxToolCalls: z.number().int().positive().optional(),
+        maxWallMinutes: z.number().int().positive().optional()
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTruthHarnessResearchHarnessStart(input))
+  );
 
   server.registerTool(
     "truth_harness_research_session_start",
