@@ -1,10 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { withWorkspaceLock, writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -24,8 +23,6 @@ export const RESEARCH_SESSION_DOMAINS = [
 
 export const RESEARCH_TASK_STATUSES = ["todo", "doing", "blocked", "done"] as const;
 const RESEARCH_SESSION_SCHEMA_VERSION = "truth-harness.research-session.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let researchSessionSchemaCache: Promise<unknown> | undefined;
 
 export type ResearchSessionDomain = (typeof RESEARCH_SESSION_DOMAINS)[number];
 export type ResearchTaskStatus = (typeof RESEARCH_TASK_STATUSES)[number];
@@ -567,25 +564,11 @@ async function writeSessionFiles(
 }
 
 async function assertResearchSessionSchema(session: ResearchSession): Promise<void> {
-  const schema = await loadResearchSessionSchema();
-  const serializedSession = parseJsonWithOptionalBom(JSON.stringify(session));
-  const issues = validateJsonSchema(serializedSession, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Research session failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadResearchSessionSchema(): Promise<unknown> {
-  researchSessionSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "research-session.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return researchSessionSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: session,
+    schemaFile: "research-session.schema.json",
+    artifactName: "Research session"
+  });
 }
 
 async function readResearchSessionRef(

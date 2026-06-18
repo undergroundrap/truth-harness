@@ -1,10 +1,8 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { listClaimRecords, type ClaimLedgerRecord } from "./claim-ledger.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { listReportDrafts, type ReportDraftSummary } from "./report-draft.js";
 import {
@@ -20,6 +18,7 @@ import {
   type ResearchSessionCheckpoint,
   type ResearchSessionTask
 } from "./research-session.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -160,8 +159,6 @@ export interface WorkspaceReviewSummary {
 }
 
 const WORKSPACE_REVIEW_SCHEMA_VERSION = "truth-harness.workspace-review.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let workspaceReviewSchemaCache: Promise<unknown> | undefined;
 
 export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): Promise<WorkspaceReview> {
   const status = await requireLocalWorkspace(input.rootPath);
@@ -244,25 +241,11 @@ export async function writeWorkspaceReview(input: CreateWorkspaceReviewInput): P
 }
 
 async function assertWorkspaceReviewSchema(review: WorkspaceReview): Promise<void> {
-  const schema = await loadWorkspaceReviewSchema();
-  const serializedReview = parseJsonWithOptionalBom(JSON.stringify(review));
-  const issues = validateJsonSchema(serializedReview, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Workspace review failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadWorkspaceReviewSchema(): Promise<unknown> {
-  workspaceReviewSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "workspace-review.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return workspaceReviewSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: review,
+    schemaFile: "workspace-review.schema.json",
+    artifactName: "Workspace review"
+  });
 }
 
 export async function listWorkspaceReviews(rootPath: string): Promise<WorkspaceReviewSummary[]> {

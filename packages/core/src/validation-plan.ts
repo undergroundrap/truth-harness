@@ -1,12 +1,11 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { createEvidenceAudit, type EvidenceAudit, type EvidenceAuditClaimType } from "./evidence-audit.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import type { InventionEvidenceRef } from "./invention-log.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -59,8 +58,6 @@ export const VALIDATION_GATE_KINDS = [
 export const VALIDATION_GATE_STATUSES = ["missing", "planned", "in-progress", "satisfied", "blocked", "not-applicable"] as const;
 export const VALIDATION_READINESS = ["blocked-refuted", "not-ready", "ready-for-review", "ready-for-narrow-claim"] as const;
 const VALIDATION_PLAN_SCHEMA_VERSION = "truth-harness.validation-plan.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let validationPlanSchemaCache: Promise<unknown> | undefined;
 
 export type ValidationPlanDomain = (typeof VALIDATION_PLAN_DOMAINS)[number];
 export type ValidationGateKind = (typeof VALIDATION_GATE_KINDS)[number];
@@ -271,25 +268,11 @@ export async function writeValidationPlan(input: CreateValidationPlanInput): Pro
 }
 
 async function assertValidationPlanSchema(plan: ValidationPlan): Promise<void> {
-  const schema = await loadValidationPlanSchema();
-  const serializedPlan = parseJsonWithOptionalBom(JSON.stringify(plan));
-  const issues = validateJsonSchema(serializedPlan, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Validation plan failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadValidationPlanSchema(): Promise<unknown> {
-  validationPlanSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "validation-plan.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return validationPlanSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: plan,
+    schemaFile: "validation-plan.schema.json",
+    artifactName: "Validation plan"
+  });
 }
 
 export async function listValidationPlans(rootPath: string): Promise<ValidationPlan[]> {

@@ -1,6 +1,5 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import {
   writeBenchmarkRunRecord,
@@ -13,12 +12,12 @@ import type { CredibilityPack } from "./credibility-pack.js";
 import { writeSymbolicCasCheckRecord } from "./cas-backend.js";
 import { writeEngineVerificationRun, type EngineVerificationRequirements } from "./engine-verification.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { writeLeanProofCheckRecord } from "./proof-backend.js";
 import { readReportDraft } from "./report-draft.js";
 import { createReceipt } from "./receipt.js";
 import { readResearchSession } from "./research-session.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { writeSmtCheckRecord, type SmtBackendId } from "./smt-backend.js";
 import type { SympyOperation } from "./sympy.js";
 import type { Receipt, TrustLabel } from "./types.js";
@@ -33,8 +32,6 @@ import type { WorkspaceReview, WorkspaceReviewItem } from "./workspace-review.js
 
 export type WorkspaceRunNextStatus = "planned" | "executed" | "blocked";
 const WORKSPACE_RUN_NEXT_SCHEMA_VERSION = "truth-harness.workspace-run-next.v0" as const;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let workspaceRunNextSchemaCache: Promise<unknown> | undefined;
 
 export interface WorkspaceRunNextWriteResult {
   plan: WorkspaceRunNextPlan;
@@ -279,25 +276,11 @@ export async function writeWorkspaceRunNextPlan(input: {
 }
 
 async function assertWorkspaceRunNextPlanSchema(plan: WorkspaceRunNextPlan): Promise<void> {
-  const schema = await loadWorkspaceRunNextSchema();
-  const serializedPlan = parseJsonWithOptionalBom(JSON.stringify(plan));
-  const issues = validateJsonSchema(serializedPlan, schema);
-  if (issues.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Workspace run-next plan failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadWorkspaceRunNextSchema(): Promise<unknown> {
-  workspaceRunNextSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "workspace-run-next.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return workspaceRunNextSchemaCache;
+  await assertJsonSchemaBeforeWrite({
+    value: plan,
+    schemaFile: "workspace-run-next.schema.json",
+    artifactName: "Workspace run-next plan"
+  });
 }
 
 export async function listWorkspaceRunNextPlans(rootPath: string): Promise<WorkspaceRunNextSummary[]> {

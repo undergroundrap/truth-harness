@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, stat } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
-import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const REPORT_DRAFT_SCHEMA_VERSION = "truth-harness.report-draft.v0" as const;
@@ -105,8 +104,6 @@ export class ReportDraftError extends Error {
 }
 
 const MAX_REPORT_MARKDOWN_BYTES = 96 * 1024;
-const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
-let reportDraftSchemaCache: Promise<unknown> | undefined;
 
 export async function writeReportDraft(input: WriteReportDraftInput): Promise<ReportDraftWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
@@ -190,26 +187,15 @@ export async function writeReportDraft(input: WriteReportDraftInput): Promise<Re
 }
 
 async function assertReportDraftSchema(report: ReportDraft): Promise<void> {
-  const schema = await loadReportDraftSchema();
-  const jsonReport = parseJsonWithOptionalBom(JSON.stringify(report));
-  const issues = validateJsonSchema(jsonReport, schema);
-  if (issues.length === 0) {
-    return;
+  try {
+    await assertJsonSchemaBeforeWrite({
+      value: report,
+      schemaFile: "report-draft.schema.json",
+      artifactName: "Report draft"
+    });
+  } catch (error) {
+    throw new ReportDraftError(500, error instanceof Error ? error.message : "Report draft failed JSON Schema validation before write.");
   }
-
-  throw new ReportDraftError(
-    500,
-    `Report draft failed JSON Schema validation before write: ${issues
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join("; ")}`
-  );
-}
-
-function loadReportDraftSchema(): Promise<unknown> {
-  reportDraftSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "report-draft.schema.json"), "utf8").then((raw) =>
-    parseJsonWithOptionalBom(raw)
-  );
-  return reportDraftSchemaCache;
 }
 
 export async function listReportDrafts(input: ListReportDraftsInput): Promise<ReportDraftSummary[]> {
