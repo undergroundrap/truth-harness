@@ -7,6 +7,7 @@ import { appendArtifactWriteEvent } from "./event-log.js";
 import { withWorkspaceLock } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import {
+  isPortableBundlePayloadPath,
   validateWorkspaceArtifacts,
   type WorkspaceValidation,
   type WorkspaceValidationArtifact,
@@ -1518,7 +1519,7 @@ async function collectCatalogSourceSnapshot(
   paths.add(toPortableRelativePath(status.root, status.manifestPath));
 
   for (const directory of Object.values(status.manifest.directories)) {
-    for (const file of await listWorkspaceJsonFiles(resolve(status.root, directory))) {
+    for (const file of await listWorkspaceJsonFiles(status.root, resolve(status.root, directory))) {
       paths.add(toPortableRelativePath(status.root, file));
     }
   }
@@ -1535,7 +1536,7 @@ async function collectCatalogSourceSnapshot(
   return rows;
 }
 
-async function listWorkspaceJsonFiles(root: string): Promise<string[]> {
+async function listWorkspaceJsonFiles(workspaceRoot: string, root: string): Promise<string[]> {
   const files: string[] = [];
 
   async function walk(directory: string): Promise<void> {
@@ -1554,11 +1555,17 @@ async function listWorkspaceJsonFiles(root: string): Promise<string[]> {
     for (const entry of entries) {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) {
+        if (isPortableBundlePayloadPath(`${toPortableRelativePath(workspaceRoot, path)}/`)) {
+          continue;
+        }
         await walk(path);
         continue;
       }
 
       if (entry.isFile() && entry.name.endsWith(".json")) {
+        if (isPortableBundlePayloadPath(toPortableRelativePath(workspaceRoot, path))) {
+          continue;
+        }
         files.push(path);
       }
     }

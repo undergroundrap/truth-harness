@@ -465,7 +465,7 @@ function filterValidationFiles(directory: LocalWorkspaceDirectory, root: string,
   return files.filter((file) => !isPortableBundlePayloadPath(toPortablePath(relative(root, file))));
 }
 
-function isPortableBundlePayloadPath(path: string): boolean {
+export function isPortableBundlePayloadPath(path: string): boolean {
   return /^\.truth-harness\/findings\/[^/]+-credibility-bundle\/artifacts\/\.truth-harness\//u.test(path);
 }
 

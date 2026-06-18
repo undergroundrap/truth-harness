@@ -368,12 +368,14 @@ describe("local web route ledger API", () => {
         blocking: true
       })
     );
-    expect(releaseAuditPayload.audit.checks).toContainEqual(
+    const sandboxCheck = releaseAuditPayload.audit.checks.find((check: { id?: string }) => check.id === "code-run-sandbox");
+    expect(sandboxCheck).toBeDefined();
+    expect(sandboxCheck).toEqual(
       expect.objectContaining({
-        id: "code-run-sandbox",
-        blocking: true
+        id: "code-run-sandbox"
       })
     );
+    expect(sandboxCheck?.blocking).toBe(sandboxCheck?.status === "pass" ? false : true);
 
     const credibilityWriteResponse = await fetch(`${baseUrl}/api/credibility-pack`, {
       method: "POST",

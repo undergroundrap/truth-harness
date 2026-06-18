@@ -237,6 +237,41 @@ describe("workspace catalog", () => {
     expect(staleStatus.freshness.examples.join("\n")).toContain("new:.truth-harness/receipts/out-of-band.json");
   });
 
+  it("ignores exported credibility-bundle payload copies during freshness checks", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    await writeReceipt(root, "fraction.json", createReceipt("compute 3 / 4 + 5 / 8"));
+    const rebuild = await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-14T00:00:01.000Z" });
+
+    const bundledReceiptDir = join(
+      root,
+      ".truth-harness",
+      "findings",
+      "2026-06-14-cbun_test-credibility-bundle",
+      "artifacts",
+      ".truth-harness",
+      "receipts"
+    );
+    await mkdir(bundledReceiptDir, { recursive: true });
+    await writeFile(join(bundledReceiptDir, "copied-receipt.json"), `${JSON.stringify(createReceipt("compute 2 + 2"), null, 2)}\n`, "utf8");
+
+    const status = await getWorkspaceCatalogStatus(root, { checkFiles: true });
+
+    expect(status).toMatchObject({
+      readable: true,
+      stale: false,
+      artifactCount: rebuild.artifactCount,
+      freshness: {
+        checked: true,
+        stale: false,
+        workspaceArtifacts: rebuild.artifactCount,
+        changedArtifacts: 0,
+        missingArtifacts: 0,
+        newArtifacts: 0
+      }
+    });
+  });
+
   it("can incrementally upsert a single canonical artifact without a full rebuild", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
