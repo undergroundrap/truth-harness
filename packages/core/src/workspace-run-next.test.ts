@@ -730,8 +730,13 @@ describe("workspace run-next", () => {
     await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
     const review = minimalReview({
       rootPath: root,
-      command: "truth-harness proof check docs/examples/trivial.lean --write",
-      claimId: "claim_fake"
+      command:
+        "truth-harness validation attach vpl_run_next_test gate_proof_run_next_test --evidence proof:.truth-harness/proofs/candidate.json --json",
+      claimId: "claim_fake",
+      kind: "validation-gate",
+      validationPlanId: "vpl_run_next_test",
+      validationGateId: "gate_proof_run_next_test",
+      validationGateKind: "proof"
     });
     const plan = await createWorkspaceRunNextPlan({
       rootPath: root,
@@ -746,6 +751,9 @@ describe("workspace run-next", () => {
     expect(result.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
     expect(result.markdownPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
     expect(result.markdown).toContain("# Truth Harness Run-Next Plan");
+    expect(result.markdown).toContain("## Why This Action");
+    expect(result.markdown).toContain("| Target | validation proof gate_proof_run_next_test |");
+    expect(result.markdown).toContain("| Candidate evidence | proof:.truth-harness/proofs/candidate.json |");
     expect(result.markdown).toContain("It is not proof, not a trust-label upgrade");
     const parsed = JSON.parse(await readFile(result.jsonPath, "utf8")) as { schemaVersion?: string; planId?: string; dryRun?: boolean };
     expect(parsed).toMatchObject({

@@ -391,6 +391,12 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
     `| Status | \`${plan.status}\` |`,
     `| Mode | \`${plan.mode}\` |`,
     "",
+    "## Why This Action",
+    "",
+    "| Field | Value |",
+    "| --- | --- |",
+    ...workspaceRunNextWhyRows(plan).map(([field, value]) => `| ${field} | ${escapeMarkdownTable(value)} |`),
+    "",
     "## Next Item",
     "",
     item
@@ -433,6 +439,52 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
     ""
   ];
   return lines.join("\n");
+}
+
+function workspaceRunNextWhyRows(plan: WorkspaceRunNextPlan): Array<[string, string]> {
+  const item = plan.item;
+  const evidenceRef = plan.execution.evidenceRef ?? evidenceRefFromRunNextCommand(item?.command ?? plan.execution.command);
+  const target = item
+    ? workspaceRunNextTarget(item)
+    : "No open workspace review item.";
+  const source = item
+    ? `${item.kind} / ${item.priority}`
+    : "workspace-review";
+  const boundary = plan.dryRun
+    ? "Dry-run only; execute through CLI/MCP with explicit local execution approval."
+    : "Executed through the bounded in-process run-next planner.";
+  return [
+    ["Target", target],
+    ["Source", source],
+    ["Candidate evidence", evidenceRef ?? "No candidate evidence ref selected."],
+    ["Execution boundary", boundary],
+    ["First stop condition", plan.stopConditions[0] ?? "No stop condition recorded."],
+    ["First warning", plan.warnings[0] ?? "No warning recorded."]
+  ];
+}
+
+function workspaceRunNextTarget(item: WorkspaceRunNextPlan["item"]): string {
+  if (!item) {
+    return "No open workspace review item.";
+  }
+  if (item.validationGateId) {
+    return `validation ${item.validationGateKind ?? "gate"} ${item.validationGateId}`;
+  }
+  if (item.obligationId) {
+    return `${item.obligationKind ?? "obligation"} ${item.obligationId}`;
+  }
+  return item.claimId ?? item.routeId ?? item.reportId ?? item.sessionId ?? "workspace queue";
+}
+
+function evidenceRefFromRunNextCommand(command: string | undefined): string | undefined {
+  if (!command) {
+    return undefined;
+  }
+  const match = command.match(/--evidence\s+("[^"]+"|'[^']+'|\S+)/u);
+  if (!match) {
+    return undefined;
+  }
+  return match[1].replace(/^["']|["']$/gu, "");
 }
 
 function tryParseWorkspaceRunNextJson(raw: string): WorkspaceRunNextPlan | undefined {
