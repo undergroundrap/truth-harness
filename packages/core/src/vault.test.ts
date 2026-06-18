@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -106,6 +106,39 @@ describe("local encrypted vault", () => {
         keyEnv
       })
     ).rejects.toThrow("Path escapes workspace root");
+  });
+
+  it("fails closed before writing malformed encrypted envelopes", async () => {
+    const root = await tempRoot();
+    process.env[keyEnv] = "test vault passphrase";
+    const initialized = await initLocalWorkspace(root, { now: "2026-06-08T00:00:00.000Z" });
+    await writeFile(join(root, "private-notes.md"), "secret local note", "utf8");
+    await writeFile(
+      initialized.manifestPath,
+      `${JSON.stringify(
+        {
+          ...initialized.manifest,
+          privacy: {
+            ...initialized.manifest.privacy,
+            networkAccess: "unknown"
+          }
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    await expect(
+      sealVaultFile({
+        rootPath: root,
+        sourcePath: "private-notes.md",
+        keyEnv,
+        now: "2026-06-08T00:01:00.000Z"
+      })
+    ).rejects.toThrow("Vault envelope failed JSON Schema validation before write");
+
+    expect(await readdir(join(root, ".truth-harness", "vault"))).toEqual([]);
   });
 });
 

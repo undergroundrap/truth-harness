@@ -11,6 +11,7 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -189,6 +190,11 @@ export async function sealVaultFile(input: SealVaultFileInput): Promise<VaultSea
   const vaultDir = resolve(status.root, manifest.directories.vault);
   await mkdir(vaultDir, { recursive: true });
   const path = join(vaultDir, `${entry.createdAt.slice(0, 10)}-${entry.vaultId}.json`);
+  await assertJsonSchemaBeforeWrite({
+    value: entry,
+    schemaFile: "vault.schema.json",
+    artifactName: "Vault envelope"
+  });
   await writeJsonFileAtomic(path, entry);
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
