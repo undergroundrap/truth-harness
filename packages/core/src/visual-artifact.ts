@@ -1,7 +1,9 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { validateJsonSchema } from "./json-schema-validation.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata } from "./types.js";
@@ -155,6 +157,9 @@ export interface VisualArtifactSummary {
   tags: string[];
 }
 
+const SCHEMAS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas");
+let visualArtifactSchemaCache: Promise<unknown> | undefined;
+
 export async function createVisualArtifact(input: CreateVisualArtifactInput): Promise<VisualArtifact> {
   const status = await requireLocalWorkspace(input.rootPath);
   const createdAt = input.now ?? new Date().toISOString();
@@ -206,6 +211,7 @@ export async function writeVisualArtifact(input: CreateVisualArtifactInput): Pro
   const status = await requireLocalWorkspace(input.rootPath);
   const visual = await createVisualArtifact(input);
   const visualsDir = resolve(status.root, status.manifest.directories.visuals);
+  await assertVisualArtifactSchema(visual);
   await mkdir(visualsDir, { recursive: true });
   const baseName = `${visual.createdAt.slice(0, 10)}-${visual.visualId}`;
   const jsonPath = join(visualsDir, `${baseName}.json`);
@@ -225,6 +231,28 @@ export async function writeVisualArtifact(input: CreateVisualArtifactInput): Pro
     jsonPath,
     markdownPath
   };
+}
+
+async function assertVisualArtifactSchema(visual: VisualArtifact): Promise<void> {
+  const schema = await loadVisualArtifactSchema();
+  const serializedVisual = parseJsonWithOptionalBom(JSON.stringify(visual));
+  const issues = validateJsonSchema(serializedVisual, schema);
+  if (issues.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `Visual artifact failed JSON Schema validation before write: ${issues
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join("; ")}`
+  );
+}
+
+function loadVisualArtifactSchema(): Promise<unknown> {
+  visualArtifactSchemaCache ??= readFile(resolve(SCHEMAS_DIR, "visual-artifact.schema.json"), "utf8").then((raw) =>
+    parseJsonWithOptionalBom(raw)
+  );
+  return visualArtifactSchemaCache;
 }
 
 export async function listVisualArtifacts(rootPath: string): Promise<VisualArtifactSummary[]> {

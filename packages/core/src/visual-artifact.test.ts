@@ -122,6 +122,30 @@ describe("visual artifacts", () => {
     );
   });
 
+  it("validates visual artifact JSON before writing sidecars", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      displayName: "Visual Lab",
+      now: "2026-06-14T00:00:00.000Z"
+    });
+
+    await expect(
+      writeVisualArtifact({
+        rootPath: root,
+        title: "Invalid visual",
+        kind: "plot",
+        renderer: { engine: "truth-harness-native" },
+        payload: {
+          format: "svg",
+          content: "<svg />"
+        },
+        now: "not-a-date"
+      })
+    ).rejects.toThrow("$.createdAt must be a valid date-time string");
+
+    await expect(listVisualArtifacts(root)).resolves.toEqual([]);
+  });
+
   it("rejects unsupported visual artifact schema versions", () => {
     expect(() => parseVisualArtifactJson(JSON.stringify({ schemaVersion: "old.visual" }))).toThrow(
       "Unsupported visual artifact schema"
