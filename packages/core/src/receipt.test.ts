@@ -24,6 +24,39 @@ describe("createReceipt", () => {
     expect(trace.explanations?.map((view) => view.audience)).toContain("middle-school");
   });
 
+  it("checks concrete LaTeX common-denominator lemmas with exact arithmetic", () => {
+    const receipt = createReceipt("\\operatorname{lcm}(4,8) = 8,\\ \\frac{3}{4}=\\frac{6}{8}");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("lcm(4,8) = 8");
+    expect(receipt.summary).toContain("3/4 = 3/4");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-rational-arithmetic");
+    expect(receipt.evidenceProfile.outputs).toContain("checks=passed");
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("not a formal proof");
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "common-denominator-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      verdict?: string;
+      rewrite?: { multiplier?: string };
+      checks?: Array<{ id: string; ok: boolean }>;
+    };
+    expect(payload.verdict).toBe("accepted");
+    expect(payload.rewrite?.multiplier).toBe("2");
+    expect(payload.checks?.every((check) => check.ok)).toBe(true);
+  });
+
+  it("refutes wrong concrete common-denominator lemmas", () => {
+    const receipt = createReceipt("\\operatorname{lcm}(4,8) = 8,\\ \\frac{3}{4}=\\frac{7}{8}");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("Refuted common-denominator statement");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["numerator-rewrite=failed", "fraction-equality=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+  });
+
   it("marks MVP receipts as local-only with no external disclosure", () => {
     const receipt = createReceipt("compute 2 + 2");
 

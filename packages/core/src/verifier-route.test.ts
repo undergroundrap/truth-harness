@@ -71,6 +71,32 @@ describe("verifier route", () => {
     });
   });
 
+  it("routes concrete LaTeX common-denominator lemmas through the native rational kernel", () => {
+    const route = createVerifierRoute("\\operatorname{lcm}(4,8) = 8,\\ \\frac{3}{4}=\\frac{6}{8}", {
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    expect(route.status).toBe("verified");
+    expect(route.finalTrust).toBe("exact-computed");
+    expect(route.evidenceKind).toBe("exact-arithmetic");
+    expect(route.usedCapabilities).toContainEqual(
+      expect.objectContaining({
+        capabilityId: "local-rational-arithmetic",
+        status: "used",
+        canMintTrust: true
+      })
+    );
+    expect(route.receipt.artifacts.some((artifact) => artifact.kind === "common-denominator-certificate")).toBe(true);
+    expect(verifierRouteReadiness(route)).toMatchObject({
+      readyForNarrowClaim: true,
+      strongestTrust: "exact-computed"
+    });
+  });
+
   it("treats stronger-label obligations as upgrades for already scoped exact results", () => {
     const route = createVerifierRoute("for all integers n, n^2+n is even", {
       now: new Date("2026-06-12T00:00:00.000Z"),

@@ -25,6 +25,16 @@ interface UniversalParityClaim {
   parity: "even" | "odd";
 }
 
+interface CommonDenominatorClaim {
+  source: string;
+  lcmArgs: [bigint, bigint];
+  statedLcm: bigint;
+  originalNumerator: bigint;
+  originalDenominator: bigint;
+  rewrittenNumerator: bigint;
+  rewrittenDenominator: bigint;
+}
+
 export interface CreateReceiptOptions {
   maximaCommand?: string;
   casRunner?: CasBackendCommandRunner;
@@ -108,6 +118,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
       problem,
       normalizedProblem,
       intervalPrompt,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
+  const commonDenominatorClaim = parseCommonDenominatorClaim(normalizedProblem);
+  if (commonDenominatorClaim) {
+    return completeCommonDenominatorReceipt({
+      problem,
+      normalizedProblem,
+      claim: commonDenominatorClaim,
       createdAt,
       nodes,
       edges,
@@ -1028,6 +1053,158 @@ function completeUniversalParityReceipt(args: {
   });
 }
 
+function completeCommonDenominatorReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: CommonDenominatorClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const computedLcm = lcm(args.claim.lcmArgs[0], args.claim.lcmArgs[1]);
+  const sourceFraction = new Rational(args.claim.originalNumerator, args.claim.originalDenominator);
+  const rewrittenFraction = new Rational(args.claim.rewrittenNumerator, args.claim.rewrittenDenominator);
+  const lcmMatches = computedLcm === args.claim.statedLcm;
+  const denominatorMatchesLcm = args.claim.rewrittenDenominator === args.claim.statedLcm;
+  const originalDenominatorIsLcmInput =
+    args.claim.originalDenominator === args.claim.lcmArgs[0] || args.claim.originalDenominator === args.claim.lcmArgs[1];
+  const multiplier = args.claim.originalDenominator !== 0n && args.claim.statedLcm % args.claim.originalDenominator === 0n
+    ? args.claim.statedLcm / args.claim.originalDenominator
+    : undefined;
+  const numeratorRewriteMatches = multiplier !== undefined && args.claim.rewrittenNumerator === args.claim.originalNumerator * multiplier;
+  const fractionsEqual = sourceFraction.compare(rewrittenFraction) === 0;
+  const valid =
+    lcmMatches &&
+    denominatorMatchesLcm &&
+    originalDenominatorIsLcmInput &&
+    numeratorRewriteMatches &&
+    fractionsEqual;
+  const trust: TrustLabel = valid ? "exact-computed" : "refuted";
+  const checks = [
+    {
+      id: "lcm",
+      ok: lcmMatches,
+      expected: computedLcm.toString(),
+      observed: args.claim.statedLcm.toString()
+    },
+    {
+      id: "denominator-target",
+      ok: denominatorMatchesLcm,
+      expected: args.claim.statedLcm.toString(),
+      observed: args.claim.rewrittenDenominator.toString()
+    },
+    {
+      id: "original-denominator-is-lcm-input",
+      ok: originalDenominatorIsLcmInput,
+      expected: args.claim.lcmArgs.map((value) => value.toString()).join(","),
+      observed: args.claim.originalDenominator.toString()
+    },
+    {
+      id: "numerator-rewrite",
+      ok: numeratorRewriteMatches,
+      expected: multiplier === undefined ? "integer multiplier required" : (args.claim.originalNumerator * multiplier).toString(),
+      observed: args.claim.rewrittenNumerator.toString()
+    },
+    {
+      id: "fraction-equality",
+      ok: fractionsEqual,
+      expected: sourceFraction.toString(),
+      observed: rewrittenFraction.toString()
+    }
+  ];
+  const certificate = {
+    schemaVersion: "truth-harness.common-denominator.v0",
+    adapter: "local-rational-arithmetic",
+    source: args.claim.source,
+    lcm: {
+      inputs: args.claim.lcmArgs.map((value) => value.toString()),
+      computed: computedLcm.toString(),
+      stated: args.claim.statedLcm.toString()
+    },
+    rewrite: {
+      from: `${args.claim.originalNumerator.toString()}/${args.claim.originalDenominator.toString()}`,
+      to: `${args.claim.rewrittenNumerator.toString()}/${args.claim.rewrittenDenominator.toString()}`,
+      multiplier: multiplier?.toString() ?? null
+    },
+    checks,
+    verdict: valid ? "accepted" : "refuted"
+  };
+  const artifact = addArtifact(args.artifacts, {
+    kind: "common-denominator-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-rational-arithmetic",
+      operation: "common-denominator-check",
+      checkCount: checks.length
+    },
+    trust,
+    summary: "Checked a concrete common-denominator rewrite with exact integer and rational arithmetic.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: toolNode.id, label: "checked-by" });
+
+  const computationNode = addNode(args.nodes, args.createdAt, {
+    kind: valid ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: valid
+      ? `${args.claim.originalNumerator.toString()}/${args.claim.originalDenominator.toString()} rewrites to ${args.claim.rewrittenNumerator.toString()}/${args.claim.rewrittenDenominator.toString()} using denominator ${args.claim.statedLcm.toString()}.`
+      : `Concrete arithmetic refuted at least one common-denominator check: ${checks.filter((check) => !check.ok).map((check) => check.id).join(", ")}.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: computationNode.id, label: valid ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: valid ? "info" : "warning",
+    message: valid
+      ? "The common-denominator lemma was checked by exact local arithmetic. This earns exact-computed, not proved."
+      : "The common-denominator lemma matched the local checker but failed at least one exact arithmetic check."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: valid
+      ? `Exact common-denominator result: lcm(${args.claim.lcmArgs[0].toString()},${args.claim.lcmArgs[1].toString()}) = ${computedLcm.toString()} and ${sourceFraction.toString()} = ${rewrittenFraction.toString()}.`
+      : `Refuted common-denominator statement: failed checks ${checks.filter((check) => !check.ok).map((check) => check.id).join(", ")}.`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-rational-arithmetic",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: valid
+        ? [`lcm=${computedLcm.toString()}`, `${sourceFraction.toString()}=${rewrittenFraction.toString()}`, "checks=passed"]
+        : checks.filter((check) => !check.ok).map((check) => `${check.id}=failed`),
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only checks a concrete lcm/equivalent-fraction rewrite pattern.",
+        "It is exact arithmetic evidence, not a formal proof-checker-backed theorem."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
+
 function completeArithmeticReceipt(args: {
   problem: string;
   normalizedProblem: string;
@@ -1225,6 +1402,67 @@ function parseArithmeticPrompt(problem: string): string | undefined {
   }
 
   return candidate;
+}
+
+function parseCommonDenominatorClaim(problem: string): CommonDenominatorClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/^(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const lcmMatch = /\blcm\s*\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)\s*=\s*(-?\d+)/iu.exec(candidate);
+  const fractionMatch = /(-?\d+)\s*\/\s*(\d+)\s*=\s*(-?\d+)\s*\/\s*(\d+)/u.exec(candidate);
+
+  if (!lcmMatch || !fractionMatch) {
+    return undefined;
+  }
+
+  const lcmArgs: [bigint, bigint] = [BigInt(lcmMatch[1]), BigInt(lcmMatch[2])];
+  const statedLcm = BigInt(lcmMatch[3]);
+  const originalDenominator = BigInt(fractionMatch[2]);
+  const rewrittenDenominator = BigInt(fractionMatch[4]);
+
+  if (lcmArgs[0] <= 0n || lcmArgs[1] <= 0n || statedLcm <= 0n || originalDenominator <= 0n || rewrittenDenominator <= 0n) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    lcmArgs,
+    statedLcm,
+    originalNumerator: BigInt(fractionMatch[1]),
+    originalDenominator,
+    rewrittenNumerator: BigInt(fractionMatch[3]),
+    rewrittenDenominator
+  };
+}
+
+function latexToReadableMath(value: string): string {
+  return value
+    .replace(/\\operatorname\{([^{}]+)\}/gu, "$1")
+    .replace(/\\frac\{(-?\d+)\}\{(-?\d+)\}/gu, "$1/$2")
+    .replace(/\\[,;:! ]/gu, " ")
+    .replace(/\\/gu, " ");
+}
+
+function lcm(left: bigint, right: bigint): bigint {
+  return (abs(left) / gcd(abs(left), abs(right))) * abs(right);
+}
+
+function gcd(left: bigint, right: bigint): bigint {
+  let a = left;
+  let b = right;
+
+  while (b !== 0n) {
+    const next = a % b;
+    a = b;
+    b = next;
+  }
+
+  return a === 0n ? 1n : a;
+}
+
+function abs(value: bigint): bigint {
+  return value < 0n ? -value : value;
 }
 
 function normalizeProblem(problem: string): string {

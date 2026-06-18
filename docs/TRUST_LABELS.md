@@ -22,6 +22,8 @@ Truth Harness trust labels describe what local evidence currently supports. They
 
 The local modular parity checker emits `exact-computed`, not `proved`. It can attach a certificate showing the two residue classes modulo 2, but `proved` is reserved for accepted proof-checking backends such as Lean.
 
+The local rational arithmetic adapter also accepts a narrow LaTeX/common-denominator pattern such as `\operatorname{lcm}(4,8) = 8, \frac{3}{4}=\frac{6}{8}`. When the lcm, denominator target, rewrite multiplier, and rational equality all check out, it emits an `exact-computed` common-denominator certificate. If a matched statement fails one of those exact checks, it emits `refuted`. This path is still concrete arithmetic evidence, not a formal theorem proof.
+
 `truth-harness proof backends` and the MCP `truth_harness_proof_backends` tool report local proof-checker availability without network access. A successful Lean version probe means this machine may be able to check Lean proof artifacts; it does not prove any claim, and it never mints a `proved` receipt by itself.
 
 `truth-harness proof project <path>` inspects local Lean/Lake project readiness without running Lean, Lake, dependency fetches, or network commands. It can report pinned toolchain files, Lake metadata, `lake-manifest.json`, `.lean` file samples, and likely mathlib references, but it does not prove anything and cannot satisfy a proof gate.
