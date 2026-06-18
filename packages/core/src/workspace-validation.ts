@@ -11,6 +11,7 @@ import {
 } from "./local-workspace.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { parseReceiptJson, ReceiptValidationError } from "./receipt-validation.js";
+import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 
 export type WorkspaceValidationArtifactKind = LocalWorkspaceDirectory | "manifest";
@@ -906,9 +907,10 @@ async function validateVerifierRouteObligationPolicy(
     }
 
     const obligationId = typeof obligationValue.obligationId === "string" ? obligationValue.obligationId : undefined;
+    const obligationStatement = typeof obligationValue.statement === "string" ? obligationValue.statement : undefined;
     const kind = typeof obligationValue.kind === "string" ? obligationValue.kind : undefined;
     const status = typeof obligationValue.status === "string" ? obligationValue.status : undefined;
-    if (kind !== "formal-proof" || status !== "satisfied" || !obligationId) {
+    if (kind !== "formal-proof" || status !== "satisfied" || !obligationId || !obligationStatement) {
       continue;
     }
 
@@ -918,6 +920,7 @@ async function validateVerifierRouteObligationPolicy(
       index,
       routeId,
       obligationId,
+      obligationStatement,
       evidenceRefs: satisfiedBy
     });
 
@@ -939,6 +942,7 @@ async function hasScopedAcceptedProofEvidence(input: {
   index: ArtifactIndex;
   routeId: string;
   obligationId: string;
+  obligationStatement: string;
   evidenceRefs: unknown[];
 }): Promise<boolean> {
   for (const refValue of input.evidenceRefs) {
@@ -954,13 +958,27 @@ async function hasScopedAcceptedProofEvidence(input: {
       proof.proofCheckerBacked === true &&
       proof.backend.acceptedProofChecker === true &&
       scope?.routeId === input.routeId &&
-      scope.obligationId === input.obligationId
+      scope.obligationId === input.obligationId &&
+      scope.statementHash === routeStatementBoundaryHash(input.obligationStatement) &&
+      normalizeOptionalStatementBoundary(scope.statement) === normalizeStatementBoundary(input.obligationStatement)
     ) {
       return true;
     }
   }
 
   return false;
+}
+
+function routeStatementBoundaryHash(statement: string): string {
+  return stableHash({ statement: normalizeStatementBoundary(statement) });
+}
+
+function normalizeStatementBoundary(statement: string): string {
+  return statement.replace(/\s+/gu, " ").trim();
+}
+
+function normalizeOptionalStatementBoundary(statement: string | undefined): string | undefined {
+  return typeof statement === "string" && statement.trim() ? normalizeStatementBoundary(statement) : undefined;
 }
 
 async function readProofEvidence(root: string, ref: string, index: ArtifactIndex) {

@@ -288,6 +288,7 @@ export {
   readVerifierRoute,
   renderVerifierRouteMarkdown,
   satisfyVerifierRouteObligation,
+  verifierRouteStatementBoundaryHash,
   verifierRouteReadiness,
   writeVerifierRoute
 } from "./verifier-route.js";

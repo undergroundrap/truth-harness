@@ -9,7 +9,7 @@ import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchHarness, writeResearchSession } from "./research-session.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createWorkspaceReview, listWorkspaceReviews, readWorkspaceReview, writeWorkspaceReview } from "./workspace-review.js";
-import { writeVerifierRoute } from "./verifier-route.js";
+import { verifierRouteStatementBoundaryHash, writeVerifierRoute } from "./verifier-route.js";
 
 const roots: string[] = [];
 
@@ -397,6 +397,7 @@ describe("workspace review", () => {
     expect(review.summary.criticalItems).toBe(0);
     const item = review.items.find((candidate) => candidate.kind === "route-obligation");
     const obligationId = String(stored.proofObligations[0].obligationId);
+    const statement = String(stored.proofObligations[0].statement);
     expect(item).toMatchObject({
       kind: "route-obligation",
       routeId: route.route.routeId,
@@ -404,6 +405,8 @@ describe("workspace review", () => {
     });
     expect(item?.command).toContain(`--route ${route.route.routeId}`);
     expect(item?.command).toContain(`--obligation ${obligationId}`);
+    expect(item?.command).toContain(`--statement ${JSON.stringify(statement)}`);
+    expect(item?.command).toContain(`--statement-hash ${verifierRouteStatementBoundaryHash(statement)}`);
   });
 
   it("creates a local verifier autonomy contract for non-high-stakes work", async () => {

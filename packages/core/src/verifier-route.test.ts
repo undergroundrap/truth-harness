@@ -12,6 +12,7 @@ import {
   listVerifierRoutes,
   readVerifierRoute,
   satisfyVerifierRouteObligation,
+  verifierRouteStatementBoundaryHash,
   verifierRouteReadiness,
   writeVerifierRoute
 } from "./verifier-route.js";
@@ -452,6 +453,29 @@ describe("verifier route", () => {
       })
     ).rejects.toThrow("scoped to this exact route and obligation");
 
+    const routeScopedOnlyProofWrite = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "trivial.lean",
+      declarationName: "trivial_true",
+      scope: {
+        routeId: routeWrite.route.routeId,
+        obligationId: obligation?.obligationId
+      },
+      now: new Date("2026-06-12T00:02:30.000Z"),
+      runner
+    });
+    const routeScopedOnlyProofRef = relative(root, routeScopedOnlyProofWrite.jsonPath);
+
+    await expect(
+      satisfyVerifierRouteObligation({
+        rootPath: root,
+        routeRef: routeWrite.route.routeId,
+        obligationId: obligation?.obligationId ?? "",
+        evidenceRef: { kind: "proof", ref: routeScopedOnlyProofRef },
+        now: new Date("2026-06-12T00:02:45.000Z")
+      })
+    ).rejects.toThrow("exact scoped statement boundary");
+
     const scopedProofWrite = await writeLeanProofCheckRecord({
       rootPath: root,
       sourcePath: "trivial.lean",
@@ -459,7 +483,8 @@ describe("verifier route", () => {
       scope: {
         routeId: routeWrite.route.routeId,
         obligationId: obligation?.obligationId,
-        statementHash: "0123456789abcdef"
+        statement: obligation?.statement,
+        statementHash: verifierRouteStatementBoundaryHash(obligation?.statement ?? "")
       },
       now: new Date("2026-06-12T00:03:00.000Z"),
       runner

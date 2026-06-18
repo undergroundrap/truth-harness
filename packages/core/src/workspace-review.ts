@@ -8,6 +8,7 @@ import { listReportDrafts, type ReportDraftSummary } from "./report-draft.js";
 import {
   listVerifierRoutes,
   readVerifierRoute,
+  verifierRouteStatementBoundaryHash,
   verifierRouteReadiness,
   type ProofObligation,
   type VerifierRoute
@@ -824,7 +825,7 @@ function routeObligationItem(workspacePath: string, route: VerifierRoute, obliga
 }
 
 function commandForRouteObligation(workspacePath: string, route: VerifierRoute, obligation: ProofObligation): string {
-  const scopedCommand = scopedProofCommand(obligation.command, route.routeId, obligation.obligationId);
+  const scopedCommand = scopedProofCommand(obligation.command, route.routeId, obligation.obligationId, obligation.statement);
   if (scopedCommand) {
     return scopedCommand;
   }
@@ -832,7 +833,12 @@ function commandForRouteObligation(workspacePath: string, route: VerifierRoute, 
   return obligation.command ?? `truth-harness route show ${quoteCommandArg(route.routeId)} --workspace ${quoteCommandArg(workspacePath)} --json`;
 }
 
-function scopedProofCommand(command: string | undefined, routeId: string, obligationId: string): string | undefined {
+function scopedProofCommand(
+  command: string | undefined,
+  routeId: string,
+  obligationId: string,
+  statement: string
+): string | undefined {
   if (!command?.startsWith("truth-harness proof check ")) {
     return command;
   }
@@ -843,6 +849,12 @@ function scopedProofCommand(command: string | undefined, routeId: string, obliga
   }
   if (!hasCliFlag(scoped, "--obligation")) {
     scoped += ` --obligation ${quoteCommandArg(obligationId)}`;
+  }
+  if (!hasCliFlag(scoped, "--statement")) {
+    scoped += ` --statement ${quoteCommandArg(statement)}`;
+  }
+  if (!hasCliFlag(scoped, "--statement-hash")) {
+    scoped += ` --statement-hash ${quoteCommandArg(verifierRouteStatementBoundaryHash(statement))}`;
   }
 
   return scoped;

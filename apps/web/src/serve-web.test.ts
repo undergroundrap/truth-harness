@@ -7,7 +7,12 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { gunzipSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { writeCredibilityBundle, writeResearchSession, type EngineVerificationCommandRunner } from "../../../packages/core/src/index.js";
+import {
+  verifierRouteStatementBoundaryHash,
+  writeCredibilityBundle,
+  writeResearchSession,
+  type EngineVerificationCommandRunner
+} from "../../../packages/core/src/index.js";
 
 const repoRoot = resolve(".");
 const tsxCli = resolve(repoRoot, "node_modules/tsx/dist/cli.mjs");
@@ -1727,7 +1732,9 @@ describe("local web route ledger API", () => {
           },
           scope: {
             routeId: routePayload.route.routeId,
-            obligationId: formalObligation.obligationId
+            obligationId: formalObligation.obligationId,
+            statement: formalObligation.statement,
+            statementHash: verifierRouteStatementBoundaryHash(formalObligation.statement)
           },
           status: "accepted",
           trust: "proved",

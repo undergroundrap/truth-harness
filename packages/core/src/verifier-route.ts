@@ -71,6 +71,7 @@ export interface VerifierRouteEvidenceRef {
     routeId?: string;
     obligationId?: string;
     statementHash?: string;
+    statement?: string;
   };
 }
 
@@ -717,7 +718,7 @@ function proofObligationsForRoute(input: {
       statement,
       requiredBefore,
       acceptanceCriteria: obligationAcceptanceCriteria(gap, requiredTrust),
-      command: routeObligationCommand(gap.command, kind, input.routeId, obligationId),
+      command: routeObligationCommand(gap.command, kind, input.routeId, obligationId, statement),
       nextStep: gap.nextStep
     };
   });
@@ -727,15 +728,47 @@ function routeObligationCommand(
   command: string | undefined,
   kind: ProofObligationKind,
   routeId: string,
-  obligationId: string
+  obligationId: string,
+  statement: string
 ): string | undefined {
   if (kind === "formal-proof" && command?.startsWith("truth-harness proof check ")) {
-    return command.includes("--route ")
-      ? command
-      : `${command} --route ${routeId} --obligation ${obligationId}`;
+    let scoped = command;
+    if (!hasCliFlag(scoped, "--route")) {
+      scoped += ` --route ${quoteCommandArg(routeId)}`;
+    }
+    if (!hasCliFlag(scoped, "--obligation")) {
+      scoped += ` --obligation ${quoteCommandArg(obligationId)}`;
+    }
+    if (!hasCliFlag(scoped, "--statement")) {
+      scoped += ` --statement ${quoteCommandArg(statement)}`;
+    }
+    if (!hasCliFlag(scoped, "--statement-hash")) {
+      scoped += ` --statement-hash ${quoteCommandArg(verifierRouteStatementBoundaryHash(statement))}`;
+    }
+    return scoped;
   }
 
   return command;
+}
+
+export function verifierRouteStatementBoundaryHash(statement: string): string {
+  return stableHash({ statement: normalizeStatementBoundary(statement) });
+}
+
+function normalizeStatementBoundary(statement: string): string {
+  return statement.replace(/\s+/gu, " ").trim();
+}
+
+function normalizeOptionalStatementBoundary(statement: string | undefined): string | undefined {
+  return typeof statement === "string" && statement.trim() ? normalizeStatementBoundary(statement) : undefined;
+}
+
+function hasCliFlag(command: string, flag: string): boolean {
+  return new RegExp(`(?:^|\\s)${escapeRegExp(flag)}(?:\\s|=|$)`, "u").test(command);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function obligationKind(gap: VerifierRouteGap): ProofObligationKind {
@@ -1236,6 +1269,18 @@ function evidenceSatisfiesObligation(
           satisfied: false,
           reason:
             "formal-proof obligations require an accepted proof-check record scoped to this exact route and obligation."
+        };
+      }
+
+      const requiredStatementHash = verifierRouteStatementBoundaryHash(obligation.statement);
+      if (
+        evidence.scope.statementHash !== requiredStatementHash ||
+        normalizeOptionalStatementBoundary(evidence.scope.statement) !== normalizeStatementBoundary(obligation.statement)
+      ) {
+        return {
+          satisfied: false,
+          reason:
+            "formal-proof obligations require the proof-check record to include the exact scoped statement boundary."
         };
       }
 

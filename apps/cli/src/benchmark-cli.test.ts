@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "../../../packages/core/src/proof-backend.js";
 import { writeReportDraft } from "../../../packages/core/src/report-draft.js";
 import { addResearchSessionCheckpoint } from "../../../packages/core/src/research-session.js";
+import { verifierRouteStatementBoundaryHash } from "../../../packages/core/src/verifier-route.js";
 import { program } from "./index.js";
 
 const roots: string[] = [];
@@ -871,11 +872,12 @@ describe("benchmark CLI", () => {
     const written = JSON.parse(write.stdout) as {
       route: {
         routeId: string;
-        proofObligations: Array<{ obligationId: string; kind: string; status: string }>;
+        proofObligations: Array<{ obligationId: string; kind: string; status: string; statement: string }>;
       };
     };
     const obligation = written.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
     const obligationId = obligation?.obligationId ?? "obl_0123456789abcdef";
+    const obligationStatement = obligation?.statement ?? "formal-proof fixture statement";
     const proofRef = join(".truth-harness", "proofs", "manual-proof.json");
     await mkdir(join(root, ".truth-harness", "proofs"), { recursive: true });
     await writeFile(
@@ -903,7 +905,8 @@ describe("benchmark CLI", () => {
           scope: {
             routeId: written.route.routeId,
             obligationId,
-            statementHash: "0123456789abcdef"
+            statement: obligationStatement,
+            statementHash: verifierRouteStatementBoundaryHash(obligationStatement)
           },
           status: "accepted",
           trust: "proved",

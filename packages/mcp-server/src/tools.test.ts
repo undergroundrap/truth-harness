@@ -7,6 +7,7 @@ import {
   writeReportDraft,
   type ProofBackendCommandRunner
 } from "@truth-harness/core";
+import { verifierRouteStatementBoundaryHash } from "../../core/src/verifier-route.js";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   handleTruthHarnessAsk,
@@ -254,6 +255,7 @@ describe("MCP tool handlers", () => {
       timeoutMs: 50
     });
     const obligation = result.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
+    const obligationStatement = obligation?.statement ?? "formal-proof fixture statement";
     const proofRef = join(".truth-harness", "proofs", "manual-proof.json");
     await mkdir(join(root, ".truth-harness", "proofs"), { recursive: true });
     await writeFile(
@@ -280,7 +282,9 @@ describe("MCP tool handlers", () => {
           },
           scope: {
             routeId: result.route.routeId,
-            obligationId: obligation?.obligationId
+            obligationId: obligation?.obligationId,
+            statement: obligationStatement,
+            statementHash: verifierRouteStatementBoundaryHash(obligationStatement)
           },
           status: "accepted",
           trust: "proved",

@@ -490,6 +490,10 @@
             "statementHash": {
               "type": "string",
               "pattern": "^[a-f0-9]{16,64}$"
+            },
+            "statement": {
+              "type": "string",
+              "minLength": 1
             }
           },
           "additionalProperties": false
