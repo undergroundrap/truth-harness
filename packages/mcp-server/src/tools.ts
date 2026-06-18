@@ -641,6 +641,7 @@ export interface TruthHarnessWorkspaceRunNextInput {
 
 export interface TruthHarnessWorkspaceRunNextListInput {
   workspacePath?: string;
+  verifySnapshots?: boolean;
 }
 
 export interface TruthHarnessWorkspaceRunNextShowInput {
@@ -1866,7 +1867,9 @@ export async function handleTruthHarnessWorkspaceRunNextList(input: TruthHarness
   total: number;
   plans: WorkspaceRunNextSummary[];
 }> {
-  const plans = await listWorkspaceRunNextPlans(resolveWorkspaceRoot(input.workspacePath));
+  const plans = await listWorkspaceRunNextPlans(resolveWorkspaceRoot(input.workspacePath), {
+    verifySnapshots: Boolean(input.verifySnapshots)
+  });
   return {
     total: plans.length,
     plans

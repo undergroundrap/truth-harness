@@ -1897,10 +1897,19 @@ describe("benchmark CLI", () => {
         rationaleExecutionBoundary?: string;
         sourceSnapshotId?: string;
         sourceSnapshotPath?: string;
+        sourceSnapshotStatus?: string;
+        sourceSnapshotAdded?: number;
+        sourceSnapshotIgnoredAdded?: number;
       }>;
     };
     const listedPlan = planListPayload.plans.find((plan) => plan.planId === writtenDryRunPayload.plan.planId);
     const humanList = await runCli(["workspace", "run-nexts", root]);
+    const verifiedPlanList = await runCli(["workspace", "run-nexts", root, "--verify-snapshots", "--json"]);
+    const verifiedPlanListPayload = JSON.parse(verifiedPlanList.stdout) as typeof planListPayload;
+    const verifiedListedPlan = verifiedPlanListPayload.plans.find(
+      (plan) => plan.planId === writtenDryRunPayload.plan.planId
+    );
+    const verifiedHumanList = await runCli(["workspace", "run-nexts", root, "--verify-snapshots"]);
     expect(planList.exitCode).toBe(0);
     expect(planListPayload.total).toBeGreaterThanOrEqual(1);
     expect(listedPlan).toMatchObject({
@@ -1918,6 +1927,15 @@ describe("benchmark CLI", () => {
     expect(humanList.stdout).toContain("Source: claim-blocker / high");
     expect(humanList.stdout).toContain("Boundary: Dry-run only");
     expect(humanList.stdout).toContain(`Source snapshot: ${writtenDryRunPayload.plan.sourceSnapshot?.snapshotId}`);
+    expect(verifiedPlanList.exitCode).toBe(0);
+    expect(verifiedListedPlan).toMatchObject({
+      planId: writtenDryRunPayload.plan.planId,
+      sourceSnapshotStatus: "verified",
+      sourceSnapshotAdded: 0,
+      sourceSnapshotIgnoredAdded: 2
+    });
+    expect(verifiedHumanList.exitCode).toBe(0);
+    expect(verifiedHumanList.stdout).toContain("Snapshot drift: verified");
     const shownById = await runCli([
       "workspace",
       "show-run-next",

@@ -1531,14 +1531,19 @@ export function createTruthHarnessMcpServer(): McpServer {
         workspacePath: z
           .string()
           .optional()
-          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        verifySnapshots: z
+          .boolean()
+          .optional()
+          .describe("When true, verify each source snapshot and report whether saved handoffs drifted.")
       },
       annotations: {
         readOnlyHint: true,
         openWorldHint: false
       }
     },
-    async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceRunNextList({ workspacePath }))
+    async ({ workspacePath, verifySnapshots }) =>
+      toolJson(await handleTruthHarnessWorkspaceRunNextList({ workspacePath, verifySnapshots }))
   );
 
   server.registerTool(

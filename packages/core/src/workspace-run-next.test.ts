@@ -800,6 +800,21 @@ describe("workspace run-next", () => {
         sourceSnapshotPath: parsed.sourceSnapshot?.path
       })
     );
+    const verifiedList = await listWorkspaceRunNextPlans(root, {
+      verifySnapshots: true,
+      now: "2026-06-14T00:03:00.000Z"
+    });
+    expect(verifiedList).toContainEqual(
+      expect.objectContaining({
+        planId: result.plan.planId,
+        sourceSnapshotStatus: "verified",
+        sourceSnapshotAdded: 0,
+        sourceSnapshotChanged: 0,
+        sourceSnapshotMissing: 0,
+        sourceSnapshotIgnoredAdded: 2,
+        sourceSnapshotDriftSummary: expect.stringContaining("still matches")
+      })
+    );
     expect(await readWorkspaceRunNextPlan(root, result.plan.planId)).toMatchObject({
       planId: result.plan.planId,
       reviewId: review.reviewId
@@ -826,6 +841,20 @@ describe("workspace run-next", () => {
         artifactId: result.plan.planId,
         localOnly: true,
         networkAccess: "none"
+      })
+    );
+
+    await writeFile(join(root, ".truth-harness", "findings", "manual-drift.txt"), "drift\n", "utf8");
+    const driftedList = await listWorkspaceRunNextPlans(root, {
+      verifySnapshots: true,
+      now: "2026-06-14T00:04:00.000Z"
+    });
+    expect(driftedList).toContainEqual(
+      expect.objectContaining({
+        planId: result.plan.planId,
+        sourceSnapshotStatus: "drifted",
+        sourceSnapshotAdded: 1,
+        sourceSnapshotDriftSummary: expect.stringContaining("1 added")
       })
     );
 

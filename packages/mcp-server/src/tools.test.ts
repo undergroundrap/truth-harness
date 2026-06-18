@@ -1200,6 +1200,15 @@ describe("MCP tool handlers", () => {
       dryRun: true,
       executionKind: "dry-run"
     });
+    const verifiedRunNextList = await handleTruthHarnessWorkspaceRunNextList({
+      verifySnapshots: true
+    });
+    expect(verifiedRunNextList.plans[0]).toMatchObject({
+      planId: writtenDryRun.plan.planId,
+      sourceSnapshotStatus: "verified",
+      sourceSnapshotAdded: 0,
+      sourceSnapshotIgnoredAdded: 2
+    });
     const shownRunNext = await handleTruthHarnessWorkspaceRunNextShow({
       planRef: writtenDryRun.plan.planId
     });

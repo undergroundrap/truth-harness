@@ -3734,9 +3734,12 @@ workspace
   .command("run-nexts")
   .description("List persisted workspace run-next intent packets.")
   .argument("[path]", "Project root path", ".")
+  .option("--verify-snapshots", "Verify each source snapshot and report whether saved handoffs drifted")
   .option("--json", "Print the full workspace run-next list JSON")
-  .action(async (path: string, options: { json?: boolean }) => {
-    const plans = await listWorkspaceRunNextPlans(path);
+  .action(async (path: string, options: { verifySnapshots?: boolean; json?: boolean }) => {
+    const plans = await listWorkspaceRunNextPlans(path, {
+      verifySnapshots: Boolean(options.verifySnapshots)
+    });
 
     if (options.json) {
       printJson({ total: plans.length, plans });
@@ -7438,6 +7441,12 @@ function printWorkspaceRunNextList(plans: WorkspaceRunNextSummary[]): void {
       console.log(
         `  Source snapshot: ${plan.sourceSnapshotId}${plan.sourceSnapshotPath ? ` (${plan.sourceSnapshotPath})` : ""}`
       );
+    }
+    if (plan.sourceSnapshotStatus) {
+      console.log(`  Snapshot drift: ${plan.sourceSnapshotStatus}`);
+      if (plan.sourceSnapshotDriftSummary) {
+        console.log(`    ${plan.sourceSnapshotDriftSummary}`);
+      }
     }
   }
 }

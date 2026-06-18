@@ -39,7 +39,7 @@ import {
   type VerifierRouteEvidenceRef
 } from "./verifier-route.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
-import { writeWorkspaceSnapshot } from "./workspace-snapshot.js";
+import { verifyWorkspaceSnapshot, writeWorkspaceSnapshot } from "./workspace-snapshot.js";
 import type { WorkspaceReview, WorkspaceReviewItem } from "./workspace-review.js";
 
 export type WorkspaceRunNextStatus = "planned" | "executed" | "blocked";
@@ -57,6 +57,13 @@ export interface WorkspaceRunNextSourceSnapshot {
   path: string;
   totalFiles: number;
   totalBytes: number;
+}
+
+export type WorkspaceRunNextSourceSnapshotStatus = "not-recorded" | "verified" | "drifted" | "missing";
+
+export interface WorkspaceRunNextListOptions {
+  verifySnapshots?: boolean;
+  now?: string;
 }
 
 export interface WorkspaceRunNextSummary {
@@ -83,6 +90,13 @@ export interface WorkspaceRunNextSummary {
   sourceSnapshotPath?: string;
   sourceSnapshotFiles?: number;
   sourceSnapshotBytes?: number;
+  sourceSnapshotStatus?: WorkspaceRunNextSourceSnapshotStatus;
+  sourceSnapshotVerifiedAt?: string;
+  sourceSnapshotMissing?: number;
+  sourceSnapshotChanged?: number;
+  sourceSnapshotAdded?: number;
+  sourceSnapshotIgnoredAdded?: number;
+  sourceSnapshotDriftSummary?: string;
 }
 
 export interface WorkspaceRunNextRationale {
@@ -338,7 +352,10 @@ async function assertWorkspaceRunNextPlanSchema(plan: WorkspaceRunNextPlan): Pro
   });
 }
 
-export async function listWorkspaceRunNextPlans(rootPath: string): Promise<WorkspaceRunNextSummary[]> {
+export async function listWorkspaceRunNextPlans(
+  rootPath: string,
+  options: WorkspaceRunNextListOptions = {}
+): Promise<WorkspaceRunNextSummary[]> {
   const status = await requireRunNextWorkspace(rootPath);
   const findingsDir = resolve(status.root, status.manifest.directories.findings);
 
@@ -360,7 +377,14 @@ export async function listWorkspaceRunNextPlans(rootPath: string): Promise<Works
       .map(async (file) => {
         const path = join(findingsDir, file);
         const plan = tryParseWorkspaceRunNextJson(await readFile(path, "utf8"));
-        return plan ? summarizeWorkspaceRunNextPlan(plan, toPortablePath(relative(status.root, path))) : undefined;
+        if (!plan) {
+          return undefined;
+        }
+        const portablePath = toPortablePath(relative(status.root, path));
+        const snapshotStatus = options.verifySnapshots
+          ? await verifyRunNextSourceSnapshot(status.root, plan, portablePath, options.now)
+          : undefined;
+        return summarizeWorkspaceRunNextPlan(plan, portablePath, snapshotStatus);
       })
   );
 
@@ -551,7 +575,11 @@ function tryParseWorkspaceRunNextJson(raw: string): WorkspaceRunNextPlan | undef
   }
 }
 
-function summarizeWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan, path: string): WorkspaceRunNextSummary {
+function summarizeWorkspaceRunNextPlan(
+  plan: WorkspaceRunNextPlan,
+  path: string,
+  sourceSnapshotStatus: Partial<WorkspaceRunNextSummary> = {}
+): WorkspaceRunNextSummary {
   const rationale = plan.rationale ?? workspaceRunNextRationaleFor(plan);
 
   return {
@@ -577,8 +605,63 @@ function summarizeWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan, path: string)
     sourceSnapshotId: plan.sourceSnapshot?.snapshotId,
     sourceSnapshotPath: plan.sourceSnapshot?.path,
     sourceSnapshotFiles: plan.sourceSnapshot?.totalFiles,
-    sourceSnapshotBytes: plan.sourceSnapshot?.totalBytes
+    sourceSnapshotBytes: plan.sourceSnapshot?.totalBytes,
+    ...sourceSnapshotStatus
   };
+}
+
+async function verifyRunNextSourceSnapshot(
+  rootPath: string,
+  plan: WorkspaceRunNextPlan,
+  planPath: string,
+  now?: string
+): Promise<Partial<WorkspaceRunNextSummary>> {
+  if (!plan.sourceSnapshot?.snapshotId) {
+    return {
+      sourceSnapshotStatus: "not-recorded",
+      sourceSnapshotDriftSummary: "No source snapshot was recorded on this run-next handoff."
+    };
+  }
+
+  try {
+    const verification = await verifyWorkspaceSnapshot({
+      rootPath,
+      snapshotRef: plan.sourceSnapshot.snapshotId,
+      now
+    });
+    const ignoredSelfAdded = verification.addedSinceSnapshot.filter((entry) =>
+      isRunNextSelfAddedPath(planPath, entry.path)
+    );
+    const added = verification.addedSinceSnapshot.length - ignoredSelfAdded.length;
+    const missing = verification.missing.length;
+    const changed = verification.changed.length;
+    const verified = missing === 0 && changed === 0 && added === 0;
+
+    return {
+      sourceSnapshotStatus: verified ? "verified" : "drifted",
+      sourceSnapshotVerifiedAt: verification.verifiedAt,
+      sourceSnapshotMissing: missing,
+      sourceSnapshotChanged: changed,
+      sourceSnapshotAdded: added,
+      sourceSnapshotIgnoredAdded: ignoredSelfAdded.length,
+      sourceSnapshotDriftSummary: verified
+        ? `Source snapshot still matches after ignoring ${ignoredSelfAdded.length} run-next handoff file(s).`
+        : `${missing} missing, ${changed} changed, ${added} added since source snapshot.`
+    };
+  } catch (error) {
+    return {
+      sourceSnapshotStatus: "missing",
+      sourceSnapshotMissing: 1,
+      sourceSnapshotDriftSummary: error instanceof Error ? error.message : "Source snapshot could not be verified."
+    };
+  }
+}
+
+function isRunNextSelfAddedPath(planPath: string, addedPath: string): boolean {
+  if (addedPath === planPath) {
+    return true;
+  }
+  return planPath.endsWith(".json") && addedPath === planPath.replace(/\.json$/u, ".md");
 }
 
 function resolveUnderRoot(root: string, path: string): string {
