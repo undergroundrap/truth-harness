@@ -259,6 +259,7 @@ import {
   type ProofBackendStatusReport,
   type Receipt,
   type ReceiptRenderFormat,
+  type ResearchHarnessWriteResult,
   type ResearchEvidenceRef,
   type ResearchSession,
   type ResearchSessionCheckpointWriteResult,
@@ -2013,6 +2014,9 @@ research
   .option("--snapshot <ref>", "Workspace snapshot id or path; repeatable", collectRepeated, [])
   .option("--task <text>", "Additional research task; repeatable", collectRepeated, [])
   .option("--no-default-tasks", "Only use tasks supplied with --task")
+  .option("--validation-claim <text>", "Seed claim for the linked validation plan. Defaults to the first --claim or the objective.")
+  .option("--validation-title <title>", "Short title for the linked validation plan")
+  .option("--no-validation-plan", "Do not write the initial linked validation plan")
   .option("--max-depth <count>", "Maximum recursive investigation depth", parsePositiveInteger)
   .option("--max-branches <count>", "Maximum branches per node", parsePositiveInteger)
   .option("--max-tool-calls <count>", "Maximum tool calls before review", parsePositiveInteger)
@@ -2031,6 +2035,9 @@ research
         snapshot: string[];
         task: string[];
         defaultTasks?: boolean;
+        validationClaim?: string;
+        validationTitle?: string;
+        validationPlan?: boolean;
         maxDepth?: number;
         maxBranches?: number;
         maxToolCalls?: number;
@@ -2049,6 +2056,9 @@ research
         snapshotRefs: options.snapshot,
         tasks: options.task,
         includeDefaultTasks: options.defaultTasks !== false,
+        createValidationPlan: options.validationPlan !== false,
+        validationClaim: options.validationClaim,
+        validationTitle: options.validationTitle,
         maxDepth: options.maxDepth,
         maxBranches: options.maxBranches,
         maxToolCalls: options.maxToolCalls,
@@ -2060,7 +2070,7 @@ research
         return;
       }
 
-      printResearchSessionWrite(result);
+      printResearchHarnessWrite(result);
     }
   );
 
@@ -8073,6 +8083,19 @@ function printResearchSessionWrite(result: ResearchSessionWriteResult): void {
     for (const warning of result.session.warnings) {
       console.log(`  ${warning}`);
     }
+  }
+}
+
+function printResearchHarnessWrite(result: ResearchHarnessWriteResult): void {
+  printResearchSessionWrite(result);
+
+  if (result.validationPlan) {
+    console.log("");
+    console.log(`Linked validation plan: ${result.validationPlan.plan.planId}`);
+    console.log(`Validation JSON: ${result.validationPlan.jsonPath}`);
+    console.log(`Validation Markdown: ${result.validationPlan.markdownPath}`);
+    console.log(`Validation readiness: ${result.validationPlan.plan.readiness.status}`);
+    console.log(`Open blocking gates: ${result.validationPlan.plan.readiness.blockingGateCount}`);
   }
 }
 

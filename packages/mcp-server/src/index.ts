@@ -2745,6 +2745,15 @@ export function createTruthHarnessMcpServer(): McpServer {
           .boolean()
           .optional()
           .describe("Defaults to true. When false, only supplied tasks are included."),
+        createValidationPlan: z
+          .boolean()
+          .optional()
+          .describe("Defaults to true. When false, the harness skips the initial linked validation plan."),
+        validationClaim: z
+          .string()
+          .optional()
+          .describe("Seed claim for the linked validation plan. Defaults to the first claim or the objective."),
+        validationTitle: z.string().optional().describe("Short title for the linked validation plan."),
         maxDepth: z.number().int().positive().optional(),
         maxBranches: z.number().int().positive().optional(),
         maxToolCalls: z.number().int().positive().optional(),

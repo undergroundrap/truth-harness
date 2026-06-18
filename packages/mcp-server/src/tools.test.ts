@@ -1460,6 +1460,10 @@ describe("MCP tool handlers", () => {
     const list = await handleTruthHarnessResearchSessionList({});
 
     expect(harness.session.schemaVersion).toBe("truth-harness.research-session.v0");
+    expect(harness.validationPlan?.plan.schemaVersion).toBe("truth-harness.validation-plan.v0");
+    expect(harness.validationPlan?.plan.evidenceRefs).toContainEqual(
+      expect.objectContaining({ kind: "session", ref: harness.session.sessionId })
+    );
     expect(harness.session.tasks.map((task) => task.title)).toContain(
       "Run `truth-harness engines readiness` and record which trust labels this machine can responsibly support."
     );

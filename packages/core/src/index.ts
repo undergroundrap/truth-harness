@@ -503,6 +503,7 @@ export type {
   CreateResearchHarnessInput,
   CreateResearchSessionInput,
   ResearchEvidenceRef,
+  ResearchHarnessWriteResult,
   ResearchSession,
   ResearchSessionCheckpoint,
   ResearchSessionCheckpointInput,

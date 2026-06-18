@@ -76,6 +76,16 @@ describe("research sessions", () => {
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
     expect(result.session.schemaVersion).toBe("truth-harness.research-session.v0");
+    expect(result.validationPlan?.plan.schemaVersion).toBe("truth-harness.validation-plan.v0");
+    expect(result.validationPlan?.plan.claim).toBe(
+      "Investigate a deterministic math and physics validation layer for AI-generated robotics simulation code."
+    );
+    expect(result.validationPlan?.plan.objective).toContain(result.session.sessionId);
+    expect(result.validationPlan?.plan.domains).toEqual(expect.arrayContaining(["math", "physics", "software"]));
+    expect(result.validationPlan?.plan.domains).toHaveLength(3);
+    expect(result.validationPlan?.plan.evidenceRefs).toContainEqual(
+      expect.objectContaining({ kind: "session", ref: result.session.sessionId })
+    );
     expect(result.session.budgets.maxUnverifiedFinalClaims).toBe(0);
     expect(result.session.modelPolicy.selectedContextOnly).toBe(true);
     expect(result.session.reviewBoundary.expertReviewRequired).toBe(true);

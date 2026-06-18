@@ -724,8 +724,16 @@ describe("Truth Harness MCP server", () => {
         }
       });
       const researchHarnessText = firstText(researchHarnessResult.content);
+      const researchHarnessJson = JSON.parse(researchHarnessText) as {
+        session: { sessionId: string };
+        validationPlan?: { plan: { schemaVersion: string; evidenceRefs: Array<{ kind: string; ref: string }> } };
+      };
       expect(researchHarnessResult.isError).not.toBe(true);
       expect(researchHarnessText).toContain("\"schemaVersion\": \"truth-harness.research-session.v0\"");
+      expect(researchHarnessJson.validationPlan?.plan.schemaVersion).toBe("truth-harness.validation-plan.v0");
+      expect(researchHarnessJson.validationPlan?.plan.evidenceRefs).toContainEqual(
+        expect.objectContaining({ kind: "session", ref: researchHarnessJson.session.sessionId })
+      );
       expect(researchHarnessText).toContain("truth-harness engines readiness");
       expect(researchHarnessText).toContain("Never label a result `proved` unless an accepted proof checker verifies the concrete proof artifact.");
       expect(researchHarnessText).toContain("Identify the first benchmark that would falsify the design.");
@@ -1126,7 +1134,7 @@ describe("Truth Harness MCP server", () => {
         name: "truth_harness_validation_plan_list",
         arguments: {}
       });
-      expect(firstText(validationPlanList.content)).toContain("\"total\": 1");
+      expect(firstText(validationPlanList.content)).toContain("\"total\": 2");
 
       const inventionResult = await client.callTool({
         name: "truth_harness_invention_log",

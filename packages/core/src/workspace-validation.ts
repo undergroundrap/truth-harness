@@ -710,7 +710,7 @@ async function validateWorkspaceReferences(
     }
 
     for (const ref of collectWorkspaceReferences(parsed, artifact.path)) {
-      if (isResolvedReference(ref, index)) {
+      if (isResolvedReference(ref, index) || isInlineValidationPlanAuditReference(ref, parsed, artifact)) {
         continue;
       }
 
@@ -1181,6 +1181,19 @@ function isResolvedReference(
   }
 
   return index.idsByKind.get(artifactKind)?.has(ref.ref) ?? false;
+}
+
+function isInlineValidationPlanAuditReference(
+  ref: WorkspaceReference,
+  source: unknown,
+  artifact: WorkspaceValidationArtifact
+): boolean {
+  if (artifact.kind !== "validation" || ref.kind !== "audit" || !isRecord(source)) {
+    return false;
+  }
+
+  const audit = isRecord(source.audit) ? source.audit : undefined;
+  return typeof audit?.auditId === "string" && audit.auditId === ref.ref;
 }
 
 function isResolvedArtifactRef(

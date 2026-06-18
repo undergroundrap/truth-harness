@@ -2429,17 +2429,29 @@ describe("benchmark CLI", () => {
     ]);
     const json = JSON.parse(result.stdout) as {
       session: {
+        sessionId: string;
         schemaVersion: string;
         tasks: Array<{ title: string }>;
         budgets: { maxUnverifiedFinalClaims: number };
+      };
+      validationPlan?: {
+        plan: {
+          schemaVersion: string;
+          evidenceRefs: Array<{ kind: string; ref: string }>;
+        };
       };
       markdown: string;
     };
     const taskTitles = json.session.tasks.map((task) => task.title);
     const list = JSON.parse((await runCli(["research", "list", root, "--json"])).stdout) as { total: number };
+    const validationList = JSON.parse((await runCli(["validation", "list", root, "--json"])).stdout) as { total: number };
 
     expect(result.exitCode).toBe(0);
     expect(json.session.schemaVersion).toBe("truth-harness.research-session.v0");
+    expect(json.validationPlan?.plan.schemaVersion).toBe("truth-harness.validation-plan.v0");
+    expect(json.validationPlan?.plan.evidenceRefs).toContainEqual(
+      expect.objectContaining({ kind: "session", ref: json.session.sessionId })
+    );
     expect(taskTitles).toContain(
       "Run `truth-harness engines readiness` and record which trust labels this machine can responsibly support."
     );
@@ -2450,6 +2462,7 @@ describe("benchmark CLI", () => {
     expect(json.session.budgets.maxUnverifiedFinalClaims).toBe(0);
     expect(json.markdown).toContain("truth-harness engines readiness");
     expect(list.total).toBe(1);
+    expect(validationList.total).toBe(1);
   });
 });
 

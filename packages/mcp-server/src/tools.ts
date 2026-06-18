@@ -201,6 +201,7 @@ import {
   type ReceiptRenderFormat,
   type ReportDraftReadResult,
   type ReportDraftSummary,
+  type ResearchHarnessWriteResult,
   type ResearchEvidenceRef,
   type ResearchSession,
   type ResearchSessionCheckpointWriteResult,
@@ -1012,6 +1013,9 @@ export interface TruthHarnessResearchSessionStartInput {
 
 export interface TruthHarnessResearchHarnessStartInput extends TruthHarnessResearchSessionStartInput {
   includeDefaultTasks?: boolean;
+  createValidationPlan?: boolean;
+  validationClaim?: string;
+  validationTitle?: string;
 }
 
 export interface TruthHarnessResearchSessionCheckpointInput {
@@ -2405,7 +2409,7 @@ export async function handleTruthHarnessResearchSessionStart(
 
 export async function handleTruthHarnessResearchHarnessStart(
   input: TruthHarnessResearchHarnessStartInput
-): Promise<ResearchSessionWriteResult> {
+): Promise<ResearchHarnessWriteResult> {
   return writeResearchHarness({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -2417,6 +2421,9 @@ export async function handleTruthHarnessResearchHarnessStart(
     snapshotRefs: input.snapshotRefs,
     tasks: input.tasks,
     includeDefaultTasks: input.includeDefaultTasks,
+    createValidationPlan: input.createValidationPlan,
+    validationClaim: input.validationClaim,
+    validationTitle: input.validationTitle,
     maxDepth: input.maxDepth,
     maxBranches: input.maxBranches,
     maxToolCalls: input.maxToolCalls,

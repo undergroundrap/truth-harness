@@ -6,6 +6,12 @@ import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus 
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
+import {
+  writeValidationPlan,
+  type ValidationEvidenceRef,
+  type ValidationPlanDomain,
+  type ValidationPlanWriteResult
+} from "./validation-plan.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const RESEARCH_SESSION_DOMAINS = [
@@ -137,6 +143,9 @@ export interface CreateResearchSessionInput {
 
 export interface CreateResearchHarnessInput extends CreateResearchSessionInput {
   includeDefaultTasks?: boolean;
+  createValidationPlan?: boolean;
+  validationClaim?: string;
+  validationTitle?: string;
 }
 
 export interface ResearchSessionWriteResult {
@@ -144,6 +153,10 @@ export interface ResearchSessionWriteResult {
   jsonPath: string;
   markdownPath: string;
   markdown: string;
+}
+
+export interface ResearchHarnessWriteResult extends ResearchSessionWriteResult {
+  validationPlan?: ValidationPlanWriteResult;
 }
 
 export interface ResearchSessionCheckpointInput {
@@ -238,10 +251,10 @@ export async function writeResearchSession(input: CreateResearchSessionInput): P
   return writeSessionFiles(status.root, status.manifest.directories.sessions, session);
 }
 
-export async function writeResearchHarness(input: CreateResearchHarnessInput): Promise<ResearchSessionWriteResult> {
+export async function writeResearchHarness(input: CreateResearchHarnessInput): Promise<ResearchHarnessWriteResult> {
   const objective = requireText(input.objective, "Research harness objective is required.");
   const domains = normalizeDomains(input.domains, objective);
-  return writeResearchSession({
+  const sessionResult = await writeResearchSession({
     ...input,
     objective,
     title: normalizeOptionalText(input.title) ?? titleFromObjective(objective),
@@ -253,6 +266,32 @@ export async function writeResearchHarness(input: CreateResearchHarnessInput): P
       includeDefaultTasks: input.includeDefaultTasks
     })
   });
+
+  if (input.createValidationPlan === false) {
+    return sessionResult;
+  }
+
+  const validationPlan = await writeValidationPlan({
+    rootPath: input.rootPath,
+    title: normalizeOptionalText(input.validationTitle) ?? `${sessionResult.session.title} validation gates`,
+    claim: normalizeOptionalText(input.validationClaim) ?? input.claims?.[0] ?? objective,
+    objective: `Define the evidence gates for the hard-problem harness ${sessionResult.session.sessionId} before any stronger conclusion is allowed.`,
+    domains: toValidationPlanDomains(domains),
+    evidenceRefs: [
+      {
+        kind: "session",
+        ref: sessionResult.session.sessionId,
+        summary: "Hard-problem research harness that owns the investigation runbook."
+      },
+      ...toValidationEvidenceRefs(sessionResult.session.evidenceRefs)
+    ],
+    now: input.now
+  });
+
+  return {
+    ...sessionResult,
+    validationPlan
+  };
 }
 
 export function createResearchHarnessTasks(input: {
@@ -711,6 +750,52 @@ function researchHarnessDomainTasks(domain: ResearchSessionDomain): string[] {
         "Classify each emerging subproblem into a stronger lane before making domain-specific claims.",
         "Keep unsupported ideas in the hypothesis bucket until a concrete verifier, source, experiment, or expert review can check them."
       ];
+  }
+}
+
+function toValidationPlanDomains(domains: ResearchSessionDomain[]): ValidationPlanDomain[] {
+  const mapped = domains.map((domain): ValidationPlanDomain => {
+    switch (domain) {
+      case "math":
+        return "math";
+      case "physics":
+        return "physics";
+      case "code":
+        return "software";
+      case "biomedical":
+        return "biomedical";
+      case "materials":
+      case "energy":
+        return "engineering";
+      case "climate":
+        return "simulation";
+      case "patent":
+        return "patent";
+      case "learning":
+      case "general":
+        return "general";
+    }
+  });
+  return mergeStrings([], mapped) as ValidationPlanDomain[];
+}
+
+function toValidationEvidenceRefs(refs: ResearchEvidenceRef[]): ValidationEvidenceRef[] {
+  return refs.map((ref) => ({
+    kind: toValidationEvidenceKind(ref.kind),
+    ref: ref.ref,
+    trust: ref.trust,
+    summary: ref.summary
+  }));
+}
+
+function toValidationEvidenceKind(kind: ResearchEvidenceRef["kind"]): ValidationEvidenceRef["kind"] {
+  switch (kind) {
+    case "claim":
+      return "other";
+    case "workspace-review":
+      return "review";
+    default:
+      return kind;
   }
 }
 
