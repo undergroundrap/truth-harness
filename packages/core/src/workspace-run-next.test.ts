@@ -431,6 +431,20 @@ describe("workspace run-next", () => {
       status: "satisfied",
       evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })]
     });
+
+    const afterClosureReview = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-18T00:06:00.000Z"
+    });
+    const afterClosurePlan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review: afterClosureReview,
+      executeLocal: false,
+      now: "2026-06-18T00:07:00.000Z"
+    });
+
+    expect(afterClosureReview.items).not.toContainEqual(expect.objectContaining({ validationGateId: proofGate.gateId }));
+    expect(afterClosurePlan.item?.validationGateId).not.toBe(proofGate.gateId);
   });
 
   it("blocks validation attach commands that target a different review gate", async () => {
