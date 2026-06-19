@@ -12,6 +12,8 @@ npm run docker:cleanup -- heavy-images
 npm run docker:cleanup -- heavy-images --confirm-delete
 npm run docker:cleanup -- build-cache
 npm run docker:cleanup -- build-cache --confirm-delete
+npm run docker:cleanup -- all-build-cache
+npm run docker:cleanup -- all-build-cache --confirm-delete
 ```
 
 `npm run reviewer:status` runs the local release audit and then prints Docker storage posture.
@@ -20,7 +22,7 @@ npm run docker:cleanup -- build-cache --confirm-delete
 
 `npm run docker:storage` is read-only. It reports local `.truth-harness` size, Docker Desktop storage, Docker's own `system df` summary when available, Truth Harness images, and cleanup commands.
 
-`npm run docker:cleanup` is preview-only by default. It requires `--confirm-delete` before it removes anything.
+`npm run docker:cleanup` is preview-only by default. It requires `--confirm-delete` before it removes anything. The helper accepts the confirmation as either a normal script argument or npm's config-style `confirm-delete=true` environment flag, so the documented npm commands stay destructive only when they visibly include confirmation.
 
 ## Storage Reality
 

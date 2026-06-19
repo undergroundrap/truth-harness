@@ -75,6 +75,8 @@ npm run docker:cleanup -- heavy-images
 npm run docker:cleanup -- heavy-images --confirm-delete
 npm run docker:cleanup -- build-cache
 npm run docker:cleanup -- build-cache --confirm-delete
+npm run docker:cleanup -- all-build-cache
+npm run docker:cleanup -- all-build-cache --confirm-delete
 ```
 
 See [DOCKER_REVIEWER_FLOW.md](DOCKER_REVIEWER_FLOW.md) for the Docker-first reviewer flow and the storage boundary between `.truth-harness` artifacts and heavyweight engine images.

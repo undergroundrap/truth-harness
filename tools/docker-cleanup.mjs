@@ -4,7 +4,10 @@ import { spawnSync } from "node:child_process";
 const args = process.argv.slice(2);
 const positionalTarget = args.find((arg) => !arg.startsWith("-"));
 const target = optionValue("--target") ?? positionalTarget ?? "heavy-images";
-const confirmDelete = args.includes("--confirm-delete");
+const confirmDelete =
+  args.includes("--confirm-delete") ||
+  envFlag("npm_config_confirm_delete") ||
+  envFlag("npm_config_confirm");
 
 const plans = {
   "heavy-images": {
@@ -79,6 +82,11 @@ function optionValue(name) {
     return undefined;
   }
   return args[index + 1];
+}
+
+function envFlag(name) {
+  const value = process.env[name];
+  return value === "true" || value === "1" || value === "yes";
 }
 
 function run(command, commandArgs, options = {}) {

@@ -67,6 +67,8 @@ function printHuman(input) {
   console.log("    npm run docker:cleanup -- build-cache");
   console.log("  Delete old build cache after review:");
   console.log("    npm run docker:cleanup -- build-cache --confirm-delete");
+  console.log("  Delete all unused build cache after review:");
+  console.log("    npm run docker:cleanup -- all-build-cache --confirm-delete");
   console.log("");
   console.log("Note: Docker Desktop may keep docker_data.vhdx allocated until Docker/WSL compacts it.");
 }
