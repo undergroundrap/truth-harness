@@ -417,6 +417,7 @@ const dockerVerifierNotes = document.querySelector("#docker-verifier-notes");
 const dockerProfessorCommand = document.querySelector("#docker-professor-command");
 const dockerProofCommand = document.querySelector("#docker-proof-command");
 const dockerAllEnginesCommand = document.querySelector("#docker-all-engines-command");
+const dockerProfessorAllCommand = document.querySelector("#docker-professor-all-command");
 const dockerVerifyCommand = document.querySelector("#docker-verify-command");
 const dockerCopyCommands = document.querySelectorAll(".docker-copy-command");
 const casArtifactList = document.querySelector("#cas-artifact-list");
@@ -9788,6 +9789,7 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
   const professorCommand = commands.professor ?? "npm run docker:professor";
   const proofCommand = commands.proof ?? "npm run docker:proof";
   const allEnginesCommand = commands.allEngines ?? "npm run docker:all-engines";
+  const professorAllCommand = commands.professorAll ?? "npm run docker:professor:all";
   const verifyCommand = commands.verify ?? "npm run docker:verify";
 
   if (dockerProfessorCommand) {
@@ -9798,6 +9800,9 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
   }
   if (dockerAllEnginesCommand) {
     dockerAllEnginesCommand.textContent = allEnginesCommand;
+  }
+  if (dockerProfessorAllCommand) {
+    dockerProfessorAllCommand.textContent = professorAllCommand;
   }
   if (dockerVerifyCommand) {
     dockerVerifyCommand.textContent = verifyCommand;
@@ -9811,6 +9816,9 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
     }
     if (button.dataset.commandKey === "allEngines") {
       button.dataset.command = allEnginesCommand;
+    }
+    if (button.dataset.commandKey === "professorAll") {
+      button.dataset.command = professorAllCommand;
     }
     if (button.dataset.commandKey === "verify") {
       button.dataset.command = verifyCommand;
@@ -9829,6 +9837,7 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
         "npm run docker:professor writes the reviewer rehearsal artifacts in the no-network compose service.",
         "npm run docker:proof runs the truth-harness service with no external network route and records engine outputs only through normal receipts.",
         "npm run docker:all-engines is the heavy strict reviewer gate for Maxima, Z3, cvc5, Lean, and SageMath.",
+        "npm run docker:professor:all packages the strict all-engine gate into a professor credibility pack and reviewer bundle.",
         "npm run docker:verify builds and tests the verification image; builds may fetch dependencies if the image is not already cached.",
         "Docker status does not prove a claim. Only accepted Lean, Z3, or Maxima artifacts can satisfy their matching obligations."
       ];

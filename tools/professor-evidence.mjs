@@ -3,6 +3,14 @@ import { spawnSync } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
+const strictAllEngines = process.argv.slice(2).some((arg) => arg === "--all-engines" || arg === "--strict");
+const engineRequirementArgs = strictAllEngines
+  ? ["--require-all-engines"]
+  : ["--require-maxima", "--require-z3", "--require-cvc5", "--require-lean"];
+const evidenceModeLabel = strictAllEngines
+  ? "strict Maxima/Z3/cvc5/Lean/SageMath all-engine"
+  : "Maxima/Z3/cvc5/Lean professor";
+
 const steps = [
   {
     label: "build TypeScript artifacts",
@@ -15,17 +23,14 @@ const steps = [
     args: ["apps/cli/dist/index.js", "workspace", "init", ".", "--name", "Truth Harness"]
   },
   {
-    label: "write concrete Maxima/Z3/cvc5/Lean engine evidence",
+    label: `write concrete ${evidenceModeLabel} engine evidence`,
     command: "node",
     args: [
       "apps/cli/dist/index.js",
       "engines",
       "verify",
       "--write",
-      "--require-maxima",
-      "--require-z3",
-      "--require-cvc5",
-      "--require-lean",
+      ...engineRequirementArgs,
       "--timeout-ms",
       "30000"
     ]
@@ -55,17 +60,14 @@ const steps = [
     ]
   },
   {
-    label: "write professor credibility pack",
+    label: `write ${strictAllEngines ? "strict " : ""}professor credibility pack`,
     command: "node",
     args: [
       "apps/cli/dist/index.js",
       "workspace",
       "credibility-pack",
       ".",
-      "--require-maxima",
-      "--require-z3",
-      "--require-cvc5",
-      "--require-lean",
+      ...engineRequirementArgs,
       "--timeout-ms",
       "30000",
       "--max-routes",
@@ -78,17 +80,14 @@ const steps = [
     ]
   },
   {
-    label: "write portable reviewer bundle",
+    label: `write ${strictAllEngines ? "strict " : ""}portable reviewer bundle`,
     command: "node",
     args: [
       "apps/cli/dist/index.js",
       "workspace",
       "credibility-bundle",
       ".",
-      "--require-maxima",
-      "--require-z3",
-      "--require-cvc5",
-      "--require-lean",
+      ...engineRequirementArgs,
       "--timeout-ms",
       "30000",
       "--max-routes",
@@ -122,10 +121,14 @@ runStep({
 });
 
 console.log("");
-console.log("Professor evidence sequence completed.");
+console.log(`${strictAllEngines ? "Strict all-engine p" : "P"}rofessor evidence sequence completed.`);
 console.log("Generated local engine, benchmark, credibility-pack, and reviewer-bundle artifacts are under .truth-harness/.");
 console.log(`Verified portable reviewer bundle: ${bundleRef}`);
-console.log("Inspect the latest credibility pack before claiming broader discovery readiness; optional all-engine gates may still block stricter review.");
+if (strictAllEngines) {
+  console.log("This strict reviewer packet required Maxima, Z3, cvc5, Lean, and SageMath to earn scoped evidence.");
+} else {
+  console.log("Inspect the latest credibility pack before claiming broader discovery readiness; run with --all-engines when SageMath must be included in the same reviewer packet.");
+}
 
 function runStep(step) {
   console.log(`\n==> ${step.label}`);

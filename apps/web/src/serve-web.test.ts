@@ -97,6 +97,7 @@ describe("local web route ledger API", () => {
         engines: "npm run docker:engines",
         proof: "npm run docker:proof",
         allEngines: "npm run docker:all-engines",
+        professorAll: "npm run docker:professor:all",
         verify: "npm run docker:verify"
       },
       runtimeBoundary: {
@@ -114,6 +115,9 @@ describe("local web route ledger API", () => {
     );
     expect(statusPayload.dockerVerifier.notes).toContain(
       "npm run docker:all-engines is the heavy strict gate for Maxima, Z3, cvc5, Lean, and SageMath when a reviewer explicitly wants every adapter fixture."
+    );
+    expect(statusPayload.dockerVerifier.notes).toContain(
+      "npm run docker:professor:all writes the strict all-engine professor packet and portable reviewer bundle from the no-network all-engine service."
     );
     expect(statusPayload.engineVerification).toMatchObject({
       schemaVersion: "truth-harness.engine-verification.v0",

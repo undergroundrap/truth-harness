@@ -513,12 +513,16 @@ describe("web UI action contracts", () => {
 
     expect(html).toContain('id="docker-professor-command"');
     expect(html).toContain('id="docker-all-engines-command"');
+    expect(html).toContain('id="docker-professor-all-command"');
     expect(html).toContain('data-command-key="professor"');
     expect(html).toContain('data-command-key="allEngines"');
+    expect(html).toContain('data-command-key="professorAll"');
     expect(html).toContain("npm run docker:professor");
     expect(html).toContain("npm run docker:all-engines");
+    expect(html).toContain("npm run docker:professor:all");
     expect(source).toContain('const professorCommand = commands.professor ?? "npm run docker:professor";');
     expect(source).toContain('const allEnginesCommand = commands.allEngines ?? "npm run docker:all-engines";');
+    expect(source).toContain('const professorAllCommand = commands.professorAll ?? "npm run docker:professor:all";');
     expect(source).toContain('report.docker?.professorCommand ?? "npm run docker:professor"');
     expect(source).toContain('report.docker?.allEnginesCommand ?? "npm run docker:all-engines"');
     expect(source).toContain('data-testid="copy-professor-evidence-command"');
