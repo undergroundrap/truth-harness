@@ -618,7 +618,70 @@ describe("workspace review", () => {
       })
     );
     expect(upgradeItems.length).toBeGreaterThan(0);
-    expect(upgradeItems.every((item) => item.priority === "medium")).toBe(true);
+    expect(upgradeItems.every((item) => item.priority === "medium" || item.priority === "low")).toBe(true);
+    expect(upgradeItems.every((item) => item.priority !== "high" && item.priority !== "critical")).toBe(true);
+  });
+
+  it("prioritizes ready claim recording before passive proof inspection placeholders", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const blockedRoute = await writeVerifierRoute({
+      rootPath: root,
+      problem: "solve integer constraints x > 0 and x < 3",
+      now: new Date("2026-06-13T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const stored = JSON.parse(await readFile(blockedRoute.jsonPath, "utf8")) as {
+      proofObligations: Array<Record<string, unknown>>;
+    };
+    stored.proofObligations = [
+      {
+        ...stored.proofObligations[0],
+        kind: "formal-proof",
+        status: "open",
+        severity: "critical",
+        title: "Formal proof-checker obligation",
+        requiredBefore: "Before labeling this scoped claim proved.",
+        command: "truth-harness proof check docs/examples/trivial.lean --write"
+      }
+    ];
+    await writeFile(blockedRoute.jsonPath, JSON.stringify(stored, null, 2), "utf8");
+    const readyRoute = await writeVerifierRoute({
+      rootPath: root,
+      problem: "compute 1 + 1",
+      now: new Date("2026-06-13T00:02:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 10,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-13T00:03:00.000Z"
+    });
+    const passiveProofItem = review.items.find(
+      (item) => item.kind === "route-obligation" && item.routeId === blockedRoute.route.routeId
+    );
+
+    expect(passiveProofItem).toMatchObject({
+      priority: "low",
+      command: `truth-harness route show ${blockedRoute.route.routeId} --workspace ${root} --json`
+    });
+    expect(review.items[0]).toMatchObject({
+      kind: "route-ready-claim",
+      routeId: readyRoute.route.routeId,
+      command: expect.stringContaining("truth-harness claim add")
+    });
+    expect(review.autonomy.nextCommand).toBe(review.items[0]?.command);
   });
 
   it("demotes legacy stronger-claim obligations that were stored as critical", async () => {
@@ -825,7 +888,7 @@ describe("workspace review", () => {
     expect(skipped.summary.totalItems).toBe(0);
   });
 
-  it("includes saved report drafts in bounded agent handoffs", async () => {
+  it("queues only report drafts that need integrity review", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {
       now: "2026-06-13T00:00:00.000Z"
@@ -865,29 +928,10 @@ describe("workspace review", () => {
     });
 
     expect(review.summary.reportDrafts).toBe(2);
-    expect(review.summary.reportDraftReviewItems).toBe(2);
+    expect(review.summary.reportDraftReviewItems).toBe(1);
     expect(review.summary.reportDraftsNeedingAttention).toBe(1);
     expect(review.autonomy.mode).toBe("human-review-gated");
-    expect(review.items).toContainEqual(
-      expect.objectContaining({
-        kind: "report-draft-review",
-        priority: "low",
-        reportId: verified.report.reportId,
-        command: expect.stringContaining(`truth-harness workspace report ${verified.report.reportId}`),
-        acceptanceCriteria: expect.arrayContaining([
-          "Read the report draft through the local report command and inspect its warnings.",
-          "Use the draft as a review artifact, not as independent proof."
-        ]),
-        evidenceSlots: expect.arrayContaining([
-          expect.objectContaining({
-            slotId: "verified-report-markdown",
-            status: "satisfied",
-            required: false
-          })
-        ]),
-        agentPacket: expect.stringContaining(`Report: ${verified.report.reportId}`)
-      })
-    );
+    expect(review.items).not.toContainEqual(expect.objectContaining({ reportId: verified.report.reportId }));
     expect(review.items).toContainEqual(
       expect.objectContaining({
         kind: "report-draft-review",

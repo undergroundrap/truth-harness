@@ -193,7 +193,7 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
     ...sessions.flatMap((session) => linkedValidationGateItems(status.root, session, validationPlans)),
     ...activeRoutes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef, claimsByStatementKey)),
     ...claimItems,
-    ...reportDrafts.map((report) => reportDraftReviewItem(status.root, report)),
+    ...reportDrafts.flatMap((report) => reportDraftReviewItems(status.root, report)),
     ...sessions.flatMap((session) => sessionReviewItems(status.root, session))
   ]));
   const autonomy = createAutonomyContract(items);
@@ -881,7 +881,7 @@ function routeObligationItem(workspacePath: string, route: VerifierRoute, obliga
       obligationId: obligation.obligationId
     }),
     kind: "route-obligation",
-    priority: priorityForRouteObligation(route, obligation),
+    priority: priorityForRouteObligation(route, obligation, command),
     title: obligation.title,
     summary: `${route.problem} - ${obligation.requiredBefore}`,
     command,
@@ -1019,7 +1019,7 @@ async function preferredClaimBlockerCommand(
 }
 
 function isActionableClaimReviewCommand(command: string): boolean {
-  return writesVerifierEvidence(command) || /^truth-harness\s+source\s+cite\b/u.test(command);
+  return writesEvidenceOrLedger(command) || /^truth-harness\s+source\s+cite\b/u.test(command);
 }
 
 function firstEquivalentReadyRoute(
@@ -1046,6 +1046,14 @@ function sessionReviewItems(workspacePath: string, session: ResearchSession): Wo
   );
 
   return [...taskItems, ...nextCheckItems];
+}
+
+function reportDraftReviewItems(workspacePath: string, summary: ReportDraftSummary): WorkspaceReviewItem[] {
+  if (summary.markdownVerified) {
+    return [];
+  }
+
+  return [reportDraftReviewItem(workspacePath, summary)];
 }
 
 function reportDraftReviewItem(workspacePath: string, summary: ReportDraftSummary): WorkspaceReviewItem {
@@ -1416,7 +1424,11 @@ function uniqueSorted(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))].sort((left, right) => left.localeCompare(right));
 }
 
-function priorityForRouteObligation(route: VerifierRoute, obligation: ProofObligation): WorkspaceReviewPriority {
+function priorityForRouteObligation(route: VerifierRoute, obligation: ProofObligation, command: string): WorkspaceReviewPriority {
+  if (isPassiveInspectionCommand(command)) {
+    return "low";
+  }
+
   if (isStrongerLabelUpgrade(obligation)) {
     return route.finalTrust === "unverified" ? "medium" : "low";
   }
@@ -1500,14 +1512,14 @@ function sortReviewItems(items: WorkspaceReviewItem[]): WorkspaceReviewItem[] {
       return priority;
     }
 
-    const kind = kindRank[left.kind] - kindRank[right.kind];
-    if (kind !== 0) {
-      return kind;
-    }
-
     const actionability = actionabilityRank(left) - actionabilityRank(right);
     if (actionability !== 0) {
       return actionability;
+    }
+
+    const kind = kindRank[left.kind] - kindRank[right.kind];
+    if (kind !== 0) {
+      return kind;
     }
 
     return (right.createdAt ?? "").localeCompare(left.createdAt ?? "");
@@ -1515,7 +1527,7 @@ function sortReviewItems(items: WorkspaceReviewItem[]): WorkspaceReviewItem[] {
 }
 
 function actionabilityRank(item: WorkspaceReviewItem): number {
-  if (writesVerifierEvidence(item.command)) {
+  if (writesEvidenceOrLedger(item.command)) {
     return 0;
   }
   if (isPassiveInspectionCommand(item.command)) {
@@ -1524,14 +1536,13 @@ function actionabilityRank(item: WorkspaceReviewItem): number {
   return 1;
 }
 
-function writesVerifierEvidence(command: string): boolean {
+function writesEvidenceOrLedger(command: string): boolean {
   return (
-    /^truth-harness\s+verify\b/u.test(command) &&
-    hasCliFlag(command, "--write")
-  ) || (
-    /^truth-harness\s+(?:smt|cas|proof)\s+check\b/u.test(command) &&
-    hasCliFlag(command, "--write")
-  ) || /^truth-harness\s+validation\s+attach\b/u.test(command);
+    (/^truth-harness\s+verify\b/u.test(command) && hasCliFlag(command, "--write")) ||
+    (/^truth-harness\s+(?:smt|cas|proof)\s+check\b/u.test(command) && hasCliFlag(command, "--write")) ||
+    /^truth-harness\s+validation\s+attach\b/u.test(command) ||
+    /^truth-harness\s+claim\s+add\b/u.test(command)
+  );
 }
 
 function isPassiveInspectionCommand(command: string): boolean {
