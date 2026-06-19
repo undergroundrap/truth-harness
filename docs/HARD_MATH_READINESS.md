@@ -44,13 +44,14 @@ packages/benchmarks/suites/math-credibility-ladder.json
 
 The ladder checks that Truth Harness can:
 
-- verify exact arithmetic equalities
-- refute false exact arithmetic equalities
-- check common-denominator lemmas without calling them formal proofs
+- pass a 30-case native-safe hard-math floor
+- verify exact arithmetic equalities, including powers and signed rational arithmetic
+- refute false exact arithmetic equalities with exact left/right traces
+- check common-denominator lemmas, including signed rewrites, without calling them formal proofs
 - distinguish narrow universal parity certificates from proof-checker-backed theorems
-- catch dimensional mistakes
-- return conservative interval bounds
-- refuse theorem-level prompts outside the current checker boundary
+- catch dimensional mistakes, including powered unit expressions
+- return conservative interval bounds, including reciprocal and interior-minimum cases
+- refuse theorem-level or unsupported-parser prompts outside the current checker boundary
 
 Passing this ladder does not prove Truth Harness can solve hard math. A saved passing `truth-harness.benchmark-run.v0` record proves the current workspace has replayable regression evidence for the foundations that hard-math workflows will depend on.
 

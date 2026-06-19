@@ -192,7 +192,7 @@ Initial benchmark suites:
 
 | Suite | Scope |
 | --- | --- |
-| `math-credibility-ladder` | Native-safe hard-math readiness floor: exact equalities, common-denominator lemmas, parity boundaries, dimensional mistakes, interval bounds, and honest theorem-boundary refusals. |
+| `math-credibility-ladder` | 30-case native-safe hard-math readiness floor: exact equalities/refutations, signed common-denominator lemmas, parity boundaries, dimensional powers/mistakes, interval bounds, and honest theorem/parser-boundary refusals. |
 | `ai-failure-seed` | Fluent-but-wrong AI math behavior, including false universals, exact arithmetic, symbolic prompts, dimensional checks, interval bounds, and unsupported prompts. |
 | `foundations-seed` | Current exact arithmetic, parity refutation, and unsupported-task humility regression suite. |
 | `foundations-100` | Arithmetic, algebra, fractions, units, simple proofs. |

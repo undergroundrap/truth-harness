@@ -1,7 +1,7 @@
 {
   "id": "math-credibility-ladder",
   "title": "Math Credibility Ladder",
-  "description": "A local, Docker-friendly ladder for checking whether Truth Harness is useful to serious math users before claiming frontier capability. It covers exact equality, concrete refutation, narrow universal parity, dimensional sanity checks, interval bounds, and honest unsupported labels for theorem-level prompts outside the current checker boundary.",
+  "description": "A local, Docker-friendly ladder for checking whether Truth Harness is useful to serious math users before claiming frontier capability. It covers exact equality, concrete refutation, common-denominator rewrites, narrow universal parity, dimensional sanity checks, interval bounds, and honest unsupported labels for theorem-level prompts outside the current checker boundary.",
   "tasks": [
     {
       "id": "exact-rational-equality",
@@ -47,6 +47,51 @@
       "expectTrust": "exact-computed",
       "expectEvidenceKind": "exact-arithmetic",
       "expectSummaryIncludes": "11"
+    },
+    {
+      "id": "right-associative-power-equality",
+      "category": "exact-arithmetic",
+      "aiFailureMode": "Applies exponent associativity incorrectly or relies on calculator-style ambiguity.",
+      "prompt": "verify 2^3^2 = 512",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "both sides equal 512"
+    },
+    {
+      "id": "refute-parenthesized-power-equality",
+      "category": "exact-arithmetic",
+      "aiFailureMode": "Ignores parentheses around powers and accepts a false equality.",
+      "prompt": "verify (2^3)^2 = 512",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "left side is 64"
+    },
+    {
+      "id": "signed-rational-sum",
+      "category": "exact-arithmetic",
+      "aiFailureMode": "Loses the sign while combining unlike denominators.",
+      "prompt": "compute -3/4 + 5/8",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "-1/8"
+    },
+    {
+      "id": "signed-common-denominator-lemma",
+      "category": "fraction-lemma",
+      "aiFailureMode": "Treats signs in equivalent fractions as visual notation instead of exact rational evidence.",
+      "prompt": "check lcm(3, 9) = 9 and -2/3 = -6/9",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "lcm(3,9) = 9"
+    },
+    {
+      "id": "refute-bad-numerator-rewrite",
+      "category": "fraction-lemma",
+      "aiFailureMode": "Checks only the denominator and misses an invalid numerator rewrite.",
+      "prompt": "check lcm(6, 9) = 18 and 2/6 = 8/18",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "failed checks numerator-rewrite"
     },
     {
       "id": "universal-even-parity-boundary",
@@ -103,6 +148,15 @@
       "expectSummaryIncludes": "M L^-1 T^-2"
     },
     {
+      "id": "dimension-dynamic-pressure",
+      "category": "dimensional-analysis",
+      "aiFailureMode": "Fails to reason through squared velocity in a physics unit relation.",
+      "prompt": "dimension check pressure = density * velocity^2",
+      "expectTrust": "dimension-checked",
+      "expectEvidenceKind": "dimension-analysis",
+      "expectSummaryIncludes": "M L^-1 T^-2"
+    },
+    {
       "id": "refute-energy-velocity",
       "category": "dimensional-analysis",
       "aiFailureMode": "Confuses velocity with velocity squared in an energy relation.",
@@ -119,6 +173,15 @@
       "expectTrust": "refuted",
       "expectEvidenceKind": "dimension-analysis",
       "expectSummaryIncludes": "right is M L^3 T^-2"
+    },
+    {
+      "id": "refute-density-area-denominator",
+      "category": "dimensional-analysis",
+      "aiFailureMode": "Misses that density requires volume, not area, in the denominator.",
+      "prompt": "dimension check density = mass / length^2",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "dimension-analysis",
+      "expectSummaryIncludes": "right is M L^-2"
     },
     {
       "id": "rational-interval-bound",
@@ -139,6 +202,33 @@
       "expectSummaryIncludes": "[-1, 1]"
     },
     {
+      "id": "interval-square-crosses-zero",
+      "category": "bounded-numerics",
+      "aiFailureMode": "Uses only endpoint evaluation and misses the minimum at zero.",
+      "prompt": "bound x^2 for x in [-2, 3]",
+      "expectTrust": "bounded-numeric",
+      "expectEvidenceKind": "interval-bound",
+      "expectSummaryIncludes": "[0, 9]"
+    },
+    {
+      "id": "interval-reciprocal-positive",
+      "category": "bounded-numerics",
+      "aiFailureMode": "Reverses reciprocal interval endpoints or rounds the bound.",
+      "prompt": "bound 1 / x for x in [2, 4]",
+      "expectTrust": "bounded-numeric",
+      "expectEvidenceKind": "interval-bound",
+      "expectSummaryIncludes": "[1/4, 1/2]"
+    },
+    {
+      "id": "interval-shifted-square",
+      "category": "bounded-numerics",
+      "aiFailureMode": "Misses that a shifted square can have an interior minimum.",
+      "prompt": "bound (x - 1)^2 for x in [0, 2]",
+      "expectTrust": "bounded-numeric",
+      "expectEvidenceKind": "interval-bound",
+      "expectSummaryIncludes": "[0, 1]"
+    },
+    {
       "id": "division-by-zero-boundary",
       "category": "bounded-numerics",
       "aiFailureMode": "Ignores a singularity inside the stated interval.",
@@ -152,6 +242,15 @@
       "category": "checker-boundary",
       "aiFailureMode": "Solves a calculus prompt from memory without a configured symbolic/integration checker.",
       "prompt": "integrate x^2 from 0 to 1",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    },
+    {
+      "id": "unsupported-divisibility-language",
+      "category": "checker-boundary",
+      "aiFailureMode": "Treats semantically similar wording as verified even though no accepted parser/checker handled it.",
+      "prompt": "for all integers n, n^2+n is divisible by 2",
       "expectTrust": "unverified",
       "expectEvidenceKind": "unsupported",
       "expectSummaryIncludes": "Unsupported"
