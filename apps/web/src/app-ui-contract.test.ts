@@ -94,11 +94,13 @@ describe("web UI action contracts", () => {
     ]);
 
     expect(html).toContain('id="branch-map"');
-    expect(source).toContain("return 28 + Math.max(rowCount, 1) * 88;");
-    expect(styles).toContain(".branch-rows-2 {\n  height: 204px;");
-    expect(styles).toContain(".git-row-1 {\n  top: 102px;");
-    expect(styles).toContain("grid-template-columns: 96px minmax(0, 1fr);");
-    expect(styles).toContain("min-height: 74px;");
+    expect(source).toContain("return 32 + Math.max(rowCount, 1) * 104;");
+    expect(source).toContain("return 18 + lane * 14;");
+    expect(styles).toContain(".branch-rows-2 {\n  height: 240px;");
+    expect(styles).toContain(".git-row-1 {\n  top: 120px;");
+    expect(styles).toContain("grid-template-columns: 78px minmax(0, 1fr);");
+    expect(styles).toContain("height: 90px;");
+    expect(styles).toContain("height: 82px;");
     expect(styles).toContain("-webkit-line-clamp: 2;");
     expect(styles).toContain("text-overflow: ellipsis;");
     expect(styles).toContain("overflow: hidden auto;");
@@ -166,6 +168,8 @@ describe("web UI action contracts", () => {
     expect(source).toContain('data-testid="verify-credibility-bundle"');
     expect(source).toContain('data-testid="refresh-credibility-bundle-history"');
     expect(source).toContain('data-testid="copy-credibility-bundle-command"');
+    expect(source).toContain('data-testid="copy-strict-professor-command"');
+    expect(source).toContain('data-testid="copy-strict-engine-command"');
     expect(source).toContain('data-testid="copy-credibility-bundle-path"');
     expect(source).toContain('data-testid="download-credibility-bundle-readme"');
     expect(source).toContain('data-testid="download-credibility-bundle-manifest"');
@@ -184,6 +188,13 @@ describe("web UI action contracts", () => {
     expect(source).toContain("Archive SHA-256");
     expect(source).toContain("Last web verify");
     expect(source).toContain("Verification artifact");
+    expect(source).toContain("Strict All-Engine Reviewer Bundle");
+    expect(source).toContain("strict all-engine professor packet");
+    expect(source).toContain("Strict all-engine bundle exported");
+    expect(source).toContain("function credibilityBundleIsStrictAllEngine(manifest)");
+    expect(source).toContain("function credibilityStrictProfessorCommand");
+    expect(source).toContain("function credibilityStrictEngineCommand");
+    expect(source).toContain("Strict all-engine Docker professor command copied from the Report tab.");
     expect(source).toContain("Saved ${payload.verification?.verificationId");
     expect(source).toContain("Verified Reviewer Bundle");
     expect(source).toContain("Bundle Verification History");
@@ -234,6 +245,7 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".saved-report-integrity");
     expect(styles).toContain(".credibility-pack-summary");
     expect(styles).toContain(".credibility-bundle-card");
+    expect(styles).toContain(".credibility-bundle-card.bundle-standard");
     expect(styles).toContain(".credibility-bundle-facts");
     expect(styles).toContain(".credibility-bundle-command");
     expect(styles).toContain(".credibility-verification-history");

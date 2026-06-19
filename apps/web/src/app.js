@@ -11118,15 +11118,15 @@ function branchChildLane(currentLane, index) {
 }
 
 function branchCanvasHeight(rowCount) {
-  return 28 + Math.max(rowCount, 1) * 88;
+  return 32 + Math.max(rowCount, 1) * 104;
 }
 
 function branchRowY(rowIndex) {
-  return 52 + rowIndex * 88;
+  return 60 + rowIndex * 104;
 }
 
 function branchLaneX(lane) {
-  return 18 + lane * 18;
+  return 18 + lane * 14;
 }
 
 function branchEdgePath(fromLane, fromRow, toLane, toRow, kind) {
@@ -12209,6 +12209,34 @@ function renderCredibilityPackPanel() {
       fallbackDetail: "the reviewer bundle verification command was saved as a local text file instead."
     });
   });
+  credibilityPackPanel.querySelector(".copy-strict-professor-command")?.addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    const commandText = button.dataset.command ?? credibilityStrictProfessorCommand();
+    void copyOrDownloadText({
+      button,
+      text: `${commandText}\n`,
+      filename: `truth-harness-strict-professor-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      copiedTitle: "Copied strict reviewer route",
+      copiedDetail: "Strict all-engine Docker professor command copied from the Report tab.",
+      fallbackTitle: "Downloaded strict reviewer route",
+      fallbackDetail: "the strict all-engine Docker professor command was saved as a local text file instead."
+    });
+  });
+  credibilityPackPanel.querySelector(".copy-strict-engine-command")?.addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    const commandText = button.dataset.command ?? credibilityStrictEngineCommand();
+    void copyOrDownloadText({
+      button,
+      text: `${commandText}\n`,
+      filename: `truth-harness-strict-engine-${safeFilenameTimestamp()}.txt`,
+      type: "text/plain",
+      copiedTitle: "Copied strict engine route",
+      copiedDetail: "Strict all-engine evidence writer command copied from the Report tab.",
+      fallbackTitle: "Downloaded strict engine route",
+      fallbackDetail: "the strict all-engine evidence writer command was saved as a local text file instead."
+    });
+  });
   credibilityPackPanel.querySelector(".copy-credibility-bundle-path")?.addEventListener("click", (event) => {
     const button = event.currentTarget;
     const path = button.dataset.path ?? state.credibilityBundle?.paths?.relativeBundle ?? "";
@@ -12299,6 +12327,7 @@ function credibilityBundleCardHtml() {
   const verification = payload?.verification;
   const archive = state.credibilityArchive;
   const hasBundle = payload?.latest && manifest;
+  const strictAllEngine = credibilityBundleIsStrictAllEngine(manifest);
   const verifying = state.credibilityBundleVerifying;
   const bundleError = state.credibilityBundleError ?? state.credibilityBundleVerifyError;
   const status = bundleError
@@ -12306,7 +12335,9 @@ function credibilityBundleCardHtml() {
     : state.credibilityBundleLoading || verifying
       ? "checking"
       : hasBundle
-        ? verification?.passed && verification?.sourceMatchesWorkspace
+        ? !strictAllEngine
+          ? "standard"
+          : verification?.passed && verification?.sourceMatchesWorkspace
           ? "verified"
           : "drift"
         : "missing";
@@ -12316,7 +12347,9 @@ function credibilityBundleCardHtml() {
     : verifying
       ? "verifying"
     : status === "verified"
-      ? "verified bundle"
+      ? "strict verified"
+      : status === "standard"
+        ? "standard bundle"
       : status === "drift"
         ? "bundle drift"
         : status === "error"
@@ -12325,12 +12358,18 @@ function credibilityBundleCardHtml() {
   const detail = bundleError
     ? bundleError
     : hasBundle
-      ? "Portable reviewer bundle found locally. The verification command checks copied hashes and reports live source drift separately."
-      : "Run the Docker professor route to create the portable reviewer bundle after engine and benchmark gates pass.";
+      ? strictAllEngine
+        ? "Latest portable reviewer bundle includes strict all-engine evidence. Hash verification checks copied files and reports live source drift separately."
+        : "A portable reviewer bundle exists, but it is not the strict all-engine professor packet. Regenerate with the strict Docker route before serious outside review."
+      : "Run the strict Docker professor route to create a portable reviewer bundle after engine and benchmark gates pass.";
   const command = credibilityBundleCommand();
+  const strictProfessorCommand = credibilityStrictProfessorCommand(manifest);
+  const strictEngineCommand = credibilityStrictEngineCommand(manifest);
   const path = payload?.paths?.relativeBundle ?? payload?.bundleRef ?? "";
   const facts = hasBundle
     ? [
+        ["Reviewer standard", credibilityBundleReviewerStandard(manifest)],
+        ["Required engines", strictAllEngine ? "Maxima, Z3, cvc5, Lean, SageMath" : "not all strict engines"],
         ["Bundle", manifest.bundleId],
         ["Pack", manifest.packId],
         ["Pack status", manifest.packStatus],
@@ -12343,7 +12382,8 @@ function credibilityBundleCardHtml() {
         ["Archive SHA-256", archive?.sha256 ?? (state.credibilityArchiveLoading ? "calculating" : state.credibilityArchiveError ?? "not loaded")]
       ]
     : [
-        ["Expected route", "npm run docker:professor"],
+        ["Expected route", "npm run docker:professor:all"],
+        ["Required engines", "Maxima, Z3, cvc5, Lean, SageMath"],
         ["Network", "no-network compose service"],
         ["Status", state.credibilityBundleLoading ? "checking local findings" : "not exported yet"]
       ];
@@ -12351,8 +12391,8 @@ function credibilityBundleCardHtml() {
   return `<section class="credibility-bundle-card bundle-${escapeHtml(status)}" aria-label="Portable reviewer bundle">
     <div class="credibility-bundle-head">
       <div>
-        <span class="mini-label">portable handoff</span>
-        <strong>Verified Reviewer Bundle</strong>
+        <span class="mini-label">${strictAllEngine ? "strict portable handoff" : "portable handoff"}</span>
+        <strong>${strictAllEngine ? "Strict All-Engine Reviewer Bundle" : "Verified Reviewer Bundle"}</strong>
       </div>
       <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
     </div>
@@ -12368,6 +12408,8 @@ function credibilityBundleCardHtml() {
         <button class="text-button compact-button refresh-credibility-bundle" data-testid="refresh-credibility-bundle" type="button" ${state.credibilityBundleLoading ? "disabled" : ""}>${state.credibilityBundleLoading ? "Refreshing" : "Refresh bundle"}</button>
         <button class="text-button compact-button strong-action verify-credibility-bundle" data-testid="verify-credibility-bundle" type="button" ${hasBundle && !verifying ? "" : "disabled"}>${verifying ? "Verifying" : "Verify now"}</button>
         <button class="text-button compact-button copy-credibility-bundle-command" data-testid="copy-credibility-bundle-command" data-command="${escapeHtml(command)}" type="button">Copy verify</button>
+        <button class="text-button compact-button strong-action copy-strict-professor-command" data-testid="copy-strict-professor-command" data-command="${escapeHtml(strictProfessorCommand)}" type="button">Copy strict packet</button>
+        <button class="text-button compact-button copy-strict-engine-command" data-testid="copy-strict-engine-command" data-command="${escapeHtml(strictEngineCommand)}" type="button">Copy engine run</button>
         <button class="text-button compact-button copy-credibility-bundle-path" data-testid="copy-credibility-bundle-path" data-path="${escapeHtml(path)}" type="button" ${path ? "" : "disabled"}>Copy path</button>
         <button class="text-button compact-button download-credibility-bundle-file" data-testid="download-credibility-bundle-readme" data-label="Bundle README" data-href="/api/credibility-bundle/latest/file?kind=readme" type="button" ${hasBundle ? "" : "disabled"}>README</button>
         <button class="text-button compact-button download-credibility-bundle-file" data-testid="download-credibility-bundle-manifest" data-label="Bundle manifest" data-href="/api/credibility-bundle/latest/file?kind=manifest" type="button" ${hasBundle ? "" : "disabled"}>Manifest</button>
@@ -12448,12 +12490,17 @@ function credibilityReviewerChecklistHtml(pack) {
   const summary = manifest?.packSummary ?? pack?.summary ?? {};
   const actionPlan = pack?.reviewerActionPlan;
   const hasBundle = Boolean(payload?.latest && manifest);
+  const strictAllEngine = credibilityBundleIsStrictAllEngine(manifest);
   const checklist = [
     {
-      label: "Portable bundle exported",
-      passed: hasBundle,
-      detail: hasBundle ? `${manifest.bundleId} is present under .truth-harness/findings.` : "No reviewer bundle is present yet.",
-      command: "npm run docker:professor"
+      label: "Strict all-engine bundle exported",
+      passed: hasBundle && strictAllEngine,
+      detail: hasBundle
+        ? strictAllEngine
+          ? `${manifest.bundleId} includes Maxima, Z3, cvc5, Lean, and SageMath in one portable packet.`
+          : `${manifest.bundleId} exists but is not the strict all-engine professor packet.`
+        : "No reviewer bundle is present yet.",
+      command: credibilityStrictProfessorCommand(manifest)
     },
     {
       label: "Bundle hash integrity",
@@ -12558,7 +12605,35 @@ function gateStringIsComplete(value) {
 function credibilityBundleCommand() {
   return state.credibilityBundle?.command ??
     state.credibilityBundle?.manifest?.reviewerCommands?.verifyBundle ??
-    "npm run docker:professor";
+    "npm run docker:professor:all";
+}
+
+function credibilityBundleIsStrictAllEngine(manifest) {
+  if (!manifest) {
+    return false;
+  }
+  const commands = manifest.reviewerCommands ?? {};
+  const summary = manifest.packSummary ?? {};
+  return Boolean(
+    commands.verifyEngines?.includes("--require-all-engines") ||
+    commands.reproducePack?.includes("--require-all-engines") ||
+    commands.dockerStrictProfessorEvidence ||
+    (summary.requiredEngineGates === "5/5" && summary.concreteEngineGates === "5/5")
+  );
+}
+
+function credibilityBundleReviewerStandard(manifest) {
+  return credibilityBundleIsStrictAllEngine(manifest)
+    ? "strict all-engine professor packet"
+    : "standard reviewer packet";
+}
+
+function credibilityStrictProfessorCommand(manifest = state.credibilityBundle?.manifest) {
+  return manifest?.reviewerCommands?.dockerStrictProfessorEvidence ?? "npm run docker:professor:all";
+}
+
+function credibilityStrictEngineCommand(manifest = state.credibilityBundle?.manifest) {
+  return manifest?.reviewerCommands?.dockerAllEngines ?? "npm run docker:all-engines:write";
 }
 
 function credibilityBundleValueHtml(value) {
@@ -12581,12 +12656,13 @@ function credibilityBundleTrust(payload) {
 
 function credibilityBundleActivitySummary(payload) {
   if (!payload?.latest) {
-    return "No portable reviewer bundle is present yet; run npm run docker:professor after evidence gates pass.";
+    return "No portable reviewer bundle is present yet; run npm run docker:professor:all after evidence gates pass.";
   }
 
   const manifest = payload.manifest ?? {};
   const verification = payload.verification ?? {};
-  return `${manifest.bundleId ?? "bundle"} for ${manifest.packId ?? "pack"}; integrity ${verification.passed ? "passed" : "changed"}, source ${verification.sourceMatchesWorkspace ? "matches" : "drifted"}.`;
+  const standard = credibilityBundleReviewerStandard(manifest);
+  return `${manifest.bundleId ?? "bundle"} for ${manifest.packId ?? "pack"} (${standard}); integrity ${verification.passed ? "passed" : "changed"}, source ${verification.sourceMatchesWorkspace ? "matches" : "drifted"}.`;
 }
 
 function credibilityBenchmarkCardHtml(pack) {
