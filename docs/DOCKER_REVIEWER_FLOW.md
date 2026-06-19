@@ -26,6 +26,8 @@ npm run docker:cleanup -- all-build-cache --confirm-delete
 
 `npm run docker:reviewer:all` is the stricter auditor lane. It builds the heavier all-engine image, then writes the same no-network reviewer artifacts while requiring Maxima, Z3, cvc5, Lean, and SageMath to each earn scoped fixture evidence through `--require-all-engines`. Use this before serious outside review when SageMath should be part of the same portable packet, not merely a separate optional smoke.
 
+Engine verification JSON remains the forensic source of record, including raw probe stdout/stderr where a backend exposes it. Human-facing CLI and Markdown summaries keep backend versions concise, so noisy banners such as cvc5's license text render as a stable version label like `cvc5 version 1.0.3` instead of overwhelming the reviewer packet.
+
 `npm run docker:storage` is read-only. It reports local `.truth-harness` size, Docker Desktop storage, Docker's own `system df` summary when available, Truth Harness images, and cleanup commands.
 
 `npm run docker:cleanup` is preview-only by default. It requires `--confirm-delete` before it removes anything. The helper accepts the confirmation as either a normal script argument or npm's config-style `confirm-delete=true` environment flag, so the documented npm commands stay destructive only when they visibly include confirmation.

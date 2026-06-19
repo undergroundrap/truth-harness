@@ -707,7 +707,7 @@ function probeSmtBackend(args: {
     };
   }
 
-  const version = stdout || stderr || "version unavailable";
+  const version = normalizeSmtBackendVersion(args.backendId, stdout, stderr);
 
   return {
     backendId: args.backendId,
@@ -869,6 +869,19 @@ function isMissingExecutable(error: { name?: string; message: string }): boolean
 
 function singleLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeSmtBackendVersion(backendId: SmtBackendId, stdout: string, stderr: string): string {
+  const raw = stdout || stderr || "version unavailable";
+
+  if (backendId === "cvc5") {
+    const match = /\bcvc5 version\s+([0-9][^\s,;)]*)/iu.exec(raw);
+    if (match) {
+      return `cvc5 version ${match[1]}`;
+    }
+  }
+
+  return raw.length > 160 ? `${raw.slice(0, 157)}...` : raw;
 }
 
 function trimOutput(value: string): string {

@@ -97,6 +97,44 @@ describe("SMT backend status", () => {
     expect(report.warnings.join(" ")).toContain("must not label results `smt-checked`");
   });
 
+  it("keeps cvc5 version labels concise while preserving raw probe output", () => {
+    const verboseBanner = [
+      "This is cvc5 version 1.0.3 compiled with GCC version 12.2.0 on Dec 20 2022.",
+      "This build of cvc5 uses GPLed libraries, and is thus covered by the GNU General Public License.",
+      "THIS SOFTWARE IS PROVIDED AS-IS, WITHOUT ANY WARRANTIES."
+    ].join(" ");
+    const runner: SmtBackendCommandRunner = (command, args) => {
+      if (command === "cvc5-test" && args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: verboseBanner,
+          stderr: ""
+        };
+      }
+      return {
+        status: null,
+        stdout: "",
+        stderr: "",
+        error: {
+          name: "Error",
+          message: "spawn z3 ENOENT"
+        }
+      };
+    };
+
+    const report = getSmtBackendStatus({
+      cvc5Command: "cvc5-test",
+      runner
+    });
+
+    const cvc5 = report.backends.find((backend) => backend.backendId === "cvc5");
+    expect(cvc5).toMatchObject({
+      status: "available",
+      version: "cvc5 version 1.0.3",
+      stdout: verboseBanner
+    });
+  });
+
   it("labels SAT and UNSAT SMT-LIB checks as smt-checked, not proved", () => {
     const calls: string[][] = [];
     const runner: SmtBackendCommandRunner = (_command, args) => {
@@ -168,7 +206,7 @@ describe("SMT backend status", () => {
       displayName: "cvc5 SMT solver",
       adapter: "local-cvc5-smtlib-subprocess",
       acceptedProofChecker: false,
-      version: "This is cvc5 version 1.1.2"
+      version: "cvc5 version 1.1.2"
     });
     expect(record.status).toBe("sat");
     expect(record.trust).toBe("smt-checked");

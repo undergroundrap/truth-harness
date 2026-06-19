@@ -148,7 +148,15 @@ describe("engine evidence verification", () => {
   it("passes the required cvc5 gate only after concrete SMT evidence is earned", async () => {
     const runner: EngineVerificationCommandRunner = (command, args) => {
       if (command === "cvc5-test" && args[0] === "--version") {
-        return { status: 0, stdout: "This is cvc5 version 1.1.2\n", stderr: "" };
+        return {
+          status: 0,
+          stdout: [
+            "This is cvc5 version 1.1.2 compiled with GCC version 12.2.0.",
+            "This build of cvc5 uses GPLed libraries, and is thus covered by the GNU General Public License.",
+            "THIS SOFTWARE IS PROVIDED AS-IS, WITHOUT ANY WARRANTIES."
+          ].join(" "),
+          stderr: ""
+        };
       }
       if (command === "cvc5-test") {
         return { status: 0, stdout: "unsat\n", stderr: "" };
@@ -183,7 +191,7 @@ describe("engine evidence verification", () => {
         status: "passed",
         trust: "smt-checked",
         evidenceMinted: true,
-        evidence: expect.objectContaining({ backendId: "cvc5", trust: "smt-checked" })
+        evidence: expect.objectContaining({ backendId: "cvc5", backendVersion: "cvc5 version 1.1.2", trust: "smt-checked" })
       })
     );
   });
