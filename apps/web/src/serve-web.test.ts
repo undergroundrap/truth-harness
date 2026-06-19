@@ -1856,6 +1856,7 @@ describe("local web safety guard", () => {
 
     const indexResponse = await fetch(`${baseUrl}/`);
     expect(indexResponse.status).toBe(200);
+    expect(indexResponse.headers.get("cache-control")).toBe("no-store");
     expect(indexResponse.headers.get("content-security-policy")).toContain("connect-src 'self'");
     expect(indexResponse.headers.get("permissions-policy")).toContain("camera=()");
     expect(indexResponse.headers.get("x-frame-options")).toBe("DENY");

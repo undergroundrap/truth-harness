@@ -3439,9 +3439,8 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 .graph-edge-list code {
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .graph-repair-panel {
@@ -3794,8 +3793,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 #runbook-packet {
   flex: 1 1 auto;
   min-height: 0;
-  max-height: min(48vh, 520px);
-  overflow: auto;
+  overflow: visible;
   white-space: pre-wrap;
   border: 0;
   border-top: 1px solid var(--line-soft);
@@ -3803,7 +3801,6 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   background: #0f0f0f;
   color: #e6dfce;
   padding: 10px;
-  scrollbar-gutter: stable;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
@@ -3827,9 +3824,6 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
     min-height: 0;
   }
 
-  #runbook-packet {
-    max-height: min(50vh, 540px);
-  }
 }
 
 @container (max-width: 560px) {
@@ -3991,14 +3985,13 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 .claim-gate-grid code {
   display: block;
   min-width: 0;
-  overflow: hidden;
   border-radius: 6px;
   background: #070707;
   color: #e6dfce;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
   padding: 7px 8px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .docker-verifier-card {
@@ -4251,14 +4244,13 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 .docker-command-row code {
   display: block;
   min-width: 0;
-  overflow: hidden;
   border-radius: 6px;
   background: #070707;
   color: #e6dfce;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
   padding: 5px 7px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .docker-verifier-notes {

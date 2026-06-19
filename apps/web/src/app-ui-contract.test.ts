@@ -491,6 +491,73 @@ describe("web UI action contracts", () => {
     expect(taskDockStyles).toContain("flex: 0 0 auto;");
   });
 
+  it("exposes a browser-run layout audit for agents and screenshot regression work", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+    const claimGateCommandStyles = styles.match(/\.claim-gate-grid code \{[\s\S]*?\r?\n\}/u)?.[0];
+    const dockerCommandStyles = styles.match(/\.docker-command-row code \{[\s\S]*?\r?\n\}/u)?.[0];
+    const graphEdgeCodeStyles = styles.match(/\.graph-edge-list code \{[\s\S]*?\r?\n\}/u)?.[0];
+    const runbookPacketStyles = styles.match(/#runbook-packet \{[\s\S]*?\r?\n\}/u)?.[0];
+
+    expect(html).toContain('src="./src/app.js?v=2026-06-19-layout-audit-timeout"');
+    expect(html).toContain('href="./src/styles.css?v=2026-06-19-layout-audit-pass"');
+    expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
+    expect(html).toContain('aria-hidden="true"');
+    expect(source).toContain('const UI_AUDIT_SURFACES = ["trace", "plot", "runbook", "checks", "graph", "protocol", "notes", "replay", "report"];');
+    expect(source).toContain('const UI_AUDIT_SCROLL_ALLOWLIST = [');
+    expect(source).toContain('".plot-canvas"');
+    expect(source).toContain('".git-branch-stage"');
+    expect(source).toContain("setTimeout(done, 120);");
+    expect(source).toContain("requestAnimationFrame(() => requestAnimationFrame(done));");
+    expect(source).toContain("function collectOverflowAudit(panel, findings)");
+    expect(source).toContain("function collectNestedScrollAudit(panel, findings)");
+    expect(source).toContain("function collectBranchMapOverlapAudit(findings)");
+    expect(source).toContain("function visibleSurfaceAudit(surface)");
+    expect(source).toContain("async function restoreSurfaceAfterUiAudit(previousSurface, previousScrolls)");
+    expect(source).toContain("async function truthHarnessUiAudit(options = {})");
+    expect(source).toContain("function writeTruthHarnessUiAuditResult(result)");
+    expect(source).toContain("function markTruthHarnessUiAuditRunning(source)");
+    expect(source).toContain('document.documentElement.dataset.truthHarnessUiAudit = "ready";');
+    expect(source).toContain('resultNode.dataset.status = "running";');
+    expect(source).toContain('markTruthHarnessUiAuditRunning("event");');
+    expect(source).toContain('markTruthHarnessUiAuditRunning("url");');
+    expect(source).toContain('document.addEventListener("truth-harness:run-ui-audit"');
+    expect(source).toContain('document.querySelector("#truth-harness-ui-audit-result")');
+    expect(source).toContain("function scheduleTruthHarnessUiAuditFromUrl()");
+    expect(source).toContain('params.get("uiAudit") !== "1"');
+    expect(source).toContain("scheduleTruthHarnessUiAuditFromUrl();");
+    expect(source).toContain('schemaVersion: "truth-harness.web-ui-layout-audit.v0"');
+    expect(source).toContain('"horizontal-overflow"');
+    expect(source).toContain('"vertical-clipping"');
+    expect(source).toContain('"nested-scroll-trap"');
+    expect(source).toContain('"branch-map-overlap"');
+    expect(source).toContain('"audit-runtime-error"');
+    expect(source).toContain('"audit-url-runtime-error"');
+    expect(source).toContain("window.truthHarnessUiAudit = truthHarnessUiAudit;");
+    expect(source).toContain("This browser layout audit checks visible DOM geometry only.");
+    expect(source).toContain("A passing result does not replace human review or future pixel-diff screenshot baselines.");
+    expect(claimGateCommandStyles).toBeTruthy();
+    expect(claimGateCommandStyles).toContain("overflow-wrap: anywhere;");
+    expect(claimGateCommandStyles).toContain("white-space: normal;");
+    expect(claimGateCommandStyles).not.toContain("text-overflow: ellipsis;");
+    expect(dockerCommandStyles).toBeTruthy();
+    expect(dockerCommandStyles).toContain("overflow-wrap: anywhere;");
+    expect(dockerCommandStyles).toContain("white-space: normal;");
+    expect(dockerCommandStyles).not.toContain("text-overflow: ellipsis;");
+    expect(graphEdgeCodeStyles).toBeTruthy();
+    expect(graphEdgeCodeStyles).toContain("overflow-wrap: anywhere;");
+    expect(graphEdgeCodeStyles).toContain("white-space: normal;");
+    expect(graphEdgeCodeStyles).not.toContain("text-overflow: ellipsis;");
+    expect(runbookPacketStyles).toBeTruthy();
+    expect(runbookPacketStyles).toContain("overflow: visible;");
+    expect(runbookPacketStyles).toContain("white-space: pre-wrap;");
+    expect(runbookPacketStyles).not.toContain("max-height:");
+    expect(runbookPacketStyles).not.toContain("overflow: auto;");
+  });
+
   it("shows the browser-safe workspace run-next dry run on the Run tab", async () => {
     const [html, source, styles] = await Promise.all([
       readFile(appHtmlPath, "utf8"),

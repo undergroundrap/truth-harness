@@ -6819,6 +6819,417 @@ function resetActiveSurfaceScroll() {
   document.querySelector(`[data-surface-panel="${state.surface}"]`)?.scrollTo({ top: 0, left: 0 });
 }
 
+const UI_AUDIT_SURFACES = ["trace", "plot", "runbook", "checks", "graph", "protocol", "notes", "replay", "report"];
+const UI_AUDIT_SCROLL_ALLOWLIST = [
+  ".plot-canvas",
+  ".git-branch-stage",
+  ".research-map-list",
+  ".visual-renderer-source",
+  "#research-notes"
+];
+const UI_AUDIT_CLAMP_ALLOWLIST = [
+  ".git-branch-title",
+  ".git-branch-meta span",
+  ".git-branch-meta code",
+  ".research-map-row strong",
+  ".research-map-row small"
+];
+
+function nextUiAuditPaint() {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve();
+    };
+    setTimeout(done, 120);
+    requestAnimationFrame(() => requestAnimationFrame(done));
+  });
+}
+
+function matchesAnySelector(element, selectors) {
+  return selectors.some((selector) => {
+    try {
+      return element.matches(selector) || Boolean(element.closest(selector));
+    } catch (_error) {
+      return false;
+    }
+  });
+}
+
+function uiAuditElementSelector(element) {
+  if (element.id) {
+    return `#${element.id}`;
+  }
+
+  const testId = element.getAttribute("data-testid");
+  if (testId) {
+    return `[data-testid="${testId}"]`;
+  }
+
+  const className = typeof element.className === "string"
+    ? element.className
+      .split(/\s+/u)
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((part) => `.${part}`)
+      .join("")
+    : "";
+  return `${element.tagName.toLowerCase()}${className}`;
+}
+
+function elementIsVisibleForUiAudit(element) {
+  const style = window.getComputedStyle(element);
+  const rect = element.getBoundingClientRect();
+  return style.display !== "none" &&
+    style.visibility !== "hidden" &&
+    rect.width > 0 &&
+    rect.height > 0;
+}
+
+function uiAuditFinding(findings, severity, code, element, detail, metrics = {}) {
+  findings.push({
+    severity,
+    code,
+    selector: element ? uiAuditElementSelector(element) : "window",
+    detail,
+    metrics
+  });
+}
+
+function collectOverflowAudit(panel, findings) {
+  const candidates = [
+    panel,
+    ...panel.querySelectorAll("section, article, div, button, details, summary, textarea, input, code, pre, svg")
+  ];
+
+  for (const element of candidates) {
+    if (!elementIsVisibleForUiAudit(element)) {
+      continue;
+    }
+
+    const style = window.getComputedStyle(element);
+    const horizontalOverflow = element.scrollWidth - element.clientWidth;
+    const verticalOverflow = element.scrollHeight - element.clientHeight;
+    const intentionallyScrollable = matchesAnySelector(element, UI_AUDIT_SCROLL_ALLOWLIST);
+    const intentionallyClamped = matchesAnySelector(element, UI_AUDIT_CLAMP_ALLOWLIST) ||
+      (style.webkitLineClamp && style.webkitLineClamp !== "none");
+    const clipsX = ["hidden", "clip"].includes(style.overflowX);
+    const clipsY = ["hidden", "clip"].includes(style.overflowY);
+
+    if (horizontalOverflow > 4 && !intentionallyScrollable && !intentionallyClamped && clipsX) {
+      uiAuditFinding(
+        findings,
+        "fail",
+        "horizontal-overflow",
+        element,
+        "Visible content is wider than its clipped box.",
+        {
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth,
+          overflowX: style.overflowX
+        }
+      );
+    }
+
+    if (verticalOverflow > 6 && !intentionallyScrollable && !intentionallyClamped && clipsY) {
+      uiAuditFinding(
+        findings,
+        "fail",
+        "vertical-clipping",
+        element,
+        "Visible content is taller than its clipped box.",
+        {
+          clientHeight: element.clientHeight,
+          scrollHeight: element.scrollHeight,
+          overflowY: style.overflowY
+        }
+      );
+    }
+  }
+}
+
+function collectNestedScrollAudit(panel, findings) {
+  const nestedScrollers = [...panel.querySelectorAll("*")]
+    .filter((element) => {
+      if (!elementIsVisibleForUiAudit(element) || matchesAnySelector(element, UI_AUDIT_SCROLL_ALLOWLIST)) {
+        return false;
+      }
+
+      const style = window.getComputedStyle(element);
+      const scrollsY = element.scrollHeight - element.clientHeight > 12 && ["auto", "scroll"].includes(style.overflowY);
+      const scrollsX = element.scrollWidth - element.clientWidth > 12 && ["auto", "scroll"].includes(style.overflowX);
+      return scrollsX || scrollsY;
+    })
+    .slice(0, 10);
+
+  for (const element of nestedScrollers) {
+    uiAuditFinding(
+      findings,
+      "warn",
+      "nested-scroll-trap",
+      element,
+      "A visible nested scroll region can fight the main workspace scroll.",
+      {
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight
+      }
+    );
+  }
+}
+
+function collectBranchMapOverlapAudit(findings) {
+  if (!branchMap || !elementIsVisibleForUiAudit(branchMap)) {
+    return;
+  }
+
+  const rows = [...branchMap.querySelectorAll(".git-branch-row")]
+    .filter(elementIsVisibleForUiAudit)
+    .map((element) => ({
+      element,
+      rect: element.getBoundingClientRect()
+    }))
+    .sort((left, right) => left.rect.top - right.rect.top);
+
+  for (let index = 1; index < rows.length; index += 1) {
+    const previous = rows[index - 1];
+    const current = rows[index];
+    const gap = current.rect.top - previous.rect.bottom;
+    if (gap < 6) {
+      uiAuditFinding(
+        findings,
+        "fail",
+        "branch-map-overlap",
+        current.element,
+        "Branch map rows are overlapping or too close to read as a Git-style history.",
+        {
+          previousBottom: Math.round(previous.rect.bottom),
+          currentTop: Math.round(current.rect.top),
+          gap: Math.round(gap)
+        }
+      );
+    }
+  }
+}
+
+function visibleSurfaceAudit(surface) {
+  const panel = document.querySelector(`[data-surface-panel="${surface}"]`);
+  const findings = [];
+  if (!panel) {
+    uiAuditFinding(findings, "fail", "missing-surface", undefined, `Surface ${surface} was not found.`);
+    return {
+      surface,
+      status: "failed",
+      findings
+    };
+  }
+
+  if (panel.hidden || panel.getAttribute("aria-hidden") === "true") {
+    uiAuditFinding(findings, "fail", "inactive-surface", panel, `Surface ${surface} was not activated before audit.`);
+  }
+
+  collectOverflowAudit(panel, findings);
+  collectNestedScrollAudit(panel, findings);
+  collectBranchMapOverlapAudit(findings);
+
+  const failed = findings.filter((finding) => finding.severity === "fail").length;
+  const warned = findings.filter((finding) => finding.severity === "warn").length;
+  return {
+    surface,
+    status: failed > 0 ? "failed" : warned > 0 ? "warning" : "passed",
+    metrics: {
+      panelClientWidth: panel.clientWidth,
+      panelScrollWidth: panel.scrollWidth,
+      panelClientHeight: panel.clientHeight,
+      panelScrollHeight: panel.scrollHeight,
+      branchRows: branchMap?.querySelectorAll(".git-branch-row").length ?? 0
+    },
+    findings
+  };
+}
+
+async function restoreSurfaceAfterUiAudit(previousSurface, previousScrolls) {
+  state.surface = previousSurface;
+  render();
+  await nextUiAuditPaint();
+  previousScrolls.forEach((position, surface) => {
+    document.querySelector(`[data-surface-panel="${surface}"]`)?.scrollTo(position);
+  });
+}
+
+async function truthHarnessUiAudit(options = {}) {
+  const previousSurface = state.surface;
+  const previousScrolls = new Map(
+    [...surfacePanels].map((panel) => [panel.dataset.surfacePanel, { top: panel.scrollTop, left: panel.scrollLeft }])
+  );
+  const requestedSurfaces = Array.isArray(options.surfaces) && options.surfaces.length > 0
+    ? options.surfaces.filter((surface) => UI_AUDIT_SURFACES.includes(surface))
+    : UI_AUDIT_SURFACES;
+  const surfaces = [];
+
+  try {
+    for (const surface of requestedSurfaces) {
+      state.surface = surface;
+      if (surface === "plot") {
+        requestVisualFit();
+      }
+      if (surface === "report") {
+        const loaders = [];
+        if (!state.credibilityPack && !state.credibilityPackLoading) {
+          loaders.push(refreshCredibilityPack({ announce: false }));
+        }
+        if (!state.credibilityBundle && !state.credibilityBundleLoading) {
+          loaders.push(refreshCredibilityBundle({ announce: false }));
+        }
+        if (!state.credibilityRunNextPlan && !state.credibilityRunNextLoading) {
+          loaders.push(refreshCredibilityRunNext({ announce: false }));
+        }
+        if (!state.reportDraftsLoaded && !state.reportDraftsLoading) {
+          loaders.push(refreshReportDrafts({ announce: false }));
+        }
+        if (loaders.length > 0) {
+          await Promise.allSettled(loaders);
+        }
+      }
+      render();
+      resetActiveSurfaceScroll();
+      await nextUiAuditPaint();
+      surfaces.push(visibleSurfaceAudit(surface));
+    }
+  } finally {
+    await restoreSurfaceAfterUiAudit(previousSurface, previousScrolls);
+  }
+
+  const findings = surfaces.flatMap((surface) =>
+    surface.findings.map((finding) => ({
+      surface: surface.surface,
+      ...finding
+    }))
+  );
+  const failures = findings.filter((finding) => finding.severity === "fail").length;
+  const warnings = findings.filter((finding) => finding.severity === "warn").length;
+
+  return {
+    schemaVersion: "truth-harness.web-ui-layout-audit.v0",
+    generatedAt: new Date().toISOString(),
+    viewport: {
+      width: window.innerWidth,
+      height: window.innerHeight
+    },
+    status: failures > 0 ? "failed" : warnings > 0 ? "warning" : "passed",
+    surfaces,
+    summary: {
+      surfaces: surfaces.length,
+      passed: surfaces.filter((surface) => surface.status === "passed").length,
+      warnings,
+      failures
+    },
+    boundary: [
+      "This browser layout audit checks visible DOM geometry only.",
+      "It does not prove mathematical, scientific, legal, medical, or regulatory truth.",
+      "A passing result does not replace human review or future pixel-diff screenshot baselines."
+    ]
+  };
+}
+
+window.truthHarnessUiAudit = truthHarnessUiAudit;
+
+function writeTruthHarnessUiAuditResult(result) {
+  const resultNode = document.querySelector("#truth-harness-ui-audit-result");
+  if (!resultNode) {
+    return;
+  }
+
+  resultNode.textContent = `${JSON.stringify(result, null, 2)}\n`;
+  resultNode.dataset.status = result.status ?? "unknown";
+  resultNode.dataset.generatedAt = result.generatedAt ?? new Date().toISOString();
+}
+
+function markTruthHarnessUiAuditRunning(source) {
+  const resultNode = document.querySelector("#truth-harness-ui-audit-result");
+  if (!resultNode) {
+    return;
+  }
+
+  resultNode.textContent = "";
+  resultNode.dataset.status = "running";
+  resultNode.dataset.source = source;
+  resultNode.dataset.startedAt = new Date().toISOString();
+}
+
+document.documentElement.dataset.truthHarnessUiAudit = "ready";
+
+document.addEventListener("truth-harness:run-ui-audit", (event) => {
+  const options = event instanceof CustomEvent && event.detail && typeof event.detail === "object"
+    ? event.detail
+    : {};
+  markTruthHarnessUiAuditRunning("event");
+  void truthHarnessUiAudit(options)
+    .then(writeTruthHarnessUiAuditResult)
+    .catch((error) => {
+      writeTruthHarnessUiAuditResult({
+        schemaVersion: "truth-harness.web-ui-layout-audit.v0",
+        generatedAt: new Date().toISOString(),
+        status: "failed",
+        surfaces: [],
+        summary: {
+          surfaces: 0,
+          passed: 0,
+          warnings: 0,
+          failures: 1
+        },
+        findings: [
+          {
+            severity: "fail",
+            code: "audit-runtime-error",
+            selector: "document",
+            detail: error instanceof Error ? error.message : "Unknown UI audit failure."
+          }
+        ]
+      });
+    });
+});
+
+function scheduleTruthHarnessUiAuditFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("uiAudit") !== "1") {
+    return;
+  }
+
+  markTruthHarnessUiAuditRunning("url");
+  void truthHarnessUiAudit()
+    .then(writeTruthHarnessUiAuditResult)
+    .catch((error) => {
+      writeTruthHarnessUiAuditResult({
+        schemaVersion: "truth-harness.web-ui-layout-audit.v0",
+        generatedAt: new Date().toISOString(),
+        status: "failed",
+        surfaces: [],
+        summary: {
+          surfaces: 0,
+          passed: 0,
+          warnings: 0,
+          failures: 1
+        },
+        findings: [
+          {
+            severity: "fail",
+            code: "audit-url-runtime-error",
+            selector: "window.location",
+            detail: error instanceof Error ? error.message : "Unknown URL-triggered UI audit failure."
+          }
+        ]
+      });
+    });
+}
+
+scheduleTruthHarnessUiAuditFromUrl();
+
 function renderSidebarActions() {
   sidebarActionButtons.forEach((button) => {
     const action = button.dataset.sidebarAction;
