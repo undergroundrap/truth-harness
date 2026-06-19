@@ -99,6 +99,8 @@ import {
   handleTruthHarnessWorkspaceRunNext,
   handleTruthHarnessWorkspaceRunNextList,
   handleTruthHarnessWorkspaceRunNextShow,
+  handleTruthHarnessWorkspaceUiReview,
+  handleTruthHarnessWorkspaceUiReviewList,
   handleTruthHarnessWorkspaceSnapshot,
   handleTruthHarnessWorkspaceSnapshotList,
   handleTruthHarnessWorkspaceSnapshotVerify,
@@ -1103,6 +1105,53 @@ describe("MCP tool handlers", () => {
         artifactId: review.review.reviewId
       })
     );
+  });
+
+  it("writes web UI review evidence for agents", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP UI Review Lab" });
+
+    const dryRun = await handleTruthHarnessWorkspaceUiReview({
+      targetUrl: "http://127.0.0.1:4180/",
+      viewport: { width: 1329, height: 912 },
+      checklist: [{ title: "Browser reviewed for clipping and overflow.", status: "pass" }]
+    });
+    const written = await handleTruthHarnessWorkspaceUiReview({
+      targetUrl: "http://127.0.0.1:4180/",
+      viewport: { width: 1329, height: 912 },
+      checklist: [
+        {
+          title: "Browser reviewed for clipping, overflow, focus state, scroll behavior, and report readability.",
+          status: "pass",
+          notes: ["Agent observed the local browser surface."]
+        }
+      ],
+      write: true
+    });
+
+    if ("written" in dryRun) {
+      throw new Error("Expected dry web UI review.");
+    }
+    if (!("written" in written)) {
+      throw new Error("Expected written web UI review.");
+    }
+
+    const list = await handleTruthHarnessWorkspaceUiReviewList({});
+
+    expect(dryRun.schemaVersion).toBe("truth-harness.web-ui-review.v0");
+    expect(dryRun.status).toBe("passed");
+    expect(written.written).toBe(true);
+    expect(written.review.reviewId).toMatch(/^uirev_[a-f0-9]{16}$/u);
+    expect(written.result.jsonPath.replace(/\\/g, "/")).toContain(".truth-harness/findings/");
+    expect(written.result.markdown).toContain("Truth Harness Web UI Review");
+    expect(list.total).toBe(1);
+    expect(list.reviews[0]).toMatchObject({
+      reviewId: written.review.reviewId,
+      status: "passed",
+      targetUrl: "http://127.0.0.1:4180/"
+    });
+    expect(await readFile(written.result.markdownPath, "utf8")).toContain("UI launch-readiness evidence only");
   });
 
   it("lists and reads saved report drafts for agents", async () => {

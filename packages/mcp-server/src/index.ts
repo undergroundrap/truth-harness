@@ -94,6 +94,8 @@ import {
   handleTruthHarnessWorkspaceRunNext,
   handleTruthHarnessWorkspaceRunNextList,
   handleTruthHarnessWorkspaceRunNextShow,
+  handleTruthHarnessWorkspaceUiReview,
+  handleTruthHarnessWorkspaceUiReviewList,
   handleTruthHarnessWorkspaceSnapshot,
   handleTruthHarnessWorkspaceSnapshotList,
   handleTruthHarnessWorkspaceSnapshotVerify,
@@ -1570,6 +1572,81 @@ export function createTruthHarnessMcpServer(): McpServer {
     },
     async ({ workspacePath, planRef, verifySnapshot }) =>
       toolJson(await handleTruthHarnessWorkspaceRunNextShow({ workspacePath, planRef, verifySnapshot }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_ui_review",
+    {
+      title: "Record Web UI Review",
+      description:
+        "Create or write a local truth-harness.web-ui-review.v0 browser launch-readiness review. This is UI evidence only, not mathematical proof.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        targetUrl: z
+          .string()
+          .optional()
+          .describe("Browser URL reviewed. Defaults to http://127.0.0.1:4180/."),
+        viewport: z
+          .object({
+            width: z.number().int().positive().max(10000),
+            height: z.number().int().positive().max(10000)
+          })
+          .optional()
+          .describe("Viewport used for the review."),
+        checklist: z
+          .array(
+            z.object({
+              title: z
+                .string()
+                .min(1)
+                .describe("Concrete UI check, such as clipping, overflow, focus, scroll, or readability."),
+              status: z.enum(["pass", "warn", "fail"]).describe("Result for this check."),
+              notes: z.array(z.string()).optional().describe("Optional notes for this check.")
+            })
+          )
+          .optional()
+          .describe("Explicit pass/warn/fail browser-review checklist."),
+        screenshot: z.string().optional().describe("Optional workspace-local or absolute screenshot path reviewed."),
+        replayCommand: z.string().optional().describe("Command or instruction used to reproduce this review."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write JSON and Markdown into .truth-harness/findings.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) =>
+      toolJson(
+        await handleTruthHarnessWorkspaceUiReview({
+          ...input
+        })
+      )
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_ui_review_list",
+    {
+      title: "List Web UI Reviews",
+      description:
+        "List saved truth-harness.web-ui-review.v0 browser launch-readiness records from .truth-harness/findings.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath }) => toolJson(await handleTruthHarnessWorkspaceUiReviewList({ workspacePath }))
   );
 
   server.registerTool(

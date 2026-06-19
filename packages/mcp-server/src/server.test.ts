@@ -167,6 +167,8 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_workspace_snapshot_list",
         "truth_harness_workspace_snapshot_verify",
         "truth_harness_workspace_status",
+        "truth_harness_workspace_ui_review",
+        "truth_harness_workspace_ui_review_list",
         "truth_harness_workspace_validate"
       ]);
 
@@ -476,6 +478,31 @@ describe("Truth Harness MCP server", () => {
       expect(workspaceRunNextShowWithSnapshotText).toContain("\"sourceSnapshotStatus\": \"verified\"");
       expect(workspaceRunNextShowWithSnapshotText).toContain("\"safeToResume\": true");
       expect(workspaceRunNextShowWithSnapshotText).toContain("\"status\": \"safe-to-resume\"");
+
+      const webUiReview = await client.callTool({
+        name: "truth_harness_workspace_ui_review",
+        arguments: {
+          write: true,
+          targetUrl: "http://127.0.0.1:4180/",
+          viewport: { width: 1280, height: 720 },
+          checklist: [
+            {
+              title: "Browser reviewed for clipping, overflow, focus state, scroll behavior, and report readability.",
+              status: "pass"
+            }
+          ]
+        }
+      });
+      expect(webUiReview.isError).not.toBe(true);
+      expect(firstText(webUiReview.content)).toContain("\"schemaVersion\": \"truth-harness.web-ui-review.v0\"");
+      expect(firstText(webUiReview.content)).toContain("\"written\": true");
+
+      const webUiReviewList = await client.callTool({
+        name: "truth_harness_workspace_ui_review_list",
+        arguments: {}
+      });
+      expect(firstText(webUiReviewList.content)).toContain("\"total\": 1");
+      expect(firstText(webUiReviewList.content)).toContain("\"status\": \"passed\"");
 
       const workspaceReviewList = await client.callTool({
         name: "truth_harness_workspace_review_list",

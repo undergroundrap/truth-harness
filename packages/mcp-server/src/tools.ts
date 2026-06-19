@@ -25,6 +25,7 @@ import {
   createSourceCitationReceipt,
   createValidationPlan,
   createVerifierRoute,
+  createWebUiReviewRecord,
   createCredibilityPack,
   createWorkspaceReview,
   createWorkspaceReviewFromCredibilityPack,
@@ -70,6 +71,7 @@ import {
   listWorkspaceRunNextPlans,
   listWorkspaceReviews,
   listWorkspaceSnapshots,
+  listWebUiReviews,
   listVaultEntries,
   parseReceiptJson,
   parseBenchmarkRunRecordJson,
@@ -123,6 +125,7 @@ import {
   writeWorkspaceReview,
   writeWorkspaceRunNextPlan,
   writeWorkspaceSnapshot,
+  writeWebUiReview,
   type BenchmarkArtifactSummary,
   type BenchmarkComparisonRecord,
   type BenchmarkComparisonWriteResult,
@@ -257,6 +260,10 @@ import {
   type WorkspaceReview,
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
+  type WebUiReviewCheckStatus,
+  type WebUiReviewRecord,
+  type WebUiReviewSummary,
+  type WebUiReviewWriteResult,
   type SympyOperation
 } from "@truth-harness/core";
 
@@ -548,6 +555,39 @@ export interface TruthHarnessWorkspaceEventsInput {
   workspacePath?: string;
   limit?: number;
 }
+
+export interface TruthHarnessWorkspaceUiReviewCheckInput {
+  title: string;
+  status: WebUiReviewCheckStatus;
+  notes?: string[];
+}
+
+export interface TruthHarnessWorkspaceUiReviewInput {
+  workspacePath?: string;
+  targetUrl?: string;
+  viewport?: {
+    width: number;
+    height: number;
+  };
+  checklist?: TruthHarnessWorkspaceUiReviewCheckInput[];
+  screenshot?: string;
+  replayCommand?: string;
+  write?: boolean;
+}
+
+export interface TruthHarnessWorkspaceUiReviewListInput {
+  workspacePath?: string;
+}
+
+export interface TruthHarnessWorkspaceUiReviewWriteOutput {
+  review: WebUiReviewRecord;
+  written: true;
+  result: WebUiReviewWriteResult;
+}
+
+export type TruthHarnessWorkspaceUiReviewOutput =
+  | WebUiReviewRecord
+  | TruthHarnessWorkspaceUiReviewWriteOutput;
 
 export interface TruthHarnessVisualGraphInput {
   workspacePath?: string;
@@ -1805,6 +1845,30 @@ export async function handleTruthHarnessWorkspaceReview(
   return createWorkspaceReview(reviewInput);
 }
 
+export async function handleTruthHarnessWorkspaceUiReview(
+  input: TruthHarnessWorkspaceUiReviewInput
+): Promise<TruthHarnessWorkspaceUiReviewOutput> {
+  const reviewInput = {
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    targetUrl: input.targetUrl,
+    viewport: input.viewport,
+    checklist: input.checklist,
+    screenshot: input.screenshot,
+    replayCommand: input.replayCommand
+  };
+
+  if (input.write) {
+    const result = await writeWebUiReview(reviewInput);
+    return {
+      review: result.record,
+      written: true,
+      result
+    };
+  }
+
+  return createWebUiReviewRecord(reviewInput);
+}
+
 export async function handleTruthHarnessWorkspaceRunNext(
   input: TruthHarnessWorkspaceRunNextInput
 ): Promise<TruthHarnessWorkspaceRunNextOutput> {
@@ -1905,6 +1969,17 @@ export async function handleTruthHarnessWorkspaceReviewShow(
   input: TruthHarnessWorkspaceReviewShowInput
 ): Promise<WorkspaceReview> {
   return readWorkspaceReview(resolveWorkspaceRoot(input.workspacePath), input.reviewRef);
+}
+
+export async function handleTruthHarnessWorkspaceUiReviewList(input: TruthHarnessWorkspaceUiReviewListInput): Promise<{
+  total: number;
+  reviews: WebUiReviewSummary[];
+}> {
+  const reviews = await listWebUiReviews(resolveWorkspaceRoot(input.workspacePath));
+  return {
+    total: reviews.length,
+    reviews
+  };
 }
 
 export async function handleTruthHarnessReportList(input: TruthHarnessReportListInput): Promise<{
