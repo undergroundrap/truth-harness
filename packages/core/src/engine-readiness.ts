@@ -1,4 +1,5 @@
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
+import type { CodeRunSandboxRunSummary } from "./sandbox.js";
 import type { TrustLabel } from "./types.js";
 
 export type EngineReadinessStatus = "ready" | "degraded" | "blocked" | "planned";
@@ -48,6 +49,14 @@ export interface EngineReadinessReport {
     readyTrustLabels: Array<TrustLabel | "provenance-only">;
     missingExternalEngines: string[];
   };
+  savedEvidence: {
+    sandboxRun?: {
+      runId: string;
+      createdAt: string;
+      provider: string;
+      path: string;
+    };
+  };
   gates: EngineReadinessGate[];
   claimClasses: EngineReadinessClaimClass[];
   trustBoundary: {
@@ -75,6 +84,14 @@ interface ClaimClassDefinition {
   recommendedCommand?: string;
   limitations: string[];
   planned?: boolean;
+}
+
+export interface EngineReadinessOptions extends EngineManifestOptions {
+  savedSandboxRun?: CodeRunSandboxRunSummary;
+}
+
+export interface EngineReadinessFromManifestOptions {
+  savedSandboxRun?: CodeRunSandboxRunSummary;
 }
 
 const CLAIM_CLASS_DEFINITIONS: ClaimClassDefinition[] = [
@@ -280,23 +297,30 @@ const GATE_DEFINITIONS = [
   }
 ] as const;
 
-export function createEngineReadinessReport(options: EngineManifestOptions = {}): EngineReadinessReport {
-  const manifest = getEngineManifest(options);
-  return createEngineReadinessReportFromManifest(manifest);
+export function createEngineReadinessReport(options: EngineReadinessOptions = {}): EngineReadinessReport {
+  const { savedSandboxRun, ...manifestOptions } = options;
+  const manifest = getEngineManifest(manifestOptions);
+  return createEngineReadinessReportFromManifest(manifest, { savedSandboxRun });
 }
 
-export function createEngineReadinessReportFromManifest(manifest: EngineManifest): EngineReadinessReport {
-  const capabilityById = new Map(manifest.capabilities.map((capability) => [capability.id, capability]));
+export function createEngineReadinessReportFromManifest(
+  manifest: EngineManifest,
+  options: EngineReadinessFromManifestOptions = {}
+): EngineReadinessReport {
+  const capabilities = applySavedReadinessEvidence(manifest.capabilities, options);
+  const capabilityById = new Map(capabilities.map((capability) => [capability.id, capability]));
   const claimClasses = CLAIM_CLASS_DEFINITIONS.map((definition) => claimClassReadiness(definition, capabilityById));
   const gates = GATE_DEFINITIONS.map((gate) => readinessGate(gate, claimClasses));
   const readyClaimClasses = claimClasses.filter((entry) => entry.status === "ready").length;
   const blockedClaimClasses = claimClasses.filter((entry) => entry.status === "blocked").length;
   const plannedClaimClasses = claimClasses.filter((entry) => entry.status === "planned").length;
   const readyTrustLabels = readyTrustLabelsFor(claimClasses);
-  const missingExternalEngines = manifest.capabilities
+  const missingExternalEngines = capabilities
     .filter((capability) => capability.kind === "adapter" && capability.status !== "available")
     .map((capability) => capability.displayName);
   const recommendedNextActions = recommendedActionsFor(claimClasses, gates, manifest);
+  const countedCapabilities = capabilities.filter((capability) => capability.kind !== "planned-adapter");
+  const readyCapabilities = countedCapabilities.filter(capabilityReady).length;
 
   return {
     schemaVersion: "truth-harness.engine-readiness.v0",
@@ -310,11 +334,12 @@ export function createEngineReadinessReportFromManifest(manifest: EngineManifest
       totalClaimClasses: claimClasses.length,
       blockedClaimClasses,
       plannedClaimClasses,
-      readyCapabilities: manifest.readyCount,
-      totalCapabilities: manifest.totalCount,
+      readyCapabilities,
+      totalCapabilities: countedCapabilities.length,
       readyTrustLabels,
       missingExternalEngines
     },
+    savedEvidence: savedEvidenceSummary(options),
     gates,
     claimClasses,
     trustBoundary: {
@@ -330,6 +355,48 @@ export function createEngineReadinessReportFromManifest(manifest: EngineManifest
       ...manifest.warnings,
       "Readiness reports do not mint evidence; each claim still needs its own receipt, proof check, SMT run, CAS check, source citation, or validation artifact."
     ]
+  };
+}
+
+function applySavedReadinessEvidence(
+  capabilities: EngineCapability[],
+  options: EngineReadinessFromManifestOptions
+): EngineCapability[] {
+  const savedSandbox = options.savedSandboxRun;
+  if (!savedSandbox || savedSandbox.status !== "passed" || !savedSandbox.canAttestNetworkNone) {
+    return capabilities;
+  }
+
+  return capabilities.map((capability) => {
+    if (capability.id !== "code-run-sandbox" || capability.status === "available") {
+      return capability;
+    }
+    return {
+      ...capability,
+      status: "available",
+      networkAccess: "none",
+      limitations: [
+        `Saved Docker sandbox measurement ${savedSandbox.runId} passed at ${savedSandbox.createdAt}; the current host probe remains separate.`,
+        ...capability.limitations
+      ],
+      nextStep:
+        "Use Docker no-network code-run workflows or refresh `npm run docker:sandbox:write`; do not treat the host process as sandboxed."
+    };
+  });
+}
+
+function savedEvidenceSummary(options: EngineReadinessFromManifestOptions): EngineReadinessReport["savedEvidence"] {
+  const sandboxRun = options.savedSandboxRun;
+  if (!sandboxRun || sandboxRun.status !== "passed" || !sandboxRun.canAttestNetworkNone) {
+    return {};
+  }
+  return {
+    sandboxRun: {
+      runId: sandboxRun.runId,
+      createdAt: sandboxRun.createdAt,
+      provider: sandboxRun.provider,
+      path: sandboxRun.path
+    }
   };
 }
 

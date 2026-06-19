@@ -76,6 +76,7 @@ import {
   listBenchmarkArtifacts,
   listSymbolicCasChecks,
   listClaimCharts,
+  listCodeRunSandboxRuns,
   listClaimRecords,
   listCodeRuns,
   listEngineVerificationRuns,
@@ -4473,6 +4474,8 @@ engines
   .command("readiness")
   .description("Summarize which trust labels this local installation can responsibly support today.")
   .option("--json", "Print the full engine readiness JSON")
+  .option("--workspace <path>", "Workspace root used for optional saved evidence lookup", ".")
+  .option("--include-saved-sandbox", "Let a saved passing Docker sandbox-run record satisfy the agent-autonomy safety gate")
   .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 1500)
   .option("--maxima-command <command>", "Override Maxima executable for this probe")
   .option("--sage-command <command>", "Override SageMath executable for this probe")
@@ -4480,8 +4483,10 @@ engines
   .option("--z3-command <command>", "Override Z3 executable for this probe")
   .option("--cvc5-command <command>", "Override cvc5 executable for this probe")
   .action(
-    (options: {
+    async (options: {
       json?: boolean;
+      workspace: string;
+      includeSavedSandbox?: boolean;
       timeoutMs: number;
       maximaCommand?: string;
       sageCommand?: string;
@@ -4498,6 +4503,9 @@ engines
         z3Command?: string;
         cvc5Command?: string;
       }>();
+      const savedSandboxRun = options.includeSavedSandbox
+        ? await latestPassingSandboxRunForReadiness(options.workspace)
+        : undefined;
       const report = createEngineReadinessReport({
         timeoutMs:
           command.getOptionValueSource("timeoutMs") === "default" &&
@@ -4509,7 +4517,8 @@ engines
         sageCommand: options.sageCommand ?? parentCliStringOption("sageCommand", parentOptions.sageCommand),
         leanCommand: options.leanCommand ?? parentCliStringOption("leanCommand", parentOptions.leanCommand),
         z3Command: options.z3Command ?? parentCliStringOption("z3Command", parentOptions.z3Command),
-        cvc5Command: options.cvc5Command ?? parentCliStringOption("cvc5Command", parentOptions.cvc5Command)
+        cvc5Command: options.cvc5Command ?? parentCliStringOption("cvc5Command", parentOptions.cvc5Command),
+        savedSandboxRun
       });
       const json = Boolean(options.json || parentOptions.json);
 
@@ -5529,6 +5538,12 @@ function printEngineReadinessReport(report: EngineReadinessReport): void {
   );
   console.log(`Network: ${report.networkAccess}`);
 
+  if (report.savedEvidence.sandboxRun) {
+    console.log(
+      `Saved sandbox evidence: ${report.savedEvidence.sandboxRun.runId} (${report.savedEvidence.sandboxRun.provider}, ${report.savedEvidence.sandboxRun.createdAt})`
+    );
+  }
+
   console.log("");
   console.log("Readiness gates:");
   for (const gate of report.gates) {
@@ -5580,6 +5595,15 @@ function printEngineReadinessReport(report: EngineReadinessReport): void {
     for (const warning of report.warnings) {
       console.log(`  ${warning}`);
     }
+  }
+}
+
+async function latestPassingSandboxRunForReadiness(workspacePath: string) {
+  try {
+    const runs = await listCodeRunSandboxRuns(resolve(workspacePath));
+    return runs.find((run) => run.status === "passed" && run.canAttestNetworkNone);
+  } catch {
+    return undefined;
   }
 }
 

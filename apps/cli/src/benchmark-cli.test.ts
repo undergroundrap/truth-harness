@@ -429,6 +429,7 @@ describe("benchmark CLI", () => {
       schemaVersion: string;
       status: string;
       summary: { readyClaimClasses: number; readyTrustLabels: string[]; missingExternalEngines: string[] };
+      savedEvidence?: { sandboxRun?: unknown };
       gates: Array<{ id: string; status: string; missingClaimClasses: string[] }>;
       claimClasses: Array<{ id: string; status: string; targetTrust: string; missingCapabilityIds: string[] }>;
       trustBoundary: { readinessDoesNotMintEvidence: boolean; provedRequiresAcceptedProofCheckerRun: boolean };
@@ -437,6 +438,7 @@ describe("benchmark CLI", () => {
     expect(result.exitCode).toBe(0);
     expect(json.schemaVersion).toBe("truth-harness.engine-readiness.v0");
     expect(json.status).toBe("research-core-ready");
+    expect(json.savedEvidence?.sandboxRun).toBeUndefined();
     expect(json.summary.readyClaimClasses).toBeGreaterThan(0);
     expect(json.summary.readyTrustLabels).toEqual(expect.arrayContaining(["exact-computed", "refuted"]));
     expect(json.summary.missingExternalEngines).toEqual(
@@ -465,6 +467,43 @@ describe("benchmark CLI", () => {
     );
     expect(json.trustBoundary.readinessDoesNotMintEvidence).toBe(true);
     expect(json.trustBoundary.provedRequiresAcceptedProofCheckerRun).toBe(true);
+  });
+
+  it("keeps saved-sandbox readiness lookup conservative when no saved measurement exists", async () => {
+    const root = await tempRoot();
+    const result = await runCli([
+      "engines",
+      "readiness",
+      "--json",
+      "--include-saved-sandbox",
+      "--workspace",
+      root,
+      "--timeout-ms",
+      "50",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--sage-command",
+      "truth-harness-missing-sage-command",
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
+      "--cvc5-command",
+      "truth-harness-missing-cvc5-command"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      savedEvidence?: { sandboxRun?: unknown };
+      gates: Array<{ id: string; status: string }>;
+    };
+
+    expect(result.exitCode).toBe(0);
+    expect(json.savedEvidence?.sandboxRun).toBeUndefined();
+    expect(json.gates).toContainEqual(
+      expect.objectContaining({
+        id: "agent-autonomy",
+        status: "blocked"
+      })
+    );
   });
 
   it("writes and lists engine evidence runs from the CLI", async () => {

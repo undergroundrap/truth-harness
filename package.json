@@ -72,6 +72,7 @@
     "demo:smt": "npm run cli -- smt check docs/examples/constraints.smt2 --fail-on-unverified",
     "demo:symbolic": "npm run cli -- bench run packages/benchmarks/suites/symbolic-seed.json",
     "engines:readiness": "npm run cli -- engines readiness",
+    "engines:readiness:saved": "npm run cli -- engines readiness --include-saved-sandbox",
     "engines:verify": "npm run cli -- engines verify",
     "engines:verify:docker-core": "npm run cli -- engines verify --require-maxima --require-z3 --require-cvc5",
     "engines:verify:lean": "npm run cli -- engines verify --require-lean",

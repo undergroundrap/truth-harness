@@ -62,6 +62,44 @@ describe("engine readiness", () => {
     );
     expect(report.summary.readyTrustLabels).toEqual(expect.arrayContaining(["cross-checked", "smt-checked", "proved"]));
   });
+
+  it("can use a saved passing Docker sandbox run for agent-autonomy readiness without changing host manifest status", () => {
+    const report = createEngineReadinessReportFromManifest(minimalManifest(), {
+      savedSandboxRun: {
+        runId: "sandbox_run_0123456789abcdef",
+        title: "Code-Run Sandbox Measurement",
+        summary: "Measured Docker no-network sandbox boundary.",
+        createdAt: "2026-06-18T01:02:03.000Z",
+        status: "passed",
+        provider: "container",
+        canAttestNetworkNone: true,
+        path: ".truth-harness/findings/2026-06-18-sandbox_run_0123456789abcdef-sandbox-run.json",
+        tags: ["sandbox", "network-none"],
+        warnings: []
+      }
+    });
+
+    expect(report.manifestStatus).toBe("partial");
+    expect(report.savedEvidence.sandboxRun).toEqual(
+      expect.objectContaining({
+        runId: "sandbox_run_0123456789abcdef",
+        provider: "container"
+      })
+    );
+    expect(report.claimClasses).toContainEqual(
+      expect.objectContaining({
+        id: "code-execution-safety",
+        status: "ready",
+        readyCapabilityIds: ["code-run-sandbox"]
+      })
+    );
+    expect(report.gates).toContainEqual(
+      expect.objectContaining({
+        id: "agent-autonomy",
+        status: "ready"
+      })
+    );
+  });
 });
 
 function minimalManifest(): EngineManifest {

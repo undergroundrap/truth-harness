@@ -6,6 +6,7 @@ Truth Harness uses Docker as the default credibility path for reviewer-facing en
 
 ```bash
 npm run reviewer:status
+npm run engines:readiness:saved
 npm run docker:reviewer
 npm run docker:storage
 npm run docker:cleanup -- heavy-images
@@ -17,6 +18,8 @@ npm run docker:cleanup -- all-build-cache --confirm-delete
 ```
 
 `npm run reviewer:status` runs the local release audit and then prints Docker storage posture.
+
+`npm run engines:readiness:saved` prints the reviewer-facing readiness view. It can cite the latest saved passing `truth-harness.sandbox-run.v0` Docker no-network measurement for the agent-autonomy gate while keeping host probes conservative.
 
 `npm run docker:reviewer` is an alias for `npm run docker:professor`. It builds the pinned Lean reviewer image when needed, then writes no-network engine evidence, adversarial benchmark evidence, a credibility pack, and a verified reviewer bundle.
 
