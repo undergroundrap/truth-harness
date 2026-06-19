@@ -32,6 +32,7 @@ import {
   createTeachingPacket,
   createReleaseAudit,
   writeCodeRunSandboxRun,
+  createWebUiReviewRecord,
   createVerifierRoute,
   createSymbolicCasCheckRecord,
   getCasBackendStatus,
@@ -99,6 +100,7 @@ import {
   listWorkspaceRunNextPlans,
   listWorkspaceReviews,
   listWorkspaceSnapshots,
+  listWebUiReviews,
   listVaultEntries,
   openVaultEntry,
   parseReceiptJson,
@@ -166,6 +168,7 @@ import {
   writeWorkspaceReview,
   writeWorkspaceRunNextPlan,
   writeWorkspaceSnapshot,
+  writeWebUiReview,
   writeClaimChart,
   createValidationPlan,
   type ClaimFileCheck,
@@ -312,6 +315,10 @@ import {
   type WorkspaceReview,
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
+  type WebUiReviewCheckStatus,
+  type WebUiReviewRecord,
+  type WebUiReviewSummary,
+  type WebUiReviewWriteResult,
   type VisualArtifact,
   type VisualArtifactKind,
   type VisualArtifactPayloadFormat,
@@ -3232,6 +3239,72 @@ workspace
       }
     }
   );
+
+workspace
+  .command("ui-review")
+  .description("Record a browser UI launch-readiness review as local evidence.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full web UI review JSON")
+  .option("--write", "Write JSON and Markdown into .truth-harness/findings")
+  .option("--target-url <url>", "Browser URL that was reviewed", "http://127.0.0.1:4180/")
+  .option("--viewport <size>", "Viewport size as WIDTHxHEIGHT", parseViewport, { width: 1280, height: 720 })
+  .option("--pass <text>", "Passing browser-review check. Repeatable", collectRepeated, [])
+  .option("--warn <text>", "Launch-readiness warning found during browser review. Repeatable", collectRepeated, [])
+  .option("--fail <text>", "Launch-readiness failure found during browser review. Repeatable", collectRepeated, [])
+  .option("--note <text>", "Reviewer note attached to every recorded check. Repeatable", collectRepeated, [])
+  .option("--screenshot <path>", "Workspace-local or absolute screenshot path reviewed")
+  .action(
+    async (
+      path: string,
+      options: {
+        json?: boolean;
+        write?: boolean;
+        targetUrl: string;
+        viewport: { width: number; height: number };
+        pass: string[];
+        warn: string[];
+        fail: string[];
+        note: string[];
+        screenshot?: string;
+      }
+    ) => {
+      const checklist = webUiReviewChecklistFromOptions(options);
+      const replayCommand = webUiReviewReplayCommand(path, options, checklist);
+      const input = {
+        rootPath: path,
+        targetUrl: options.targetUrl,
+        viewport: options.viewport,
+        checklist,
+        screenshot: options.screenshot,
+        replayCommand
+      };
+      const writeResult = options.write ? await writeWebUiReview(input) : undefined;
+      const record = writeResult?.record ?? createWebUiReviewRecord(input);
+
+      if (options.json) {
+        printJson(writeResult ? { review: record, written: true, result: writeResult } : record);
+        return;
+      }
+
+      printWebUiReview(record, writeResult);
+    }
+  );
+
+workspace
+  .command("ui-reviews")
+  .description("List saved web UI launch-readiness review records.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full web UI review list JSON")
+  .action(async (path: string, options: { json?: boolean }) => {
+    const reviews = await listWebUiReviews(path);
+
+    if (options.json) {
+      printJson({ total: reviews.length, reviews });
+      return;
+    }
+
+    printWebUiReviewList(reviews);
+  });
 
 workspace
   .command("stress")
@@ -7097,6 +7170,57 @@ function printWorkspaceReview(review: WorkspaceReview, writeResult?: WorkspaceRe
   }
 }
 
+function printWebUiReview(record: WebUiReviewRecord, writeResult?: WebUiReviewWriteResult): void {
+  const passed = record.checklist.filter((check) => check.status === "pass").length;
+  const warnings = record.checklist.filter((check) => check.status === "warn").length;
+  const failed = record.checklist.filter((check) => check.status === "fail").length;
+
+  console.log("Truth Harness web UI review");
+  console.log(`Review: ${record.reviewId}`);
+  console.log(`Status: ${record.status}`);
+  console.log(`Target: ${record.targetUrl}`);
+  console.log(`Viewport: ${record.viewport.width}x${record.viewport.height}`);
+  console.log(`Checks: ${passed} pass, ${warnings} warn, ${failed} fail`);
+  if (record.artifacts.screenshot) {
+    console.log(`Screenshot: ${record.artifacts.screenshot}`);
+  }
+
+  console.log("");
+  console.log("Checklist:");
+  for (const check of record.checklist) {
+    console.log(`  ${check.status.toUpperCase()} ${check.title}`);
+    for (const note of check.notes) {
+      console.log(`    ${note}`);
+    }
+  }
+
+  console.log("");
+  console.log("Boundary:");
+  for (const limitation of record.limitations) {
+    console.log(`  ${limitation}`);
+  }
+
+  if (writeResult) {
+    console.log("");
+    console.log(`JSON: ${writeResult.jsonPath}`);
+    console.log(`Markdown: ${writeResult.markdownPath}`);
+  }
+}
+
+function printWebUiReviewList(reviews: WebUiReviewSummary[]): void {
+  console.log(`Truth Harness web UI reviews: ${reviews.length}`);
+  for (const review of reviews) {
+    console.log("");
+    console.log(`${review.reviewId} ${review.status}`);
+    console.log(`  ${review.createdAt} - ${review.targetUrl} at ${review.viewport.width}x${review.viewport.height}`);
+    console.log(`  Checks: ${review.checks.passed} pass, ${review.checks.warnings} warn, ${review.checks.failed} fail`);
+    console.log(`  Path: ${review.path}`);
+    if (review.screenshot) {
+      console.log(`  Screenshot: ${review.screenshot}`);
+    }
+  }
+}
+
 function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPackWriteResult): void {
   console.log("Truth Harness professor credibility pack");
   console.log(`Pack: ${pack.packId}`);
@@ -9311,6 +9435,63 @@ function parsePositiveInteger(value: string): number {
   }
 
   return parsed;
+}
+
+function parseViewport(value: string): { width: number; height: number } {
+  const match = /^(\d+)x(\d+)$/iu.exec(value.trim());
+  if (!match) {
+    throw new Error(`Expected viewport as WIDTHxHEIGHT, received ${JSON.stringify(value)}.`);
+  }
+
+  const width = Number.parseInt(match[1] ?? "", 10);
+  const height = Number.parseInt(match[2] ?? "", 10);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    throw new Error(`Expected positive viewport dimensions, received ${JSON.stringify(value)}.`);
+  }
+
+  return { width, height };
+}
+
+function webUiReviewChecklistFromOptions(options: {
+  pass: string[];
+  warn: string[];
+  fail: string[];
+  note: string[];
+}): Array<{ title: string; status: WebUiReviewCheckStatus; notes: string[] }> {
+  return [
+    ...options.pass.map((title) => ({ title, status: "pass" as const, notes: options.note })),
+    ...options.warn.map((title) => ({ title, status: "warn" as const, notes: options.note })),
+    ...options.fail.map((title) => ({ title, status: "fail" as const, notes: options.note }))
+  ];
+}
+
+function webUiReviewReplayCommand(
+  path: string,
+  options: {
+    targetUrl: string;
+    viewport: { width: number; height: number };
+    pass: string[];
+    warn: string[];
+    fail: string[];
+    note: string[];
+    screenshot?: string;
+  },
+  checklist: Array<{ title: string; status: WebUiReviewCheckStatus }>
+): string {
+  const flags = [
+    "--write",
+    `--target-url ${quoteCommandArg(options.targetUrl)}`,
+    `--viewport ${options.viewport.width}x${options.viewport.height}`,
+    ...checklist.map((check) => `--${webUiReviewStatusFlag(check.status)} ${quoteCommandArg(check.title)}`),
+    ...options.note.map((note) => `--note ${quoteCommandArg(note)}`),
+    options.screenshot ? `--screenshot ${quoteCommandArg(options.screenshot)}` : undefined
+  ].filter(Boolean);
+
+  return `truth-harness workspace ui-review ${quoteCommandArg(path)} ${flags.join(" ")}`;
+}
+
+function webUiReviewStatusFlag(status: WebUiReviewCheckStatus): "pass" | "warn" | "fail" {
+  return status;
 }
 
 function parseNonNegativeInteger(value: string): number {

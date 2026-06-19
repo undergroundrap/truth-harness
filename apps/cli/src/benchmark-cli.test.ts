@@ -2469,6 +2469,49 @@ describe("benchmark CLI", () => {
     expect(json.commands.engineVerify).toContain("--require-maxima");
   });
 
+  it("writes and lists web UI review records from the CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--name", "CLI UI Review Lab"]);
+
+    const written = await runCli([
+      "workspace",
+      "ui-review",
+      root,
+      "--write",
+      "--json",
+      "--target-url",
+      "http://127.0.0.1:4180/",
+      "--viewport",
+      "1365x768",
+      "--pass",
+      "No visible clipping in the launch workspace",
+      "--pass",
+      "Composer and readiness chips do not hide the inspected content",
+      "--screenshot",
+      ".truth-harness/findings/ui-review.png"
+    ]);
+    const json = JSON.parse(written.stdout) as {
+      review: { schemaVersion: string; reviewId: string; status: string; viewport: { width: number; height: number } };
+      written: boolean;
+      result: { jsonPath: string };
+    };
+    const listed = await runCli(["workspace", "ui-reviews", root, "--json"]);
+    const listJson = JSON.parse(listed.stdout) as { total: number; reviews: Array<{ reviewId: string; status: string }> };
+
+    expect(written.exitCode).toBe(0);
+    expect(json.written).toBe(true);
+    expect(json.review.schemaVersion).toBe("truth-harness.web-ui-review.v0");
+    expect(json.review.status).toBe("passed");
+    expect(json.review.viewport).toEqual({ width: 1365, height: 768 });
+    expect(json.result.jsonPath).toContain(".truth-harness");
+    expect(listed.exitCode).toBe(0);
+    expect(listJson.total).toBe(1);
+    expect(listJson.reviews[0]).toMatchObject({
+      reviewId: json.review.reviewId,
+      status: "passed"
+    });
+  });
+
   it("writes, lists, compares, and gates benchmark artifacts", async () => {
     const root = await tempRoot();
     const passingSuite = join(root, "passing-suite.json");

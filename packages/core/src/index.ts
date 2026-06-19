@@ -47,6 +47,13 @@ export {
   writeCodeRunSandboxRun
 } from "./sandbox.js";
 export {
+  createWebUiReviewRecord,
+  listWebUiReviews,
+  parseWebUiReviewJson,
+  renderWebUiReviewMarkdown,
+  writeWebUiReview
+} from "./web-ui-review.js";
+export {
   CLAIM_LEDGER_DOMAINS,
   CLAIM_LEDGER_STATUSES,
   CLAIM_VERIFICATION_STAGES,
@@ -445,6 +452,16 @@ export type {
   CodeRunSandboxRunWriteResult,
   CodeRunSandboxStatus
 } from "./sandbox.js";
+export type {
+  CreateWebUiReviewInput,
+  WebUiReviewChecklistItem,
+  WebUiReviewCheckStatus,
+  WebUiReviewRecord,
+  WebUiReviewStatus,
+  WebUiReviewSummary,
+  WebUiReviewWriteResult,
+  WriteWebUiReviewInput
+} from "./web-ui-review.js";
 export type {
   ClaimLedgerDomain,
   ClaimLedgerEvidenceRef,

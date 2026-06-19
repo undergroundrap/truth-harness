@@ -11,6 +11,7 @@ import { writeEngineVerificationRun, type EngineVerificationCommandRunner } from
 import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchSession } from "./research-session.js";
 import { detectCodeRunSandboxStatus, writeCodeRunSandboxRun } from "./sandbox.js";
+import { writeWebUiReview } from "./web-ui-review.js";
 import { writeVerifierRoute } from "./verifier-route.js";
 
 const roots: string[] = [];
@@ -103,7 +104,7 @@ describe("release audit", () => {
         id: "web-ui-smoke",
         status: "warn",
         blocking: false,
-        command: "npm run web:smoke"
+        command: expect.stringContaining("truth-harness workspace ui-review")
       })
     );
     expect(markdown).toContain("# Truth Harness Release Audit");
@@ -111,6 +112,106 @@ describe("release audit", () => {
     expect(markdown).toContain("Adversarial benchmark: passed");
     expect(markdown).toContain("Report drafts: 0 saved, 0 needing attention");
     expect(markdown).toContain("Research sessions: 0 inspected, 0 continuation item(s)");
+  });
+
+  it("uses a saved passing web UI review to clear launch-polish warnings", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "UI Review Audit", now: "2026-06-17T00:00:00.000Z" });
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(createReceipt("for all integers n, n^2+n+1 is even")),
+      suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
+      suitePath: "packages/benchmarks/suites/ai-failure-seed.json",
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-17T00:00:00.500Z"
+    });
+    const uiReview = await writeWebUiReview({
+      rootPath: root,
+      now: new Date("2026-06-17T00:00:00.700Z"),
+      targetUrl: "http://127.0.0.1:4180/",
+      viewport: { width: 1365, height: 768 },
+      screenshot: ".truth-harness/findings/ui-review.png",
+      checklist: [
+        {
+          title: "No obvious text clipping, overlap, or scroll-fighting in the inspected launch surface.",
+          status: "pass"
+        }
+      ]
+    });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-17T00:00:02.000Z",
+      engineRequirements: { maxima: true, z3: true, lean: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      leanCommand: "lean-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: passingEngineRunner
+    });
+
+    expect(audit.status).toBe("ready");
+    expect(audit.professorReady).toBe(true);
+    expect(audit.publicLaunchReady).toBe(false);
+    expect(audit.summary.webUiReview).toBe("passed");
+    expect(audit.webUiReview).toMatchObject({
+      reviewId: uiReview.record.reviewId,
+      status: "passed"
+    });
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "web-ui-smoke",
+        status: "pass",
+        summary: expect.stringContaining(uiReview.record.reviewId),
+        details: expect.arrayContaining([
+          expect.stringContaining(uiReview.record.artifacts.json),
+          expect.stringContaining("Screenshot: .truth-harness/findings/ui-review.png")
+        ])
+      })
+    );
+  });
+
+  it("does not clear launch polish from a thin passing web UI review", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Thin UI Review Audit", now: "2026-06-17T00:00:00.000Z" });
+    const weakReview = await writeWebUiReview({
+      rootPath: root,
+      now: new Date("2026-06-17T00:00:00.700Z"),
+      targetUrl: "http://127.0.0.1:4180/",
+      viewport: { width: 1280, height: 720 },
+      checklist: [
+        {
+          title: "ok",
+          status: "pass"
+        }
+      ]
+    });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-17T00:00:02.000Z",
+      engineRequirements: {},
+      runner: passingEngineRunner
+    });
+
+    expect(audit.summary.webUiReview).toBe("passed");
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "web-ui-smoke",
+        status: "warn",
+        summary: expect.stringContaining("too thin"),
+        details: expect.arrayContaining([
+          expect.stringContaining(weakReview.record.artifacts.json),
+          expect.stringContaining("does not name any launch-polish failure modes")
+        ])
+      })
+    );
   });
 
   it("warns when active research sessions need resumable agent continuation", async () => {

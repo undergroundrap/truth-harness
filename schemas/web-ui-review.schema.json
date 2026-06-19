@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/web-ui-review.schema.json",
+  "title": "Truth Harness Web UI Review",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "reviewId",
+    "title",
+    "summary",
+    "createdAt",
+    "status",
+    "localOnly",
+    "networkAccess",
+    "targetUrl",
+    "viewport",
+    "checklist",
+    "artifacts",
+    "replay",
+    "tags",
+    "limitations",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.web-ui-review.v0"
+    },
+    "reviewId": {
+      "type": "string",
+      "pattern": "^uirev_[a-f0-9]{16}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": ["passed", "warning", "failed"]
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "targetUrl": {
+      "type": "string",
+      "minLength": 1
+    },
+    "viewport": {
+      "type": "object",
+      "required": ["width", "height"],
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "checklist": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["checkId", "title", "status", "notes"],
+        "properties": {
+          "checkId": {
+            "type": "string",
+            "pattern": "^ui_check_[a-f0-9]{12}$|^ui_check_missing_explicit_review$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": ["pass", "warn", "fail"]
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "required": ["json", "markdown"],
+      "properties": {
+        "json": {
+          "type": "string",
+          "minLength": 1
+        },
+        "markdown": {
+          "type": "string",
+          "minLength": 1
+        },
+        "screenshot": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "replay": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "additionalProperties": false
+}

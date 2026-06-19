@@ -8,6 +8,7 @@ import {
   type CodeRunSandboxRunSummary,
   type CodeRunSandboxStatus
 } from "./sandbox.js";
+import { listWebUiReviews, type WebUiReviewSummary } from "./web-ui-review.js";
 import { getWorkspaceCatalogStatus, type WorkspaceCatalogStatus } from "./workspace-catalog.js";
 
 export type ReleaseAuditStatus = "ready" | "blocked";
@@ -80,11 +81,13 @@ export interface ReleaseAudit {
     reviewItems: number;
     criticalReviewItems: number;
     sandboxAvailable: boolean;
+    webUiReview: "missing" | "passed" | "warning" | "failed";
   };
   workspace: LocalWorkspaceStatus;
   catalog?: WorkspaceCatalogStatus;
   sandbox: CodeRunSandboxStatus;
   sandboxEvidence?: CodeRunSandboxRunSummary;
+  webUiReview?: WebUiReviewSummary;
   credibilityPack?: CredibilityPack;
   checks: ReleaseAuditCheck[];
   commands: {
@@ -120,6 +123,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
   const workspace = await getLocalWorkspaceStatus(rootPath);
   const sandbox = getCodeRunSandboxStatus();
   const sandboxEvidence = workspace.exists && workspace.manifest ? await latestPassingSandboxRun(rootPath) : undefined;
+  const webUiReview = workspace.exists && workspace.manifest ? await latestWebUiReview(rootPath) : undefined;
 
   if (!workspace.exists || !workspace.manifest) {
     const checks = [
@@ -140,6 +144,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
       workspace,
       sandbox,
       sandboxEvidence,
+      webUiReview,
       commands,
       checks,
       validationPassed: false,
@@ -188,7 +193,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     savedStrictEngineRunCheck(credibilityPack, input.requireSavedStrictEngineRun === true),
     reviewQueueCheck(credibilityPack),
     sandboxCheck(sandbox, input.requireSandbox === true, sandboxEvidence),
-    manualUiCheck()
+    manualUiCheck(webUiReview)
   ];
 
   return buildAudit({
@@ -199,6 +204,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     catalog,
     sandbox,
     sandboxEvidence,
+    webUiReview,
     credibilityPack,
     commands,
     checks,
@@ -241,6 +247,7 @@ export function renderReleaseAuditMarkdown(audit: ReleaseAudit): string {
     `- Research sessions: ${audit.summary.researchSessions} inspected, ${audit.summary.sessionContinuationItems} continuation item(s)`,
     `- Review queue: ${audit.summary.reviewItems} item(s), ${audit.summary.criticalReviewItems} critical`,
     `- Code-run sandbox: ${audit.summary.sandboxAvailable ? "available" : "not measured"}`,
+    `- Web UI review: ${audit.summary.webUiReview}`,
     "",
     "## Checks",
     ""
@@ -292,6 +299,7 @@ function buildAudit(input: {
   catalog?: WorkspaceCatalogStatus;
   sandbox: CodeRunSandboxStatus;
   sandboxEvidence?: CodeRunSandboxRunSummary;
+  webUiReview?: WebUiReviewSummary;
   credibilityPack?: CredibilityPack;
   commands: ReleaseAudit["commands"];
   checks: ReleaseAuditCheck[];
@@ -341,12 +349,14 @@ function buildAudit(input: {
       sessionContinuationItems: input.sessionContinuationItems,
       reviewItems: input.reviewItems,
       criticalReviewItems: input.criticalReviewItems,
-      sandboxAvailable: input.sandbox.available || input.sandboxEvidence?.status === "passed"
+      sandboxAvailable: input.sandbox.available || input.sandboxEvidence?.status === "passed",
+      webUiReview: input.webUiReview?.status ?? "missing"
     },
     workspace: input.workspace,
     catalog: input.catalog,
     sandbox: input.sandbox,
     sandboxEvidence: input.sandboxEvidence,
+    webUiReview: input.webUiReview,
     credibilityPack: input.credibilityPack,
     checks: input.checks,
     commands: input.commands,
@@ -354,7 +364,7 @@ function buildAudit(input: {
     limitations: [
       "Release audit composes existing local evidence checks; it does not prove mathematical, scientific, medical, regulatory, or legal truth.",
       "Engine evidence is scoped to concrete smoke checks. Future claims still need their own receipts, proof checks, SMT/CAS artifacts, sources, simulations, or expert review.",
-      "The UI/manual launch-readiness check is currently a documented warning, not a full browser screenshot regression suite.",
+      "Saved web UI review records can clear launch-polish warnings for the inspected viewport, but they do not replace future automated screenshot regression tests.",
       "Docker commands are recommended for strict reviewer gates, but this audit does not start Docker by itself."
     ]
   };
@@ -866,19 +876,98 @@ async function latestPassingSandboxRun(rootPath: string): Promise<CodeRunSandbox
   return runs.find((run) => run.status === "passed" && run.canAttestNetworkNone);
 }
 
-function manualUiCheck(): ReleaseAuditCheck {
+function manualUiCheck(review: WebUiReviewSummary | undefined): ReleaseAuditCheck {
+  if (review?.status === "passed") {
+    const sufficiency = webUiReviewSufficiency(review);
+    if (!sufficiency.sufficient) {
+      return warnCheck({
+        id: "web-ui-smoke",
+        title: "Web UI launch polish",
+        blocking: false,
+        summary: `Latest browser UI review ${review.reviewId} passed but is too thin to clear launch polish.`,
+        command: "truth-harness workspace ui-review . --pass \"browser screenshot reviewed for clipping, overflow, focus state, scroll behavior, and report readability\"",
+        details: [
+          `Saved artifact: ${review.path}.`,
+          sufficiency.reason,
+          `${review.checks.passed} passed, ${review.checks.warnings} warning, ${review.checks.failed} failed UI check(s).`,
+          "A launch-clearing UI review must explicitly cover visual failure modes such as clipping, overflow, focus state, scroll behavior, or report readability.",
+          "This is browser-review evidence only; it does not prove math or scientific truth."
+        ]
+      });
+    }
+
+    return passCheck({
+      id: "web-ui-smoke",
+      title: "Web UI launch polish",
+      summary: `Latest browser UI review ${review.reviewId} passed at ${review.viewport.width}x${review.viewport.height}.`,
+      command: "truth-harness workspace ui-review . --pass \"browser screenshot reviewed for clipping, overflow, focus state, scroll behavior, and report readability\"",
+      details: [
+        `Saved artifact: ${review.path}.`,
+        review.screenshot ? `Screenshot: ${review.screenshot}.` : "No screenshot path was attached to this review.",
+        `Target URL: ${review.targetUrl}.`,
+        `${review.checks.passed} passed, ${review.checks.warnings} warning, ${review.checks.failed} failed UI check(s).`,
+        "This is browser-review evidence only; it does not prove math or scientific truth."
+      ]
+    });
+  }
+
+  if (review) {
+    return warnCheck({
+      id: "web-ui-smoke",
+      title: "Web UI launch polish",
+      blocking: false,
+      summary: `Latest browser UI review ${review.reviewId} is ${review.status}.`,
+      command: "truth-harness workspace ui-review . --pass \"browser screenshot reviewed\"",
+      details: [
+        `Saved artifact: ${review.path}.`,
+        `${review.checks.passed} passed, ${review.checks.warnings} warning, ${review.checks.failed} failed UI check(s).`,
+        ...review.warnings.slice(0, 5),
+        "Fix or re-review the browser surface before public recording."
+      ]
+    });
+  }
+
   return warnCheck({
     id: "web-ui-smoke",
     title: "Web UI launch polish",
     blocking: false,
     summary: "Automated web smoke coverage exists, but screenshot-level UI polish still needs browser review.",
-    command: "npm run web:smoke",
+    command: "truth-harness workspace ui-review . --pass \"browser screenshot reviewed for clipping, overflow, focus state, scroll behavior, and report readability\"",
     details: [
       "Run the web smoke before public recording to catch contract and local API regressions.",
-      "Then run a browser pass for overflow, clipping, focus state, scroll behavior, and report readability.",
+      "Then run a browser pass and write a web UI review record for overflow, clipping, focus state, scroll behavior, and report readability.",
       "This warning should become an automated browser screenshot regression gate later."
     ]
   });
+}
+
+function webUiReviewSufficiency(review: WebUiReviewSummary): { sufficient: boolean; reason: string } {
+  const reviewText = `${review.checkTitles.join(" ")} ${review.warnings.join(" ")}`.toLowerCase();
+  const hasEnoughDetail = review.checks.passed + review.checks.warnings + review.checks.failed >= 1;
+  const coversLaunchFailureModes =
+    /clipping|overflow|overlap|focus|scroll|readability|report|navigation|screenshot/u.test(reviewText);
+
+  if (!hasEnoughDetail) {
+    return {
+      sufficient: false,
+      reason: "The saved UI review has no checklist items."
+    };
+  }
+  if (!coversLaunchFailureModes) {
+    return {
+      sufficient: false,
+      reason: "The saved UI review text does not name any launch-polish failure modes."
+    };
+  }
+  return {
+    sufficient: true,
+    reason: "The saved UI review names launch-polish failure modes."
+  };
+}
+
+async function latestWebUiReview(rootPath: string): Promise<WebUiReviewSummary | undefined> {
+  const reviews = await listWebUiReviews(rootPath);
+  return reviews[0];
 }
 
 function nextActions(checks: ReleaseAuditCheck[], pack: CredibilityPack | undefined): string[] {
