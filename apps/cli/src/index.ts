@@ -6751,6 +6751,7 @@ function printReleaseAudit(audit: ReleaseAudit): void {
   console.log(`  ${audit.commands.dockerEngines}`);
   console.log(`  ${audit.commands.dockerSandbox}`);
   console.log(`  ${audit.commands.dockerAllEngines}`);
+  console.log(`  ${audit.commands.dockerProfessorAll}`);
   console.log(`  ${audit.commands.dockerProof}`);
   console.log(`  ${audit.commands.dockerVerify}`);
 
@@ -7292,6 +7293,12 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
   console.log(`  ${pack.reviewerCommands.runMathCredibilityLadder}`);
   console.log(`  ${pack.reviewerCommands.reviewWorkspace}`);
   console.log(`  ${pack.reviewerCommands.reproducePack}`);
+  console.log(`  ${pack.reviewerCommands.dockerProfessorEvidence}`);
+  console.log(`  ${pack.reviewerCommands.dockerStrictProfessorEvidence}`);
+  console.log(`  ${pack.reviewerCommands.dockerCoreEngines}`);
+  console.log(`  ${pack.reviewerCommands.dockerLeanFixture}`);
+  console.log(`  ${pack.reviewerCommands.dockerSageFixture}`);
+  console.log(`  ${pack.reviewerCommands.dockerAllEngines}`);
 
   if (pack.reviewerActionPlan.actions.length > 0) {
     console.log("");
@@ -7399,6 +7406,10 @@ function printCredibilityBundle(result: CredibilityBundleWriteResult): void {
   console.log(`  ${manifest.reviewerCommands.runAdversarialBenchmark}`);
   console.log(`  ${manifest.reviewerCommands.runMathCredibilityLadder}`);
   console.log(`  ${manifest.reviewerCommands.reviewWorkspace}`);
+  console.log(`  ${manifest.reviewerCommands.reproducePack}`);
+  console.log(`  ${manifest.reviewerCommands.dockerProfessorEvidence}`);
+  console.log(`  ${manifest.reviewerCommands.dockerStrictProfessorEvidence}`);
+  console.log(`  ${manifest.reviewerCommands.dockerAllEngines}`);
 
   if (manifest.warnings.length > 0) {
     console.log("");

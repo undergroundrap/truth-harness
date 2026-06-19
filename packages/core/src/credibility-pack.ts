@@ -32,6 +32,7 @@ export interface CredibilityPackCommandSet {
   reviewWorkspace: string;
   reproducePack: string;
   dockerProfessorEvidence: string;
+  dockerStrictProfessorEvidence: string;
   dockerCoreEngines: string;
   dockerLeanFixture: string;
   dockerSageFixture: string;
@@ -388,6 +389,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Review open obligations: \`${pack.reviewerCommands.reviewWorkspace}\``,
     `- Reproduce this pack: \`${pack.reviewerCommands.reproducePack}\``,
     `- Docker professor evidence: \`${pack.reviewerCommands.dockerProfessorEvidence}\``,
+    `- Docker strict professor evidence: \`${pack.reviewerCommands.dockerStrictProfessorEvidence}\``,
     `- Docker core engines: \`${pack.reviewerCommands.dockerCoreEngines}\``,
     `- Docker Lean fixture: \`${pack.reviewerCommands.dockerLeanFixture}\``,
     `- Docker Sage fixture: \`${pack.reviewerCommands.dockerSageFixture}\``,
@@ -1001,6 +1003,7 @@ function createReviewerCommands(input: {
     reviewWorkspace: "truth-harness workspace review .",
     reproducePack: `truth-harness workspace credibility-pack .${engineSuffix}`,
     dockerProfessorEvidence: "npm run docker:professor",
+    dockerStrictProfessorEvidence: "npm run docker:professor:all",
     dockerCoreEngines: "npm run docker:engines",
     dockerLeanFixture: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean",
     dockerSageFixture: "npm run docker:sage",

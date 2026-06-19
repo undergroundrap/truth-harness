@@ -1509,6 +1509,7 @@ describe("MCP tool handlers", () => {
     expect(bundle.manifest.summary.totalFiles).toBeGreaterThan(0);
     expect(bundle.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
     expect(bundle.manifest.reviewerCommands.verifyEngines).toContain("--require-all-engines");
+    expect(bundle.manifest.reviewerCommands.dockerStrictProfessorEvidence).toBe("npm run docker:professor:all");
     expect(verification).toMatchObject({
       schemaVersion: "truth-harness.credibility-bundle-verification.v0",
       bundleId: bundle.manifest.bundleId,

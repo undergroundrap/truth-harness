@@ -460,6 +460,7 @@ describe("release audit", () => {
     });
 
     expect(audit.status).toBe("blocked");
+    expect(audit.commands.dockerProfessorAll).toBe("npm run docker:professor:all");
     expect(audit.professorReady).toBe(false);
     expect(audit.summary.blockingFailures).toBeGreaterThanOrEqual(2);
     expect(audit.checks).toContainEqual(
@@ -503,6 +504,7 @@ describe("release audit", () => {
     });
 
     expect(audit.status).toBe("blocked");
+    expect(audit.commands.dockerProfessorAll).toBe("npm run docker:professor:all");
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
         id: "engine-evidence",

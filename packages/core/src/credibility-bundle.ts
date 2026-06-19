@@ -87,6 +87,9 @@ export interface CredibilityBundleManifest {
     runMathCredibilityLadder: string;
     reviewWorkspace: string;
     reproducePack: string;
+    dockerProfessorEvidence: string;
+    dockerStrictProfessorEvidence: string;
+    dockerAllEngines: string;
   };
   limitations: string[];
   warnings: string[];
@@ -239,7 +242,10 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
       runAdversarialBenchmark: pack.reviewerCommands.runAdversarialBenchmark,
       runMathCredibilityLadder: pack.reviewerCommands.runMathCredibilityLadder,
       reviewWorkspace: pack.reviewerCommands.reviewWorkspace,
-      reproducePack: pack.reviewerCommands.reproducePack
+      reproducePack: pack.reviewerCommands.reproducePack,
+      dockerProfessorEvidence: pack.reviewerCommands.dockerProfessorEvidence,
+      dockerStrictProfessorEvidence: pack.reviewerCommands.dockerStrictProfessorEvidence,
+      dockerAllEngines: pack.reviewerCommands.dockerAllEngines
     },
     limitations: [
       "This bundle verifies file identity and reviewer reproducibility boundaries; it does not prove every artifact is true.",

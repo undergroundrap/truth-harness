@@ -600,8 +600,10 @@ describe("professor credibility pack", () => {
     expect(pack.status).toBe("blocked");
     expect(pack.reviewerCommands.dockerSageFixture).toBe("npm run docker:sage");
     expect(pack.reviewerCommands.dockerAllEngines).toBe("npm run docker:all-engines:write");
+    expect(pack.reviewerCommands.dockerStrictProfessorEvidence).toBe("npm run docker:professor:all");
     expect(pack.markdown).toContain("Docker Sage fixture");
     expect(pack.markdown).toContain("Docker all engines");
+    expect(pack.markdown).toContain("Docker strict professor evidence");
     expect(pack.reviewerActionPlan.actions).toContainEqual(
       expect.objectContaining({
         title: "Close required Maxima symbolic cross-check gate",

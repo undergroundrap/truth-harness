@@ -83,6 +83,8 @@ describe("credibility reviewer bundle", () => {
     expect(result.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
     expect(result.manifest.reviewerCommands.runAdversarialBenchmark).toContain("ai-failure-seed");
     expect(result.manifest.reviewerCommands.runMathCredibilityLadder).toContain("math-credibility-ladder");
+    expect(result.manifest.reviewerCommands.dockerStrictProfessorEvidence).toBe("npm run docker:professor:all");
+    expect(result.manifest.reviewerCommands.dockerAllEngines).toBe("npm run docker:all-engines:write");
     const readme = await readFile(result.readmePath, "utf8");
     expect(readme).toContain("Truth Harness Portable Reviewer Bundle");
     expect(readme).toContain("Saved Report Drafts");

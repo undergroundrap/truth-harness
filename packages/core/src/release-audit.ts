@@ -101,6 +101,7 @@ export interface ReleaseAudit {
     mathCredibilityLadder: string;
     engineVerify: string;
     dockerProfessor: string;
+    dockerProfessorAll: string;
     dockerEngines: string;
     dockerSandbox: string;
     dockerAllEngines: string;
@@ -1083,6 +1084,7 @@ function releaseAuditCommands(
     mathCredibilityLadder: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
     engineVerify: `truth-harness engines verify --write${requirementFlags}`,
     dockerProfessor: "npm run docker:professor",
+    dockerProfessorAll: "npm run docker:professor:all",
     dockerEngines: "npm run docker:engines",
     dockerSandbox: "npm run docker:sandbox:write",
     dockerAllEngines: "npm run docker:all-engines",

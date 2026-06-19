@@ -1636,6 +1636,9 @@ describe("benchmark CLI", () => {
           runAdversarialBenchmark: string;
           runMathCredibilityLadder: string;
           reproducePack: string;
+          dockerProfessorEvidence: string;
+          dockerStrictProfessorEvidence: string;
+          dockerAllEngines: string;
         };
       };
       result: { bundleDir: string; manifestPath: string; packMarkdownPath: string };
@@ -1704,6 +1707,9 @@ describe("benchmark CLI", () => {
     expect(bundle.manifest.reviewerCommands.runAdversarialBenchmark).toContain("ai-failure-seed");
     expect(bundle.manifest.reviewerCommands.runMathCredibilityLadder).toContain("math-credibility-ladder");
     expect(bundle.manifest.reviewerCommands.reproducePack).toContain("--require-all-engines");
+    expect(bundle.manifest.reviewerCommands.dockerProfessorEvidence).toBe("npm run docker:professor");
+    expect(bundle.manifest.reviewerCommands.dockerStrictProfessorEvidence).toBe("npm run docker:professor:all");
+    expect(bundle.manifest.reviewerCommands.dockerAllEngines).toBe("npm run docker:all-engines:write");
     expect(bundle.result.bundleDir.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
     expect(await readFile(bundle.result.manifestPath, "utf8")).toContain(bundle.manifest.bundleId);
     expect(verifyById).toMatchObject({
@@ -1725,6 +1731,8 @@ describe("benchmark CLI", () => {
     expect(await readFile(writtenVerify.paths.markdown, "utf8")).toContain(writtenVerify.verification.verificationId);
     expect(humanBundle.stdout).toContain("Truth Harness portable reviewer bundle");
     expect(humanBundle.stdout).toContain("Reviewer commands:");
+    expect(humanBundle.stdout).toContain("npm run docker:professor:all");
+    expect(humanBundle.stdout).toContain("npm run docker:all-engines:write");
     expect(humanVerify.stdout).toContain("Truth Harness credibility bundle verification");
     expect(humanVerify.stdout).toContain("Bundle integrity: passed");
 

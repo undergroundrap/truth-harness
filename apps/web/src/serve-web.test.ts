@@ -371,6 +371,7 @@ describe("local web route ledger API", () => {
       mode: "public-review"
     });
     expect(releaseAuditPayload.audit.commands.releaseAudit).toContain("--require-all-engines");
+    expect(releaseAuditPayload.audit.commands.dockerProfessorAll).toBe("npm run docker:professor:all");
     expect(releaseAuditPayload.audit.checks).toContainEqual(
       expect.objectContaining({
         id: "engine-evidence",
