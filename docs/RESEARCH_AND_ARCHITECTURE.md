@@ -192,6 +192,9 @@ Initial benchmark suites:
 
 | Suite | Scope |
 | --- | --- |
+| `math-credibility-ladder` | Native-safe hard-math readiness floor: exact equalities, common-denominator lemmas, parity boundaries, dimensional mistakes, interval bounds, and honest theorem-boundary refusals. |
+| `ai-failure-seed` | Fluent-but-wrong AI math behavior, including false universals, exact arithmetic, symbolic prompts, dimensional checks, interval bounds, and unsupported prompts. |
+| `foundations-seed` | Current exact arithmetic, parity refutation, and unsupported-task humility regression suite. |
 | `foundations-100` | Arithmetic, algebra, fractions, units, simple proofs. |
 | `calculus-100` | Limits, derivatives, integrals, series, differential equations. |
 | `linear-algebra-75` | Matrices, eigenvalues, vector spaces, proofs and computations. |
@@ -206,6 +209,7 @@ CLI shape:
 truth-harness bench run suites/foundations-100 --engine local --json
 truth-harness bench run suites/foundations-100 --write
 truth-harness bench run suites/foundations-100 --fail-on-failures
+npm run demo:math-ladder
 truth-harness bench list
 truth-harness bench compare runs/baseline.json runs/current.json --write
 truth-harness bench compare runs/baseline.json runs/current.json --fail-on-regression

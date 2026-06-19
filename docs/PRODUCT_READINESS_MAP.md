@@ -27,7 +27,7 @@ The product should stay private-prototype until the readiness gates below move f
 | Web UI | Yellow/red | The workbench shell exists and is improving. Browser review can now be recorded as `truth-harness.web-ui-review.v0` evidence and cited by release audit, but the UI is not yet polished enough to be the product's first impression without continued review. |
 | Visuals | Yellow/red | Number line, maps, lineage, and visual tabs exist. Needs interaction polish, layout QA, editability, and large-canvas testing. |
 | Teaching/reporting | Yellow | Teaching packets and HTML reports exist. Needs professor/student workflow testing. |
-| Adversarial benchmarks | Green/yellow | The 16-case `ai-failure-seed` suite can be saved as a benchmark-run record; professor credibility packs/release audits block readiness when that run is missing or failing; run-next can close the benchmark action through core APIs without shell execution; reviewer packets cite artifact paths, replay commands, receipt replay examples, and trust accuracy. Needs larger public false-claims corpus. |
+| Adversarial benchmarks | Green/yellow | The 16-case `ai-failure-seed` suite can be saved as a benchmark-run record; `math-credibility-ladder` is now a native-safe hard-math readiness suite for exact equality, common-denominator lemmas, parity boundaries, dimensional mistakes, interval bounds, and honest theorem-boundary refusals; professor credibility packs/release audits block readiness when the adversarial run is missing or failing; run-next can close the benchmark action through core APIs without shell execution; reviewer packets cite artifact paths, replay commands, receipt replay examples, and trust accuracy. Needs larger public false-claims corpus. |
 | Storage scale | Yellow | Local workspace artifacts work; catalog indexing, same-directory atomic writes, append-only artifact-write event logs, local web `/api/events`, and locks for session/corpus read-modify-write paths are in place. Large-workspace performance, timeline UX polish, and longer multi-agent stress tests still need proof. |
 | Formal proof | Yellow | Lean proof-check records exist when Lean is installed. A separate Docker `lean-proof` target pins Lean and checks a small fixture; broad Mathlib/project automation is still future work. |
 | Sage/Wolfram-like breadth | Yellow | Constrained SageMath CAS check records exist for scoped symbolic equality via `cas check --backend sage`, and a separate no-network `sage-math` Docker target can run the `--require-sage` engine gate. Sage is still not a general Sage execution surface. |
@@ -64,13 +64,14 @@ Do not publicly launch or record the main hype demo until these are true:
 4. `npm run docker:professor` completes, writes local engine/benchmark/credibility-pack/reviewer-bundle artifacts, verifies the bundle hashes, and the resulting credibility pack itself reports `ready-for-review`.
 5. `npm run docker:all-engines` passes when the heavy SageMath plus Lean image is available; `npm run docker:all-engines:write` can save a strict run for audit citation.
 6. `npm run docker:demo` passes.
-7. The web app has no obvious clipping, overlap, broken scroll, broken focus, or confusing navigation in desktop view, and the browser pass is saved with `truth-harness workspace ui-review . --write`.
-8. A new user can understand the difference between Math, Visuals, Lineage, Protocol, Notes, Replay, and Report without reading source code.
-9. The project can run a 100+ receipt local workspace without slow scans becoming painful.
-10. Claim ledger search/tag/filter/dependency flows are usable from both CLI and UI.
-11. At least one professor-style teaching workflow can be completed end to end: ask -> receipt -> trace -> notes -> report -> replay.
-12. Agent workflows can work for at least one hour against local artifacts without losing provenance.
-13. Security docs clearly explain what Docker protects, what it does not protect, and what code-run can and cannot attest; saved `truth-harness.sandbox-run.v0` records let release-audit cite a measured no-network Docker boundary without pretending the Windows host is sandboxed.
+7. `npm run demo:math-ladder` passes and any failed case is treated as a hard-math credibility regression.
+8. The web app has no obvious clipping, overlap, broken scroll, broken focus, or confusing navigation in desktop view, and the browser pass is saved with `truth-harness workspace ui-review . --write`.
+9. A new user can understand the difference between Math, Visuals, Lineage, Protocol, Notes, Replay, and Report without reading source code.
+10. The project can run a 100+ receipt local workspace without slow scans becoming painful.
+11. Claim ledger search/tag/filter/dependency flows are usable from both CLI and UI.
+12. At least one professor-style teaching workflow can be completed end to end: ask -> receipt -> trace -> notes -> report -> replay.
+13. Agent workflows can work for at least one hour against local artifacts without losing provenance.
+14. Security docs clearly explain what Docker protects, what it does not protect, and what code-run can and cannot attest; saved `truth-harness.sandbox-run.v0` records let release-audit cite a measured no-network Docker boundary without pretending the Windows host is sandboxed.
 
 ## Stress Tests We Need
 
@@ -81,6 +82,7 @@ Do not publicly launch or record the main hype demo until these are true:
 - Run symbolic CAS checks where SymPy and Maxima agree, disagree, and fail to parse.
 - Run SMT checks for sat, unsat, unknown/error, missing solver, and malformed SMT-LIB.
 - Run replay on generated receipts and compare trust, summary, and evidence boundaries.
+- Keep `packages/benchmarks/suites/math-credibility-ladder.json` passing as the native-safe hard-math readiness floor before adding heavier Lean/Sage/mathlib cases.
 
 ### Workspace Stress
 
@@ -127,7 +129,7 @@ First harness: `truth-harness workspace stress <path> --receipts 100 --claims 50
 7. **Agent session log:** unified timeline for human actions, agent actions, CLI commands, API calls, receipts, notes, and reports.
 8. **Sage credibility gate hardening:** direct constrained Sage check records and the separate `sage-math` Docker gate exist; next is build-time performance testing, a smaller image strategy if possible, and a reviewer fixture beyond the trigonometric identity smoke.
 9. **Lean runtime design:** expand the pinned Lean fixture toward real project templates, Mathlib-aware diagnostics, and proof records that support meaningful `proved` claims.
-10. **Adversarial benchmark suite:** the first 16-case seed suite is wired into professor/release readiness; expand it into a public false-claims and hallucination-catcher corpus before public launch.
+10. **Adversarial benchmark suite:** the first 16-case seed suite is wired into professor/release readiness, and the math credibility ladder now guards the native-safe hard-math floor; expand both into a public false-claims and hallucination-catcher corpus before public launch.
 11. **Security rehearsal:** re-run threat model around code-run, MCP, Docker, filesystem writes, and local reports.
 
 ## Product Principle

@@ -1,0 +1,178 @@
+{
+  "id": "math-credibility-ladder",
+  "title": "Math Credibility Ladder",
+  "description": "A local, Docker-friendly ladder for checking whether Truth Harness is useful to serious math users before claiming frontier capability. It covers exact equality, concrete refutation, narrow universal parity, dimensional sanity checks, interval bounds, and honest unsupported labels for theorem-level prompts outside the current checker boundary.",
+  "tasks": [
+    {
+      "id": "exact-rational-equality",
+      "category": "exact-arithmetic",
+      "aiFailureMode": "Rounds or handwaves a fraction equality instead of replaying exact rational arithmetic.",
+      "prompt": "verify 3 / 4 + 5 / 8 = 11 / 8",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "both sides equal 11/8"
+    },
+    {
+      "id": "refute-near-power-equality",
+      "category": "exact-arithmetic",
+      "aiFailureMode": "Accepts a familiar power-of-two fact with an off-by-one result.",
+      "prompt": "verify 2^10 = 1025",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "left side is 1024"
+    },
+    {
+      "id": "common-denominator-lemma",
+      "category": "fraction-lemma",
+      "aiFailureMode": "Treats a fraction rewrite as obvious without recording the lcm and equality checks.",
+      "prompt": "check lcm(4, 8) = 8 and 3/4 = 6/8",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "lcm(4,8) = 8"
+    },
+    {
+      "id": "refute-bad-common-denominator",
+      "category": "fraction-lemma",
+      "aiFailureMode": "Lets an invalid common-denominator step pass because the original fraction still looks valid.",
+      "prompt": "check lcm(4, 8) = 4 and 3/4 = 3/4",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "failed checks lcm"
+    },
+    {
+      "id": "nested-exact-expression",
+      "category": "exact-arithmetic",
+      "aiFailureMode": "Loses exactness across powers, addition, and division.",
+      "prompt": "compute (2^5 + 1) / 3",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "11"
+    },
+    {
+      "id": "universal-even-parity-boundary",
+      "category": "universal-parity",
+      "aiFailureMode": "Calls a modular parity certificate a formal proof.",
+      "prompt": "for all integers n, n^2+n is even",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "universal-parity",
+      "expectSummaryIncludes": "not proof-checker-backed"
+    },
+    {
+      "id": "universal-shifted-even-parity",
+      "category": "universal-parity",
+      "aiFailureMode": "Misses that adding two preserves the even parity certificate.",
+      "prompt": "for all integers n, n^2+n+2 is even",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "universal-parity",
+      "expectSummaryIncludes": "both residue classes modulo 2"
+    },
+    {
+      "id": "refute-shifted-odd-parity",
+      "category": "universal-parity",
+      "aiFailureMode": "Fails to look for the first counterexample to a universal parity claim.",
+      "prompt": "for all integers n, n^2+n+2 is odd",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "universal-parity",
+      "expectSummaryIncludes": "n=-20"
+    },
+    {
+      "id": "unsupported-euler-prime-pattern",
+      "category": "number-theory-boundary",
+      "aiFailureMode": "Generalizes a famous prime-generating pattern without a number-theory proof or exhaustive domain.",
+      "prompt": "for all integers n, n^2+n+41 is prime",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    },
+    {
+      "id": "dimension-energy-work",
+      "category": "dimensional-analysis",
+      "aiFailureMode": "Accepts a physics relation without checking SI base dimensions.",
+      "prompt": "dimension check energy = force * length",
+      "expectTrust": "dimension-checked",
+      "expectEvidenceKind": "dimension-analysis",
+      "expectSummaryIncludes": "M L^2 T^-2"
+    },
+    {
+      "id": "dimension-pressure",
+      "category": "dimensional-analysis",
+      "aiFailureMode": "Forgets that pressure is force per area.",
+      "prompt": "dimension check pressure = force / area",
+      "expectTrust": "dimension-checked",
+      "expectEvidenceKind": "dimension-analysis",
+      "expectSummaryIncludes": "M L^-1 T^-2"
+    },
+    {
+      "id": "refute-energy-velocity",
+      "category": "dimensional-analysis",
+      "aiFailureMode": "Confuses velocity with velocity squared in an energy relation.",
+      "prompt": "dimension check energy = mass * velocity",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "dimension-analysis",
+      "expectSummaryIncludes": "right is M L T^-1"
+    },
+    {
+      "id": "refute-pressure-times-area",
+      "category": "dimensional-analysis",
+      "aiFailureMode": "Multiplies by area where the units require division.",
+      "prompt": "dimension check pressure = force * area",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "dimension-analysis",
+      "expectSummaryIncludes": "right is M L^3 T^-2"
+    },
+    {
+      "id": "rational-interval-bound",
+      "category": "bounded-numerics",
+      "aiFailureMode": "Uses a point estimate where a bounded interval certificate is required.",
+      "prompt": "bound x / 2 + 1 for x in [1/3, 5/3]",
+      "expectTrust": "bounded-numeric",
+      "expectEvidenceKind": "interval-bound",
+      "expectSummaryIncludes": "[7/6, 11/6]"
+    },
+    {
+      "id": "dependency-loss-boundary",
+      "category": "bounded-numerics",
+      "aiFailureMode": "Pretends interval arithmetic has proven algebraic cancellation exactly.",
+      "prompt": "bound x - x for x in [0, 1]",
+      "expectTrust": "bounded-numeric",
+      "expectEvidenceKind": "interval-bound",
+      "expectSummaryIncludes": "[-1, 1]"
+    },
+    {
+      "id": "division-by-zero-boundary",
+      "category": "bounded-numerics",
+      "aiFailureMode": "Ignores a singularity inside the stated interval.",
+      "prompt": "bound 1 / x for x in [-1, 1]",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "interval-bound",
+      "expectSummaryIncludes": "contains zero"
+    },
+    {
+      "id": "unsupported-calculus-boundary",
+      "category": "checker-boundary",
+      "aiFailureMode": "Solves a calculus prompt from memory without a configured symbolic/integration checker.",
+      "prompt": "integrate x^2 from 0 to 1",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    },
+    {
+      "id": "unsupported-infinitude-primes",
+      "category": "theorem-boundary",
+      "aiFailureMode": "Presents a known theorem proof without an accepted proof artifact.",
+      "prompt": "prove the infinitude of primes",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    },
+    {
+      "id": "unsupported-riemann-hypothesis",
+      "category": "frontier-boundary",
+      "aiFailureMode": "Pretends an open problem can be answered by fluent model text.",
+      "prompt": "prove the Riemann hypothesis",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    }
+  ]
+}

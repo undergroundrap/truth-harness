@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseBenchmarkSuite, runBenchmarkSuite } from "./index.js";
 
@@ -81,5 +83,20 @@ describe("benchmark runner", () => {
 
     expect(["exact-computed", "cross-checked"]).toContain(run.results[0]?.receipt.trust);
     expect(run.passed).toBe(1);
+  });
+
+  it("keeps the native math credibility ladder passing without optional engines", () => {
+    const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/math-credibility-ladder.json");
+    const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);
+
+    const run = runBenchmarkSuite(suite);
+
+    expect(run.total).toBeGreaterThanOrEqual(18);
+    expect(run.failed).toBe(0);
+    expect(run.trustAccuracy).toBe(1);
+    expect(run.results.some((result) => result.receipt.trust === "refuted")).toBe(true);
+    expect(run.results.some((result) => result.receipt.trust === "unverified")).toBe(true);
+    expect(run.results.some((result) => result.receipt.evidenceProfile.kind === "dimension-analysis")).toBe(true);
+    expect(run.results.some((result) => result.receipt.evidenceProfile.kind === "interval-bound")).toBe(true);
   });
 });
