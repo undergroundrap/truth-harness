@@ -5,10 +5,13 @@ Truth Harness stores private project data under `.truth-harness/` by default. Ma
 ## Repair
 
 ```bash
+npm run workspace:status
 npm run cli -- workspace repair
 npm run workspace:repair-artifacts:preview
-npm run cli -- workspace repair-artifacts
-npm run cli -- workspace validate
+npm run workspace:repair-artifacts
+npm run workspace:validate
+npm run workspace:events
+npm run workspace:ui-review:pass
 ```
 
 `workspace repair` restores missing private directories and manifest defaults. `workspace repair-artifacts` repairs known legacy JSON metadata drift, such as older verifier-route manifest fields or prompt-derived visual refs that should be manual context instead of receipt evidence. It never reruns a verifier and never upgrades a trust label.
