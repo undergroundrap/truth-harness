@@ -2526,6 +2526,23 @@ describe("benchmark CLI", () => {
   it("writes and lists web UI review records from the CLI", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--name", "CLI UI Review Lab"]);
+    const layoutAuditPath = join(root, ".truth-harness", "findings", "ui-layout-audit.json");
+    await writeFile(
+      layoutAuditPath,
+      JSON.stringify({
+        schemaVersion: "truth-harness.web-ui-layout-audit.v0",
+        generatedAt: "2026-06-19T00:00:00.000Z",
+        viewport: { width: 1365, height: 768 },
+        status: "passed",
+        summary: {
+          surfaces: 9,
+          passed: 9,
+          warnings: 0,
+          failures: 0
+        },
+        surfaces: []
+      })
+    );
 
     const written = await runCli([
       "workspace",
@@ -2542,27 +2559,49 @@ describe("benchmark CLI", () => {
       "--pass",
       "Composer and readiness chips do not hide the inspected content",
       "--screenshot",
-      ".truth-harness/findings/ui-review.png"
+      ".truth-harness/findings/ui-review.png",
+      "--layout-audit",
+      ".truth-harness/findings/ui-layout-audit.json"
     ]);
     const json = JSON.parse(written.stdout) as {
-      review: { schemaVersion: string; reviewId: string; status: string; viewport: { width: number; height: number } };
+      review: {
+        schemaVersion: string;
+        reviewId: string;
+        status: string;
+        viewport: { width: number; height: number };
+        layoutAudit?: { status: string; surfaces: { total: number; passed: number } };
+        artifacts: { layoutAudit?: string };
+      };
       written: boolean;
       result: { jsonPath: string };
     };
     const listed = await runCli(["workspace", "ui-reviews", root, "--json"]);
-    const listJson = JSON.parse(listed.stdout) as { total: number; reviews: Array<{ reviewId: string; status: string }> };
+    const listJson = JSON.parse(listed.stdout) as {
+      total: number;
+      reviews: Array<{ reviewId: string; status: string; layoutAudit?: string; layoutAuditStatus?: string }>;
+    };
 
     expect(written.exitCode).toBe(0);
     expect(json.written).toBe(true);
     expect(json.review.schemaVersion).toBe("truth-harness.web-ui-review.v0");
     expect(json.review.status).toBe("passed");
     expect(json.review.viewport).toEqual({ width: 1365, height: 768 });
+    expect(json.review.layoutAudit).toMatchObject({
+      status: "passed",
+      surfaces: {
+        total: 9,
+        passed: 9
+      }
+    });
+    expect(json.review.artifacts.layoutAudit).toBe(".truth-harness/findings/ui-layout-audit.json");
     expect(json.result.jsonPath).toContain(".truth-harness");
     expect(listed.exitCode).toBe(0);
     expect(listJson.total).toBe(1);
     expect(listJson.reviews[0]).toMatchObject({
       reviewId: json.review.reviewId,
-      status: "passed"
+      status: "passed",
+      layoutAudit: ".truth-harness/findings/ui-layout-audit.json",
+      layoutAuditStatus: "passed"
     });
   });
 

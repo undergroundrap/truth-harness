@@ -33,6 +33,7 @@ import {
   createReleaseAudit,
   writeCodeRunSandboxRun,
   createWebUiReviewRecord,
+  parseWebUiLayoutAuditSummaryJson,
   createVerifierRoute,
   createSymbolicCasCheckRecord,
   getCasBackendStatus,
@@ -317,6 +318,7 @@ import {
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
   type WebUiReviewCheckStatus,
+  type WebUiLayoutAuditSummary,
   type WebUiReviewRecord,
   type WebUiReviewSummary,
   type WebUiReviewWriteResult,
@@ -3254,6 +3256,7 @@ workspace
   .option("--fail <text>", "Launch-readiness failure found during browser review. Repeatable", collectRepeated, [])
   .option("--note <text>", "Reviewer note attached to every recorded check. Repeatable", collectRepeated, [])
   .option("--screenshot <path>", "Workspace-local or absolute screenshot path reviewed")
+  .option("--layout-audit <path>", "Workspace-local or absolute truth-harness.web-ui-layout-audit.v0 JSON reviewed")
   .action(
     async (
       path: string,
@@ -3267,8 +3270,10 @@ workspace
         fail: string[];
         note: string[];
         screenshot?: string;
+        layoutAudit?: string;
       }
     ) => {
+      const layoutAuditSummary = await readWebUiLayoutAuditSummary(path, options.layoutAudit);
       const checklist = webUiReviewChecklistFromOptions(options);
       const replayCommand = webUiReviewReplayCommand(path, options, checklist);
       const input = {
@@ -3277,6 +3282,8 @@ workspace
         viewport: options.viewport,
         checklist,
         screenshot: options.screenshot,
+        layoutAudit: options.layoutAudit,
+        layoutAuditSummary,
         replayCommand
       };
       const writeResult = options.write ? await writeWebUiReview(input) : undefined;
@@ -7209,6 +7216,16 @@ function printWebUiReview(record: WebUiReviewRecord, writeResult?: WebUiReviewWr
   if (record.artifacts.screenshot) {
     console.log(`Screenshot: ${record.artifacts.screenshot}`);
   }
+  if (record.artifacts.layoutAudit) {
+    console.log(`Layout audit: ${record.artifacts.layoutAudit}`);
+  }
+  if (record.layoutAudit) {
+    console.log(
+      `Layout audit status: ${record.layoutAudit.status} ` +
+        `(${record.layoutAudit.surfaces.passed}/${record.layoutAudit.surfaces.total} surfaces passed, ` +
+        `${record.layoutAudit.surfaces.failures} fail, ${record.layoutAudit.surfaces.warnings} warn)`
+    );
+  }
 
   console.log("");
   console.log("Checklist:");
@@ -7242,6 +7259,9 @@ function printWebUiReviewList(reviews: WebUiReviewSummary[]): void {
     console.log(`  Path: ${review.path}`);
     if (review.screenshot) {
       console.log(`  Screenshot: ${review.screenshot}`);
+    }
+    if (review.layoutAudit) {
+      console.log(`  Layout audit: ${review.layoutAudit}${review.layoutAuditStatus ? ` (${review.layoutAuditStatus})` : ""}`);
     }
   }
 }
@@ -9518,6 +9538,7 @@ function webUiReviewReplayCommand(
     fail: string[];
     note: string[];
     screenshot?: string;
+    layoutAudit?: string;
   },
   checklist: Array<{ title: string; status: WebUiReviewCheckStatus }>
 ): string {
@@ -9527,10 +9548,23 @@ function webUiReviewReplayCommand(
     `--viewport ${options.viewport.width}x${options.viewport.height}`,
     ...checklist.map((check) => `--${webUiReviewStatusFlag(check.status)} ${quoteCommandArg(check.title)}`),
     ...options.note.map((note) => `--note ${quoteCommandArg(note)}`),
-    options.screenshot ? `--screenshot ${quoteCommandArg(options.screenshot)}` : undefined
+    options.screenshot ? `--screenshot ${quoteCommandArg(options.screenshot)}` : undefined,
+    options.layoutAudit ? `--layout-audit ${quoteCommandArg(options.layoutAudit)}` : undefined
   ].filter(Boolean);
 
   return `truth-harness workspace ui-review ${quoteCommandArg(path)} ${flags.join(" ")}`;
+}
+
+async function readWebUiLayoutAuditSummary(
+  rootPath: string,
+  layoutAuditPath: string | undefined
+): Promise<WebUiLayoutAuditSummary | undefined> {
+  if (!layoutAuditPath) {
+    return undefined;
+  }
+
+  const resolvedPath = resolve(rootPath, layoutAuditPath);
+  return parseWebUiLayoutAuditSummaryJson(await readFile(resolvedPath, "utf8"), layoutAuditPath);
 }
 
 function webUiReviewStatusFlag(status: WebUiReviewCheckStatus): "pass" | "warn" | "fail" {

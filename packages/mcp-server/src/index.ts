@@ -1610,6 +1610,10 @@ export function createTruthHarnessMcpServer(): McpServer {
           .optional()
           .describe("Explicit pass/warn/fail browser-review checklist."),
         screenshot: z.string().optional().describe("Optional workspace-local or absolute screenshot path reviewed."),
+        layoutAudit: z
+          .string()
+          .optional()
+          .describe("Optional workspace-local truth-harness.web-ui-layout-audit.v0 JSON path reviewed."),
         replayCommand: z.string().optional().describe("Command or instruction used to reproduce this review."),
         write: z
           .boolean()

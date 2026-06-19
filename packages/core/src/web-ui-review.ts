@@ -9,6 +9,29 @@ import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 export type WebUiReviewStatus = "passed" | "warning" | "failed";
 export type WebUiReviewCheckStatus = "pass" | "warn" | "fail";
 
+export interface WebUiLayoutAuditSummary {
+  schemaVersion: "truth-harness.web-ui-layout-audit.v0";
+  status: WebUiReviewStatus;
+  generatedAt?: string;
+  sourcePath?: string;
+  viewport?: {
+    width: number;
+    height: number;
+  };
+  surfaces: {
+    total: number;
+    passed: number;
+    warnings: number;
+    failures: number;
+  };
+  nonPassingSurfaces: Array<{
+    surface: string;
+    status: WebUiReviewStatus;
+    findings: number;
+    findingCodes: string[];
+  }>;
+}
+
 export interface WebUiReviewChecklistItem {
   checkId: string;
   title: string;
@@ -31,10 +54,12 @@ export interface WebUiReviewRecord {
     height: number;
   };
   checklist: WebUiReviewChecklistItem[];
+  layoutAudit?: WebUiLayoutAuditSummary;
   artifacts: {
     json: string;
     markdown: string;
     screenshot?: string;
+    layoutAudit?: string;
   };
   replay: string;
   tags: string[];
@@ -55,6 +80,8 @@ export interface WebUiReviewSummary {
   };
   path: string;
   screenshot?: string;
+  layoutAudit?: string;
+  layoutAuditStatus?: WebUiReviewStatus;
   checks: {
     passed: number;
     warnings: number;
@@ -78,6 +105,8 @@ export interface CreateWebUiReviewInput {
     notes?: string[];
   }>;
   screenshot?: string;
+  layoutAudit?: string;
+  layoutAuditSummary?: WebUiLayoutAuditSummary;
   replayCommand?: string;
 }
 
@@ -96,7 +125,7 @@ const WEB_UI_REVIEW_SCHEMA_VERSION = "truth-harness.web-ui-review.v0" as const;
 
 export function createWebUiReviewRecord(input: CreateWebUiReviewInput = {}): WebUiReviewRecord {
   const createdAt = (input.now ?? new Date()).toISOString();
-  const checklist = normalizeChecklist(input.checklist);
+  const checklist = normalizeChecklist(input.checklist, input.layoutAuditSummary);
   const status = reviewStatusForChecklist(checklist);
   const warningCount = checklist.filter((check) => check.status === "warn").length;
   const failedCount = checklist.filter((check) => check.status === "fail").length;
@@ -107,7 +136,9 @@ export function createWebUiReviewRecord(input: CreateWebUiReviewInput = {}): Web
     targetUrl: input.targetUrl ?? "http://127.0.0.1:4180/",
     viewport: normalizeViewport(input.viewport),
     checklist,
-    screenshot: input.screenshot
+    screenshot: input.screenshot,
+    layoutAudit: input.layoutAudit,
+    layoutAuditSummary: input.layoutAuditSummary
   };
   const reviewId = `uirev_${stableHash(base).slice(0, 16)}`;
 
@@ -123,10 +154,12 @@ export function createWebUiReviewRecord(input: CreateWebUiReviewInput = {}): Web
     targetUrl: base.targetUrl,
     viewport: base.viewport,
     checklist,
+    ...(input.layoutAuditSummary ? { layoutAudit: input.layoutAuditSummary } : {}),
     artifacts: {
       json: "",
       markdown: "",
-      ...(input.screenshot ? { screenshot: input.screenshot } : {})
+      ...(input.screenshot ? { screenshot: input.screenshot } : {}),
+      ...(input.layoutAudit ? { layoutAudit: input.layoutAudit } : {})
     },
     replay:
       input.replayCommand ??
@@ -135,12 +168,17 @@ export function createWebUiReviewRecord(input: CreateWebUiReviewInput = {}): Web
       "web-ui",
       "browser-review",
       status,
-      input.screenshot ? "screenshot-attached" : "no-screenshot"
-    ].sort(),
+      input.screenshot ? "screenshot-attached" : "no-screenshot",
+      input.layoutAuditSummary ? "layout-audit-attached" : "no-layout-audit",
+      input.layoutAuditSummary ? `layout-audit-${input.layoutAuditSummary.status}` : undefined
+    ]
+      .filter((tag): tag is string => Boolean(tag))
+      .sort(),
     limitations: [
       "This is UI launch-readiness evidence only. It does not prove mathematical, scientific, medical, regulatory, or legal truth.",
       "A passing UI review means the recorded browser surface was inspected for the listed checks at the stated viewport.",
-      "This review does not replace automated screenshot regression tests; it is a durable local review artifact until those gates exist."
+      "Attached browser layout audits check visible DOM geometry only; they do not prove product usability for every viewport.",
+      "This review does not replace future pixel-diff screenshot baselines; it is a durable local review artifact until those gates exist."
     ],
     warnings: status === "passed" ? [] : checklist.flatMap((check) => check.status === "pass" ? [] : [`${check.title}: ${check.notes.join(" ") || check.status}`])
   };
@@ -156,7 +194,8 @@ export async function writeWebUiReview(input: WriteWebUiReviewInput): Promise<We
   record.artifacts = {
     json: toPortablePath(relative(workspace.root, jsonPath)),
     markdown: toPortablePath(relative(workspace.root, markdownPath)),
-    ...(input.screenshot ? { screenshot: toPortablePath(input.screenshot) } : {})
+    ...(input.screenshot ? { screenshot: toPortablePath(input.screenshot) } : {}),
+    ...(input.layoutAudit ? { layoutAudit: toPortablePath(input.layoutAudit) } : {})
   };
   const markdown = renderWebUiReviewMarkdown(record);
 
@@ -220,6 +259,66 @@ export function parseWebUiReviewJson(raw: string, sourcePath = "web UI review"):
   return parsed;
 }
 
+export function parseWebUiLayoutAuditSummaryJson(raw: string, sourcePath = "web UI layout audit"): WebUiLayoutAuditSummary {
+  const parsed = JSON.parse(stripUtf8Bom(raw)) as {
+    schemaVersion?: unknown;
+    status?: unknown;
+    generatedAt?: unknown;
+    viewport?: unknown;
+    summary?: unknown;
+    surfaces?: unknown;
+  };
+  if (parsed.schemaVersion !== "truth-harness.web-ui-layout-audit.v0") {
+    throw new Error(`Unsupported web UI layout audit schema: ${JSON.stringify(parsed.schemaVersion)} in ${sourcePath}`);
+  }
+
+  const summary = parsed.summary as Partial<{
+    surfaces: unknown;
+    passed: unknown;
+    warnings: unknown;
+    failures: unknown;
+  }>;
+  const total = finiteInteger(summary?.surfaces, "summary.surfaces", sourcePath);
+  const passed = finiteInteger(summary?.passed, "summary.passed", sourcePath);
+  const warnings = finiteInteger(summary?.warnings, "summary.warnings", sourcePath);
+  const failures = finiteInteger(summary?.failures, "summary.failures", sourcePath);
+  const status = webUiReviewStatusFromUnknown(parsed.status, failures, warnings, sourcePath);
+  const surfaces = Array.isArray(parsed.surfaces) ? parsed.surfaces : [];
+
+  return {
+    schemaVersion: "truth-harness.web-ui-layout-audit.v0",
+    status,
+    ...(typeof parsed.generatedAt === "string" ? { generatedAt: parsed.generatedAt } : {}),
+    sourcePath,
+    ...(viewportFromUnknown(parsed.viewport) ? { viewport: viewportFromUnknown(parsed.viewport) } : {}),
+    surfaces: {
+      total,
+      passed,
+      warnings,
+      failures
+    },
+    nonPassingSurfaces: surfaces
+      .map((surface) => {
+        const item = surface as { surface?: unknown; status?: unknown; findings?: unknown };
+        const itemStatus = webUiReviewStatusFromUnknown(item.status, 0, 0, sourcePath);
+        const findings = Array.isArray(item.findings) ? item.findings : [];
+        return {
+          surface: typeof item.surface === "string" ? item.surface : "unknown",
+          status: itemStatus,
+          findings: findings.length,
+          findingCodes: [
+            ...new Set(
+              findings
+                .map((finding) => (finding as { code?: unknown }).code)
+                .filter((code): code is string => typeof code === "string" && code.length > 0)
+            )
+          ].sort()
+        };
+      })
+      .filter((surface) => surface.status !== "passed")
+  };
+}
+
 export function renderWebUiReviewMarkdown(record: WebUiReviewRecord): string {
   const counts = reviewCheckCounts(record.checklist);
   const lines = [
@@ -240,6 +339,7 @@ export function renderWebUiReviewMarkdown(record: WebUiReviewRecord): string {
     `- Warnings: \`${counts.warnings}\``,
     `- Failed checks: \`${counts.failed}\``,
     ...(record.artifacts.screenshot ? [`- Screenshot: \`${escapeMarkdownText(record.artifacts.screenshot)}\``] : []),
+    ...(record.artifacts.layoutAudit ? [`- Layout audit: \`${escapeMarkdownText(record.artifacts.layoutAudit)}\``] : []),
     "",
     "## Checklist",
     ""
@@ -249,6 +349,23 @@ export function renderWebUiReviewMarkdown(record: WebUiReviewRecord): string {
     lines.push(`- \`${check.status}\` ${escapeMarkdownText(check.title)} (${check.checkId})`);
     for (const note of check.notes) {
       lines.push(`  - ${escapeMarkdownText(note)}`);
+    }
+  }
+
+  if (record.layoutAudit) {
+    lines.push("", "## Browser Layout Audit", "");
+    lines.push(`- Status: \`${record.layoutAudit.status}\``);
+    lines.push(`- Surfaces: \`${record.layoutAudit.surfaces.passed}/${record.layoutAudit.surfaces.total} passed\``);
+    lines.push(`- Warnings: \`${record.layoutAudit.surfaces.warnings}\``);
+    lines.push(`- Failures: \`${record.layoutAudit.surfaces.failures}\``);
+    if (record.layoutAudit.nonPassingSurfaces.length > 0) {
+      lines.push("- Non-passing surfaces:");
+      for (const surface of record.layoutAudit.nonPassingSurfaces) {
+        const codes = surface.findingCodes.length > 0 ? `; ${escapeMarkdownText(surface.findingCodes.join(", "))}` : "";
+        lines.push(
+          `  - \`${escapeMarkdownText(surface.surface)}\`: \`${surface.status}\` (${surface.findings} finding(s)${codes})`
+        );
+      }
     }
   }
 
@@ -275,19 +392,24 @@ async function assertWebUiReviewSchema(record: WebUiReviewRecord): Promise<void>
   });
 }
 
-function normalizeChecklist(input: CreateWebUiReviewInput["checklist"]): WebUiReviewChecklistItem[] {
-  if (!input || input.length === 0) {
-    return [
+function normalizeChecklist(
+  input: CreateWebUiReviewInput["checklist"],
+  layoutAuditSummary?: WebUiLayoutAuditSummary
+): WebUiReviewChecklistItem[] {
+  const checks = input?.length
+    ? input
+    : layoutAuditSummary
+      ? []
+      : [
       {
         checkId: "ui_check_missing_explicit_review",
         title: "No explicit browser review checks were provided.",
-        status: "warn",
+        status: "warn" as const,
         notes: ["Record at least one pass/warn/fail check from a real browser inspection before launch."]
       }
     ];
-  }
 
-  return input.map((check, index) => {
+  const normalized = checks.map((check, index) => {
     const title = check.title.trim();
     const status = check.status;
     const checkId = `ui_check_${stableHash({ index, title, status }).slice(0, 12)}`;
@@ -298,6 +420,12 @@ function normalizeChecklist(input: CreateWebUiReviewInput["checklist"]): WebUiRe
       notes: (check.notes?.map((note) => note.trim()).filter(Boolean) ?? [])
     };
   });
+
+  if (layoutAuditSummary) {
+    normalized.push(layoutAuditChecklistItem(layoutAuditSummary, normalized.length));
+  }
+
+  return normalized;
 }
 
 function normalizeViewport(viewport: CreateWebUiReviewInput["viewport"]): { width: number; height: number } {
@@ -335,6 +463,39 @@ function reviewCheckCounts(checklist: WebUiReviewChecklistItem[]): WebUiReviewSu
   };
 }
 
+function layoutAuditChecklistItem(summary: WebUiLayoutAuditSummary, index: number): WebUiReviewChecklistItem {
+  const status = webUiReviewCheckStatusFromLayoutAudit(summary.status);
+  const title = `Browser layout audit ${summary.status}: ${summary.surfaces.passed}/${summary.surfaces.total} surfaces passed`;
+  return {
+    checkId: `ui_check_${stableHash({ index, title, status, summary }).slice(0, 12)}`,
+    title,
+    status,
+    notes: [
+      `${summary.surfaces.failures} failure(s), ${summary.surfaces.warnings} warning(s), ${summary.nonPassingSurfaces.length} non-passing surface(s).`,
+      ...(summary.nonPassingSurfaces.length > 0
+        ? [
+          `Non-passing surfaces: ${summary.nonPassingSurfaces
+            .map((surface) =>
+              `${surface.surface}:${surface.status}` +
+              (surface.findingCodes.length > 0 ? ` (${surface.findingCodes.join(", ")})` : "")
+            )
+            .join(", ")}.`
+        ]
+        : [])
+    ]
+  };
+}
+
+function webUiReviewCheckStatusFromLayoutAudit(status: WebUiReviewStatus): WebUiReviewCheckStatus {
+  if (status === "failed") {
+    return "fail";
+  }
+  if (status === "warning") {
+    return "warn";
+  }
+  return "pass";
+}
+
 function summarizeWebUiReview(rootPath: string, path: string, raw: string): WebUiReviewSummary | undefined {
   try {
     const record = parseWebUiReviewJson(raw, path);
@@ -348,6 +509,8 @@ function summarizeWebUiReview(rootPath: string, path: string, raw: string): WebU
       viewport: record.viewport,
       path: toPortablePath(relative(rootPath, path)),
       screenshot: record.artifacts.screenshot,
+      layoutAudit: record.artifacts.layoutAudit,
+      layoutAuditStatus: record.layoutAudit?.status,
       checks: reviewCheckCounts(record.checklist),
       checkTitles: record.checklist.map((check) => check.title),
       tags: record.tags,
@@ -375,6 +538,47 @@ function toPortablePath(path: string): string {
   return path.split(sep).join("/");
 }
 
+function finiteInteger(value: unknown, field: string, sourcePath: string): number {
+  if (!Number.isInteger(value) || Number(value) < 0) {
+    throw new Error(`Invalid web UI layout audit ${field}: ${JSON.stringify(value)} in ${sourcePath}`);
+  }
+  return Number(value);
+}
+
+function webUiReviewStatusFromUnknown(value: unknown, failures: number, warnings: number, sourcePath: string): WebUiReviewStatus {
+  if (value === "passed" || value === "warning" || value === "failed") {
+    return value;
+  }
+  if (failures > 0) {
+    return "failed";
+  }
+  if (warnings > 0) {
+    return "warning";
+  }
+  if (value === undefined || value === null) {
+    return "passed";
+  }
+  throw new Error(`Invalid web UI layout audit status: ${JSON.stringify(value)} in ${sourcePath}`);
+}
+
+function viewportFromUnknown(value: unknown): WebUiLayoutAuditSummary["viewport"] {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const viewport = value as { width?: unknown; height?: unknown };
+  if (!Number.isInteger(viewport.width) || !Number.isInteger(viewport.height)) {
+    return undefined;
+  }
+  return {
+    width: Number(viewport.width),
+    height: Number(viewport.height)
+  };
+}
+
 function escapeMarkdownText(value: string): string {
   return value.replace(/\\/gu, "\\\\").replace(/\*/gu, "\\*").replace(/_/gu, "\\_").replace(/`/gu, "\\`");
+}
+
+function stripUtf8Bom(value: string): string {
+  return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
 }

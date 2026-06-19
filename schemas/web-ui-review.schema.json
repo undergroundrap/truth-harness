@@ -98,6 +98,98 @@
         "additionalProperties": false
       }
     },
+    "layoutAudit": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "status",
+        "surfaces",
+        "nonPassingSurfaces"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "truth-harness.web-ui-layout-audit.v0"
+        },
+        "status": {
+          "enum": ["passed", "warning", "failed"]
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sourcePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "viewport": {
+          "type": "object",
+          "required": ["width", "height"],
+          "properties": {
+            "width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "surfaces": {
+          "type": "object",
+          "required": ["total", "passed", "warnings", "failures"],
+          "properties": {
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "passed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warnings": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failures": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        },
+        "nonPassingSurfaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["surface", "status", "findings", "findingCodes"],
+            "properties": {
+              "surface": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "enum": ["passed", "warning", "failed"]
+              },
+              "findings": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "findingCodes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "artifacts": {
       "type": "object",
       "required": ["json", "markdown"],
@@ -111,6 +203,10 @@
           "minLength": 1
         },
         "screenshot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "layoutAudit": {
           "type": "string",
           "minLength": 1
         }

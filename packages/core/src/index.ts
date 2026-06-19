@@ -49,6 +49,7 @@ export {
 export {
   createWebUiReviewRecord,
   listWebUiReviews,
+  parseWebUiLayoutAuditSummaryJson,
   parseWebUiReviewJson,
   renderWebUiReviewMarkdown,
   writeWebUiReview
@@ -454,6 +455,7 @@ export type {
 } from "./sandbox.js";
 export type {
   CreateWebUiReviewInput,
+  WebUiLayoutAuditSummary,
   WebUiReviewChecklistItem,
   WebUiReviewCheckStatus,
   WebUiReviewRecord,

@@ -12,9 +12,12 @@ npm run workspace:repair-artifacts
 npm run workspace:validate
 npm run workspace:events
 npm run workspace:ui-review:pass
+npm run cli -- workspace ui-review . --layout-audit .truth-harness/findings/ui-layout-audit.json --write
 ```
 
 `workspace repair` restores missing private directories and manifest defaults. `workspace repair-artifacts` repairs known legacy JSON metadata drift, such as older verifier-route manifest fields or prompt-derived visual refs that should be manual context instead of receipt evidence. It never reruns a verifier and never upgrades a trust label.
+
+Use `workspace ui-review --layout-audit <json> --write` after a browser automation run has saved the hidden `truth-harness.web-ui-layout-audit.v0` payload from `http://127.0.0.1:4180/?uiAudit=1`. The saved UI review inherits warning or failure status from that audit, so a layout regression cannot be recorded as a clean launch review by accident.
 
 Use preview mode before changing artifact JSON:
 

@@ -6,6 +6,7 @@ import { initLocalWorkspace } from "./local-workspace.js";
 import {
   createWebUiReviewRecord,
   listWebUiReviews,
+  parseWebUiLayoutAuditSummaryJson,
   parseWebUiReviewJson,
   writeWebUiReview
 } from "./web-ui-review.js";
@@ -77,10 +78,96 @@ describe("web UI review records", () => {
     expect(reviews[0]).toMatchObject({
       reviewId: parsed.reviewId,
       status: "passed",
+      layoutAudit: undefined,
       checks: {
         passed: 2,
         warnings: 0,
         failed: 0
+      }
+    });
+  });
+
+  it("attaches browser layout audit summaries and fails closed on layout failures", async () => {
+    const root = await mkdtemp(join(tmpdir(), "truth-harness-web-ui-layout-review-"));
+    await initLocalWorkspace(root, { now: "2026-06-19T00:00:00.000Z" });
+    const layoutAuditSummary = parseWebUiLayoutAuditSummaryJson(
+      `\ufeff${JSON.stringify({
+        schemaVersion: "truth-harness.web-ui-layout-audit.v0",
+        generatedAt: "2026-06-19T00:00:02.000Z",
+        viewport: { width: 1280, height: 720 },
+        status: "failed",
+        summary: {
+          surfaces: 9,
+          passed: 8,
+          warnings: 0,
+          failures: 1
+        },
+        surfaces: [
+          {
+            surface: "graph",
+            status: "failed",
+            findings: [
+              {
+                severity: "fail",
+                code: "branch-map-overlap",
+                selector: ".git-branch-row",
+                detail: "Branch map rows overlap."
+              }
+            ]
+          }
+        ]
+      })}`,
+      ".truth-harness/findings/ui-layout-audit.json"
+    );
+
+    const result = await writeWebUiReview({
+      rootPath: root,
+      now: new Date("2026-06-19T00:00:03.000Z"),
+      targetUrl: "http://127.0.0.1:4180/?uiAudit=1",
+      layoutAudit: ".truth-harness/findings/ui-layout-audit.json",
+      layoutAuditSummary,
+      checklist: [
+        {
+          title: "Browser was opened before saving the review.",
+          status: "pass"
+        }
+      ]
+    });
+    const parsed = parseWebUiReviewJson(await readFile(result.jsonPath, "utf8"), result.jsonPath);
+    const reviews = await listWebUiReviews(root);
+
+    expect(layoutAuditSummary.status).toBe("failed");
+    expect(layoutAuditSummary.nonPassingSurfaces).toEqual([
+      {
+        surface: "graph",
+        status: "failed",
+        findings: 1,
+        findingCodes: ["branch-map-overlap"]
+      }
+    ]);
+    expect(parsed.status).toBe("failed");
+    expect(parsed.layoutAudit).toMatchObject({
+      status: "failed",
+      surfaces: {
+        total: 9,
+        passed: 8,
+        warnings: 0,
+        failures: 1
+      }
+    });
+    expect(parsed.artifacts.layoutAudit).toBe(".truth-harness/findings/ui-layout-audit.json");
+    expect(parsed.checklist.some((check) => check.status === "fail" && check.title.includes("Browser layout audit failed"))).toBe(true);
+    expect(result.markdown).toContain("Browser Layout Audit");
+    expect(result.markdown).toContain("branch-map-overlap");
+    expect(reviews[0]).toMatchObject({
+      reviewId: parsed.reviewId,
+      status: "failed",
+      layoutAudit: ".truth-harness/findings/ui-layout-audit.json",
+      layoutAuditStatus: "failed",
+      checks: {
+        passed: 1,
+        warnings: 0,
+        failed: 1
       }
     });
   });

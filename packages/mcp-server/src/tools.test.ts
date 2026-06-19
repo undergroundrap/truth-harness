@@ -1111,6 +1111,23 @@ describe("MCP tool handlers", () => {
     const root = await tempRoot();
     process.env.TRUTH_HARNESS_ROOT = root;
     await handleTruthHarnessWorkspaceInit({ name: "MCP UI Review Lab" });
+    const layoutAuditPath = join(root, ".truth-harness", "findings", "mcp-layout-audit.json");
+    await writeFile(
+      layoutAuditPath,
+      JSON.stringify({
+        schemaVersion: "truth-harness.web-ui-layout-audit.v0",
+        generatedAt: "2026-06-19T00:00:00.000Z",
+        viewport: { width: 1329, height: 912 },
+        status: "passed",
+        summary: {
+          surfaces: 9,
+          passed: 9,
+          warnings: 0,
+          failures: 0
+        },
+        surfaces: []
+      })
+    );
 
     const dryRun = await handleTruthHarnessWorkspaceUiReview({
       targetUrl: "http://127.0.0.1:4180/",
@@ -1127,6 +1144,7 @@ describe("MCP tool handlers", () => {
           notes: ["Agent observed the local browser surface."]
         }
       ],
+      layoutAudit: ".truth-harness/findings/mcp-layout-audit.json",
       write: true
     });
 
@@ -1143,13 +1161,23 @@ describe("MCP tool handlers", () => {
     expect(dryRun.status).toBe("passed");
     expect(written.written).toBe(true);
     expect(written.review.reviewId).toMatch(/^uirev_[a-f0-9]{16}$/u);
+    expect(written.review.layoutAudit).toMatchObject({
+      status: "passed",
+      surfaces: {
+        total: 9,
+        passed: 9
+      }
+    });
+    expect(written.review.artifacts.layoutAudit).toBe(".truth-harness/findings/mcp-layout-audit.json");
     expect(written.result.jsonPath.replace(/\\/g, "/")).toContain(".truth-harness/findings/");
     expect(written.result.markdown).toContain("Truth Harness Web UI Review");
     expect(list.total).toBe(1);
     expect(list.reviews[0]).toMatchObject({
       reviewId: written.review.reviewId,
       status: "passed",
-      targetUrl: "http://127.0.0.1:4180/"
+      targetUrl: "http://127.0.0.1:4180/",
+      layoutAudit: ".truth-harness/findings/mcp-layout-audit.json",
+      layoutAuditStatus: "passed"
     });
     expect(await readFile(written.result.markdownPath, "utf8")).toContain("UI launch-readiness evidence only");
   });

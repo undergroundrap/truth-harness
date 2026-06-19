@@ -26,6 +26,7 @@ import {
   createValidationPlan,
   createVerifierRoute,
   createWebUiReviewRecord,
+  parseWebUiLayoutAuditSummaryJson,
   createCredibilityPack,
   createWorkspaceReview,
   createWorkspaceReviewFromCredibilityPack,
@@ -261,6 +262,7 @@ import {
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
   type WebUiReviewCheckStatus,
+  type WebUiLayoutAuditSummary,
   type WebUiReviewRecord,
   type WebUiReviewSummary,
   type WebUiReviewWriteResult,
@@ -571,6 +573,8 @@ export interface TruthHarnessWorkspaceUiReviewInput {
   };
   checklist?: TruthHarnessWorkspaceUiReviewCheckInput[];
   screenshot?: string;
+  layoutAudit?: string;
+  layoutAuditSummary?: WebUiLayoutAuditSummary;
   replayCommand?: string;
   write?: boolean;
 }
@@ -1848,12 +1852,16 @@ export async function handleTruthHarnessWorkspaceReview(
 export async function handleTruthHarnessWorkspaceUiReview(
   input: TruthHarnessWorkspaceUiReviewInput
 ): Promise<TruthHarnessWorkspaceUiReviewOutput> {
+  const rootPath = resolveWorkspaceRoot(input.workspacePath);
+  const layoutAuditSummary = input.layoutAuditSummary ?? await readWebUiLayoutAuditSummary(rootPath, input.layoutAudit);
   const reviewInput = {
-    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    rootPath,
     targetUrl: input.targetUrl,
     viewport: input.viewport,
     checklist: input.checklist,
     screenshot: input.screenshot,
+    layoutAudit: input.layoutAudit,
+    layoutAuditSummary,
     replayCommand: input.replayCommand
   };
 
@@ -2824,6 +2832,18 @@ function resolveWorkspaceRoot(path?: string): string {
 function resolveWorkspacePath(path: string): string {
   const workspaceRoot = getWorkspaceRoot();
   return resolvePathUnderRoot(workspaceRoot, path);
+}
+
+async function readWebUiLayoutAuditSummary(
+  rootPath: string,
+  layoutAuditPath: string | undefined
+): Promise<WebUiLayoutAuditSummary | undefined> {
+  if (!layoutAuditPath) {
+    return undefined;
+  }
+
+  const resolvedPath = resolvePathUnderRoot(rootPath, layoutAuditPath);
+  return parseWebUiLayoutAuditSummaryJson(await readFile(resolvedPath, "utf8"), layoutAuditPath);
 }
 
 function credibilityEngineRequirementsFromInput(input: TruthHarnessWorkspaceCredibilityBundleInput): EngineVerificationRequirements {
