@@ -62,3 +62,19 @@ Deletion requires `--confirm-delete`. Without it, Truth Harness prints the files
 Cleanup does not accept arbitrary filesystem paths. Targets are resolved from the local workspace manifest and must stay under `.truth-harness/`. Index lock files are preserved so cleanup does not disturb active workspace operations.
 
 Archive, restore, and cleanup commands use the same target vocabulary. Archive and restore output is structured JSON with `--json`, so an agent can cite the archive manifest, hash verification state, and conflict list before requesting any destructive cleanup or overwrite.
+
+## Docker Storage
+
+Workspace cleanup does not remove Docker images, Docker build cache, or Docker Desktop's `docker_data.vhdx`.
+
+Use the Docker reviewer helpers for that separate layer:
+
+```bash
+npm run docker:storage
+npm run docker:cleanup -- heavy-images
+npm run docker:cleanup -- heavy-images --confirm-delete
+npm run docker:cleanup -- build-cache
+npm run docker:cleanup -- build-cache --confirm-delete
+```
+
+See [DOCKER_REVIEWER_FLOW.md](DOCKER_REVIEWER_FLOW.md) for the Docker-first reviewer flow and the storage boundary between `.truth-harness` artifacts and heavyweight engine images.

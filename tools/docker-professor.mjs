@@ -2,9 +2,19 @@
 import { spawnSync } from "node:child_process";
 
 function main() {
+  console.log("Truth Harness Docker reviewer flow");
+  console.log("This builds the pinned Lean reviewer image, then writes no-network professor evidence.");
+  console.log("Use `npm run docker:storage` to inspect Docker disk use before or after the run.");
+  console.log("");
   ensureDockerEngine();
   runDocker(["compose", "build", "lean-proof"], "build the pinned Lean professor evidence image");
   runDocker(["compose", "run", "--rm", "professor-evidence"], "write professor evidence inside the no-network compose service");
+  console.log("");
+  console.log("Docker reviewer flow completed.");
+  console.log("Next useful checks:");
+  console.log("  npm run audit:release");
+  console.log("  npm run docker:storage");
+  console.log("  npm run docker:cleanup -- heavy-images");
 }
 
 function ensureDockerEngine() {
