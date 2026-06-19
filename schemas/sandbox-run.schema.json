@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/sandbox-run.schema.json",
+  "title": "Truth Harness Code-Run Sandbox Measurement",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "runId",
+    "title",
+    "summary",
+    "createdAt",
+    "status",
+    "localOnly",
+    "networkAccess",
+    "replay",
+    "measurement",
+    "artifacts",
+    "tags",
+    "limitations",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.sandbox-run.v0"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^sandbox_run_[a-f0-9]{16}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": ["passed", "failed"]
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "replay": {
+      "type": "string",
+      "minLength": 1
+    },
+    "measurement": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "platform",
+        "available",
+        "provider",
+        "processSandbox",
+        "networkIsolation",
+        "filesystemIsolation",
+        "canAttestNetworkNone",
+        "reason",
+        "notes"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "truth-harness.code-run-sandbox-status.v0"
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "provider": {
+          "enum": ["none", "bubblewrap", "container", "windows-job", "custom"]
+        },
+        "processSandbox": {
+          "enum": ["none", "enforced"]
+        },
+        "networkIsolation": {
+          "enum": ["not-enforced", "enforced"]
+        },
+        "filesystemIsolation": {
+          "enum": ["working-directory-only", "workspace-scoped"]
+        },
+        "canAttestNetworkNone": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifacts": {
+      "type": "object",
+      "required": ["json", "markdown"],
+      "properties": {
+        "json": {
+          "type": "string",
+          "minLength": 1
+        },
+        "markdown": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "additionalProperties": false
+}

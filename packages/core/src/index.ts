@@ -37,7 +37,15 @@ export {
   renderCodeRunMarkdown,
   writeCodeRun
 } from "./code-run.js";
-export { getCodeRunSandboxStatus, sandboxMeasurementForStatus } from "./sandbox.js";
+export {
+  createCodeRunSandboxRunRecord,
+  getCodeRunSandboxStatus,
+  listCodeRunSandboxRuns,
+  parseCodeRunSandboxRunJson,
+  renderCodeRunSandboxRunMarkdown,
+  sandboxMeasurementForStatus,
+  writeCodeRunSandboxRun
+} from "./sandbox.js";
 export {
   CLAIM_LEDGER_DOMAINS,
   CLAIM_LEDGER_STATUSES,
@@ -431,6 +439,10 @@ export type {
   CodeRunSandboxNetworkIsolation,
   CodeRunSandboxProcessIsolation,
   CodeRunSandboxProvider,
+  CodeRunSandboxRunRecord,
+  CodeRunSandboxRunStatus,
+  CodeRunSandboxRunSummary,
+  CodeRunSandboxRunWriteResult,
   CodeRunSandboxStatus
 } from "./sandbox.js";
 export type {

@@ -1,5 +1,15 @@
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { detectCodeRunSandboxStatus, type CodeRunSandboxProbe } from "./sandbox.js";
+import { initLocalWorkspace } from "./local-workspace.js";
+import {
+  detectCodeRunSandboxStatus,
+  listCodeRunSandboxRuns,
+  parseCodeRunSandboxRunJson,
+  writeCodeRunSandboxRun,
+  type CodeRunSandboxProbe
+} from "./sandbox.js";
 
 describe("code-run sandbox detection", () => {
   it("does not trust the Truth Harness container marker by itself", () => {
@@ -67,6 +77,49 @@ describe("code-run sandbox detection", () => {
       canAttestNetworkNone: true
     });
     expect(status.reason).toContain("loopback-only");
+  });
+
+  it("writes, parses, and lists durable sandbox measurement findings", async () => {
+    const root = await mkdtemp(join(tmpdir(), "truth-harness-sandbox-run-"));
+    await initLocalWorkspace(root, { now: "2026-06-19T00:00:00.000Z" });
+    const status = detectCodeRunSandboxStatus(
+      probe({
+        env: { TRUTH_HARNESS_CONTAINER: "1" },
+        exists: { "/.dockerenv": true },
+        files: {
+          "/proc/net/route": "Iface\tDestination\tGateway\tFlags\n",
+          "/proc/net/ipv6_route": ""
+        },
+        dirs: {
+          "/sys/class/net": ["lo"]
+        }
+      })
+    );
+
+    const result = await writeCodeRunSandboxRun({
+      rootPath: root,
+      now: new Date("2026-06-19T00:00:00.000Z"),
+      status,
+      replayCommand: "npm run docker:sandbox:write"
+    });
+    const parsed = parseCodeRunSandboxRunJson(await readFile(result.jsonPath, "utf8"), result.jsonPath);
+    const runs = await listCodeRunSandboxRuns(root);
+
+    expect(parsed.schemaVersion).toBe("truth-harness.sandbox-run.v0");
+    expect(parsed.runId).toBe(result.record.runId);
+    expect(parsed.status).toBe("passed");
+    expect(parsed.measurement.provider).toBe("container");
+    expect(parsed.measurement.canAttestNetworkNone).toBe(true);
+    expect(parsed.replay).toBe("npm run docker:sandbox:write");
+    expect(parsed.artifacts.json).toContain(".truth-harness/findings/");
+    expect(result.markdown).toContain("Can attest networkAccess none: `true`");
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      runId: parsed.runId,
+      status: "passed",
+      provider: "container",
+      canAttestNetworkNone: true
+    });
   });
 });
 

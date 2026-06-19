@@ -31,6 +31,7 @@ import {
   createSourceCitationReceipt,
   createTeachingPacket,
   createReleaseAudit,
+  writeCodeRunSandboxRun,
   createVerifierRoute,
   createSymbolicCasCheckRecord,
   getCasBackendStatus,
@@ -1415,11 +1416,21 @@ const code = program
 code
   .command("sandbox-status")
   .description("Report whether a measured code-run sandbox is available.")
+  .option("--write", "Write the sandbox measurement into .truth-harness/findings")
+  .option("--workspace <path>", "Project root path for writing sandbox evidence", ".")
   .option("--json", "Print the full sandbox status JSON")
-  .action((options: { json?: boolean }) => {
+  .action(async (options: { write?: boolean; workspace: string; json?: boolean }) => {
     const status = getCodeRunSandboxStatus();
+    const writeResult = options.write
+      ? await writeCodeRunSandboxRun({
+          rootPath: options.workspace,
+          status,
+          replayCommand: "truth-harness code sandbox-status --write --json"
+        })
+      : undefined;
+
     if (options.json) {
-      printJson(status);
+      printJson(writeResult ? { status, written: true, result: writeResult } : status);
       if (!status.available) {
         process.exitCode = 1;
       }
@@ -1431,6 +1442,10 @@ code
     console.log(`Network isolation: ${status.networkIsolation}`);
     console.log(`Filesystem isolation: ${status.filesystemIsolation}`);
     console.log(status.reason);
+    if (writeResult) {
+      console.log(`Wrote sandbox measurement: ${writeResult.jsonPath}`);
+      console.log(`Wrote sandbox report: ${writeResult.markdownPath}`);
+    }
     if (!status.available) {
       process.exitCode = 1;
     }
@@ -6637,6 +6652,7 @@ function printReleaseAudit(audit: ReleaseAudit): void {
   console.log(`  ${audit.commands.rebuildCatalog}`);
   console.log(`  ${audit.commands.credibilityPack}`);
   console.log(`  ${audit.commands.dockerEngines}`);
+  console.log(`  ${audit.commands.dockerSandbox}`);
   console.log(`  ${audit.commands.dockerAllEngines}`);
   console.log(`  ${audit.commands.dockerProof}`);
   console.log(`  ${audit.commands.dockerVerify}`);

@@ -2,7 +2,12 @@ import { resolve } from "node:path";
 import { createCredibilityPack, type CredibilityPack, type CreateCredibilityPackInput } from "./credibility-pack.js";
 import type { EngineVerificationCommandRunner, EngineVerificationRequirements } from "./engine-verification.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
-import { getCodeRunSandboxStatus, type CodeRunSandboxStatus } from "./sandbox.js";
+import {
+  getCodeRunSandboxStatus,
+  listCodeRunSandboxRuns,
+  type CodeRunSandboxRunSummary,
+  type CodeRunSandboxStatus
+} from "./sandbox.js";
 import { getWorkspaceCatalogStatus, type WorkspaceCatalogStatus } from "./workspace-catalog.js";
 
 export type ReleaseAuditStatus = "ready" | "blocked";
@@ -79,6 +84,7 @@ export interface ReleaseAudit {
   workspace: LocalWorkspaceStatus;
   catalog?: WorkspaceCatalogStatus;
   sandbox: CodeRunSandboxStatus;
+  sandboxEvidence?: CodeRunSandboxRunSummary;
   credibilityPack?: CredibilityPack;
   checks: ReleaseAuditCheck[];
   commands: {
@@ -91,6 +97,7 @@ export interface ReleaseAudit {
     engineVerify: string;
     dockerProfessor: string;
     dockerEngines: string;
+    dockerSandbox: string;
     dockerAllEngines: string;
     dockerProof: string;
     dockerVerify: string;
@@ -112,6 +119,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
   });
   const workspace = await getLocalWorkspaceStatus(rootPath);
   const sandbox = getCodeRunSandboxStatus();
+  const sandboxEvidence = workspace.exists && workspace.manifest ? await latestPassingSandboxRun(rootPath) : undefined;
 
   if (!workspace.exists || !workspace.manifest) {
     const checks = [
@@ -123,7 +131,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
         command: `truth-harness workspace init ${quoteCommandArg(rootPath)}`,
         details: ["Initialize a local .truth-harness workspace before relying on audit, catalog, or release readiness."]
       }),
-      sandboxCheck(sandbox, input.requireSandbox === true)
+      sandboxCheck(sandbox, input.requireSandbox === true, sandboxEvidence)
     ];
     return buildAudit({
       createdAt,
@@ -131,6 +139,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
       rootPath,
       workspace,
       sandbox,
+      sandboxEvidence,
       commands,
       checks,
       validationPassed: false,
@@ -178,7 +187,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     researchSessionContinuityCheck(credibilityPack),
     savedStrictEngineRunCheck(credibilityPack, input.requireSavedStrictEngineRun === true),
     reviewQueueCheck(credibilityPack),
-    sandboxCheck(sandbox, input.requireSandbox === true),
+    sandboxCheck(sandbox, input.requireSandbox === true, sandboxEvidence),
     manualUiCheck()
   ];
 
@@ -189,6 +198,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     workspace,
     catalog,
     sandbox,
+    sandboxEvidence,
     credibilityPack,
     commands,
     checks,
@@ -281,6 +291,7 @@ function buildAudit(input: {
   workspace: LocalWorkspaceStatus;
   catalog?: WorkspaceCatalogStatus;
   sandbox: CodeRunSandboxStatus;
+  sandboxEvidence?: CodeRunSandboxRunSummary;
   credibilityPack?: CredibilityPack;
   commands: ReleaseAudit["commands"];
   checks: ReleaseAuditCheck[];
@@ -330,11 +341,12 @@ function buildAudit(input: {
       sessionContinuationItems: input.sessionContinuationItems,
       reviewItems: input.reviewItems,
       criticalReviewItems: input.criticalReviewItems,
-      sandboxAvailable: input.sandbox.available
+      sandboxAvailable: input.sandbox.available || input.sandboxEvidence?.status === "passed"
     },
     workspace: input.workspace,
     catalog: input.catalog,
     sandbox: input.sandbox,
+    sandboxEvidence: input.sandboxEvidence,
     credibilityPack: input.credibilityPack,
     checks: input.checks,
     commands: input.commands,
@@ -801,7 +813,11 @@ function reviewQueueCheck(pack: CredibilityPack): ReleaseAuditCheck {
   });
 }
 
-function sandboxCheck(status: CodeRunSandboxStatus, required: boolean): ReleaseAuditCheck {
+function sandboxCheck(
+  status: CodeRunSandboxStatus,
+  required: boolean,
+  saved: CodeRunSandboxRunSummary | undefined
+): ReleaseAuditCheck {
   if (status.available) {
     return passCheck({
       id: "code-run-sandbox",
@@ -811,13 +827,27 @@ function sandboxCheck(status: CodeRunSandboxStatus, required: boolean): ReleaseA
       details: status.notes
     });
   }
+  if (saved?.status === "passed" && saved.canAttestNetworkNone) {
+    return passCheck({
+      id: "code-run-sandbox",
+      title: "Code-run sandbox boundary",
+      summary: `Saved Docker no-network sandbox measurement ${saved.runId} passed; current host remains unmeasured.`,
+      command: "npm run docker:sandbox:write",
+      details: [
+        `Saved artifact: ${saved.path}.`,
+        saved.summary,
+        "Native host code-run evidence must still stay at networkAccess unknown unless this same host can measure a sandbox provider.",
+        ...status.notes
+      ]
+    });
+  }
   if (required) {
     return failCheck({
       id: "code-run-sandbox",
       title: "Code-run sandbox boundary",
       blocking: true,
       summary: status.reason,
-      command: "docker compose run --rm truth-harness npm run cli -- code sandbox-status --json",
+      command: "npm run docker:sandbox:write",
       details: status.notes
     });
   }
@@ -826,9 +856,14 @@ function sandboxCheck(status: CodeRunSandboxStatus, required: boolean): ReleaseA
     title: "Code-run sandbox boundary",
     blocking: false,
     summary: status.reason,
-    command: "docker compose run --rm truth-harness npm run cli -- code sandbox-status --json",
+    command: "npm run docker:sandbox:write",
     details: ["Native host code-run evidence must stay at networkAccess unknown.", ...status.notes]
   });
+}
+
+async function latestPassingSandboxRun(rootPath: string): Promise<CodeRunSandboxRunSummary | undefined> {
+  const runs = await listCodeRunSandboxRuns(rootPath);
+  return runs.find((run) => run.status === "passed" && run.canAttestNetworkNone);
 }
 
 function manualUiCheck(): ReleaseAuditCheck {
@@ -880,6 +915,7 @@ function releaseAuditCommands(
     engineVerify: `truth-harness engines verify --write${requirementFlags}`,
     dockerProfessor: "npm run docker:professor",
     dockerEngines: "npm run docker:engines",
+    dockerSandbox: "npm run docker:sandbox:write",
     dockerAllEngines: "npm run docker:all-engines",
     dockerProof: "npm run docker:proof",
     dockerVerify: "npm run docker:verify",

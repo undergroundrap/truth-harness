@@ -86,6 +86,7 @@ npm run docker:engines
 npm run docker:all-engines
 docker compose run --rm truth-harness npm run cli -- proof project .
 docker compose run --rm truth-harness npm run cli -- code sandbox-status --json
+npm run docker:sandbox:write
 ```
 
 The npm convenience wrapper calls the compiled CLI inside the same compose service. When the command has CLI flags, put a second `--` before the first flag so npm forwards it to Truth Harness instead of treating it as npm config:
@@ -112,11 +113,12 @@ The Checks tab includes a Safe Verifier Path card for machines that do not have 
 ```bash
 npm run docker:proof
 npm run docker:engines
+npm run docker:sandbox:write
 npm run docker:all-engines
 npm run docker:verify
 ```
 
-Use `npm run docker:engines` for the quickest no-runtime-network Maxima/Z3/cvc5 evidence smoke from the built image. Use `npm run docker:proof` for the broader day-to-day no-runtime-network engine suite after the dev image exists. Use `npm run docker:all-engines` only when a reviewer explicitly wants the heavy Maxima/Z3/cvc5/Lean/SageMath strict gate. The all-engine scripts pass Compose `--build` on purpose so the strict result corresponds to the current source tree, although cached layers may still keep repeat runs fast. Use `npm run docker:all-engines:write` when that strict run should become a durable `.truth-harness/engine-runs` artifact for release-audit and credibility-pack citation. Use `npm run docker:verify` before demos or review checkpoints when you want the full image build and verification target. Image builds may download dependencies; verifier runs inside the `engine-smoke`, `truth-harness`, or `all-engines` compose services use the no-network runtime boundary described below.
+Use `npm run docker:engines` for the quickest no-runtime-network Maxima/Z3/cvc5 evidence smoke from the built image. Use `npm run docker:sandbox:write` when a reviewer wants a durable `.truth-harness/findings` record proving the no-network compose boundary was measured. Use `npm run docker:proof` for the broader day-to-day no-runtime-network engine suite after the dev image exists. Use `npm run docker:all-engines` only when a reviewer explicitly wants the heavy Maxima/Z3/cvc5/Lean/SageMath strict gate. The all-engine scripts pass Compose `--build` on purpose so the strict result corresponds to the current source tree, although cached layers may still keep repeat runs fast. Use `npm run docker:all-engines:write` when that strict run should become a durable `.truth-harness/engine-runs` artifact for release-audit and credibility-pack citation. Use `npm run docker:verify` before demos or review checkpoints when you want the full image build and verification target. Image builds may download dependencies; verifier runs inside the `engine-smoke`, `truth-harness`, or `all-engines` compose services use the no-network runtime boundary described below.
 
 The UI card is guidance, not evidence. Claims still need concrete receipts: `cross-checked` requires an accepted independent CAS record, `smt-checked` requires a concrete Z3 or cvc5 solver record, and `proved` requires an accepted proof-checker record.
 
@@ -135,7 +137,8 @@ By default, MCP `truth_harness_code_run` is still disabled. To expose it to an a
 - The dev image runs as an unprivileged `truth` user.
 - CLI and MCP compose services use `network_mode: "none"` so normal CLI, MCP, test, and proof runs cannot reach the network from inside the container.
 - Compose drops Linux capabilities, sets `no-new-privileges:true`, and caps process count for each service.
-- `truth-harness code sandbox-status --json` can record the CLI/MCP no-network services as a measured `container` provider when the runtime has only loopback networking and no default route.
+- `truth-harness code sandbox-status --json` can report the CLI/MCP no-network services as a measured `container` provider when the runtime has only loopback networking and no default route.
+- `truth-harness code sandbox-status --write --json` writes that measurement as a `truth-harness.sandbox-run.v0` finding. `npm run docker:sandbox:write` is the recommended reviewer command because it records the measurement from inside the no-network compose service.
 - The web compose service publishes `127.0.0.1:4180` for the browser and is not a code sandbox. Its local API currently creates receipts and claim-ledger records through `@truth-harness/core` without hosted model calls.
 - Node dependencies live in the `truth_harness_node_modules` Docker volume.
 - npm cache lives in the `truth_harness_npm_cache` Docker volume.

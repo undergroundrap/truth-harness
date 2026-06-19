@@ -329,6 +329,11 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
         schemaVersion: "truth-harness.report-draft.v0",
         schemaFile: "report-draft.schema.json",
         idKey: "reportId"
+      },
+      {
+        schemaVersion: "truth-harness.sandbox-run.v0",
+        schemaFile: "sandbox-run.schema.json",
+        idKey: "runId"
       }
     ]
   }
@@ -1336,6 +1341,9 @@ function inferLooseArtifactId(
   }
   if (record?.schemaVersion === "truth-harness.report-draft.v0") {
     return typeof record.reportId === "string" ? record.reportId : undefined;
+  }
+  if (record?.schemaVersion === "truth-harness.sandbox-run.v0") {
+    return typeof record.runId === "string" ? record.runId : undefined;
   }
 
   return undefined;

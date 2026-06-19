@@ -1390,6 +1390,35 @@ describe("benchmark CLI", () => {
     }
   });
 
+  it("writes code-run sandbox status evidence from the CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    const result = await runCli(["code", "sandbox-status", "--write", "--workspace", root, "--json"]);
+    const json = JSON.parse(result.stdout) as {
+      status: { available: boolean };
+      written: true;
+      result: {
+        record: {
+          schemaVersion: string;
+          runId: string;
+          status: string;
+          measurement: { schemaVersion: string; canAttestNetworkNone: boolean };
+        };
+        jsonPath: string;
+        markdownPath: string;
+      };
+    };
+
+    expect(result.exitCode).toBe(json.status.available ? 0 : 1);
+    expect(json.written).toBe(true);
+    expect(json.result.record.schemaVersion).toBe("truth-harness.sandbox-run.v0");
+    expect(json.result.record.runId).toMatch(/^sandbox_run_[a-f0-9]{16}$/);
+    expect(json.result.record.measurement.schemaVersion).toBe("truth-harness.code-run-sandbox-status.v0");
+    expect(json.result.record.status).toBe(json.result.record.measurement.canAttestNetworkNone ? "passed" : "failed");
+    expect(json.result.jsonPath).toContain(".truth-harness");
+    expect(json.result.markdownPath).toContain(".truth-harness");
+  });
+
   it("repairs older workspace manifests from the CLI", async () => {
     const root = await tempRoot();
     const init = JSON.parse((await runCli(["workspace", "init", root, "--json"])).stdout) as {

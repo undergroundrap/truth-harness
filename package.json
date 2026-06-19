@@ -20,6 +20,8 @@
     "docker:cli": "docker compose run --rm truth-harness node apps/cli/dist/index.js",
     "docker:engines": "node tools/docker-engines.mjs",
     "docker:professor": "node tools/docker-professor.mjs",
+    "docker:sandbox": "docker compose run --build --rm truth-harness npm run cli -- code sandbox-status --json",
+    "docker:sandbox:write": "docker compose run --build --rm truth-harness npm run cli -- code sandbox-status --write --workspace /workspace --json",
     "docker:sage": "docker compose run --build --rm sage-math",
     "docker:all-engines": "docker compose run --build --rm all-engines",
     "docker:all-engines:write": "docker compose run --build --rm all-engines node apps/cli/dist/index.js engines verify --write --require-all-engines",

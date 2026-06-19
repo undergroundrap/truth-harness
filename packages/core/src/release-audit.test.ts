@@ -10,6 +10,7 @@ import { createReceipt } from "./receipt.js";
 import { writeEngineVerificationRun, type EngineVerificationCommandRunner } from "./engine-verification.js";
 import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchSession } from "./research-session.js";
+import { detectCodeRunSandboxStatus, writeCodeRunSandboxRun } from "./sandbox.js";
 import { writeVerifierRoute } from "./verifier-route.js";
 
 const roots: string[] = [];
@@ -468,6 +469,73 @@ describe("release audit", () => {
     );
     expect(audit.nextActions).not.toContain("truth-harness engines verify --write --require-all-concrete");
     expect(markdown).toContain("Saved no-network Docker engine evidence covers the required gates");
+  });
+
+  it("uses saved Docker sandbox evidence when the host sandbox is unmeasured", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Saved Sandbox Audit", now: "2026-06-17T00:00:00.000Z" });
+    const sandboxRun = await writeCodeRunSandboxRun({
+      rootPath: root,
+      now: new Date("2026-06-17T00:00:00.250Z"),
+      replayCommand: "npm run docker:sandbox:write",
+      status: detectCodeRunSandboxStatus({
+        platform: "linux",
+        env: { TRUTH_HARNESS_CONTAINER: "1" },
+        fileExists: (path) => path === "/.dockerenv",
+        readFile: (path) => {
+          if (path === "/proc/net/route" || path === "/proc/net/ipv6_route") {
+            return "";
+          }
+          return undefined;
+        },
+        readDir: (path) => (path === "/sys/class/net" ? ["lo"] : undefined)
+      })
+    });
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(createReceipt("for all integers n, n^2+n+1 is even")),
+      suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
+      suitePath: "packages/benchmarks/suites/ai-failure-seed.json",
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-17T00:00:00.500Z"
+    });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-17T00:00:02.000Z",
+      requireSandbox: true,
+      engineRequirements: { maxima: true, z3: true, lean: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      leanCommand: "lean-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: passingEngineRunner
+    });
+
+    expect(audit.status).toBe("ready");
+    expect(audit.summary.sandboxAvailable).toBe(true);
+    expect(audit.sandboxEvidence).toMatchObject({
+      runId: sandboxRun.record.runId,
+      status: "passed",
+      canAttestNetworkNone: true
+    });
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "code-run-sandbox",
+        status: "pass",
+        blocking: false,
+        command: "npm run docker:sandbox:write",
+        details: expect.arrayContaining([
+          expect.stringContaining(sandboxRun.record.artifacts.json),
+          expect.stringContaining("Native host code-run evidence must still stay at networkAccess unknown")
+        ])
+      })
+    );
   });
 });
 
