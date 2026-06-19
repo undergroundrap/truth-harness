@@ -28,6 +28,7 @@ export interface CredibilityPackCommandSet {
   validateWorkspace: string;
   verifyEngines: string;
   runAdversarialBenchmark: string;
+  runMathCredibilityLadder: string;
   reviewWorkspace: string;
   reproducePack: string;
   dockerProfessorEvidence: string;
@@ -74,6 +75,7 @@ export interface CredibilityPackBenchmarkLedger {
   savedRuns: number;
   latestRuns: BenchmarkArtifactSummary[];
   latestAdversarialRun?: BenchmarkArtifactSummary;
+  latestMathCredibilityLadderRun?: BenchmarkArtifactSummary;
 }
 
 export interface CredibilityPackEngineEvidenceLadderEntry {
@@ -115,6 +117,8 @@ export interface CredibilityPack {
     savedBenchmarkRuns: number;
     latestAdversarialBenchmarkStatus: "missing" | "passed" | "failed";
     latestAdversarialBenchmarkAccuracy?: number;
+    latestMathCredibilityLadderStatus: "missing" | "passed" | "failed";
+    latestMathCredibilityLadderAccuracy?: number;
     savedReportDrafts: number;
     reportDraftsNeedingAttention: number;
     reviewItems: number;
@@ -257,6 +261,8 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       savedBenchmarkRuns: benchmarkLedger.savedRuns,
       latestAdversarialBenchmarkStatus: adversarialBenchmarkStatus(benchmarkLedger.latestAdversarialRun),
       latestAdversarialBenchmarkAccuracy: benchmarkLedger.latestAdversarialRun?.trustAccuracy,
+      latestMathCredibilityLadderStatus: benchmarkStatus(benchmarkLedger.latestMathCredibilityLadderRun),
+      latestMathCredibilityLadderAccuracy: benchmarkLedger.latestMathCredibilityLadderRun?.trustAccuracy,
       savedReportDrafts: review.summary.reportDrafts ?? 0,
       reportDraftsNeedingAttention: review.summary.reportDraftsNeedingAttention ?? 0,
       reviewItems: review.summary.totalItems,
@@ -367,6 +373,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Engine evidence: ${pack.summary.engineStatus} (${pack.summary.concreteEngineGates} concrete gates, ${pack.summary.requiredEngineGates} required gates, ${pack.summary.engineEvidenceMinted} evidence records earned)`,
     `- Saved engine-run ledger: ${pack.summary.savedEngineRuns} saved${savedEngineRunLedgerLabel(pack)}`,
     `- Adversarial benchmark: ${formatAdversarialBenchmarkSummary(pack.summary.latestAdversarialBenchmarkStatus, pack.summary.latestAdversarialBenchmarkAccuracy)} (${pack.summary.savedBenchmarkRuns} saved benchmark run${pack.summary.savedBenchmarkRuns === 1 ? "" : "s"})`,
+    `- Math credibility ladder: ${formatBenchmarkSummary(pack.summary.latestMathCredibilityLadderStatus, pack.summary.latestMathCredibilityLadderAccuracy)}`,
     `- Saved report drafts: ${formatReportDraftSummary(pack.summary.savedReportDrafts, pack.summary.reportDraftsNeedingAttention)}`,
     `- Embedded artifact snapshot: ${pack.summary.snapshotFiles} files, ${pack.summary.snapshotBytes} bytes`,
     `- Open work queue: ${pack.summary.reviewItems} items (${pack.summary.criticalReviewItems} critical, ${pack.summary.highReviewItems} high)`,
@@ -377,6 +384,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Validate workspace: \`${pack.reviewerCommands.validateWorkspace}\``,
     `- Verify engines: \`${pack.reviewerCommands.verifyEngines}\``,
     `- Run adversarial benchmark: \`${pack.reviewerCommands.runAdversarialBenchmark}\``,
+    `- Run math credibility ladder: \`${pack.reviewerCommands.runMathCredibilityLadder}\``,
     `- Review open obligations: \`${pack.reviewerCommands.reviewWorkspace}\``,
     `- Reproduce this pack: \`${pack.reviewerCommands.reproducePack}\``,
     `- Docker professor evidence: \`${pack.reviewerCommands.dockerProfessorEvidence}\``,
@@ -477,6 +485,21 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
   } else {
     lines.push(
       "No saved `ai-failure-seed` benchmark run was found. Run the adversarial benchmark command before asking a professor to review the workspace.",
+      ""
+    );
+  }
+  if (pack.benchmarkLedger.latestMathCredibilityLadderRun) {
+    const run = pack.benchmarkLedger.latestMathCredibilityLadderRun;
+    lines.push(
+      `Latest math credibility ladder: \`${run.artifactId}\` (${run.passed}/${run.total}, ${((run.trustAccuracy ?? 0) * 100).toFixed(1)}%)`,
+      `Path: \`${run.path}\``,
+      `Replay: \`${run.replayCommand ?? run.command ?? pack.reviewerCommands.runMathCredibilityLadder}\``,
+      `Receipt replay examples: ${formatBenchmarkReceiptReplays(run.receiptReplays)}`,
+      ""
+    );
+  } else {
+    lines.push(
+      "No saved `math-credibility-ladder` benchmark run was found. Run the ladder before claiming the native-safe hard-math floor is green.",
       ""
     );
   }
@@ -587,11 +610,16 @@ function summarizeBenchmarkLedger(artifacts: BenchmarkArtifactSummary[]): Credib
   return {
     savedRuns: runs.length,
     latestRuns: runs.slice(0, 5),
-    latestAdversarialRun: runs.find((run) => run.suiteId === "ai-failure-seed")
+    latestAdversarialRun: runs.find((run) => run.suiteId === "ai-failure-seed"),
+    latestMathCredibilityLadderRun: runs.find((run) => run.suiteId === "math-credibility-ladder")
   };
 }
 
 function adversarialBenchmarkStatus(run: BenchmarkArtifactSummary | undefined): "missing" | "passed" | "failed" {
+  return benchmarkStatus(run);
+}
+
+function benchmarkStatus(run: BenchmarkArtifactSummary | undefined): "missing" | "passed" | "failed" {
   if (!run) {
     return "missing";
   }
@@ -608,6 +636,10 @@ function formatAdversarialBenchmarkSummary(
   }
 
   return `${status}${accuracy === undefined ? "" : ` (${(accuracy * 100).toFixed(1)}%)`}`;
+}
+
+function formatBenchmarkSummary(status: "missing" | "passed" | "failed", accuracy: number | undefined): string {
+  return formatAdversarialBenchmarkSummary(status, accuracy);
 }
 
 function formatReportDraftSummary(saved: number, needingAttention: number): string {
@@ -723,6 +755,35 @@ function createReviewerActionPlan(input: {
       source: {
         kind: "benchmark-run",
         ref: adversarialBenchmark.path
+      }
+    });
+  }
+
+  const mathLadder = input.benchmarkLedger.latestMathCredibilityLadderRun;
+  if (!mathLadder) {
+    pushAction({
+      category: "benchmark",
+      priority: "high",
+      title: "Run math credibility ladder",
+      detail: "No saved `math-credibility-ladder` benchmark run was found. Professor review should include the native-safe hard-math readiness floor: exact equality, common-denominator lemmas, parity boundaries, dimensional mistakes, interval bounds, and honest theorem-boundary refusals.",
+      command: input.reviewerCommands.runMathCredibilityLadder,
+      closes: ["benchmark:math-credibility-ladder", "math-credibility-ladder-ledger"],
+      source: {
+        kind: "benchmark-suite",
+        ref: "math-credibility-ladder"
+      }
+    });
+  } else if ((mathLadder.failed ?? 0) > 0) {
+    pushAction({
+      category: "benchmark",
+      priority: "critical",
+      title: "Fix math credibility ladder regressions",
+      detail: `Latest \`math-credibility-ladder\` run ${mathLadder.artifactId} has ${mathLadder.failed ?? 0} failing case(s). Fix or explicitly triage before treating the math lane as professor-ready.`,
+      command: input.reviewerCommands.runMathCredibilityLadder,
+      closes: ["benchmark:math-credibility-ladder", `benchmark-run:${mathLadder.artifactId}`],
+      source: {
+        kind: "benchmark-run",
+        ref: mathLadder.path
       }
     });
   }
@@ -875,6 +936,13 @@ function credibilityWarnings(input: {
       `Latest \`ai-failure-seed\` adversarial benchmark run has ${input.benchmarkLedger.latestAdversarialRun.failed ?? 0} failing case(s).`
     );
   }
+  if (!input.benchmarkLedger.latestMathCredibilityLadderRun) {
+    warnings.push("No saved `math-credibility-ladder` hard-math readiness run found.");
+  } else if ((input.benchmarkLedger.latestMathCredibilityLadderRun.failed ?? 0) > 0) {
+    warnings.push(
+      `Latest \`math-credibility-ladder\` hard-math readiness run has ${input.benchmarkLedger.latestMathCredibilityLadderRun.failed ?? 0} failing case(s).`
+    );
+  }
   if (input.review.summary.criticalItems > 0) {
     warnings.push(`Workspace review has ${input.review.summary.criticalItems} critical open item(s).`);
   }
@@ -929,6 +997,7 @@ function createReviewerCommands(input: {
     validateWorkspace: "truth-harness workspace validate .",
     verifyEngines: `truth-harness engines verify --write${engineSuffix}`,
     runAdversarialBenchmark: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+    runMathCredibilityLadder: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
     reviewWorkspace: "truth-harness workspace review .",
     reproducePack: `truth-harness workspace credibility-pack .${engineSuffix}`,
     dockerProfessorEvidence: "npm run docker:professor",

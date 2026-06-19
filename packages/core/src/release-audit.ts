@@ -74,6 +74,7 @@ export interface ReleaseAudit {
     requiredEngineGates: string;
     concreteEngineGates: string;
     adversarialBenchmark: string;
+    mathCredibilityLadder: string;
     reportDrafts: number;
     reportDraftsNeedingAttention: number;
     researchSessions: number;
@@ -97,6 +98,7 @@ export interface ReleaseAudit {
     credibilityPack: string;
     credibilityActions: string;
     adversarialBenchmark: string;
+    mathCredibilityLadder: string;
     engineVerify: string;
     dockerProfessor: string;
     dockerEngines: string;
@@ -152,6 +154,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
       requiredEngineGates: "0/0",
       concreteEngineGates: "0/0",
       adversarialBenchmark: "missing",
+      mathCredibilityLadder: "missing",
       reportDrafts: 0,
       reportDraftsNeedingAttention: 0,
       researchSessions: 0,
@@ -188,6 +191,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     catalogCheck(catalog),
     engineCheck(credibilityPack, hasRequiredEngine(engineRequirements)),
     adversarialBenchmarkCheck(credibilityPack),
+    mathCredibilityLadderCheck(credibilityPack),
     reportDraftsCheck(credibilityPack),
     researchSessionContinuityCheck(credibilityPack),
     savedStrictEngineRunCheck(credibilityPack, input.requireSavedStrictEngineRun === true),
@@ -213,6 +217,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     requiredEngineGates: credibilityPack.summary.requiredEngineGates,
     concreteEngineGates: credibilityPack.summary.concreteEngineGates,
     adversarialBenchmark: credibilityPack.summary.latestAdversarialBenchmarkStatus,
+    mathCredibilityLadder: credibilityPack.summary.latestMathCredibilityLadderStatus,
     reportDrafts: credibilityPack.summary.savedReportDrafts,
     reportDraftsNeedingAttention: credibilityPack.summary.reportDraftsNeedingAttention,
     researchSessions: credibilityPack.workspaceReview.summary.sessions,
@@ -243,6 +248,7 @@ export function renderReleaseAuditMarkdown(audit: ReleaseAudit): string {
     `- Required engine gates: ${audit.summary.requiredEngineGates}`,
     `- Concrete engine gates: ${audit.summary.concreteEngineGates}`,
     `- Adversarial benchmark: ${audit.summary.adversarialBenchmark}`,
+    `- Math credibility ladder: ${audit.summary.mathCredibilityLadder}`,
     `- Report drafts: ${audit.summary.reportDrafts} saved, ${audit.summary.reportDraftsNeedingAttention} needing attention`,
     `- Research sessions: ${audit.summary.researchSessions} inspected, ${audit.summary.sessionContinuationItems} continuation item(s)`,
     `- Review queue: ${audit.summary.reviewItems} item(s), ${audit.summary.criticalReviewItems} critical`,
@@ -308,6 +314,7 @@ function buildAudit(input: {
   requiredEngineGates: string;
   concreteEngineGates: string;
   adversarialBenchmark: string;
+  mathCredibilityLadder: string;
   reportDrafts: number;
   reportDraftsNeedingAttention: number;
   researchSessions: number;
@@ -343,6 +350,7 @@ function buildAudit(input: {
       requiredEngineGates: input.requiredEngineGates,
       concreteEngineGates: input.concreteEngineGates,
       adversarialBenchmark: input.adversarialBenchmark,
+      mathCredibilityLadder: input.mathCredibilityLadder,
       reportDrafts: input.reportDrafts,
       reportDraftsNeedingAttention: input.reportDraftsNeedingAttention,
       researchSessions: input.researchSessions,
@@ -700,6 +708,77 @@ function adversarialBenchmarkEvidenceDetails(pack: CredibilityPack): string[] {
   return details;
 }
 
+function mathCredibilityLadderCheck(pack: CredibilityPack): ReleaseAuditCheck {
+  const status = pack.summary.latestMathCredibilityLadderStatus;
+  const accuracy = pack.summary.latestMathCredibilityLadderAccuracy;
+  const accuracyText = accuracy === undefined ? "unknown accuracy" : `${(accuracy * 100).toFixed(1)}% trust accuracy`;
+  const evidenceDetails = mathCredibilityLadderEvidenceDetails(pack);
+  if (status === "passed") {
+    return passCheck({
+      id: "math-credibility-ladder",
+      title: "Math credibility ladder",
+      summary: `Latest math-credibility-ladder run passed with ${accuracyText}.`,
+      command: pack.reviewerCommands.runMathCredibilityLadder,
+      details: [
+        ...evidenceDetails,
+        "The ladder is the native-safe hard-math floor: exact equality, common-denominator lemmas, parity boundaries, dimensional mistakes, interval bounds, and honest theorem-boundary refusals."
+      ]
+    });
+  }
+
+  if (status === "failed") {
+    return failCheck({
+      id: "math-credibility-ladder",
+      title: "Math credibility ladder",
+      blocking: true,
+      summary: `Latest math-credibility-ladder run failed with ${accuracyText}.`,
+      command: pack.reviewerCommands.runMathCredibilityLadder,
+      details: [
+        ...evidenceDetails,
+        "Fix or explicitly triage failing ladder cases before treating the math lane as professor-ready.",
+        ...pack.reviewerActionPlan.actions
+          .filter((action) => action.category === "benchmark" && action.source.ref.includes("math-credibility-ladder"))
+          .slice(0, 3)
+          .map((action) => action.detail)
+      ]
+    });
+  }
+
+  return failCheck({
+    id: "math-credibility-ladder",
+    title: "Math credibility ladder",
+    blocking: true,
+    summary: "No saved math-credibility-ladder benchmark run was found.",
+    command: pack.reviewerCommands.runMathCredibilityLadder,
+    details: [
+      "Run and save the math credibility ladder before serious review so reviewers can see the native-safe hard-math floor replay locally.",
+      "The ladder is not a proof of future claims; it is regression evidence for the verifier routing and trust-label floor."
+    ]
+  });
+}
+
+function mathCredibilityLadderEvidenceDetails(pack: CredibilityPack): string[] {
+  const run = pack.benchmarkLedger.latestMathCredibilityLadderRun;
+  if (!run) {
+    return [];
+  }
+
+  const details = [
+    `Artifact: ${run.path}.`,
+    `Benchmark run id: ${run.artifactId}.`,
+    `Replay command: ${run.replayCommand ?? run.command ?? pack.reviewerCommands.runMathCredibilityLadder}.`
+  ];
+
+  if (run.receiptReplays && run.receiptReplays.length > 0) {
+    details.push(`Receipt replay example: ${run.receiptReplays[0]}.`);
+  }
+  if (run.failedCaseIds && run.failedCaseIds.length > 0) {
+    details.push(`Failing cases: ${run.failedCaseIds.join(", ")}.`);
+  }
+
+  return details;
+}
+
 function reportDraftsCheck(pack: CredibilityPack): ReleaseAuditCheck {
   const saved = pack.summary.savedReportDrafts;
   const needingAttention = pack.summary.reportDraftsNeedingAttention;
@@ -1001,6 +1080,7 @@ function releaseAuditCommands(
     credibilityPack: `truth-harness workspace credibility-pack ${quotedRoot}${requirementFlags}`,
     credibilityActions: `truth-harness workspace credibility-actions ${quotedRoot}${requirementFlags}`,
     adversarialBenchmark: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+    mathCredibilityLadder: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
     engineVerify: `truth-harness engines verify --write${requirementFlags}`,
     dockerProfessor: "npm run docker:professor",
     dockerEngines: "npm run docker:engines",

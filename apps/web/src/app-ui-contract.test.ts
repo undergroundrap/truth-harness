@@ -185,8 +185,10 @@ describe("web UI action contracts", () => {
     expect(source).toContain("pack?.engineEvidence?.cases");
     expect(source).toContain("Engine Evidence Ladder");
     expect(source).toContain("function credibilityBenchmarkCardHtml(pack)");
+    expect(source).toContain("function credibilityMathLadderCommand(pack)");
     expect(source).toContain('data-testid="copy-credibility-benchmark-command"');
-    expect(source).toContain("Adversarial benchmark command copied from the credibility pack.");
+    expect(source).toContain("math-credibility-ladder");
+    expect(source).toContain("command copied from the credibility pack.");
     expect(source).toContain("receiptReplays");
     expect(source).toContain("async function refreshCredibilityRunNext({ announce = true } = {})");
     expect(source).toContain("async function saveCredibilityRunNextFromUi(button)");
@@ -249,7 +251,9 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function refreshReleaseAudit({ announce = true } = {})");
     expect(source).toContain("function renderReleaseAuditGate()");
     expect(source).toContain("function releaseAuditBenchmarkCardHtml(audit)");
+    expect(source).toContain("function releaseAuditMathLadderCardHtml(audit)");
     expect(source).toContain("function releaseAuditBenchmarkSummary(summary)");
+    expect(source).toContain("function releaseAuditMathLadderSummary(summary)");
     expect(source).toContain('data-testid="refresh-release-audit"');
     expect(source).toContain('data-testid="copy-release-audit-command"');
     expect(source).toContain('data-testid="copy-release-benchmark-command"');
@@ -258,13 +262,15 @@ describe("web UI action contracts", () => {
     expect(source).toContain("requireSandbox");
     expect(source).toContain("maxReports");
     expect(source).toContain("adversarialBenchmark");
+    expect(source).toContain("mathCredibilityLadder");
+    expect(source).toContain("latestMathCredibilityLadderStatus");
     expect(source).toContain("reportDraftsNeedingAttention");
     expect(source).toContain("sessionContinuationItems");
     expect(source).toContain("Receipt replay:");
     expect(source).toContain("releaseAuditActivitySummary");
     expect(source).toContain(".copy-release-action-command");
     expect(source).toContain("Strict release-audit command copied from the Checks tab.");
-    expect(source).toContain("Adversarial benchmark command copied from the Checks tab.");
+    expect(source).toContain("command copied from the Checks tab.");
     expect(source).toContain("Release-audit next action copied from the Checks tab.");
     expect(styles).toContain(".release-audit-gate");
     expect(styles).toContain(".release-audit-summary");

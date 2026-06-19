@@ -110,7 +110,7 @@ describe("local web route ledger API", () => {
     expect(typeof statusPayload.dockerVerifier.recommended).toBe("boolean");
     expect(statusPayload.dockerVerifier.notes).toContain("The web UI never runs Docker automatically; it only exposes copyable commands.");
     expect(statusPayload.dockerVerifier.notes).toContain(
-      "npm run docker:professor writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, a credibility pack, and a verified portable reviewer bundle inside the no-network compose service."
+      "npm run docker:professor writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, math credibility ladder evidence, a credibility pack, and a verified portable reviewer bundle inside the no-network compose service."
     );
     expect(statusPayload.dockerVerifier.notes).toContain(
       "npm run docker:all-engines is the heavy strict gate for Maxima, Z3, cvc5, Lean, and SageMath when a reviewer explicitly wants every adapter fixture."

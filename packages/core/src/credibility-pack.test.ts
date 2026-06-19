@@ -62,6 +62,23 @@ describe("professor credibility pack", () => {
       workingDirectory: root,
       now: "2026-06-16T00:00:45.000Z"
     });
+    const mathLadderReceipt = createReceipt("3 / 4 + 5 / 8");
+    const mathLadderBenchmark = await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(mathLadderReceipt, {
+        suiteId: "math-credibility-ladder",
+        title: "Math Credibility Ladder",
+        expectTrust: "exact-computed",
+        expectEvidenceKind: "exact-arithmetic",
+        category: "native-safe-hard-math-floor",
+        aiFailureMode: "trust-label boundary"
+      }),
+      suiteDescription: "Native-safe hard-math readiness floor.",
+      suitePath: "packages/benchmarks/suites/math-credibility-ladder.json",
+      command: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-16T00:00:46.000Z"
+    });
 
     const result = await writeCredibilityPack({
       rootPath: root,
@@ -90,9 +107,11 @@ describe("professor credibility pack", () => {
       engineEvidenceMinted: 3,
       savedEngineRuns: 1,
       latestStrictEngineRunStatus: "passed",
-      savedBenchmarkRuns: 1,
+      savedBenchmarkRuns: 2,
       latestAdversarialBenchmarkStatus: "passed",
       latestAdversarialBenchmarkAccuracy: 1,
+      latestMathCredibilityLadderStatus: "passed",
+      latestMathCredibilityLadderAccuracy: 1,
       professorReady: true
     });
     expect(result.pack.embeddedSnapshot.entries.length).toBeGreaterThan(0);
@@ -110,12 +129,14 @@ describe("professor credibility pack", () => {
     expect(result.markdown).toContain("Professor ready: yes");
     expect(result.markdown).toContain("Saved engine-run ledger: 1 saved");
     expect(result.markdown).toContain("Adversarial benchmark: passed (100.0%)");
+    expect(result.markdown).toContain("Math credibility ladder: passed (100.0%)");
     expect(result.markdown).toContain("## Engine Evidence Ladder");
     expect(result.markdown).toContain("| Lean proof fixture | required | `passed` | `proved` | earned evidence | Concrete `proved` evidence earned");
     expect(result.markdown).toContain("## Saved Engine Run Ledger");
     expect(result.markdown).toContain(strictEngineRun.record.runId);
     expect(result.markdown).toContain("## Benchmark Ledger");
     expect(result.markdown).toContain(adversarialBenchmark.record.benchmarkRunId);
+    expect(result.markdown).toContain(mathLadderBenchmark.record.benchmarkRunId);
     expect(result.markdown).toContain("Docker Lean fixture");
     expect(result.pack.engineRunLedger.latestStrictReviewerRun).toMatchObject({
       runId: strictEngineRun.record.runId,
@@ -128,6 +149,13 @@ describe("professor credibility pack", () => {
       failed: 0,
       replayCommand: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
       receiptReplays: expect.arrayContaining([adversarialReceipt.replay])
+    });
+    expect(result.pack.benchmarkLedger.latestMathCredibilityLadderRun).toMatchObject({
+      artifactId: mathLadderBenchmark.record.benchmarkRunId,
+      suiteId: "math-credibility-ladder",
+      failed: 0,
+      replayCommand: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
+      receiptReplays: expect.arrayContaining([mathLadderReceipt.replay])
     });
     expect(result.pack.reviewerActionPlan).toMatchObject({
       totalActions: 0,
@@ -145,6 +173,9 @@ describe("professor credibility pack", () => {
     );
     expect(result.pack.reviewerCommands.runAdversarialBenchmark).toBe(
       "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures"
+    );
+    expect(result.pack.reviewerCommands.runMathCredibilityLadder).toBe(
+      "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures"
     );
 
     const json = await readFile(result.jsonPath, "utf8");
@@ -237,10 +268,11 @@ describe("professor credibility pack", () => {
     expect(pack.warnings).toContain("Required engine evidence gates are incomplete: 0/3 passed.");
     expect(pack.warnings).toContain("Concrete engine smoke gates are incomplete: 0/3 passed.");
     expect(pack.warnings).toContain("No saved `ai-failure-seed` adversarial benchmark run found.");
+    expect(pack.warnings).toContain("No saved `math-credibility-ladder` hard-math readiness run found.");
     expect(pack.reviewerActionPlan).toMatchObject({
-      totalActions: 4,
+      totalActions: 5,
       criticalActions: 3,
-      highActions: 1
+      highActions: 2
     });
     expect(pack.reviewerActionPlan.actions).toContainEqual(
       expect.objectContaining({
@@ -270,6 +302,15 @@ describe("professor credibility pack", () => {
         title: "Run adversarial AI failure benchmark",
         command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
         closes: expect.arrayContaining(["benchmark:ai-failure-seed"])
+      })
+    );
+    expect(pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({
+        category: "benchmark",
+        priority: "high",
+        title: "Run math credibility ladder",
+        command: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
+        closes: expect.arrayContaining(["benchmark:math-credibility-ladder"])
       })
     );
     expect(pack.reviewerActionPlan.actions.map((action) => action.detail).join("\n")).not.toContain("spawn");
@@ -319,6 +360,22 @@ describe("professor credibility pack", () => {
       workingDirectory: root,
       now: "2026-06-16T00:00:45.000Z"
     });
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(createReceipt("3 / 4 + 5 / 8"), {
+        suiteId: "math-credibility-ladder",
+        title: "Math Credibility Ladder",
+        expectTrust: "exact-computed",
+        expectEvidenceKind: "exact-arithmetic",
+        category: "native-safe-hard-math-floor",
+        aiFailureMode: "trust-label boundary"
+      }),
+      suiteDescription: "Native-safe hard-math readiness floor.",
+      suitePath: "packages/benchmarks/suites/math-credibility-ladder.json",
+      command: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-16T00:00:46.000Z"
+    });
 
     const pack = await createCredibilityPack({
       rootPath: root,
@@ -343,6 +400,7 @@ describe("professor credibility pack", () => {
       requiredEngineGates: "0/4",
       latestProfessorEngineRunStatus: "passed",
       latestAdversarialBenchmarkStatus: "passed",
+      latestMathCredibilityLadderStatus: "passed",
       professorReady: true
     });
     expect(pack.engineRunLedger.latestProfessorReviewerRun).toMatchObject({

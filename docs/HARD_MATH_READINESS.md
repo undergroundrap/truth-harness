@@ -30,6 +30,12 @@ Run it through Docker:
 npm run docker:math-ladder
 ```
 
+Save it as reviewer evidence before running a credibility pack or release audit:
+
+```bash
+truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures
+```
+
 The suite lives at:
 
 ```text
@@ -46,7 +52,7 @@ The ladder checks that Truth Harness can:
 - return conservative interval bounds
 - refuse theorem-level prompts outside the current checker boundary
 
-Passing this ladder does not prove Truth Harness can solve hard math. It proves the harness is still honest on the foundations that hard-math workflows will depend on.
+Passing this ladder does not prove Truth Harness can solve hard math. A saved passing `truth-harness.benchmark-run.v0` record proves the current workspace has replayable regression evidence for the foundations that hard-math workflows will depend on.
 
 ## Readiness Stages
 

@@ -15,6 +15,7 @@ truth-harness workspace credibility-pack . --require-all-engines
 truth-harness workspace credibility-pack . --dry-run --json
 truth-harness workspace credibility-actions . --require-all-engines --json
 truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures
+truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures
 npm run docker:professor
 truth-harness workspace credibility-bundle .
 truth-harness workspace verify-credibility-bundle . .truth-harness/findings/<date>-<bundle-id>-credibility-bundle
@@ -52,14 +53,14 @@ npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/
 - Structured engine evidence ladder that separates required/optional gates, earned/missing/failed evidence, and the plain-English reviewer meaning for each engine row.
 - Saved engine-run ledger summary from `.truth-harness/engine-runs`, including the latest no-network Docker professor run and the latest strict all-engines reviewer run when they exist.
 - Engine-run records validate against `engine-run.schema.json` before they are saved, so reviewer packets cannot cite malformed or non-replayable engine evidence ledger entries.
-- Saved benchmark ledger summary from `.truth-harness/benchmarks`, including the latest `ai-failure-seed` adversarial AI-failure run, artifact path, trust accuracy, replay command, and sample receipt replay commands.
+- Saved benchmark ledger summary from `.truth-harness/benchmarks`, including the latest `ai-failure-seed` adversarial AI-failure run and latest `math-credibility-ladder` hard-math readiness run, artifact paths, trust accuracy, replay commands, and sample receipt replay commands.
 - Benchmark run and comparison records validate against their schemas before saving, so adversarial demo scores and regression verdicts cannot become citable reviewer evidence if the local ledger shape is malformed.
 - Saved report draft summary from `.truth-harness/findings`, including how many human-facing Markdown drafts exist and whether any need integrity review before sharing.
 - Workspace review queue with top open proof/check obligations. Normal unverified exploration and stronger-label upgrades stay visible as work, but they are not treated as release-critical defects unless they block a current claim boundary.
 - Structured reviewer action plan with priorities, close targets, and commands for validation, engine, benchmark, and workspace-review blockers.
-- Exact reviewer commands for validation, writable engine checks, adversarial benchmarks, review, Docker core engines, the Lean proof fixture, the heavier SageMath fixture, and the strict all-engine Docker gate.
-- A one-command Docker professor evidence route: `npm run docker:professor` builds the pinned Lean proof image, then writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, a credibility pack, and a verified portable reviewer bundle from inside the no-network compose service.
-- Blocking warnings when validation fails, required engines are missing, concrete engine smoke gates are incomplete, the adversarial benchmark is missing/failing, saved report drafts fail Markdown sidecar integrity, or critical review items remain open.
+- Exact reviewer commands for validation, writable engine checks, adversarial benchmarks, the math credibility ladder, review, Docker core engines, the Lean proof fixture, the heavier SageMath fixture, and the strict all-engine Docker gate.
+- A one-command Docker professor evidence route: `npm run docker:professor` builds the pinned Lean proof image, then writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, math credibility ladder evidence, a credibility pack, and a verified portable reviewer bundle from inside the no-network compose service.
+- Blocking warnings when validation fails, required engines are missing, concrete engine smoke gates are incomplete, either required benchmark run is missing/failing, saved report drafts fail Markdown sidecar integrity, or critical review items remain open.
 
 ## Portable Reviewer Bundle
 
@@ -110,6 +111,7 @@ A pack is `ready-for-review` only when:
 - all concrete engine smoke gates pass, or recoverable host probe gaps are covered by a saved passing no-network Docker professor/all-engine run for the same capabilities,
 - every explicitly required engine gate passes, or recoverable host probe gaps are covered by a saved passing no-network Docker professor/all-engine run for the same required capabilities,
 - the latest saved `ai-failure-seed` adversarial benchmark exists and has no failing cases,
+- the latest saved `math-credibility-ladder` benchmark exists and has no failing cases,
 - saved report draft Markdown files match the SHA-256 recorded in their JSON sidecars,
 - the workspace review has no critical open items.
 
@@ -122,7 +124,7 @@ When the pack is blocked, `reviewerActionPlan.actions` is the first queue a huma
 - the priority (`critical`, `high`, `medium`, or `low`),
 - the category (`validation`, `engine`, `benchmark`, or `workspace-review`),
 - the evidence status and reviewer meaning for blocked engine gates,
-- benchmark actions mean the reviewer packet is missing or failing the saved adversarial AI-failure suite,
+- benchmark actions mean the reviewer packet is missing or failing the saved adversarial AI-failure suite or the saved math credibility ladder,
 - the exact command to run,
 - the gate or artifact it closes.
 
@@ -134,7 +136,7 @@ The web Report tab renders the same action plan, exposes copy buttons for those 
 Portable reviewer bundles now surface saved report drafts as first-class manifest entries under `reportDrafts`, cite them in the bundle README, and verify that each bundled Markdown draft matches the SHA-256 recorded by its JSON sidecar. That makes the exportable handoff include not just raw receipts, but the human-facing report draft that was created from them.
 Headless reviewers and agents can inspect the same saved drafts with `truth-harness workspace reports .`, `truth-harness workspace report <report_...> . --markdown`, MCP `truth_harness_report_list`, and MCP `truth_harness_report_read`; all paths use the same core Markdown hash verification as the web Report tab. Workspace review and run-next also surface report drafts as first-class local queue items: verified drafts are review artifacts, while missing or hash-mismatched Markdown blocks sharing until a human or agent reconciles the sidecar.
 For automation or CI, use `truth-harness workspace credibility-actions . --json` to get a compact `truth-harness.credibility-actions.v0` payload. `--priority` and `--category` filter the queue without mutating workspace state.
-For bounded agent work, use `truth-harness workspace run-next . --source credibility-actions --json` to plan the first reviewer action through the shared autonomy contract. Adding `--execute-local` only runs supported local Truth Harness core APIs, such as writable engine verification runs and `truth-harness bench run ... --write` benchmark runs; it does not execute shell strings. When the first action is the adversarial AI-failure benchmark, run-next reads the workspace-local suite JSON, generates receipts in-process, writes a durable `truth-harness.benchmark-run.v0` artifact, and the next credibility pack/release audit cites that artifact path plus replay metadata.
+For bounded agent work, use `truth-harness workspace run-next . --source credibility-actions --json` to plan the first reviewer action through the shared autonomy contract. Adding `--execute-local` only runs supported local Truth Harness core APIs, such as writable engine verification runs and `truth-harness bench run ... --write` benchmark runs; it does not execute shell strings. When the first action is the adversarial AI-failure benchmark or the math credibility ladder, run-next reads the workspace-local suite JSON, generates receipts in-process, writes a durable `truth-harness.benchmark-run.v0` artifact, and the next credibility pack/release audit cites that artifact path plus replay metadata.
 
 Maxima and SageMath CAS check records can support the narrow `cross-checked` label only when a concrete recorded agreement exists. Z3 and cvc5 SMT records can support the narrow `smt-checked` label only when the selected solver returns `sat` or `unsat` for a concrete SMT-LIB artifact. The default Docker core credibility gate now requires Maxima, Z3, and cvc5 evidence. SageMath is available as a direct constrained CAS adapter and as the heavier no-network `sage-math` Docker gate through `--require-sage` or `npm run docker:sage`. Use `--require-all-engines` when a reviewer packet should fail unless Maxima, Z3, cvc5, Lean, and SageMath all earn their own scoped evidence. Use `npm run docker:all-engines` for the no-network strict gate and `npm run docker:all-engines:write` when the strict result should be saved for audit citation. Credibility-pack reviewer commands now use `truth-harness engines verify --write ...` so reruns create durable `.truth-harness/engine-runs` records instead of transient terminal output. That stronger mode is still a smoke gate over representative fixtures, not proof of every workspace claim.
 

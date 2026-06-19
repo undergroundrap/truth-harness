@@ -100,6 +100,8 @@
         "savedBenchmarkRuns": { "type": "integer", "minimum": 0 },
         "latestAdversarialBenchmarkStatus": { "enum": ["missing", "passed", "failed"] },
         "latestAdversarialBenchmarkAccuracy": { "type": "number", "minimum": 0, "maximum": 1 },
+        "latestMathCredibilityLadderStatus": { "enum": ["missing", "passed", "failed"] },
+        "latestMathCredibilityLadderAccuracy": { "type": "number", "minimum": 0, "maximum": 1 },
         "savedReportDrafts": { "type": "integer", "minimum": 0 },
         "reportDraftsNeedingAttention": { "type": "integer", "minimum": 0 },
         "reviewItems": { "type": "integer", "minimum": 0 },

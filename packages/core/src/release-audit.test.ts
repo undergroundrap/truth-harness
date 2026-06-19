@@ -34,6 +34,7 @@ describe("release audit", () => {
       workingDirectory: root,
       now: "2026-06-17T00:00:00.500Z"
     });
+    const mathLadderBenchmark = await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
     await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
 
     const audit = await createReleaseAudit({
@@ -63,6 +64,7 @@ describe("release audit", () => {
       requiredEngineGates: "5/5",
       concreteEngineGates: "5/5",
       adversarialBenchmark: "passed",
+      mathCredibilityLadder: "passed",
       reportDrafts: 0,
       reportDraftsNeedingAttention: 0,
       researchSessions: 0,
@@ -84,6 +86,9 @@ describe("release audit", () => {
       expect.objectContaining({ id: "adversarial-ai-benchmark", status: "pass", blocking: false })
     );
     expect(audit.checks).toContainEqual(
+      expect.objectContaining({ id: "math-credibility-ladder", status: "pass", blocking: false })
+    );
+    expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "report-drafts", status: "pass", blocking: false })
     );
     expect(audit.checks).toContainEqual(
@@ -101,6 +106,16 @@ describe("release audit", () => {
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
+        id: "math-credibility-ladder",
+        details: expect.arrayContaining([
+          `Artifact: ${mathLadderBenchmark.jsonPath.replace(/\\/gu, "/").replace(`${root.replace(/\\/gu, "/")}/`, "")}.`,
+          `Benchmark run id: ${mathLadderBenchmark.record.benchmarkRunId}.`,
+          "Replay command: truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures."
+        ])
+      })
+    );
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
         id: "web-ui-smoke",
         status: "warn",
         blocking: false,
@@ -110,6 +125,7 @@ describe("release audit", () => {
     expect(markdown).toContain("# Truth Harness Release Audit");
     expect(markdown).toContain("Required engine gates: 5/5");
     expect(markdown).toContain("Adversarial benchmark: passed");
+    expect(markdown).toContain("Math credibility ladder: passed");
     expect(markdown).toContain("Report drafts: 0 saved, 0 needing attention");
     expect(markdown).toContain("Research sessions: 0 inspected, 0 continuation item(s)");
   });
@@ -126,6 +142,7 @@ describe("release audit", () => {
       workingDirectory: root,
       now: "2026-06-17T00:00:00.500Z"
     });
+    await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
     const uiReview = await writeWebUiReview({
       rootPath: root,
       now: new Date("2026-06-17T00:00:00.700Z"),
@@ -226,6 +243,7 @@ describe("release audit", () => {
       workingDirectory: root,
       now: "2026-06-17T00:00:00.500Z"
     });
+    await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
     const session = await writeResearchSession({
       rootPath: root,
       title: "Autonomous proof route",
@@ -322,6 +340,7 @@ describe("release audit", () => {
       workingDirectory: root,
       now: "2026-06-17T00:00:20.000Z"
     });
+    await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:21.000Z");
     await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:30.000Z" });
 
     const audit = await createReleaseAudit({
@@ -364,6 +383,7 @@ describe("release audit", () => {
       workingDirectory: root,
       now: "2026-06-17T00:00:00.500Z"
     });
+    await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
     const draft = await writeReportDraft({
       rootPath: root,
       title: "Shareable Reviewer Draft",
@@ -525,6 +545,7 @@ describe("release audit", () => {
       workingDirectory: root,
       now: "2026-06-17T00:00:00.500Z"
     });
+    await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
     await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
 
     const audit = await createReleaseAudit({
@@ -601,6 +622,7 @@ describe("release audit", () => {
       workingDirectory: root,
       now: "2026-06-17T00:00:00.500Z"
     });
+    await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
     await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
 
     const audit = await createReleaseAudit({
@@ -706,6 +728,43 @@ function benchmarkRun(receipt: ReturnType<typeof createReceipt>) {
       }
     ]
   };
+}
+
+async function writeMathCredibilityLadderRun(root: string, now: string) {
+  const receipt = createReceipt("3 / 4 + 5 / 8");
+  return writeBenchmarkRunRecord({
+    rootPath: root,
+    run: {
+      suiteId: "math-credibility-ladder",
+      title: "Math Credibility Ladder",
+      startedAt: now,
+      completedAt: now,
+      total: 1,
+      passed: 1,
+      failed: 0,
+      trustAccuracy: 1,
+      results: [
+        {
+          task: {
+            id: "exact-rational-equality",
+            prompt: receipt.problem,
+            expectTrust: "exact-computed" as const,
+            expectEvidenceKind: "exact-arithmetic" as const,
+            category: "native-safe-hard-math-floor",
+            aiFailureMode: "trust-label boundary"
+          },
+          receipt,
+          passed: true,
+          failures: []
+        }
+      ]
+    },
+    suiteDescription: "Native-safe hard-math readiness floor.",
+    suitePath: "packages/benchmarks/suites/math-credibility-ladder.json",
+    command: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
+    workingDirectory: root,
+    now
+  });
 }
 
 async function tempRoot(): Promise<string> {

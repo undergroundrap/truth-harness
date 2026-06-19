@@ -31,6 +31,15 @@ describe("credibility reviewer bundle", () => {
       workingDirectory: root,
       now: "2026-06-16T00:00:30.000Z"
     });
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: mathLadderRun(createReceipt("3 / 4 + 5 / 8")),
+      suiteDescription: "Native-safe hard-math readiness floor.",
+      suitePath: "packages/benchmarks/suites/math-credibility-ladder.json",
+      command: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-16T00:00:31.000Z"
+    });
     const reportDraft = await writeReportDraftFixture(root);
 
     const result = await writeCredibilityBundle({
@@ -73,6 +82,7 @@ describe("credibility reviewer bundle", () => {
     );
     expect(result.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
     expect(result.manifest.reviewerCommands.runAdversarialBenchmark).toContain("ai-failure-seed");
+    expect(result.manifest.reviewerCommands.runMathCredibilityLadder).toContain("math-credibility-ladder");
     const readme = await readFile(result.readmePath, "utf8");
     expect(readme).toContain("Truth Harness Portable Reviewer Bundle");
     expect(readme).toContain("Saved Report Drafts");
@@ -327,6 +337,34 @@ function benchmarkRun(receipt: ReturnType<typeof createReceipt>) {
           expectEvidenceKind: "universal-parity" as const,
           category: "false-universal",
           aiFailureMode: "confident universal claim"
+        },
+        receipt,
+        passed: true,
+        failures: []
+      }
+    ]
+  };
+}
+
+function mathLadderRun(receipt: ReturnType<typeof createReceipt>) {
+  return {
+    suiteId: "math-credibility-ladder",
+    title: "Math Credibility Ladder",
+    startedAt: "2026-06-16T00:00:22.000Z",
+    completedAt: "2026-06-16T00:00:23.000Z",
+    total: 1,
+    passed: 1,
+    failed: 0,
+    trustAccuracy: 1,
+    results: [
+      {
+        task: {
+          id: "exact-rational-equality",
+          prompt: receipt.problem,
+          expectTrust: "exact-computed" as const,
+          expectEvidenceKind: "exact-arithmetic" as const,
+          category: "native-safe-hard-math-floor",
+          aiFailureMode: "trust-label boundary"
         },
         receipt,
         passed: true,

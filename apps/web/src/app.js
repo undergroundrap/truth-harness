@@ -9327,14 +9327,19 @@ function renderReleaseAuditGate() {
     : [];
   const visibleChecks = [...failedChecks, ...warningChecks]
     .filter((check) => check.id !== "adversarial-ai-benchmark")
+    .filter((check) => check.id !== "math-credibility-ladder")
     .slice(0, 5);
   const nextActions = Array.isArray(audit?.nextActions) ? audit.nextActions.slice(0, 4) : [];
-  const benchmarkCard = releaseAuditBenchmarkCardHtml(audit);
+  const benchmarkCards = [
+    releaseAuditBenchmarkCardHtml(audit),
+    releaseAuditMathLadderCardHtml(audit)
+  ].join("");
   const rows = audit
     ? [
         ["Checks", `${summary.passedChecks ?? 0} pass / ${summary.warningChecks ?? 0} warn / ${summary.failedChecks ?? 0} fail`],
         ["Engines", `${summary.requiredEngineGates ?? "0/5"} required / ${summary.concreteEngineGates ?? "0/5"} concrete`],
         ["Adversarial benchmark", releaseAuditBenchmarkSummary(summary)],
+        ["Math ladder", releaseAuditMathLadderSummary(summary)],
         ["Report drafts", `${summary.reportDrafts ?? 0} saved / ${summary.reportDraftsNeedingAttention ?? 0} attention`],
         ["Research sessions", `${summary.researchSessions ?? 0} sessions / ${summary.sessionContinuationItems ?? 0} open`],
         ["Review queue", `${summary.reviewItems ?? 0} open / ${summary.criticalReviewItems ?? 0} critical`],
@@ -9381,7 +9386,7 @@ function renderReleaseAuditGate() {
       <span>Replayable audit</span>
       <code>${escapeHtml(command)}</code>
     </div>
-    ${benchmarkCard}
+    ${benchmarkCards}
     ${checkCards ? `<div class="release-audit-check-grid">${checkCards}</div>` : `<p>No blocking or warning checks returned for this audit scope.</p>`}
     ${actionCards ? `<details class="release-audit-details">
       <summary>
@@ -9430,17 +9435,20 @@ function renderReleaseAuditGate() {
       });
     });
   });
-  releaseAuditGate.querySelector(".copy-release-benchmark-command")?.addEventListener("click", (event) => {
-    const button = event.currentTarget;
-    void copyOrDownloadText({
-      button,
-      text: `${button.dataset.command ?? releaseAuditBenchmarkCommand(audit)}\n`,
-      filename: `truth-harness-adversarial-benchmark-${safeFilenameTimestamp()}.txt`,
-      type: "text/plain",
-      copiedTitle: "Copied benchmark command",
-      copiedDetail: "Adversarial benchmark command copied from the Checks tab.",
-      fallbackTitle: "Downloaded benchmark command",
-      fallbackDetail: "the adversarial benchmark command was saved as a local text file instead."
+  releaseAuditGate.querySelectorAll(".copy-release-benchmark-command").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const target = event.currentTarget;
+      const label = target.dataset.benchmarkLabel ?? "benchmark";
+      void copyOrDownloadText({
+        button: target,
+        text: `${target.dataset.command ?? ""}\n`,
+        filename: `truth-harness-${label}-${safeFilenameTimestamp()}.txt`,
+        type: "text/plain",
+        copiedTitle: "Copied benchmark command",
+        copiedDetail: `${label} command copied from the Checks tab.`,
+        fallbackTitle: "Downloaded benchmark command",
+        fallbackDetail: `the ${label} command was saved as a local text file instead.`
+      });
     });
   });
 }
@@ -9486,7 +9494,54 @@ function releaseAuditBenchmarkCardHtml(audit) {
     ${receiptReplay ? `<small>Receipt replay: <code>${escapeHtml(receiptReplay)}</code></small>` : ""}
     <div class="release-audit-benchmark-command">
       <code>${escapeHtml(command)}</code>
-      <button class="text-button compact-button copy-release-benchmark-command" data-testid="copy-release-benchmark-command" data-command="${escapeHtml(command)}" type="button">Copy benchmark</button>
+      <button class="text-button compact-button copy-release-benchmark-command" data-testid="copy-release-benchmark-command" data-benchmark-label="adversarial-benchmark" data-command="${escapeHtml(command)}" type="button">Copy benchmark</button>
+    </div>
+    ${details ? `<ul>${details}</ul>` : ""}
+  </section>`;
+}
+
+function releaseAuditMathLadderCardHtml(audit) {
+  if (!audit) {
+    return "";
+  }
+
+  const check = Array.isArray(audit.checks)
+    ? audit.checks.find((item) => item.id === "math-credibility-ladder")
+    : undefined;
+  const packSummary = audit.credibilityPack?.summary ?? {};
+  const latestRun = audit.credibilityPack?.benchmarkLedger?.latestMathCredibilityLadderRun;
+  const receiptReplay = latestRun?.receiptReplays?.[0];
+  const status = check?.status ?? (packSummary.latestMathCredibilityLadderStatus === "passed" ? "pass" : "fail");
+  const statusClass = status === "fail" ? "refuted" : status === "warn" ? "waiting" : "exact";
+  const command = latestRun?.replayCommand ?? check?.command ?? releaseAuditMathLadderCommand(audit);
+  const details = Array.isArray(check?.details)
+    ? check.details.slice(0, 3).map((detail) => `<li>${escapeHtml(detail)}</li>`).join("")
+    : "";
+  const facts = [
+    ["Status", packSummary.latestMathCredibilityLadderStatus ?? audit.summary?.mathCredibilityLadder ?? "missing"],
+    ["Trust accuracy", formatPercent(packSummary.latestMathCredibilityLadderAccuracy)],
+    ["Saved runs", String(packSummary.savedBenchmarkRuns ?? 0)],
+    ["Latest run", latestRun?.artifactId ?? "none"],
+    ["Failed cases", String(latestRun?.failed ?? 0)]
+  ];
+
+  return `<section class="release-audit-benchmark-card benchmark-${escapeHtml(status)}">
+    <div class="release-audit-benchmark-head">
+      <div>
+        <span class="mini-label">native-safe hard-math floor</span>
+        <strong>Math Credibility Ladder</strong>
+      </div>
+      <span class="status-pill ${statusClass}">${escapeHtml(releaseAuditBenchmarkLabel(status))}</span>
+    </div>
+    <p>${escapeHtml(check?.summary ?? "Run the saved hard-math ladder before claiming the math lane is professor-ready.")}</p>
+    <dl class="release-audit-benchmark-facts">
+      ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+    </dl>
+    ${latestRun?.path ? `<small>Artifact: <code>${escapeHtml(latestRun.path)}</code></small>` : ""}
+    ${receiptReplay ? `<small>Receipt replay: <code>${escapeHtml(receiptReplay)}</code></small>` : ""}
+    <div class="release-audit-benchmark-command">
+      <code>${escapeHtml(command)}</code>
+      <button class="text-button compact-button copy-release-benchmark-command" data-benchmark-label="math-credibility-ladder" data-command="${escapeHtml(command)}" type="button">Copy ladder</button>
     </div>
     ${details ? `<ul>${details}</ul>` : ""}
   </section>`;
@@ -9498,8 +9553,19 @@ function releaseAuditBenchmarkCommand(audit) {
     "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures";
 }
 
+function releaseAuditMathLadderCommand(audit) {
+  return audit?.commands?.mathCredibilityLadder ??
+    audit?.credibilityPack?.reviewerCommands?.runMathCredibilityLadder ??
+    "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures";
+}
+
 function releaseAuditBenchmarkSummary(summary) {
   const status = summary?.adversarialBenchmark ?? "missing";
+  return status === "passed" ? "passed" : status === "failed" ? "failed" : "missing";
+}
+
+function releaseAuditMathLadderSummary(summary) {
+  const status = summary?.mathCredibilityLadder ?? "missing";
   return status === "passed" ? "passed" : status === "failed" ? "failed" : "missing";
 }
 
@@ -12095,18 +12161,20 @@ function renderCredibilityPackPanel() {
       fallbackDetail: "the reviewer credibility-pack command was saved as a local text file instead."
     });
   });
-  credibilityPackPanel.querySelector(".copy-credibility-benchmark-command")?.addEventListener("click", (event) => {
-    const button = event.currentTarget;
-    const benchmarkCommand = credibilityBenchmarkCommand(pack);
-    void copyOrDownloadText({
-      button,
-      text: `${button.dataset.command ?? benchmarkCommand}\n`,
-      filename: `truth-harness-adversarial-benchmark-${safeFilenameTimestamp()}.txt`,
-      type: "text/plain",
-      copiedTitle: "Copied adversarial benchmark",
-      copiedDetail: "Adversarial benchmark command copied from the credibility pack.",
-      fallbackTitle: "Downloaded adversarial benchmark",
-      fallbackDetail: "the adversarial benchmark command was saved as a local text file instead."
+  credibilityPackPanel.querySelectorAll(".copy-credibility-benchmark-command").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const target = event.currentTarget;
+      const label = target.dataset.benchmarkLabel ?? "benchmark";
+      void copyOrDownloadText({
+        button: target,
+        text: `${target.dataset.command ?? ""}\n`,
+        filename: `truth-harness-${label}-${safeFilenameTimestamp()}.txt`,
+        type: "text/plain",
+        copiedTitle: "Copied benchmark command",
+        copiedDetail: `${label} command copied from the credibility pack.`,
+        fallbackTitle: "Downloaded benchmark command",
+        fallbackDetail: `the ${label} command was saved as a local text file instead.`
+      });
     });
   });
   credibilityPackPanel.querySelector(".refresh-credibility-bundle")?.addEventListener("click", () => {
@@ -12417,6 +12485,12 @@ function credibilityReviewerChecklistHtml(pack) {
       command: manifest?.reviewerCommands?.runAdversarialBenchmark ?? pack?.reviewerCommands?.runAdversarialBenchmark
     },
     {
+      label: "Math credibility ladder",
+      passed: summary.latestMathCredibilityLadderStatus === "passed",
+      detail: `Latest saved hard-math readiness ladder status: ${summary.latestMathCredibilityLadderStatus ?? "missing"}.`,
+      command: manifest?.reviewerCommands?.runMathCredibilityLadder ?? pack?.reviewerCommands?.runMathCredibilityLadder
+    },
+    {
       label: "Critical review queue closed",
       passed: Number(summary.criticalReviewItems ?? actionPlan?.criticalActions ?? 1) === 0,
       detail: `${summary.reviewItems ?? actionPlan?.totalActions ?? "unknown"} open review item(s), ${summary.criticalReviewItems ?? actionPlan?.criticalActions ?? "unknown"} critical.`,
@@ -12509,22 +12583,40 @@ function credibilityBundleActivitySummary(payload) {
 function credibilityBenchmarkCardHtml(pack) {
   const summary = pack?.summary ?? {};
   const latestRun = pack?.benchmarkLedger?.latestAdversarialRun;
+  const ladderRun = pack?.benchmarkLedger?.latestMathCredibilityLadderRun;
   const receiptReplay = latestRun?.receiptReplays?.[0];
+  const ladderReceiptReplay = ladderRun?.receiptReplays?.[0];
   const status = summary.latestAdversarialBenchmarkStatus ?? "missing";
+  const ladderStatus = summary.latestMathCredibilityLadderStatus ?? "missing";
   const command = latestRun?.replayCommand ?? credibilityBenchmarkCommand(pack);
+  const ladderCommand = ladderRun?.replayCommand ?? credibilityMathLadderCommand(pack);
   const statusClass = status === "passed" ? "exact" : status === "failed" ? "refuted" : "waiting";
+  const ladderStatusClass = ladderStatus === "passed" ? "exact" : ladderStatus === "failed" ? "refuted" : "waiting";
   const label = status === "passed" ? "passing" : status === "failed" ? "regression" : "required";
+  const ladderLabel = ladderStatus === "passed" ? "passing" : ladderStatus === "failed" ? "regression" : "required";
   const detail = status === "passed"
     ? "The saved adversarial suite is passing and can be replayed by a reviewer."
     : status === "failed"
       ? "The latest adversarial suite has failures; fix or triage before professor review."
       : "Run and save the adversarial suite before asking a professor to trust this workspace.";
+  const ladderDetail = ladderStatus === "passed"
+    ? "The saved hard-math ladder is passing and can be replayed by a reviewer."
+    : ladderStatus === "failed"
+      ? "The latest hard-math ladder has failures; fix or triage before professor review."
+      : "Run and save the hard-math ladder before claiming the math lane is professor-ready.";
   const facts = [
     ["Status", status],
     ["Trust accuracy", formatPercent(summary.latestAdversarialBenchmarkAccuracy)],
     ["Saved runs", String(summary.savedBenchmarkRuns ?? 0)],
     ["Latest run", latestRun?.artifactId ?? "none"],
     ["Failed cases", String(latestRun?.failed ?? 0)]
+  ];
+  const ladderFacts = [
+    ["Status", ladderStatus],
+    ["Trust accuracy", formatPercent(summary.latestMathCredibilityLadderAccuracy)],
+    ["Saved runs", String(summary.savedBenchmarkRuns ?? 0)],
+    ["Latest run", ladderRun?.artifactId ?? "none"],
+    ["Failed cases", String(ladderRun?.failed ?? 0)]
   ];
 
   return `<section class="credibility-benchmark-card benchmark-${escapeHtml(status)}">
@@ -12543,7 +12635,26 @@ function credibilityBenchmarkCardHtml(pack) {
     ${receiptReplay ? `<small>Receipt replay: <code>${escapeHtml(receiptReplay)}</code></small>` : ""}
     <div class="credibility-benchmark-command">
       <code>${escapeHtml(command)}</code>
-      <button class="text-button compact-button copy-credibility-benchmark-command" data-testid="copy-credibility-benchmark-command" data-command="${escapeHtml(command)}" type="button">Copy benchmark</button>
+      <button class="text-button compact-button copy-credibility-benchmark-command" data-testid="copy-credibility-benchmark-command" data-benchmark-label="adversarial-benchmark" data-command="${escapeHtml(command)}" type="button">Copy benchmark</button>
+    </div>
+  </section>
+  <section class="credibility-benchmark-card benchmark-${escapeHtml(ladderStatus)}">
+    <div class="credibility-benchmark-head">
+      <div>
+        <span class="mini-label">native-safe hard-math floor</span>
+        <strong>Math Credibility Ladder</strong>
+      </div>
+      <span class="status-pill ${ladderStatusClass}">${escapeHtml(ladderLabel)}</span>
+    </div>
+    <p>${escapeHtml(ladderDetail)}</p>
+    <dl class="credibility-benchmark-facts">
+      ${ladderFacts.map(([labelText, value]) => `<div><dt>${escapeHtml(labelText)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+    </dl>
+    ${ladderRun?.path ? `<small>Artifact: <code>${escapeHtml(ladderRun.path)}</code></small>` : ""}
+    ${ladderReceiptReplay ? `<small>Receipt replay: <code>${escapeHtml(ladderReceiptReplay)}</code></small>` : ""}
+    <div class="credibility-benchmark-command">
+      <code>${escapeHtml(ladderCommand)}</code>
+      <button class="text-button compact-button copy-credibility-benchmark-command" data-benchmark-label="math-credibility-ladder" data-command="${escapeHtml(ladderCommand)}" type="button">Copy ladder</button>
     </div>
   </section>`;
 }
@@ -12551,6 +12662,11 @@ function credibilityBenchmarkCardHtml(pack) {
 function credibilityBenchmarkCommand(pack) {
   return pack?.reviewerCommands?.runAdversarialBenchmark ??
     "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures";
+}
+
+function credibilityMathLadderCommand(pack) {
+  return pack?.reviewerCommands?.runMathCredibilityLadder ??
+    "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures";
 }
 
 function credibilityRunNextHtml() {
@@ -12715,6 +12831,7 @@ function credibilityPackSummaryRows(pack) {
     ["Strict engine gates", `${summary.requiredEngineGates ?? "0/0"} required${summary.latestStrictEngineRunStatus ? `, latest saved ${summary.latestStrictEngineRunStatus}` : ""}`],
     ["Engine evidence", `${summary.engineStatus ?? "unknown"} (${summary.concreteEngineGates ?? "0/0"} concrete, ${summary.engineEvidenceMinted ?? 0} evidence records)`],
     ["Adversarial benchmark", `${summary.latestAdversarialBenchmarkStatus ?? "missing"} (${formatPercent(summary.latestAdversarialBenchmarkAccuracy)})`],
+    ["Math ladder", `${summary.latestMathCredibilityLadderStatus ?? "missing"} (${formatPercent(summary.latestMathCredibilityLadderAccuracy)})`],
     ["Saved engine ledger", `${summary.savedEngineRuns ?? 0} run${summary.savedEngineRuns === 1 ? "" : "s"}`],
     ["Open review queue", `${summary.reviewItems ?? 0} items (${summary.criticalReviewItems ?? 0} critical, ${summary.highReviewItems ?? 0} high)`],
     ["Snapshot", `${summary.snapshotFiles ?? 0} files, ${formatBytes(summary.snapshotBytes ?? 0)}`],
@@ -12815,7 +12932,7 @@ function credibilityPackActivitySummary(pack) {
     return "Professor credibility pack loaded from the local workspace.";
   }
 
-  return `${pack.status}; validation ${pack.summary.validationPassed ? "passed" : "failed"}, engines ${pack.summary.requiredEngineGates}, benchmark ${pack.summary.latestAdversarialBenchmarkStatus ?? "missing"}, queue ${pack.summary.reviewItems} item${pack.summary.reviewItems === 1 ? "" : "s"}.`;
+  return `${pack.status}; validation ${pack.summary.validationPassed ? "passed" : "failed"}, engines ${pack.summary.requiredEngineGates}, adversarial ${pack.summary.latestAdversarialBenchmarkStatus ?? "missing"}, ladder ${pack.summary.latestMathCredibilityLadderStatus ?? "missing"}, queue ${pack.summary.reviewItems} item${pack.summary.reviewItems === 1 ? "" : "s"}.`;
 }
 
 function credibilityBundleVerificationReportItems(limit = 5) {

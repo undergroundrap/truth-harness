@@ -7247,6 +7247,12 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
         : ` (${(pack.summary.latestAdversarialBenchmarkAccuracy * 100).toFixed(1)}%)`) +
       `, saved runs: ${pack.summary.savedBenchmarkRuns}`
   );
+  console.log(
+    `Math credibility ladder: ${pack.summary.latestMathCredibilityLadderStatus}` +
+      (pack.summary.latestMathCredibilityLadderAccuracy === undefined
+        ? ""
+        : ` (${(pack.summary.latestMathCredibilityLadderAccuracy * 100).toFixed(1)}%)`)
+  );
   console.log(`Embedded snapshot: ${pack.embeddedSnapshot.snapshotId} (${pack.summary.snapshotFiles} files)`);
   console.log(`Review queue: ${pack.summary.reviewItems} items (${pack.summary.criticalReviewItems} critical, ${pack.summary.highReviewItems} high)`);
   console.log(
@@ -7259,6 +7265,7 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
   console.log(`  ${pack.reviewerCommands.validateWorkspace}`);
   console.log(`  ${pack.reviewerCommands.verifyEngines}`);
   console.log(`  ${pack.reviewerCommands.runAdversarialBenchmark}`);
+  console.log(`  ${pack.reviewerCommands.runMathCredibilityLadder}`);
   console.log(`  ${pack.reviewerCommands.reviewWorkspace}`);
   console.log(`  ${pack.reviewerCommands.reproducePack}`);
 
@@ -7366,6 +7373,7 @@ function printCredibilityBundle(result: CredibilityBundleWriteResult): void {
   console.log(`  ${manifest.reviewerCommands.validateWorkspace}`);
   console.log(`  ${manifest.reviewerCommands.verifyEngines}`);
   console.log(`  ${manifest.reviewerCommands.runAdversarialBenchmark}`);
+  console.log(`  ${manifest.reviewerCommands.runMathCredibilityLadder}`);
   console.log(`  ${manifest.reviewerCommands.reviewWorkspace}`);
 
   if (manifest.warnings.length > 0) {

@@ -43,6 +43,18 @@ const steps = [
     ]
   },
   {
+    label: "write math credibility ladder evidence",
+    command: "node",
+    args: [
+      "apps/cli/dist/index.js",
+      "bench",
+      "run",
+      "packages/benchmarks/suites/math-credibility-ladder.json",
+      "--write",
+      "--fail-on-failures"
+    ]
+  },
+  {
     label: "write professor credibility pack",
     command: "node",
     args: [

@@ -84,6 +84,7 @@ export interface CredibilityBundleManifest {
     validateWorkspace: string;
     verifyEngines: string;
     runAdversarialBenchmark: string;
+    runMathCredibilityLadder: string;
     reviewWorkspace: string;
     reproducePack: string;
   };
@@ -236,6 +237,7 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
       validateWorkspace: pack.reviewerCommands.validateWorkspace,
       verifyEngines: pack.reviewerCommands.verifyEngines,
       runAdversarialBenchmark: pack.reviewerCommands.runAdversarialBenchmark,
+      runMathCredibilityLadder: pack.reviewerCommands.runMathCredibilityLadder,
       reviewWorkspace: pack.reviewerCommands.reviewWorkspace,
       reproducePack: pack.reviewerCommands.reproducePack
     },
