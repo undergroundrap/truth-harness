@@ -22,6 +22,7 @@ services:
       TRUTH_HARNESS_CONTAINER: "1"
       TRUTH_HARNESS_MAXIMA: "maxima-sage"
       TRUTH_HARNESS_Z3: "z3"
+      TRUTH_HARNESS_CVC5: "cvc5"
     volumes:
       - .:/workspace
       - truth_harness_node_modules:/workspace/node_modules
@@ -39,6 +40,7 @@ services:
       TRUTH_HARNESS_CONTAINER: "1"
       TRUTH_HARNESS_MAXIMA: "maxima-sage"
       TRUTH_HARNESS_Z3: "z3"
+      TRUTH_HARNESS_CVC5: "cvc5"
     command: ["npm", "run", "cli", "--", "engines", "verify", "--require-maxima", "--require-z3"]
 
   professor-evidence:
@@ -53,6 +55,7 @@ services:
       TRUTH_HARNESS_LEAN: "lean"
       TRUTH_HARNESS_MAXIMA: "maxima-sage"
       TRUTH_HARNESS_Z3: "z3"
+      TRUTH_HARNESS_CVC5: "cvc5"
     volumes:
       - ./.truth-harness:/workspace/.truth-harness
     command: ["npm", "run", "professor:evidence"]
@@ -83,6 +86,7 @@ services:
       TRUTH_HARNESS_CONTAINER: "1"
       TRUTH_HARNESS_MAXIMA: "maxima-sage"
       TRUTH_HARNESS_Z3: "z3"
+      TRUTH_HARNESS_CVC5: "cvc5"
     volumes:
       - .:/workspace
       - truth_harness_node_modules:/workspace/node_modules
@@ -100,6 +104,7 @@ services:
       TRUTH_HARNESS_CONTAINER: "1"
       TRUTH_HARNESS_MAXIMA: "maxima-sage"
       TRUTH_HARNESS_Z3: "z3"
+      TRUTH_HARNESS_CVC5: "cvc5"
     volumes:
       - .:/workspace
       - truth_harness_node_modules:/workspace/node_modules

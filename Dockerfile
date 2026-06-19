@@ -9,10 +9,11 @@ ENV CI=true \
     TRUTH_HARNESS_CONTAINER=1 \
     TRUTH_HARNESS_MAXIMA=maxima-sage \
     TRUTH_HARNESS_Z3=z3 \
+    TRUTH_HARNESS_CVC5=cvc5 \
     PATH="/opt/truth-harness-python/bin:${PATH}"
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates graphviz maxima-sage maxima-sage-share python3 python3-pip python3-venv tini z3 \
+  && apt-get install -y --no-install-recommends ca-certificates cvc5 graphviz maxima-sage maxima-sage-share python3 python3-pip python3-venv tini z3 \
   && python3 -m venv /opt/truth-harness-python \
   && /opt/truth-harness-python/bin/python -m pip install sympy==1.14.0 \
   && useradd --create-home --uid 10001 truth \
@@ -40,7 +41,7 @@ CMD ["npm", "run", "check"]
 
 FROM dev AS verify
 
-RUN npm run check && npm run proof:launch:engines && npm run engines:verify:docker-core
+RUN npm run check && npm run proof:launch:engines && npm run engines:verify:docker-core && npm run engines:verify:cvc5
 
 FROM dev AS sage-math
 

@@ -899,6 +899,15 @@ function routeObligationItem(workspacePath: string, route: VerifierRoute, obliga
 
 function commandForRouteObligation(workspacePath: string, route: VerifierRoute, obligation: ProofObligation): string {
   const inspectRouteCommand = `truth-harness route show ${quoteCommandArg(route.routeId)} --workspace ${quoteCommandArg(workspacePath)} --json`;
+  const concreteSmtCommand = concreteSmtCommandForRouteObligation(route, obligation);
+  if (concreteSmtCommand) {
+    return concreteSmtCommand;
+  }
+
+  if (smtCommandNeedsConcreteSource(obligation.command)) {
+    return inspectRouteCommand;
+  }
+
   if (proofCommandNeedsConcreteSource(obligation.command)) {
     return inspectRouteCommand;
   }
@@ -909,6 +918,90 @@ function commandForRouteObligation(workspacePath: string, route: VerifierRoute, 
   }
 
   return obligation.command ?? inspectRouteCommand;
+}
+
+function concreteSmtCommandForRouteObligation(route: VerifierRoute, obligation: ProofObligation): string | undefined {
+  if (obligation.kind !== "solver-encoding") {
+    return undefined;
+  }
+
+  const sourcePath = concreteSmtCheckSource(obligation.command) ?? siblingConcreteSmtCheckSource(route, obligation);
+  if (!sourcePath) {
+    return undefined;
+  }
+
+  const backend = smtBackendForObligation(obligation) ?? smtBackendFromCommand(obligation.command);
+  const backendArg = backend && backend !== "z3" ? ` --backend ${quoteCommandArg(backend)}` : "";
+  return `truth-harness smt check ${quoteCommandArg(sourcePath)}${backendArg} --write`;
+}
+
+function siblingConcreteSmtCheckSource(route: VerifierRoute, obligation: ProofObligation): string | undefined {
+  for (const candidate of route.proofObligations ?? []) {
+    if (candidate.obligationId === obligation.obligationId || candidate.kind !== "solver-encoding") {
+      continue;
+    }
+
+    const sourcePath = concreteSmtCheckSource(candidate.command);
+    if (sourcePath) {
+      return sourcePath;
+    }
+  }
+
+  return undefined;
+}
+
+function concreteSmtCheckSource(command: string | undefined): string | undefined {
+  if (!command?.startsWith("truth-harness smt check ")) {
+    return undefined;
+  }
+  if (smtCommandNeedsConcreteSource(command)) {
+    return undefined;
+  }
+
+  const match = /^truth-harness\s+smt\s+check\s+((?:"(?:\\.|[^"\\])*")|(?:[^\s]+))(?:\s|$)/u.exec(command);
+  if (!match?.[1]) {
+    return undefined;
+  }
+
+  return unquoteCommandToken(match[1]);
+}
+
+function unquoteCommandToken(token: string): string | undefined {
+  if (!token.startsWith("\"")) {
+    return token;
+  }
+
+  try {
+    const parsed = JSON.parse(token) as unknown;
+    return typeof parsed === "string" ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function smtBackendForObligation(obligation: ProofObligation): "z3" | "cvc5" | undefined {
+  if (obligation.sourceCapabilityId === "z3-smt-solver") {
+    return "z3";
+  }
+
+  if (obligation.sourceCapabilityId === "cvc5-smt-solver") {
+    return "cvc5";
+  }
+
+  return undefined;
+}
+
+function smtBackendFromCommand(command: string | undefined): "z3" | "cvc5" | undefined {
+  const match = command?.match(/(?:^|\s)--backend(?:\s+|=)(z3|cvc5)(?:\s|$)/u);
+  return match?.[1] === "z3" || match?.[1] === "cvc5" ? match[1] : undefined;
+}
+
+function smtCommandNeedsConcreteSource(command: string | undefined): boolean {
+  if (!command?.startsWith("truth-harness smt check ")) {
+    return false;
+  }
+
+  return command.includes("<workspace-local.smt2>") || command.includes("<");
 }
 
 function scopedProofCommand(

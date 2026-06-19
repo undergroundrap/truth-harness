@@ -197,7 +197,7 @@ describe("workspace review", () => {
       nextItemId: review.items[0]?.itemId,
       nextCommand: review.items[0]?.command
     });
-    expect(review.autonomy.suggestedBatchSize).toBe(3);
+    expect(review.autonomy.suggestedBatchSize).toBe(2);
     expect(review.autonomy.blockedActions).toContain("Do not upgrade a trust label unless an accepted local artifact satisfies the exact matching obligation.");
     expect(review.autonomy.stopConditions).toContain("A high-stakes interpretation, final claim, treatment, patentability, or real-world recommendation is requested.");
     expect(review.autonomy.humanReviewRequiredFor).toEqual(expect.arrayContaining([expect.stringMatching(/^claim-blocker:claim_/u)]));
@@ -208,7 +208,7 @@ describe("workspace review", () => {
     );
     expect(blockedRouteAction).toMatchObject({
       kind: "route-obligation",
-      priority: "high",
+      priority: "low",
       routeId: blockedRoute.route.routeId,
       acceptanceCriteria: expect.arrayContaining([
         "Open the source route and satisfy this exact obligation before upgrading trust.",
@@ -382,6 +382,36 @@ describe("workspace review", () => {
       z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
+    const stored = JSON.parse(await readFile(route.jsonPath, "utf8")) as {
+      proofObligations: Array<Record<string, unknown>>;
+    };
+    stored.proofObligations = [
+      {
+        obligationId: "obl_smt_evidence_order_test",
+        kind: "solver-encoding",
+        status: "open",
+        severity: "critical",
+        sourceCapabilityId: "z3-smt-solver",
+        title: "SMT encoding obligation",
+        statement: "solve integer constraints x > 0 and x < 3",
+        requiredBefore: "Before labeling this scoped claim smt-checked.",
+        acceptanceCriteria: ["Attach a concrete SMT check record."],
+        command: "truth-harness smt check docs/examples/constraints.smt2 --backend z3 --write"
+      },
+      {
+        obligationId: "obl_passive_proof_order_test",
+        kind: "formal-proof",
+        status: "open",
+        severity: "critical",
+        sourceCapabilityId: "lean-proof-checker",
+        title: "Formal proof-checker obligation",
+        statement: "solve integer constraints x > 0 and x < 3",
+        requiredBefore: "Before labeling this scoped claim proved.",
+        acceptanceCriteria: ["Attach an accepted proof-check record."],
+        command: "truth-harness proof check docs/examples/trivial.lean --write"
+      }
+    ];
+    await writeFile(route.jsonPath, JSON.stringify(stored, null, 2), "utf8");
 
     const review = await createWorkspaceReview({
       rootPath: root,
@@ -401,6 +431,57 @@ describe("workspace review", () => {
     expect(evidenceCommandIndex).toBeLessThan(passiveCommandIndex);
     expect(routeItems[evidenceCommandIndex]?.command).toContain("--write");
     expect(review.autonomy.nextCommand).toBe(routeItems[evidenceCommandIndex]?.command);
+  });
+
+  it("derives missing independent SMT commands from sibling route SMT sources", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "solve integer constraints x > 0 and x < 3",
+      now: new Date("2026-06-13T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      cvc5Command: "truth-harness-missing-cvc5-command",
+      smtReviewPolicy: "independent",
+      timeoutMs: 50
+    });
+    const stored = JSON.parse(await readFile(route.jsonPath, "utf8")) as {
+      proofObligations: Array<Record<string, unknown>>;
+    };
+    const z3Obligation = stored.proofObligations.find((obligation) => obligation.sourceCapabilityId === "z3-smt-solver");
+    const cvc5Obligation = stored.proofObligations.find((obligation) => obligation.sourceCapabilityId === "cvc5-smt-solver");
+    expect(z3Obligation?.command).toContain("docs/examples/constraints.smt2");
+    expect(cvc5Obligation?.command).toContain("docs/examples/constraints.smt2");
+    if (cvc5Obligation) {
+      delete cvc5Obligation.command;
+    }
+    await writeFile(route.jsonPath, JSON.stringify(stored, null, 2), "utf8");
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-13T00:02:00.000Z"
+    });
+    const item = review.items.find(
+      (candidate) =>
+        candidate.kind === "route-obligation" &&
+        candidate.routeId === route.route.routeId &&
+        candidate.obligationId === cvc5Obligation?.obligationId
+    );
+
+    expect(item).toMatchObject({
+      kind: "route-obligation",
+      obligationKind: "solver-encoding",
+      command: "truth-harness smt check docs/examples/constraints.smt2 --backend cvc5 --write"
+    });
+    expect(item?.command).not.toContain("route show");
+    expect(review.autonomy.nextCommand).toMatch(/^truth-harness smt check\b/u);
   });
 
   it("does not ask for a ready-route claim after a claim cites that route", async () => {

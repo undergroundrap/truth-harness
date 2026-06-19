@@ -1,6 +1,6 @@
 # Docker-First Workflow
 
-Truth Harness should be run from Docker by default when you are testing agent-facing code, proof gates, symbolic adapters, or MCP workflows. Docker keeps Node, Python, SymPy, Maxima, Z3, and npm dependencies out of the host environment and makes the public credibility path easier to replay. Optional larger or second-opinion engines such as SageMath and cvc5 are gated separately.
+Truth Harness should be run from Docker by default when you are testing agent-facing code, proof gates, symbolic adapters, or MCP workflows. Docker keeps Node, Python, SymPy, Maxima, Z3, cvc5, and npm dependencies out of the host environment and makes the public credibility path easier to replay. Optional larger engines such as SageMath and Lean are gated separately.
 
 Docker is still not magic security. The Docker daemon is powerful, and a dev container with the repository bind-mounted can change files in that repository. Treat Docker as the baseline isolation layer, then use Truth Harness receipts, measured sandbox status, and replayable evidence for stronger claims.
 
@@ -8,7 +8,7 @@ Docker is still not magic security. The Docker daemon is powerful, and a dev con
 
 Start Docker Desktop first and make sure the Linux engine is running.
 
-This builds a verification image from the committed source without bind-mounting the repo into the running checks. It runs the TypeScript build, test suite, launch proof gate, a concrete Maxima CAS agreement check, a concrete Z3 SMT-LIB check, and the `engines verify --require-maxima --require-z3` evidence gate inside the image build.
+This builds a verification image from the committed source without bind-mounting the repo into the running checks. It runs the TypeScript build, test suite, launch proof gate, a concrete Maxima CAS agreement check, concrete Z3 and cvc5 SMT-LIB checks, and the `engines verify --require-maxima --require-z3` plus `engines verify --require-cvc5` evidence gates inside the image build.
 
 ```bash
 docker build --target verify -t truth-harness:verify .
@@ -102,7 +102,7 @@ docker compose up web
 
 Then open `http://127.0.0.1:4180`. The web service publishes only to localhost. The browser calls localhost `/api/receipt` and `/api/claims` endpoints backed by `@truth-harness/core`; it does not call a hosted model or external service. The web server also rejects non-local Host headers by default and accepts browser API writes only from the same origin.
 
-The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima and Z3 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; use `truth-harness proof project <path>` to inspect that local layout without executing Lean, run `docker compose run --rm lean-proof` for the pinned fixture, then set `TRUTH_HARNESS_LEAN` or build a derived image once a real project layout is chosen.
+The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima, Z3, and cvc5 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; use `truth-harness proof project <path>` to inspect that local layout without executing Lean, run `docker compose run --rm lean-proof` for the pinned fixture, then set `TRUTH_HARNESS_LEAN` or build a derived image once a real project layout is chosen.
 
 ## Web UI Safe Verifier Path
 
@@ -137,8 +137,8 @@ By default, MCP `truth_harness_code_run` is still disabled. To expose it to an a
 - The web compose service publishes `127.0.0.1:4180` for the browser and is not a code sandbox. Its local API currently creates receipts and claim-ledger records through `@truth-harness/core` without hosted model calls.
 - Node dependencies live in the `truth_harness_node_modules` Docker volume.
 - npm cache lives in the `truth_harness_npm_cache` Docker volume.
-- Python, `sympy==1.14.0`, Maxima through `maxima-sage`, and Z3 are installed inside the image.
-- `TRUTH_HARNESS_MAXIMA=maxima-sage` and `TRUTH_HARNESS_Z3=z3` are set for compose services so local CAS and SMT probes use the containerized solvers.
+- Python, `sympy==1.14.0`, Maxima through `maxima-sage`, Z3, and cvc5 are installed inside the image.
+- `TRUTH_HARNESS_MAXIMA=maxima-sage`, `TRUTH_HARNESS_Z3=z3`, and `TRUTH_HARNESS_CVC5=cvc5` are set for compose services so local CAS and SMT probes use the containerized solvers.
 
 ## What Is Not Isolated
 

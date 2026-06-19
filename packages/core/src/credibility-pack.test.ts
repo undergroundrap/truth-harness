@@ -358,7 +358,7 @@ describe("professor credibility pack", () => {
   it("orders reviewer actions toward evidence-writing commands before passive inspection", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
-    await writeVerifierRoute({
+    const route = await writeVerifierRoute({
       rootPath: root,
       problem: "solve integer constraints x > 0 and x < 3",
       now: new Date("2026-06-16T00:00:20.000Z"),
@@ -367,6 +367,36 @@ describe("professor credibility pack", () => {
       z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
+    const stored = JSON.parse(await readFile(route.jsonPath, "utf8")) as {
+      proofObligations: Array<Record<string, unknown>>;
+    };
+    stored.proofObligations = [
+      {
+        obligationId: "obl_smt_credibility_order_test",
+        kind: "solver-encoding",
+        status: "open",
+        severity: "critical",
+        sourceCapabilityId: "z3-smt-solver",
+        title: "SMT encoding obligation",
+        statement: "solve integer constraints x > 0 and x < 3",
+        requiredBefore: "Before labeling this scoped claim smt-checked.",
+        acceptanceCriteria: ["Attach a concrete SMT check record."],
+        command: "truth-harness smt check docs/examples/constraints.smt2 --backend z3 --write"
+      },
+      {
+        obligationId: "obl_passive_proof_credibility_order_test",
+        kind: "formal-proof",
+        status: "open",
+        severity: "critical",
+        sourceCapabilityId: "lean-proof-checker",
+        title: "Formal proof-checker obligation",
+        statement: "solve integer constraints x > 0 and x < 3",
+        requiredBefore: "Before labeling this scoped claim proved.",
+        acceptanceCriteria: ["Attach an accepted proof-check record."],
+        command: "truth-harness proof check docs/examples/trivial.lean --write"
+      }
+    ];
+    await writeFile(route.jsonPath, JSON.stringify(stored, null, 2), "utf8");
     await writeBenchmarkRunRecord({
       rootPath: root,
       run: benchmarkRun(createReceipt("for all integers n, n^2+n+1 is even"), {
