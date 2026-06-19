@@ -1,6 +1,23 @@
-# Truth Harness
+<p align="center">
+  <img src="apps/web/assets/icon-192.png" alt="Truth Harness icon" width="144" height="144">
+</p>
 
-**Local-First Verified Math for AI Agents.**
+<h1 align="center">Truth Harness</h1>
+
+<p align="center">
+  <strong>Local-first verified math for AI agents.</strong>
+</p>
+
+<p align="center">
+  <a href="./LICENSE"><img alt="License: AGPL-3.0 plus visible attribution" src="https://img.shields.io/badge/license-AGPL--3.0%20%2B%20attribution-blue"></a>
+  <a href="https://github.com/undergroundrap/truth-harness/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/undergroundrap/truth-harness/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Local-first" src="https://img.shields.io/badge/local--first-private%20workspace-6ee7b7">
+  <img alt="Network" src="https://img.shields.io/badge/network-zero%20by%20default-9ca3af">
+  <img alt="Trust" src="https://img.shields.io/badge/trust-replayable%20receipts-f5d06f">
+  <img alt="Interfaces" src="https://img.shields.io/badge/interfaces-CLI%20%2B%20MCP-b5a7ff">
+  <img alt="Runtime" src="https://img.shields.io/badge/runtime-Docker%20first-60a5fa">
+  <img alt="TypeScript" src="https://img.shields.io/badge/types-TypeScript-3178c6">
+</p>
 
 Truth Harness is a verification-first mathematical workbench for humans, Claude, Codex, and other agentic tools.
 
