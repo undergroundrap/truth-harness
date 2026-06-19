@@ -86,6 +86,24 @@ describe("web UI action contracts", () => {
     expect(styles).toContain("grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));");
   });
 
+  it("keeps the compact branch map from overlapping wrapped receipt labels", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('id="branch-map"');
+    expect(source).toContain("return 28 + Math.max(rowCount, 1) * 88;");
+    expect(styles).toContain(".branch-rows-2 {\n  height: 204px;");
+    expect(styles).toContain(".git-row-1 {\n  top: 102px;");
+    expect(styles).toContain("grid-template-columns: 96px minmax(0, 1fr);");
+    expect(styles).toContain("min-height: 74px;");
+    expect(styles).toContain("-webkit-line-clamp: 2;");
+    expect(styles).toContain("text-overflow: ellipsis;");
+    expect(styles).toContain("overflow: hidden auto;");
+  });
+
   it("surfaces workspace credibility packs from the Report tab", async () => {
     const [html, source, styles] = await Promise.all([
       readFile(appHtmlPath, "utf8"),

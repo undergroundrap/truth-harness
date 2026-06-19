@@ -11088,7 +11088,7 @@ function renderBranchMap(receipt) {
   branchMap.innerHTML = `
     <div class="branch-map-stage git-branch-stage">
       <div class="git-branch-canvas branch-rows-${Math.max(rows.length, 1)}">
-      <svg class="git-branch-lines" viewBox="0 0 84 ${branchCanvasHeight(rows.length)}" preserveAspectRatio="none" aria-hidden="true">
+      <svg class="git-branch-lines" viewBox="0 0 92 ${branchCanvasHeight(rows.length)}" preserveAspectRatio="none" aria-hidden="true">
         ${railHtml}
         ${edgeHtml}
       </svg>
@@ -11109,15 +11109,15 @@ function branchChildLane(currentLane, index) {
 }
 
 function branchCanvasHeight(rowCount) {
-  return 20 + Math.max(rowCount, 1) * 64;
+  return 28 + Math.max(rowCount, 1) * 88;
 }
 
 function branchRowY(rowIndex) {
-  return 40 + rowIndex * 64;
+  return 52 + rowIndex * 88;
 }
 
 function branchLaneX(lane) {
-  return 16 + lane * 16;
+  return 18 + lane * 18;
 }
 
 function branchEdgePath(fromLane, fromRow, toLane, toRow, kind) {
