@@ -763,14 +763,31 @@ function reviewQueueCheck(pack: CredibilityPack): ReleaseAuditCheck {
       details: pack.reviewerActionPlan.actions.slice(0, 6).map((action) => `${action.priority}: ${action.title}`)
     });
   }
-  if (pack.summary.highReviewItems > 0 || pack.summary.reviewItems > 0) {
+  const mediumReviewItems = pack.workspaceReview.summary.mediumItems;
+  const lowReviewItems = pack.workspaceReview.summary.lowItems;
+  if (pack.summary.highReviewItems > 0 || mediumReviewItems > 0) {
     return warnCheck({
       id: "review-queue",
-      title: "Open review queue",
+      title: "Open actionable review queue",
       blocking: false,
-      summary: `${pack.summary.reviewItems} reviewer item(s) remain open.`,
+      summary: `${pack.summary.highReviewItems + mediumReviewItems} actionable reviewer item(s) remain open.`,
       command: "truth-harness workspace review .",
-      details: pack.workspaceReview.topItems.slice(0, 5).map((item) => `${item.priority}: ${item.title}`)
+      details: pack.workspaceReview.topItems
+        .filter((item) => item.priority !== "low")
+        .slice(0, 5)
+        .map((item) => `${item.priority}: ${item.title}`)
+    });
+  }
+  if (lowReviewItems > 0) {
+    return passCheck({
+      id: "review-queue",
+      title: "Optional review queue",
+      summary: `${lowReviewItems} low-priority optional reviewer item(s) remain visible but are not release blockers.`,
+      command: "truth-harness workspace review .",
+      details: pack.workspaceReview.topItems
+        .filter((item) => item.priority === "low")
+        .slice(0, 5)
+        .map((item) => `low: ${item.title}`)
     });
   }
   return passCheck({
@@ -832,7 +849,10 @@ function nextActions(checks: ReleaseAuditCheck[], pack: CredibilityPack | undefi
     .filter((check) => check.status === "fail" && check.command)
     .map((check) => check.command as string);
   const dockerEngineCommands = pack ? engineEvidenceDockerCommands(pack) : [];
-  const reviewerCommands = pack?.reviewerActionPlan.actions.slice(0, 5).map((action) => action.command) ?? [];
+  const reviewerCommands = pack?.reviewerActionPlan.actions
+    .filter((action) => action.priority !== "low")
+    .slice(0, 5)
+    .map((action) => action.command) ?? [];
   return [...new Set([...actionCommands, ...dockerEngineCommands, ...reviewerCommands])].slice(0, 8);
 }
 

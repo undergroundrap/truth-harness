@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -10,6 +10,7 @@ import { createReceipt } from "./receipt.js";
 import { writeEngineVerificationRun, type EngineVerificationCommandRunner } from "./engine-verification.js";
 import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchSession } from "./research-session.js";
+import { writeVerifierRoute } from "./verifier-route.js";
 
 const roots: string[] = [];
 
@@ -181,6 +182,72 @@ describe("release audit", () => {
     )).toBe(true);
     expect(markdown).toContain("Research sessions: 1 inspected, 3 continuation item(s)");
     expect(markdown).toContain("WARN Research session continuity");
+  });
+
+  it("treats low-priority passive review items as optional instead of launch warnings", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Passive Queue Audit", now: "2026-06-17T00:00:00.000Z" });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "solve integer constraints x > 0 and x < 3",
+      now: new Date("2026-06-17T00:00:10.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const stored = JSON.parse(await readFile(route.jsonPath, "utf8")) as {
+      proofObligations: Array<Record<string, unknown>>;
+    };
+    stored.proofObligations = [
+      {
+        ...stored.proofObligations[0],
+        kind: "formal-proof",
+        status: "open",
+        severity: "critical",
+        title: "Formal proof-checker obligation",
+        requiredBefore: "Before labeling this scoped claim proved.",
+        command: "truth-harness proof check docs/examples/trivial.lean --write"
+      }
+    ];
+    await writeFile(route.jsonPath, JSON.stringify(stored, null, 2), "utf8");
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(createReceipt("for all integers n, n^2+n+1 is even")),
+      suiteDescription: "Curated fluent-but-wrong AI math failure suite.",
+      suitePath: "packages/benchmarks/suites/ai-failure-seed.json",
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-17T00:00:20.000Z"
+    });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:30.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-17T00:01:00.000Z",
+      engineRequirements: { maxima: true, z3: true, lean: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      leanCommand: "lean-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: passingEngineRunner
+    });
+
+    expect(audit.status).toBe("ready");
+    expect(audit.summary.reviewItems).toBeGreaterThan(0);
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "review-queue",
+        title: "Optional review queue",
+        status: "pass",
+        blocking: false,
+        summary: expect.stringContaining("low-priority optional reviewer item(s)")
+      })
+    );
+    expect(audit.nextActions.some((action) => action.startsWith("truth-harness route show"))).toBe(false);
   });
 
   it("blocks release readiness when a saved report draft fails sidecar integrity", async () => {
