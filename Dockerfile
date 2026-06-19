@@ -41,7 +41,7 @@ CMD ["npm", "run", "check"]
 
 FROM dev AS verify
 
-RUN npm run check && npm run proof:launch:engines && npm run engines:verify:docker-core && npm run engines:verify:cvc5
+RUN npm run check && npm run proof:launch:engines && npm run engines:verify:docker-core
 
 FROM dev AS sage-math
 

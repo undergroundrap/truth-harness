@@ -8,7 +8,7 @@ Docker is still not magic security. The Docker daemon is powerful, and a dev con
 
 Start Docker Desktop first and make sure the Linux engine is running.
 
-This builds a verification image from the committed source without bind-mounting the repo into the running checks. It runs the TypeScript build, test suite, launch proof gate, a concrete Maxima CAS agreement check, concrete Z3 and cvc5 SMT-LIB checks, and the `engines verify --require-maxima --require-z3` plus `engines verify --require-cvc5` evidence gates inside the image build.
+This builds a verification image from the committed source without bind-mounting the repo into the running checks. It runs the TypeScript build, test suite, launch proof gate, a concrete Maxima CAS agreement check, concrete Z3 and cvc5 SMT-LIB checks, and the Docker-core `engines verify --require-maxima --require-z3 --require-cvc5` evidence gate inside the image build.
 
 ```bash
 docker build --target verify -t truth-harness:verify .

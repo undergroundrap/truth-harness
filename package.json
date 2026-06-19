@@ -58,7 +58,7 @@
     "demo:symbolic": "npm run cli -- bench run packages/benchmarks/suites/symbolic-seed.json",
     "engines:readiness": "npm run cli -- engines readiness",
     "engines:verify": "npm run cli -- engines verify",
-    "engines:verify:docker-core": "npm run cli -- engines verify --require-maxima --require-z3",
+    "engines:verify:docker-core": "npm run cli -- engines verify --require-maxima --require-z3 --require-cvc5",
     "engines:verify:lean": "npm run cli -- engines verify --require-lean",
     "engines:verify:cvc5": "npm run cli -- engines verify --require-cvc5",
     "engines:verify:sage": "npm run cli -- engines verify --require-sage",

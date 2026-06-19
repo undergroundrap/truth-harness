@@ -1171,8 +1171,16 @@ describe("benchmark CLI", () => {
     });
   });
 
-  it("reports SMT backend status without requiring Z3 to be installed", async () => {
-    const result = await runCli(["smt", "backends", "--z3-command", "truth-harness-missing-z3-command", "--json"]);
+  it("reports SMT backend status without requiring SMT solvers to be installed", async () => {
+    const result = await runCli([
+      "smt",
+      "backends",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
+      "--cvc5-command",
+      "truth-harness-missing-cvc5-command",
+      "--json"
+    ]);
     const json = JSON.parse(result.stdout) as {
       smtSolversAvailable: number;
       backends: Array<{ backendId: string; status: string; canCheckSmt: boolean; statusProbeMintedCheck: boolean }>;

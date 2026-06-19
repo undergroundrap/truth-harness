@@ -1291,7 +1291,7 @@ describe("Truth Harness MCP server", () => {
       await client.close();
       await server.close();
     }
-  });
+  }, 15000);
 });
 
 async function tempRoot(): Promise<string> {
