@@ -684,6 +684,53 @@ describe("workspace review", () => {
     expect(review.autonomy.nextCommand).toBe(review.items[0]?.command);
   });
 
+  it("does not treat passive-only inspection blockers as unattended local work", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "solve integer constraints x > 0 and x < 3",
+      now: new Date("2026-06-13T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const stored = JSON.parse(await readFile(route.jsonPath, "utf8")) as {
+      proofObligations: Array<Record<string, unknown>>;
+    };
+    stored.proofObligations = [
+      {
+        ...stored.proofObligations[0],
+        kind: "formal-proof",
+        status: "open",
+        severity: "critical",
+        title: "Formal proof-checker obligation",
+        requiredBefore: "Before labeling this scoped claim proved.",
+        command: "truth-harness proof check docs/examples/trivial.lean --write"
+      }
+    ];
+    await writeFile(route.jsonPath, JSON.stringify(stored, null, 2), "utf8");
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-13T00:02:00.000Z"
+    });
+
+    expect(review.items.length).toBeGreaterThan(0);
+    expect(review.items.every((item) => item.command.startsWith("truth-harness route show"))).toBe(true);
+    expect(review.autonomy.mode).toBe("idle");
+    expect(review.autonomy.canRunUnattended).toBe(false);
+    expect(review.autonomy.suggestedBatchSize).toBe(0);
+    expect(review.autonomy.nextCommand).toBeUndefined();
+    expect(review.autonomy.agentPacket).toContain("No open local work item.");
+  });
+
   it("demotes legacy stronger-claim obligations that were stored as critical", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {

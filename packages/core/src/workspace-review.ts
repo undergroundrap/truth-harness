@@ -1282,13 +1282,15 @@ function summarizeItems(input: {
 }
 
 function createAutonomyContract(items: WorkspaceReviewItem[]): WorkspaceReviewAutonomyContract {
-  const nextItem = items[0];
+  const actionableItems = items.filter((item) => isAutonomyActionableItem(item));
+  const nextItem = actionableItems[0];
   const highStakeItems = items.filter((item) => itemRequiresHumanReview(item));
-  const mode: WorkspaceReviewAutonomyMode = items.length === 0
-    ? "idle"
-    : highStakeItems.length > 0 ? "human-review-gated" : "local-verifier-loop";
+  const mode: WorkspaceReviewAutonomyMode = highStakeItems.length > 0
+    ? "human-review-gated"
+    : actionableItems.length > 0 ? "local-verifier-loop" : "idle";
+  const artifactItems = actionableItems.length > 0 ? actionableItems : items;
   const requiredArtifacts = uniqueSorted(
-    items
+    artifactItems
       .slice(0, 5)
       .flatMap((item) => item.evidenceSlots ?? [])
       .flatMap((slot) => slot.acceptedArtifacts)
@@ -1300,8 +1302,8 @@ function createAutonomyContract(items: WorkspaceReviewItem[]): WorkspaceReviewAu
   ]);
   const contractWithoutPacket = {
     mode,
-    canRunUnattended: items.length > 0,
-    suggestedBatchSize: Math.min(3, items.length),
+    canRunUnattended: actionableItems.length > 0,
+    suggestedBatchSize: Math.min(3, actionableItems.length),
     nextItemId: nextItem?.itemId,
     nextCommand: nextItem?.command,
     allowedActions: autonomyAllowedActions(mode),
@@ -1315,6 +1317,10 @@ function createAutonomyContract(items: WorkspaceReviewItem[]): WorkspaceReviewAu
     ...contractWithoutPacket,
     agentPacket: renderAutonomyAgentPacket(contractWithoutPacket)
   };
+}
+
+function isAutonomyActionableItem(item: WorkspaceReviewItem): boolean {
+  return !isPassiveInspectionCommand(item.command);
 }
 
 function itemRequiresHumanReview(item: WorkspaceReviewItem): boolean {

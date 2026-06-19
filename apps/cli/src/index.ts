@@ -7039,6 +7039,8 @@ function printWorkspaceReview(review: WorkspaceReview, writeResult?: WorkspaceRe
   console.log(`Suggested batch: ${review.autonomy.suggestedBatchSize}`);
   if (review.autonomy.nextCommand) {
     console.log(`Next command: ${review.autonomy.nextCommand}`);
+  } else if (review.items.length > 0) {
+    console.log("Next command: none; remaining review items are passive inspection blockers.");
   }
 
   if (review.items.length === 0) {
