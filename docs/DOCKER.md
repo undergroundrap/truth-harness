@@ -149,7 +149,7 @@ By default, MCP `truth_harness_code_run` is still disabled. To expose it to an a
 - Loopback remains available inside the container. The measurement means no non-loopback interface/default route was observed.
 - Docker does not make AI-generated code safe. Keep executable allowlists narrow, prefer `--require-sandbox` for risky workflows, and review any command before running it.
 - Maxima, SageMath, Z3, and cvc5 availability probes are not evidence by themselves. `cross-checked` still requires a concrete CAS agreement run over the recorded expression/result pair, and `smt-checked` still requires a concrete selected SMT solver `sat` or `unsat` run over the recorded artifact. `truth-harness engines verify` exists to make that distinction machine-readable.
-- Full SageMath is intentionally isolated in the separate `sage-math` target because it is much larger than the default dev image. Use `npm run docker:sage` to build/run that no-network gate when a reviewer explicitly wants `--require-sage`. Use `npm run docker:all-engines` for the still-heavier combined SageMath plus pinned-Lean image when the strict `--require-all-engines` gate must pass in one no-runtime-network container.
+- Full SageMath is intentionally isolated in the separate `sage-math` target because it is much larger than the default dev image. Use `npm run docker:sage` to build/run that no-network gate when a reviewer explicitly wants `--require-sage`; it passes Compose `--build` so the Sage gate follows the current source tree. Use `npm run docker:all-engines` for the still-heavier combined SageMath plus pinned-Lean image when the strict `--require-all-engines` gate must pass in one no-runtime-network container.
 
 ## Reset Container State
 
