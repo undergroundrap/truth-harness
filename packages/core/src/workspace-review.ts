@@ -183,12 +183,15 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const claimsByStatementKey = claimsByReviewStatementKey(claims);
   const supersededClaimIds = supersededClaimIdSet(claims);
   const routes = await Promise.all(routeSummaries.map((route) => readVerifierRoute(status.root, route.routeId)));
+  const staleEquivalentRouteIds = staleEquivalentVerifierRouteIds(routes);
+  const activeRoutes = routes.filter((route) => !staleEquivalentRouteIds.has(route.routeId));
+  const readyRoutesByStatementKey = readyRoutesByReviewStatementKey(activeRoutes);
   const claimItems = (await Promise.all(
-    claims.map((claim) => claimReviewItems(status.root, claim, supersededClaimIds))
+    claims.map((claim) => claimReviewItems(status.root, claim, supersededClaimIds, readyRoutesByStatementKey))
   )).flat();
   const items = attachAgentPackets(sortReviewItems([
     ...sessions.flatMap((session) => linkedValidationGateItems(status.root, session, validationPlans)),
-    ...routes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef, claimsByStatementKey)),
+    ...activeRoutes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef, claimsByStatementKey)),
     ...claimItems,
     ...reportDrafts.map((report) => reportDraftReviewItem(status.root, report)),
     ...sessions.flatMap((session) => sessionReviewItems(status.root, session))
@@ -814,6 +817,61 @@ function routeReviewItems(
   return items;
 }
 
+function staleEquivalentVerifierRouteIds(routes: VerifierRoute[]): Set<string> {
+  const staleRouteIds = new Set<string>();
+
+  for (const candidate of routes) {
+    for (const other of routes) {
+      if (candidate.routeId === other.routeId || staleRouteIds.has(candidate.routeId)) {
+        continue;
+      }
+
+      if (equivalentRouteProblems(candidate.problem, other.problem) && routeSupersedesForReview(other, candidate)) {
+        staleRouteIds.add(candidate.routeId);
+      }
+    }
+  }
+
+  return staleRouteIds;
+}
+
+function readyRoutesByReviewStatementKey(routes: VerifierRoute[]): Map<string, VerifierRoute> {
+  const map = new Map<string, VerifierRoute>();
+
+  for (const route of routes) {
+    const readiness = verifierRouteReadiness(route);
+    if (!readiness.readyForNarrowClaim) {
+      continue;
+    }
+
+    for (const key of reviewStatementKeys(route.problem)) {
+      const existing = map.get(key);
+      if (!existing || routeSupersedesForReview(route, existing)) {
+        map.set(key, route);
+      }
+    }
+  }
+
+  return map;
+}
+
+function equivalentRouteProblems(left: string, right: string): boolean {
+  const leftKeys = new Set(reviewStatementKeys(left));
+  return reviewStatementKeys(right).some((key) => leftKeys.has(key));
+}
+
+function routeSupersedesForReview(candidate: VerifierRoute, stale: VerifierRoute): boolean {
+  const readiness = verifierRouteReadiness(candidate);
+  if (!readiness.readyForNarrowClaim) {
+    return false;
+  }
+
+  const candidateRank = reviewTrustRank(readiness.strongestTrust);
+  const staleRank = reviewTrustRank(stale.finalTrust);
+
+  return candidateRank > staleRank || (candidateRank === staleRank && candidate.createdAt.localeCompare(stale.createdAt) > 0);
+}
+
 function routeObligationItem(workspacePath: string, route: VerifierRoute, obligation: ProofObligation): WorkspaceReviewItem {
   const command = commandForRouteObligation(workspacePath, route, obligation);
   return {
@@ -902,7 +960,8 @@ function escapeRegExp(value: string): string {
 async function claimReviewItems(
   workspacePath: string,
   claim: ClaimLedgerRecord,
-  supersededClaimIds: Set<string>
+  supersededClaimIds: Set<string>,
+  readyRoutesByStatementKey: Map<string, VerifierRoute>
 ): Promise<WorkspaceReviewItem[]> {
   if (claim.finalization.readyForNarrowClaim || claim.status !== "active" || supersededClaimIds.has(claim.claimId)) {
     return [];
@@ -910,7 +969,7 @@ async function claimReviewItems(
 
   const openChecks = claim.finalization.openChecks ?? [];
   const reviewCommand = `truth-harness claim review ${quoteCommandArg(claim.claimId)} --workspace ${quoteCommandArg(workspacePath)} --json`;
-  const command = await preferredClaimBlockerCommand(workspacePath, claim.claimId, reviewCommand);
+  const command = await preferredClaimBlockerCommand(workspacePath, claim, readyRoutesByStatementKey, reviewCommand);
   return [
     {
       itemId: itemIdFor({
@@ -935,9 +994,20 @@ async function claimReviewItems(
   ];
 }
 
-async function preferredClaimBlockerCommand(workspacePath: string, claimId: string, fallbackCommand: string): Promise<string> {
+async function preferredClaimBlockerCommand(
+  workspacePath: string,
+  claim: ClaimLedgerRecord,
+  readyRoutesByStatementKey: Map<string, VerifierRoute>,
+  fallbackCommand: string
+): Promise<string> {
+  const readyRoute = firstEquivalentReadyRoute(claim, readyRoutesByStatementKey);
+  if (readyRoute) {
+    const readiness = verifierRouteReadiness(readyRoute);
+    return `truth-harness claim add ${quoteCommandArg(claim.statement)} --workspace ${quoteCommandArg(workspacePath)} --title ${quoteCommandArg(claim.title)} --domain ${quoteCommandArg(claim.domain)} --supersedes ${quoteCommandArg(claim.claimId)} --evidence ${quoteCommandArg(`route:${readyRoute.routeId}`)} --trust ${quoteCommandArg(readiness.strongestTrust)} --json`;
+  }
+
   try {
-    const packet = await createClaimReviewPacket({ rootPath: workspacePath, claimRef: claimId });
+    const packet = await createClaimReviewPacket({ rootPath: workspacePath, claimRef: claim.claimId });
     const action = packet.nextActions.find((nextAction) =>
       typeof nextAction.command === "string" && isActionableClaimReviewCommand(nextAction.command)
     );
@@ -950,6 +1020,20 @@ async function preferredClaimBlockerCommand(workspacePath: string, claimId: stri
 
 function isActionableClaimReviewCommand(command: string): boolean {
   return writesVerifierEvidence(command) || /^truth-harness\s+source\s+cite\b/u.test(command);
+}
+
+function firstEquivalentReadyRoute(
+  claim: ClaimLedgerRecord,
+  readyRoutesByStatementKey: Map<string, VerifierRoute>
+): VerifierRoute | undefined {
+  for (const key of reviewStatementKeys(claim.normalizedStatement || claim.statement)) {
+    const route = readyRoutesByStatementKey.get(key);
+    if (route && !claim.evidenceRefs.some((ref) => ref.kind === "route" && ref.ref === route.routeId)) {
+      return route;
+    }
+  }
+
+  return undefined;
 }
 
 function sessionReviewItems(workspacePath: string, session: ResearchSession): WorkspaceReviewItem[] {
@@ -1137,6 +1221,29 @@ function reviewStatementKeys(value: string): string[] {
 
     return [candidate.trim(), compactOperators].filter(Boolean);
   }));
+}
+
+function reviewTrustRank(value: TrustLabel): number {
+  switch (value) {
+    case "refuted":
+      return 100;
+    case "proved":
+      return 90;
+    case "cross-checked":
+      return 80;
+    case "smt-checked":
+      return 70;
+    case "dimension-checked":
+      return 60;
+    case "exact-computed":
+      return 50;
+    case "bounded-numeric":
+      return 40;
+    case "source-cited":
+      return 30;
+    case "unverified":
+      return 0;
+  }
 }
 
 function summarizeItems(input: {
@@ -1680,11 +1787,19 @@ function workspaceReviewAcceptanceCriteria(item: WorkspaceReviewItem): string[] 
       );
     }
   } else if (item.kind === "claim-blocker") {
-    criteria.push(
-      "Run the claim review and resolve the named open check.",
-      "Attach citations, receipts, routes, or expert review before finalizing.",
-      "Do not finalize the claim until open blockers are represented in the ledger."
-    );
+    if (/^truth-harness\s+claim\s+add\b/u.test(item.command) && hasCliFlag(item.command, "--supersedes")) {
+      criteria.push(
+        "Write a superseding claim that cites the ready route or evidence artifact.",
+        "Keep the new claim scoped to the attached evidence and trust label.",
+        "Leave the old blocked claim superseded instead of duplicating unresolved work."
+      );
+    } else {
+      criteria.push(
+        "Run the claim review and resolve the named open check.",
+        "Attach citations, receipts, routes, or expert review before finalizing.",
+        "Do not finalize the claim until open blockers are represented in the ledger."
+      );
+    }
   } else if (item.kind === "report-draft-review") {
     if (item.priority === "low") {
       criteria.push(

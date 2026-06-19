@@ -97,6 +97,26 @@ describe("verifier route", () => {
     });
   });
 
+  it("routes concrete LaTeX arithmetic equalities through the native rational kernel", () => {
+    const route = createVerifierRoute("\\frac{3}{4}+\\frac{5}{8} = \\frac{11}{8}", {
+      now: new Date("2026-06-12T00:00:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    expect(route.status).toBe("verified");
+    expect(route.finalTrust).toBe("exact-computed");
+    expect(route.evidenceKind).toBe("exact-arithmetic");
+    expect(route.receipt.summary).toContain("both sides equal 11/8");
+    expect(route.receipt.artifacts.some((artifact) => artifact.kind === "exact-arithmetic-equality-certificate")).toBe(true);
+    expect(verifierRouteReadiness(route)).toMatchObject({
+      readyForNarrowClaim: true,
+      strongestTrust: "exact-computed"
+    });
+  });
+
   it("treats stronger-label obligations as upgrades for already scoped exact results", () => {
     const route = createVerifierRoute("for all integers n, n^2+n is even", {
       now: new Date("2026-06-12T00:00:00.000Z"),

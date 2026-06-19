@@ -7,7 +7,15 @@ import {
   type BenchmarkRunTaskLike,
   type BenchmarkRunTaskResultLike
 } from "./benchmark-run.js";
-import { createClaimReviewPacket } from "./claim-ledger.js";
+import {
+  CLAIM_LEDGER_DOMAINS,
+  CLAIM_LEDGER_STATUSES,
+  createClaimReviewPacket,
+  writeClaimLedgerRecord,
+  type ClaimLedgerDomain,
+  type ClaimLedgerEvidenceRef,
+  type ClaimLedgerStatus
+} from "./claim-ledger.js";
 import type { CredibilityPack } from "./credibility-pack.js";
 import { writeSymbolicCasCheckRecord } from "./cas-backend.js";
 import { writeEngineVerificationRun, type EngineVerificationRequirements } from "./engine-verification.js";
@@ -959,6 +967,67 @@ async function executeWorkspaceRunNextItem(
       };
     }
 
+    if (group === "claim" && action === "add") {
+      const statement = positionalArgsBeforeFirstOption(rest).join(" ").trim();
+      const title = optionString(options.title);
+      const supersedes = optionString(options.supersedes);
+      const evidence = optionString(options.evidence);
+      const nextCheck = optionString(options["next-check"]);
+      const tag = optionString(options.tag);
+      const dependsOn = optionString(options["depends-on"]);
+      const author = optionString(options.author);
+      const derivedBy = optionString(options["derived-by"]);
+      const checkedValues = [statement, title, supersedes, evidence, nextCheck, tag, dependsOn, author, derivedBy].filter(
+        (value): value is string => Boolean(value)
+      );
+
+      if (!statement || checkedValues.some(containsPlaceholderToken)) {
+        return blockedPlaceholderCommand(item.command, "claim-add");
+      }
+      if (item.claimId && supersedes !== item.claimId) {
+        return {
+          status: "blocked",
+          kind: "claim-add",
+          command: item.command,
+          summary: supersedes
+            ? `Claim add command supersedes ${supersedes}, but the review item targets ${item.claimId}.`
+            : `Claim add command must include --supersedes ${item.claimId} for this blocked-claim review item.`
+        };
+      }
+
+      const result = await writeClaimLedgerRecord({
+        rootPath: workspace,
+        title,
+        statement,
+        domain: parseRunNextClaimLedgerDomain(optionString(options.domain)),
+        status: parseRunNextClaimLedgerStatus(optionString(options.status)),
+        trust: parseRunNextTrustLabel(optionString(options.trust)),
+        tags: tag ? [tag] : [],
+        dependsOn: dependsOn ? [dependsOn] : [],
+        supersedes: supersedes ? [supersedes] : [],
+        derivedBy,
+        authors: author ? [author] : [],
+        evidenceRefs: evidence ? [parseRunNextClaimLedgerEvidenceRef(evidence)] : [],
+        nextChecks: nextCheck ? [nextCheck] : []
+      });
+
+      return {
+        status: "executed",
+        kind: "claim-add",
+        command: item.command,
+        evidenceRef: `claim:${result.claim.claimId}`,
+        attached: result.claim.evidenceRefs.length > 0 || result.claim.supersedes.length > 0,
+        summary: `Wrote claim ${result.claim.claimId}${
+          result.claim.supersedes.length > 0 ? ` superseding ${result.claim.supersedes.join(", ")}` : ""
+        } with trust ${result.claim.trust}.`,
+        result: {
+          claim: result.claim,
+          jsonPath: workspaceLocalRef(workspace, result.jsonPath),
+          markdownPath: workspaceLocalRef(workspace, result.markdownPath)
+        }
+      };
+    }
+
     if (group === "validation" && action === "attach") {
       const planRef = rest[0];
       const gateId = rest[1];
@@ -1289,6 +1358,10 @@ function manualContainerGateBoundary(command: string): WorkspaceRunNextPlan["exe
   return undefined;
 }
 
+function containsPlaceholderToken(value: string): boolean {
+  return value.includes("<") || value.includes(">");
+}
+
 function blockedPlaceholderCommand(command: string, kind: string): WorkspaceRunNextPlan["execution"] {
   return {
     status: "blocked",
@@ -1524,18 +1597,18 @@ function splitLocalCommand(command: string): string[] {
   const tokens: string[] = [];
   let current = "";
   let quote: "\"" | undefined;
-  let escaping = false;
 
-  for (const character of command) {
-    if (escaping) {
-      current += character;
-      escaping = false;
-      continue;
-    }
-
+  for (let index = 0; index < command.length; index += 1) {
+    const character = command[index];
     if (quote) {
       if (character === "\\") {
-        escaping = true;
+        const next = command[index + 1];
+        if (next === quote || next === "\\") {
+          current += next;
+          index += 1;
+        } else {
+          current += character;
+        }
         continue;
       }
       if (character === quote) {
@@ -1566,9 +1639,6 @@ function splitLocalCommand(command: string): string[] {
     current += character;
   }
 
-  if (escaping) {
-    throw new Error("Command ended with an incomplete escape.");
-  }
   if (quote) {
     throw new Error("Command ended with an unterminated quote.");
   }
@@ -1638,6 +1708,97 @@ function parseSmtBackendOption(value: string | true | undefined): SmtBackendId |
   }
 
   throw new Error(`Unsupported SMT backend ${JSON.stringify(value)}. Use z3 or cvc5.`);
+}
+
+function parseRunNextClaimLedgerDomain(value: string | undefined): ClaimLedgerDomain | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (isRunNextClaimLedgerDomain(value)) {
+    return value;
+  }
+
+  throw new Error(`Unsupported claim ledger domain ${JSON.stringify(value)}.`);
+}
+
+function isRunNextClaimLedgerDomain(value: string): value is ClaimLedgerDomain {
+  return (CLAIM_LEDGER_DOMAINS as readonly string[]).includes(value);
+}
+
+function parseRunNextClaimLedgerStatus(value: string | undefined): ClaimLedgerStatus | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (isRunNextClaimLedgerStatus(value)) {
+    return value;
+  }
+
+  throw new Error(`Unsupported claim ledger status ${JSON.stringify(value)}.`);
+}
+
+function isRunNextClaimLedgerStatus(value: string): value is ClaimLedgerStatus {
+  return (CLAIM_LEDGER_STATUSES as readonly string[]).includes(value);
+}
+
+function parseRunNextTrustLabel(value: string | undefined): TrustLabel | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (isTrustLabel(value)) {
+    return value;
+  }
+
+  throw new Error(`Unsupported trust label ${JSON.stringify(value)}.`);
+}
+
+function parseRunNextClaimLedgerEvidenceRef(value: string): ClaimLedgerEvidenceRef {
+  const trustSeparator = value.lastIndexOf("@");
+  const maybeTrust = trustSeparator > 0 ? value.slice(trustSeparator + 1) : undefined;
+  const trust = maybeTrust ? parseRunNextTrustLabel(maybeTrust) : undefined;
+  const rawRef = trust ? value.slice(0, trustSeparator) : value;
+  const separator = rawRef.indexOf(":");
+  if (separator <= 0) {
+    return { kind: "other", ref: rawRef, trust };
+  }
+
+  const maybeKind = rawRef.slice(0, separator);
+  const ref = rawRef.slice(separator + 1);
+  if (isRunNextClaimEvidenceKind(maybeKind)) {
+    return { kind: maybeKind, ref, trust };
+  }
+
+  return { kind: "other", ref: rawRef, trust };
+}
+
+function isRunNextClaimEvidenceKind(value: string): value is ClaimLedgerEvidenceRef["kind"] {
+  return (
+    value === "claim" ||
+    value === "receipt" ||
+    value === "artifact" ||
+    value === "source" ||
+    value === "literature" ||
+    value === "notebook" ||
+    value === "notebook-run" ||
+    value === "code-run" ||
+    value === "benchmark" ||
+    value === "disclosure" ||
+    value === "simulation" ||
+    value === "experiment" ||
+    value === "vault" ||
+    value === "audit" ||
+    value === "snapshot" ||
+    value === "review" ||
+    value === "validation" ||
+    value === "model-context" ||
+    value === "cas" ||
+    value === "proof" ||
+    value === "smt" ||
+    value === "route" ||
+    value === "invention" ||
+    value === "claim-chart" ||
+    value === "discovery-package" ||
+    value === "other"
+  );
 }
 
 function parseRunNextValidationEvidenceRef(value: string): ValidationEvidenceRef {
@@ -1785,10 +1946,14 @@ function runNextTrustSatisfiesExpectation(actual: TrustLabel, expected: TrustLab
 
 function isTrustLabel(value: unknown): value is TrustLabel {
   return (
+    value === "proved" ||
     value === "unverified" ||
     value === "exact-computed" ||
+    value === "bounded-numeric" ||
+    value === "smt-checked" ||
+    value === "dimension-checked" ||
+    value === "source-cited" ||
     value === "cross-checked" ||
-    value === "proved" ||
     value === "refuted"
   );
 }

@@ -57,6 +57,39 @@ describe("createReceipt", () => {
     expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
   });
 
+  it("checks concrete LaTeX arithmetic equalities with exact rational traces", () => {
+    const receipt = createReceipt("\\frac{3}{4}+\\frac{5}{8} = \\frac{11}{8}");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("both sides equal 11/8");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["left=11/8", "right=11/8", "equality=passed"])
+    );
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("not a formal proof");
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "exact-arithmetic-equality-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      verdict?: string;
+      left?: { result?: string; trace?: { steps?: unknown[] } };
+      right?: { result?: string; trace?: { steps?: unknown[] } };
+    };
+    expect(payload.verdict).toBe("accepted");
+    expect(payload.left?.result).toBe("11/8");
+    expect(payload.right?.result).toBe("11/8");
+    expect(payload.left?.trace?.steps?.length).toBeGreaterThan(0);
+  });
+
+  it("refutes false concrete LaTeX arithmetic equalities", () => {
+    const receipt = createReceipt("\\frac{3}{4}+\\frac{5}{8} = \\frac{3}{2}");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("left side is 11/8");
+    expect(receipt.summary).toContain("right side is 3/2");
+    expect(receipt.evidenceProfile.outputs).toContain("equality=failed");
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+  });
+
   it("marks MVP receipts as local-only with no external disclosure", () => {
     const receipt = createReceipt("compute 2 + 2");
 

@@ -321,6 +321,53 @@ describe("workspace review", () => {
     expect(review.autonomy.nextCommand).toBe(item?.command);
   });
 
+  it("uses equivalent ready routes to resolve blocked claims before re-verifying them", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const claim = await writeClaimLedgerRecord({
+      rootPath: root,
+      title: "Common denominator lemma",
+      statement: "\\operatorname{lcm}(4,8) = 8,\\ \\frac{3}{4}=\\frac{6}{8}",
+      domain: "math",
+      now: "2026-06-13T00:01:00.000Z"
+    });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "\\operatorname{lcm}(4,8) = 8,\\ \\frac{3}{4}=\\frac{6}{8}",
+      now: new Date("2026-06-13T00:02:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 1,
+      maxSessions: 0,
+      now: "2026-06-13T00:03:00.000Z"
+    });
+    const item = review.items.find((candidate) => candidate.kind === "claim-blocker");
+
+    expect(item).toMatchObject({
+      kind: "claim-blocker",
+      claimId: claim.claim.claimId,
+      command: expect.stringContaining("truth-harness claim add"),
+      acceptanceCriteria: expect.arrayContaining([
+        "Write a superseding claim that cites the ready route or evidence artifact.",
+        "Leave the old blocked claim superseded instead of duplicating unresolved work."
+      ])
+    });
+    expect(item?.command).toContain(`--supersedes ${claim.claim.claimId}`);
+    expect(item?.command).toContain(`--evidence route:${route.route.routeId}`);
+    expect(item?.command).toContain("--trust exact-computed");
+    expect(item?.command).not.toContain("truth-harness verify");
+    expect(review.autonomy.nextCommand).toBe(item?.command);
+  });
+
   it("prefers evidence-writing route obligations over passive inspection commands", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {
@@ -463,6 +510,76 @@ describe("workspace review", () => {
         claimId: oldClaim.claim.claimId
       })
     );
+  });
+
+  it("does not let stale weaker equivalent routes outrank newer ready evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const oldRoute = await writeVerifierRoute({
+      rootPath: root,
+      problem: "\\operatorname{lcm}(4,8) = 8,\\ \\frac{3}{4}=\\frac{6}{8}",
+      now: new Date("2026-06-13T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const stored = JSON.parse(await readFile(oldRoute.jsonPath, "utf8")) as {
+      status: string;
+      finalTrust: string;
+      evidenceKind: string;
+      proofObligations: Array<Record<string, unknown>>;
+    };
+    stored.status = "unverified";
+    stored.finalTrust = "unverified";
+    stored.evidenceKind = "unsupported";
+    stored.proofObligations = [
+      {
+        ...stored.proofObligations[0],
+        kind: "solver-encoding",
+        status: "open",
+        severity: "critical",
+        title: "SMT encoding obligation",
+        requiredBefore: "Before labeling this scoped claim smt-checked.",
+        command: "truth-harness smt check <workspace-local.smt2> --write"
+      }
+    ];
+    await writeFile(oldRoute.jsonPath, JSON.stringify(stored, null, 2), "utf8");
+    const newRoute = await writeVerifierRoute({
+      rootPath: root,
+      problem: "\\operatorname{lcm}(4,8) = 8,\\ \\frac{3}{4}=\\frac{6}{8}",
+      now: new Date("2026-06-13T00:02:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 10,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-13T00:03:00.000Z"
+    });
+
+    expect(review.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "route-obligation",
+        routeId: oldRoute.route.routeId
+      })
+    );
+    expect(review.items).toContainEqual(
+      expect.objectContaining({
+        kind: "route-ready-claim",
+        routeId: newRoute.route.routeId,
+        trust: "exact-computed"
+      })
+    );
+    expect(review.summary.routeObligations).toBe(0);
+    expect(review.autonomy.nextCommand).toContain(`route:${newRoute.route.routeId}`);
   });
 
   it("keeps stronger-label upgrades below current route blockers", async () => {

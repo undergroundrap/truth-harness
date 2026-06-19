@@ -35,6 +35,12 @@ interface CommonDenominatorClaim {
   rewrittenDenominator: bigint;
 }
 
+interface ExactArithmeticEqualityClaim {
+  source: string;
+  leftSource: string;
+  rightSource: string;
+}
+
 export interface CreateReceiptOptions {
   maximaCommand?: string;
   casRunner?: CasBackendCommandRunner;
@@ -133,6 +139,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
       problem,
       normalizedProblem,
       claim: commonDenominatorClaim,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
+  const exactArithmeticEquality = parseExactArithmeticEqualityClaim(normalizedProblem);
+  if (exactArithmeticEquality) {
+    return completeExactArithmeticEqualityReceipt({
+      problem,
+      normalizedProblem,
+      claim: exactArithmeticEquality,
       createdAt,
       nodes,
       edges,
@@ -1205,6 +1226,127 @@ function completeCommonDenominatorReceipt(args: {
   });
 }
 
+function completeExactArithmeticEqualityReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: ExactArithmeticEqualityClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const leftExpression = parseExpression(args.claim.leftSource);
+  const rightExpression = parseExpression(args.claim.rightSource);
+  const leftTrace = createArithmeticTrace(args.claim.leftSource, leftExpression);
+  const rightTrace = createArithmeticTrace(args.claim.rightSource, rightExpression);
+  const leftValue = rationalFromTraceResult(leftTrace.result);
+  const rightValue = rationalFromTraceResult(rightTrace.result);
+  const valid = leftValue.compare(rightValue) === 0;
+  const trust: TrustLabel = valid ? "exact-computed" : "refuted";
+  const certificate = {
+    schemaVersion: "truth-harness.exact-arithmetic-equality.v0",
+    adapter: "local-rational-arithmetic",
+    source: args.claim.source,
+    left: {
+      expression: args.claim.leftSource,
+      result: leftTrace.result,
+      trace: leftTrace
+    },
+    right: {
+      expression: args.claim.rightSource,
+      result: rightTrace.result,
+      trace: rightTrace
+    },
+    checks: [
+      {
+        id: "exact-rational-equality",
+        ok: valid,
+        left: leftValue.toString(),
+        right: rightValue.toString()
+      }
+    ],
+    verdict: valid ? "accepted" : "refuted"
+  };
+  const artifact = addArtifact(args.artifacts, {
+    kind: "exact-arithmetic-equality-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-rational-arithmetic",
+      operation: "exact-arithmetic-equality",
+      leftTraceSteps: leftTrace.steps.length,
+      rightTraceSteps: rightTrace.steps.length
+    },
+    trust,
+    summary: "Checked a concrete arithmetic equality with exact rational arithmetic.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: toolNode.id, label: "checked-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: valid ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: valid
+      ? `Both sides reduce exactly to ${leftValue.toString()}.`
+      : `Left side reduces to ${leftValue.toString()}, while right side reduces to ${rightValue.toString()}.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: valid ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: valid ? "info" : "warning",
+    message: valid
+      ? "The equality was checked by exact local rational arithmetic. This earns exact-computed, not proved."
+      : "The equality matched the exact arithmetic checker and was refuted by evaluating both sides."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: valid
+      ? `Exact equality result: both sides equal ${leftValue.toString()}.`
+      : `Refuted exact equality: left side is ${leftValue.toString()}, right side is ${rightValue.toString()}.`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-rational-arithmetic",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.leftSource, args.claim.rightSource],
+      outputs: [
+        `left=${leftValue.toString()}`,
+        `right=${rightValue.toString()}`,
+        valid ? "equality=passed" : "equality=failed",
+        `leftTraceSteps=${leftTrace.steps.length}`,
+        `rightTraceSteps=${rightTrace.steps.length}`
+      ],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only checks concrete arithmetic equalities parsed by the local rational arithmetic grammar.",
+        "Exact arithmetic equality is deterministic computation, not a formal proof-checker-backed theorem."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
+
 function completeArithmeticReceipt(args: {
   problem: string;
   normalizedProblem: string;
@@ -1434,6 +1576,42 @@ function parseCommonDenominatorClaim(problem: string): CommonDenominatorClaim | 
     rewrittenNumerator: BigInt(fractionMatch[3]),
     rewrittenDenominator
   };
+}
+
+function parseExactArithmeticEqualityClaim(problem: string): ExactArithmeticEqualityClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/^(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const parts = candidate.split("=");
+  if (parts.length !== 2) {
+    return undefined;
+  }
+
+  const leftSource = parts[0]?.trim();
+  const rightSource = parts[1]?.trim();
+  if (!leftSource || !rightSource || !isExactArithmeticExpressionSource(leftSource) || !isExactArithmeticExpressionSource(rightSource)) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    leftSource,
+    rightSource
+  };
+}
+
+function isExactArithmeticExpressionSource(value: string): boolean {
+  return /^[0-9\s+\-*/^()]+$/u.test(value);
+}
+
+function rationalFromTraceResult(value: string): Rational {
+  const separator = value.indexOf("/");
+  if (separator < 0) {
+    return new Rational(value);
+  }
+
+  return new Rational(value.slice(0, separator), value.slice(separator + 1));
 }
 
 function latexToReadableMath(value: string): string {

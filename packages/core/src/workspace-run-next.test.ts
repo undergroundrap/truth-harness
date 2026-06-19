@@ -21,6 +21,7 @@ import {
   writeWorkspaceRunNextPlan
 } from "./workspace-run-next.js";
 import { createWorkspaceReview, type WorkspaceReview } from "./workspace-review.js";
+import { writeVerifierRoute } from "./verifier-route.js";
 
 const roots: string[] = [];
 
@@ -520,6 +521,103 @@ describe("workspace run-next", () => {
     expect(plan.execution.result).toMatchObject({
       claimId: claim.claim.claimId,
       workspacePath: root
+    });
+  });
+
+  it("executes claim-add review actions to supersede blocked claims with ready route evidence", async () => {
+    const root = await tempRoot();
+    const outsideRoot = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const claim = await writeClaimLedgerRecord({
+      rootPath: root,
+      title: "Common denominator lemma",
+      statement: "\\operatorname{lcm}(4,8) = 8,\\ \\frac{3}{4}=\\frac{6}{8}",
+      domain: "math",
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "\\operatorname{lcm}(4,8) = 8,\\ \\frac{3}{4}=\\frac{6}{8}",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50,
+      now: new Date("2026-06-18T00:02:00.000Z")
+    });
+    const review = minimalReview({
+      rootPath: root,
+      command: `truth-harness claim add "\\operatorname{lcm}(4,8) = 8,\\ \\frac{3}{4}=\\frac{6}{8}" --workspace ${outsideRoot} --title "Common denominator lemma" --domain math --supersedes ${claim.claim.claimId} --evidence route:${route.route.routeId} --trust exact-computed --json`,
+      claimId: claim.claim.claimId,
+      domain: "math"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-18T00:03:00.000Z"
+    });
+    const refreshedReview = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 2,
+      maxSessions: 0,
+      now: "2026-06-18T00:04:00.000Z"
+    });
+
+    expect(plan.localOnly).toBe(true);
+    expect(plan.networkAccess).toBe("none");
+    expect(plan.status).toBe("executed");
+    expect(plan.execution).toMatchObject({
+      kind: "claim-add",
+      evidenceRef: expect.stringMatching(/^claim:claim_[a-f0-9]{16}$/u),
+      attached: true,
+      result: {
+        claim: {
+          statement: "\\operatorname{lcm}(4,8) = 8,\\ \\frac{3}{4}=\\frac{6}{8}",
+          title: "Common denominator lemma",
+          domain: "math",
+          trust: "exact-computed",
+          supersedes: [claim.claim.claimId],
+          evidenceRefs: [expect.objectContaining({ kind: "route", ref: route.route.routeId })],
+          finalization: {
+            readyForNarrowClaim: true
+          }
+        },
+        jsonPath: expect.stringContaining(".truth-harness/claims/")
+      }
+    });
+    expect(plan.execution.summary).toContain(`superseding ${claim.claim.claimId}`);
+    expect(refreshedReview.items.some((item) => item.claimId === claim.claim.claimId)).toBe(false);
+  });
+
+  it("blocks claim-add review actions that supersede a different claim", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const claim = await writeClaimLedgerRecord({
+      rootPath: root,
+      statement: "A claim should not be superseded by the wrong review item.",
+      domain: "math",
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const review = minimalReview({
+      rootPath: root,
+      command: 'truth-harness claim add "A claim should not be superseded by the wrong review item." --domain math --supersedes claim_0000000000000000 --json',
+      claimId: claim.claim.claimId,
+      domain: "math"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-18T00:02:00.000Z"
+    });
+
+    expect(plan.status).toBe("blocked");
+    expect(plan.execution).toMatchObject({
+      kind: "claim-add",
+      summary: `Claim add command supersedes claim_0000000000000000, but the review item targets ${claim.claim.claimId}.`
     });
   });
 

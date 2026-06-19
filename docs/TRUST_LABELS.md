@@ -24,6 +24,8 @@ The local modular parity checker emits `exact-computed`, not `proved`. It can at
 
 The local rational arithmetic adapter also accepts a narrow LaTeX/common-denominator pattern such as `\operatorname{lcm}(4,8) = 8, \frac{3}{4}=\frac{6}{8}`. When the lcm, denominator target, rewrite multiplier, and rational equality all check out, it emits an `exact-computed` common-denominator certificate. If a matched statement fails one of those exact checks, it emits `refuted`. This path is still concrete arithmetic evidence, not a formal theorem proof.
 
+The same rational adapter accepts concrete LaTeX arithmetic equalities such as `\frac{3}{4}+\frac{5}{8}=\frac{11}{8}` when both sides reduce through the local exact arithmetic grammar. It records left-side and right-side deterministic traces, emits `exact-computed` when both sides match exactly, and emits `refuted` when the exact values differ. This supports narrow arithmetic claims only; it does not upgrade surrounding algebra, finance, scientific, or theorem claims beyond the checked equality.
+
 `truth-harness proof backends` and the MCP `truth_harness_proof_backends` tool report local proof-checker availability without network access. A successful Lean version probe means this machine may be able to check Lean proof artifacts; it does not prove any claim, and it never mints a `proved` receipt by itself.
 
 `truth-harness proof project <path>` inspects local Lean/Lake project readiness without running Lean, Lake, dependency fetches, or network commands. It can report pinned toolchain files, Lake metadata, `lake-manifest.json`, `.lean` file samples, and likely mathlib references, but it does not prove anything and cannot satisfy a proof gate.
