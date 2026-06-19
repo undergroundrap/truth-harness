@@ -3149,7 +3149,7 @@ workspace
   .option("--require-cvc5", "Mark cvc5 as required for release readiness")
   .option("--require-lean", "Mark Lean as required for release readiness")
   .option("--require-sage", "Require SageMath to earn a constrained CAS cross-check")
-  .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
+  .option("--require-docker-core", "Require the Docker-core Maxima, Z3, and cvc5 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
   .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates")
   .option("--require-sandbox", "Block release readiness unless a measured code-run sandbox is available")
@@ -3332,7 +3332,7 @@ workspace
   .option("--require-cvc5", "Mark cvc5 as required for professor readiness")
   .option("--require-lean", "Mark Lean as required for professor readiness")
   .option("--require-sage", "Require SageMath to earn a constrained CAS cross-check")
-  .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
+  .option("--require-docker-core", "Require the Docker-core Maxima, Z3, and cvc5 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
   .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates")
   .option("--fail-on-blocked", "Exit non-zero if the pack is blocked")
@@ -3419,7 +3419,7 @@ workspace
   .option("--require-cvc5", "Mark cvc5 as required for professor readiness")
   .option("--require-lean", "Mark Lean as required for professor readiness")
   .option("--require-sage", "Require SageMath to earn a constrained CAS cross-check")
-  .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
+  .option("--require-docker-core", "Require the Docker-core Maxima, Z3, and cvc5 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
   .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates")
   .option("--priority <priority>", "Only show one priority: critical, high, medium, or low")
@@ -3520,7 +3520,7 @@ workspace
   .option("--require-cvc5", "Mark cvc5 as required for professor readiness")
   .option("--require-lean", "Mark Lean as required for professor readiness")
   .option("--require-sage", "Require SageMath to earn a constrained CAS cross-check")
-  .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
+  .option("--require-docker-core", "Require the Docker-core Maxima, Z3, and cvc5 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
   .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates")
   .option("--fail-on-blocked", "Exit non-zero if the underlying credibility pack is blocked")
@@ -3664,7 +3664,7 @@ workspace
   .option("--require-cvc5", "Require cvc5 for credibility-actions")
   .option("--require-lean", "Require Lean for credibility-actions")
   .option("--require-sage", "Require SageMath for credibility-actions")
-  .option("--require-docker-core", "Require Docker-core Maxima and Z3 evidence gates for credibility-actions")
+  .option("--require-docker-core", "Require Docker-core Maxima, Z3, and cvc5 evidence gates for credibility-actions")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates for credibility-actions")
   .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates for credibility-actions")
   .option("--fail-on-blocked", "Exit non-zero if no supported local action can run")
@@ -4453,7 +4453,7 @@ engines
   .option("--require-cvc5", "Fail unless cvc5 earns a concrete smt-checked result")
   .option("--require-lean", "Fail unless Lean accepts the pinned proof fixture")
   .option("--require-sage", "Fail unless SageMath earns a constrained CAS cross-check")
-  .option("--require-docker-core", "Require the Docker-core Maxima and Z3 gates")
+  .option("--require-docker-core", "Require the Docker-core Maxima, Z3, and cvc5 gates")
   .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates")
   .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates")
   .action(
@@ -5581,7 +5581,7 @@ function printEngineVerificationReport(
   console.log("");
   console.log("Trust boundary:");
   console.log("  Status probes do not mint evidence.");
-  console.log("  Concrete Maxima, Z3, and Lean runs can mint only their scoped labels.");
+  console.log("  Concrete Maxima, Z3, cvc5, and Lean runs can mint only their scoped labels.");
   console.log("  Sage direct CAS checks are constrained; engine readiness keeps Sage optional until a pinned fixture exists.");
   console.log("  Every claim still needs a replayable receipt, proof, SMT, CAS, or source artifact.");
 
@@ -5695,7 +5695,7 @@ function engineRequirementsFromOptions(options: EngineRequirementOptions): Engin
       options.requireMaxima || options.requireDockerCore || options.requireAllConcrete || options.requireAllEngines
     ),
     z3: Boolean(options.requireZ3 || options.requireDockerCore || options.requireAllConcrete || options.requireAllEngines),
-    cvc5: Boolean(options.requireCvc5 || options.requireAllEngines),
+    cvc5: Boolean(options.requireCvc5 || options.requireDockerCore || options.requireAllEngines),
     lean: Boolean(options.requireLean || options.requireAllConcrete || options.requireAllEngines),
     sage: Boolean(options.requireSage || options.requireAllEngines)
   };

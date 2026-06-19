@@ -1496,7 +1496,7 @@ export function createTruthHarnessMcpServer(): McpServer {
         requireCvc5: z.boolean().optional().describe("Require cvc5 for credibility-actions."),
         requireLean: z.boolean().optional().describe("Require Lean for credibility-actions."),
         requireSage: z.boolean().optional().describe("Require SageMath for credibility-actions."),
-        requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima and Z3 evidence gates."),
+        requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima, Z3, and cvc5 evidence gates."),
         requireAllConcrete: z.boolean().optional().describe("Require Maxima, Z3, and Lean concrete evidence gates."),
         requireAllEngines: z.boolean().optional().describe("Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates."),
         executeLocal: z
@@ -1790,7 +1790,7 @@ export function createTruthHarnessMcpServer(): McpServer {
           .boolean()
           .optional()
           .describe("Require SageMath to earn a constrained CAS cross-check."),
-        requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima and Z3 evidence gates."),
+        requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima, Z3, and cvc5 evidence gates."),
         requireAllConcrete: z.boolean().optional().describe("Require Maxima, Z3, and Lean concrete evidence gates."),
         requireAllEngines: z
           .boolean()
@@ -1880,7 +1880,7 @@ export function createTruthHarnessMcpServer(): McpServer {
           .boolean()
           .optional()
           .describe("Require SageMath to earn a constrained CAS cross-check."),
-        requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima and Z3 evidence gates."),
+        requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima, Z3, and cvc5 evidence gates."),
         requireAllConcrete: z.boolean().optional().describe("Require Maxima, Z3, and Lean concrete evidence gates."),
         requireAllEngines: z
           .boolean()

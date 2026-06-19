@@ -402,9 +402,10 @@ describe("release audit", () => {
     const engineRun = await writeEngineVerificationRun({
       rootPath: root,
       now: new Date("2026-06-17T00:00:00.250Z"),
-      requirements: { maxima: true, z3: true, lean: true },
+      requirements: { maxima: true, z3: true, cvc5: true, lean: true },
       maximaCommand: "maxima-test",
       z3Command: "z3-test",
+      cvc5Command: "cvc5-test",
       leanCommand: "lean-test",
       smtSourcePath: "constraints.smt2",
       smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
@@ -427,7 +428,7 @@ describe("release audit", () => {
     const audit = await createReleaseAudit({
       rootPath: root,
       now: "2026-06-17T00:00:02.000Z",
-      engineRequirements: { maxima: true, z3: true, lean: true },
+      engineRequirements: { maxima: true, z3: true, cvc5: true, lean: true },
       smtSourcePath: "constraints.smt2",
       smtSourceText: "(check-sat)\n",
       leanSourcePath: "Proof.lean",
@@ -446,8 +447,8 @@ describe("release audit", () => {
     expect(audit.summary).toMatchObject({
       validationPassed: true,
       catalogFresh: true,
-      requiredEngineGates: "0/3",
-      concreteEngineGates: "0/3",
+      requiredEngineGates: "0/4",
+      concreteEngineGates: "0/4",
       adversarialBenchmark: "passed",
       blockingFailures: 0
     });
@@ -460,7 +461,7 @@ describe("release audit", () => {
         command: "npm run docker:professor",
         summary: "Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking.",
         details: expect.arrayContaining([
-          `Saved professor Docker run ${engineRun.record.runId} passed with 3/3 required gates.`,
+          `Saved professor Docker run ${engineRun.record.runId} passed with 4/4 required gates.`,
           "Current host probes did not earn all required engine evidence, but the durable saved run covers the same required capabilities."
         ])
       })

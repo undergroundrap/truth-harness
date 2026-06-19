@@ -12398,7 +12398,7 @@ function credibilityReviewerChecklistHtml(pack) {
     {
       label: "Concrete engine breadth",
       passed: gateStringIsComplete(summary.concreteEngineGates),
-      detail: `${summary.concreteEngineGates ?? "0/0"} concrete Maxima/Z3/Lean/cvc5/Sage fixture gates are satisfied.`,
+      detail: `${summary.concreteEngineGates ?? "0/0"} concrete Maxima/Z3/cvc5/Lean/Sage fixture gates are satisfied.`,
       command: manifest?.reviewerCommands?.verifyEngines ?? pack?.reviewerCommands?.verifyEngines
     },
     {

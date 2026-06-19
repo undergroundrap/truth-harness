@@ -290,9 +290,10 @@ describe("professor credibility pack", () => {
     const professorEngineRun = await writeEngineVerificationRun({
       rootPath: root,
       now: new Date("2026-06-16T00:00:30.000Z"),
-      requirements: { maxima: true, z3: true, lean: true },
+      requirements: { maxima: true, z3: true, cvc5: true, lean: true },
       maximaCommand: "maxima-test",
       z3Command: "z3-test",
+      cvc5Command: "cvc5-test",
       leanCommand: "lean-test",
       smtSourcePath: "constraints.smt2",
       smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
@@ -322,7 +323,7 @@ describe("professor credibility pack", () => {
     const pack = await createCredibilityPack({
       rootPath: root,
       now: "2026-06-16T00:01:00.000Z",
-      engineRequirements: { maxima: true, z3: true, lean: true },
+      engineRequirements: { maxima: true, z3: true, cvc5: true, lean: true },
       smtSourcePath: "constraints.smt2",
       smtSourceText: "(check-sat)\n",
       leanSourcePath: "Proof.lean",
@@ -338,8 +339,8 @@ describe("professor credibility pack", () => {
     expect(pack.status).toBe("ready-for-review");
     expect(pack.summary).toMatchObject({
       engineStatus: "failed",
-      concreteEngineGates: "0/3",
-      requiredEngineGates: "0/3",
+      concreteEngineGates: "0/4",
+      requiredEngineGates: "0/4",
       latestProfessorEngineRunStatus: "passed",
       latestAdversarialBenchmarkStatus: "passed",
       professorReady: true
@@ -347,10 +348,10 @@ describe("professor credibility pack", () => {
     expect(pack.engineRunLedger.latestProfessorReviewerRun).toMatchObject({
       runId: professorEngineRun.record.runId,
       status: "passed",
-      requiredTotal: 3
+      requiredTotal: 4
     });
-    expect(pack.warnings).not.toContain("Required engine evidence gates are incomplete: 0/3 passed.");
-    expect(pack.warnings).not.toContain("Concrete engine smoke gates are incomplete: 0/3 passed.");
+    expect(pack.warnings).not.toContain("Required engine evidence gates are incomplete: 0/4 passed.");
+    expect(pack.warnings).not.toContain("Concrete engine smoke gates are incomplete: 0/4 passed.");
     expect(pack.reviewerActionPlan.actions.filter((action) => action.category === "engine")).toEqual([]);
     expect(pack.markdown).toContain("Saved engine-run ledger: 1 saved (latest professor Docker: passed)");
   });

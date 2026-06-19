@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 function main() {
   ensureDockerEngine();
   runDocker(["compose", "build", "truth-harness"], "build the Truth Harness Docker image");
-  runDocker(["compose", "run", "--rm", "engine-smoke"], "run the no-network Maxima/Z3 engine smoke");
+  runDocker(["compose", "run", "--rm", "engine-smoke"], "run the no-network Maxima/Z3/cvc5 engine smoke");
 }
 
 function ensureDockerEngine() {

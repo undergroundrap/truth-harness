@@ -41,7 +41,7 @@ services:
       TRUTH_HARNESS_MAXIMA: "maxima-sage"
       TRUTH_HARNESS_Z3: "z3"
       TRUTH_HARNESS_CVC5: "cvc5"
-    command: ["npm", "run", "cli", "--", "engines", "verify", "--require-maxima", "--require-z3"]
+    command: ["npm", "run", "cli", "--", "engines", "verify", "--require-maxima", "--require-z3", "--require-cvc5"]
 
   professor-evidence:
     <<: *truth-harness-security

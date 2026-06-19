@@ -24,7 +24,7 @@ Use the Docker-first default verification command when another agent, a reviewer
 npm run verify:default
 ```
 
-It runs the no-runtime-network Maxima/Z3 engine evidence smoke and then the full TypeScript build/test suite inside the compose service. If Docker Desktop is not running, the command fails instead of silently downgrading to host execution. `npm run verify:native` is available for development fallback only; do not cite it as the public credibility gate.
+It runs the no-runtime-network Maxima/Z3/cvc5 engine evidence smoke and then the full TypeScript build/test suite inside the compose service. If Docker Desktop is not running, the command fails instead of silently downgrading to host execution. `npm run verify:native` is available for development fallback only; do not cite it as the public credibility gate.
 
 Build the reusable dev image:
 
@@ -54,7 +54,7 @@ npm run docker:engines
 
 This command differs from `truth-harness engines`: the manifest reports availability and trust boundaries, while `engines verify` runs concrete checks and reports which scoped labels were actually earned. The npm script first checks that the Docker engine is reachable, then builds the `truth-harness` image and runs the `engine-smoke` service without the repo bind mount or `node_modules` named volume so stale dev dependencies cannot affect the result. Use `truth-harness engines verify --json` when an agent needs a machine-readable gate report.
 
-If `workspace credibility-pack`, `workspace credibility-actions`, or `workspace release-audit` reports `spawn EPERM` or `spawn ENOENT` for Maxima, Z3, or Lean on the host, use the Docker gates before assuming the engine itself is unavailable. `npm run docker:engines` replays the concrete Maxima/Z3 checks inside the no-network image, and `npm run docker:professor` writes a durable Maxima/Z3/Lean professor evidence run plus benchmark and reviewer packet. Release audit can cite that saved no-network run as professor-review evidence even when the Windows host has no matching engine binaries installed.
+If `workspace credibility-pack`, `workspace credibility-actions`, or `workspace release-audit` reports `spawn EPERM` or `spawn ENOENT` for Maxima, Z3, cvc5, or Lean on the host, use the Docker gates before assuming the engine itself is unavailable. `npm run docker:engines` replays the concrete Maxima/Z3/cvc5 checks inside the no-network image, and `npm run docker:professor` writes a durable Maxima/Z3/cvc5/Lean professor evidence run plus benchmark and reviewer packet. Release audit can cite that saved no-network run as professor-review evidence even when the Windows host has no matching engine binaries installed.
 
 Run the pinned Lean proof fixture in the separate Lean image:
 
@@ -106,7 +106,7 @@ The web inspector's Engine Readiness panel reads `/api/status` and should report
 
 ## Web UI Safe Verifier Path
 
-The Checks tab includes a Safe Verifier Path card for machines that do not have local Maxima, Z3, or Lean installed. It does not run Docker automatically. It gives humans and agents copyable commands for the safe path:
+The Checks tab includes a Safe Verifier Path card for machines that do not have local Maxima, Z3, cvc5, or Lean installed. It does not run Docker automatically. It gives humans and agents copyable commands for the safe path:
 
 ```bash
 npm run docker:proof
@@ -114,7 +114,7 @@ npm run docker:engines
 npm run docker:verify
 ```
 
-Use `npm run docker:engines` for the quickest no-runtime-network Maxima/Z3 evidence smoke from the built image. Use `npm run docker:proof` for the broader day-to-day no-runtime-network engine suite after the dev image exists. Use `npm run docker:verify` before demos or review checkpoints when you want the full image build and verification target. Image builds may download dependencies; verifier runs inside the `engine-smoke` or `truth-harness` compose services use the no-network runtime boundary described below.
+Use `npm run docker:engines` for the quickest no-runtime-network Maxima/Z3/cvc5 evidence smoke from the built image. Use `npm run docker:proof` for the broader day-to-day no-runtime-network engine suite after the dev image exists. Use `npm run docker:verify` before demos or review checkpoints when you want the full image build and verification target. Image builds may download dependencies; verifier runs inside the `engine-smoke` or `truth-harness` compose services use the no-network runtime boundary described below.
 
 The UI card is guidance, not evidence. Claims still need concrete receipts: `cross-checked` requires an accepted independent CAS record, `smt-checked` requires a concrete Z3 or cvc5 solver record, and `proved` requires an accepted proof-checker record.
 

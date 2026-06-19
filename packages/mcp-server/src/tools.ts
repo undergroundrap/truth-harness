@@ -2755,7 +2755,7 @@ function credibilityEngineRequirementsFromInput(input: TruthHarnessWorkspaceCred
   return {
     maxima: Boolean(input.requireMaxima || input.requireDockerCore || input.requireAllConcrete || input.requireAllEngines),
     z3: Boolean(input.requireZ3 || input.requireDockerCore || input.requireAllConcrete || input.requireAllEngines),
-    cvc5: Boolean(input.requireCvc5 || input.requireAllEngines),
+    cvc5: Boolean(input.requireCvc5 || input.requireDockerCore || input.requireAllEngines),
     lean: Boolean(input.requireLean || input.requireAllConcrete || input.requireAllEngines),
     sage: Boolean(input.requireSage || input.requireAllEngines)
   };

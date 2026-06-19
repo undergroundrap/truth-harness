@@ -455,7 +455,7 @@ function recommendedActionsFor(
   const agentGate = gates.find((gate) => gate.id === "agent-autonomy");
 
   if (professorGate?.status !== "ready") {
-    actions.push("Run `npm run docker:engines` or configure Maxima/Z3/Lean locally before professor-facing math claims.");
+    actions.push("Run `npm run docker:engines` or configure Maxima/Z3/cvc5/Lean locally before professor-facing math claims.");
   }
   if (agentGate?.status !== "ready") {
     actions.push("Keep agent-triggered code execution gated until `truth-harness code sandbox-status --json` can attest the sandbox boundary.");

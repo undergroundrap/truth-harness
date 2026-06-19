@@ -961,7 +961,7 @@ function reviewerEngineActionCommand(
   }
 }
 
-const PROFESSOR_ENGINE_CAPABILITIES = ["maxima-cas", "z3-smt-solver", "lean-proof-checker"] as const;
+const PROFESSOR_ENGINE_CAPABILITIES = ["maxima-cas", "z3-smt-solver", "cvc5-smt-solver", "lean-proof-checker"] as const;
 
 function savedEngineRunLedgerLabel(pack: Pick<CredibilityPack, "summary">): string {
   const labels: string[] = [];
@@ -1025,8 +1025,8 @@ function reviewerEngineActionDetail(
   if (command === commands.verifyEngines) {
     return "rerun the writable reviewer command after installing or fixing the backend";
   }
-  if (item.id === "maxima-symbolic-cross-check" || item.id === "z3-smt-check") {
-    return "run the no-network Docker core gate because the host blocked direct Maxima/Z3 execution";
+  if (item.id === "maxima-symbolic-cross-check" || item.id === "z3-smt-check" || item.id === "cvc5-smt-check") {
+    return "run the no-network Docker core gate because the host blocked direct Maxima/Z3/cvc5 execution";
   }
   if (item.id === "lean-proof-fixture") {
     return "run the pinned no-network Lean Docker fixture because the host blocked direct Lean execution";

@@ -15,14 +15,17 @@ const steps = [
     args: ["apps/cli/dist/index.js", "workspace", "init", ".", "--name", "Truth Harness"]
   },
   {
-    label: "write concrete Maxima/Z3/Lean engine evidence",
+    label: "write concrete Maxima/Z3/cvc5/Lean engine evidence",
     command: "node",
     args: [
       "apps/cli/dist/index.js",
       "engines",
       "verify",
       "--write",
-      "--require-all-concrete",
+      "--require-maxima",
+      "--require-z3",
+      "--require-cvc5",
+      "--require-lean",
       "--timeout-ms",
       "30000"
     ]
@@ -47,7 +50,10 @@ const steps = [
       "workspace",
       "credibility-pack",
       ".",
-      "--require-all-concrete",
+      "--require-maxima",
+      "--require-z3",
+      "--require-cvc5",
+      "--require-lean",
       "--timeout-ms",
       "30000",
       "--max-routes",
@@ -67,7 +73,10 @@ const steps = [
       "workspace",
       "credibility-bundle",
       ".",
-      "--require-all-concrete",
+      "--require-maxima",
+      "--require-z3",
+      "--require-cvc5",
+      "--require-lean",
       "--timeout-ms",
       "30000",
       "--max-routes",

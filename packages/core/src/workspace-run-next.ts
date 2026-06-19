@@ -2021,7 +2021,7 @@ function engineRequirementsFromOptions(options: Record<string, string | true>): 
   return {
     maxima: Boolean(options["require-maxima"] || options["require-docker-core"] || options["require-all-concrete"] || options["require-all-engines"]),
     z3: Boolean(options["require-z3"] || options["require-docker-core"] || options["require-all-concrete"] || options["require-all-engines"]),
-    cvc5: Boolean(options["require-cvc5"] || options["require-all-engines"]),
+    cvc5: Boolean(options["require-cvc5"] || options["require-docker-core"] || options["require-all-engines"]),
     lean: Boolean(options["require-lean"] || options["require-all-concrete"] || options["require-all-engines"]),
     sage: Boolean(options["require-sage"] || options["require-all-engines"])
   };

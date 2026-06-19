@@ -76,7 +76,7 @@ For serious mathlib work, the target environment should be:
 6. Proof checks that write `.truth-harness/proofs/*.json`, scoped to route obligations when they are meant to close verifier-route gates.
 7. Visuals and reports generated from proof-check records, not from model claims.
 
-Lean should not be bundled into the default image until the project has a pinned proof-lane environment. The current Docker image keeps Maxima and Z3 ready for CAS/SMT work; Lean remains opt-in until the proof project layout is chosen.
+Lean should not be bundled into the default image until the project has a pinned proof-lane environment. The current Docker image keeps Maxima, Z3, and cvc5 ready for CAS/SMT work; Lean remains opt-in until the proof project layout is chosen.
 
 The repository includes a small pinned fixture at `docs/examples/lean-fixture`:
 
