@@ -11043,11 +11043,11 @@ function branchChildLane(currentLane, index) {
 }
 
 function branchCanvasHeight(rowCount) {
-  return 22 + Math.max(rowCount, 1) * 48;
+  return 20 + Math.max(rowCount, 1) * 64;
 }
 
 function branchRowY(rowIndex) {
-  return 32 + rowIndex * 48;
+  return 40 + rowIndex * 64;
 }
 
 function branchLaneX(lane) {

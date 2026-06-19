@@ -1405,9 +1405,8 @@ body.visual-focus-active[data-surface="plot"] .work-surface {
 .route-pill code {
   display: block;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .route-pill span {
@@ -1664,11 +1663,10 @@ h4 {
 .route-ledger-values code {
   display: block;
   max-width: 100%;
-  overflow: hidden;
   color: #e9e2d2;
   font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .route-ledger-actions {
@@ -2146,14 +2144,20 @@ h4 {
 }
 
 .ledger-record strong,
-.ledger-record small,
-.route-record strong,
-.route-record small {
+.ledger-record small {
   display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.route-record strong,
+.route-record small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .ledger-record strong,
@@ -2181,6 +2185,8 @@ h4 {
 .route-record code {
   color: #ded6c8;
   font-size: 11px;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .key-values {
@@ -2217,31 +2223,31 @@ h4 {
 }
 
 .branch-rows-1 {
-  height: 70px;
+  height: 84px;
 }
 
 .branch-rows-2 {
-  height: 118px;
+  height: 148px;
 }
 
 .branch-rows-3 {
-  height: 166px;
+  height: 212px;
 }
 
 .branch-rows-4 {
-  height: 214px;
+  height: 276px;
 }
 
 .branch-rows-5 {
-  height: 262px;
+  height: 340px;
 }
 
 .branch-rows-6 {
-  height: 310px;
+  height: 404px;
 }
 
 .branch-rows-7 {
-  height: 358px;
+  height: 468px;
 }
 
 .git-branch-lines {
@@ -2298,7 +2304,7 @@ h4 {
   display: grid;
   grid-template-columns: 76px minmax(0, 1fr);
   align-items: center;
-  min-height: 42px;
+  min-height: 56px;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -2308,36 +2314,36 @@ h4 {
 }
 
 .git-row-0 {
-  top: 11px;
+  top: 14px;
 }
 
 .git-row-1 {
-  top: 59px;
+  top: 78px;
 }
 
 .git-row-2 {
-  top: 107px;
+  top: 142px;
 }
 
 .git-row-3 {
-  top: 155px;
+  top: 206px;
 }
 
 .git-row-4 {
-  top: 203px;
+  top: 270px;
 }
 
 .git-row-5 {
-  top: 251px;
+  top: 334px;
 }
 
 .git-row-6 {
-  top: 299px;
+  top: 398px;
 }
 
 .git-dot {
   position: absolute;
-  top: 21px;
+  top: 29px;
   z-index: 4;
   width: 10px;
   height: 10px;
@@ -2368,7 +2374,7 @@ h4 {
   display: grid;
   gap: 3px;
   min-width: 0;
-  min-height: 42px;
+  min-height: 56px;
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
@@ -2392,17 +2398,17 @@ h4 {
 .git-branch-title {
   display: block;
   min-width: 0;
-  overflow: hidden;
   color: #f0eadf;
   font-size: 11px;
   font-weight: 720;
   line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .git-branch-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -2414,9 +2420,8 @@ h4 {
 .git-branch-meta span,
 .git-branch-meta code {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .git-branch-meta span:first-child {
@@ -2427,7 +2432,7 @@ h4 {
 }
 
 .git-branch-meta code {
-  max-width: 72px;
+  max-width: 132px;
   color: #d6cebd;
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
 }
@@ -3615,16 +3620,14 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 .runbook-next code {
   display: block;
   min-width: 0;
-  width: max-content;
   max-width: 100%;
-  overflow: hidden;
   border: 1px solid var(--line-soft);
   border-radius: 7px;
   background: #0f0f0f;
   color: #eadfca;
   padding: 7px 8px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
   font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
@@ -3858,10 +3861,9 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 .matrix-hero code {
   display: block;
   min-width: 0;
-  overflow: hidden;
   color: #f1eadc;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .matrix-hero strong {
@@ -6667,9 +6669,8 @@ textarea:focus-visible {
 .progress-row strong,
 .progress-row small {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .progress-row strong {
