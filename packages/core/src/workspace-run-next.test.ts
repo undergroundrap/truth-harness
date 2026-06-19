@@ -860,6 +860,63 @@ describe("workspace run-next", () => {
     expect(plan.warnings.join(" ")).toContain("never executes shell strings");
   });
 
+  it("does not select passive-only review blockers as run-next targets", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "solve integer constraints x > 0 and x < 3",
+      now: new Date("2026-06-14T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const stored = JSON.parse(await readFile(route.jsonPath, "utf8")) as {
+      proofObligations: Array<Record<string, unknown>>;
+    };
+    stored.proofObligations = [
+      {
+        ...stored.proofObligations[0],
+        kind: "formal-proof",
+        status: "open",
+        severity: "critical",
+        title: "Formal proof-checker obligation",
+        requiredBefore: "Before labeling this scoped claim proved.",
+        command: "truth-harness proof check docs/examples/trivial.lean --write"
+      }
+    ];
+    await writeFile(route.jsonPath, JSON.stringify(stored, null, 2), "utf8");
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-14T00:03:00.000Z"
+    });
+
+    expect(review.items.length).toBeGreaterThan(0);
+    expect(review.autonomy).toMatchObject({
+      mode: "idle",
+      canRunUnattended: false,
+      nextCommand: undefined
+    });
+    expect(plan.status).toBe("blocked");
+    expect(plan.item).toBeUndefined();
+    expect(plan.execution).toMatchObject({
+      status: "blocked",
+      kind: "no-open-item",
+      summary: expect.stringContaining("passive inspection blockers")
+    });
+  });
+
   it("writes dry-run plans into findings with a local artifact event", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });

@@ -803,17 +803,17 @@ describe("local web route ledger API", () => {
       localOnly: true,
       networkAccess: "none",
       dryRun: true,
-      status: "planned"
+      status: "blocked"
     });
     expect(runNextPayload.plan.reviewId).toMatch(/^wrev_[a-f0-9]{16}$/u);
     expect(runNextPayload.plan.execution).toMatchObject({
-      status: "planned",
-      kind: "dry-run"
+      status: "blocked",
+      kind: "no-open-item"
     });
     expect(runNextPayload.plan.warnings).toContain(
       "Run-next never executes shell strings. Only supported local Truth Harness actions can run."
     );
-    expect(runNextPayload.plan.item.command).toContain("truth-harness");
+    expect(runNextPayload.plan.item).toBeUndefined();
 
     const forbiddenRunNextResponse = await fetch(`${baseUrl}/api/workspace-run-next?executeLocal=true`);
     expect(forbiddenRunNextResponse.status).toBe(400);

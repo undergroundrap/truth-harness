@@ -208,7 +208,12 @@ export async function createWorkspaceRunNextPlan(input: {
 }): Promise<WorkspaceRunNextPlan> {
   const createdAt = input.now ?? new Date().toISOString();
   const planId = workspaceRunNextPlanId(createdAt, input.review.reviewId);
-  const nextItem = input.review.items.find((item) => item.itemId === input.review.autonomy.nextItemId) ?? input.review.items[0];
+  const nextItem = input.review.autonomy.nextItemId
+    ? input.review.items.find((item) => item.itemId === input.review.autonomy.nextItemId)
+    : undefined;
+  const noNextItemSummary = input.review.items.length > 0
+    ? "No executable local work item is available; remaining review items are passive inspection blockers."
+    : "No open workspace review item is available.";
   const basePlan: WorkspaceRunNextPlan = {
     schemaVersion: WORKSPACE_RUN_NEXT_SCHEMA_VERSION,
     planId,
@@ -226,7 +231,7 @@ export async function createWorkspaceRunNextPlan(input: {
       kind: "dry-run",
       summary: nextItem
         ? "Dry-run only. Re-run with --execute-local to run one supported local Truth Harness action."
-        : "No open workspace review item is available."
+        : noNextItemSummary
     },
     stopConditions: input.review.autonomy.stopConditions,
     warnings: [
@@ -242,7 +247,7 @@ export async function createWorkspaceRunNextPlan(input: {
       execution: {
         status: "blocked",
         kind: "no-open-item",
-        summary: "No open local work item is available."
+        summary: noNextItemSummary
       }
     });
   }
