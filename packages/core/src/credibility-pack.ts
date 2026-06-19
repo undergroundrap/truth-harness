@@ -34,6 +34,7 @@ export interface CredibilityPackCommandSet {
   dockerCoreEngines: string;
   dockerLeanFixture: string;
   dockerSageFixture: string;
+  dockerAllEngines: string;
 }
 
 export interface CredibilityPackReviewItem {
@@ -382,6 +383,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Docker core engines: \`${pack.reviewerCommands.dockerCoreEngines}\``,
     `- Docker Lean fixture: \`${pack.reviewerCommands.dockerLeanFixture}\``,
     `- Docker Sage fixture: \`${pack.reviewerCommands.dockerSageFixture}\``,
+    `- Docker all engines: \`${pack.reviewerCommands.dockerAllEngines}\``,
     "",
     "## Reviewer Action Plan",
     ""
@@ -932,7 +934,8 @@ function createReviewerCommands(input: {
     dockerProfessorEvidence: "npm run docker:professor",
     dockerCoreEngines: "npm run docker:engines",
     dockerLeanFixture: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean",
-    dockerSageFixture: "npm run docker:sage"
+    dockerSageFixture: "npm run docker:sage",
+    dockerAllEngines: "npm run docker:all-engines:write"
   };
 }
 
@@ -947,17 +950,19 @@ function reviewerEngineActionCommand(
   if (!isHostProcessBlocked(item.summary)) {
     return commands.verifyEngines;
   }
+  if (commands.verifyEngines.includes("--require-all-engines")) {
+    return commands.dockerAllEngines;
+  }
 
   switch (item.id) {
     case "maxima-symbolic-cross-check":
     case "z3-smt-check":
+    case "cvc5-smt-check":
       return commands.dockerCoreEngines;
     case "lean-proof-fixture":
       return commands.dockerLeanFixture;
     case "sage-symbolic-cross-check":
       return commands.dockerSageFixture;
-    case "cvc5-smt-check":
-      return commands.verifyEngines;
   }
 }
 
@@ -1024,6 +1029,9 @@ function reviewerEngineActionDetail(
 ): string {
   if (command === commands.verifyEngines) {
     return "rerun the writable reviewer command after installing or fixing the backend";
+  }
+  if (command === commands.dockerAllEngines) {
+    return "run the heavy no-network all-engine gate because strict review requires Maxima, Z3, cvc5, Lean, and SageMath evidence";
   }
   if (item.id === "maxima-symbolic-cross-check" || item.id === "z3-smt-check" || item.id === "cvc5-smt-check") {
     return "run the no-network Docker core gate because the host blocked direct Maxima/Z3/cvc5 execution";

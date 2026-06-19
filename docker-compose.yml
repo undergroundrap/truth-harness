@@ -75,6 +75,27 @@ services:
       TRUTH_HARNESS_SAGE: "sage"
     command: ["npm", "run", "engines:verify:sage"]
 
+  all-engines:
+    <<: *truth-harness-security
+    build:
+      context: .
+      target: all-engines
+    image: truth-harness:all-engines
+    working_dir: /workspace
+    network_mode: "none"
+    environment:
+      CI: "true"
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
+      TRUTH_HARNESS_CONTAINER: "1"
+      TRUTH_HARNESS_MAXIMA: "maxima-sage"
+      TRUTH_HARNESS_Z3: "z3"
+      TRUTH_HARNESS_CVC5: "cvc5"
+      TRUTH_HARNESS_LEAN: "lean"
+      TRUTH_HARNESS_SAGE: "sage"
+    volumes:
+      - ./.truth-harness:/workspace/.truth-harness
+    command: ["npm", "run", "engines:verify:all"]
+
   mcp:
     <<: *truth-harness-security
     image: truth-harness:dev

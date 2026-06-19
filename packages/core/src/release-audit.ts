@@ -91,6 +91,7 @@ export interface ReleaseAudit {
     engineVerify: string;
     dockerProfessor: string;
     dockerEngines: string;
+    dockerAllEngines: string;
     dockerProof: string;
     dockerVerify: string;
     workspaceStress: string;
@@ -569,7 +570,8 @@ function engineEvidenceDockerCommands(pack: CredibilityPack): string[] {
   return [
     pack.reviewerCommands.dockerCoreEngines,
     pack.reviewerCommands.dockerLeanFixture,
-    pack.reviewerCommands.dockerSageFixture
+    pack.reviewerCommands.dockerSageFixture,
+    pack.reviewerCommands.dockerAllEngines
   ].filter((command) => present.has(command));
 }
 
@@ -878,6 +880,7 @@ function releaseAuditCommands(
     engineVerify: `truth-harness engines verify --write${requirementFlags}`,
     dockerProfessor: "npm run docker:professor",
     dockerEngines: "npm run docker:engines",
+    dockerAllEngines: "npm run docker:all-engines",
     dockerProof: "npm run docker:proof",
     dockerVerify: "npm run docker:verify",
     workspaceStress: "truth-harness workspace stress <throwaway-path> --receipts 100 --claims 50 --routes 20 --fail-on-validation",

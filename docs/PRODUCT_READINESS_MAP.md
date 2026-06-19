@@ -20,7 +20,7 @@ The product should stay private-prototype until the readiness gates below move f
 | Refutation | Green | Narrow universal parity claims can be refuted with concrete counterexamples. |
 | Trust labels | Green | Conservative labels exist and are validated; `proved` is reserved for accepted proof checkers. |
 | Receipt validation | Green | Receipt JSON is schema/runtime validated and fails toward missing/unsupported evidence. |
-| Docker engine path | Green | Docker image includes SymPy, Maxima, Z3, cvc5, and a pinned Lean proof target; `engines verify --require-maxima --require-z3 --require-cvc5` reports earned `cross-checked` and independent `smt-checked` gates in the no-network compose service. `npm run docker:professor` now writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, a credibility pack, and a hash-verified portable reviewer bundle in one no-network reviewer rehearsal. |
+| Docker engine path | Green | Docker image includes SymPy, Maxima, Z3, cvc5, and a pinned Lean proof target; `engines verify --require-maxima --require-z3 --require-cvc5` reports earned `cross-checked` and independent `smt-checked` gates in the no-network compose service. `npm run docker:professor` writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, a credibility pack, and a hash-verified portable reviewer bundle in one no-network reviewer rehearsal. `npm run docker:all-engines` is the heavier strict gate that combines SageMath plus pinned Lean so Maxima, Z3, cvc5, Lean, and SageMath each earn scoped fixture evidence in one no-runtime-network image. |
 | CLI coverage | Green/yellow | Broad CLI exists across receipts, claims, routes, CAS, SMT, proof records, benchmarks, sources, notebooks, sessions, audits, release audit, and snapshots. Needs usability pass. |
 | MCP/agent layer | Green/yellow | Agents can call many local tools. Workspace run-next planning is available through CLI/MCP and the local web API as a dry-run plan; CLI `--write` and MCP `write: true` record run-next intent packets into local findings before handoff, and CLI/MCP list/show commands reopen those packets for later audit or resume. Bounded execution remains behind CLI/MCP gates and now includes in-process writable engine verification and benchmark runs without shell execution. Code-run is gated and safer than before, but agent flows need end-to-end stress tests. |
 | Claim ledger | Yellow/green | Linked claims, evidence refs, tags, supersession, and readiness gates exist. Needs multi-day workspace testing. |
@@ -62,14 +62,15 @@ Do not publicly launch or record the main hype demo until these are true:
 2. `docker compose build` passes.
 3. `npm run docker:engines` passes.
 4. `npm run docker:professor` completes, writes local engine/benchmark/credibility-pack/reviewer-bundle artifacts, verifies the bundle hashes, and the resulting credibility pack itself reports `ready-for-review`.
-5. `npm run docker:demo` passes.
-6. The web app has no obvious clipping, overlap, broken scroll, broken focus, or confusing navigation in desktop view.
-7. A new user can understand the difference between Math, Visuals, Lineage, Protocol, Notes, Replay, and Report without reading source code.
-8. The project can run a 100+ receipt local workspace without slow scans becoming painful.
-9. Claim ledger search/tag/filter/dependency flows are usable from both CLI and UI.
-10. At least one professor-style teaching workflow can be completed end to end: ask -> receipt -> trace -> notes -> report -> replay.
-11. Agent workflows can work for at least one hour against local artifacts without losing provenance.
-12. Security docs clearly explain what Docker protects, what it does not protect, and what code-run can and cannot attest.
+5. `npm run docker:all-engines` passes when the heavy SageMath plus Lean image is available; `npm run docker:all-engines:write` can save a strict run for audit citation.
+6. `npm run docker:demo` passes.
+7. The web app has no obvious clipping, overlap, broken scroll, broken focus, or confusing navigation in desktop view.
+8. A new user can understand the difference between Math, Visuals, Lineage, Protocol, Notes, Replay, and Report without reading source code.
+9. The project can run a 100+ receipt local workspace without slow scans becoming painful.
+10. Claim ledger search/tag/filter/dependency flows are usable from both CLI and UI.
+11. At least one professor-style teaching workflow can be completed end to end: ask -> receipt -> trace -> notes -> report -> replay.
+12. Agent workflows can work for at least one hour against local artifacts without losing provenance.
+13. Security docs clearly explain what Docker protects, what it does not protect, and what code-run can and cannot attest.
 
 ## Stress Tests We Need
 

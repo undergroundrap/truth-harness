@@ -118,6 +118,7 @@ export interface EngineVerificationReport {
     professorCommand: string;
     leanCommand: string;
     sageCommand: string;
+    allEnginesCommand: string;
     verifyImageCommand: string;
     networkPolicy: "compose-core-no-network";
   };
@@ -237,6 +238,7 @@ export async function verifyEngineEvidence(input: EngineVerificationInput = {}):
       professorCommand: "npm run docker:professor",
       leanCommand: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean",
       sageCommand: "docker compose run --rm sage-math npm run cli -- engines verify --require-sage",
+      allEnginesCommand: "npm run docker:all-engines",
       verifyImageCommand: "npm run docker:verify",
       networkPolicy: "compose-core-no-network"
     },

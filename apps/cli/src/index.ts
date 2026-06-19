@@ -5576,6 +5576,7 @@ function printEngineVerificationReport(
   console.log(`  Core no-network: ${report.docker.coreCommand}`);
   console.log(`  Professor evidence: ${report.docker.professorCommand}`);
   console.log(`  Lean fixture: ${report.docker.leanCommand}`);
+  console.log(`  All engines: ${report.docker.allEnginesCommand}`);
   console.log(`  Verify image: ${report.docker.verifyImageCommand}`);
 
   console.log("");
@@ -6636,6 +6637,7 @@ function printReleaseAudit(audit: ReleaseAudit): void {
   console.log(`  ${audit.commands.rebuildCatalog}`);
   console.log(`  ${audit.commands.credibilityPack}`);
   console.log(`  ${audit.commands.dockerEngines}`);
+  console.log(`  ${audit.commands.dockerAllEngines}`);
   console.log(`  ${audit.commands.dockerProof}`);
   console.log(`  ${audit.commands.dockerVerify}`);
 

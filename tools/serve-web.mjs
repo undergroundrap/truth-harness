@@ -2928,6 +2928,7 @@ function dockerVerifierGuidance(verification) {
       professor: "npm run docker:professor",
       engines: "npm run docker:engines",
       proof: "npm run docker:proof",
+      allEngines: "npm run docker:all-engines",
       verify: "npm run docker:verify"
     },
     missingEngines,
@@ -2942,6 +2943,7 @@ function dockerVerifierGuidance(verification) {
       "The web UI never runs Docker automatically; it only exposes copyable commands.",
       "npm run docker:professor writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, a credibility pack, and a verified portable reviewer bundle inside the no-network compose service.",
       "npm run docker:engines runs concrete Maxima/Z3/cvc5 evidence smoke checks inside the no-network compose service.",
+      "npm run docker:all-engines is the heavy strict gate for Maxima, Z3, cvc5, Lean, and SageMath when a reviewer explicitly wants every adapter fixture.",
       "npm run docker:proof runs the truth-harness compose service with no external network route after the dev image exists.",
       "npm run docker:verify builds and tests the verification image; image builds may download dependencies.",
       "Docker status does not prove a claim. Trust labels still require concrete Lean, Z3, Maxima, or other accepted evidence artifacts."
