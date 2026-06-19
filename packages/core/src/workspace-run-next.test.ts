@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -663,6 +663,41 @@ describe("workspace run-next", () => {
     expect(plan.execution.summary).toContain("does not execute npm, Docker, or shell commands");
   });
 
+  it("blocks unavailable SMT backends before writing unverified retry noise", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    await mkdir(join(root, "docs", "examples"), { recursive: true });
+    await writeFile(
+      join(root, "docs", "examples", "constraints.smt2"),
+      "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      "utf8"
+    );
+    const review = minimalReview({
+      rootPath: root,
+      command: "truth-harness smt check docs/examples/constraints.smt2 --write --z3-command truth-harness-missing-z3-command",
+      claimId: "claim_fake",
+      kind: "route-obligation",
+      routeId: "route_smt_unavailable_test",
+      obligationId: "obl_smt_unavailable_test",
+      obligationKind: "solver-encoding"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+    const smtFiles = await readdir(join(root, ".truth-harness", "smt")).catch(() => []);
+
+    expect(plan.status).toBe("blocked");
+    expect(plan.execution.kind).toBe("smt-check");
+    expect(plan.execution.summary).toContain("Local z3 SMT backend is not available");
+    expect(plan.execution.summary).toContain("npm run docker:cli -- smt check docs/examples/constraints.smt2 -- --write");
+    expect(plan.execution.evidenceRef).toBeUndefined();
+    expect(smtFiles).toEqual([]);
+  });
+
   it("reads saved report drafts through run-next without honoring command workspace overrides", async () => {
     const root = await tempRoot();
     const outsideRoot = await tempRoot();
@@ -1065,6 +1100,9 @@ function minimalReview(input: {
   validationPlanId?: string;
   validationGateId?: string;
   validationGateKind?: string;
+  routeId?: string;
+  obligationId?: string;
+  obligationKind?: WorkspaceReview["items"][number]["obligationKind"];
   sessionId?: string;
   domain?: string;
 }): WorkspaceReview {
@@ -1124,6 +1162,9 @@ function minimalReview(input: {
         summary: "Test claim review.",
         command: input.command,
         claimId: input.claimId,
+        routeId: input.routeId,
+        obligationId: input.obligationId,
+        obligationKind: input.obligationKind,
         reportId: input.reportId,
         validationPlanId: input.validationPlanId,
         validationGateId: input.validationGateId,

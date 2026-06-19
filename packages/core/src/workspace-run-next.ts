@@ -31,7 +31,7 @@ import {
   type ResearchSessionCheckpointWriteResult
 } from "./research-session.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
-import { writeSmtCheckRecord, type SmtBackendId } from "./smt-backend.js";
+import { getSmtBackendStatus, writeSmtCheckRecord, type SmtBackendId } from "./smt-backend.js";
 import type { SympyOperation } from "./sympy.js";
 import type { Receipt, TrustLabel } from "./types.js";
 import {
@@ -1253,13 +1253,32 @@ async function executeWorkspaceRunNextItem(
       if (!sourcePath || sourcePath.includes("<") || sourcePath.includes(">")) {
         return blockedPlaceholderCommand(item.command, "smt-check");
       }
+      const backend = parseSmtBackendOption(options.backend);
+      const z3Command = typeof options["z3-command"] === "string" ? options["z3-command"] : undefined;
+      const cvc5Command = typeof options["cvc5-command"] === "string" ? options["cvc5-command"] : undefined;
+      const selectedBackend = backend ?? "z3";
+      const backendStatus = getSmtBackendStatus({
+        z3Command,
+        cvc5Command,
+        timeoutMs
+      }).backends.find((candidate) => candidate.backendId === selectedBackend);
+      if (!backendStatus?.canCheckSmt) {
+        return {
+          status: "blocked",
+          kind: "smt-check",
+          command: item.command,
+          summary: `Local ${selectedBackend} SMT backend is not available for run-next (${
+            backendStatus?.error ?? backendStatus?.status ?? "unknown"
+          }). Use the Docker evidence path instead: ${dockerSmtCheckCommand(sourcePath, selectedBackend)}`
+        };
+      }
       const result = await writeSmtCheckRecord({
         rootPath: workspace,
         sourcePath,
         queryName: typeof options.query === "string" ? options.query : undefined,
-        backend: parseSmtBackendOption(options.backend),
-        z3Command: typeof options["z3-command"] === "string" ? options["z3-command"] : undefined,
-        cvc5Command: typeof options["cvc5-command"] === "string" ? options["cvc5-command"] : undefined,
+        backend,
+        z3Command,
+        cvc5Command,
         timeoutMs
       });
       const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
@@ -1369,6 +1388,11 @@ function blockedPlaceholderCommand(command: string, kind: string): WorkspaceRunN
     command,
     summary: "The next command contains a placeholder path. Prepare a concrete workspace-local artifact before executing it."
   };
+}
+
+function dockerSmtCheckCommand(sourcePath: string, backend: SmtBackendId): string {
+  const backendArgs = backend === "z3" ? "" : ` --backend ${quoteCommandArg(backend)}`;
+  return `npm run docker:cli -- smt check ${quoteCommandArg(sourcePath)} --${backendArgs} --write`;
 }
 
 async function maybeAttachRouteEvidence(
