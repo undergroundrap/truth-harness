@@ -105,6 +105,14 @@ docker compose up web
 
 Then open `http://127.0.0.1:4180`. The web service publishes only to localhost. The browser calls localhost `/api/receipt` and `/api/claims` endpoints backed by `@truth-harness/core`; it does not call a hosted model or external service. The web server also rejects non-local Host headers by default and accepts browser API writes only from the same origin.
 
+When the browser looks stale or you are not sure whether `4180` is currently served by Docker or the host repo, use the read-only runtime doctor:
+
+```bash
+npm run web:doctor
+```
+
+The doctor reports the port owner, `/api/status` runtime identity, served app bundle version, and safe refresh commands. It never stops containers, kills processes, rebuilds images, or runs verifier work. If Docker owns the port and the API is stale, the safe refresh path is `docker compose up --build web`. If you intentionally want to switch back to host web, stop only the compose web service with `docker compose stop web`, then run `npm run web:restart`.
+
 The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima, Z3, and cvc5 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; use `truth-harness proof project <path>` to inspect that local layout without executing Lean, run `docker compose run --rm lean-proof` for the pinned fixture, then set `TRUTH_HARNESS_LEAN` or build a derived image once a real project layout is chosen.
 
 ## Web UI Safe Verifier Path
