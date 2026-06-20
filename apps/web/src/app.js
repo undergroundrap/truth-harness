@@ -9986,6 +9986,7 @@ function renderSafetyStatus() {
   const sandbox = safety.codeRunSandbox ?? {};
   const mcp = safety.mcpCodeRun ?? {};
   const webServer = safety.webServer ?? {};
+  const runtime = runtimeIdentityForUi(payload);
   const attested = sandbox.canAttestNetworkNone === true;
   const exposed = mcp.exposed === true;
   const unsandboxedAllowed = mcp.unsandboxedAllowed === true;
@@ -9996,6 +9997,8 @@ function renderSafetyStatus() {
     : "not reported";
   const modelCallState = payload.externalCalls ? "external calls possible" : "none from local API";
   const rows = [
+    ["Runtime", runtime.label],
+    ["Project root", runtime.projectRootLabel],
     ["Local API", payload.localOnly ? "local only" : "check config"],
     ["Browser guard", webGuardState],
     ["API body limit", bodyLimit],
@@ -10012,6 +10015,7 @@ function renderSafetyStatus() {
     .join("");
 
   const noteCandidates = [
+    runtime.staleHint,
     sandbox.reason,
     webServer.recommendation,
     mcp.recommendation,
@@ -10020,6 +10024,58 @@ function renderSafetyStatus() {
   const notes = noteCandidates.length > 0 ? noteCandidates.slice(0, 3) : ["No local safety metadata was returned."];
   safetyNotes.innerHTML = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
   renderEngineReadinessStatus(payload);
+}
+
+function runtimeIdentityForUi(payload) {
+  const reported = payload?.runtime;
+  if (reported && typeof reported === "object") {
+    return {
+      label: runtimeKindLabel(reported.runtimeKind),
+      projectRootLabel: compactRuntimePathForUi(reported.projectRoot),
+      staleHint: reported.staleHint ?? "Runtime identity was reported by the local web API."
+    };
+  }
+
+  const sandbox = payload?.safety?.codeRunSandbox ?? {};
+  const webServer = payload?.safety?.webServer ?? {};
+  const containerLike = sandbox.platform === "linux" && webServer.bindHost === "0.0.0.0";
+  return {
+    label: containerLike ? "probable Docker/container" : "legacy local API",
+    projectRootLabel: "not reported",
+    staleHint: containerLike
+      ? "This API build does not expose runtime identity. If source looks stale, rebuild or restart Docker."
+      : "This API build does not expose runtime identity. Restart the local web server after source changes."
+  };
+}
+
+function runtimeKindLabel(kind) {
+  switch (kind) {
+    case "docker-container":
+      return "Docker /workspace";
+    case "windows-host":
+      return "Windows host repo";
+    case "local-host":
+      return "local host repo";
+    default:
+      return formatSafetyPhrase(kind ?? "local API");
+  }
+}
+
+function compactRuntimePathForUi(value) {
+  const text = String(value ?? "").trim();
+  if (!text) {
+    return "not reported";
+  }
+  const normalized = text.replace(/\\/gu, "/");
+  if (normalized === "/workspace" || normalized.startsWith("/workspace/")) {
+    return normalized;
+  }
+  const marker = "/AntigravityProjects/";
+  const markerIndex = normalized.indexOf(marker);
+  if (markerIndex >= 0) {
+    return `...${normalized.slice(markerIndex)}`;
+  }
+  return normalized.length > 54 ? `...${normalized.slice(-51)}` : normalized;
 }
 
 function renderWorkspaceReadinessStatus(payload = state.workspaceReadiness) {
@@ -10872,15 +10928,16 @@ function engineEvidenceCaseLabel(status) {
 
 function safetyStatusSummary(payload) {
   const sandbox = payload?.safety?.codeRunSandbox;
+  const runtime = runtimeIdentityForUi(payload);
   if (!sandbox) {
-    return "Local status endpoint responded without sandbox metadata.";
+    return `Local status endpoint responded without sandbox metadata. Runtime: ${runtime.label}.`;
   }
 
   if (sandbox.canAttestNetworkNone) {
-    return `Code-run sandbox attested by ${formatSafetyPhrase(sandbox.provider)} with ${formatSafetyPhrase(sandbox.networkIsolation)} network isolation.`;
+    return `Code-run sandbox attested by ${formatSafetyPhrase(sandbox.provider)} with ${formatSafetyPhrase(sandbox.networkIsolation)} network isolation. Runtime: ${runtime.label}.`;
   }
 
-  return `Code-run sandbox not attested: ${sandbox.reason ?? "no measured sandbox provider"}`;
+  return `Code-run sandbox not attested: ${sandbox.reason ?? "no measured sandbox provider"}. Runtime: ${runtime.label}.`;
 }
 
 function engineReadinessSummary(payload) {

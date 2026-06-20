@@ -60,6 +60,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.localOnly).toBe(true);
     expect(statusPayload.externalCalls).toBe(false);
     expect(statusPayload.capabilities).toContain("docker-verifier-guidance");
+    expect(statusPayload.capabilities).toContain("web-runtime-identity");
     expect(statusPayload.capabilities).toContain("report-draft-save");
     expect(statusPayload.capabilities).toContain("research-session-list");
     expect(statusPayload.capabilities).toContain("research-harness-start");
@@ -91,6 +92,13 @@ describe("local web route ledger API", () => {
       maxJsonBodyBytes: 128 * 1024,
       apiErrorFormat: "json"
     });
+    expect(statusPayload.runtime).toMatchObject({
+      schemaVersion: "truth-harness.web-runtime.v0",
+      runtimeKind: process.platform === "win32" ? "windows-host" : "local-host",
+      projectRoot: tempProjectRoot?.replace(/\\/gu, "/"),
+      localOnly: true
+    });
+    expect(statusPayload.runtime.staleHint).toContain("local host repository runtime");
     expect(statusPayload.dockerVerifier).toMatchObject({
       schemaVersion: "truth-harness.docker-verifier-guidance.v0",
       localOnly: true,

@@ -59,6 +59,10 @@ describe("web UI action contracts", () => {
 
     expect(html).toContain('id="engine-evidence-gate"');
     expect(source).toContain("function renderEngineEvidenceGate(payload = state.safetyStatus)");
+    expect(source).toContain("function runtimeIdentityForUi(payload)");
+    expect(source).toContain("function compactRuntimePathForUi(value)");
+    expect(source).toContain('["Runtime", runtime.label]');
+    expect(source).toContain('["Project root", runtime.projectRootLabel]');
     expect(source).toContain("payload.engineReadiness");
     expect(source).toContain("payload.engineVerification");
     expect(source).toContain('fetch("/api/engine-runs"');
@@ -514,7 +518,7 @@ describe("web UI action contracts", () => {
     const graphEdgeCodeStyles = styles.match(/\.graph-edge-list code \{[\s\S]*?\r?\n\}/u)?.[0];
     const runbookPacketStyles = styles.match(/#runbook-packet \{[\s\S]*?\r?\n\}/u)?.[0];
 
-    expect(html).toContain('src="./src/app.js?v=2026-06-19-idle-actions"');
+    expect(html).toContain('src="./src/app.js?v=2026-06-19-runtime-identity"');
     expect(html).toContain('href="./src/styles.css?v=2026-06-19-layout-audit-pass"');
     expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
     expect(html).toContain('aria-hidden="true"');

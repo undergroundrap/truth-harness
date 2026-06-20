@@ -82,6 +82,7 @@ const coreModulePath = args.get("core-module") ?? process.env.TRUTH_HARNESS_WEB_
 const host = args.get("host") ?? "127.0.0.1";
 const port = Number(args.get("port") ?? "4180");
 const allowNonLocalWeb = isTruthyEnv(process.env.TRUTH_HARNESS_WEB_ALLOW_NONLOCAL);
+const serverStartedAt = new Date().toISOString();
 
 const mimeTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -162,6 +163,7 @@ async function handleApiRequest(request, response, requestUrl) {
     const mcpCodeRunExposed = isTruthyEnv(process.env.TRUTH_HARNESS_ALLOW_CODE_RUN);
     const unsandboxedCodeRunAllowed = isTruthyEnv(process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN);
     const webServer = webServerSafetyStatus();
+    const runtime = webRuntimeIdentity();
 
     writeJson(response, 200, {
       schemaVersion: "truth-harness.web-status.v0",
@@ -169,6 +171,7 @@ async function handleApiRequest(request, response, requestUrl) {
       externalCalls: false,
       api: "local-node",
       engine: "@truth-harness/core",
+      runtime,
       safety: {
         status: codeRunSandbox.canAttestNetworkNone ? "sandbox-attested" : "sandbox-unavailable",
         codeRunSandbox,
@@ -228,6 +231,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "workspace-run-next-show",
         "release-audit",
         "docker-verifier-guidance",
+        "web-runtime-identity",
         "sandbox-status",
         "safety-center",
         "workspace-maintenance"
@@ -3056,6 +3060,29 @@ function webServerSafetyStatus() {
     recommendation: allowNonLocalWeb
       ? "Non-local web access was explicitly enabled; do not expose this server to untrusted networks."
       : "The local API rejects non-local Host headers and cross-origin browser writes."
+  };
+}
+
+function webRuntimeIdentity() {
+  const projectRootPath = portablePath(projectRoot);
+  const dockerWorkspace = projectRootPath === "/workspace" || projectRootPath.startsWith("/workspace/");
+  const runtimeKind = dockerWorkspace ? "docker-container" : process.platform === "win32" ? "windows-host" : "local-host";
+
+  return {
+    schemaVersion: "truth-harness.web-runtime.v0",
+    startedAt: serverStartedAt,
+    runtimeKind,
+    projectRoot: projectRootPath,
+    webRoot: portablePath(root),
+    coreModulePath: portablePath(resolve(coreModulePath)),
+    cwd: portablePath(process.cwd()),
+    platform: process.platform,
+    nodeVersion: process.version,
+    pid: process.pid,
+    localOnly: true,
+    staleHint: runtimeKind === "docker-container"
+      ? "Browser and API are attached to the Docker /workspace runtime. Rebuild or restart the container to pick up host source changes."
+      : "Browser and API are attached to the local host repository runtime."
   };
 }
 
