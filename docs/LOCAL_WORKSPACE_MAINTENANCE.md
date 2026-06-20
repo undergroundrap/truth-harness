@@ -76,6 +76,8 @@ Use the Docker reviewer helpers for that separate layer:
 npm run docker:storage
 npm run docker:cleanup -- heavy-images
 npm run docker:cleanup -- heavy-images --confirm-delete
+npm run docker:cleanup -- dev-image
+npm run docker:cleanup -- dev-image --confirm-delete
 npm run docker:cleanup -- build-cache
 npm run docker:cleanup -- build-cache --confirm-delete
 npm run docker:cleanup -- all-build-cache

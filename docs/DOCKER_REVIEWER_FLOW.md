@@ -12,6 +12,8 @@ npm run docker:reviewer:all
 npm run docker:storage
 npm run docker:cleanup -- heavy-images
 npm run docker:cleanup -- heavy-images --confirm-delete
+npm run docker:cleanup -- dev-image
+npm run docker:cleanup -- dev-image --confirm-delete
 npm run docker:cleanup -- build-cache
 npm run docker:cleanup -- build-cache --confirm-delete
 npm run docker:cleanup -- all-build-cache
@@ -28,7 +30,7 @@ npm run docker:cleanup -- all-build-cache --confirm-delete
 
 Engine verification JSON remains the forensic source of record, including raw probe stdout/stderr where a backend exposes it. Human-facing CLI and Markdown summaries keep backend versions concise, so noisy banners such as cvc5's license text render as a stable version label like `cvc5 version 1.0.3` instead of overwhelming the reviewer packet.
 
-`npm run docker:storage` is read-only. It reports local `.truth-harness` size, Docker Desktop storage, Docker's own `system df` summary when available, Truth Harness images, and cleanup commands.
+`npm run docker:storage` is read-only. It reports local `.truth-harness` size, Docker Desktop storage, Docker's own `system df` summary when available, Truth Harness images, cleanup commands, and scoped cleanup recommendations.
 
 `npm run docker:cleanup` is preview-only by default. It requires `--confirm-delete` before it removes anything. The helper accepts the confirmation as either a normal script argument or npm's config-style `confirm-delete=true` environment flag, so the documented npm commands stay destructive only when they visibly include confirmation.
 
@@ -60,6 +62,12 @@ Previews removal of optional heavy Truth Harness reviewer images:
 - `truth-harness:verify`
 
 It intentionally keeps `truth-harness:dev`, because the local Docker web and default compose workflows use it.
+
+```bash
+npm run docker:cleanup -- dev-image
+```
+
+Previews removal of `truth-harness:dev`. Use this after stopping Docker web/check workflows when you want to free the default dev image too. The next Docker web/check run will rebuild it.
 
 ```bash
 npm run docker:cleanup -- build-cache

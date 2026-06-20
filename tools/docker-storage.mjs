@@ -14,6 +14,7 @@ const report = {
   dockerDesktop: dockerDesktopStorage(),
   docker: dockerCliStorage()
 };
+report.recommendations = buildCleanupRecommendations(report);
 
 if (json) {
   console.log(JSON.stringify(report, null, 2));
@@ -63,12 +64,33 @@ function printHuman(input) {
   console.log("    npm run docker:cleanup -- heavy-images");
   console.log("  Delete heavy Truth Harness images after review:");
   console.log("    npm run docker:cleanup -- heavy-images --confirm-delete");
+  console.log("  Preview dev image cleanup after stopping Docker web/check workflows:");
+  console.log("    npm run docker:cleanup -- dev-image");
+  console.log("  Delete dev image after stopping Docker web/check workflows:");
+  console.log("    npm run docker:cleanup -- dev-image --confirm-delete");
   console.log("  Preview old build-cache cleanup:");
   console.log("    npm run docker:cleanup -- build-cache");
   console.log("  Delete old build cache after review:");
   console.log("    npm run docker:cleanup -- build-cache --confirm-delete");
   console.log("  Delete all unused build cache after review:");
   console.log("    npm run docker:cleanup -- all-build-cache --confirm-delete");
+  console.log("");
+  console.log("Recommended scoped cleanup");
+  if (input.recommendations.length === 0) {
+    console.log("  No scoped Truth Harness cleanup target looks useful right now.");
+  } else {
+    for (const recommendation of input.recommendations) {
+      const estimate = recommendation.estimatedBytes > 0 ? ` (~${formatBytes(recommendation.estimatedBytes)})` : "";
+      console.log(`  ${recommendation.title}${estimate}`);
+      console.log(`    Preview: ${recommendation.previewCommand}`);
+      if (recommendation.deleteCommand) {
+        console.log(`    Delete:  ${recommendation.deleteCommand}`);
+      }
+      if (recommendation.note) {
+        console.log(`    Note:    ${recommendation.note}`);
+      }
+    }
+  }
   console.log("");
   console.log("Note: Docker Desktop may keep docker_data.vhdx allocated until Docker/WSL compacts it.");
 }
@@ -81,22 +103,27 @@ function dockerCliStorage() {
       error: systemDf.output,
       systemDf: "",
       truthHarnessImages: "",
-      truthHarnessVolumes: ""
+      truthHarnessVolumes: "",
+      truthHarnessImageRows: [],
+      imageReclaimable: { bytes: 0 },
+      buildCacheReclaimable: { bytes: 0 }
     };
   }
+
+  const truthHarnessImages = runDocker([
+    "image",
+    "ls",
+    "--filter",
+    "reference=truth-harness:*",
+    "--format",
+    "table {{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}"
+  ]).output;
 
   return {
     available: true,
     error: "",
     systemDf: systemDf.output,
-    truthHarnessImages: runDocker([
-      "image",
-      "ls",
-      "--filter",
-      "reference=truth-harness:*",
-      "--format",
-      "table {{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}"
-    ]).output,
+    truthHarnessImages,
     truthHarnessVolumes: runDocker([
       "volume",
       "ls",
@@ -104,8 +131,101 @@ function dockerCliStorage() {
       "name=truth-harness",
       "--format",
       "table {{.Name}}\t{{.Driver}}"
-    ]).output
+    ]).output,
+    truthHarnessImageRows: parseTruthHarnessImageRows(truthHarnessImages),
+    imageReclaimable: parseDockerDfReclaimable(systemDf.output, "Images"),
+    buildCacheReclaimable: parseDockerDfReclaimable(systemDf.output, "Build Cache")
   };
+}
+
+function buildCleanupRecommendations(input) {
+  const recommendations = [];
+  if (!input.docker.available) {
+    recommendations.push({
+      title: "Docker CLI accounting unavailable",
+      estimatedBytes: 0,
+      previewCommand: "npm run docker:storage",
+      deleteCommand: "",
+      note: "Run the read-only storage command from an approved local shell before deleting Docker data."
+    });
+    return recommendations;
+  }
+
+  const imageRows = input.docker.truthHarnessImageRows ?? [];
+  const heavyImageNames = new Set([
+    "truth-harness:all-engines",
+    "truth-harness:sage-math",
+    "truth-harness:lean-proof",
+    "truth-harness:verify"
+  ]);
+  const heavyBytes = imageRows
+    .filter((row) => heavyImageNames.has(row.image))
+    .reduce((sum, row) => sum + row.bytes, 0);
+  if (heavyBytes > 0) {
+    recommendations.push({
+      title: "Remove optional reviewer engine images",
+      estimatedBytes: heavyBytes,
+      previewCommand: "npm run docker:cleanup -- heavy-images",
+      deleteCommand: "npm run docker:cleanup -- heavy-images --confirm-delete",
+      note: "Keeps truth-harness:dev so the default Docker web/check path can still start quickly."
+    });
+  }
+
+  const devBytes = imageRows
+    .filter((row) => row.image === "truth-harness:dev")
+    .reduce((sum, row) => sum + row.bytes, 0);
+  if (devBytes > 0) {
+    recommendations.push({
+      title: "Remove dev image when Docker web/check work is paused",
+      estimatedBytes: devBytes,
+      previewCommand: "npm run docker:cleanup -- dev-image",
+      deleteCommand: "npm run docker:cleanup -- dev-image --confirm-delete",
+      note: "The next Docker web/check run will rebuild this image."
+    });
+  }
+
+  if (input.docker.buildCacheReclaimable.bytes > 0) {
+    recommendations.push({
+      title: "Prune unused Docker build cache older than 24 hours",
+      estimatedBytes: input.docker.buildCacheReclaimable.bytes,
+      previewCommand: "npm run docker:cleanup -- build-cache",
+      deleteCommand: "npm run docker:cleanup -- build-cache --confirm-delete",
+      note: "Usually safe after reviewer runs; rebuilds may be slower afterward."
+    });
+  }
+
+  return recommendations;
+}
+
+function parseTruthHarnessImageRows(output) {
+  return output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("REPOSITORY:TAG"))
+    .map((line) => {
+      const [image = "", size = "", created = ""] = line.split(/\s{2,}/u);
+      return {
+        image,
+        size,
+        created,
+        bytes: parseDockerSize(size)
+      };
+    })
+    .filter((row) => row.image.startsWith("truth-harness:"));
+}
+
+function parseDockerDfReclaimable(output, label) {
+  const line = output
+    .split(/\r?\n/u)
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(label));
+  if (!line) {
+    return { bytes: 0 };
+  }
+
+  const columns = line.split(/\s{2,}/u);
+  const reclaimable = columns[4] ?? "";
+  return { bytes: parseDockerSize(reclaimable.split(/\s+/u)[0] ?? "") };
 }
 
 function dockerDesktopStorage() {
@@ -211,6 +331,28 @@ function formatBytes(bytes) {
     unit += 1;
   }
   return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+function parseDockerSize(value) {
+  const match = value.trim().match(/^([\d.]+)\s*([kmgt]?b)$/iu);
+  if (!match) {
+    return 0;
+  }
+
+  const amount = Number.parseFloat(match[1]);
+  if (!Number.isFinite(amount)) {
+    return 0;
+  }
+
+  const unit = match[2].toLowerCase();
+  const multipliers = {
+    b: 1,
+    kb: 1024,
+    mb: 1024 ** 2,
+    gb: 1024 ** 3,
+    tb: 1024 ** 4
+  };
+  return Math.round(amount * (multipliers[unit] ?? 1));
 }
 
 function indent(value) {

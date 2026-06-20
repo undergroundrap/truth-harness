@@ -22,6 +22,13 @@ const plans = {
     ],
     missingIsOk: true
   },
+  "dev-image": {
+    title: "Truth Harness dev image",
+    description:
+      "Removes truth-harness:dev. The next Docker web/check workflow will rebuild it, so use this only when you are done with local container work for now.",
+    commands: [["docker", ["image", "rm", "truth-harness:dev"]]],
+    missingIsOk: true
+  },
   "build-cache": {
     title: "Docker build cache older than 24 hours",
     description:
