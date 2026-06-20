@@ -472,6 +472,7 @@ const workspaceRunNextTitle = document.querySelector("#workspace-run-next-title"
 const workspaceRunNextSummary = document.querySelector("#workspace-run-next-summary");
 const workspaceRunNextCommand = document.querySelector("#workspace-run-next-command");
 const workspaceRunNextDetails = document.querySelector("#workspace-run-next-details");
+const workspaceRunNextIdleActions = document.querySelector("#workspace-run-next-idle-actions");
 const startResearchHarnessButton = document.querySelector("#start-research-harness");
 const refreshRunNextButton = document.querySelector("#refresh-run-next");
 const copyRunNextCommandButton = document.querySelector("#copy-run-next-command");
@@ -7491,6 +7492,7 @@ function renderWorkspaceRunNext() {
       ["Boundary", "Planner failed before any local action could be selected."],
       ["Fallback", "Use CLI or MCP run-next after checking the local API."]
     ]);
+    renderWorkspaceRunNextIdleActions();
     if (copyRunNextCommandButton) {
       copyRunNextCommandButton.disabled = false;
     }
@@ -7507,6 +7509,7 @@ function renderWorkspaceRunNext() {
       ["Boundary", "Browser planning is dry-run only."],
       ["Execution", "CLI/MCP gates are required before local work runs."]
     ]);
+    renderWorkspaceRunNextIdleActions();
     if (copyRunNextCommandButton) {
       copyRunNextCommandButton.disabled = true;
     }
@@ -7522,9 +7525,85 @@ function renderWorkspaceRunNext() {
   workspaceRunNextSummary.textContent = workspaceRunNextPlan.execution?.summary ?? "Browser-visible planning only; use CLI/MCP gates for bounded local execution.";
   workspaceRunNextCommand.textContent = command;
   setWorkspaceRunNextDetails(workspaceRunNextDetailsRows(workspaceRunNextPlan, command));
+  renderWorkspaceRunNextIdleActions(workspaceRunNextPlan);
   if (copyRunNextCommandButton) {
     copyRunNextCommandButton.disabled = !command;
   }
+}
+
+function renderWorkspaceRunNextIdleActions(plan) {
+  if (!workspaceRunNextIdleActions) {
+    return;
+  }
+
+  const actions = workspaceRunNextIdleActionsForUi(plan);
+  if (actions.length === 0) {
+    workspaceRunNextIdleActions.innerHTML = "";
+    workspaceRunNextIdleActions.hidden = true;
+    return;
+  }
+
+  workspaceRunNextIdleActions.hidden = false;
+  workspaceRunNextIdleActions.innerHTML = actions
+    .map((action) => {
+      const requiresHuman = action.requiresHumanInput ? "needs objective" : "local read only";
+      return `<article class="workspace-run-next-idle-card">
+        <div class="workspace-run-next-idle-head">
+          <span class="mini-label">${escapeHtml(action.actionId ?? "idle-action")}</span>
+          <span class="status-pill ${action.requiresHumanInput ? "waiting" : "passed"}">${escapeHtml(requiresHuman)}</span>
+        </div>
+        <strong>${escapeHtml(action.title ?? "Idle next action")}</strong>
+        <p>${escapeHtml(action.reason ?? "Use this when no workspace queue item is open.")}</p>
+        <code>${escapeHtml(action.command ?? "")}</code>
+        <div class="workspace-run-next-row-actions">
+          <button class="text-button compact-button copy-run-next-idle-command" type="button" data-command="${escapeHtml(action.command ?? "")}">Copy command</button>
+        </div>
+        <p class="workspace-run-next-boundary">${escapeHtml(action.boundary ?? "Local planning only; no browser execution.")}</p>
+      </article>`;
+    })
+    .join("");
+}
+
+function workspaceRunNextIdleActionsForUi(plan) {
+  if (Array.isArray(plan?.idleNextActions) && plan.idleNextActions.length > 0) {
+    return plan.idleNextActions;
+  }
+  if (!plan || plan.item || plan.mode !== "idle" || plan.execution?.kind !== "no-open-item") {
+    return [];
+  }
+
+  return fallbackWorkspaceRunNextIdleActions(plan.workspacePath ?? ".");
+}
+
+function fallbackWorkspaceRunNextIdleActions(workspacePath) {
+  const workspace = quoteCommandArgForUi(workspacePath);
+  return [
+    {
+      actionId: "start-validation-backed-harness",
+      title: "Start a new hard-problem harness",
+      command: 'truth-harness research harness "State the narrow hard problem or conjecture here" --domain math --plan-next',
+      reason:
+        "There is no open local queue item. Create a session with a linked validation plan and a saved run-next handoff.",
+      boundary: "Needs a narrow human objective before any claim can be validated.",
+      requiresHumanInput: true
+    },
+    {
+      actionId: "refresh-professor-review",
+      title: "Refresh the professor credibility packet",
+      command: `truth-harness workspace credibility-pack ${workspace} --require-all-engines`,
+      reason: "Recompute the reviewer packet from local artifacts so blockers are visible before the next loop.",
+      boundary: "Reads local evidence only; it does not prove new claims or run Docker by itself.",
+      requiresHumanInput: false
+    },
+    {
+      actionId: "refresh-release-audit",
+      title: "Refresh the strict release audit",
+      command: `truth-harness workspace release-audit ${workspace} --require-all-engines --require-saved-strict-engine-run --require-sandbox`,
+      reason: "Confirm the workspace is reviewer-clean before starting another autonomous loop.",
+      boundary: "Composes existing local evidence only; strict Docker reviewer commands remain explicit.",
+      requiresHumanInput: false
+    }
+  ];
 }
 
 function setWorkspaceRunNextDetails(rows) {
@@ -15619,6 +15698,13 @@ copyRunNextCommandButton?.addEventListener("click", () => {
   copyWorkspaceRunNextCommand().catch((error) => {
     addActivity("web-ui", "Copy next action failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
   });
+});
+
+workspaceRunNextIdleActions?.addEventListener("click", (event) => {
+  const copyButton = event.target.closest(".copy-run-next-idle-command");
+  if (copyButton?.dataset.command) {
+    void copyWorkspaceRunNextHandoffCommand(copyButton.dataset.command, copyButton);
+  }
 });
 
 refreshRunNextsButton?.addEventListener("click", () => {

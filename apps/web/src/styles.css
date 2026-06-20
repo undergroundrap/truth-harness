@@ -3729,6 +3729,55 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   justify-content: flex-end;
 }
 
+.workspace-run-next-idle-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.workspace-run-next-idle-actions[hidden] {
+  display: none;
+}
+
+.workspace-run-next-idle-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #12110f;
+  padding: 10px;
+}
+
+.workspace-run-next-idle-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.workspace-run-next-idle-card strong {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.workspace-run-next-idle-card p {
+  max-width: none;
+  color: #bdb4a6;
+  font-size: 11px;
+}
+
+.workspace-run-next-idle-card code {
+  min-height: 46px;
+}
+
+.workspace-run-next-boundary {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 8px;
+}
+
 .workspace-run-next-history {
   display: grid;
   gap: 10px;
@@ -3975,6 +4024,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   }
 
   .workspace-run-next-details,
+  .workspace-run-next-idle-actions,
   .workspace-run-next-mini-details,
   .workspace-run-next-details.compact {
     grid-template-columns: repeat(2, minmax(0, 1fr));

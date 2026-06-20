@@ -514,7 +514,7 @@ describe("web UI action contracts", () => {
     const graphEdgeCodeStyles = styles.match(/\.graph-edge-list code \{[\s\S]*?\r?\n\}/u)?.[0];
     const runbookPacketStyles = styles.match(/#runbook-packet \{[\s\S]*?\r?\n\}/u)?.[0];
 
-    expect(html).toContain('src="./src/app.js?v=2026-06-19-saved-handoffs"');
+    expect(html).toContain('src="./src/app.js?v=2026-06-19-idle-actions"');
     expect(html).toContain('href="./src/styles.css?v=2026-06-19-layout-audit-pass"');
     expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
     expect(html).toContain('aria-hidden="true"');
@@ -580,6 +580,7 @@ describe("web UI action contracts", () => {
     expect(html).toContain('id="workspace-run-next-card"');
     expect(html).toContain('id="workspace-run-next-command"');
     expect(html).toContain('id="workspace-run-next-details"');
+    expect(html).toContain('id="workspace-run-next-idle-actions"');
     expect(html).toContain('id="start-research-harness"');
     expect(html).toContain('id="refresh-run-next"');
     expect(html).toContain('id="copy-run-next-command"');
@@ -599,14 +600,21 @@ describe("web UI action contracts", () => {
     expect(source).toContain("planNext: true");
     expect(source).toContain("function refreshWorkspaceRunNext({ announce = true } = {})");
     expect(source).toContain("function renderWorkspaceRunNext()");
+    expect(source).toContain("function renderWorkspaceRunNextIdleActions(plan)");
+    expect(source).toContain("function fallbackWorkspaceRunNextIdleActions(workspacePath)");
     expect(source).toContain("function workspaceRunNextDetailsRows(plan, command)");
+    expect(source).toContain("copy-run-next-idle-command");
+    expect(source).toContain("start-validation-backed-harness");
     expect(source).toContain("plan?.rationale");
+    expect(source).toContain("plan?.idleNextActions");
     expect(source).toContain("evidenceRefFromCommand(command)");
     expect(source).toContain("copyWorkspaceRunNextCommand");
     expect(source).toContain("copyWorkspaceRunNextHandoffCommand");
     expect(source).not.toContain("workspace-run-next?executeLocal=true");
     expect(styles).toContain(".workspace-run-next-card");
     expect(styles).toContain(".workspace-run-next-details");
+    expect(styles).toContain(".workspace-run-next-idle-actions");
+    expect(styles).toContain(".workspace-run-next-idle-card");
     expect(styles).toContain(".workspace-run-next-history");
     expect(styles).toContain(".workspace-run-next-row");
     expect(styles).toContain(".workspace-run-next-opened");
