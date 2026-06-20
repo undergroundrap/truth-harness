@@ -149,6 +149,15 @@ export interface WorkspaceRunNextRationale {
   firstWarning?: string;
 }
 
+export interface WorkspaceRunNextIdleAction {
+  actionId: string;
+  title: string;
+  command: string;
+  reason: string;
+  boundary: string;
+  requiresHumanInput: boolean;
+}
+
 export interface WorkspaceRunNextPlan {
   schemaVersion: typeof WORKSPACE_RUN_NEXT_SCHEMA_VERSION;
   planId: string;
@@ -188,6 +197,7 @@ export interface WorkspaceRunNextPlan {
     result?: unknown;
   };
   rationale?: WorkspaceRunNextRationale;
+  idleNextActions?: WorkspaceRunNextIdleAction[];
   sourceSnapshot?: WorkspaceRunNextSourceSnapshot;
   stopConditions: string[];
   warnings: string[];
@@ -244,10 +254,11 @@ export async function createWorkspaceRunNextPlan(input: {
     return withWorkspaceRunNextRationale({
       ...basePlan,
       status: "blocked",
+      idleNextActions: workspaceRunNextIdleActions(input.rootPath),
       execution: {
         status: "blocked",
         kind: "no-open-item",
-        summary: noNextItemSummary
+        summary: `${noNextItemSummary} Use idle next actions to start a validation-backed session or refresh reviewer evidence.`
       }
     });
   }
@@ -570,6 +581,23 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
     ...(plan.execution.command ? [`- Command: \`${plan.execution.command}\``] : []),
     ...(plan.execution.evidenceRef ? [`- Evidence ref: \`${plan.execution.evidenceRef}\``] : []),
     ...(typeof plan.execution.attached === "boolean" ? [`- Attached: \`${String(plan.execution.attached)}\``] : []),
+    ...(plan.idleNextActions && plan.idleNextActions.length > 0
+      ? [
+          "",
+          "## Idle Next Actions",
+          "",
+          ...plan.idleNextActions.flatMap((action) => [
+            `### ${action.title}`,
+            "",
+            `- Action: \`${action.actionId}\``,
+            `- Command: \`${action.command}\``,
+            `- Reason: ${action.reason}`,
+            `- Boundary: ${action.boundary}`,
+            `- Requires human input: \`${String(action.requiresHumanInput)}\``,
+            ""
+          ])
+        ]
+      : []),
     "",
     "## Stop Conditions",
     "",
@@ -634,6 +662,45 @@ function workspaceRunNextTarget(item: WorkspaceRunNextPlan["item"] | undefined):
     return `${item.obligationKind ?? "obligation"} ${item.obligationId}`;
   }
   return item.claimId ?? item.routeId ?? item.reportId ?? item.sessionId ?? "workspace queue";
+}
+
+function workspaceRunNextIdleActions(rootPath: string): WorkspaceRunNextIdleAction[] {
+  const workspace = quoteCommandArg(rootPath);
+  return [
+    {
+      actionId: "start-validation-backed-harness",
+      title: "Start a new hard-problem harness",
+      command:
+        "truth-harness research harness \"State the narrow hard problem or conjecture here\" --domain math --plan-next",
+      reason:
+        "There is no open local queue item. A fresh research harness creates a session, linked validation plan, first checkpoint, and saved run-next handoff.",
+      boundary:
+        "Requires a human or supervising agent to choose a narrow objective before any claim can be validated.",
+      requiresHumanInput: true
+    },
+    {
+      actionId: "refresh-professor-review",
+      title: "Refresh the professor credibility packet",
+      command: `truth-harness workspace credibility-pack ${workspace} --require-all-engines`,
+      reason:
+        "Recomputes the reviewer packet from local artifacts so a professor or agent can see whether new blockers appeared.",
+      boundary:
+        "Reads local evidence and engine-run records; it does not prove new claims or execute Docker by itself.",
+      requiresHumanInput: false
+    },
+    {
+      actionId: "refresh-release-audit",
+      title: "Refresh the strict release audit",
+      command:
+        `truth-harness workspace release-audit ${workspace} ` +
+        "--require-all-engines --require-saved-strict-engine-run --require-sandbox",
+      reason:
+        "Confirms the workspace is still reviewer-clean before starting another autonomous loop.",
+      boundary:
+        "Composes existing local evidence only; Docker reviewer commands remain explicit separate actions.",
+      requiresHumanInput: false
+    }
+  ];
 }
 
 function evidenceRefFromRunNextCommand(command: string | undefined): string | undefined {

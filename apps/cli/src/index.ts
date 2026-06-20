@@ -7606,6 +7606,18 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
     console.log(`  Attached: ${String(plan.execution.attached)}`);
   }
 
+  if (plan.idleNextActions && plan.idleNextActions.length > 0) {
+    console.log("");
+    console.log("Idle next actions:");
+    for (const action of plan.idleNextActions) {
+      console.log(`  ${action.actionId}: ${action.title}`);
+      console.log(`    Command: ${action.command}`);
+      console.log(`    Reason: ${action.reason}`);
+      console.log(`    Boundary: ${action.boundary}`);
+      console.log(`    Requires human input: ${action.requiresHumanInput ? "yes" : "no"}`);
+    }
+  }
+
   console.log("");
   console.log("Stop conditions:");
   for (const condition of plan.stopConditions) {

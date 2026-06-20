@@ -916,6 +916,23 @@ describe("workspace run-next", () => {
       kind: "no-open-item",
       summary: expect.stringContaining("No open workspace review item")
     });
+    expect(plan.idleNextActions).toEqual([
+      expect.objectContaining({
+        actionId: "start-validation-backed-harness",
+        command: expect.stringContaining("truth-harness research harness"),
+        requiresHumanInput: true
+      }),
+      expect.objectContaining({
+        actionId: "refresh-professor-review",
+        command: expect.stringContaining("truth-harness workspace credibility-pack"),
+        requiresHumanInput: false
+      }),
+      expect.objectContaining({
+        actionId: "refresh-release-audit",
+        command: expect.stringContaining("truth-harness workspace release-audit"),
+        requiresHumanInput: false
+      })
+    ]);
   });
 
   it("writes dry-run plans into findings with a local artifact event", async () => {

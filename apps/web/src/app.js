@@ -7539,6 +7539,7 @@ function setWorkspaceRunNextDetails(rows) {
 }
 
 function workspaceRunNextDetailsRows(plan, command) {
+  const idleActions = plan?.idleNextActions?.map((action) => action.title).join(" / ");
   if (plan?.rationale) {
     return [
       ["Target", plan.rationale.target],
@@ -7548,7 +7549,8 @@ function workspaceRunNextDetailsRows(plan, command) {
       ["Execution", plan.execution?.kind ?? "dry-run"],
       ["Boundary", plan.rationale.executionBoundary],
       ["Stop", plan.rationale.firstStopCondition],
-      ["Warning", plan.rationale.firstWarning]
+      ["Warning", plan.rationale.firstWarning],
+      ["Idle actions", idleActions]
     ];
   }
 
@@ -7573,7 +7575,8 @@ function workspaceRunNextDetailsRows(plan, command) {
     ["Execution", execution?.kind ?? "dry-run"],
     ["Boundary", boundary],
     ["Stop", plan?.stopConditions?.[0]],
-    ["Warning", plan?.warnings?.[0]]
+    ["Warning", plan?.warnings?.[0]],
+    ["Idle actions", idleActions]
   ];
 }
 

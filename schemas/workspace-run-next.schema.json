@@ -146,6 +146,39 @@
       },
       "additionalProperties": false
     },
+    "idleNextActions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["actionId", "title", "command", "reason", "boundary", "requiresHumanInput"],
+        "properties": {
+          "actionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "boundary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "requiresHumanInput": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "sourceSnapshot": {
       "type": "object",
       "required": ["snapshotId", "path", "totalFiles", "totalBytes"],

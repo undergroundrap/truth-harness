@@ -2123,6 +2123,45 @@ describe("benchmark CLI", () => {
     expect(human.stdout).toContain("Execution: planned (dry-run)");
   });
 
+  it("prints idle run-next handoff actions when no workspace item is open", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+
+    const json = await runCli(["workspace", "run-next", root, "--json"]);
+    const plan = JSON.parse(json.stdout) as {
+      status: string;
+      execution: { kind: string };
+      idleNextActions?: Array<{ actionId: string; command: string; requiresHumanInput: boolean }>;
+    };
+    const human = await runCli(["workspace", "run-next", root]);
+
+    expect(plan).toMatchObject({
+      status: "blocked",
+      execution: { kind: "no-open-item" },
+      idleNextActions: [
+        expect.objectContaining({
+          actionId: "start-validation-backed-harness",
+          command: expect.stringContaining("truth-harness research harness"),
+          requiresHumanInput: true
+        }),
+        expect.objectContaining({
+          actionId: "refresh-professor-review",
+          command: expect.stringContaining("truth-harness workspace credibility-pack"),
+          requiresHumanInput: false
+        }),
+        expect.objectContaining({
+          actionId: "refresh-release-audit",
+          command: expect.stringContaining("truth-harness workspace release-audit"),
+          requiresHumanInput: false
+        })
+      ]
+    });
+    expect(human.stdout).toContain("Idle next actions:");
+    expect(human.stdout).toContain("start-validation-backed-harness");
+    expect(human.stdout).toContain("refresh-professor-review");
+    expect(human.stdout).toContain("refresh-release-audit");
+  });
+
   it("lists and reads saved report drafts from the workspace CLI", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);
