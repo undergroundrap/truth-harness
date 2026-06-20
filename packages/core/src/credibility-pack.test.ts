@@ -411,6 +411,9 @@ describe("professor credibility pack", () => {
     expect(pack.warnings).not.toContain("Required engine evidence gates are incomplete: 0/4 passed.");
     expect(pack.warnings).not.toContain("Concrete engine smoke gates are incomplete: 0/4 passed.");
     expect(pack.reviewerActionPlan.actions.filter((action) => action.category === "engine")).toEqual([]);
+    expect(pack.markdown).toContain(
+      "Engine evidence: saved Docker professor evidence covers these gates; live host smoke: failed (0/4 concrete gates, 0/4 required gates, 0 evidence records earned)"
+    );
     expect(pack.markdown).toContain("Saved engine-run ledger: 1 saved (latest professor Docker: passed)");
   });
 

@@ -371,8 +371,8 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     "",
     `- Professor ready: ${pack.summary.professorReady ? "yes" : "no"}`,
     `- Workspace validation: ${pack.summary.validationPassed ? "passed" : "failed"} (${pack.summary.validationErrors} errors, ${pack.summary.validationWarnings} warnings)`,
-    `- Engine evidence: ${pack.summary.engineStatus} (${pack.summary.concreteEngineGates} concrete gates, ${pack.summary.requiredEngineGates} required gates, ${pack.summary.engineEvidenceMinted} evidence records earned)`,
-    `- Saved engine-run ledger: ${pack.summary.savedEngineRuns} saved${savedEngineRunLedgerLabel(pack)}`,
+    `- Engine evidence: ${formatCredibilityPackEngineEvidenceSummary(pack)}`,
+    `- Saved engine-run ledger: ${pack.summary.savedEngineRuns} saved${formatCredibilityPackSavedEngineRunLedgerLabel(pack)}`,
     `- Adversarial benchmark: ${formatAdversarialBenchmarkSummary(pack.summary.latestAdversarialBenchmarkStatus, pack.summary.latestAdversarialBenchmarkAccuracy)} (${pack.summary.savedBenchmarkRuns} saved benchmark run${pack.summary.savedBenchmarkRuns === 1 ? "" : "s"})`,
     `- Math credibility ladder: ${formatBenchmarkSummary(pack.summary.latestMathCredibilityLadderStatus, pack.summary.latestMathCredibilityLadderAccuracy)}`,
     `- Saved report drafts: ${formatReportDraftSummary(pack.summary.savedReportDrafts, pack.summary.reportDraftsNeedingAttention)}`,
@@ -1040,7 +1040,20 @@ function reviewerEngineActionCommand(
 
 const PROFESSOR_ENGINE_CAPABILITIES = ["maxima-cas", "z3-smt-solver", "cvc5-smt-solver", "lean-proof-checker"] as const;
 
-function savedEngineRunLedgerLabel(pack: Pick<CredibilityPack, "summary">): string {
+export function formatCredibilityPackEngineEvidenceSummary(pack: Pick<CredibilityPack, "summary">): string {
+  const liveSummary =
+    `${pack.summary.engineStatus} (` +
+    `${pack.summary.concreteEngineGates} concrete gates, ` +
+    `${pack.summary.requiredEngineGates} required gates, ` +
+    `${pack.summary.engineEvidenceMinted} evidence records earned)`;
+  const savedCoverage = savedEngineEvidenceCoverageLabel(pack);
+  if (savedCoverage && pack.summary.engineStatus !== "passed") {
+    return `${savedCoverage}; live host smoke: ${liveSummary}`;
+  }
+  return liveSummary;
+}
+
+export function formatCredibilityPackSavedEngineRunLedgerLabel(pack: Pick<CredibilityPack, "summary">): string {
   const labels: string[] = [];
   if (pack.summary.latestProfessorEngineRunStatus) {
     labels.push(`latest professor Docker: ${pack.summary.latestProfessorEngineRunStatus}`);
@@ -1049,6 +1062,16 @@ function savedEngineRunLedgerLabel(pack: Pick<CredibilityPack, "summary">): stri
     labels.push(`latest strict reviewer: ${pack.summary.latestStrictEngineRunStatus}`);
   }
   return labels.length > 0 ? ` (${labels.join(", ")})` : "";
+}
+
+function savedEngineEvidenceCoverageLabel(pack: Pick<CredibilityPack, "summary">): string | undefined {
+  if (pack.summary.latestStrictEngineRunStatus === "passed") {
+    return "saved strict Docker evidence covers these gates";
+  }
+  if (pack.summary.latestProfessorEngineRunStatus === "passed") {
+    return "saved Docker professor evidence covers these gates";
+  }
+  return undefined;
 }
 
 function concreteEngineCases(report: EngineVerificationReport): EngineVerificationReport["cases"] {

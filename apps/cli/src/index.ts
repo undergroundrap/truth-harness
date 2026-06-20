@@ -134,6 +134,8 @@ import {
   createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
   createWorkspaceGraph,
+  formatCredibilityPackEngineEvidenceSummary,
+  formatCredibilityPackSavedEngineRunLedgerLabel,
   writeVisualArtifact,
   writeReceiptPlotVisualArtifact,
   writeResearchCanvasVisualArtifact,
@@ -7278,13 +7280,9 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
       `(${pack.summary.validationErrors} errors, ${pack.summary.validationWarnings} warnings, ${pack.summary.checkedFiles} files)`
   );
   console.log(
-    `Engines: ${pack.summary.engineStatus} ` +
-      `(${pack.summary.concreteEngineGates} concrete, ${pack.summary.requiredEngineGates} required, ${pack.summary.engineEvidenceMinted} evidence)`
+    `Engines: ${formatCredibilityPackEngineEvidenceSummary(pack)}`
   );
-  console.log(
-    `Saved engine runs: ${pack.summary.savedEngineRuns}` +
-      (pack.summary.latestStrictEngineRunStatus ? ` (latest strict reviewer: ${pack.summary.latestStrictEngineRunStatus})` : "")
-  );
+  console.log(`Saved engine runs: ${pack.summary.savedEngineRuns}${formatCredibilityPackSavedEngineRunLedgerLabel(pack)}`);
   console.log(
     `Adversarial benchmark: ${pack.summary.latestAdversarialBenchmarkStatus}` +
       (pack.summary.latestAdversarialBenchmarkAccuracy === undefined

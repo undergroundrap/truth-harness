@@ -243,6 +243,8 @@ export {
 } from "./credibility-bundle.js";
 export {
   createCredibilityPack,
+  formatCredibilityPackEngineEvidenceSummary,
+  formatCredibilityPackSavedEngineRunLedgerLabel,
   renderCredibilityPackMarkdown,
   writeCredibilityPack
 } from "./credibility-pack.js";
