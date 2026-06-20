@@ -2086,6 +2086,7 @@ research
   .option("--max-branches <count>", "Maximum branches per node", parsePositiveInteger)
   .option("--max-tool-calls <count>", "Maximum tool calls before review", parsePositiveInteger)
   .option("--max-wall-minutes <count>", "Maximum wall minutes before review", parsePositiveInteger)
+  .option("--plan-next", "Also write the first dry-run workspace run-next handoff packet for this harness")
   .option("--json", "Print the full research harness JSON")
   .action(
     async (
@@ -2107,6 +2108,7 @@ research
         maxBranches?: number;
         maxToolCalls?: number;
         maxWallMinutes?: number;
+        planNext?: boolean;
         json?: boolean;
       }
     ) => {
@@ -2129,13 +2131,21 @@ research
         maxToolCalls: options.maxToolCalls,
         maxWallMinutes: options.maxWallMinutes
       });
+      const runNext = options.planNext
+        ? await writeResearchHarnessInitialRunNextPlan({
+            rootPath: options.workspace
+          })
+        : undefined;
 
       if (options.json) {
-        printJson(result);
+        printJson(runNext ? { ...result, runNext } : result);
         return;
       }
 
       printResearchHarnessWrite(result);
+      if (runNext) {
+        printResearchHarnessRunNextPlan(runNext);
+      }
     }
   );
 
@@ -5863,6 +5873,23 @@ async function createRunNextReviewFromOptions(path: string, options: RunNextSour
   throw new Error(`Unsupported run-next source ${JSON.stringify(options.source)}. Use workspace-review or credibility-actions.`);
 }
 
+type WorkspaceRunNextWrite = Awaited<ReturnType<typeof writeWorkspaceRunNextPlan>>;
+
+async function writeResearchHarnessInitialRunNextPlan(input: { rootPath: string }): Promise<WorkspaceRunNextWrite> {
+  const review = await createWorkspaceReview({
+    rootPath: input.rootPath
+  });
+  const plan = await createWorkspaceRunNextPlan({
+    rootPath: input.rootPath,
+    review,
+    executeLocal: false
+  });
+  return writeWorkspaceRunNextPlan({
+    rootPath: input.rootPath,
+    plan
+  });
+}
+
 interface EngineRequirementOptions {
   requireMaxima?: boolean;
   requireZ3?: boolean;
@@ -8488,6 +8515,24 @@ function printResearchHarnessWrite(result: ResearchHarnessWriteResult): void {
     console.log(`Validation Markdown: ${result.validationPlan.markdownPath}`);
     console.log(`Validation readiness: ${result.validationPlan.plan.readiness.status}`);
     console.log(`Open blocking gates: ${result.validationPlan.plan.readiness.blockingGateCount}`);
+  }
+}
+
+function printResearchHarnessRunNextPlan(result: WorkspaceRunNextWrite): void {
+  console.log("");
+  console.log("Initial run-next handoff:");
+  console.log(`  Plan: ${result.plan.planId}`);
+  console.log(`  Status: ${result.plan.status}`);
+  console.log(`  JSON: ${result.jsonPath}`);
+  console.log(`  Markdown: ${result.markdownPath}`);
+
+  if (result.plan.item) {
+    console.log(`  Next action: ${result.plan.item.title}`);
+    if (result.plan.item.command) {
+      console.log(`  Command: ${result.plan.item.command}`);
+    }
+  } else {
+    console.log("  Next action: No actionable workspace item is open.");
   }
 }
 

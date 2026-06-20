@@ -2921,6 +2921,76 @@ describe("benchmark CLI", () => {
     expect(validationList.total).toBe(1);
   });
 
+  it("writes an initial run-next handoff when starting a hard-problem harness", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+
+    const result = await runCli([
+      "research",
+      "harness",
+      "Investigate a reusable exact arithmetic lemma before broadening the simulation claim.",
+      "--workspace",
+      root,
+      "--domain",
+      "math",
+      "--claim",
+      "3 / 4 + 5 / 8",
+      "--validation-claim",
+      "3 / 4 + 5 / 8",
+      "--plan-next",
+      "--json"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      session: { sessionId: string };
+      validationPlan?: {
+        plan: {
+          planId: string;
+          gates: Array<{ gateId: string; kind: string; status: string }>;
+        };
+      };
+      runNext?: {
+        plan: {
+          planId: string;
+          status: string;
+          item?: {
+            kind: string;
+            validationPlanId?: string;
+            validationGateKind?: string;
+            sessionId?: string;
+            command?: string;
+          };
+          sourceSnapshot?: { snapshotId: string };
+        };
+        jsonPath: string;
+        markdownPath: string;
+      };
+    };
+    const listed = JSON.parse((await runCli(["workspace", "run-nexts", root, "--json"])).stdout) as {
+      total: number;
+      plans: Array<{ planId: string }>;
+    };
+
+    expect(result.exitCode).toBe(0);
+    expect(json.validationPlan?.plan.planId).toMatch(/^plan_[a-f0-9]{16}$/u);
+    expect(json.runNext?.plan).toMatchObject({
+      status: "planned",
+      item: {
+        kind: "validation-gate",
+        validationPlanId: json.validationPlan?.plan.planId,
+        validationGateKind: "proof",
+        sessionId: json.session.sessionId,
+        command: expect.stringContaining("truth-harness verify")
+      }
+    });
+    expect(json.runNext?.plan.sourceSnapshot?.snapshotId).toMatch(/^snap_[a-f0-9]{16}$/u);
+    expect(json.runNext?.jsonPath).toContain(".truth-harness");
+    expect(json.runNext?.markdownPath).toContain(".truth-harness");
+    expect(existsSync(json.runNext?.jsonPath ?? "")).toBe(true);
+    expect(existsSync(json.runNext?.markdownPath ?? "")).toBe(true);
+    expect(listed.total).toBe(1);
+    expect(listed.plans[0]?.planId).toBe(json.runNext?.plan.planId);
+  });
+
   it("attaches verifier route evidence to validation gates from the CLI", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);
