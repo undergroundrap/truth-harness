@@ -186,7 +186,7 @@ describe("workspace review", () => {
     expect(review.networkAccess).toBe("none");
     expect(review.summary.routes).toBe(2);
     expect(review.summary.claims).toBe(1);
-    expect(review.summary.routeObligations).toBeGreaterThanOrEqual(3);
+    expect(review.summary.routeObligations).toBe(0);
     expect(review.summary.readyRoutesWithoutClaims).toBe(1);
     expect(review.summary.blockedClaims).toBe(1);
     expect(review.summary.criticalItems).toBe(0);
@@ -203,29 +203,13 @@ describe("workspace review", () => {
     expect(review.autonomy.humanReviewRequiredFor).toEqual(expect.arrayContaining([expect.stringMatching(/^claim-blocker:claim_/u)]));
     expect(review.autonomy.agentPacket).toContain("# Truth Harness Autonomy Contract");
     expect(review.autonomy.agentPacket).toContain("This contract can authorize local work. It cannot certify truth.");
-    const blockedRouteAction = review.items.find(
-      (item) => item.kind === "route-obligation" && item.routeId === blockedRoute.route.routeId
+    expect(review.warnings).toContainEqual(expect.stringContaining("passive route obligations remain on verifier routes"));
+    expect(review.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "route-obligation",
+        routeId: blockedRoute.route.routeId
+      })
     );
-    expect(blockedRouteAction).toMatchObject({
-      kind: "route-obligation",
-      priority: "low",
-      routeId: blockedRoute.route.routeId,
-      acceptanceCriteria: expect.arrayContaining([
-        "Open the source route and satisfy this exact obligation before upgrading trust.",
-        "Run this only inside the local workspace boundary."
-      ]),
-      evidenceSlots: expect.arrayContaining([
-        expect.objectContaining({
-          required: true,
-          status: "open",
-          suggestedCommand: expect.any(String),
-          attachTo: expect.objectContaining({
-            routeId: blockedRoute.route.routeId
-          })
-        })
-      ]),
-      agentPacket: expect.stringContaining("# Truth Harness Workspace Action")
-    });
     expect(review.items).not.toContainEqual(
       expect.objectContaining({
         kind: "route-obligation",
@@ -233,9 +217,6 @@ describe("workspace review", () => {
         priority: "critical"
       })
     );
-    expect(blockedRouteAction?.agentPacket).toContain(`Route: ${blockedRoute.route.routeId}`);
-    expect(blockedRouteAction?.agentPacket).toContain("Evidence slots:");
-    expect(blockedRouteAction?.agentPacket).toContain("This packet is a plan, not evidence.");
     expect(review.items).toContainEqual(
       expect.objectContaining({
         kind: "route-ready-claim",
@@ -427,10 +408,10 @@ describe("workspace review", () => {
     const passiveCommandIndex = routeItems.findIndex((item) => /^truth-harness route show\b/u.test(item.command));
 
     expect(evidenceCommandIndex).toBeGreaterThanOrEqual(0);
-    expect(passiveCommandIndex).toBeGreaterThanOrEqual(0);
-    expect(evidenceCommandIndex).toBeLessThan(passiveCommandIndex);
+    expect(passiveCommandIndex).toBe(-1);
     expect(routeItems[evidenceCommandIndex]?.command).toContain("--write");
     expect(review.autonomy.nextCommand).toBe(routeItems[evidenceCommandIndex]?.command);
+    expect(review.warnings).toContainEqual(expect.stringContaining("1 passive route obligation remains on verifier routes"));
   });
 
   it("derives missing independent SMT commands from sibling route SMT sources", async () => {
@@ -685,10 +666,6 @@ describe("workspace review", () => {
       maxSessions: 0,
       now: "2026-06-13T00:02:00.000Z"
     });
-    const upgradeItems = review.items.filter((item) =>
-      item.kind === "route-obligation" && item.routeId === route.route.routeId
-    );
-
     expect(route.route.finalTrust).toBe("exact-computed");
     expect(review.summary.criticalItems).toBe(0);
     expect(review.items).toContainEqual(
@@ -698,9 +675,13 @@ describe("workspace review", () => {
         priority: "low"
       })
     );
-    expect(upgradeItems.length).toBeGreaterThan(0);
-    expect(upgradeItems.every((item) => item.priority === "medium" || item.priority === "low")).toBe(true);
-    expect(upgradeItems.every((item) => item.priority !== "high" && item.priority !== "critical")).toBe(true);
+    expect(review.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "route-obligation",
+        routeId: route.route.routeId
+      })
+    );
+    expect(review.warnings).toContainEqual(expect.stringContaining("passive route obligations remain on verifier routes"));
   });
 
   it("prioritizes ready claim recording before passive proof inspection placeholders", async () => {
@@ -749,20 +730,19 @@ describe("workspace review", () => {
       maxSessions: 0,
       now: "2026-06-13T00:03:00.000Z"
     });
-    const passiveProofItem = review.items.find(
-      (item) => item.kind === "route-obligation" && item.routeId === blockedRoute.route.routeId
+    expect(review.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "route-obligation",
+        routeId: blockedRoute.route.routeId
+      })
     );
-
-    expect(passiveProofItem).toMatchObject({
-      priority: "low",
-      command: `truth-harness route show ${blockedRoute.route.routeId} --workspace ${root} --json`
-    });
     expect(review.items[0]).toMatchObject({
       kind: "route-ready-claim",
       routeId: readyRoute.route.routeId,
       command: expect.stringContaining("truth-harness claim add")
     });
     expect(review.autonomy.nextCommand).toBe(review.items[0]?.command);
+    expect(review.warnings).toContainEqual(expect.stringContaining("1 passive route obligation remains on verifier routes"));
   });
 
   it("does not treat passive-only inspection blockers as unattended local work", async () => {
@@ -803,13 +783,14 @@ describe("workspace review", () => {
       now: "2026-06-13T00:02:00.000Z"
     });
 
-    expect(review.items.length).toBeGreaterThan(0);
-    expect(review.items.every((item) => item.command.startsWith("truth-harness route show"))).toBe(true);
+    expect(review.items).toEqual([]);
+    expect(review.summary.routeObligations).toBe(0);
     expect(review.autonomy.mode).toBe("idle");
     expect(review.autonomy.canRunUnattended).toBe(false);
     expect(review.autonomy.suggestedBatchSize).toBe(0);
     expect(review.autonomy.nextCommand).toBeUndefined();
     expect(review.autonomy.agentPacket).toContain("No open local work item.");
+    expect(review.warnings).toContainEqual(expect.stringContaining("1 passive route obligation remains on verifier routes"));
   });
 
   it("demotes legacy stronger-claim obligations that were stored as critical", async () => {
@@ -849,18 +830,13 @@ describe("workspace review", () => {
     });
 
     expect(review.summary.criticalItems).toBe(0);
-    const item = review.items.find((candidate) => candidate.kind === "route-obligation");
-    const obligationId = String(stored.proofObligations[0].obligationId);
-    const statement = String(stored.proofObligations[0].statement);
-    expect(item).toMatchObject({
-      kind: "route-obligation",
-      routeId: route.route.routeId,
-      priority: "low",
-      command: `truth-harness route show ${route.route.routeId} --workspace ${root} --json`
-    });
-    expect(item?.command).not.toContain("docs/examples/trivial.lean");
-    expect(item?.command).not.toContain(`--obligation ${obligationId}`);
-    expect(item?.agentPacket).toContain("Accepted proof-check artifact");
+    expect(review.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "route-obligation",
+        routeId: route.route.routeId
+      })
+    );
+    expect(review.warnings).toContainEqual(expect.stringContaining("1 passive route obligation remains on verifier routes"));
   });
 
   it("creates a local verifier autonomy contract for non-high-stakes work", async () => {

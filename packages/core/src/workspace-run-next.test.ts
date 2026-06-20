@@ -902,18 +902,19 @@ describe("workspace run-next", () => {
       now: "2026-06-14T00:03:00.000Z"
     });
 
-    expect(review.items.length).toBeGreaterThan(0);
+    expect(review.items).toEqual([]);
     expect(review.autonomy).toMatchObject({
       mode: "idle",
       canRunUnattended: false,
       nextCommand: undefined
     });
+    expect(review.warnings).toContainEqual(expect.stringContaining("1 passive route obligation remains on verifier routes"));
     expect(plan.status).toBe("blocked");
     expect(plan.item).toBeUndefined();
     expect(plan.execution).toMatchObject({
       status: "blocked",
       kind: "no-open-item",
-      summary: expect.stringContaining("passive inspection blockers")
+      summary: expect.stringContaining("No open workspace review item")
     });
   });
 

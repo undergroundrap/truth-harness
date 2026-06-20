@@ -896,10 +896,10 @@ function reviewQueueCheck(pack: CredibilityPack): ReleaseAuditCheck {
   }
   return passCheck({
     id: "review-queue",
-    title: "Open review queue",
-    summary: "No reviewer queue items are open for the inspected scope.",
+    title: "Actionable review queue",
+    summary: "No actionable reviewer queue items are open for the inspected scope.",
     command: "truth-harness workspace review .",
-    details: ["No critical route, claim, or session blockers were found in this audit scope."]
+    details: ["No executable route, claim, report, or session blockers were found in this audit scope."]
   });
 }
 

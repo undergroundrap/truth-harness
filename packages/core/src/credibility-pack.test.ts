@@ -495,9 +495,7 @@ describe("professor credibility pack", () => {
       title: "SMT encoding obligation"
     });
     expect(workspaceActions[0]?.command).toMatch(/^truth-harness smt check\b.*--write/u);
-    expect(workspaceActions.findIndex((action) => /^truth-harness smt check\b/u.test(action.command))).toBeLessThan(
-      workspaceActions.findIndex((action) => /^truth-harness route show\b/u.test(action.command))
-    );
+    expect(workspaceActions.some((action) => /^truth-harness route show\b/u.test(action.command))).toBe(false);
   });
 
   it("blocks professor readiness when saved report drafts fail integrity checks", async () => {

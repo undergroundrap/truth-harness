@@ -56,7 +56,7 @@ npm run cli -- workspace verify-credibility-bundle . -- .truth-harness/findings/
 - Saved benchmark ledger summary from `.truth-harness/benchmarks`, including the latest `ai-failure-seed` adversarial AI-failure run and latest `math-credibility-ladder` hard-math readiness run, artifact paths, trust accuracy, replay commands, and sample receipt replay commands.
 - Benchmark run and comparison records validate against their schemas before saving, so adversarial demo scores and regression verdicts cannot become citable reviewer evidence if the local ledger shape is malformed.
 - Saved report draft summary from `.truth-harness/findings`, including how many human-facing Markdown drafts exist and whether any need integrity review before sharing.
-- Workspace review queue with top open proof/check obligations. Normal unverified exploration and stronger-label upgrades stay visible as work, but they are not treated as release-critical defects unless they block a current claim boundary.
+- Workspace review queue with top actionable proof/check obligations. Passive route-only placeholders remain on their source verifier routes as overclaim boundaries and are summarized as omitted passive obligations instead of filling the next-action queue.
 - Structured reviewer action plan with priorities, close targets, and commands for validation, engine, benchmark, and workspace-review blockers.
 - Exact reviewer commands for validation, writable engine checks, adversarial benchmarks, the math credibility ladder, review, Docker core engines, the Lean proof fixture, the heavier SageMath fixture, and the strict all-engine Docker gate.
 - A one-command Docker professor evidence route: `npm run docker:professor` builds the pinned Lean proof image, then writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, math credibility ladder evidence, a credibility pack, and a verified portable reviewer bundle from inside the no-network compose service.
@@ -115,7 +115,7 @@ A pack is `ready-for-review` only when:
 - saved report draft Markdown files match the SHA-256 recorded in their JSON sidecars,
 - the workspace review has no critical open items.
 
-Critical review items are reserved for product, evidence, or current-claim blockers. Open research routes that honestly remain `unverified` should appear as high-priority work, while upgrade obligations that would be needed before claiming a stronger label should appear below that. The queue should make the next honest move obvious without making the whole workspace look broken.
+Critical review items are reserved for product, evidence, or current-claim blockers. Open research routes that honestly remain `unverified` should appear as high-priority work when there is an actionable local command, while route-only upgrade placeholders should stay on the verifier route as passive boundaries. The queue should make the next honest move obvious without making the whole workspace look broken.
 
 This status is intentionally conservative. A ready pack does not prove every claim; it only says the workspace is coherent enough for external review.
 

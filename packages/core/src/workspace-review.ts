@@ -189,13 +189,18 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const claimItems = (await Promise.all(
     claims.map((claim) => claimReviewItems(status.root, claim, supersededClaimIds, readyRoutesByStatementKey))
   )).flat();
-  const items = attachAgentPackets(sortReviewItems([
+  const candidateItems = sortReviewItems([
     ...sessions.flatMap((session) => linkedValidationGateItems(status.root, session, validationPlans)),
     ...activeRoutes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef, claimsByStatementKey)),
     ...claimItems,
     ...reportDrafts.flatMap((report) => reportDraftReviewItems(status.root, report)),
     ...sessions.flatMap((session) => sessionReviewItems(status.root, session))
-  ]));
+  ]);
+  const passiveRouteInspectionItems = candidateItems.filter(isPassiveRouteInspectionItem);
+  const passiveRouteInspectionWarning = passiveRouteInspectionItems.length > 0
+    ? `${passiveRouteInspectionItems.length} passive route obligation${passiveRouteInspectionItems.length === 1 ? "" : "s"} ${passiveRouteInspectionItems.length === 1 ? "remains" : "remain"} on verifier routes but were omitted from the executable work queue. Inspect the source routes before upgrading any claim beyond its current trust label.`
+    : undefined;
+  const items = attachAgentPackets(candidateItems.filter((item) => !isPassiveRouteInspectionItem(item)));
   const autonomy = createAutonomyContract(items);
   const reviewWithoutMarkdown = {
     schemaVersion: WORKSPACE_REVIEW_SCHEMA_VERSION,
@@ -216,7 +221,8 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
     items,
     warnings: [
       "Workspace review is a local planning queue. It does not upgrade trust or prove claims by itself.",
-      "Follow item commands only inside the local workspace boundary and keep final claims scoped to attached evidence."
+      "Follow item commands only inside the local workspace boundary and keep final claims scoped to attached evidence.",
+      ...(passiveRouteInspectionWarning ? [passiveRouteInspectionWarning] : [])
     ]
   };
   const reviewId = `wrev_${stableHash(reviewWithoutMarkdown).slice(0, 16)}`;
@@ -1414,6 +1420,10 @@ function createAutonomyContract(items: WorkspaceReviewItem[]): WorkspaceReviewAu
 
 function isAutonomyActionableItem(item: WorkspaceReviewItem): boolean {
   return !isPassiveInspectionCommand(item.command);
+}
+
+function isPassiveRouteInspectionItem(item: WorkspaceReviewItem): boolean {
+  return item.kind === "route-obligation" && isPassiveInspectionCommand(item.command);
 }
 
 function itemRequiresHumanReview(item: WorkspaceReviewItem): boolean {

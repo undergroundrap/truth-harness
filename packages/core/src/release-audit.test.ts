@@ -304,7 +304,7 @@ describe("release audit", () => {
     expect(markdown).toContain("WARN Research session continuity");
   });
 
-  it("treats low-priority passive review items as optional instead of launch warnings", async () => {
+  it("omits passive route-only review placeholders from the actionable launch queue", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Passive Queue Audit", now: "2026-06-17T00:00:00.000Z" });
     const route = await writeVerifierRoute({
@@ -358,14 +358,14 @@ describe("release audit", () => {
     });
 
     expect(audit.status).toBe("ready");
-    expect(audit.summary.reviewItems).toBeGreaterThan(0);
+    expect(audit.summary.reviewItems).toBe(0);
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
         id: "review-queue",
-        title: "Optional review queue",
+        title: "Actionable review queue",
         status: "pass",
         blocking: false,
-        summary: expect.stringContaining("low-priority optional reviewer item(s)")
+        summary: expect.stringContaining("No actionable reviewer queue items")
       })
     );
     expect(audit.nextActions.some((action) => action.startsWith("truth-harness route show"))).toBe(false);
