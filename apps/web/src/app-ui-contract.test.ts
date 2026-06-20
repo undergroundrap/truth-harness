@@ -284,6 +284,9 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function releaseAuditMathLadderCardHtml(audit)");
     expect(source).toContain("function releaseAuditBenchmarkSummary(summary)");
     expect(source).toContain("function releaseAuditMathLadderSummary(summary)");
+    expect(source).toContain("function releaseAuditEngineEvidenceSummary(audit)");
+    expect(source).toContain("Saved no-network Docker engine evidence");
+    expect(source).toContain('["Engines", releaseAuditEngineEvidenceSummary(audit)]');
     expect(source).toContain('data-testid="refresh-release-audit"');
     expect(source).toContain('data-testid="copy-release-audit-command"');
     expect(source).toContain('data-testid="copy-release-benchmark-command"');

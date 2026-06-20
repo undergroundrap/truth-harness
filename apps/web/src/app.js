@@ -9749,7 +9749,7 @@ function renderReleaseAuditGate() {
   const rows = audit
     ? [
         ["Checks", `${summary.passedChecks ?? 0} pass / ${summary.warningChecks ?? 0} warn / ${summary.failedChecks ?? 0} fail`],
-        ["Engines", `${summary.requiredEngineGates ?? "0/5"} required / ${summary.concreteEngineGates ?? "0/5"} concrete`],
+        ["Engines", releaseAuditEngineEvidenceSummary(audit)],
         ["Adversarial benchmark", releaseAuditBenchmarkSummary(summary)],
         ["Math ladder", releaseAuditMathLadderSummary(summary)],
         ["Report drafts", `${summary.reportDrafts ?? 0} saved / ${summary.reportDraftsNeedingAttention ?? 0} attention`],
@@ -10012,6 +10012,25 @@ function releaseAuditCheckCardHtml(check) {
       ${details ? `<ul>${details}</ul>` : ""}
     </details>` : ""}
   </section>`;
+}
+
+function releaseAuditEngineEvidenceSummary(audit) {
+  const summary = audit?.summary ?? {};
+  const concreteGates = summary.concreteEngineGates ?? "0/5";
+  const requiredGates = summary.requiredEngineGates ?? "0/5";
+  const engineCheck = Array.isArray(audit?.checks)
+    ? audit.checks.find((check) => check.id === "engine-evidence")
+    : undefined;
+  const checkSummary = typeof engineCheck?.summary === "string" ? engineCheck.summary : "";
+
+  if (
+    engineCheck?.status === "pass" &&
+    checkSummary.includes("Saved no-network Docker engine evidence")
+  ) {
+    return `${checkSummary} (live host: ${concreteGates} concrete, ${requiredGates} required)`;
+  }
+
+  return `${requiredGates} required / ${concreteGates} concrete`;
 }
 
 function releaseAuditActivitySummary(audit) {
