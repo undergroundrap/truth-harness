@@ -215,7 +215,8 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function credibilityPackSavedEngineCoverageLabel(summary = {})");
     expect(source).toContain("function credibilityPackEngineGatePassed(value, summary = {})");
     expect(source).toContain("function credibilityPackEngineGateDetail(summary = {}, kind)");
-    expect(source).toContain("live host smoke remains");
+    expect(source).toContain("current web container probe is informational");
+    expect(source).toContain("current web container probe is non-blocking");
     expect(source).toContain("saved strict Docker evidence covers these gates");
     expect(source).toContain("saved Docker professor evidence covers these gates");
     expect(source).toContain("pack?.engineEvidenceLadder");
@@ -513,7 +514,7 @@ describe("web UI action contracts", () => {
     const graphEdgeCodeStyles = styles.match(/\.graph-edge-list code \{[\s\S]*?\r?\n\}/u)?.[0];
     const runbookPacketStyles = styles.match(/#runbook-packet \{[\s\S]*?\r?\n\}/u)?.[0];
 
-    expect(html).toContain('src="./src/app.js?v=2026-06-19-reviewer-evidence-sync"');
+    expect(html).toContain('src="./src/app.js?v=2026-06-19-reviewer-probe-wording"');
     expect(html).toContain('href="./src/styles.css?v=2026-06-19-layout-audit-pass"');
     expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
     expect(html).toContain('aria-hidden="true"');

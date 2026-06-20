@@ -13039,7 +13039,7 @@ function credibilityPackEngineGatePassed(value, summary = {}) {
 function credibilityPackEngineGateDetail(summary = {}, kind) {
   const savedCoverage = credibilityPackSavedEngineCoverageLabel(summary);
   if (savedCoverage) {
-    return `${savedCoverage}; live host smoke remains ${summary.engineStatus ?? "unknown"} (${summary.concreteEngineGates ?? "0/0"} concrete, ${summary.requiredEngineGates ?? "0/0"} required).`;
+    return `${savedCoverage}; current web container probe is informational: status ${summary.engineStatus ?? "unknown"} (${summary.concreteEngineGates ?? "0/0"} concrete, ${summary.requiredEngineGates ?? "0/0"} required).`;
   }
   if (kind === "required") {
     return `${summary.requiredEngineGates ?? "0/0"} required reviewer gates are satisfied.`;
@@ -13382,7 +13382,7 @@ function credibilityPackEngineEvidenceSummaryFromSummary(summary = {}) {
   const savedCoverage = credibilityPackSavedEngineCoverageLabel(summary);
 
   if (savedCoverage && engineStatus !== "passed") {
-    return `${savedCoverage}; live host smoke: ${liveSummary}`;
+    return `${savedCoverage}; current web container probe is non-blocking: ${liveSummary}`;
   }
 
   return liveSummary;
