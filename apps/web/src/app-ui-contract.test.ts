@@ -514,7 +514,7 @@ describe("web UI action contracts", () => {
     const graphEdgeCodeStyles = styles.match(/\.graph-edge-list code \{[\s\S]*?\r?\n\}/u)?.[0];
     const runbookPacketStyles = styles.match(/#runbook-packet \{[\s\S]*?\r?\n\}/u)?.[0];
 
-    expect(html).toContain('src="./src/app.js?v=2026-06-19-research-harness-web"');
+    expect(html).toContain('src="./src/app.js?v=2026-06-19-saved-handoffs"');
     expect(html).toContain('href="./src/styles.css?v=2026-06-19-layout-audit-pass"');
     expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
     expect(html).toContain('aria-hidden="true"');
@@ -583,9 +583,19 @@ describe("web UI action contracts", () => {
     expect(html).toContain('id="start-research-harness"');
     expect(html).toContain('id="refresh-run-next"');
     expect(html).toContain('id="copy-run-next-command"');
+    expect(html).toContain('id="workspace-run-next-history"');
+    expect(html).toContain('id="workspace-run-next-list"');
+    expect(html).toContain('id="workspace-run-next-inspection"');
+    expect(html).toContain('id="refresh-run-nexts"');
+    expect(html).toContain('id="verify-run-nexts"');
     expect(source).toContain('fetch("/api/workspace-run-next"');
     expect(source).toContain('fetch("/api/research-harness"');
+    expect(source).toContain('fetch(`/api/workspace-run-nexts?${params.toString()}`');
+    expect(source).toContain('fetch(`/api/workspace-run-nexts/${encodeURIComponent(ref)}?verifySnapshot=true`');
     expect(source).toContain("function startResearchHarnessFromUi()");
+    expect(source).toContain("function refreshWorkspaceRunNextHandoffs({ announce = true, verifySnapshots = false } = {})");
+    expect(source).toContain("function openWorkspaceRunNextHandoff(planRef)");
+    expect(source).toContain("function renderWorkspaceRunNextHandoffs()");
     expect(source).toContain("planNext: true");
     expect(source).toContain("function refreshWorkspaceRunNext({ announce = true } = {})");
     expect(source).toContain("function renderWorkspaceRunNext()");
@@ -593,9 +603,13 @@ describe("web UI action contracts", () => {
     expect(source).toContain("plan?.rationale");
     expect(source).toContain("evidenceRefFromCommand(command)");
     expect(source).toContain("copyWorkspaceRunNextCommand");
+    expect(source).toContain("copyWorkspaceRunNextHandoffCommand");
     expect(source).not.toContain("workspace-run-next?executeLocal=true");
     expect(styles).toContain(".workspace-run-next-card");
     expect(styles).toContain(".workspace-run-next-details");
+    expect(styles).toContain(".workspace-run-next-history");
+    expect(styles).toContain(".workspace-run-next-row");
+    expect(styles).toContain(".workspace-run-next-opened");
     expect(styles).toContain("overflow-wrap: anywhere;");
   });
 

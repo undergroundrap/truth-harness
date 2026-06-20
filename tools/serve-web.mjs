@@ -224,6 +224,8 @@ async function handleApiRequest(request, response, requestUrl) {
         "workspace-review-queue",
         "workspace-run-next-dry-run",
         "workspace-run-next-save",
+        "workspace-run-next-list",
+        "workspace-run-next-show",
         "release-audit",
         "docker-verifier-guidance",
         "sandbox-status",
@@ -963,6 +965,60 @@ async function handleApiRequest(request, response, requestUrl) {
         response,
         error instanceof HttpError ? error.status : 400,
         error instanceof Error ? error.message : "Workspace run-next plan could not be saved.",
+        request
+      );
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/workspace-run-nexts" && request.method === "GET") {
+    try {
+      const { listWorkspaceRunNextPlans } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const verifySnapshots = isTruthyQueryParam(requestUrl.searchParams.get("verifySnapshots"));
+      const limit = boundedInteger(requestUrl.searchParams.get("limit"), 8, 1, 50);
+      const plans = await listWorkspaceRunNextPlans(projectRoot, {
+        verifySnapshots
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-run-next-list-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        verifySnapshots,
+        total: plans.length,
+        plans: plans.slice(0, limit)
+      });
+    } catch (error) {
+      writeApiError(
+        response,
+        error instanceof HttpError ? error.status : 409,
+        error instanceof Error ? error.message : "Workspace run-next plans could not be listed.",
+        request
+      );
+    }
+    return;
+  }
+
+  const runNextPlanMatch = requestUrl.pathname.match(/^\/api\/workspace-run-nexts\/([^/]+)$/u);
+  if (runNextPlanMatch && request.method === "GET") {
+    try {
+      const { inspectWorkspaceRunNextPlan } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const planRef = decodeURIComponent(runNextPlanMatch[1] ?? "");
+      const verifySnapshot = isTruthyQueryParam(requestUrl.searchParams.get("verifySnapshot"));
+      const result = await inspectWorkspaceRunNextPlan(projectRoot, planRef, { verifySnapshot });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-run-next-show-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        verifySnapshot,
+        inspection: result
+      });
+    } catch (error) {
+      writeApiError(
+        response,
+        error instanceof HttpError ? error.status : 404,
+        error instanceof Error ? error.message : "Workspace run-next plan could not be opened.",
         request
       );
     }

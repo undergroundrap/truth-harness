@@ -69,6 +69,8 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("workspace-events");
     expect(statusPayload.capabilities).toContain("workspace-run-next-dry-run");
     expect(statusPayload.capabilities).toContain("workspace-run-next-save");
+    expect(statusPayload.capabilities).toContain("workspace-run-next-list");
+    expect(statusPayload.capabilities).toContain("workspace-run-next-show");
     expect(statusPayload.capabilities).toContain("workspace-maintenance");
     expect(statusPayload.capabilities).toContain("engine-evidence-verification");
     expect(statusPayload.capabilities).toContain("engine-readiness-report");
@@ -930,6 +932,57 @@ describe("local web route ledger API", () => {
         actor: "local-api",
         action: "wrote-workspace-run-next-plan"
       })
+    );
+
+    const runNextListResponse = await fetch(`${baseUrl}/api/workspace-run-nexts?limit=5`);
+    expect(runNextListResponse.status).toBe(200);
+    const runNextListPayload = await runNextListResponse.json();
+    expectLocalApiSuccess(runNextListResponse, runNextListPayload);
+    expect(runNextListPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-run-next-list-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      verifySnapshots: false
+    });
+    expect(runNextListPayload.total).toBeGreaterThanOrEqual(1);
+    expect(runNextListPayload.plans).toContainEqual(
+      expect.objectContaining({
+        planId: credibilityRunNextWritePayload.plan.planId,
+        localOnly: true,
+        networkAccess: "none",
+        resumeDecision: expect.objectContaining({
+          action: expect.any(String),
+          nextCommand: expect.stringContaining("truth-harness")
+        })
+      })
+    );
+
+    const runNextShowResponse = await fetch(
+      `${baseUrl}/api/workspace-run-nexts/${credibilityRunNextWritePayload.plan.planId}?verifySnapshot=true`
+    );
+    expect(runNextShowResponse.status).toBe(200);
+    const runNextShowPayload = await runNextShowResponse.json();
+    expectLocalApiSuccess(runNextShowResponse, runNextShowPayload);
+    expect(runNextShowPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-run-next-show-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      verifySnapshot: true,
+      inspection: {
+        schemaVersion: "truth-harness.workspace-run-next-inspection.v0",
+        plan: {
+          planId: credibilityRunNextWritePayload.plan.planId,
+          localOnly: true,
+          networkAccess: "none"
+        },
+        resumeDecision: expect.objectContaining({
+          safeToResume: expect.any(Boolean),
+          nextCommand: expect.stringContaining("truth-harness")
+        })
+      }
+    });
+    expect(["verified", "drifted", "missing", "not-recorded"]).toContain(
+      runNextShowPayload.inspection.sourceSnapshot?.sourceSnapshotStatus
     );
 
     const graphResponse = await fetch(`${baseUrl}/api/workspace-graph`);

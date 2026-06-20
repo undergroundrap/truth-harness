@@ -408,6 +408,20 @@
                       <button class="text-button compact-button" id="copy-run-next-command" type="button">Copy command</button>
                     </div>
                   </section>
+                  <section class="workspace-run-next-history" id="workspace-run-next-history" aria-label="Saved workspace run-next handoffs">
+                    <div class="workspace-run-next-history-head">
+                      <div>
+                        <span class="mini-label">Saved handoffs</span>
+                        <strong id="workspace-run-next-history-title">Loading saved intent packets.</strong>
+                      </div>
+                      <div class="workspace-run-next-actions">
+                        <button class="text-button compact-button" id="refresh-run-nexts" type="button">Refresh saved</button>
+                        <button class="text-button compact-button" id="verify-run-nexts" type="button">Verify drift</button>
+                      </div>
+                    </div>
+                    <div class="workspace-run-next-list" id="workspace-run-next-list"></div>
+                    <section class="workspace-run-next-inspection" id="workspace-run-next-inspection" aria-label="Opened run-next handoff"></section>
+                  </section>
                   <div class="runbook-grid" aria-label="Lane work plan">
                     <section class="runbook-card runbook-card-wide">
                       <h4>Workflow</h4>
@@ -890,6 +904,6 @@
       </main>
     </div>
     <pre id="truth-harness-ui-audit-result" hidden aria-hidden="true"></pre>
-    <script src="./src/app.js?v=2026-06-19-research-harness-web" type="module"></script>
+    <script src="./src/app.js?v=2026-06-19-saved-handoffs" type="module"></script>
   </body>
 </html>

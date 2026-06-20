@@ -3729,6 +3729,145 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   justify-content: flex-end;
 }
 
+.workspace-run-next-history {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--line-soft);
+  background: #10100f;
+  padding: 14px 18px 16px;
+}
+
+.workspace-run-next-history-head,
+.workspace-run-next-opened-head,
+.workspace-run-next-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workspace-run-next-history-head strong,
+.workspace-run-next-opened-head strong,
+.workspace-run-next-row-head strong {
+  color: #efe8da;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.workspace-run-next-list {
+  display: grid;
+  gap: 8px;
+}
+
+.workspace-run-next-row,
+.workspace-run-next-opened,
+.workspace-run-next-empty {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0c0c0c;
+}
+
+.workspace-run-next-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 10px;
+  align-items: start;
+  padding: 11px 12px;
+}
+
+.workspace-run-next-row-main {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.workspace-run-next-row p,
+.workspace-run-next-opened p {
+  margin: 0;
+  color: #c9c1b6;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.workspace-run-next-row code,
+.workspace-run-next-opened code {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #080808;
+  color: #eadfca;
+  padding: 7px 8px;
+  font: 11px/1.35 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.workspace-run-next-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.workspace-run-next-mini-details {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+
+.workspace-run-next-mini-details div {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #11100e;
+  padding: 6px 7px;
+}
+
+.workspace-run-next-mini-details dt {
+  margin: 0 0 2px;
+  color: #9d968b;
+  font-size: 10px;
+}
+
+.workspace-run-next-mini-details dd {
+  margin: 0;
+  color: #efe7d8;
+  font-size: 11px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.workspace-run-next-opened {
+  display: grid;
+  gap: 9px;
+  border-color: rgba(122, 214, 170, 0.42);
+  background: #0d1510;
+  padding: 12px;
+}
+
+.workspace-run-next-details.compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.workspace-run-next-empty {
+  padding: 11px 12px;
+  color: #bdb4a7;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.workspace-run-next-empty.refuted {
+  border-color: rgba(255, 136, 128, 0.45);
+  color: #f0b1ac;
+}
+
 .runbook-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3830,12 +3969,22 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   .runbook-hero,
   .runbook-next,
   .workspace-run-next-card,
+  .workspace-run-next-row,
   .runbook-utility-row {
     grid-template-columns: 1fr;
   }
 
-  .workspace-run-next-details {
+  .workspace-run-next-details,
+  .workspace-run-next-mini-details,
+  .workspace-run-next-details.compact {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspace-run-next-history-head,
+  .workspace-run-next-opened-head,
+  .workspace-run-next-row-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .runbook-facts {

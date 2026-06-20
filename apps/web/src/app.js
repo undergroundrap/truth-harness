@@ -212,6 +212,11 @@ let workspaceReview = {
 };
 let workspaceRunNextPlan;
 let workspaceRunNextError;
+let workspaceRunNextSummaries = [];
+let workspaceRunNextSummariesError;
+let workspaceRunNextSummariesVerified = false;
+let workspaceRunNextOpenedInspection;
+let workspaceRunNextOpenedError;
 let claimLedgerGraph = {
   schemaVersion: "truth-harness.claim-graph.v0",
   nodes: [],
@@ -470,6 +475,11 @@ const workspaceRunNextDetails = document.querySelector("#workspace-run-next-deta
 const startResearchHarnessButton = document.querySelector("#start-research-harness");
 const refreshRunNextButton = document.querySelector("#refresh-run-next");
 const copyRunNextCommandButton = document.querySelector("#copy-run-next-command");
+const workspaceRunNextHistoryTitle = document.querySelector("#workspace-run-next-history-title");
+const workspaceRunNextList = document.querySelector("#workspace-run-next-list");
+const workspaceRunNextInspection = document.querySelector("#workspace-run-next-inspection");
+const refreshRunNextsButton = document.querySelector("#refresh-run-nexts");
+const verifyRunNextsButton = document.querySelector("#verify-run-nexts");
 const researchNotes = document.querySelector("#research-notes");
 const notesStatus = document.querySelector("#notes-status");
 const credibilityPackPanel = document.querySelector("#credibility-pack-panel");
@@ -1169,6 +1179,7 @@ void refreshResearchMap();
 void refreshVisualArtifacts();
 void refreshWorkspaceReview();
 void refreshWorkspaceRunNext({ announce: false });
+void refreshWorkspaceRunNextHandoffs({ announce: false });
 void refreshWorkspaceGraph();
 void refreshCasChecks();
 void refreshSmtChecks();
@@ -1248,6 +1259,7 @@ function render() {
   renderAgentRoutes(receipt);
   renderRunbook(receipt);
   renderWorkspaceRunNext();
+  renderWorkspaceRunNextHandoffs();
   renderVerificationMatrix(receipt);
   renderReleaseAuditGate();
   renderCapabilityLedger();
@@ -5768,6 +5780,75 @@ async function refreshWorkspaceRunNext({ announce = true } = {}) {
   }
 }
 
+async function refreshWorkspaceRunNextHandoffs({ announce = true, verifySnapshots = false } = {}) {
+  if (!workspaceRunNextList) {
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      limit: "8"
+    });
+    if (verifySnapshots) {
+      params.set("verifySnapshots", "true");
+    }
+    const response = await fetch(`/api/workspace-run-nexts?${params.toString()}`, {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local saved run-next API failed.");
+    workspaceRunNextSummaries = Array.isArray(payload.plans) ? payload.plans : [];
+    workspaceRunNextSummariesVerified = Boolean(payload.verifySnapshots);
+    workspaceRunNextSummariesError = undefined;
+    if (announce) {
+      addActivity(
+        "local-api",
+        verifySnapshots ? "Verified saved handoffs" : "Loaded saved handoffs",
+        localApiSuccessMessage(payload, `${workspaceRunNextSummaries.length} saved run-next intent packet${workspaceRunNextSummaries.length === 1 ? "" : "s"} loaded.`),
+        "passed"
+      );
+    }
+    renderWorkspaceRunNextHandoffs();
+  } catch (error) {
+    workspaceRunNextSummaries = [];
+    workspaceRunNextSummariesVerified = false;
+    workspaceRunNextSummariesError = error instanceof Error ? error.message : "Unknown saved run-next failure.";
+    renderWorkspaceRunNextHandoffs();
+    addActivity("local-api", "Saved handoffs unavailable", workspaceRunNextSummariesError, "waiting");
+  }
+}
+
+async function openWorkspaceRunNextHandoff(planRef) {
+  const ref = String(planRef ?? "").trim();
+  if (!ref) {
+    return;
+  }
+
+  workspaceRunNextOpenedError = undefined;
+  addActivity("web-ui", "Opening saved handoff", `GET /api/workspace-run-nexts/${ref}?verifySnapshot=true`, "waiting");
+  try {
+    const response = await fetch(`/api/workspace-run-nexts/${encodeURIComponent(ref)}?verifySnapshot=true`, {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local saved run-next inspection failed.");
+    workspaceRunNextOpenedInspection = payload.inspection;
+    workspaceRunNextPlan = payload.inspection?.plan ?? workspaceRunNextPlan;
+    workspaceRunNextError = undefined;
+    addActivity(
+      "local-api",
+      "Opened saved handoff",
+      localApiSuccessMessage(payload, workspaceRunNextOpenedInspection?.resumeDecision?.reason ?? `${ref} opened with snapshot drift status.`),
+      workspaceRunNextOpenedInspection?.resumeDecision?.safeToResume ? "passed" : "waiting"
+    );
+    render();
+  } catch (error) {
+    workspaceRunNextOpenedError = error instanceof Error ? error.message : "Unknown saved run-next inspection failure.";
+    renderWorkspaceRunNextHandoffs();
+    addActivity("local-api", "Open handoff failed", workspaceRunNextOpenedError, "refuted");
+  }
+}
+
 async function startResearchHarnessFromUi() {
   const currentReceipt = receiptStore.get(state.receiptKey);
   const objective = promptInput?.value?.trim() || currentReceipt?.title?.trim();
@@ -5820,6 +5901,7 @@ async function startResearchHarnessFromUi() {
     await refreshResearchSessions({ announce: false });
     await refreshWorkspaceReview({ announce: false });
     await refreshWorkspaceRunNext({ announce: false });
+    await refreshWorkspaceRunNextHandoffs({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
     await refreshWorkspaceReadiness({ announce: false });
     await refreshWorkspaceEvents({ announce: false });
@@ -7493,6 +7575,122 @@ function workspaceRunNextDetailsRows(plan, command) {
     ["Stop", plan?.stopConditions?.[0]],
     ["Warning", plan?.warnings?.[0]]
   ];
+}
+
+function renderWorkspaceRunNextHandoffs() {
+  if (!workspaceRunNextHistoryTitle || !workspaceRunNextList || !workspaceRunNextInspection) {
+    return;
+  }
+
+  if (workspaceRunNextSummariesError) {
+    workspaceRunNextHistoryTitle.textContent = "Saved handoffs unavailable.";
+    workspaceRunNextList.innerHTML = `<div class="workspace-run-next-empty">${escapeHtml(workspaceRunNextSummariesError)}</div>`;
+    workspaceRunNextInspection.innerHTML = "";
+    return;
+  }
+
+  const count = workspaceRunNextSummaries.length;
+  workspaceRunNextHistoryTitle.textContent = count === 0
+    ? "No saved handoff packets yet."
+    : `${count} saved handoff${count === 1 ? "" : "s"}${workspaceRunNextSummariesVerified ? " with drift checked" : ""}.`;
+
+  if (count === 0) {
+    workspaceRunNextList.innerHTML = `<div class="workspace-run-next-empty">Use Start harness, Save plan in the Report tab, or CLI/MCP write mode to create resumable local intent packets.</div>`;
+    workspaceRunNextInspection.innerHTML = "";
+    return;
+  }
+
+  workspaceRunNextList.innerHTML = workspaceRunNextSummaries
+    .map((summary) => renderWorkspaceRunNextSummary(summary))
+    .join("");
+
+  workspaceRunNextInspection.innerHTML = workspaceRunNextOpenedError
+    ? `<div class="workspace-run-next-empty refuted">${escapeHtml(workspaceRunNextOpenedError)}</div>`
+    : renderWorkspaceRunNextInspection(workspaceRunNextOpenedInspection);
+}
+
+function renderWorkspaceRunNextSummary(summary) {
+  const command = summary.resumeDecision?.nextCommand ?? `truth-harness workspace show-run-next ${summary.planId} --json`;
+  const status = summary.resumeDecision?.status ?? "verify-snapshot-first";
+  const snapshot = summary.sourceSnapshotStatus ?? (summary.sourceSnapshotId ? "not checked" : "not recorded");
+  const itemTitle = summary.itemTitle ?? "No open work item.";
+  return `<article class="workspace-run-next-row" data-plan-id="${escapeHtml(summary.planId)}">
+    <div class="workspace-run-next-row-main">
+      <div class="workspace-run-next-row-head">
+        <span class="status-pill ${workspaceRunNextResumeTrust(summary.resumeDecision)}">${escapeHtml(workspaceRunNextResumeLabel(status))}</span>
+        <strong>${escapeHtml(itemTitle)}</strong>
+      </div>
+      <p>${escapeHtml(summary.rationaleTarget ?? summary.rationaleSource ?? summary.executionKind ?? "saved workspace handoff")}</p>
+      <code>${escapeHtml(command)}</code>
+      <dl class="workspace-run-next-mini-details">
+        <div><dt>Plan</dt><dd>${escapeHtml(summary.planId)}</dd></div>
+        <div><dt>Saved</dt><dd>${escapeHtml(formatActivityTime(summary.createdAt))}</dd></div>
+        <div><dt>Snapshot</dt><dd>${escapeHtml(snapshot)}</dd></div>
+        <div><dt>Source</dt><dd>${escapeHtml(summary.rationaleSource ?? summary.itemKind ?? "workspace-review")}</dd></div>
+      </dl>
+    </div>
+    <div class="workspace-run-next-row-actions">
+      <button class="text-button compact-button open-run-next-handoff" data-plan-id="${escapeHtml(summary.planId)}" type="button">Open</button>
+      <button class="text-button compact-button copy-run-next-handoff-command" data-command="${escapeHtml(command)}" type="button">Copy</button>
+    </div>
+  </article>`;
+}
+
+function renderWorkspaceRunNextInspection(inspection) {
+  if (!inspection?.plan) {
+    return "";
+  }
+
+  const decision = inspection.resumeDecision;
+  const plan = inspection.plan;
+  const command = decision?.nextCommand ?? plan.item?.command ?? plan.execution?.command ?? `truth-harness workspace show-run-next ${plan.planId} --json`;
+  const sourceSnapshot = inspection.sourceSnapshot;
+  const snapshotSummary = sourceSnapshot
+    ? sourceSnapshot.sourceSnapshotDriftSummary ?? sourceSnapshot.sourceSnapshotStatus
+    : "snapshot not verified in this view";
+  return `<div class="workspace-run-next-opened">
+    <div class="workspace-run-next-opened-head">
+      <div>
+        <span class="mini-label">Opened handoff</span>
+        <strong>${escapeHtml(plan.item?.title ?? plan.planId)}</strong>
+      </div>
+      <span class="status-pill ${workspaceRunNextResumeTrust(decision)}">${escapeHtml(workspaceRunNextResumeLabel(decision?.status))}</span>
+    </div>
+    <p>${escapeHtml(decision?.reason ?? "Inspect the saved plan before resuming work.")}</p>
+    <code>${escapeHtml(command)}</code>
+    <dl class="workspace-run-next-details compact">
+      <div><dt>Plan</dt><dd>${escapeHtml(plan.planId)}</dd></div>
+      <div><dt>Path</dt><dd>${escapeHtml(inspection.path ?? plan.sourceSnapshot?.path ?? "not recorded")}</dd></div>
+      <div><dt>Snapshot</dt><dd>${escapeHtml(snapshotSummary)}</dd></div>
+      <div><dt>Boundary</dt><dd>${escapeHtml(plan.rationale?.executionBoundary ?? "Browser inspection only.")}</dd></div>
+    </dl>
+    <div class="workspace-run-next-actions">
+      <button class="text-button compact-button copy-run-next-handoff-command" data-command="${escapeHtml(command)}" type="button">Copy resume command</button>
+    </div>
+  </div>`;
+}
+
+function workspaceRunNextResumeLabel(status) {
+  if (status === "safe-to-resume") {
+    return "safe to resume";
+  }
+  if (status === "rerun-run-next") {
+    return "rerun needed";
+  }
+  if (status === "verify-snapshot-first") {
+    return "verify first";
+  }
+  return status ?? "inspect";
+}
+
+function workspaceRunNextResumeTrust(decision) {
+  if (decision?.safeToResume) {
+    return "exact";
+  }
+  if (decision?.action === "rerun-workspace-run-next") {
+    return "refuted";
+  }
+  return "waiting";
 }
 
 function evidenceRefFromCommand(command) {
@@ -11985,6 +12183,24 @@ async function copyWorkspaceRunNextCommand() {
   });
 }
 
+async function copyWorkspaceRunNextHandoffCommand(command, button) {
+  const text = String(command ?? "").trim();
+  if (!text) {
+    return;
+  }
+
+  await copyOrDownloadText({
+    text: `${text}\n`,
+    filename: `truth-harness-saved-handoff-${safeFilenameTimestamp()}.txt`,
+    type: "text/plain",
+    button,
+    copiedTitle: "Copied handoff command",
+    copiedDetail: "Saved run-next resume/recovery command copied for an agent.",
+    fallbackTitle: "Downloaded handoff command",
+    fallbackDetail: "Saved run-next command was saved as plain text instead."
+  });
+}
+
 function downloadActivityLog() {
   const payload = {
     schemaVersion: "truth-harness.web-activity-export.v0",
@@ -15400,6 +15616,34 @@ copyRunNextCommandButton?.addEventListener("click", () => {
   copyWorkspaceRunNextCommand().catch((error) => {
     addActivity("web-ui", "Copy next action failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
   });
+});
+
+refreshRunNextsButton?.addEventListener("click", () => {
+  void refreshWorkspaceRunNextHandoffs({ announce: true });
+});
+
+verifyRunNextsButton?.addEventListener("click", () => {
+  void refreshWorkspaceRunNextHandoffs({ announce: true, verifySnapshots: true });
+});
+
+workspaceRunNextList?.addEventListener("click", (event) => {
+  const openButton = event.target.closest(".open-run-next-handoff");
+  if (openButton?.dataset.planId) {
+    void openWorkspaceRunNextHandoff(openButton.dataset.planId);
+    return;
+  }
+
+  const copyButton = event.target.closest(".copy-run-next-handoff-command");
+  if (copyButton?.dataset.command) {
+    void copyWorkspaceRunNextHandoffCommand(copyButton.dataset.command, copyButton);
+  }
+});
+
+workspaceRunNextInspection?.addEventListener("click", (event) => {
+  const copyButton = event.target.closest(".copy-run-next-handoff-command");
+  if (copyButton?.dataset.command) {
+    void copyWorkspaceRunNextHandoffCommand(copyButton.dataset.command, copyButton);
+  }
 });
 
 downloadActivityButton.addEventListener("click", downloadActivityLog);
