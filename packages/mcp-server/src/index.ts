@@ -27,6 +27,7 @@ import {
   handleTruthHarnessDiscoveryPackage,
   handleTruthHarnessEngineReadiness,
   handleTruthHarnessEngineManifest,
+  handleTruthHarnessEnginePlan,
   handleTruthHarnessEvidenceAudit,
   handleTruthHarnessEvidenceAuditList,
   handleTruthHarnessExpertReviewList,
@@ -748,6 +749,53 @@ export function createTruthHarnessMcpServer(): McpServer {
       }
     },
     async (input) => toolJson(handleTruthHarnessEngineManifest(input))
+  );
+
+  server.registerTool(
+    "truth_harness_engine_plan",
+    {
+      title: "Plan Engine Route",
+      description:
+        "Plan the local verifier stack for a problem without running engines or minting evidence. Returns classifications, recommended first command, engine comparison rows, open gates, and trust boundaries for agents.",
+      inputSchema: {
+        problem: z
+          .string()
+          .min(1)
+          .describe("Problem, claim, or research subclaim to classify and route through Truth Harness engines."),
+        maximaCommand: z
+          .string()
+          .optional()
+          .describe("Maxima executable path or command for this planning probe."),
+        sageCommand: z
+          .string()
+          .optional()
+          .describe("SageMath executable path or command for this planning probe."),
+        leanCommand: z
+          .string()
+          .optional()
+          .describe("Lean executable path or command for this planning probe."),
+        z3Command: z
+          .string()
+          .optional()
+          .describe("Z3 executable path or command for this planning probe."),
+        cvc5Command: z
+          .string()
+          .optional()
+          .describe("cvc5 executable path or command for this planning probe."),
+        timeoutMs: z
+          .number()
+          .int()
+          .positive()
+          .max(10000)
+          .optional()
+          .describe("Local backend version-probe timeout in milliseconds. Defaults to 1500.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(handleTruthHarnessEnginePlan(input))
   );
 
   server.registerTool(

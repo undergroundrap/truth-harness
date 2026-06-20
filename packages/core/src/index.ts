@@ -288,6 +288,10 @@ export { renderGraphvizVisualArtifact, renderPlotlyVisualArtifact } from "./visu
 export { runWorkspaceStress } from "./workspace-stress.js";
 export { getEngineManifest } from "./engine-manifest.js";
 export {
+  createEnginePlan,
+  classifyProblem
+} from "./engine-plan.js";
+export {
   createEngineReadinessReport,
   createEngineReadinessReportFromManifest
 } from "./engine-readiness.js";
@@ -754,6 +758,15 @@ export type {
   WorkspaceCatalogUpsertInput,
   WorkspaceCatalogUpsertResult
 } from "./workspace-catalog.js";
+export type {
+  CreateEnginePlanOptions,
+  EnginePlan,
+  EnginePlanComparisonRow,
+  EnginePlanProblemKind,
+  EnginePlanStatus,
+  EnginePlanStep,
+  EnginePlanStepRole
+} from "./engine-plan.js";
 export type {
   EngineCapability,
   EngineCapabilityKind,

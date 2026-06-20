@@ -17,6 +17,7 @@ import {
   createExperimentLogEntry,
   createExternalDisclosureLogEntry,
   createInventionLogEntry,
+  createEnginePlan,
   createLiteratureRecord,
   createModelContext,
   createNotebookRun,
@@ -155,6 +156,7 @@ import {
   type DiscoveryPackage,
   type DiscoveryPackageWriteResult,
   type EngineManifest,
+  type EnginePlan,
   type EngineReadinessReport,
   type EngineVerificationRequirements,
   type EvidenceAudit,
@@ -325,6 +327,10 @@ export interface TruthHarnessEngineManifestInput {
   leanCommand?: string;
   z3Command?: string;
   cvc5Command?: string;
+}
+
+export interface TruthHarnessEnginePlanInput extends TruthHarnessEngineManifestInput {
+  problem: string;
 }
 
 export interface TruthHarnessEngineReadinessInput extends TruthHarnessEngineManifestInput {}
@@ -1347,6 +1353,17 @@ export async function handleTruthHarnessRouteSatisfy(
 
 export function handleTruthHarnessEngineManifest(input: TruthHarnessEngineManifestInput = {}): EngineManifest {
   return getEngineManifest({
+    timeoutMs: input.timeoutMs,
+    maximaCommand: input.maximaCommand,
+    sageCommand: input.sageCommand,
+    leanCommand: input.leanCommand,
+    z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command
+  });
+}
+
+export function handleTruthHarnessEnginePlan(input: TruthHarnessEnginePlanInput): EnginePlan {
+  return createEnginePlan(input.problem, {
     timeoutMs: input.timeoutMs,
     maximaCommand: input.maximaCommand,
     sageCommand: input.sageCommand,

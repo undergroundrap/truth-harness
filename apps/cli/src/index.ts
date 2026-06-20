@@ -23,6 +23,7 @@ import {
   createExperimentLogEntry,
   createExternalDisclosureLogEntry,
   createInventionLogEntry,
+  createEnginePlan,
   createEngineReadinessReport,
   createModelContext,
   createNotebookRun,
@@ -201,6 +202,7 @@ import {
   type WorkspaceEventListResult,
   type CodeRunSummary,
   type EngineManifest,
+  type EnginePlan,
   type EngineReadinessReport,
   type EngineVerificationReport,
   type EngineVerificationRequirements,
@@ -4491,6 +4493,60 @@ const engines = program
   );
 
 engines
+  .command("plan")
+  .description("Plan the verifier stack for a problem without running engines or minting evidence.")
+  .argument("<problem>", "Problem or claim to route through the engine ladder")
+  .option("--json", "Print the full engine plan JSON")
+  .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 1500)
+  .option("--maxima-command <command>", "Override Maxima executable for this probe")
+  .option("--sage-command <command>", "Override SageMath executable for this probe")
+  .option("--lean-command <command>", "Override Lean executable for this probe")
+  .option("--z3-command <command>", "Override Z3 executable for this probe")
+  .option("--cvc5-command <command>", "Override cvc5 executable for this probe")
+  .action(
+    (problem: string, options: {
+      json?: boolean;
+      timeoutMs: number;
+      maximaCommand?: string;
+      sageCommand?: string;
+      leanCommand?: string;
+      z3Command?: string;
+      cvc5Command?: string;
+    }, command: Command) => {
+      const parentOptions = engines.opts<{
+        json?: boolean;
+        timeoutMs?: number;
+        maximaCommand?: string;
+        sageCommand?: string;
+        leanCommand?: string;
+        z3Command?: string;
+        cvc5Command?: string;
+      }>();
+      const plan = createEnginePlan(problem, {
+        timeoutMs:
+          command.getOptionValueSource("timeoutMs") === "default" &&
+          engines.getOptionValueSource("timeoutMs") !== "default" &&
+          parentOptions.timeoutMs !== undefined
+            ? parentOptions.timeoutMs
+            : options.timeoutMs,
+        maximaCommand: options.maximaCommand ?? parentCliStringOption("maximaCommand", parentOptions.maximaCommand),
+        sageCommand: options.sageCommand ?? parentCliStringOption("sageCommand", parentOptions.sageCommand),
+        leanCommand: options.leanCommand ?? parentCliStringOption("leanCommand", parentOptions.leanCommand),
+        z3Command: options.z3Command ?? parentCliStringOption("z3Command", parentOptions.z3Command),
+        cvc5Command: options.cvc5Command ?? parentCliStringOption("cvc5Command", parentOptions.cvc5Command)
+      });
+      const json = Boolean(options.json || parentOptions.json);
+
+      if (json) {
+        printJson(plan);
+        return;
+      }
+
+      printEnginePlan(plan);
+    }
+  );
+
+engines
   .command("readiness")
   .description("Summarize which trust labels this local installation can responsibly support today.")
   .option("--json", "Print the full engine readiness JSON")
@@ -5540,6 +5596,64 @@ function printEngineManifest(manifest: EngineManifest): void {
     console.log("");
     console.log("Warnings:");
     for (const warning of manifest.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printEnginePlan(plan: EnginePlan): void {
+  console.log("Truth Harness engine plan");
+  console.log(`Status: ${plan.status}`);
+  console.log(`Problem: ${plan.problem}`);
+  console.log(`Classified as: ${plan.classifications.join(", ")}`);
+  console.log(`Trust ceiling available now: ${plan.targetTrustCeiling}`);
+  console.log(`Network: ${plan.networkAccess}`);
+  console.log("");
+  console.log("Recommended first command:");
+  console.log(`  ${plan.recommendedFirstCommand}`);
+
+  console.log("");
+  console.log("Verifier stack:");
+  for (const step of plan.steps) {
+    const marker = step.canRunNow ? "READY" : step.status === "planned" ? "PLAN" : "BLOCK";
+    console.log(`  ${step.rank}. [${marker}] ${step.displayName}`);
+    console.log(`     Role: ${step.role}; trust if successful: ${step.trustIfSuccessful}`);
+    console.log(`     Evidence: ${step.evidenceRequired}`);
+    if (step.command) {
+      console.log(`     Command: ${step.command}`);
+    }
+    console.log(`     Boundary: ${step.limitation}`);
+  }
+
+  console.log("");
+  console.log("Comparison matrix:");
+  for (const row of plan.comparisonMatrix) {
+    console.log(`  ${row.displayName}`);
+    console.log(`    Agreement role: ${row.agreementValue}; status: ${row.status}; trust: ${row.trustIfSuccessful}`);
+    console.log(`    ${row.honestBoundary}`);
+  }
+
+  if (plan.nextActions.length > 0) {
+    console.log("");
+    console.log("Next actions:");
+    for (const action of plan.nextActions) {
+      console.log(`  ${action}`);
+    }
+  }
+
+  console.log("");
+  console.log("Trust boundary:");
+  console.log("  Engine plans do not mint evidence.");
+  console.log("  Status probes are not evidence.");
+  console.log("  Stronger labels require concrete replayable artifacts.");
+  console.log("  `proved` requires an accepted proof-checker run.");
+  console.log("  `cross-checked` requires independent CAS agreement.");
+  console.log("  `smt-checked` requires an encoded solver run.");
+
+  if (plan.warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const warning of plan.warnings) {
       console.log(`  ${warning}`);
     }
   }

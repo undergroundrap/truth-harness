@@ -150,6 +150,27 @@ normalize problem
 
 Not every problem uses every rung. The router should choose the smallest verifier that can honestly answer the narrow claim.
 
+## Engine Planning Surface
+
+`truth-harness engines plan "<problem>"` is the preflight router for autonomous agents. It does not run engines and cannot mint evidence. It classifies the problem shape, selects the relevant verifier stack, shows which engines can run in the current runtime, shows which stronger gates are blocked, and returns a comparison matrix that explains each engine's role.
+
+Use it before long-running work:
+
+```bash
+truth-harness engines plan "symbolic simplify sin(x)^2 + cos(x)^2" --json
+```
+
+The plan answers:
+
+- which native kernel, CAS, SMT solver, proof checker, source path, or planned adapter is relevant;
+- what trust label each step could earn only after a concrete artifact exists;
+- what independent agreement is required before `cross-checked`;
+- what encoded solver run is required before `smt-checked`;
+- what accepted proof-check artifact is required before `proved`;
+- what Docker or local engine setup is missing before a professor-grade route is possible.
+
+Agents should treat the planner as a routing contract, then call `truth-harness verify <claim> --write`, `truth-harness cas check ... --write`, `truth-harness smt check ... --write`, `truth-harness proof check ... --write`, or a validation-gate attach command to create real evidence. MCP exposes the same surface as `truth_harness_engine_plan`.
+
 ## Trust Rules
 
 Truth Harness must keep these rules stable:
