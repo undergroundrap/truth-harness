@@ -514,7 +514,7 @@ describe("web UI action contracts", () => {
     const graphEdgeCodeStyles = styles.match(/\.graph-edge-list code \{[\s\S]*?\r?\n\}/u)?.[0];
     const runbookPacketStyles = styles.match(/#runbook-packet \{[\s\S]*?\r?\n\}/u)?.[0];
 
-    expect(html).toContain('src="./src/app.js?v=2026-06-19-reviewer-probe-wording"');
+    expect(html).toContain('src="./src/app.js?v=2026-06-19-research-harness-web"');
     expect(html).toContain('href="./src/styles.css?v=2026-06-19-layout-audit-pass"');
     expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
     expect(html).toContain('aria-hidden="true"');
@@ -580,9 +580,13 @@ describe("web UI action contracts", () => {
     expect(html).toContain('id="workspace-run-next-card"');
     expect(html).toContain('id="workspace-run-next-command"');
     expect(html).toContain('id="workspace-run-next-details"');
+    expect(html).toContain('id="start-research-harness"');
     expect(html).toContain('id="refresh-run-next"');
     expect(html).toContain('id="copy-run-next-command"');
     expect(source).toContain('fetch("/api/workspace-run-next"');
+    expect(source).toContain('fetch("/api/research-harness"');
+    expect(source).toContain("function startResearchHarnessFromUi()");
+    expect(source).toContain("planNext: true");
     expect(source).toContain("function refreshWorkspaceRunNext({ announce = true } = {})");
     expect(source).toContain("function renderWorkspaceRunNext()");
     expect(source).toContain("function workspaceRunNextDetailsRows(plan, command)");

@@ -202,6 +202,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "report-draft-history",
         "research-session",
         "research-session-list",
+        "research-harness-start",
         "research-map",
         "visual-artifacts",
         "catalog-search",
@@ -895,6 +896,25 @@ async function handleApiRequest(request, response, requestUrl) {
       externalCalls: [],
       sessions
     });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/research-harness" && request.method === "POST") {
+    try {
+      const input = await readJsonBody(request);
+      const payload = await createWebResearchHarnessPayload(input);
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-research-harness-response.v0",
+        ...payload
+      });
+    } catch (error) {
+      writeApiError(
+        response,
+        error instanceof HttpError ? error.status : 400,
+        error instanceof Error ? error.message : "Research harness could not be started.",
+        request
+      );
+    }
     return;
   }
 
@@ -1811,6 +1831,82 @@ function readinessGate(input) {
     status: input.status,
     detail: input.detail,
     command: input.command
+  };
+}
+
+async function createWebResearchHarnessPayload(value = {}) {
+  const objective = requiredText(value?.objective, "Research harness objective");
+  const {
+    createWorkspaceReview,
+    createWorkspaceRunNextPlan,
+    writeResearchHarness,
+    writeWorkspaceRunNextPlan
+  } = await loadCoreModule();
+  await ensureLocalWorkspace();
+  const harness = await writeResearchHarness({
+    rootPath: projectRoot,
+    title: optionalText(value?.title),
+    objective,
+    domains: stringList(value?.domains),
+    hypotheses: stringList(value?.hypotheses),
+    claims: stringList(value?.claims),
+    evidenceRefs: evidenceRefList(value?.evidenceRefs),
+    snapshotRefs: stringList(value?.snapshotRefs),
+    tasks: stringList(value?.tasks),
+    includeDefaultTasks: value?.includeDefaultTasks === false ? false : undefined,
+    createValidationPlan: value?.createValidationPlan === false ? false : undefined,
+    validationClaim: optionalText(value?.validationClaim),
+    validationTitle: optionalText(value?.validationTitle),
+    maxDepth: boundedPositiveNumberOrUndefined(value?.maxDepth, 200),
+    maxBranches: boundedPositiveNumberOrUndefined(value?.maxBranches, 200),
+    maxToolCalls: boundedPositiveNumberOrUndefined(value?.maxToolCalls, 1000),
+    maxWallMinutes: boundedPositiveNumberOrUndefined(value?.maxWallMinutes, 24 * 60)
+  });
+  const shouldPlanNext = value?.planNext !== false;
+  const review = shouldPlanNext
+    ? await createWorkspaceReview({
+        rootPath: projectRoot
+      })
+    : undefined;
+  const plan = review
+    ? await createWorkspaceRunNextPlan({
+        rootPath: projectRoot,
+        review,
+        executeLocal: false
+      })
+    : undefined;
+  const runNext = plan
+    ? await writeWorkspaceRunNextPlan({
+        rootPath: projectRoot,
+        plan
+      })
+    : undefined;
+
+  return {
+    localOnly: true,
+    externalCalls: [],
+    networkAccess: "none",
+    planNext: shouldPlanNext,
+    harness,
+    runNext,
+    activity: [
+      {
+        actor: "local-api",
+        action: "started-research-harness",
+        detail: `${harness.session.sessionId} created with ${harness.validationPlan ? `validation plan ${harness.validationPlan.plan.planId}` : "no validation plan"}.`,
+        at: harness.session.updatedAt ?? harness.session.createdAt
+      },
+      ...(runNext
+        ? [
+            {
+              actor: "local-api",
+              action: "wrote-research-run-next-plan",
+              detail: `${runNext.plan.planId} saved as the first dry-run proof/evidence blocker for this harness.`,
+              at: runNext.plan.createdAt
+            }
+          ]
+        : [])
+    ]
   };
 }
 

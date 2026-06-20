@@ -62,6 +62,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("docker-verifier-guidance");
     expect(statusPayload.capabilities).toContain("report-draft-save");
     expect(statusPayload.capabilities).toContain("research-session-list");
+    expect(statusPayload.capabilities).toContain("research-harness-start");
     expect(statusPayload.capabilities).toContain("research-map");
     expect(statusPayload.capabilities).toContain("visual-artifacts");
     expect(statusPayload.capabilities).toContain("catalog-search");
@@ -1116,6 +1117,65 @@ describe("local web route ledger API", () => {
         modelPolicy: expect.objectContaining({
           hostedModels: "optional-with-disclosure"
         })
+      })
+    );
+
+    const harnessResponse = await fetch(`${baseUrl}/api/research-harness`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        objective: "Prove the common denominator route for 3/4 + 5/8 before using it as a reusable lemma.",
+        domains: ["math"],
+        claims: ["3 / 4 + 5 / 8"],
+        validationClaim: "3 / 4 + 5 / 8 = 11 / 8",
+        planNext: true
+      })
+    });
+    expect(harnessResponse.status).toBe(200);
+    const harnessPayload = await harnessResponse.json();
+    expectLocalApiSuccess(harnessResponse, harnessPayload);
+    expect(harnessPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-research-harness-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      networkAccess: "none",
+      planNext: true,
+      harness: {
+        session: {
+          schemaVersion: "truth-harness.research-session.v0",
+          objective: "Prove the common denominator route for 3/4 + 5/8 before using it as a reusable lemma.",
+          domains: ["math"]
+        },
+        validationPlan: {
+          plan: {
+            schemaVersion: "truth-harness.validation-plan.v0",
+            claim: "3 / 4 + 5 / 8 = 11 / 8"
+          }
+        }
+      },
+      runNext: {
+        plan: {
+          schemaVersion: "truth-harness.workspace-run-next.v0",
+          localOnly: true,
+          networkAccess: "none",
+          dryRun: true,
+          item: {
+            kind: expect.stringContaining("validation")
+          },
+          execution: {
+            kind: "dry-run"
+          }
+        }
+      }
+    });
+    expect(harnessPayload.runNext.jsonPath).toContain(".truth-harness");
+    expect(existsSync(harnessPayload.runNext.jsonPath)).toBe(true);
+    expect(harnessPayload.activity).toContainEqual(
+      expect.objectContaining({
+        actor: "local-api",
+        action: "wrote-research-run-next-plan"
       })
     );
 

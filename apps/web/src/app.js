@@ -467,6 +467,7 @@ const workspaceRunNextTitle = document.querySelector("#workspace-run-next-title"
 const workspaceRunNextSummary = document.querySelector("#workspace-run-next-summary");
 const workspaceRunNextCommand = document.querySelector("#workspace-run-next-command");
 const workspaceRunNextDetails = document.querySelector("#workspace-run-next-details");
+const startResearchHarnessButton = document.querySelector("#start-research-harness");
 const refreshRunNextButton = document.querySelector("#refresh-run-next");
 const copyRunNextCommandButton = document.querySelector("#copy-run-next-command");
 const researchNotes = document.querySelector("#research-notes");
@@ -576,6 +577,21 @@ const laneStatusText = {
   quantum: "Quantum lane",
   security: "Security lane",
   patent: "Patent lane"
+};
+const researchHarnessDomainByLane = {
+  math: "math",
+  sources: "general",
+  code: "code",
+  data: "general",
+  writing: "learning",
+  physics: "physics",
+  biology: "biomedical",
+  chemistry: "biomedical",
+  finance: "general",
+  hardware: "code",
+  quantum: "physics",
+  security: "code",
+  patent: "patent"
 };
 const verificationGateCatalog = [
   {
@@ -5749,6 +5765,73 @@ async function refreshWorkspaceRunNext({ announce = true } = {}) {
     workspaceRunNextError = error instanceof Error ? error.message : "Unknown workspace run-next failure.";
     renderWorkspaceRunNext();
     addActivity("local-api", "Next safe action unavailable", workspaceRunNextError, "waiting");
+  }
+}
+
+async function startResearchHarnessFromUi() {
+  const currentReceipt = receiptStore.get(state.receiptKey);
+  const objective = promptInput?.value?.trim() || currentReceipt?.title?.trim();
+  if (!objective) {
+    addActivity("web-ui", "Harness objective missing", "Type a problem in the prompt or select a receipt before starting a hard-problem harness.", "waiting");
+    return;
+  }
+
+  const cleanObjective = objective.replace(/(?:^|\s)#[a-z0-9][a-z0-9-]{1,40}/giu, " ").replace(/\s+/gu, " ").trim() || objective;
+  const lane = state.lane ?? "math";
+  const promptTags = extractPromptTags(objective);
+  const domains = [
+    ...new Set([
+      researchHarnessDomainByLane[lane] ?? "general",
+      ...promptTags
+        .map((tag) => researchHarnessDomainByLane[tag])
+        .filter(Boolean)
+    ])
+  ];
+  const claims = currentReceipt?.title ? [currentReceipt.title] : [cleanObjective];
+
+  if (startResearchHarnessButton) {
+    startResearchHarnessButton.disabled = true;
+    startResearchHarnessButton.textContent = "Starting";
+  }
+  addActivity("web-ui", "Starting research harness", "POST /api/research-harness will write a local session, validation plan, and first dry-run handoff.", "waiting");
+
+  try {
+    const response = await fetch("/api/research-harness", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        objective: cleanObjective,
+        domains,
+        claims,
+        validationClaim: claims[0],
+        planNext: true
+      })
+    });
+    const payload = await readLocalApiJson(response, "Local research harness API failed.");
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, localApiSuccessMessage(payload, item.detail), "passed", item.at);
+    }
+    if (payload.runNext?.plan) {
+      workspaceRunNextPlan = payload.runNext.plan;
+      workspaceRunNextError = undefined;
+    }
+    await refreshResearchSessions({ announce: false });
+    await refreshWorkspaceReview({ announce: false });
+    await refreshWorkspaceRunNext({ announce: false });
+    await refreshWorkspaceGraph({ announce: false });
+    await refreshWorkspaceReadiness({ announce: false });
+    await refreshWorkspaceEvents({ announce: false });
+    state.surface = "runbook";
+    render();
+  } catch (error) {
+    addActivity("local-api", "Research harness failed", error instanceof Error ? error.message : "Unknown research harness failure.", "refuted");
+  } finally {
+    if (startResearchHarnessButton) {
+      startResearchHarnessButton.disabled = false;
+      startResearchHarnessButton.textContent = "Start harness";
+    }
   }
 }
 
@@ -15300,6 +15383,12 @@ copyActivityButton.addEventListener("click", () => {
 copyTaskConsoleButton?.addEventListener("click", () => {
   copyTaskConsoleCommands().catch((error) => {
     addActivity("web-ui", "Copy agent console failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+  });
+});
+
+startResearchHarnessButton?.addEventListener("click", () => {
+  startResearchHarnessFromUi().catch((error) => {
+    addActivity("web-ui", "Start harness failed", error instanceof Error ? error.message : "Unknown research harness failure.", "refuted");
   });
 });
 
