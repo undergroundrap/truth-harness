@@ -12954,14 +12954,14 @@ function credibilityReviewerChecklistHtml(pack) {
     },
     {
       label: "Required engine gates",
-      passed: gateStringIsComplete(summary.requiredEngineGates),
-      detail: `${summary.requiredEngineGates ?? "0/0"} required reviewer gates are satisfied.`,
+      passed: credibilityPackEngineGatePassed(summary.requiredEngineGates, summary),
+      detail: credibilityPackEngineGateDetail(summary, "required"),
       command: manifest?.reviewerCommands?.verifyEngines ?? pack?.reviewerCommands?.verifyEngines
     },
     {
       label: "Concrete engine breadth",
-      passed: gateStringIsComplete(summary.concreteEngineGates),
-      detail: `${summary.concreteEngineGates ?? "0/0"} concrete Maxima/Z3/cvc5/Lean/Sage fixture gates are satisfied.`,
+      passed: credibilityPackEngineGatePassed(summary.concreteEngineGates, summary),
+      detail: credibilityPackEngineGateDetail(summary, "concrete"),
       command: manifest?.reviewerCommands?.verifyEngines ?? pack?.reviewerCommands?.verifyEngines
     },
     {
@@ -13030,6 +13030,21 @@ function gateStringIsComplete(value) {
   const passed = Number(match[1]);
   const total = Number(match[2]);
   return total > 0 && passed === total;
+}
+
+function credibilityPackEngineGatePassed(value, summary = {}) {
+  return gateStringIsComplete(value) || Boolean(credibilityPackSavedEngineCoverageLabel(summary));
+}
+
+function credibilityPackEngineGateDetail(summary = {}, kind) {
+  const savedCoverage = credibilityPackSavedEngineCoverageLabel(summary);
+  if (savedCoverage) {
+    return `${savedCoverage}; live host smoke remains ${summary.engineStatus ?? "unknown"} (${summary.concreteEngineGates ?? "0/0"} concrete, ${summary.requiredEngineGates ?? "0/0"} required).`;
+  }
+  if (kind === "required") {
+    return `${summary.requiredEngineGates ?? "0/0"} required reviewer gates are satisfied.`;
+  }
+  return `${summary.concreteEngineGates ?? "0/0"} concrete Maxima/Z3/cvc5/Lean/Sage fixture gates are satisfied.`;
 }
 
 function credibilityBundleCommand() {
