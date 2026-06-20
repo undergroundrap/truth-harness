@@ -1912,7 +1912,15 @@ export async function handleTruthHarnessWorkspaceRunNext(
   const plan = await createWorkspaceRunNextPlan({
     rootPath,
     review,
-    executeLocal: input.executeLocal === true
+    executeLocal: input.executeLocal === true,
+    enginePlanOptions: {
+      timeoutMs: input.timeoutMs,
+      maximaCommand: input.maximaCommand,
+      sageCommand: input.sageCommand,
+      leanCommand: input.leanCommand,
+      z3Command: input.z3Command,
+      cvc5Command: input.cvc5Command
+    }
   });
 
   if (input.write) {

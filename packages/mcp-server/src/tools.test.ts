@@ -1366,6 +1366,14 @@ describe("MCP tool handlers", () => {
       validationGateKind: "proof"
     });
     expect(plan.item?.command).toContain("truth-harness verify");
+    expect(plan.enginePlan).toMatchObject({
+      schemaVersion: "truth-harness.engine-plan.v0",
+      problem: "Prove or refute the reusable invariant for a deterministic robotics simulation kernel.",
+      classifications: expect.arrayContaining(["formal-proof", "simulation-or-engineering"])
+    });
+    expect(plan.enginePlan?.steps.map((step) => step.capabilityId)).toEqual(
+      expect.arrayContaining(["lean-proof-checker", "z3-smt-solver", "claim-ledger"])
+    );
   });
 
   it("can start a hard-problem harness and save the first agent handoff in one call", async () => {

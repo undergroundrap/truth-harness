@@ -146,6 +146,117 @@
       },
       "additionalProperties": false
     },
+    "enginePlan": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "createdAt",
+        "localOnly",
+        "networkAccess",
+        "problem",
+        "normalizedProblem",
+        "classifications",
+        "status",
+        "targetTrustCeiling",
+        "recommendedFirstCommand",
+        "steps",
+        "comparisonMatrix",
+        "blockedCapabilityIds",
+        "readyCapabilityIds",
+        "nextActions",
+        "trustBoundary",
+        "warnings"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "truth-harness.engine-plan.v0"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "localOnly": {
+          "const": true
+        },
+        "networkAccess": {
+          "const": "none"
+        },
+        "problem": {
+          "type": "string",
+          "minLength": 1
+        },
+        "normalizedProblem": {
+          "type": "string",
+          "minLength": 1
+        },
+        "classifications": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "status": {
+          "enum": ["ready-to-route", "route-with-open-gates", "insufficient-engines"]
+        },
+        "targetTrustCeiling": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recommendedFirstCommand": {
+          "type": "string",
+          "minLength": 1
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "rank",
+              "capabilityId",
+              "displayName",
+              "role",
+              "status",
+              "canRunNow",
+              "trustIfSuccessful",
+              "evidenceRequired",
+              "limitation"
+            ],
+            "properties": {
+              "rank": { "type": "integer", "minimum": 1 },
+              "capabilityId": { "type": "string", "minLength": 1 },
+              "displayName": { "type": "string", "minLength": 1 },
+              "role": { "type": "string", "minLength": 1 },
+              "status": { "type": "string", "minLength": 1 },
+              "canRunNow": { "type": "boolean" },
+              "trustIfSuccessful": { "type": "string", "minLength": 1 },
+              "command": { "type": "string" },
+              "evidenceRequired": { "type": "string", "minLength": 1 },
+              "limitation": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "comparisonMatrix": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "blockedCapabilityIds": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "readyCapabilityIds": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "nextActions": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "trustBoundary": {
+          "type": "object"
+        },
+        "warnings": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": true
+    },
     "idleNextActions": {
       "type": "array",
       "items": {

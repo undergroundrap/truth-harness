@@ -3814,7 +3814,15 @@ workspace
       const plan = await createWorkspaceRunNextPlan({
         rootPath: path,
         review,
-        executeLocal: Boolean(options.executeLocal)
+        executeLocal: Boolean(options.executeLocal),
+        enginePlanOptions: {
+          timeoutMs: options.timeoutMs,
+          maximaCommand: options.maximaCommand,
+          sageCommand: options.sageCommand,
+          leanCommand: options.leanCommand,
+          z3Command: options.z3Command,
+          cvc5Command: options.cvc5Command
+        }
       });
       const writeResult = options.write
         ? await writeWorkspaceRunNextPlan({
@@ -7718,6 +7726,23 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
   }
   if (typeof plan.execution.attached === "boolean") {
     console.log(`  Attached: ${String(plan.execution.attached)}`);
+  }
+
+  if (plan.enginePlan) {
+    console.log("");
+    console.log("Engine plan:");
+    console.log(`  Problem: ${plan.enginePlan.problem}`);
+    console.log(`  Status: ${plan.enginePlan.status}`);
+    console.log(`  Classifications: ${plan.enginePlan.classifications.join(", ")}`);
+    console.log(`  Target trust ceiling: ${plan.enginePlan.targetTrustCeiling}`);
+    console.log(`  First command: ${plan.enginePlan.recommendedFirstCommand}`);
+    console.log("  Verifier stack:");
+    for (const step of plan.enginePlan.steps.slice(0, 6)) {
+      console.log(`    ${step.rank}. ${step.capabilityId} (${step.role}, ${step.status})`);
+    }
+    if (plan.enginePlan.steps.length > 6) {
+      console.log(`    ... ${plan.enginePlan.steps.length - 6} more`);
+    }
   }
 
   if (plan.idleNextActions && plan.idleNextActions.length > 0) {

@@ -18,6 +18,7 @@ import {
 } from "./claim-ledger.js";
 import type { CredibilityPack } from "./credibility-pack.js";
 import { writeSymbolicCasCheckRecord } from "./cas-backend.js";
+import { createEnginePlan, type CreateEnginePlanOptions, type EnginePlan } from "./engine-plan.js";
 import { writeEngineVerificationRun, type EngineVerificationRequirements } from "./engine-verification.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
@@ -126,6 +127,10 @@ export interface WorkspaceRunNextSummary {
   rationaleSource?: string;
   rationaleCandidateEvidenceRef?: string;
   rationaleExecutionBoundary?: string;
+  enginePlanStatus?: EnginePlan["status"];
+  enginePlanClassifications?: EnginePlan["classifications"];
+  enginePlanTargetTrustCeiling?: EnginePlan["targetTrustCeiling"];
+  enginePlanRecommendedFirstCommand?: string;
   sourceSnapshotId?: string;
   sourceSnapshotPath?: string;
   sourceSnapshotFiles?: number;
@@ -197,6 +202,7 @@ export interface WorkspaceRunNextPlan {
     result?: unknown;
   };
   rationale?: WorkspaceRunNextRationale;
+  enginePlan?: EnginePlan;
   idleNextActions?: WorkspaceRunNextIdleAction[];
   sourceSnapshot?: WorkspaceRunNextSourceSnapshot;
   stopConditions: string[];
@@ -215,11 +221,15 @@ export async function createWorkspaceRunNextPlan(input: {
   review: WorkspaceReview;
   executeLocal: boolean;
   now?: string;
+  enginePlanOptions?: CreateEnginePlanOptions;
 }): Promise<WorkspaceRunNextPlan> {
   const createdAt = input.now ?? new Date().toISOString();
   const planId = workspaceRunNextPlanId(createdAt, input.review.reviewId);
   const nextItem = input.review.autonomy.nextItemId
     ? input.review.items.find((item) => item.itemId === input.review.autonomy.nextItemId)
+    : undefined;
+  const enginePlan = nextItem
+    ? workspaceRunNextEnginePlanFor(nextItem, createdAt, input.enginePlanOptions)
     : undefined;
   const noNextItemSummary = input.review.items.length > 0
     ? "No executable local work item is available; remaining review items are passive inspection blockers."
@@ -236,6 +246,7 @@ export async function createWorkspaceRunNextPlan(input: {
     mode: input.review.autonomy.mode,
     reviewId: input.review.reviewId,
     item: nextItem ? workspaceRunNextItemSummary(nextItem) : undefined,
+    ...(enginePlan ? { enginePlan } : {}),
     execution: {
       status: "planned",
       kind: "dry-run",
@@ -581,6 +592,23 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
     ...(plan.execution.command ? [`- Command: \`${plan.execution.command}\``] : []),
     ...(plan.execution.evidenceRef ? [`- Evidence ref: \`${plan.execution.evidenceRef}\``] : []),
     ...(typeof plan.execution.attached === "boolean" ? [`- Attached: \`${String(plan.execution.attached)}\``] : []),
+    ...(plan.enginePlan
+      ? [
+          "",
+          "## Engine Plan",
+          "",
+          `- Problem: ${plan.enginePlan.problem}`,
+          `- Status: \`${plan.enginePlan.status}\``,
+          `- Classification: ${plan.enginePlan.classifications.map((kind) => `\`${kind}\``).join(", ")}`,
+          `- Target trust ceiling: \`${plan.enginePlan.targetTrustCeiling}\``,
+          `- First command: \`${plan.enginePlan.recommendedFirstCommand}\``,
+          "- Verifier stack:",
+          ...plan.enginePlan.steps.map((step) =>
+            `  - ${step.rank}. ${step.displayName} (\`${step.capabilityId}\`, \`${step.role}\`, \`${step.status}\`) - ${step.evidenceRequired}`
+          ),
+          "- Planner boundary: engine plans are routing contracts only; concrete receipts/proof/SMT/CAS artifacts must still be written."
+        ]
+      : []),
     ...(plan.idleNextActions && plan.idleNextActions.length > 0
       ? [
           "",
@@ -662,6 +690,89 @@ function workspaceRunNextTarget(item: WorkspaceRunNextPlan["item"] | undefined):
     return `${item.obligationKind ?? "obligation"} ${item.obligationId}`;
   }
   return item.claimId ?? item.routeId ?? item.reportId ?? item.sessionId ?? "workspace queue";
+}
+
+function workspaceRunNextEnginePlanFor(
+  item: WorkspaceReviewItem,
+  createdAt: string,
+  options: CreateEnginePlanOptions | undefined
+): EnginePlan | undefined {
+  const problem = workspaceRunNextEngineProblemFor(item);
+  if (!problem) {
+    return undefined;
+  }
+
+  const now = new Date(createdAt);
+  return createEnginePlan(problem, {
+    ...options,
+    now: Number.isNaN(now.getTime()) ? options?.now : now
+  });
+}
+
+function workspaceRunNextEngineProblemFor(item: WorkspaceReviewItem): string | undefined {
+  const fromCommand = engineProblemFromRunNextCommand(item.command);
+  if (fromCommand) {
+    return fromCommand;
+  }
+
+  if (item.kind === "validation-gate") {
+    return validationClaimFromReviewSummary(item.summary);
+  }
+
+  if (item.kind === "route-obligation") {
+    const [routeProblem] = item.summary.split(" - ");
+    return normalizeEngineProblem(routeProblem);
+  }
+
+  return undefined;
+}
+
+function engineProblemFromRunNextCommand(command: string | undefined): string | undefined {
+  if (!command) {
+    return undefined;
+  }
+
+  const parsed = parseLocalTruthHarnessCommand(command);
+  if (!parsed.ok) {
+    return undefined;
+  }
+
+  const [group, action, ...rest] = parsed.args;
+  const options = commandOptionMap(parsed.args);
+
+  if (group === "verify") {
+    return normalizeEngineProblem(positionalArgsBeforeFirstOption([action, ...rest]).join(" "));
+  }
+
+  if (group === "claim" && action === "add") {
+    return normalizeEngineProblem(positionalArgsBeforeFirstOption(rest).join(" "));
+  }
+
+  if (group === "source" && action === "search") {
+    return normalizeEngineProblem(positionalArgsBeforeFirstOption(rest).join(" "));
+  }
+
+  if (group === "proof" && action === "check") {
+    return normalizeEngineProblem(optionString(options.statement));
+  }
+
+  if (group === "cas" && action === "check") {
+    const operation = optionString(options.operation);
+    const expression = optionString(options.expression);
+    return normalizeEngineProblem(expression ? `symbolic ${operation ?? "check"} ${expression}` : undefined);
+  }
+
+  return undefined;
+}
+
+function validationClaimFromReviewSummary(summary: string): string | undefined {
+  const match = /^Validation plan:\s*(.+?)\s+-\s+/u.exec(summary);
+  return normalizeEngineProblem(match?.[1]);
+}
+
+function normalizeEngineProblem(value: string | undefined): string | undefined {
+  const normalized = value?.replace(/\s+/gu, " ").trim();
+  return normalized && !normalized.includes("<") && !normalized.includes(">") ? normalized : undefined;
 }
 
 function workspaceRunNextIdleActions(rootPath: string): WorkspaceRunNextIdleAction[] {
@@ -749,6 +860,10 @@ function summarizeWorkspaceRunNextPlan(
     rationaleSource: rationale.source,
     rationaleCandidateEvidenceRef: rationale.candidateEvidenceRef,
     rationaleExecutionBoundary: rationale.executionBoundary,
+    enginePlanStatus: plan.enginePlan?.status,
+    enginePlanClassifications: plan.enginePlan?.classifications,
+    enginePlanTargetTrustCeiling: plan.enginePlan?.targetTrustCeiling,
+    enginePlanRecommendedFirstCommand: plan.enginePlan?.recommendedFirstCommand,
     sourceSnapshotId: plan.sourceSnapshot?.snapshotId,
     sourceSnapshotPath: plan.sourceSnapshot?.path,
     sourceSnapshotFiles: plan.sourceSnapshot?.totalFiles,

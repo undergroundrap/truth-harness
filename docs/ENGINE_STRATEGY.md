@@ -171,6 +171,8 @@ The plan answers:
 
 Agents should treat the planner as a routing contract, then call `truth-harness verify <claim> --write`, `truth-harness cas check ... --write`, `truth-harness smt check ... --write`, `truth-harness proof check ... --write`, or a validation-gate attach command to create real evidence. MCP exposes the same surface as `truth_harness_engine_plan`.
 
+`workspace run-next` now embeds the same routing contract when the selected work item carries a scoped claim or verifier command. That means an autonomous agent reopening a saved handoff does not need to guess whether a blocker is exact arithmetic, symbolic CAS, SMT, source-grounded, simulation-grade, or formal-proof work: the run-next packet names the first durable command, the relevant verifier stack, the evidence each engine must produce, and the stronger engines that remain blocked. This is still planning, not evidence; concrete receipts, proof-check records, SMT records, CAS records, source citations, or validation attachments remain the only artifacts that can move trust labels.
+
 ## Trust Rules
 
 Truth Harness must keep these rules stable:

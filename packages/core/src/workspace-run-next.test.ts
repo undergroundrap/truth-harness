@@ -143,6 +143,46 @@ describe("workspace run-next", () => {
     });
   });
 
+  it("embeds verifier engine plans in run-next handoff packets", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const review = minimalReview({
+      rootPath: root,
+      command: `truth-harness verify "symbolic simplify sin(x)^2 + cos(x)^2" --write --workspace ${root} --json`,
+      claimId: "claim_symbolic_engine_plan",
+      kind: "validation-gate",
+      validationPlanId: "vpl_symbolic_engine_plan",
+      validationGateId: "gate_symbolic_engine_plan",
+      validationGateKind: "proof",
+      domain: "math"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-18T00:02:00.000Z"
+    });
+    const result = await writeWorkspaceRunNextPlan({ rootPath: root, plan });
+
+    expect(plan.enginePlan).toMatchObject({
+      schemaVersion: "truth-harness.engine-plan.v0",
+      createdAt: "2026-06-18T00:02:00.000Z",
+      problem: "symbolic simplify sin(x)^2 + cos(x)^2",
+      classifications: expect.arrayContaining(["symbolic-algebra"]),
+      recommendedFirstCommand: 'truth-harness verify "symbolic simplify sin(x)^2 + cos(x)^2" --write'
+    });
+    expect(plan.enginePlan?.steps.map((step) => step.capabilityId)).toEqual(
+      expect.arrayContaining(["sympy-symbolic-adapter", "maxima-cas", "sage-cas", "lean-proof-checker", "claim-ledger"])
+    );
+    expect(plan.enginePlan?.trustBoundary.planDoesNotMintEvidence).toBe(true);
+    expect(result.markdown).toContain("## Engine Plan");
+    expect(result.markdown).toContain("sympy-symbolic-adapter");
+    expect(result.plan.enginePlan?.recommendedFirstCommand).toBe(
+      'truth-harness verify "symbolic simplify sin(x)^2 + cos(x)^2" --write'
+    );
+  });
+
   it("attaches direct proof-check artifacts to linked validation gates without overclaiming", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
