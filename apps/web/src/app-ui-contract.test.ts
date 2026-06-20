@@ -210,6 +210,11 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function credibilityEngineEvidenceTierFromCase(entry)");
     expect(source).toContain("function credibilityEngineEvidenceMeaningFromCase(entry)");
     expect(source).toContain("function credibilityEngineLadderStatusClass(entry)");
+    expect(source).toContain("function credibilityPackEngineEvidenceSummary(pack)");
+    expect(source).toContain("function credibilityPackEngineEvidenceSummaryFromSummary(summary = {})");
+    expect(source).toContain("function credibilityPackSavedEngineCoverageLabel(summary = {})");
+    expect(source).toContain("saved strict Docker evidence covers these gates");
+    expect(source).toContain("saved Docker professor evidence covers these gates");
     expect(source).toContain("pack?.engineEvidenceLadder");
     expect(source).toContain("pack?.engineEvidence?.cases");
     expect(source).toContain("Engine Evidence Ladder");

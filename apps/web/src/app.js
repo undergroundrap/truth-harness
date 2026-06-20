@@ -12803,7 +12803,7 @@ function credibilityBundleCardHtml() {
         ["Bundle", manifest.bundleId],
         ["Pack", manifest.packId],
         ["Pack status", manifest.packStatus],
-        ["Engine gates", `${manifest.packSummary?.requiredEngineGates ?? "0/0"} required, ${manifest.packSummary?.concreteEngineGates ?? "0/0"} concrete`],
+        ["Engine gates", credibilityPackEngineEvidenceSummaryFromSummary(manifest.packSummary)],
         ["Bundle integrity", verification?.passed ? "passed" : "changed"],
         ["Source workspace", verification?.sourceMatchesWorkspace ? "matches bundle" : "drifted"],
         ["Files", `${verification?.checkedBundleFiles ?? manifest.summary?.totalFiles ?? 0} checked`],
@@ -13343,8 +13343,8 @@ function credibilityPackSummaryRows(pack) {
   return [
     ["Professor ready", summary.professorReady ? "yes" : "blocked"],
     ["Workspace validation", `${summary.validationPassed ? "passed" : "failed"} (${summary.validationErrors ?? 0} errors, ${summary.validationWarnings ?? 0} warnings)`],
-    ["Strict engine gates", `${summary.requiredEngineGates ?? "0/0"} required${summary.latestStrictEngineRunStatus ? `, latest saved ${summary.latestStrictEngineRunStatus}` : ""}`],
-    ["Engine evidence", `${summary.engineStatus ?? "unknown"} (${summary.concreteEngineGates ?? "0/0"} concrete, ${summary.engineEvidenceMinted ?? 0} evidence records)`],
+    ["Strict engine gates", `${summary.requiredEngineGates ?? "0/0"} required${credibilityPackSavedEngineRunLedgerLabel(summary)}`],
+    ["Engine evidence", credibilityPackEngineEvidenceSummary(pack)],
     ["Adversarial benchmark", `${summary.latestAdversarialBenchmarkStatus ?? "missing"} (${formatPercent(summary.latestAdversarialBenchmarkAccuracy)})`],
     ["Math ladder", `${summary.latestMathCredibilityLadderStatus ?? "missing"} (${formatPercent(summary.latestMathCredibilityLadderAccuracy)})`],
     ["Saved engine ledger", `${summary.savedEngineRuns ?? 0} run${summary.savedEngineRuns === 1 ? "" : "s"}`],
@@ -13352,6 +13352,46 @@ function credibilityPackSummaryRows(pack) {
     ["Snapshot", `${summary.snapshotFiles ?? 0} files, ${formatBytes(summary.snapshotBytes ?? 0)}`],
     ["Pack ID", pack.packId]
   ];
+}
+
+function credibilityPackEngineEvidenceSummary(pack) {
+  return credibilityPackEngineEvidenceSummaryFromSummary(pack?.summary);
+}
+
+function credibilityPackEngineEvidenceSummaryFromSummary(summary = {}) {
+  const engineStatus = summary.engineStatus ?? "unknown";
+  const concreteGates = summary.concreteEngineGates ?? "0/0";
+  const requiredGates = summary.requiredEngineGates ?? "0/0";
+  const evidenceRecords = summary.engineEvidenceMinted ?? 0;
+  const liveSummary = `${engineStatus} (${concreteGates} concrete gates, ${requiredGates} required gates, ${evidenceRecords} evidence records earned)`;
+  const savedCoverage = credibilityPackSavedEngineCoverageLabel(summary);
+
+  if (savedCoverage && engineStatus !== "passed") {
+    return `${savedCoverage}; live host smoke: ${liveSummary}`;
+  }
+
+  return liveSummary;
+}
+
+function credibilityPackSavedEngineRunLedgerLabel(summary = {}) {
+  const labels = [];
+  if (summary.latestProfessorEngineRunStatus) {
+    labels.push(`latest professor Docker: ${summary.latestProfessorEngineRunStatus}`);
+  }
+  if (summary.latestStrictEngineRunStatus) {
+    labels.push(`latest strict reviewer: ${summary.latestStrictEngineRunStatus}`);
+  }
+  return labels.length > 0 ? ` (${labels.join(", ")})` : "";
+}
+
+function credibilityPackSavedEngineCoverageLabel(summary = {}) {
+  if (summary.latestStrictEngineRunStatus === "passed") {
+    return "saved strict Docker evidence covers these gates";
+  }
+  if (summary.latestProfessorEngineRunStatus === "passed") {
+    return "saved Docker professor evidence covers these gates";
+  }
+  return undefined;
 }
 
 function credibilityPackWarnings(pack) {
@@ -13447,7 +13487,7 @@ function credibilityPackActivitySummary(pack) {
     return "Professor credibility pack loaded from the local workspace.";
   }
 
-  return `${pack.status}; validation ${pack.summary.validationPassed ? "passed" : "failed"}, engines ${pack.summary.requiredEngineGates}, adversarial ${pack.summary.latestAdversarialBenchmarkStatus ?? "missing"}, ladder ${pack.summary.latestMathCredibilityLadderStatus ?? "missing"}, queue ${pack.summary.reviewItems} item${pack.summary.reviewItems === 1 ? "" : "s"}.`;
+  return `${pack.status}; validation ${pack.summary.validationPassed ? "passed" : "failed"}, engines ${credibilityPackEngineEvidenceSummary(pack)}, adversarial ${pack.summary.latestAdversarialBenchmarkStatus ?? "missing"}, ladder ${pack.summary.latestMathCredibilityLadderStatus ?? "missing"}, queue ${pack.summary.reviewItems} item${pack.summary.reviewItems === 1 ? "" : "s"}.`;
 }
 
 function credibilityBundleVerificationReportItems(limit = 5) {
