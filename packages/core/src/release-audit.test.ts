@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { initLocalWorkspace } from "./local-workspace.js";
-import { createReleaseAudit, renderReleaseAuditMarkdown } from "./release-audit.js";
+import { createReleaseAudit, formatReleaseAuditEngineSummary, renderReleaseAuditMarkdown } from "./release-audit.js";
 import { rebuildWorkspaceCatalog } from "./workspace-catalog.js";
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
 import { createReceipt } from "./receipt.js";
@@ -578,6 +578,9 @@ describe("release audit", () => {
       blockingFailures: 0
     });
     expect(audit.credibilityPack?.summary.latestProfessorEngineRunStatus).toBe("passed");
+    expect(formatReleaseAuditEngineSummary(audit)).toBe(
+      "Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking. (live host: 0/4 concrete, 0/4 required)"
+    );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
         id: "engine-evidence",
@@ -592,6 +595,9 @@ describe("release audit", () => {
       })
     );
     expect(audit.nextActions).not.toContain("truth-harness engines verify --write --require-all-concrete");
+    expect(markdown).toContain(
+      "Engine evidence: Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking. (live host: 0/4 concrete, 0/4 required)"
+    );
     expect(markdown).toContain("Saved no-network Docker engine evidence covers the required gates");
   });
 

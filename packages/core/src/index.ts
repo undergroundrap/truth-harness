@@ -250,6 +250,7 @@ export {
 } from "./credibility-pack.js";
 export {
   createReleaseAudit,
+  formatReleaseAuditEngineSummary,
   renderReleaseAuditMarkdown
 } from "./release-audit.js";
 export {

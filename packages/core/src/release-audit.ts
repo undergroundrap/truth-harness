@@ -246,6 +246,7 @@ export function renderReleaseAuditMarkdown(audit: ReleaseAudit): string {
     `- Blocking failures: ${audit.summary.blockingFailures}`,
     `- Validation: ${audit.summary.validationPassed ? "passed" : "failed"}`,
     `- Catalog fresh: ${String(audit.summary.catalogFresh)}`,
+    `- Engine evidence: ${formatReleaseAuditEngineSummary(audit)}`,
     `- Required engine gates: ${audit.summary.requiredEngineGates}`,
     `- Concrete engine gates: ${audit.summary.concreteEngineGates}`,
     `- Adversarial benchmark: ${audit.summary.adversarialBenchmark}`,
@@ -296,6 +297,18 @@ export function renderReleaseAuditMarkdown(audit: ReleaseAudit): string {
   }
 
   return `${lines.join("\n")}\n`;
+}
+
+export function formatReleaseAuditEngineSummary(audit: Pick<ReleaseAudit, "summary" | "checks">): string {
+  const liveGateSummary = `${audit.summary.concreteEngineGates} concrete, ${audit.summary.requiredEngineGates} required`;
+  const engineCheck = audit.checks.find((check) => check.id === "engine-evidence");
+  if (
+    engineCheck?.status === "pass" &&
+    engineCheck.summary.includes("Saved no-network Docker engine evidence")
+  ) {
+    return `${engineCheck.summary} (live host: ${liveGateSummary})`;
+  }
+  return liveGateSummary;
 }
 
 function buildAudit(input: {

@@ -136,6 +136,7 @@ import {
   createWorkspaceGraph,
   formatCredibilityPackEngineEvidenceSummary,
   formatCredibilityPackSavedEngineRunLedgerLabel,
+  formatReleaseAuditEngineSummary,
   writeVisualArtifact,
   writeReceiptPlotVisualArtifact,
   writeResearchCanvasVisualArtifact,
@@ -6697,9 +6698,7 @@ function printReleaseAudit(audit: ReleaseAudit): void {
     `Validation/catalog: ${audit.summary.validationPassed ? "passed" : "failed"} / ` +
       `${audit.summary.catalogFresh ? "fresh" : "stale-or-missing"}`
   );
-  console.log(
-    `Engines: ${audit.summary.concreteEngineGates} concrete, ${audit.summary.requiredEngineGates} required`
-  );
+  console.log(`Engines: ${formatReleaseAuditEngineSummary(audit)}`);
   console.log(
     `Review queue: ${audit.summary.reviewItems} item(s), ${audit.summary.criticalReviewItems} critical`
   );
