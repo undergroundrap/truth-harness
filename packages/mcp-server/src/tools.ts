@@ -1073,7 +1073,16 @@ export interface TruthHarnessResearchHarnessStartInput extends TruthHarnessResea
   createValidationPlan?: boolean;
   validationClaim?: string;
   validationTitle?: string;
+  planNext?: boolean;
 }
+
+export interface TruthHarnessResearchHarnessStartWithRunNextOutput extends ResearchHarnessWriteResult {
+  runNext: WorkspaceRunNextWriteResult;
+}
+
+export type TruthHarnessResearchHarnessStartOutput =
+  | ResearchHarnessWriteResult
+  | TruthHarnessResearchHarnessStartWithRunNextOutput;
 
 export interface TruthHarnessResearchSessionCheckpointInput {
   workspacePath?: string;
@@ -2523,9 +2532,10 @@ export async function handleTruthHarnessResearchSessionStart(
 
 export async function handleTruthHarnessResearchHarnessStart(
   input: TruthHarnessResearchHarnessStartInput
-): Promise<ResearchHarnessWriteResult> {
-  return writeResearchHarness({
-    rootPath: resolveWorkspaceRoot(input.workspacePath),
+): Promise<TruthHarnessResearchHarnessStartOutput> {
+  const rootPath = resolveWorkspaceRoot(input.workspacePath);
+  const result = await writeResearchHarness({
+    rootPath,
     title: input.title,
     objective: input.objective,
     domains: input.domains,
@@ -2543,6 +2553,27 @@ export async function handleTruthHarnessResearchHarnessStart(
     maxToolCalls: input.maxToolCalls,
     maxWallMinutes: input.maxWallMinutes
   });
+
+  if (!input.planNext) {
+    return result;
+  }
+
+  const review = await createWorkspaceReview({
+    rootPath
+  });
+  const plan = await createWorkspaceRunNextPlan({
+    rootPath,
+    review,
+    executeLocal: false
+  });
+
+  return {
+    ...result,
+    runNext: await writeWorkspaceRunNextPlan({
+      rootPath,
+      plan
+    })
+  };
 }
 
 export async function handleTruthHarnessResearchSessionCheckpoint(

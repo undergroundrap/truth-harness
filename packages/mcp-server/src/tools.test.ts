@@ -1368,6 +1368,42 @@ describe("MCP tool handlers", () => {
     expect(plan.item?.command).toContain("truth-harness verify");
   });
 
+  it("can start a hard-problem harness and save the first agent handoff in one call", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Harness Handoff Lab" });
+
+    const harness = await handleTruthHarnessResearchHarnessStart({
+      objective: "Investigate a reusable exact arithmetic lemma before broadening the simulation claim.",
+      domains: ["math"],
+      claims: ["3 / 4 + 5 / 8"],
+      validationClaim: "3 / 4 + 5 / 8",
+      planNext: true
+    });
+    if (!("runNext" in harness)) {
+      throw new Error("Expected planNext=true to return a saved run-next handoff.");
+    }
+    const savedPlans = await handleTruthHarnessWorkspaceRunNextList({});
+    const savedMarkdown = await readFile(harness.runNext.markdownPath, "utf8");
+
+    expect(harness.runNext.plan).toMatchObject({
+      status: "planned",
+      item: {
+        kind: "validation-gate",
+        validationPlanId: harness.validationPlan?.plan.planId,
+        validationGateKind: "proof",
+        sessionId: harness.session.sessionId,
+        command: expect.stringContaining("truth-harness verify")
+      }
+    });
+    expect(harness.runNext.plan.sourceSnapshot?.snapshotId).toMatch(/^snap_[a-f0-9]{16}$/u);
+    expect(harness.runNext.jsonPath).toContain(".truth-harness");
+    expect(harness.runNext.markdownPath).toContain(".truth-harness");
+    expect(savedMarkdown).toContain(harness.runNext.plan.planId);
+    expect(savedPlans.total).toBe(1);
+    expect(savedPlans.plans[0]?.planId).toBe(harness.runNext.plan.planId);
+  });
+
   it("executes candidate validation evidence through agent run-next calls", async () => {
     const root = await tempRoot();
     process.env.TRUTH_HARNESS_ROOT = root;

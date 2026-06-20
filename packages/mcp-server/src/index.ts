@@ -2871,6 +2871,12 @@ export function createTruthHarnessMcpServer(): McpServer {
           .optional()
           .describe("Seed claim for the linked validation plan. Defaults to the first claim or the objective."),
         validationTitle: z.string().optional().describe("Short title for the linked validation plan."),
+        planNext: z
+          .boolean()
+          .optional()
+          .describe(
+            "When true, also saves the first dry-run workspace run-next handoff packet so the next agent resumes from the highest-value proof/evidence blocker."
+          ),
         maxDepth: z.number().int().positive().optional(),
         maxBranches: z.number().int().positive().optional(),
         maxToolCalls: z.number().int().positive().optional(),
