@@ -498,6 +498,7 @@ const workspaceRunNextSafety = document.querySelector("#workspace-run-next-safet
 const workspaceRunNextArtifactPreview = document.querySelector("#workspace-run-next-artifact-preview");
 const workspaceRunNextIdleActions = document.querySelector("#workspace-run-next-idle-actions");
 const startResearchHarnessButton = document.querySelector("#start-research-harness");
+const seedProfessorChallengeButton = document.querySelector("#seed-professor-challenge");
 const seedHardMathButton = document.querySelector("#seed-hard-math");
 const saveRunNextHandoffButton = document.querySelector("#save-run-next-handoff");
 const refreshRunNextButton = document.querySelector("#refresh-run-next");
@@ -6150,15 +6151,24 @@ async function startResearchHarnessFromUi() {
   }
 }
 
-async function seedHardMathWorkspaceFromUi() {
-  if (seedHardMathButton) {
-    seedHardMathButton.disabled = true;
-    seedHardMathButton.textContent = "Seeding";
+async function seedHardMathWorkspaceFromUi({
+  preset = "all",
+  button = seedHardMathButton,
+  idleLabel = "Seed hard math",
+  pendingLabel = "Seeding",
+  activityTitle = "Seeding hard-math workspace",
+  failureTitle = "Hard-math seed failed"
+} = {}) {
+  if (button) {
+    button.disabled = true;
+    button.textContent = pendingLabel;
   }
   addActivity(
     "web-ui",
-    "Seeding hard-math workspace",
-    "POST /api/workspace-seed/hard-math will write local validation sessions and a dry-run run-next handoff.",
+    activityTitle,
+    preset === "professor-challenge"
+      ? "POST /api/workspace-seed/hard-math will write the five-case professor challenge and a dry-run run-next handoff."
+      : "POST /api/workspace-seed/hard-math will write local validation sessions and a dry-run run-next handoff.",
     "waiting"
   );
 
@@ -6169,6 +6179,7 @@ async function seedHardMathWorkspaceFromUi() {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        preset,
         writeRunNextPlan: true
       })
     });
@@ -6191,11 +6202,11 @@ async function seedHardMathWorkspaceFromUi() {
     state.surface = "runbook";
     render();
   } catch (error) {
-    addActivity("local-api", "Hard-math seed failed", error instanceof Error ? error.message : "Unknown hard-math seed failure.", "refuted");
+    addActivity("local-api", failureTitle, error instanceof Error ? error.message : "Unknown hard-math seed failure.", "refuted");
   } finally {
-    if (seedHardMathButton) {
-      seedHardMathButton.disabled = false;
-      seedHardMathButton.textContent = "Seed hard math";
+    if (button) {
+      button.disabled = false;
+      button.textContent = idleLabel;
     }
   }
 }
@@ -18414,6 +18425,19 @@ copyTaskConsoleButton?.addEventListener("click", () => {
 startResearchHarnessButton?.addEventListener("click", () => {
   startResearchHarnessFromUi().catch((error) => {
     addActivity("web-ui", "Start harness failed", error instanceof Error ? error.message : "Unknown research harness failure.", "refuted");
+  });
+});
+
+seedProfessorChallengeButton?.addEventListener("click", () => {
+  seedHardMathWorkspaceFromUi({
+    preset: "professor-challenge",
+    button: seedProfessorChallengeButton,
+    idleLabel: "Professor challenge",
+    pendingLabel: "Seeding challenge",
+    activityTitle: "Seeding professor challenge",
+    failureTitle: "Professor challenge failed"
+  }).catch((error) => {
+    addActivity("web-ui", "Professor challenge failed", error instanceof Error ? error.message : "Unknown professor challenge failure.", "refuted");
   });
 });
 

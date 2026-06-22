@@ -735,6 +735,7 @@ describe("web UI action contracts", () => {
     expect(html).toContain('id="workspace-run-next-artifact-preview"');
     expect(html).toContain('id="workspace-run-next-idle-actions"');
     expect(html).toContain('id="start-research-harness"');
+    expect(html).toContain('id="seed-professor-challenge"');
     expect(html).toContain('id="seed-hard-math"');
     expect(html).toContain('id="save-run-next-handoff"');
     expect(html).toContain('id="refresh-run-next"');
@@ -760,13 +761,16 @@ describe("web UI action contracts", () => {
     expect(source).toContain('const verifyParam = verifySnapshot ? "?verifySnapshot=true" : ""');
     expect(source).toContain("verify-run-next-handoff");
     expect(source).toContain("function startResearchHarnessFromUi()");
-    expect(source).toContain("function seedHardMathWorkspaceFromUi()");
+    expect(source).toContain("const seedProfessorChallengeButton");
+    expect(source).toContain("function seedHardMathWorkspaceFromUi({");
+    expect(source).toContain('preset: "professor-challenge"');
     expect(source).toContain("let workspaceRunNextSaving = false;");
     expect(source).toContain("function saveWorkspaceRunNextHandoffFromUi()");
     expect(source).toContain("Saved revision-backed handoff");
     expect(source).toContain('body: JSON.stringify({');
     expect(source).toContain('source: "workspace-review"');
     expect(source).toContain("saveRunNextHandoffButton?.addEventListener");
+    expect(source).toContain("seedProfessorChallengeButton?.addEventListener");
     expect(source).toContain('saveRunNextHandoffButton.textContent = workspaceRunNextSaving');
     expect(source).toContain("function refreshWorkspaceRunNextHandoffs({ announce = true, verifySnapshots = false } = {})");
     expect(source).toContain("let workspaceRunNextSummariesLoading = false;");
