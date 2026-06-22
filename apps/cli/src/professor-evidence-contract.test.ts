@@ -15,6 +15,9 @@ describe("professor evidence reviewer commands", () => {
 
     expect(scripts["docker:professor:all"]).toBe("node tools/docker-professor.mjs --all-engines");
     expect(scripts["docker:reviewer:all"]).toBe("npm run docker:professor:all");
+    expect(Object.entries(scripts).filter(([, command]) => command.includes("npm run cli --"))).toEqual([]);
+    expect(scripts["docker:sandbox"]).toContain("node apps/cli/dist/index.js code sandbox-status --json");
+    expect(scripts["proof:lean-fixture"]).toContain("node apps/cli/dist/index.js proof project");
 
     expect(compose).toContain("professor-evidence-all:");
     expect(compose).toContain("image: truth-harness:all-engines");
