@@ -75,6 +75,15 @@ describe("release audit", () => {
         summary: expect.stringContaining("cannot responsibly claim autonomous solutions")
       })
     );
+    expect(audit.frontierReadiness.stages).toContainEqual(
+      expect.objectContaining({
+        id: "formal-theorem-workflows",
+        status: "partial",
+        nextAction: "npm run docker:proof-repair",
+        evidence: expect.arrayContaining([expect.stringContaining("Lean repair gate: npm run docker:proof-repair")])
+      })
+    );
+    expect(audit.commands.dockerLeanRepairGate).toBe("npm run docker:proof-repair");
     expect(audit.summary).toMatchObject({
       validationPassed: true,
       catalogFresh: true,

@@ -83,6 +83,7 @@ export interface CredibilityBundleManifest {
     totalBytes: number;
     copiedSnapshotFiles: number;
     skippedBundleFiles: number;
+    skippedEphemeralFiles: number;
     reportDrafts: number;
     reportDraftFiles: number;
   };
@@ -99,6 +100,7 @@ export interface CredibilityBundleManifest {
     reproducePack: string;
     dockerProfessorEvidence: string;
     dockerStrictProfessorEvidence: string;
+    dockerLeanRepairGate: string;
     dockerAllEngines: string;
   };
   limitations: string[];
@@ -175,8 +177,13 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
     ...input,
     rootPath: status.root
   });
-  const eligibleEntries = pack.embeddedSnapshot.entries.filter((entry) => !isCredibilityBundlePath(entry.path));
-  const skippedBundleFiles = pack.embeddedSnapshot.entries.length - eligibleEntries.length;
+  const entriesWithExclusions = pack.embeddedSnapshot.entries.map((entry) => ({
+    entry,
+    exclusion: credibilityBundleExclusionForPath(entry.path)
+  }));
+  const eligibleEntries = entriesWithExclusions.filter(({ exclusion }) => exclusion === undefined).map(({ entry }) => entry);
+  const skippedBundleFiles = entriesWithExclusions.filter(({ exclusion }) => exclusion === "prior-bundle").length;
+  const skippedEphemeralFiles = entriesWithExclusions.filter(({ exclusion }) => exclusion === "ephemeral").length;
   const bundleSeed = {
     packId: pack.packId,
     snapshotId: pack.embeddedSnapshot.snapshotId,
@@ -247,6 +254,7 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
       totalBytes: artifactBytes + generatedBytes,
       copiedSnapshotFiles: files.length,
       skippedBundleFiles,
+      skippedEphemeralFiles,
       reportDrafts: reportDrafts.length,
       reportDraftFiles: reportDrafts.reduce((total, draft) => total + 1 + (draft.sourceMarkdownPath ? 1 : 0), 0)
     },
@@ -263,11 +271,12 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
       reproducePack: pack.reviewerCommands.reproducePack,
       dockerProfessorEvidence: pack.reviewerCommands.dockerProfessorEvidence,
       dockerStrictProfessorEvidence: pack.reviewerCommands.dockerStrictProfessorEvidence,
+      dockerLeanRepairGate: pack.reviewerCommands.dockerLeanRepairGate,
       dockerAllEngines: pack.reviewerCommands.dockerAllEngines
     },
     limitations: [
       "This bundle verifies file identity and reviewer reproducibility boundaries; it does not prove every artifact is true.",
-      "Copied artifacts are canonical local Truth Harness files from the embedded snapshot, excluding prior credibility-bundle directories to avoid recursive bundle growth.",
+      "Copied artifacts are canonical local Truth Harness files from the embedded snapshot, excluding prior credibility-bundle directories and `.truth-harness/tmp` scratch files.",
       "A passing bundle verification means the bundle contents still match its manifest. Source workspace drift is reported separately.",
       "`proved` remains reserved for accepted proof-checker output over a concrete formal artifact."
     ],
@@ -852,8 +861,22 @@ function resolveUnderRoot(root: string, path: string, message: string): string {
   return target;
 }
 
+function credibilityBundleExclusionForPath(path: string): "prior-bundle" | "ephemeral" | undefined {
+  if (isCredibilityBundlePath(path)) {
+    return "prior-bundle";
+  }
+  if (isEphemeralWorkspacePath(path)) {
+    return "ephemeral";
+  }
+  return undefined;
+}
+
 function isCredibilityBundlePath(path: string): boolean {
   return /^\.truth-harness\/findings\/[^/]+-credibility-bundle\//u.test(path);
+}
+
+function isEphemeralWorkspacePath(path: string): boolean {
+  return /^\.truth-harness\/tmp(?:\/|$)/u.test(path);
 }
 
 function isBundleId(value: string): boolean {

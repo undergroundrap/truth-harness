@@ -32,6 +32,8 @@ describe("professor evidence reviewer commands", () => {
     expect(professorEvidence).toContain("const strictAllEngines");
     expect(professorEvidence).toContain('["--require-all-engines"]');
     expect(professorEvidence).toContain('"--require-maxima", "--require-z3", "--require-cvc5", "--require-lean"');
+    expect(professorEvidence).toContain('"gate Lean proof-repair loop"');
+    expect(professorEvidence).toContain('"proof:repair-fixture:gate"');
     expect(professorEvidence).toContain('"tools/hard-math-closure.mjs"');
     expect(professorEvidence).toContain('"exact-fraction-lemma"');
     expect(professorEvidence).toContain('"symbolic-cas-closure-fixture"');

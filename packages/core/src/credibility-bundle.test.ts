@@ -81,6 +81,7 @@ describe("credibility reviewer bundle", () => {
     expect(result.manifest.packStatus).toBe("ready-for-review");
     expect(result.manifest.summary.artifactFiles).toBeGreaterThan(0);
     expect(result.manifest.generatedFiles).toHaveLength(3);
+    expect(result.manifest.summary.skippedEphemeralFiles).toBe(0);
     expect(result.manifest.summary.reportDrafts).toBe(1);
     expect(result.manifest.summary.reportDraftFiles).toBe(2);
     expect(result.manifest.files).toContainEqual(
@@ -114,6 +115,7 @@ describe("credibility reviewer bundle", () => {
     expect(result.manifest.reviewerCommands.runSymbolicHardMathClosure).toBe("npm run docker:symbolic-closure");
     expect(result.manifest.reviewerCommands.runSmtHardMathClosure).toBe("npm run docker:smt-closure");
     expect(result.manifest.reviewerCommands.dockerStrictProfessorEvidence).toBe("npm run docker:professor:all");
+    expect(result.manifest.reviewerCommands.dockerLeanRepairGate).toBe("npm run docker:proof-repair");
     expect(result.manifest.reviewerCommands.dockerAllEngines).toBe("npm run docker:all-engines:write");
     const readme = await readFile(result.readmePath, "utf8");
     expect(readme).toContain("Truth Harness Portable Reviewer Bundle");
@@ -363,6 +365,34 @@ describe("credibility reviewer bundle", () => {
 
     expect(second.manifest.summary.skippedBundleFiles).toBeGreaterThan(0);
     expect(second.manifest.files.every((file) => !file.sourcePath.includes("-credibility-bundle/"))).toBe(true);
+  });
+
+  it("skips ephemeral workspace temp files so active logs do not cause reviewer drift", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+    const tmpDir = join(root, ".truth-harness", "tmp");
+    const logPath = join(tmpDir, "docker-professor-gate.log");
+    await mkdir(tmpDir, { recursive: true });
+    await writeFile(logPath, "professor rehearsal started\n", "utf8");
+
+    const bundle = await writeCredibilityBundle({
+      rootPath: root,
+      now: "2026-06-16T00:01:00.000Z",
+      runner: passingEngineRunner
+    });
+    await writeFile(logPath, "professor rehearsal still streaming\n", "utf8");
+
+    const verification = await verifyCredibilityBundle({
+      rootPath: root,
+      bundleRef: bundle.manifest.bundleId,
+      now: "2026-06-16T00:02:00.000Z"
+    });
+
+    expect(bundle.manifest.summary.skippedEphemeralFiles).toBe(1);
+    expect(bundle.manifest.files.every((file) => !file.sourcePath.startsWith(".truth-harness/tmp/"))).toBe(true);
+    expect(verification.passed).toBe(true);
+    expect(verification.sourceMatchesWorkspace).toBe(true);
+    expect(verification.changedSourceFiles).toHaveLength(0);
   });
 });
 

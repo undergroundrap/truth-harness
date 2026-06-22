@@ -368,6 +368,7 @@ describe("local web route ledger API", () => {
     });
     expect(credibilityPayload.pack.reviewerCommands.verifyEngines).toContain("--write --require-all-engines");
     expect(credibilityPayload.pack.reviewerCommands.reproducePack).toContain("--require-all-engines");
+    expect(credibilityPayload.pack.reviewerCommands.dockerLeanRepairGate).toBe("npm run docker:proof-repair");
 
     const releaseAuditResponse = await fetch(
       `${baseUrl}/api/release-audit?requireAllEngines=true&requireSavedStrictEngineRun=true&requireSandbox=true&timeoutMs=50`
@@ -423,6 +424,7 @@ describe("local web route ledger API", () => {
     expect(credibilityWritePayload.pack.schemaVersion).toBe("truth-harness.credibility-pack.v0");
     expect(credibilityWritePayload.pack.reviewerActionPlan.actions.length).toBeGreaterThan(0);
     expect(credibilityWritePayload.pack.reviewerCommands.verifyEngines).toContain("--write --require-all-engines");
+    expect(credibilityWritePayload.pack.reviewerCommands.dockerLeanRepairGate).toBe("npm run docker:proof-repair");
     expect(credibilityWritePayload.paths.json).toContain(".truth-harness");
     expect(credibilityWritePayload.paths.markdown).toContain(".truth-harness");
     expect(existsSync(credibilityWritePayload.paths.json)).toBe(true);

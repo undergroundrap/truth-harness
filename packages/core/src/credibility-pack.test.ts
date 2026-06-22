@@ -194,6 +194,8 @@ describe("professor credibility pack", () => {
     expect(result.pack.reviewerCommands.runExactHardMathClosure).toBe("npm run docker:hard-math-closure");
     expect(result.pack.reviewerCommands.runSymbolicHardMathClosure).toBe("npm run docker:symbolic-closure");
     expect(result.pack.reviewerCommands.runSmtHardMathClosure).toBe("npm run docker:smt-closure");
+    expect(result.pack.reviewerCommands.dockerLeanRepairGate).toBe("npm run docker:proof-repair");
+    expect(result.markdown).toContain("Docker Lean repair gate");
 
     const json = await readFile(result.jsonPath, "utf8");
     expect(json).toContain(result.pack.packId);
@@ -685,7 +687,9 @@ describe("professor credibility pack", () => {
     expect(pack.reviewerCommands.dockerSageFixture).toBe("npm run docker:sage");
     expect(pack.reviewerCommands.dockerAllEngines).toBe("npm run docker:all-engines:write");
     expect(pack.reviewerCommands.dockerStrictProfessorEvidence).toBe("npm run docker:professor:all");
+    expect(pack.reviewerCommands.dockerLeanRepairGate).toBe("npm run docker:proof-repair");
     expect(pack.markdown).toContain("Docker Sage fixture");
+    expect(pack.markdown).toContain("Docker Lean repair gate");
     expect(pack.markdown).toContain("Docker all engines");
     expect(pack.markdown).toContain("Docker strict professor evidence");
     expect(pack.reviewerActionPlan.actions).toContainEqual(

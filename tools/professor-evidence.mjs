@@ -36,6 +36,11 @@ const steps = [
     ]
   },
   {
+    label: "gate Lean proof-repair loop",
+    command: "npm",
+    args: ["run", "proof:repair-fixture:gate"]
+  },
+  {
     label: "write adversarial AI-failure benchmark evidence",
     command: "node",
     args: [

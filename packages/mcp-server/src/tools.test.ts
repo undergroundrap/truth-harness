@@ -1754,6 +1754,7 @@ describe("MCP tool handlers", () => {
     expect(bundle.manifest.reviewerCommands.runSymbolicHardMathClosure).toBe("npm run docker:symbolic-closure");
     expect(bundle.manifest.reviewerCommands.runSmtHardMathClosure).toBe("npm run docker:smt-closure");
     expect(bundle.manifest.reviewerCommands.dockerStrictProfessorEvidence).toBe("npm run docker:professor:all");
+    expect(bundle.manifest.reviewerCommands.dockerLeanRepairGate).toBe("npm run docker:proof-repair");
     expect(verification).toMatchObject({
       schemaVersion: "truth-harness.credibility-bundle-verification.v0",
       bundleId: bundle.manifest.bundleId,

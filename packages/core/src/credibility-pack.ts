@@ -40,6 +40,7 @@ export interface CredibilityPackCommandSet {
   dockerStrictProfessorEvidence: string;
   dockerCoreEngines: string;
   dockerLeanFixture: string;
+  dockerLeanRepairGate: string;
   dockerSageFixture: string;
   dockerAllEngines: string;
 }
@@ -436,6 +437,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Docker strict professor evidence: \`${pack.reviewerCommands.dockerStrictProfessorEvidence}\``,
     `- Docker core engines: \`${pack.reviewerCommands.dockerCoreEngines}\``,
     `- Docker Lean fixture: \`${pack.reviewerCommands.dockerLeanFixture}\``,
+    `- Docker Lean repair gate: \`${pack.reviewerCommands.dockerLeanRepairGate}\``,
     `- Docker Sage fixture: \`${pack.reviewerCommands.dockerSageFixture}\``,
     `- Docker all engines: \`${pack.reviewerCommands.dockerAllEngines}\``,
     "",
@@ -1242,6 +1244,7 @@ function createReviewerCommands(input: {
     dockerStrictProfessorEvidence: "npm run docker:professor:all",
     dockerCoreEngines: "npm run docker:engines",
     dockerLeanFixture: "docker compose run --rm lean-proof npm run cli -- engines verify --require-lean",
+    dockerLeanRepairGate: "npm run docker:proof-repair",
     dockerSageFixture: "npm run docker:sage",
     dockerAllEngines: "npm run docker:all-engines:write"
   };

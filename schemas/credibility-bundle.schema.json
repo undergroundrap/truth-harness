@@ -119,6 +119,7 @@
         "totalBytes": { "type": "integer", "minimum": 0 },
         "copiedSnapshotFiles": { "type": "integer", "minimum": 0 },
         "skippedBundleFiles": { "type": "integer", "minimum": 0 },
+        "skippedEphemeralFiles": { "type": "integer", "minimum": 0 },
         "reportDrafts": { "type": "integer", "minimum": 0 },
         "reportDraftFiles": { "type": "integer", "minimum": 0 }
       },

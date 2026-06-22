@@ -7348,6 +7348,7 @@ function printReleaseAudit(audit: ReleaseAudit): void {
   console.log(`  ${audit.commands.dockerSandbox}`);
   console.log(`  ${audit.commands.dockerAllEngines}`);
   console.log(`  ${audit.commands.dockerProfessorAll}`);
+  console.log(`  ${audit.commands.dockerLeanRepairGate}`);
   console.log(`  ${audit.commands.dockerProof}`);
   console.log(`  ${audit.commands.dockerVerify}`);
 
@@ -7914,6 +7915,7 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
   console.log(`  ${pack.reviewerCommands.dockerStrictProfessorEvidence}`);
   console.log(`  ${pack.reviewerCommands.dockerCoreEngines}`);
   console.log(`  ${pack.reviewerCommands.dockerLeanFixture}`);
+  console.log(`  ${pack.reviewerCommands.dockerLeanRepairGate}`);
   console.log(`  ${pack.reviewerCommands.dockerSageFixture}`);
   console.log(`  ${pack.reviewerCommands.dockerAllEngines}`);
 
@@ -8005,6 +8007,9 @@ function printCredibilityBundle(result: CredibilityBundleWriteResult): void {
   if (manifest.summary.skippedBundleFiles > 0) {
     console.log(`Skipped prior bundle files: ${manifest.summary.skippedBundleFiles}`);
   }
+  if (manifest.summary.skippedEphemeralFiles > 0) {
+    console.log(`Skipped ephemeral scratch files: ${manifest.summary.skippedEphemeralFiles}`);
+  }
   if (manifest.summary.reportDrafts > 0) {
     console.log(`Report drafts: ${manifest.summary.reportDrafts} (${manifest.summary.reportDraftFiles} files)`);
     for (const draft of manifest.reportDrafts.slice(0, 3)) {
@@ -8029,6 +8034,7 @@ function printCredibilityBundle(result: CredibilityBundleWriteResult): void {
   console.log(`  ${manifest.reviewerCommands.reproducePack}`);
   console.log(`  ${manifest.reviewerCommands.dockerProfessorEvidence}`);
   console.log(`  ${manifest.reviewerCommands.dockerStrictProfessorEvidence}`);
+  console.log(`  ${manifest.reviewerCommands.dockerLeanRepairGate}`);
   console.log(`  ${manifest.reviewerCommands.dockerAllEngines}`);
 
   if (manifest.warnings.length > 0) {

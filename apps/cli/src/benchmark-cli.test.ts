@@ -1830,6 +1830,7 @@ describe("benchmark CLI", () => {
           reproducePack: string;
           dockerProfessorEvidence: string;
           dockerStrictProfessorEvidence: string;
+          dockerLeanRepairGate: string;
           dockerAllEngines: string;
         };
       };
@@ -1904,6 +1905,7 @@ describe("benchmark CLI", () => {
     expect(bundle.manifest.reviewerCommands.reproducePack).toContain("--require-all-engines");
     expect(bundle.manifest.reviewerCommands.dockerProfessorEvidence).toBe("npm run docker:professor");
     expect(bundle.manifest.reviewerCommands.dockerStrictProfessorEvidence).toBe("npm run docker:professor:all");
+    expect(bundle.manifest.reviewerCommands.dockerLeanRepairGate).toBe("npm run docker:proof-repair");
     expect(bundle.manifest.reviewerCommands.dockerAllEngines).toBe("npm run docker:all-engines:write");
     expect(bundle.result.bundleDir.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
     expect(await readFile(bundle.result.manifestPath, "utf8")).toContain(bundle.manifest.bundleId);

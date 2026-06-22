@@ -141,6 +141,7 @@ export interface ReleaseAudit {
     dockerEngines: string;
     dockerSandbox: string;
     dockerAllEngines: string;
+    dockerLeanRepairGate: string;
     dockerProof: string;
     dockerVerify: string;
     workspaceStress: string;
@@ -611,12 +612,13 @@ function frontierReadinessFor(input: {
         : "No accepted Lean proof fixture is cited in this audit scope.",
       evidence: [
         `Lean/proved fixture evidence: ${leanFixtureReady ? "present" : "missing"}.`,
-        "`proved` remains reserved for accepted proof-checker artifacts."
+        "`proved` remains reserved for accepted proof-checker artifacts.",
+        `Lean repair gate: ${input.commands.dockerLeanRepairGate}.`
       ],
       blockers: [
         "Add larger Lean/mathlib templates, proof-hole tracking, theorem corpora, and external mathematical review before treating this as frontier theorem infrastructure."
       ],
-      nextAction: leanFixtureReady ? "Expand Lean/mathlib fixtures and proof-hole workflows." : input.commands.dockerProof
+      nextAction: leanFixtureReady ? input.commands.dockerLeanRepairGate : input.commands.dockerProof
     },
     {
       id: "autonomous-frontier-discovery",
@@ -1690,6 +1692,7 @@ function releaseAuditCommands(
     dockerEngines: "npm run docker:engines",
     dockerSandbox: "npm run docker:sandbox:write",
     dockerAllEngines: "npm run docker:all-engines",
+    dockerLeanRepairGate: "npm run docker:proof-repair",
     dockerProof: "npm run docker:proof",
     dockerVerify: "npm run docker:verify",
     workspaceStress: "truth-harness workspace stress <throwaway-path> --receipts 100 --claims 50 --routes 20 --fail-on-validation",

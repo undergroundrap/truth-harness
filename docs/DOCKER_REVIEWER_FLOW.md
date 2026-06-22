@@ -24,11 +24,11 @@ npm run docker:cleanup -- all-build-cache --confirm-delete
 
 `npm run engines:readiness:saved` prints the reviewer-facing readiness view. It can cite the latest saved passing `truth-harness.sandbox-run.v0` Docker no-network measurement for the agent-autonomy gate while keeping host probes conservative.
 
-`npm run docker:reviewer` is an alias for `npm run docker:professor`. It builds the pinned Lean reviewer image when needed, then writes no-network engine evidence, adversarial benchmark evidence, math credibility ladder evidence, exact/symbolic/SMT hard-math closure evidence, a credibility pack, and a verified reviewer bundle.
+`npm run docker:reviewer` is an alias for `npm run docker:professor`. It builds the pinned Lean reviewer image when needed, then writes no-network engine evidence, gates the Lean proof-repair loop, writes adversarial benchmark evidence, math credibility ladder evidence, exact/symbolic/SMT hard-math closure evidence, a credibility pack, and a verified reviewer bundle.
 
 `npm run docker:reviewer:all` is the stricter auditor lane. It builds the heavier all-engine image, then writes the same no-network reviewer artifacts and closure reports while requiring Maxima, Z3, cvc5, Lean, and SageMath to each earn scoped fixture evidence through `--require-all-engines`. Use this before serious outside review when SageMath should be part of the same portable packet, not merely a separate optional smoke.
 
-The professor sequence deliberately runs the closure reports before `workspace credibility-pack` or `workspace credibility-bundle`. If exact arithmetic, independent symbolic CAS, or SMT closure fails, no later reviewer bundle is written. That keeps the portable packet aligned with the hard-problem queue: agents and professors see the highest-value proof blockers as concrete evidence gates, not loose roadmap text.
+The professor sequence deliberately runs the Lean proof-repair gate and closure reports before `workspace credibility-pack` or `workspace credibility-bundle`. If the scoped Lean repair loop, exact arithmetic, independent symbolic CAS, or SMT closure fails, no later reviewer bundle is written. That keeps the portable packet aligned with the hard-problem queue: agents and professors see the highest-value proof blockers as concrete evidence gates, not loose roadmap text.
 
 Engine verification JSON remains the forensic source of record, including raw probe stdout/stderr where a backend exposes it. Human-facing CLI and Markdown summaries keep backend versions concise, so noisy banners such as cvc5's license text render as a stable version label like `cvc5 version 1.0.3` instead of overwhelming the reviewer packet.
 
