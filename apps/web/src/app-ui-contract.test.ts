@@ -26,6 +26,11 @@ describe("web UI action contracts", () => {
     expect(source).toContain("Attach command");
     expect(source).toContain("target.validationPlanId");
     expect(source).toContain("target.validationGateId");
+    expect(source).toContain("function workspaceReviewProofRepairTargetText(item)");
+    expect(source).toContain("function workspaceReviewProofRepairCommandText(item)");
+    expect(source).toContain("function workspaceReviewProofRepairEvidenceText(item)");
+    expect(source).toContain('["Proof repair target", workspaceReviewProofRepairTargetText(item)]');
+    expect(source).toContain('["Proof repair command", workspaceReviewProofRepairCommandText(item)]');
   });
 
   it("keeps focused engine readiness commands copyable from the checks work order", async () => {
@@ -779,6 +784,11 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function renderWorkspaceRunNextIdleActions(plan)");
     expect(source).toContain("function fallbackWorkspaceRunNextIdleActions(workspacePath)");
     expect(source).toContain("function workspaceRunNextDetailsRows(plan, command)");
+    expect(source).toContain("function workspaceRunNextProofRepairRows(item)");
+    expect(source).toContain("function workspaceRunNextProofRepairCardHtml(item)");
+    expect(source).toContain("workspaceRunNextProofRepairCardHtml(plan.item)");
+    expect(source).toContain('["Proof repair target", workspaceReviewProofRepairTargetText(item)]');
+    expect(source).toContain('["Proof repair command", workspaceReviewProofRepairCommandText(item)]');
     expect(source).toContain("function renderWorkspaceRunNextArtifactPreview(plan)");
     expect(source).toContain("function workspaceRunNextRevalidationQueueHtml(value, surface");
     expect(source).toContain("function workspaceRunNextRevalidationItems(value)");
@@ -840,6 +850,8 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".workspace-run-next-engine-card");
     expect(styles).toContain(".workspace-run-next-engine-step");
     expect(styles).toContain(".workspace-run-next-details");
+    expect(styles).toContain(".workspace-run-next-proof-repair");
+    expect(styles).toContain(".workspace-run-next-proof-repair-head");
     expect(styles).toContain(".workspace-run-next-safety");
     expect(styles).toContain(".workspace-run-next-safety-grid");
     expect(styles).toContain(".workspace-run-next-idle-actions");

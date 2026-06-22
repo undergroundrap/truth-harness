@@ -4325,6 +4325,52 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   min-height: 0;
 }
 
+.workspace-run-next-proof-repair {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid rgba(230, 195, 106, 0.34);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(230, 195, 106, 0.07), rgba(12, 12, 12, 0.98)),
+    #11100c;
+  padding: 10px;
+}
+
+.workspace-run-next-proof-repair-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.workspace-run-next-proof-repair-head > div {
+  display: grid;
+  gap: 3px;
+  min-width: min(100%, 260px);
+}
+
+.workspace-run-next-proof-repair strong {
+  color: #f2ecdf;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.workspace-run-next-proof-repair p {
+  margin: 0;
+  color: #d8cdb9;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.workspace-run-next-proof-repair code {
+  min-height: 0;
+}
+
 .workspace-run-next-idle-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

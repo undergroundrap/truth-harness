@@ -5361,6 +5361,9 @@ function workspaceReviewActionFactsHtml(item) {
     ["Obligation", item.obligationId],
     ["Proof declaration", workspaceReviewProofDeclarationText(item)],
     ["Proof attempt", workspaceReviewProofAttemptText(item)],
+    ["Proof repair target", workspaceReviewProofRepairTargetText(item)],
+    ["Proof repair command", workspaceReviewProofRepairCommandText(item)],
+    ["Proof repair evidence", workspaceReviewProofRepairEvidenceText(item)],
     ["Proof source", workspaceReviewProofSourceText(item)],
     ["Proof diagnostic", item.proofAttempt?.diagnosticSnippet],
     ["Claim", item.claimId],
@@ -5391,6 +5394,26 @@ function workspaceReviewProofAttemptText(item) {
   }
 
   return [proofAttempt.checkId, proofAttempt.status, proofAttempt.sourcePath].filter(Boolean).join(" / ");
+}
+
+function workspaceReviewProofRepairTargetText(item) {
+  const target = item?.proofRepairTarget;
+  if (!target) {
+    return "";
+  }
+
+  const location = `${target.sourcePath}:${target.markerLine}:${target.markerColumn}`;
+  const declaration = target.declarationName ?? target.declarationId;
+  const sourceHash = target.sourceSha256 ? `source ${target.sourceSha256.slice(0, 12)}` : "";
+  return [target.repairTargetId, target.markerKind, declaration, sourceHash, location].filter(Boolean).join(" / ");
+}
+
+function workspaceReviewProofRepairCommandText(item) {
+  return item?.proofRepairTarget?.afterEditCommands?.[0] ?? "";
+}
+
+function workspaceReviewProofRepairEvidenceText(item) {
+  return item?.proofRepairTarget?.evidenceRequired?.join("; ") ?? "";
 }
 
 function workspaceReviewProofSourceText(item) {
@@ -8302,6 +8325,7 @@ function setArtifactAwareDefinitionRows(element, rows, surface) {
 function workspaceRunNextDetailsRows(plan, command) {
   const idleActions = plan?.idleNextActions?.map((action) => action.title).join(" / ");
   const revalidations = workspaceRunNextRevalidationSummary(plan);
+  const proofRepairRows = workspaceRunNextProofRepairRows(plan?.item);
   if (plan?.rationale) {
     return [
       ["Target", plan.rationale.target],
@@ -8315,7 +8339,8 @@ function workspaceRunNextDetailsRows(plan, command) {
       ["Boundary", plan.rationale.executionBoundary],
       ["Stop", plan.rationale.firstStopCondition],
       ["Warning", plan.rationale.firstWarning],
-      ["Idle actions", idleActions]
+      ["Idle actions", idleActions],
+      ...proofRepairRows
     ];
   }
 
@@ -8344,8 +8369,51 @@ function workspaceRunNextDetailsRows(plan, command) {
     ["Boundary", boundary],
     ["Stop", plan?.stopConditions?.[0]],
     ["Warning", plan?.warnings?.[0]],
-    ["Idle actions", idleActions]
+    ["Idle actions", idleActions],
+    ...proofRepairRows
   ];
+}
+
+function workspaceRunNextProofRepairRows(item) {
+  const target = item?.proofRepairTarget;
+  if (!target) {
+    return [];
+  }
+
+  return [
+    ["Proof repair target", workspaceReviewProofRepairTargetText(item)],
+    ["Proof repair command", workspaceReviewProofRepairCommandText(item)],
+    ["Proof repair evidence", workspaceReviewProofRepairEvidenceText(item)],
+    ["Proof repair boundary", target.boundary]
+  ];
+}
+
+function workspaceRunNextProofRepairCardHtml(item) {
+  const target = item?.proofRepairTarget;
+  if (!target) {
+    return "";
+  }
+
+  const declaration = target.declarationName ?? target.declarationId ?? "declaration not recorded";
+  const command = target.afterEditCommands?.[0] ?? "truth-harness proof check <source.lean> --write";
+  const evidence = target.evidenceRequired?.join("; ") || "Accepted scoped proof-check evidence.";
+  return `<section class="workspace-run-next-proof-repair">
+    <div class="workspace-run-next-proof-repair-head">
+      <div>
+        <span class="mini-label">proof repair target</span>
+        <strong>${escapeHtml(target.repairTargetId)}</strong>
+      </div>
+      <span class="status-pill waiting">${escapeHtml(target.markerKind ?? "marker")}</span>
+    </div>
+    <p>${escapeHtml(`${target.sourcePath}:${target.markerLine}:${target.markerColumn} - ${declaration}`)}</p>
+    <dl class="workspace-run-next-mini-details">
+      <div><dt>Source SHA-256</dt><dd>${escapeHtml(target.sourceSha256)}</dd></div>
+      ${target.declarationSignatureSha256 ? `<div><dt>Declaration SHA-256</dt><dd>${escapeHtml(target.declarationSignatureSha256)}</dd></div>` : ""}
+      <div><dt>Evidence required</dt><dd>${escapeHtml(evidence)}</dd></div>
+    </dl>
+    <code>${escapeHtml(command)}</code>
+    <p class="workspace-run-next-boundary">${escapeHtml(target.boundary ?? "Repair target is a local planning aid, not proof evidence.")}</p>
+  </section>`;
 }
 
 function workspacePilotLoopDetailsRows(loop) {
@@ -8516,6 +8584,7 @@ function renderWorkspaceRunNextInspection(inspection) {
       <div><dt>Snapshot</dt><dd>${escapeHtml(snapshotSummary)}</dd></div>
       <div><dt>Boundary</dt><dd>${escapeHtml(plan.rationale?.executionBoundary ?? "Browser inspection only.")}</dd></div>
     </dl>
+    ${workspaceRunNextProofRepairCardHtml(plan.item)}
     ${workspaceRunNextArtifactRefsHtml(artifactRefs, "workspace-run-next-inspection", {
       limit: 8,
       emptyHtml: ""
