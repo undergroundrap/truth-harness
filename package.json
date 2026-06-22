@@ -90,6 +90,7 @@
     "engines:verify:all": "node apps/cli/dist/index.js engines verify --require-all-engines",
     "mcp": "node packages/mcp-server/dist/index.js",
     "proof:lean-fixture": "node apps/cli/dist/index.js proof project docs/examples/lean-fixture --json && node apps/cli/dist/index.js proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean --timeout-ms 30000 --fail-on-unproved --json",
+    "proof:repair-fixture": "node apps/cli/dist/index.js proof repair-fixture docs/examples/lean-repair-fixture --timeout-ms 30000",
     "proof:launch": "npm run demo:replay && npm run demo:render && npm run demo:parity && npm run demo:bench && npm run demo:physics && npm run demo:numeric && npm run demo:symbolic && npm run demo:check",
     "proof:launch:engines": "npm run proof:launch && npm run demo:cas && npm run demo:smt",
     "test": "vitest run"

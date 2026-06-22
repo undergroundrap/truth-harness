@@ -262,6 +262,10 @@ export {
   writeHardMathSeedWorkspace
 } from "./hard-math-seed.js";
 export {
+  PROOF_REPAIR_FIXTURE_SCHEMA_VERSION,
+  writeProofRepairFixtureWorkspace
+} from "./proof-repair-fixture.js";
+export {
   HARD_MATH_CLOSURE_REPORT_SCHEMA_VERSION,
   listHardMathClosureReports,
   renderHardMathClosureReportMarkdown,
@@ -327,6 +331,10 @@ export type {
   HardMathSeedInput,
   HardMathSeedResult
 } from "./hard-math-seed.js";
+export type {
+  ProofRepairFixtureInput,
+  ProofRepairFixtureResult
+} from "./proof-repair-fixture.js";
 export type {
   HardMathClosureCaseReport,
   HardMathClosureGateEvidenceSummary,

@@ -1148,6 +1148,46 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.statusProbeIsNotProof).toBe(true);
   });
 
+  it("writes a proof-repair fixture without closing the route when Lean is unavailable", async () => {
+    const root = await tempRoot();
+    const result = await runCli([
+      "proof",
+      "repair-fixture",
+      root,
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--no-run-next",
+      "--json"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      schemaVersion: string;
+      routeSatisfaction?: unknown;
+      rejectedProof: { record: { status: string; trust: string } };
+      repairedProof: { record: { status: string; trust: string } };
+      repairRunNext: { plan: { status: string; item?: { command: string } } };
+      finalReview: { items: Array<{ kind: string; routeId?: string; obligationId?: string }> };
+      route: { route: { routeId: string } };
+      obligation: { obligationId: string };
+      warnings: string[];
+    };
+
+    expect(result.exitCode).toBe(0);
+    expect(json.schemaVersion).toBe("truth-harness.proof-repair-fixture.v0");
+    expect(json.rejectedProof.record).toMatchObject({ status: "backend-unavailable", trust: "unverified" });
+    expect(json.repairedProof.record).toMatchObject({ status: "backend-unavailable", trust: "unverified" });
+    expect(json.routeSatisfaction).toBeUndefined();
+    expect(json.repairRunNext.plan.status).toBe("planned");
+    expect(json.repairRunNext.plan.item?.command).toContain("truth-harness proof check");
+    expect(json.finalReview.items).toContainEqual(
+      expect.objectContaining({
+        kind: "route-obligation",
+        routeId: json.route.route.routeId,
+        obligationId: json.obligation.obligationId
+      })
+    );
+    expect(json.warnings.join(" ")).toContain("route obligation remains open");
+  });
+
   it("inspects Lean project readiness without running Lean", async () => {
     const root = await tempRoot();
     await mkdir(join(root, "Proofs"), { recursive: true });

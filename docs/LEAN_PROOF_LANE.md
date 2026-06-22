@@ -147,6 +147,25 @@ If several rejected or errored proof-check records target the same route obligat
 
 Agents may propose proof repairs, but they should not describe a claim as proved unless the accepted proof-check record exists and the formal statement matches the intended claim.
 
+## Proof Repair Fixture
+
+Use the repair fixture when you want to rehearse the full proof-repair loop end to end:
+
+```bash
+npm run build
+npm run proof:repair-fixture
+```
+
+This creates `docs/examples/lean-repair-fixture` as a local Truth Harness workspace, writes a tiny Lean theorem, records an intentionally rejected scoped proof attempt, asks `workspace run-next` for the repair handoff, rewrites the same Lean source to a valid proof, and then tries to close the exact route obligation with the accepted proof-check record.
+
+The fixture is intentionally narrow:
+
+- if Lean is installed and accepts the repaired source, the route obligation is satisfied by a scoped `truth-harness.proof-check.v0` record with `trust: proved`;
+- if Lean is missing or rejects the repaired source, the fixture remains useful as a repair handoff, but the route obligation stays open;
+- the accepted proof covers only the formal statement in the fixture, not any surrounding informal, scientific, medical, patent, or safety claim.
+
+Agents should use this as a regression rehearsal before trusting autonomous proof-repair behavior in a hard-problem workspace. It proves that the handoff loop can preserve route id, obligation id, statement hash, source hash, diagnostics, and accepted proof evidence without inventing a disconnected proof attempt.
+
 ## Research Direction
 
 The next proof-lane milestones are:

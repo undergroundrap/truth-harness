@@ -174,6 +174,7 @@ import {
   writeResearchHarness,
   writeResearchSession,
   writeHardMathSeedWorkspace,
+  writeProofRepairFixtureWorkspace,
   writeValidationPlan,
   writeVerifierRoute,
   writeWorkspaceReview,
@@ -243,6 +244,7 @@ import {
   type ExternalDisclosureStatus,
   type ExternalDisclosureWriteResult,
   type HardMathSeedResult,
+  type ProofRepairFixtureResult,
   type InventionEvidenceRef,
   type InventionLogEntry,
   type InventionValidationStage,
@@ -4531,6 +4533,43 @@ proof
   );
 
 proof
+  .command("repair-fixture")
+  .description("Write and rehearse a local Lean proof-repair fixture with route/run-next handoff evidence.")
+  .argument("[path]", "Project root path", ".")
+  .option("--now <iso>", "Deterministic creation timestamp for reproducible tests and demos")
+  .option("--lean-command <path>", "Lean executable path or command. Defaults to TRUTH_HARNESS_LEAN or lean.")
+  .option("--timeout-ms <ms>", "Backend probe and proof-check timeout in milliseconds", parsePositiveInteger, 30000)
+  .option("--no-run-next", "Create the repair rehearsal without writing the run-next handoff packet")
+  .option("--json", "Print the full proof-repair fixture JSON")
+  .action(
+    async (
+      path: string,
+      options: {
+        now?: string;
+        leanCommand?: string;
+        timeoutMs: number;
+        runNext?: boolean;
+        json?: boolean;
+      }
+    ) => {
+      const result = await writeProofRepairFixtureWorkspace({
+        rootPath: path,
+        now: options.now,
+        leanCommand: options.leanCommand,
+        timeoutMs: options.timeoutMs,
+        writeRunNextPlan: options.runNext !== false
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printProofRepairFixture(result);
+    }
+  );
+
+proof
   .command("list")
   .description("List local proof-check records.")
   .argument("[path]", "Project root path", ".")
@@ -8132,6 +8171,53 @@ function printHardMathSeed(result: HardMathSeedResult): void {
       console.log(`  Markdown: ${runNextWrite.markdownPath}`);
     }
   }
+
+  if (result.warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const warning of result.warnings) {
+      console.log(`  - ${warning}`);
+    }
+  }
+}
+
+function printProofRepairFixture(result: ProofRepairFixtureResult): void {
+  console.log("Truth Harness proof-repair fixture");
+  console.log(`Fixture: ${result.fixtureId}`);
+  console.log(`Workspace: ${result.workspacePath}`);
+  console.log(`Source: ${result.sourcePath}`);
+  console.log(`Statement: ${result.statement}`);
+  console.log("Local only: yes (network: none)");
+  console.log("");
+  console.log("Route obligation:");
+  console.log(`  route: ${result.route.route.routeId}`);
+  console.log(`  obligation: ${result.obligation.obligationId}`);
+  console.log(`  kind: ${result.obligation.kind}; status: ${result.routeSatisfaction ? "satisfied" : result.obligation.status}`);
+  console.log("");
+  console.log("Proof attempts:");
+  console.log(
+    `  rejected attempt: ${result.rejectedProof.record.checkId} status=${result.rejectedProof.record.status} trust=${result.rejectedProof.record.trust}`
+  );
+  console.log(
+    `  repaired attempt: ${result.repairedProof.record.checkId} status=${result.repairedProof.record.status} trust=${result.repairedProof.record.trust}`
+  );
+  console.log("");
+  console.log("Repair handoff:");
+  console.log(`  plan: ${result.repairRunNext.plan.planId}`);
+  console.log(`  status: ${result.repairRunNext.plan.status}`);
+  if (result.repairRunNext.plan.item) {
+    console.log(`  command: ${result.repairRunNext.plan.item.command}`);
+  }
+  if ("jsonPath" in result.repairRunNext) {
+    console.log(`  JSON: ${result.repairRunNext.jsonPath}`);
+    console.log(`  Markdown: ${result.repairRunNext.markdownPath}`);
+  }
+  console.log("");
+  console.log(
+    result.routeSatisfaction
+      ? `Closed route obligation with ${result.routeSatisfaction.evidence.trust ?? "unlabeled"} proof evidence.`
+      : "Route obligation is still open; install/configure Lean and rerun before treating the fixture as closed."
+  );
 
   if (result.warnings.length > 0) {
     console.log("");
