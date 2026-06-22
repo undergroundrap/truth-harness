@@ -654,8 +654,8 @@ describe("web UI action contracts", () => {
     const graphEdgeCodeStyles = styles.match(/\.graph-edge-list code \{[\s\S]*?\r?\n\}/u)?.[0];
     const runbookPacketStyles = styles.match(/#runbook-packet \{[\s\S]*?\r?\n\}/u)?.[0];
 
-    expect(html).toContain('src="./src/app.js?v=2026-06-22-professor-seed-restore"');
-    expect(html).toContain('href="./src/styles.css?v=2026-06-19-layout-audit-pass"');
+    expect(html).toContain('src="./src/app.js?v=2026-06-22-professor-resume-actions"');
+    expect(html).toContain('href="./src/styles.css?v=2026-06-22-professor-resume-actions"');
     expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
     expect(html).toContain('aria-hidden="true"');
     expect(source).toContain('const UI_AUDIT_SURFACES = ["trace", "plot", "runbook", "checks", "graph", "protocol", "notes", "replay", "report"];');
@@ -803,6 +803,14 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function renderWorkspaceRunNext()");
     expect(source).toContain("function renderProfessorChallengeSummary()");
     expect(source).toContain("Seeded ${escapeHtml(created)} as a local reviewer workout");
+    expect(source).toContain("function handleProfessorChallengeAction(action, button)");
+    expect(source).toContain('data-professor-action="refresh-run-next"');
+    expect(source).toContain('data-professor-action="preview-loop"');
+    expect(source).toContain('data-professor-action="save-handoff"');
+    expect(source).toContain('data-professor-action="copy-seed-command"');
+    expect(source).toContain("workspaceProfessorChallenge?.addEventListener");
+    expect(source).toContain("truth-harness workspace hard-math-seeds . --preset professor-challenge --latest --json");
+    expect(source).toContain("Professor challenge resumed");
     expect(source).toContain("function renderWorkspaceRunNextEnginePlan(plan)");
     expect(source).toContain("function workspaceRunNextEnginePlanHtml(enginePlan)");
     expect(source).toContain("function workspaceRunNextEngineFirstStep(enginePlan)");
@@ -896,6 +904,8 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".workspace-professor-challenge");
     expect(styles).toContain(".workspace-professor-challenge-grid");
     expect(styles).toContain(".workspace-professor-challenge-next");
+    expect(styles).toContain(".workspace-professor-challenge-actions");
+    expect(styles).toContain(".workspace-professor-challenge-next code");
     expect(styles).toContain(".workspace-run-next-proof-repair");
     expect(styles).toContain(".workspace-run-next-proof-repair-head");
     expect(styles).toContain(".workspace-run-next-proof-diagnostic");

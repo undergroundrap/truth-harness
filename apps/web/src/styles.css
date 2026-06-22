@@ -4184,7 +4184,25 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 }
 
 .workspace-professor-challenge-next code {
+  display: block;
   margin-top: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+.workspace-professor-challenge-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  border-top: 1px solid rgba(231, 197, 119, 0.16);
+  padding-top: 10px;
+}
+
+.workspace-professor-challenge-actions .text-button {
+  min-width: 0;
 }
 
 .workspace-run-next-engine[hidden] {

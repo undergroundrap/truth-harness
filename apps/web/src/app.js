@@ -7944,6 +7944,7 @@ function renderProfessorChallengeSummary() {
   const nextItem = nextPlan?.item;
   const nextCommand = nextItem?.command ?? nextPlan?.execution?.command ?? "truth-harness workspace run-next . --json";
   const nextTitle = nextItem?.title ?? "Run-next will select the highest-value open validation gate.";
+  const seedCommand = "truth-harness workspace hard-math-seeds . --preset professor-challenge --latest --json";
   const created = professorChallengeSeed.createdAt ? new Date(professorChallengeSeed.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "local session";
   const caseCards = cases
     .map((seedCase, index) => {
@@ -7979,7 +7980,65 @@ function renderProfessorChallengeSummary() {
       <strong>${escapeHtml(nextTitle)}</strong>
       <code>${escapeHtml(nextCommand)}</code>
     </div>
+    <div class="workspace-professor-challenge-actions" aria-label="Professor challenge resume actions">
+      <button class="text-button compact-button strong-action" data-professor-action="refresh-run-next" type="button">Refresh gates</button>
+      <button class="text-button compact-button" data-professor-action="preview-loop" type="button">Preview loop</button>
+      <button class="text-button compact-button" data-professor-action="save-handoff" type="button">Save handoff</button>
+      <button class="text-button compact-button" data-professor-action="copy-seed-command" data-command="${escapeHtml(seedCommand)}" type="button">Copy restore CLI</button>
+      <button class="text-button compact-button" data-professor-action="copy-next-command" data-command="${escapeHtml(nextCommand)}" type="button">Copy next CLI</button>
+    </div>
   </section>`;
+}
+
+async function handleProfessorChallengeAction(action, button) {
+  if (!action) {
+    return;
+  }
+
+  if (action === "copy-seed-command" || action === "copy-next-command") {
+    await copyWorkspaceRunNextHandoffCommand(button?.dataset.command, button);
+    return;
+  }
+
+  if (button) {
+    button.disabled = true;
+  }
+
+  try {
+    if (action === "refresh-run-next") {
+      await refreshLatestProfessorChallengeSeed({ announce: false });
+      await refreshWorkspaceRunNext({ announce: true });
+      await refreshWorkspacePilotLoop({ announce: false });
+      addActivity(
+        "web-ui",
+        "Professor challenge resumed",
+        "Restored the latest professor challenge seed and refreshed the verifier-directed next action.",
+        "passed"
+      );
+      return;
+    }
+
+    if (action === "preview-loop") {
+      await refreshWorkspaceRunNext({ announce: false });
+      await refreshWorkspacePilotLoop({ announce: true });
+      addActivity(
+        "web-ui",
+        "Professor challenge loop previewed",
+        "Refreshed the bounded local pilot-loop preview without executing browser-side commands.",
+        "waiting"
+      );
+      return;
+    }
+
+    if (action === "save-handoff") {
+      await saveWorkspaceRunNextHandoffFromUi();
+      return;
+    }
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
+  }
 }
 
 function renderWorkspacePilotLoop() {
@@ -18566,6 +18625,18 @@ refreshPilotLoopButton?.addEventListener("click", () => {
 copyPilotLoopCommandButton?.addEventListener("click", () => {
   copyWorkspacePilotLoopCommand().catch((error) => {
     addActivity("web-ui", "Copy pilot-loop failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+  });
+});
+
+workspaceProfessorChallenge?.addEventListener("click", (event) => {
+  const actionButton = event.target.closest("[data-professor-action]");
+  if (!actionButton) {
+    return;
+  }
+
+  const action = actionButton.dataset.professorAction;
+  handleProfessorChallengeAction(action, actionButton).catch((error) => {
+    addActivity("web-ui", "Professor challenge action failed", error instanceof Error ? error.message : "Unknown professor challenge action failure.", "refuted");
   });
 });
 
