@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/hard-math-seed.schema.json",
+  "title": "Truth Harness Hard-Math Seed",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "seedId",
+    "createdAt",
+    "preset",
+    "localOnly",
+    "networkAccess",
+    "workspacePath",
+    "cases",
+    "paths",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.hard-math-seed.v0"
+    },
+    "seedId": {
+      "type": "string",
+      "pattern": "^hmseed_[a-f0-9]{16}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "preset": {
+      "enum": ["all", "professor-challenge"]
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "workspacePath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["caseId", "title", "sessionId"],
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sessionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "validationPlanId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "validationReadiness": {
+            "type": "string",
+            "minLength": 1
+          },
+          "openBlockingGates": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "runNext": {
+      "type": "object",
+      "required": ["plan"],
+      "properties": {
+        "plan": {
+          "type": "object",
+          "required": ["schemaVersion", "planId"],
+          "properties": {
+            "schemaVersion": {
+              "const": "truth-harness.workspace-run-next.v0"
+            },
+            "planId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": true
+        },
+        "jsonPath": {
+          "type": "string"
+        },
+        "markdownPath": {
+          "type": "string"
+        },
+        "markdown": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "paths": {
+      "type": "object",
+      "required": ["json", "markdown"],
+      "properties": {
+        "json": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/findings/.+\\.json$"
+        },
+        "markdown": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/findings/.+\\.md$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

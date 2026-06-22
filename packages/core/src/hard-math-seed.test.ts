@@ -1,9 +1,13 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { listWorkspaceEvents } from "./event-log.js";
-import { writeHardMathSeedWorkspace } from "./hard-math-seed.js";
+import {
+  listHardMathSeedWorkspaces,
+  readLatestHardMathSeedWorkspace,
+  writeHardMathSeedWorkspace
+} from "./hard-math-seed.js";
 import { listResearchSessions } from "./research-session.js";
 import { listValidationPlans } from "./validation-plan.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
@@ -131,6 +135,10 @@ describe("hard-math seed workspace", () => {
     ]);
     expect(result.cases).toHaveLength(5);
     expect(result.warnings.join("\n")).toContain("Professor challenge seeds are a credibility workout");
+    expect(result.paths.json).toContain(".truth-harness/findings/");
+    expect(result.paths.markdown).toContain(".truth-harness/findings/");
+    await expect(readFile(resolve(root, result.paths.json), "utf8")).resolves.toContain(result.seedId);
+    await expect(readFile(resolve(root, result.paths.markdown), "utf8")).resolves.toContain("Truth Harness Hard-Math Seed");
     expect(result.runNext?.plan).toMatchObject({
       schemaVersion: "truth-harness.workspace-run-next.v0",
       dryRun: true,
@@ -146,6 +154,14 @@ describe("hard-math seed workspace", () => {
     expect(plans.map((plan) => plan.planId).sort()).toEqual(
       result.cases.map((seedCase) => seedCase.validationPlanId).sort()
     );
+
+    const seeds = await listHardMathSeedWorkspaces(root, { preset: "professor-challenge" });
+    expect(seeds.map((seed) => seed.seedId)).toContain(result.seedId);
+    await expect(readLatestHardMathSeedWorkspace(root, { preset: "professor-challenge" })).resolves.toMatchObject({
+      seedId: result.seedId,
+      preset: "professor-challenge",
+      cases: expect.arrayContaining([expect.objectContaining({ caseId: "false-parity-trap" })])
+    });
 
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
     expect(validation.passed).toBe(true);

@@ -261,6 +261,8 @@ export {
   HARD_MATH_SEED_PRESETS,
   HARD_MATH_SEED_SCHEMA_VERSION,
   PROFESSOR_CHALLENGE_CASE_IDS,
+  listHardMathSeedWorkspaces,
+  readLatestHardMathSeedWorkspace,
   writeHardMathSeedWorkspace
 } from "./hard-math-seed.js";
 export {
@@ -331,6 +333,7 @@ export type {
 export type {
   HardMathSeedCase,
   HardMathSeedInput,
+  HardMathSeedListInput,
   HardMathSeedPreset,
   HardMathSeedResult
 } from "./hard-math-seed.js";

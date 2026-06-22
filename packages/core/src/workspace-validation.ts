@@ -328,6 +328,11 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
         idKey: "closureId"
       },
       {
+        schemaVersion: "truth-harness.hard-math-seed.v0",
+        schemaFile: "hard-math-seed.schema.json",
+        idKey: "seedId"
+      },
+      {
         schemaVersion: "truth-harness.credibility-pack.v0",
         schemaFile: "credibility-pack.schema.json",
         idKey: "packId"
@@ -1376,6 +1381,9 @@ function inferLooseArtifactId(
   }
   if (record?.schemaVersion === "truth-harness.hard-math-closure.v0") {
     return typeof record.closureId === "string" ? record.closureId : undefined;
+  }
+  if (record?.schemaVersion === "truth-harness.hard-math-seed.v0") {
+    return typeof record.seedId === "string" ? record.seedId : undefined;
   }
   if (record?.schemaVersion === "truth-harness.credibility-pack.v0") {
     return typeof record.packId === "string" ? record.packId : undefined;

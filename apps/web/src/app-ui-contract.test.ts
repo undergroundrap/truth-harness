@@ -654,7 +654,7 @@ describe("web UI action contracts", () => {
     const graphEdgeCodeStyles = styles.match(/\.graph-edge-list code \{[\s\S]*?\r?\n\}/u)?.[0];
     const runbookPacketStyles = styles.match(/#runbook-packet \{[\s\S]*?\r?\n\}/u)?.[0];
 
-    expect(html).toContain('src="./src/app.js?v=2026-06-22-professor-challenge-summary"');
+    expect(html).toContain('src="./src/app.js?v=2026-06-22-professor-seed-restore"');
     expect(html).toContain('href="./src/styles.css?v=2026-06-19-layout-audit-pass"');
     expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
     expect(html).toContain('aria-hidden="true"');
@@ -757,6 +757,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain('fetch(`/api/workspace-pilot-loop?${params.toString()}`');
     expect(source).toContain('fetch("/api/research-harness"');
     expect(source).toContain('fetch("/api/workspace-seed/hard-math"');
+    expect(source).toContain('fetch(`/api/workspace-seed/hard-math/latest?${params.toString()}`');
     expect(source).toContain('fetch(`/api/workspace-run-nexts?${params.toString()}`');
     expect(source).toContain('fetch(`/api/workspace-run-nexts/${encodeURIComponent(ref)}${verifyParam}`');
     expect(source).toContain('const verifyParam = verifySnapshot ? "?verifySnapshot=true" : ""');
@@ -766,6 +767,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("let professorChallengeSeed");
     expect(source).toContain("const workspaceProfessorChallenge");
     expect(source).toContain("function seedHardMathWorkspaceFromUi({");
+    expect(source).toContain("function refreshLatestProfessorChallengeSeed({ announce = true } = {})");
     expect(source).toContain('preset: "professor-challenge"');
     expect(source).toContain('payload.seed?.preset === "professor-challenge"');
     expect(source).toContain("let workspaceRunNextSaving = false;");

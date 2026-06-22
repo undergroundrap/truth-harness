@@ -1218,6 +1218,7 @@ void refreshResearchSessions();
 void refreshResearchMap();
 void refreshVisualArtifacts();
 void refreshWorkspaceReview();
+void refreshLatestProfessorChallengeSeed({ announce: false });
 void refreshWorkspaceRunNext({ announce: false });
 void refreshWorkspacePilotLoop({ announce: false });
 void refreshWorkspaceRunNextHandoffs({ announce: false });
@@ -6212,6 +6213,39 @@ async function seedHardMathWorkspaceFromUi({
     if (button) {
       button.disabled = false;
       button.textContent = idleLabel;
+    }
+  }
+}
+
+async function refreshLatestProfessorChallengeSeed({ announce = true } = {}) {
+  try {
+    const params = new URLSearchParams({ preset: "professor-challenge" });
+    const response = await fetch(`/api/workspace-seed/hard-math/latest?${params.toString()}`, {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Latest professor challenge seed API failed.");
+    if (payload.seed?.preset === "professor-challenge") {
+      professorChallengeSeed = payload.seed;
+      if (announce) {
+        addActivity(
+          "local-api",
+          "Loaded professor challenge",
+          `${payload.seed.cases?.length ?? 0} persisted professor challenge cases restored from ${payload.seed.paths?.json ?? ".truth-harness/findings"}.`,
+          "passed",
+          payload.seed.createdAt
+        );
+      }
+    }
+    render();
+  } catch (error) {
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Professor challenge unavailable",
+        error instanceof Error ? error.message : "No persisted professor challenge seed could be loaded.",
+        "waiting"
+      );
     }
   }
 }

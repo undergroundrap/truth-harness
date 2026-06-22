@@ -1,6 +1,12 @@
-import { initLocalWorkspace } from "./local-workspace.js";
+import { mkdir, readdir, readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
+import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { getLocalWorkspaceStatus, initLocalWorkspace } from "./local-workspace.js";
 import { writeResearchHarness, type ResearchHarnessWriteResult } from "./research-session.js";
+import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
+import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 import { createWorkspaceRunNextPlan, writeWorkspaceRunNextPlan, type WorkspaceRunNextWriteResult } from "./workspace-run-next.js";
 import { createWorkspaceReview } from "./workspace-review.js";
 
@@ -43,7 +49,15 @@ export interface HardMathSeedResult {
     openBlockingGates?: number;
   }>;
   runNext?: WorkspaceRunNextWriteResult | { plan: WorkspaceRunNextWriteResult["plan"] };
+  paths: {
+    json: string;
+    markdown: string;
+  };
   warnings: string[];
+}
+
+export interface HardMathSeedListInput {
+  preset?: HardMathSeedPreset;
 }
 
 export const HARD_MATH_SEED_CASES: HardMathSeedCase[] = [
@@ -231,9 +245,15 @@ export async function writeHardMathSeedWorkspace(input: HardMathSeedInput): Prom
         plan
       });
 
-  return {
+  const seedId = `hmseed_${stableHash({ createdAt, preset, caseIds: selectedCases.map((seedCase) => seedCase.caseId), workspace: workspace.manifest.projectId }).slice(0, 16)}`;
+  const baseName = `${createdAt.slice(0, 10)}-${seedId}-hard-math-seed`;
+  const paths = {
+    json: toPortablePath(`${workspace.manifest.directories.findings}/${baseName}.json`),
+    markdown: toPortablePath(`${workspace.manifest.directories.findings}/${baseName}.md`)
+  };
+  const seed: HardMathSeedResult = {
     schemaVersion: HARD_MATH_SEED_SCHEMA_VERSION,
-    seedId: `hmseed_${stableHash({ createdAt, preset, caseIds: selectedCases.map((seedCase) => seedCase.caseId), workspace: workspace.manifest.projectId }).slice(0, 16)}`,
+    seedId,
     createdAt,
     preset,
     localOnly: true,
@@ -248,6 +268,7 @@ export async function writeHardMathSeedWorkspace(input: HardMathSeedInput): Prom
       openBlockingGates: result.validationPlan?.plan.readiness.blockingGateCount
     })),
     runNext,
+    paths,
     warnings: [
       "Hard-math seeds create validation queues; they do not prove any seeded claim.",
       ...(preset === "professor-challenge"
@@ -259,6 +280,49 @@ export async function writeHardMathSeedWorkspace(input: HardMathSeedInput): Prom
       "Re-running the seed refreshes deterministic local artifacts instead of minting stronger trust labels."
     ]
   };
+
+  await writeHardMathSeedRecord(workspace.root, seed);
+  return seed;
+}
+
+export async function listHardMathSeedWorkspaces(
+  rootPath: string,
+  input: HardMathSeedListInput = {}
+): Promise<HardMathSeedResult[]> {
+  const status = await getLocalWorkspaceStatus(rootPath);
+  if (!status.exists || !status.manifest) {
+    return [];
+  }
+
+  const findingsDir = resolve(status.root, status.manifest.directories.findings);
+  let files: string[];
+  try {
+    files = await readdir(findingsDir);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
+
+  const seeds = await Promise.all(
+    files
+      .filter((file) => file.endsWith(".json"))
+      .map(async (file) => readHardMathSeedFromPath(join(findingsDir, file)))
+  );
+  return seeds
+    .filter((seed): seed is HardMathSeedResult => Boolean(seed))
+    .filter((seed) => !input.preset || seed.preset === input.preset)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.seedId.localeCompare(left.seedId));
+}
+
+export async function readLatestHardMathSeedWorkspace(
+  rootPath: string,
+  input: HardMathSeedListInput = {}
+): Promise<HardMathSeedResult | undefined> {
+  const seeds = await listHardMathSeedWorkspaces(rootPath, input);
+  return seeds[0];
 }
 
 function selectSeedCases(caseIds: string[] | undefined, preset: HardMathSeedPreset): HardMathSeedCase[] {
@@ -289,4 +353,108 @@ function timestampOffset(createdAt: string, seconds: number): string {
     return createdAt;
   }
   return new Date(base.getTime() + seconds * 1000).toISOString();
+}
+
+async function writeHardMathSeedRecord(rootPath: string, seed: HardMathSeedResult): Promise<void> {
+  await assertJsonSchemaBeforeWrite({
+    value: seed,
+    schemaFile: "hard-math-seed.schema.json",
+    artifactName: "Hard-math seed"
+  });
+
+  const jsonPath = resolve(rootPath, seed.paths.json);
+  const markdownPath = resolve(rootPath, seed.paths.markdown);
+  await mkdir(resolve(rootPath, ".truth-harness", "findings"), { recursive: true });
+  await writeJsonFileAtomic(jsonPath, seed);
+  await writeFileAtomic(markdownPath, renderHardMathSeedMarkdown(seed), "utf8");
+  await refreshWorkspaceCatalogArtifact({
+    rootPath,
+    path: seed.paths.json,
+    kind: "findings",
+    now: seed.createdAt,
+    staleReason: "hard-math seed written"
+  });
+}
+
+function renderHardMathSeedMarkdown(seed: HardMathSeedResult): string {
+  const lines = [
+    "# Truth Harness Hard-Math Seed",
+    "",
+    `Seed: ${seed.seedId}`,
+    `Preset: ${seed.preset}`,
+    `Created: ${seed.createdAt}`,
+    `Workspace: ${seed.workspacePath}`,
+    "",
+    "This artifact is a local validation queue, not proof. Every seeded case still needs scoped verifier evidence.",
+    "",
+    "## Cases",
+    ""
+  ];
+
+  for (const seedCase of seed.cases) {
+    lines.push(
+      `### ${seedCase.title}`,
+      "",
+      `- Case: ${seedCase.caseId}`,
+      `- Session: ${seedCase.sessionId}`,
+      `- Validation plan: ${seedCase.validationPlanId ?? "not written"}`,
+      `- Readiness: ${seedCase.validationReadiness ?? "unknown"}`,
+      `- Open blocking gates: ${seedCase.openBlockingGates ?? "unknown"}`,
+      ""
+    );
+  }
+
+  lines.push("## Run Next", "");
+  if (seed.runNext?.plan) {
+    lines.push(
+      `- Plan: ${seed.runNext.plan.planId}`,
+      `- Status: ${seed.runNext.plan.status}`,
+      `- Dry run: ${seed.runNext.plan.dryRun ? "yes" : "no"}`,
+      `- Selected item: ${seed.runNext.plan.item?.title ?? "none"}`,
+      `- Command: \`${seed.runNext.plan.item?.command ?? seed.runNext.plan.execution?.command ?? "truth-harness workspace run-next . --json"}\``,
+      ""
+    );
+  } else {
+    lines.push("- No run-next handoff recorded.", "");
+  }
+
+  if (seed.warnings.length > 0) {
+    lines.push("## Warnings", "");
+    seed.warnings.forEach((warning) => lines.push(`- ${warning}`));
+    lines.push("");
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+async function readHardMathSeedFromPath(path: string): Promise<HardMathSeedResult | undefined> {
+  let parsed: unknown;
+  try {
+    parsed = parseJsonWithOptionalBom(await readFile(path, "utf8"));
+  } catch {
+    return undefined;
+  }
+
+  return isHardMathSeedResult(parsed) ? parsed : undefined;
+}
+
+function isHardMathSeedResult(value: unknown): value is HardMathSeedResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Partial<HardMathSeedResult>;
+  return (
+    record.schemaVersion === HARD_MATH_SEED_SCHEMA_VERSION &&
+    typeof record.seedId === "string" &&
+    typeof record.createdAt === "string" &&
+    (record.preset === "all" || record.preset === "professor-challenge") &&
+    record.localOnly === true &&
+    record.networkAccess === "none" &&
+    typeof record.workspacePath === "string" &&
+    Array.isArray(record.cases)
+  );
+}
+
+function toPortablePath(path: string): string {
+  return path.replace(/\\/g, "/");
 }

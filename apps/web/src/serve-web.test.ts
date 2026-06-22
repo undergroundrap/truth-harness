@@ -1466,6 +1466,8 @@ describe("local web route ledger API", () => {
       "smt-bounded-closure-fixture",
       "lean-trivial-proof-boundary"
     ]);
+    expect(hardMathSeedPayload.seed.paths.json).toContain(".truth-harness/findings/");
+    expect(existsSync(resolve(tempProjectRoot!, hardMathSeedPayload.seed.paths.json))).toBe(true);
     expect(existsSync(hardMathSeedPayload.seed.runNext.jsonPath)).toBe(true);
     expect(hardMathSeedPayload.activity).toContainEqual(
       expect.objectContaining({
@@ -1473,6 +1475,24 @@ describe("local web route ledger API", () => {
         action: "seeded-hard-math-workspace"
       })
     );
+
+    const latestHardMathSeedResponse = await fetch(
+      `${baseUrl}/api/workspace-seed/hard-math/latest?preset=professor-challenge`
+    );
+    expect(latestHardMathSeedResponse.status).toBe(200);
+    const latestHardMathSeedPayload = await latestHardMathSeedResponse.json();
+    expectLocalApiSuccess(latestHardMathSeedResponse, latestHardMathSeedPayload);
+    expect(latestHardMathSeedPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-hard-math-seed-latest-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      networkAccess: "none",
+      preset: "professor-challenge",
+      seed: {
+        seedId: hardMathSeedPayload.seed.seedId,
+        preset: "professor-challenge"
+      }
+    });
 
     const mapResponse = await fetch(`${baseUrl}/api/research-map`, {
       method: "POST",

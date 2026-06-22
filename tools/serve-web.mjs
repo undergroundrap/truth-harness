@@ -966,6 +966,26 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/workspace-seed/hard-math/latest" && request.method === "GET") {
+    try {
+      const payload = await createWebLatestHardMathSeedPayload({
+        preset: requestUrl.searchParams.get("preset")
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-hard-math-seed-latest-response.v0",
+        ...payload
+      });
+    } catch (error) {
+      writeApiError(
+        response,
+        error instanceof HttpError ? error.status : 400,
+        error instanceof Error ? error.message : "Latest hard-math seed could not be loaded.",
+        request
+      );
+    }
+    return;
+  }
+
   if (requestUrl.pathname === "/api/workspace-seed/hard-math" && request.method === "POST") {
     try {
       const input = await readJsonBody(request);
@@ -2109,6 +2129,20 @@ async function createWebHardMathSeedPayload(value = {}) {
         at: seed.createdAt
       }
     ]
+  };
+}
+
+async function createWebLatestHardMathSeedPayload(value = {}) {
+  const { readLatestHardMathSeedWorkspace } = await loadCoreModule();
+  await ensureLocalWorkspace();
+  const preset = normalizeHardMathSeedPresetInput(value?.preset);
+  const seed = await readLatestHardMathSeedWorkspace(projectRoot, { preset });
+  return {
+    localOnly: true,
+    externalCalls: [],
+    networkAccess: "none",
+    preset,
+    seed
   };
 }
 
