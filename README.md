@@ -349,7 +349,7 @@ See [docs/OPEN_SOURCE_AND_COMMERCIAL_STRATEGY.md](docs/OPEN_SOURCE_AND_COMMERCIA
 
 See [docs/LAUNCH_PLAN.md](docs/LAUNCH_PLAN.md) for the first Hacker News-ready demo path.
 
-See [docs/PRODUCT_READINESS_MAP.md](docs/PRODUCT_READINESS_MAP.md) for the sober pre-launch readiness map, stress-test plan, and the reasons Truth Harness should stay private-prototype until the product and UI are harder to fool.
+See [docs/GRAND_VISION_ROADMAP.md](docs/GRAND_VISION_ROADMAP.md) for the long-range roadmap from today's bounded verification harness to professor-grade math, autonomous research loops, concurrent Rust systems, hardware/EDA, and guarded science workflows. See [docs/PRODUCT_READINESS_MAP.md](docs/PRODUCT_READINESS_MAP.md) for the sober pre-launch readiness map, stress-test plan, and the reasons Truth Harness should stay private-prototype until the product and UI are harder to fool.
 
 See [docs/AGENT_SETUP.md](docs/AGENT_SETUP.md) for Claude Code and Codex MCP setup.
 

@@ -4,6 +4,8 @@ Date: 2026-06-15
 
 This document is the sober counterweight to launch planning. Truth Harness has a credible core, but it is not ready to be presented as a universal research workbench yet. The correct next phase is product hardening: understand what is real, stress it, improve the human interface, and refuse to overclaim.
 
+For the longer path from today's bounded verification harness to professor-grade math, autonomous research loops, concurrent Rust systems, hardware/EDA, and guarded science workflows, see [GRAND_VISION_ROADMAP.md](GRAND_VISION_ROADMAP.md).
+
 ## Current Verdict
 
 Truth Harness is currently a strong local-first verification prototype with a real trust model, a working CLI/MCP/core, a first web workbench shell, Dockerized engine checks, and replayable evidence artifacts.
