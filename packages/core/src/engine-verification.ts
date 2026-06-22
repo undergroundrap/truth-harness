@@ -179,6 +179,9 @@ export interface EngineVerificationRunSummary {
   summary: string;
   createdAt: string;
   status: EngineVerificationStatus;
+  strongestLevelId?: EngineVerificationLevelId;
+  strongestLevelTitle?: string;
+  strictAllEngineLevelPassed: boolean;
   concretePassed: number;
   concreteTotal: number;
   requiredPassed: number;
@@ -611,8 +614,20 @@ export function summarizeEngineVerificationLevels(cases: EngineVerificationCase[
   });
 }
 
-function strongestEngineVerificationLevel(levels: EngineVerificationLevel[]): EngineVerificationLevel | undefined {
+export function engineVerificationLevelsForReport(
+  report: Pick<EngineVerificationReport, "cases"> & { levels?: EngineVerificationLevel[] }
+): EngineVerificationLevel[] {
+  return report.levels ?? summarizeEngineVerificationLevels(report.cases);
+}
+
+export function strongestEngineVerificationLevel(levels: EngineVerificationLevel[]): EngineVerificationLevel | undefined {
   return [...levels].reverse().find((level) => level.status === "passed");
+}
+
+export function strongestEngineVerificationLevelForReport(
+  report: Pick<EngineVerificationReport, "cases"> & { levels?: EngineVerificationLevel[] }
+): EngineVerificationLevel | undefined {
+  return strongestEngineVerificationLevel(engineVerificationLevelsForReport(report));
 }
 
 function isEngineCaseEvidencePassed(entry: EngineVerificationCase | undefined): boolean {
@@ -1034,12 +1049,19 @@ function summarizeEngineVerificationRun(
 ): EngineVerificationRunSummary | undefined {
   try {
     const record = parseEngineVerificationRunJson(raw, path);
+    const levels = engineVerificationLevelsForReport(record.report);
+    const strongestLevel = strongestEngineVerificationLevel(levels);
     return {
       runId: record.runId,
       title: record.title,
       summary: record.summary,
       createdAt: record.createdAt,
       status: record.status,
+      strongestLevelId: strongestLevel?.levelId,
+      strongestLevelTitle: strongestLevel?.title,
+      strictAllEngineLevelPassed: levels.some(
+        (level) => level.levelId === "engine-level-5-strict-all-engines" && level.status === "passed"
+      ),
       concretePassed: record.report.concretePassed,
       concreteTotal: record.report.concreteTotal,
       requiredPassed: record.report.requiredPassed,

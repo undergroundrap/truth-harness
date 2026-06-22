@@ -102,6 +102,7 @@ export interface ReleaseAudit {
     catalogFresh: boolean;
     requiredEngineGates: string;
     concreteEngineGates: string;
+    savedEngineLadderLevel?: string;
     adversarialBenchmark: string;
     mathCredibilityLadder: string;
     hardMathClosure: string;
@@ -276,6 +277,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     catalogFresh: catalog.readable && !catalog.stale,
     requiredEngineGates: credibilityPack.summary.requiredEngineGates,
     concreteEngineGates: credibilityPack.summary.concreteEngineGates,
+    savedEngineLadderLevel: credibilityPack.summary.savedEngineLadderLevel,
     adversarialBenchmark: credibilityPack.summary.latestAdversarialBenchmarkStatus,
     mathCredibilityLadder: credibilityPack.summary.latestMathCredibilityLadderStatus,
     hardMathClosure: hardMathClosureSummary(credibilityPack),
@@ -310,6 +312,7 @@ export function renderReleaseAuditMarkdown(audit: ReleaseAudit): string {
     `- Engine evidence: ${formatReleaseAuditEngineSummary(audit)}`,
     `- Required engine gates: ${audit.summary.requiredEngineGates}`,
     `- Concrete engine gates: ${audit.summary.concreteEngineGates}`,
+    `- Saved engine ladder: ${audit.summary.savedEngineLadderLevel ?? "missing"}`,
     `- Adversarial benchmark: ${audit.summary.adversarialBenchmark}`,
     `- Math credibility ladder: ${audit.summary.mathCredibilityLadder}`,
     `- Hard-math closure: ${audit.summary.hardMathClosure}`,
@@ -394,7 +397,8 @@ export function formatReleaseAuditEngineSummary(audit: Pick<ReleaseAudit, "summa
     engineCheck?.status === "pass" &&
     engineCheck.summary.includes("Saved no-network Docker engine evidence")
   ) {
-    return `${engineCheck.summary} (live host: ${liveGateSummary})`;
+    const savedLevel = audit.summary.savedEngineLadderLevel ? `; saved ladder: ${audit.summary.savedEngineLadderLevel}` : "";
+    return `${engineCheck.summary} (live host: ${liveGateSummary}${savedLevel})`;
   }
   return liveGateSummary;
 }
@@ -416,6 +420,7 @@ function buildAudit(input: {
   catalogFresh: boolean;
   requiredEngineGates: string;
   concreteEngineGates: string;
+  savedEngineLadderLevel?: string;
   adversarialBenchmark: string;
   mathCredibilityLadder: string;
   hardMathClosure: string;
@@ -465,6 +470,7 @@ function buildAudit(input: {
       catalogFresh: input.catalogFresh,
       requiredEngineGates: input.requiredEngineGates,
       concreteEngineGates: input.concreteEngineGates,
+      savedEngineLadderLevel: input.savedEngineLadderLevel,
       adversarialBenchmark: input.adversarialBenchmark,
       mathCredibilityLadder: input.mathCredibilityLadder,
       hardMathClosure: input.hardMathClosure,
@@ -504,6 +510,7 @@ function frontierReadinessFor(input: {
   professorReady: boolean;
   requiredEngineGates: string;
   concreteEngineGates: string;
+  savedEngineLadderLevel?: string;
   hardMathClosure: string;
   catalogFresh: boolean;
 }): ReleaseAuditFrontierReadiness {
@@ -517,6 +524,7 @@ function frontierReadinessFor(input: {
   const engineEvidenceReady = checkPassed(input.checks, "engine-evidence");
   const hardMathClosureReady = checkPassed(input.checks, "hard-math-closure");
   const strictAllEngineEvidenceReady =
+    input.credibilityPack?.summary.savedEngineLadderLevel === "engine-level-5-strict-all-engines" ||
     input.credibilityPack?.summary.latestStrictEngineRunStatus === "passed" ||
     (engineEvidenceReady &&
       gateRatioAtLeast(input.requiredEngineGates, 5, 5) &&
@@ -569,6 +577,7 @@ function frontierReadinessFor(input: {
         `Engine check: ${checkSummary(input.checks, "engine-evidence")}.`,
         `Live concrete gates: ${input.concreteEngineGates}.`,
         `Live required gates: ${input.requiredEngineGates}.`,
+        `Strongest saved engine ladder: ${input.savedEngineLadderLevel ?? "missing"}.`,
         `Saved strict engine run: ${input.credibilityPack?.summary.latestStrictEngineRunStatus ?? "missing"}.`
       ],
       blockers: strictAllEngineEvidenceReady
@@ -851,12 +860,20 @@ function savedEngineCoverageDetails(pack: CredibilityPack): string[] {
   const professor = pack.engineRunLedger.latestProfessorReviewerRun;
   const strict = pack.engineRunLedger.latestStrictReviewerRun;
   if (professor?.status === "passed") {
-    details.push(`Saved professor Docker run ${professor.runId} passed with ${professor.requiredPassed}/${professor.requiredTotal} required gates.`);
+    details.push(
+      `Saved professor Docker run ${professor.runId} passed with ${professor.requiredPassed}/${professor.requiredTotal} required gates${formatSavedEngineRunLevel(professor)}.`
+    );
   }
   if (strict?.status === "passed" && strict.runId !== professor?.runId) {
-    details.push(`Saved strict all-engine run ${strict.runId} passed with ${strict.requiredPassed}/${strict.requiredTotal} required gates.`);
+    details.push(
+      `Saved strict all-engine run ${strict.runId} passed with ${strict.requiredPassed}/${strict.requiredTotal} required gates${formatSavedEngineRunLevel(strict)}.`
+    );
   }
   return details.length > 0 ? details : ["A saved passing engine run covers the missing host capability."];
+}
+
+function formatSavedEngineRunLevel(run: { strongestLevelId?: string }): string {
+  return run.strongestLevelId ? `; strongest level ${run.strongestLevelId}` : "";
 }
 
 function preferredEngineEvidenceCommand(pack: CredibilityPack): string {
@@ -903,9 +920,14 @@ function savedStrictEngineRunCheck(pack: CredibilityPack, required: boolean): Re
     return passCheck({
       id: "saved-strict-engine-run",
       title: "Saved strict engine run",
-      summary: `Latest strict reviewer run ${latest.runId} passed.`,
+      summary: `Latest strict reviewer run ${latest.runId} passed${formatSavedEngineRunLevel(latest)}.`,
       command: "truth-harness engines verify --write --require-all-engines",
-      details: [`Saved engine runs: ${pack.engineRunLedger.savedRuns}.`]
+      details: [
+        `Saved engine runs: ${pack.engineRunLedger.savedRuns}.`,
+        latest.strictAllEngineLevelPassed
+          ? "Explicit strict all-engine ladder level passed."
+          : "Legacy strict reviewer record inferred from its required gate count."
+      ]
     });
   }
   if (required) {

@@ -8,6 +8,7 @@ import {
   listEngineVerificationRuns,
   verifyEngineEvidence,
   type EngineVerificationCommandRunner,
+  type EngineVerificationLevelId,
   type EngineVerificationReport,
   type EngineVerificationRequirements,
   type EngineVerificationRunSummary
@@ -72,6 +73,7 @@ export interface CredibilityPackActionItem {
 export interface CredibilityPackEngineRunLedger {
   savedRuns: number;
   latestRuns: EngineVerificationRunSummary[];
+  strongestSavedLevelRun?: EngineVerificationRunSummary;
   latestProfessorReviewerRun?: EngineVerificationRunSummary;
   latestStrictReviewerRun?: EngineVerificationRunSummary;
 }
@@ -125,8 +127,13 @@ export interface CredibilityPack {
     requiredEngineGates: string;
     engineEvidenceMinted: number;
     savedEngineRuns: number;
+    savedEngineLadderLevel?: EngineVerificationLevelId;
+    savedEngineLadderLevelTitle?: string;
+    savedEngineLadderLevelRunId?: string;
     latestStrictEngineRunStatus?: EngineVerificationReport["status"];
+    latestStrictEngineRunLevel?: EngineVerificationLevelId;
     latestProfessorEngineRunStatus?: EngineVerificationReport["status"];
+    latestProfessorEngineRunLevel?: EngineVerificationLevelId;
     savedBenchmarkRuns: number;
     latestAdversarialBenchmarkStatus: "missing" | "passed" | "failed";
     latestAdversarialBenchmarkAccuracy?: number;
@@ -277,8 +284,13 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       requiredEngineGates: `${engineEvidence.requiredPassed}/${engineEvidence.requiredTotal}`,
       engineEvidenceMinted: engineEvidence.evidenceMinted,
       savedEngineRuns: engineRunLedger.savedRuns,
+      savedEngineLadderLevel: engineRunLedger.strongestSavedLevelRun?.strongestLevelId,
+      savedEngineLadderLevelTitle: engineRunLedger.strongestSavedLevelRun?.strongestLevelTitle,
+      savedEngineLadderLevelRunId: engineRunLedger.strongestSavedLevelRun?.runId,
       latestStrictEngineRunStatus: engineRunLedger.latestStrictReviewerRun?.status,
+      latestStrictEngineRunLevel: engineRunLedger.latestStrictReviewerRun?.strongestLevelId,
       latestProfessorEngineRunStatus: engineRunLedger.latestProfessorReviewerRun?.status,
+      latestProfessorEngineRunLevel: engineRunLedger.latestProfessorReviewerRun?.strongestLevelId,
       savedBenchmarkRuns: benchmarkLedger.savedRuns,
       latestAdversarialBenchmarkStatus: adversarialBenchmarkStatus(benchmarkLedger.latestAdversarialRun),
       latestAdversarialBenchmarkAccuracy: benchmarkLedger.latestAdversarialRun?.trustAccuracy,
@@ -491,16 +503,24 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     if (pack.engineRunLedger.latestStrictReviewerRun) {
       const strictRun = pack.engineRunLedger.latestStrictReviewerRun;
       lines.push(
-        `Latest strict reviewer run: \`${strictRun.runId}\` (${strictRun.status}, ${strictRun.requiredPassed}/${strictRun.requiredTotal} required gates)`,
+        `Latest strict reviewer run: \`${strictRun.runId}\` (${strictRun.status}, ${strictRun.requiredPassed}/${strictRun.requiredTotal} required gates${formatRunLevelParenthetical(strictRun)})`,
         `Path: \`${strictRun.path}\``,
         ""
       );
     } else {
       lines.push("No saved strict all-engines reviewer run was found yet.", "");
     }
+    if (pack.engineRunLedger.strongestSavedLevelRun) {
+      const levelRun = pack.engineRunLedger.strongestSavedLevelRun;
+      lines.push(
+        `Strongest saved engine ladder: \`${levelRun.strongestLevelId}\`${levelRun.strongestLevelTitle ? ` (${levelRun.strongestLevelTitle})` : ""}`,
+        `Evidence run: \`${levelRun.runId}\` at \`${levelRun.path}\``,
+        ""
+      );
+    }
     for (const run of pack.engineRunLedger.latestRuns) {
       lines.push(
-        `- \`${run.runId}\`: ${run.status}, ${run.concretePassed}/${run.concreteTotal} concrete, ${run.requiredPassed}/${run.requiredTotal} required, ${run.evidenceMinted} evidence records, \`${run.path}\``
+        `- \`${run.runId}\`: ${run.status}, ${run.concretePassed}/${run.concreteTotal} concrete, ${run.requiredPassed}/${run.requiredTotal} required, ${run.evidenceMinted} evidence records${formatRunLevelParenthetical(run)}, \`${run.path}\``
       );
     }
     lines.push("");
@@ -643,8 +663,9 @@ function summarizeEngineRunLedger(runs: EngineVerificationRunSummary[]): Credibi
   return {
     savedRuns: runs.length,
     latestRuns: runs.slice(0, 5),
+    strongestSavedLevelRun: strongestSavedEngineLevelRun(runs),
     latestProfessorReviewerRun: runs.find(isPassedProfessorEngineRun),
-    latestStrictReviewerRun: runs.find((run) => run.requiredTotal >= 5)
+    latestStrictReviewerRun: runs.find(isStrictReviewerEngineRun)
   };
 }
 
@@ -1254,6 +1275,13 @@ function reviewerEngineActionCommand(
 }
 
 const PROFESSOR_ENGINE_CAPABILITIES = ["maxima-cas", "z3-smt-solver", "cvc5-smt-solver", "lean-proof-checker"] as const;
+const ENGINE_LEVEL_RANK: Record<EngineVerificationLevelId, number> = {
+  "engine-level-1-core-cas-smt": 1,
+  "engine-level-2-smt-diversity": 2,
+  "engine-level-3-formal-proof-fixture": 3,
+  "engine-level-4-sage-breadth": 4,
+  "engine-level-5-strict-all-engines": 5
+};
 
 export function formatCredibilityPackEngineEvidenceSummary(pack: Pick<CredibilityPack, "summary">): string {
   const liveSummary =
@@ -1270,11 +1298,18 @@ export function formatCredibilityPackEngineEvidenceSummary(pack: Pick<Credibilit
 
 export function formatCredibilityPackSavedEngineRunLedgerLabel(pack: Pick<CredibilityPack, "summary">): string {
   const labels: string[] = [];
+  if (pack.summary.savedEngineLadderLevel) {
+    labels.push(`strongest saved level: ${pack.summary.savedEngineLadderLevel}`);
+  }
   if (pack.summary.latestProfessorEngineRunStatus) {
-    labels.push(`latest professor Docker: ${pack.summary.latestProfessorEngineRunStatus}`);
+    labels.push(
+      `latest professor Docker: ${pack.summary.latestProfessorEngineRunStatus}${pack.summary.latestProfessorEngineRunLevel ? ` (${pack.summary.latestProfessorEngineRunLevel})` : ""}`
+    );
   }
   if (pack.summary.latestStrictEngineRunStatus) {
-    labels.push(`latest strict reviewer: ${pack.summary.latestStrictEngineRunStatus}`);
+    labels.push(
+      `latest strict reviewer: ${pack.summary.latestStrictEngineRunStatus}${pack.summary.latestStrictEngineRunLevel ? ` (${pack.summary.latestStrictEngineRunLevel})` : ""}`
+    );
   }
   return labels.length > 0 ? ` (${labels.join(", ")})` : "";
 }
@@ -1326,6 +1361,30 @@ function hasPassedSavedRunForCapabilities(ledger: CredibilityPackEngineRunLedger
 
 function isPassedProfessorEngineRun(run: EngineVerificationRunSummary): boolean {
   return run.status === "passed" && PROFESSOR_ENGINE_CAPABILITIES.every((capability) => run.tags.includes(capability));
+}
+
+function isStrictReviewerEngineRun(run: EngineVerificationRunSummary): boolean {
+  return run.strictAllEngineLevelPassed || run.requiredTotal >= 5;
+}
+
+function strongestSavedEngineLevelRun(runs: EngineVerificationRunSummary[]): EngineVerificationRunSummary | undefined {
+  return runs
+    .filter((run) => run.status === "passed" && run.strongestLevelId)
+    .sort((left, right) => {
+      const rankDelta = engineLevelRank(right) - engineLevelRank(left);
+      return rankDelta !== 0 ? rankDelta : right.createdAt.localeCompare(left.createdAt);
+    })[0];
+}
+
+function engineLevelRank(run: EngineVerificationRunSummary): number {
+  return run.strongestLevelId ? ENGINE_LEVEL_RANK[run.strongestLevelId] : 0;
+}
+
+function formatRunLevelParenthetical(run: EngineVerificationRunSummary): string {
+  if (!run.strongestLevelId) {
+    return "";
+  }
+  return `, strongest level ${run.strongestLevelId}`;
 }
 
 function isRecoverableEngineProbeGap(item: EngineVerificationReport["cases"][number]): boolean {

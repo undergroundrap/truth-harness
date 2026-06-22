@@ -113,7 +113,7 @@ These levels are not a public math-achievement ladder yet. They are the current 
 - `engine-level-4-sage-breadth`: SageMath earns a constrained symbolic `cross-checked` result in addition to the core CAS/SMT gate.
 - `engine-level-5-strict-all-engines`: Maxima, Z3, cvc5, Lean, and SageMath all mint concrete scoped evidence.
 
-These levels are stricter than readiness probes. A level passes only when the relevant case records mint evidence; merely finding an executable is not enough.
+These levels are stricter than readiness probes. A level passes only when the relevant case records mint evidence; merely finding an executable is not enough. Saved engine-run summaries now record the strongest passed engine level, and credibility packs plus release audits cite that level when durable Docker evidence covers missing host probes.
 
 Run the practical Docker core gate:
 

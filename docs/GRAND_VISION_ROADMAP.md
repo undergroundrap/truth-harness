@@ -89,7 +89,7 @@ Goal: make mathematicians respect the tool.
 Required product capabilities:
 
 - named math benchmark levels: native exact arithmetic/refutation/unit/boundary levels now exist; next add high-school algebra, undergraduate algebra, discrete math, SMT encodings, Lean fixtures, and Sage fixtures
-- engine-backed math levels: Maxima/Z3 core evidence, cvc5 diversity, Lean proof fixture, Sage breadth, and strict all-engine evidence are explicit reviewer stages
+- engine-backed math levels: Maxima/Z3 core evidence, cvc5 diversity, Lean proof fixture, Sage breadth, and strict all-engine evidence are explicit reviewer stages, and saved engine-run records now expose the strongest passed level to credibility packs and release audits
 - larger false-claim corpus where frontier models commonly overclaim
 - Lean/mathlib workspace templates with explicit holes, theorem statements, dependencies, and repair targets
 - SageMath adapter records for constrained number theory, algebra, combinatorics, exact linear algebra, and graph theory

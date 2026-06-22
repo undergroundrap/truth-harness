@@ -96,7 +96,13 @@
         "requiredEngineGates": { "type": "string", "pattern": "^[0-9]+/[0-9]+$" },
         "engineEvidenceMinted": { "type": "integer", "minimum": 0 },
         "savedEngineRuns": { "type": "integer", "minimum": 0 },
+        "savedEngineLadderLevel": { "$ref": "#/$defs/engineLevelId" },
+        "savedEngineLadderLevelTitle": { "type": "string", "minLength": 1 },
+        "savedEngineLadderLevelRunId": { "type": "string", "minLength": 1 },
         "latestStrictEngineRunStatus": { "enum": ["passed", "partial", "failed"] },
+        "latestStrictEngineRunLevel": { "$ref": "#/$defs/engineLevelId" },
+        "latestProfessorEngineRunStatus": { "enum": ["passed", "partial", "failed"] },
+        "latestProfessorEngineRunLevel": { "$ref": "#/$defs/engineLevelId" },
         "savedBenchmarkRuns": { "type": "integer", "minimum": 0 },
         "latestAdversarialBenchmarkStatus": { "enum": ["missing", "passed", "failed"] },
         "latestAdversarialBenchmarkAccuracy": { "type": "number", "minimum": 0, "maximum": 1 },
@@ -263,6 +269,15 @@
   },
   "additionalProperties": true,
   "$defs": {
+    "engineLevelId": {
+      "enum": [
+        "engine-level-1-core-cas-smt",
+        "engine-level-2-smt-diversity",
+        "engine-level-3-formal-proof-fixture",
+        "engine-level-4-sage-breadth",
+        "engine-level-5-strict-all-engines"
+      ]
+    },
     "trustLabel": {
       "enum": [
         "proved",

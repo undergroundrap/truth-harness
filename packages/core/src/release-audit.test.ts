@@ -701,12 +701,13 @@ describe("release audit", () => {
       catalogFresh: true,
       requiredEngineGates: "0/4",
       concreteEngineGates: "0/4",
+      savedEngineLadderLevel: "engine-level-3-formal-proof-fixture",
       adversarialBenchmark: "passed",
       blockingFailures: 0
     });
     expect(audit.credibilityPack?.summary.latestProfessorEngineRunStatus).toBe("passed");
     expect(formatReleaseAuditEngineSummary(audit)).toBe(
-      "Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking. (live host: 0/4 concrete, 0/4 required)"
+      "Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking. (live host: 0/4 concrete, 0/4 required; saved ladder: engine-level-3-formal-proof-fixture)"
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
@@ -716,15 +717,16 @@ describe("release audit", () => {
         command: "npm run docker:professor",
         summary: "Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking.",
         details: expect.arrayContaining([
-          `Saved professor Docker run ${engineRun.record.runId} passed with 4/4 required gates.`,
+          `Saved professor Docker run ${engineRun.record.runId} passed with 4/4 required gates; strongest level engine-level-3-formal-proof-fixture.`,
           "Current host probes did not earn all required engine evidence, but the durable saved run covers the same required capabilities."
         ])
       })
     );
     expect(audit.nextActions).not.toContain("truth-harness engines verify --write --require-all-concrete");
     expect(markdown).toContain(
-      "Engine evidence: Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking. (live host: 0/4 concrete, 0/4 required)"
+      "Engine evidence: Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking. (live host: 0/4 concrete, 0/4 required; saved ladder: engine-level-3-formal-proof-fixture)"
     );
+    expect(markdown).toContain("Saved engine ladder: engine-level-3-formal-proof-fixture");
     expect(markdown).toContain("Saved no-network Docker engine evidence covers the required gates");
   });
 
