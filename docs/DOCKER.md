@@ -56,14 +56,22 @@ This command differs from `truth-harness engines`: the manifest reports availabi
 
 If `workspace credibility-pack`, `workspace credibility-actions`, or `workspace release-audit` reports `spawn EPERM` or `spawn ENOENT` for Maxima, Z3, cvc5, Lean, or SageMath on the host, use the Docker gates before assuming the engine itself is unavailable. `npm run docker:engines` replays the concrete Maxima/Z3/cvc5 checks inside the no-network image, `npm run docker:professor` writes a durable Maxima/Z3/cvc5/Lean professor evidence run plus benchmark and reviewer packet, and `npm run docker:professor:all` writes the stricter Maxima/Z3/cvc5/Lean/SageMath reviewer packet from the heavier all-engine image. Release audit can cite those saved no-network runs as reviewer evidence even when the Windows host has no matching engine binaries installed.
 
-Run the pinned Lean proof fixture in the separate Lean image:
+Run the pinned Lean proof suite in the separate Lean image:
 
 ```bash
 docker compose build lean-proof
 docker compose run --rm lean-proof
 ```
 
-The `lean-proof` target installs Lean through elan during image build, pins the default toolchain to `leanprover/lean4:v4.12.0`, and runs `npm run proof:lean-fixture`. The compose service then checks the fixture again with `network_mode: "none"`. This is intentionally separate from the default dev image so proof-lane dependencies do not become silent bloat.
+The `lean-proof` target installs Lean through elan during image build, pins the default toolchain to `leanprover/lean4:v4.12.0`, and runs `npm run proof:lean-suite`. That suite checks the static Lean fixture and the proof-repair fixture that records a rejected scoped attempt, asks run-next for the repair handoff, writes the repaired source, and closes the exact route obligation only when Lean accepts the proof-check record. The compose service then checks the suite again with `network_mode: "none"` and fails if the repair obligation stays open. This is intentionally separate from the default dev image so proof-lane dependencies do not become silent bloat.
+
+For just the repair loop:
+
+```bash
+npm run docker:proof-repair
+```
+
+This command uses the strict repair gate and exits non-zero unless the repaired Lean proof closes the scoped route obligation.
 
 The same Lean fixture can be checked through the engine evidence report:
 
@@ -113,7 +121,7 @@ npm run web:doctor
 
 The doctor reports the port owner, `/api/status` runtime identity, served app bundle version, and safe refresh commands. It never stops containers, kills processes, rebuilds images, or runs verifier work. If Docker owns the port and the API is stale, the safe refresh path is `docker compose up --build web`. If you intentionally want to switch back to host web, stop only the compose web service with `docker compose stop web`, then run `npm run web:restart`.
 
-The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima, Z3, and cvc5 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; use `truth-harness proof project <path>` to inspect that local layout without executing Lean, run `docker compose run --rm lean-proof` for the pinned fixture, then set `TRUTH_HARNESS_LEAN` or build a derived image once a real project layout is chosen.
+The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima, Z3, and cvc5 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; use `truth-harness proof project <path>` to inspect that local layout without executing Lean, run `docker compose run --rm lean-proof` for the pinned Lean suite, then set `TRUTH_HARNESS_LEAN` or build a derived image once a real project layout is chosen.
 
 ## Web UI Safe Verifier Path
 

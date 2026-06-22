@@ -74,9 +74,9 @@ RUN curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-ini
   && elan toolchain install leanprover/lean4:v4.12.0 \
   && lean --version
 
-RUN npm run proof:lean-fixture && npm run engines:verify:lean
+RUN npm run proof:lean-suite && npm run engines:verify:lean
 
-CMD ["npm", "run", "proof:lean-fixture"]
+CMD ["npm", "run", "proof:lean-suite"]
 
 FROM sage-math AS all-engines
 
@@ -96,6 +96,6 @@ RUN curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-ini
   && elan toolchain install leanprover/lean4:v4.12.0 \
   && lean --version
 
-RUN npm run proof:lean-fixture && npm run engines:verify:all
+RUN npm run proof:lean-suite && npm run engines:verify:all
 
 CMD ["npm", "run", "engines:verify:all"]

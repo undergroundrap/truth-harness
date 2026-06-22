@@ -4540,6 +4540,7 @@ proof
   .option("--lean-command <path>", "Lean executable path or command. Defaults to TRUTH_HARNESS_LEAN or lean.")
   .option("--timeout-ms <ms>", "Backend probe and proof-check timeout in milliseconds", parsePositiveInteger, 30000)
   .option("--no-run-next", "Create the repair rehearsal without writing the run-next handoff packet")
+  .option("--fail-on-open", "Exit non-zero unless the repaired proof closes the route obligation")
   .option("--json", "Print the full proof-repair fixture JSON")
   .action(
     async (
@@ -4549,6 +4550,7 @@ proof
         leanCommand?: string;
         timeoutMs: number;
         runNext?: boolean;
+        failOnOpen?: boolean;
         json?: boolean;
       }
     ) => {
@@ -4562,10 +4564,16 @@ proof
 
       if (options.json) {
         printJson(result);
+        if (options.failOnOpen && !result.routeSatisfaction) {
+          process.exitCode = 1;
+        }
         return;
       }
 
       printProofRepairFixture(result);
+      if (options.failOnOpen && !result.routeSatisfaction) {
+        process.exitCode = 1;
+      }
     }
   );
 

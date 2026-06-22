@@ -18,10 +18,16 @@ describe("professor evidence reviewer commands", () => {
     expect(Object.entries(scripts).filter(([, command]) => command.includes("npm run cli --"))).toEqual([]);
     expect(scripts["docker:sandbox"]).toContain("node apps/cli/dist/index.js code sandbox-status --json");
     expect(scripts["proof:lean-fixture"]).toContain("node apps/cli/dist/index.js proof project");
+    expect(scripts["proof:lean-suite"]).toContain("npm run proof:lean-fixture");
+    expect(scripts["proof:lean-suite"]).toContain("npm run proof:repair-fixture:gate");
+    expect(scripts["proof:repair-fixture:gate"]).toContain("--fail-on-open");
+    expect(scripts["docker:proof-repair"]).toBe("docker compose run --build --rm lean-proof npm run proof:repair-fixture:gate");
+    expect(scripts["docker:lean-suite"]).toBe("docker compose run --build --rm lean-proof npm run proof:lean-suite");
 
     expect(compose).toContain("professor-evidence-all:");
     expect(compose).toContain("image: truth-harness:all-engines");
     expect(compose).toContain('command: ["npm", "run", "professor:evidence", "--", "--all-engines"]');
+    expect(compose).toContain('command: ["npm", "run", "proof:lean-suite"]');
 
     expect(professorEvidence).toContain("const strictAllEngines");
     expect(professorEvidence).toContain('["--require-all-engines"]');

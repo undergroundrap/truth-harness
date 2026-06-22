@@ -1188,6 +1188,28 @@ describe("benchmark CLI", () => {
     expect(json.warnings.join(" ")).toContain("route obligation remains open");
   });
 
+  it("can gate proof-repair fixtures so missing Lean cannot look green", async () => {
+    const root = await tempRoot();
+    const result = await runCli([
+      "proof",
+      "repair-fixture",
+      root,
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--no-run-next",
+      "--fail-on-open",
+      "--json"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      routeSatisfaction?: unknown;
+      warnings: string[];
+    };
+
+    expect(result.exitCode).toBe(1);
+    expect(json.routeSatisfaction).toBeUndefined();
+    expect(json.warnings.join(" ")).toContain("route obligation remains open");
+  });
+
   it("inspects Lean project readiness without running Lean", async () => {
     const root = await tempRoot();
     await mkdir(join(root, "Proofs"), { recursive: true });

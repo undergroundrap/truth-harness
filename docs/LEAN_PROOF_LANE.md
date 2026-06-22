@@ -119,14 +119,14 @@ Run the local script when Lean is installed:
 npm run proof:lean-fixture
 ```
 
-Run the Docker profile when you want the fixture checked in a reproducible image:
+Run the Docker profile when you want the proof lane checked in a reproducible image:
 
 ```bash
 docker compose build lean-proof
 docker compose run --rm lean-proof
 ```
 
-The Docker target installs Lean through elan during image build, then the compose service checks the fixture with no runtime network route. This profile is deliberately separate from the default dev image so the proof lane can become strong without making every user carry a large proof environment.
+The Docker target installs Lean through elan during image build, then the compose service runs `npm run proof:lean-suite` with no runtime network route. The suite checks the static Lean fixture and the proof-repair fixture, so the pinned profile must prove both that Lean can accept a concrete proof and that Truth Harness can preserve a failed attempt, produce a run-next repair handoff, rerun the repaired proof, and close the exact route obligation only after an accepted proof-check record exists. The suite fails if the repair obligation stays open. This profile is deliberately separate from the default dev image so the proof lane can become strong without making every user carry a large proof environment.
 
 ## Agent Use
 
@@ -155,6 +155,14 @@ Use the repair fixture when you want to rehearse the full proof-repair loop end 
 npm run build
 npm run proof:repair-fixture
 ```
+
+Use the pinned no-runtime-network Lean image when you want the same repair loop to close with real Lean instead of a host-local installation:
+
+```bash
+npm run docker:proof-repair
+```
+
+The Docker command uses `--fail-on-open`; it is meant for reviewer evidence and must not pass unless the scoped route obligation closes.
 
 This creates `docs/examples/lean-repair-fixture` as a local Truth Harness workspace, writes a tiny Lean theorem, records an intentionally rejected scoped proof attempt, asks `workspace run-next` for the repair handoff, rewrites the same Lean source to a valid proof, and then tries to close the exact route obligation with the accepted proof-check record.
 
