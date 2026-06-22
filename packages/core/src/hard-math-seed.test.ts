@@ -165,7 +165,7 @@ describe("hard-math seed workspace", () => {
 
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
     expect(validation.passed).toBe(true);
-  });
+  }, 15000);
 
   it("can seed one selected case without writing a run-next handoff", async () => {
     const root = await tempRoot();

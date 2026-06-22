@@ -94,6 +94,7 @@ import {
   handleTruthHarnessWorkspaceCredibilityBundleVerify,
   handleTruthHarnessWorkspaceEvents,
   handleTruthHarnessWorkspaceGraph,
+  handleTruthHarnessWorkspaceHardMathSeedList,
   handleTruthHarnessWorkspaceRepair,
   handleTruthHarnessWorkspaceReview,
   handleTruthHarnessWorkspaceReviewList,
@@ -1481,9 +1482,29 @@ describe("MCP tool handlers", () => {
       now: "2026-06-20T12:05:00.000Z",
       writeRunNextPlan: false
     });
+    const latestChallenge = await handleTruthHarnessWorkspaceHardMathSeedList({
+      preset: "professor-challenge",
+      latest: true
+    });
     expect(challenge).toMatchObject({
       schemaVersion: "truth-harness.hard-math-seed.v0",
       preset: "professor-challenge"
+    });
+    expect(latestChallenge).toMatchObject({
+      total: 1,
+      preset: "professor-challenge",
+      latest: true,
+      seed: {
+        seedId: challenge.seedId,
+        paths: {
+          json: challenge.paths.json
+        }
+      },
+      seeds: [
+        expect.objectContaining({
+          seedId: challenge.seedId
+        })
+      ]
     });
     expect(challenge.cases.map((seedCase) => seedCase.caseId)).toEqual([
       "exact-fraction-lemma",

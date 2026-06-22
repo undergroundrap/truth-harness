@@ -75,6 +75,7 @@ import {
   isValidationPlanDomain,
   inspectLeanProject,
   inspectWorkspaceRunNextPlan,
+  listHardMathSeedWorkspaces,
   listBenchmarkArtifacts,
   listSymbolicCasChecks,
   listClaimCharts,
@@ -112,6 +113,7 @@ import {
   readClaimRecord,
   readReportDraft,
   readResearchSession,
+  readLatestHardMathSeedWorkspace,
   readVisualArtifact,
   readWorkspaceReview,
   readWorkspaceRevision,
@@ -3837,6 +3839,50 @@ workspace
       printHardMathSeed(result);
     }
   );
+
+workspace
+  .command("hard-math-seeds")
+  .description("List persisted hard-math seed packets so agents can resume existing validation queues.")
+  .argument("[path]", "Project root path", ".")
+  .option("--preset <preset>", "Filter by seed preset: all or professor-challenge")
+  .option("--latest", "Show only the newest matching seed packet")
+  .option("--json", "Print the full hard-math seed list JSON")
+  .action(async (path: string, options: { preset?: string; latest?: boolean; json?: boolean }) => {
+    const preset = options.preset ? parseHardMathSeedPreset(options.preset) : undefined;
+    if (options.latest) {
+      const seed = await readLatestHardMathSeedWorkspace(path, { preset });
+      if (options.json) {
+        printJson({
+          total: seed ? 1 : 0,
+          latest: true,
+          ...(preset ? { preset } : {}),
+          seed
+        });
+        return;
+      }
+
+      if (!seed) {
+        console.log("Truth Harness hard-math seeds: 0");
+        console.log("No matching hard-math seed packet was found.");
+        return;
+      }
+
+      printHardMathSeedList([seed], { latest: true });
+      return;
+    }
+
+    const seeds = await listHardMathSeedWorkspaces(path, { preset });
+    if (options.json) {
+      printJson({
+        total: seeds.length,
+        ...(preset ? { preset } : {}),
+        seeds
+      });
+      return;
+    }
+
+    printHardMathSeedList(seeds);
+  });
 
 workspace
   .command("run-next")
@@ -8228,6 +8274,34 @@ function printHardMathSeed(result: HardMathSeedResult): void {
     for (const warning of result.warnings) {
       console.log(`  - ${warning}`);
     }
+  }
+}
+
+function printHardMathSeedList(seeds: HardMathSeedResult[], options: { latest?: boolean } = {}): void {
+  console.log(`Truth Harness hard-math seeds: ${seeds.length}${options.latest ? " latest" : ""}`);
+  if (seeds.length === 0) {
+    console.log("No persisted hard-math seed packets found.");
+    return;
+  }
+
+  for (const seed of seeds) {
+    const runNext = seed.runNext?.plan;
+    console.log("");
+    console.log(`${seed.seedId} ${seed.createdAt}`);
+    console.log(`  Preset: ${seed.preset}`);
+    console.log(`  Cases: ${seed.cases.length}`);
+    console.log(`  JSON: ${seed.paths.json}`);
+    console.log(`  Markdown: ${seed.paths.markdown}`);
+    if (runNext) {
+      console.log(`  Run-next: ${runNext.planId} (${runNext.status})`);
+      if (runNext.item?.command) {
+        console.log(`  First command: ${runNext.item.command}`);
+      }
+    } else {
+      console.log("  Run-next: not written");
+    }
+    const openGateCount = seed.cases.reduce((total, seedCase) => total + (seedCase.openBlockingGates ?? 0), 0);
+    console.log(`  Open blocking gates: ${openGateCount}`);
   }
 }
 

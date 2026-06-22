@@ -48,6 +48,7 @@ import {
   initLocalWorkspace,
   addResearchSessionCheckpoint,
   inspectWorkspaceRunNextPlan,
+  listHardMathSeedWorkspaces,
   listClaimRecords,
   listBenchmarkArtifacts,
   listSymbolicCasChecks,
@@ -83,6 +84,7 @@ import {
   readClaimRecord,
   readReportDraft,
   readResearchSession,
+  readLatestHardMathSeedWorkspace,
   readVisualArtifact,
   readWorkspaceRunNextPlan,
   readWorkspaceReview,
@@ -182,6 +184,7 @@ import {
   type ExternalDisclosureStatus,
   type ExternalDisclosureWriteResult,
   type HardMathSeedResult,
+  type HardMathSeedPreset,
   type InventionEvidenceRef,
   type InventionLogEntry,
   type InventionLogWriteResult,
@@ -680,6 +683,12 @@ export interface TruthHarnessWorkspaceSeedHardMathInput {
   preset?: "all" | "professor-challenge";
   now?: string;
   writeRunNextPlan?: boolean;
+}
+
+export interface TruthHarnessWorkspaceHardMathSeedListInput {
+  workspacePath?: string;
+  preset?: HardMathSeedPreset;
+  latest?: boolean;
 }
 
 export interface TruthHarnessWorkspaceRunNextInput {
@@ -1947,6 +1956,33 @@ export async function handleTruthHarnessWorkspaceSeedHardMath(
     now: input.now,
     writeRunNextPlan: input.writeRunNextPlan !== false
   });
+}
+
+export async function handleTruthHarnessWorkspaceHardMathSeedList(input: TruthHarnessWorkspaceHardMathSeedListInput): Promise<{
+  total: number;
+  preset?: HardMathSeedPreset;
+  latest: boolean;
+  seed?: HardMathSeedResult;
+  seeds: HardMathSeedResult[];
+}> {
+  const rootPath = resolveWorkspaceRoot(input.workspacePath);
+  if (input.latest) {
+    const seed = await readLatestHardMathSeedWorkspace(rootPath, { preset: input.preset });
+    return {
+      total: seed ? 1 : 0,
+      ...(input.preset ? { preset: input.preset } : {}),
+      latest: true,
+      ...(seed ? { seed, seeds: [seed] } : { seeds: [] })
+    };
+  }
+
+  const seeds = await listHardMathSeedWorkspaces(rootPath, { preset: input.preset });
+  return {
+    total: seeds.length,
+    ...(input.preset ? { preset: input.preset } : {}),
+    latest: false,
+    seeds
+  };
 }
 
 export async function handleTruthHarnessWorkspaceUiReview(

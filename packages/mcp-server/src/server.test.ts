@@ -156,6 +156,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_workspace_credibility_bundle_verify",
         "truth_harness_workspace_events",
         "truth_harness_workspace_graph",
+        "truth_harness_workspace_hard_math_seed_list",
         "truth_harness_workspace_init",
         "truth_harness_workspace_pilot_loop",
         "truth_harness_workspace_repair",

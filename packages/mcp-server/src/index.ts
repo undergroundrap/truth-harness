@@ -92,6 +92,7 @@ import {
   handleTruthHarnessWorkspaceReview,
   handleTruthHarnessWorkspaceReviewList,
   handleTruthHarnessWorkspaceReviewShow,
+  handleTruthHarnessWorkspaceHardMathSeedList,
   handleTruthHarnessWorkspaceSeedHardMath,
   handleTruthHarnessWorkspaceRunNext,
   handleTruthHarnessWorkspaceRunNextList,
@@ -1541,6 +1542,32 @@ export function createTruthHarnessMcpServer(): McpServer {
     },
     async ({ workspacePath, caseIds, preset, now, writeRunNextPlan }) =>
       toolJson(await handleTruthHarnessWorkspaceSeedHardMath({ workspacePath, caseIds, preset, now, writeRunNextPlan }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_hard_math_seed_list",
+    {
+      title: "List Hard-Math Seeds",
+      description:
+        "List or reopen persisted hard-math seed packets from .truth-harness/findings so agents resume existing validation queues instead of reseeding duplicate work.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        preset: z
+          .enum(["all", "professor-challenge"])
+          .optional()
+          .describe("Optional seed preset filter."),
+        latest: z.boolean().optional().describe("When true, return only the newest matching seed packet.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, preset, latest }) =>
+      toolJson(await handleTruthHarnessWorkspaceHardMathSeedList({ workspacePath, preset, latest }))
   );
 
   server.registerTool(

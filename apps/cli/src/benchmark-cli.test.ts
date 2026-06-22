@@ -1222,16 +1222,42 @@ describe("benchmark CLI", () => {
     ]);
     const json = JSON.parse(result.stdout) as {
       schemaVersion: string;
+      seedId: string;
       preset: string;
+      paths: { json: string; markdown: string };
       cases: Array<{ caseId: string; validationPlanId?: string }>;
       runNext?: { plan?: { schemaVersion: string; dryRun: boolean; item?: { kind: string } } };
     };
+    const latest = JSON.parse(
+      (await runCli(["workspace", "hard-math-seeds", root, "--preset", "professor-challenge", "--latest", "--json"])).stdout
+    ) as {
+      total: number;
+      latest: boolean;
+      preset: string;
+      seed?: { seedId: string; preset: string; paths: { json: string } };
+    };
+    const listedHuman = await runCli(["workspace", "hard-math-seeds", root, "--preset", "professor-challenge", "--latest"]);
 
     expect(result.exitCode).toBe(0);
     expect(json).toMatchObject({
       schemaVersion: "truth-harness.hard-math-seed.v0",
       preset: "professor-challenge"
     });
+    expect(json.paths.json).toContain(".truth-harness/findings/");
+    expect(latest).toMatchObject({
+      total: 1,
+      latest: true,
+      preset: "professor-challenge",
+      seed: {
+        seedId: json.seedId,
+        preset: "professor-challenge",
+        paths: {
+          json: json.paths.json
+        }
+      }
+    });
+    expect(listedHuman.stdout).toContain("Truth Harness hard-math seeds: 1 latest");
+    expect(listedHuman.stdout).toContain(json.seedId);
     expect(json.cases.map((seedCase) => seedCase.caseId)).toEqual([
       "exact-fraction-lemma",
       "false-parity-trap",
