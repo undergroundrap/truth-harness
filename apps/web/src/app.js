@@ -8495,6 +8495,7 @@ function renderWorkspaceRunNextSummary(summary) {
   const revision = summary.sourceRevisionStatus ?? (summary.sourceRevisionId ? "not checked" : "not recorded");
   const snapshot = summary.sourceSnapshotStatus ?? (summary.sourceSnapshotId ? "not checked" : "not recorded");
   const itemTitle = summary.itemTitle ?? "No open work item.";
+  const repairSummary = workspaceRunNextProofRepairSummaryText(summary);
   const packetPathHtml = workspaceArtifactRefIsPreviewable(summary.path)
     ? artifactRefControlHtml(summary.path, {
         surface: "workspace-run-next-history",
@@ -8525,6 +8526,7 @@ function renderWorkspaceRunNextSummary(summary) {
         <div><dt>Revision</dt><dd>${escapeHtml(revision)}</dd></div>
         <div><dt>Snapshot</dt><dd>${escapeHtml(snapshot)}</dd></div>
         <div><dt>Source</dt><dd>${escapeHtml(summary.rationaleSource ?? summary.itemKind ?? "workspace-review")}</dd></div>
+        ${repairSummary ? `<div><dt>Repair</dt><dd>${escapeHtml(repairSummary)}</dd></div>` : ""}
         <div><dt>Packet</dt><dd>${packetPathHtml}</dd></div>
       </dl>
       ${workspaceRunNextSafetyHtml(summary, { surface: "workspace-run-next-history", compact: true })}
@@ -8537,6 +8539,18 @@ function renderWorkspaceRunNextSummary(summary) {
       <button class="text-button compact-button copy-run-next-handoff-command" data-command="${escapeHtml(command)}" type="button">Copy</button>
     </div>
   </article>`;
+}
+
+function workspaceRunNextProofRepairSummaryText(value) {
+  const target = value?.proofRepairTargetSummary ?? value?.item?.proofRepairTarget;
+  if (!target) {
+    return "";
+  }
+
+  const location = `${target.sourcePath}:${target.markerLine}:${target.markerColumn}`;
+  const declaration = target.declarationName ?? target.declarationId;
+  const command = target.afterEditCommand ?? target.afterEditCommands?.[0];
+  return [target.repairTargetId, location, declaration, command].filter(Boolean).join(" / ");
 }
 
 function renderWorkspaceRunNextInspection(inspection) {

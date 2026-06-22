@@ -1786,6 +1786,7 @@ describe("workspace run-next", () => {
     });
     const write = await writeWorkspaceRunNextPlan({ rootPath: root, plan });
     const reread = await readWorkspaceRunNextPlan(root, write.plan.planId);
+    const summaries = await listWorkspaceRunNextPlans(root);
 
     expect(plan.item?.proofDeclaration).toEqual(proofDeclaration);
     expect(plan.item?.proofAttempt).toEqual(proofAttempt);
@@ -1798,6 +1799,25 @@ describe("workspace run-next", () => {
     expect(write.markdown).toContain(`Proof attempt: \`${proofAttempt.checkId}\``);
     expect(write.markdown).toContain(`Proof repair target: \`${proofRepairTarget.repairTargetId}\``);
     expect(write.markdown).toContain(`Proof repair source sha256: \`${proofRepairTarget.sourceSha256}\``);
+    expect(summaries).toContainEqual(
+      expect.objectContaining({
+        planId: write.plan.planId,
+        proofRepairTargetSummary: {
+          repairTargetId: proofRepairTarget.repairTargetId,
+          sourcePath: proofRepairTarget.sourcePath,
+          sourceSha256: proofRepairTarget.sourceSha256,
+          markerKind: proofRepairTarget.markerKind,
+          markerLine: proofRepairTarget.markerLine,
+          markerColumn: proofRepairTarget.markerColumn,
+          declarationId: proofRepairTarget.declarationId,
+          declarationName: proofRepairTarget.declarationName,
+          declarationSignatureSha256: proofRepairTarget.declarationSignatureSha256,
+          afterEditCommand: proofRepairTarget.afterEditCommands[0],
+          evidenceRequired: proofRepairTarget.evidenceRequired,
+          boundary: proofRepairTarget.boundary
+        }
+      })
+    );
   });
 });
 

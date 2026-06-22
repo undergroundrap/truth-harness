@@ -211,6 +211,21 @@ export interface WorkspaceRunNextResumeDecision {
   nextCommand: string;
 }
 
+export interface WorkspaceRunNextProofRepairTargetSummary {
+  repairTargetId: string;
+  sourcePath: string;
+  sourceSha256: string;
+  markerKind: NonNullable<WorkspaceReviewItem["proofRepairTarget"]>["markerKind"];
+  markerLine: number;
+  markerColumn: number;
+  declarationId?: string;
+  declarationName?: string;
+  declarationSignatureSha256?: string;
+  afterEditCommand?: string;
+  evidenceRequired: string[];
+  boundary: string;
+}
+
 export interface WorkspaceRunNextSummary {
   schemaVersion: typeof WORKSPACE_RUN_NEXT_SCHEMA_VERSION;
   planId: string;
@@ -225,6 +240,7 @@ export interface WorkspaceRunNextSummary {
   itemTitle?: string;
   itemKind?: WorkspaceReviewItem["kind"];
   itemPriority?: WorkspaceReviewItem["priority"];
+  proofRepairTargetSummary?: WorkspaceRunNextProofRepairTargetSummary;
   executionKind: string;
   executionStatus: WorkspaceRunNextStatus;
   rationaleTarget?: string;
@@ -1357,6 +1373,7 @@ function summarizeWorkspaceRunNextPlan(
     itemTitle: plan.item?.title,
     itemKind: plan.item?.kind,
     itemPriority: plan.item?.priority,
+    proofRepairTargetSummary: summarizeWorkspaceRunNextProofRepairTarget(plan.item?.proofRepairTarget),
     executionKind: plan.execution.kind,
     executionStatus: plan.execution.status,
     rationaleTarget: rationale.target,
@@ -1381,6 +1398,31 @@ function summarizeWorkspaceRunNextPlan(
     resumeDecision: createWorkspaceRunNextResumeDecision(plan, sourceSnapshotCheck, sourceRevisionCheck),
     ...(sourceRevisionCheck ?? {}),
     ...(sourceSnapshotCheck ?? {})
+  };
+}
+
+function summarizeWorkspaceRunNextProofRepairTarget(
+  target: WorkspaceReviewItem["proofRepairTarget"] | undefined
+): WorkspaceRunNextProofRepairTargetSummary | undefined {
+  if (!target) {
+    return undefined;
+  }
+
+  return {
+    repairTargetId: target.repairTargetId,
+    sourcePath: target.sourcePath,
+    sourceSha256: target.sourceSha256,
+    markerKind: target.markerKind,
+    markerLine: target.markerLine,
+    markerColumn: target.markerColumn,
+    ...(target.declarationId ? { declarationId: target.declarationId } : {}),
+    ...(target.declarationName ? { declarationName: target.declarationName } : {}),
+    ...(target.declarationSignatureSha256
+      ? { declarationSignatureSha256: target.declarationSignatureSha256 }
+      : {}),
+    ...(target.afterEditCommands[0] ? { afterEditCommand: target.afterEditCommands[0] } : {}),
+    evidenceRequired: [...target.evidenceRequired],
+    boundary: target.boundary
   };
 }
 
