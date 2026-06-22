@@ -11331,6 +11331,7 @@ function renderReleaseAuditGate() {
     ? [
         ["Checks", `${summary.passedChecks ?? 0} pass / ${summary.warningChecks ?? 0} warn / ${summary.failedChecks ?? 0} fail`],
         ["Engines", releaseAuditEngineEvidenceSummary(audit)],
+        ["Saved engine ladder", releaseAuditSavedEngineLadderSummary(audit)],
         ["Reviewer bundle", releaseAuditReviewerBundleSummary(audit)],
         ["Adversarial benchmark", releaseAuditBenchmarkSummary(summary)],
         ["Math ladder", releaseAuditMathLadderSummary(summary)],
@@ -12185,10 +12186,14 @@ function releaseAuditGateEvidenceRefs(audit, check) {
     const run = pack?.engineRunLedger?.latestStrictReviewerRun;
     add("engine run artifact", run?.path);
     add("engine run id", run?.runId);
+    add("engine ladder level", run?.strongestLevelId);
   }
   if (check.id === "engine-evidence") {
     const professor = pack?.engineRunLedger?.latestProfessorReviewerRun;
     const strict = pack?.engineRunLedger?.latestStrictReviewerRun;
+    const strongest = pack?.engineRunLedger?.strongestSavedLevelRun;
+    add("strongest saved level", pack?.summary?.savedEngineLadderLevel);
+    add("strongest level run", strongest?.path);
     add("professor engine run", professor?.path);
     add("strict engine run", strict?.path);
     add("engine verify command", pack?.reviewerCommands?.verifyEngines);
@@ -12406,6 +12411,7 @@ function releaseAuditEngineEvidenceSummary(audit) {
   const summary = audit?.summary ?? {};
   const concreteGates = summary.concreteEngineGates ?? "0/5";
   const requiredGates = summary.requiredEngineGates ?? "0/5";
+  const savedLevel = releaseAuditSavedEngineLadderSummary(audit);
   const engineCheck = Array.isArray(audit?.checks)
     ? audit.checks.find((check) => check.id === "engine-evidence")
     : undefined;
@@ -12415,10 +12421,25 @@ function releaseAuditEngineEvidenceSummary(audit) {
     engineCheck?.status === "pass" &&
     checkSummary.includes("Saved no-network Docker engine evidence")
   ) {
-    return `saved Docker evidence; live host ${concreteGates} concrete / ${requiredGates} required`;
+    return `saved Docker evidence (${savedLevel}); live host ${concreteGates} concrete / ${requiredGates} required`;
   }
 
   return `${requiredGates} required / ${concreteGates} concrete`;
+}
+
+function releaseAuditSavedEngineLadderSummary(audit) {
+  const summary = audit?.summary ?? {};
+  const packSummary = audit?.credibilityPack?.summary ?? {};
+  const run = audit?.credibilityPack?.engineRunLedger?.strongestSavedLevelRun
+    ?? audit?.credibilityPack?.engineRunLedger?.latestStrictReviewerRun
+    ?? audit?.credibilityPack?.engineRunLedger?.latestProfessorReviewerRun;
+  const inferred = savedEngineLadderFromRun(run);
+  const level = summary.savedEngineLadderLevel ?? packSummary.savedEngineLadderLevel ?? inferred.level;
+  const title = packSummary.savedEngineLadderLevelTitle ?? inferred.title;
+  if (!level) {
+    return "missing";
+  }
+  return title ? `${level} (${title})` : level;
 }
 
 function releaseAuditActivitySummary(audit) {
@@ -15857,7 +15878,8 @@ function credibilityEngineEvidenceLadderHtml(pack) {
   const rows = Array.isArray(pack?.engineEvidenceLadder)
     ? pack.engineEvidenceLadder
     : credibilityEngineEvidenceLadderFromCases(pack?.engineEvidence?.cases);
-  if (rows.length === 0) {
+  const savedLedgerCard = credibilityEngineSavedLedgerHtml(pack);
+  if (rows.length === 0 && !savedLedgerCard) {
     return "";
   }
 
@@ -15881,10 +15903,59 @@ function credibilityEngineEvidenceLadderHtml(pack) {
   return `<section class="credibility-engine-ladder" aria-label="Engine evidence ladder">
     <div class="credibility-pack-section-head">
       <strong>Engine Evidence Ladder</strong>
-      <span>${rows.length} gate${rows.length === 1 ? "" : "s"} / required gates must earn concrete evidence</span>
+      <span>${rows.length} gate${rows.length === 1 ? "" : "s"} / saved ladder evidence is cited separately</span>
     </div>
+    ${savedLedgerCard}
     <div class="credibility-engine-ladder-grid">${cards}</div>
   </section>`;
+}
+
+function credibilityEngineSavedLedgerHtml(pack) {
+  const summary = pack?.summary ?? {};
+  const run = pack?.engineRunLedger?.strongestSavedLevelRun
+    ?? pack?.engineRunLedger?.latestStrictReviewerRun
+    ?? pack?.engineRunLedger?.latestProfessorReviewerRun;
+  const inferred = savedEngineLadderFromRun(run);
+  const level = summary.savedEngineLadderLevel ?? run?.strongestLevelId ?? inferred.level;
+  if (!level && !run) {
+    return "";
+  }
+
+  const statusClass = level === "engine-level-5-strict-all-engines" ? "exact" : run?.status === "passed" ? "waiting" : "refuted";
+  const title = summary.savedEngineLadderLevelTitle ?? run?.strongestLevelTitle ?? inferred.title ?? "Saved engine evidence";
+  const path = run?.path ?? "no saved engine run artifact";
+  const runId = summary.savedEngineLadderLevelRunId ?? run?.runId ?? "not recorded";
+  return `<article class="credibility-engine-saved-level ${statusClass}" data-testid="credibility-saved-engine-level">
+    <div>
+      <span class="mini-label">saved Docker engine ladder</span>
+      <strong>${escapeHtml(level ?? "No saved engine ladder level")}</strong>
+      <p>${escapeHtml(title)}. This is durable reviewer evidence only; each future claim still needs its own receipt or proof/check artifact.</p>
+    </div>
+    <dl>
+      <div><dt>Evidence run</dt><dd><code>${escapeHtml(runId)}</code></dd></div>
+      <div><dt>Status</dt><dd>${escapeHtml(run?.status ?? "missing")}</dd></div>
+      <div><dt>Required gates</dt><dd>${escapeHtml(run ? `${run.requiredPassed}/${run.requiredTotal}` : "not recorded")}</dd></div>
+      <div><dt>Artifact</dt><dd><code>${escapeHtml(path)}</code></dd></div>
+    </dl>
+  </article>`;
+}
+
+function savedEngineLadderFromRun(run) {
+  if (!run) {
+    return { level: undefined, title: undefined };
+  }
+  const requiredPassed = Number(run.requiredPassed ?? 0);
+  const requiredTotal = Number(run.requiredTotal ?? 0);
+  if (run.status === "passed" && requiredTotal >= 5 && requiredPassed >= requiredTotal) {
+    return {
+      level: "engine-level-5-strict-all-engines",
+      title: "Strict all-engine saved evidence"
+    };
+  }
+  return {
+    level: run.strongestLevelId,
+    title: run.strongestLevelTitle
+  };
 }
 
 function credibilityEngineEvidenceLadderFromCases(cases) {
@@ -15954,6 +16025,7 @@ function credibilityPackSummaryRows(pack) {
     ["Workspace validation", `${summary.validationPassed ? "passed" : "failed"} (${summary.validationErrors ?? 0} errors, ${summary.validationWarnings ?? 0} warnings)`],
     ["Strict engine gates", `${summary.requiredEngineGates ?? "0/0"} required${credibilityPackSavedEngineRunLedgerLabel(summary)}`],
     ["Engine evidence", credibilityPackEngineEvidenceSummary(pack)],
+    ["Saved engine ladder", credibilityPackSavedEngineLadderSummary(summary, pack?.engineRunLedger)],
     ["Adversarial benchmark", `${summary.latestAdversarialBenchmarkStatus ?? "missing"} (${formatPercent(summary.latestAdversarialBenchmarkAccuracy)})`],
     ["Math ladder", `${summary.latestMathCredibilityLadderStatus ?? "missing"} (${formatPercent(summary.latestMathCredibilityLadderAccuracy)})`],
     ["Saved engine ledger", `${summary.savedEngineRuns ?? 0} run${summary.savedEngineRuns === 1 ? "" : "s"}`],
@@ -15984,13 +16056,33 @@ function credibilityPackEngineEvidenceSummaryFromSummary(summary = {}) {
 
 function credibilityPackSavedEngineRunLedgerLabel(summary = {}) {
   const labels = [];
+  if (summary.savedEngineLadderLevel) {
+    labels.push(`strongest saved level: ${summary.savedEngineLadderLevel}`);
+  }
   if (summary.latestProfessorEngineRunStatus) {
-    labels.push(`latest professor Docker: ${summary.latestProfessorEngineRunStatus}`);
+    labels.push(
+      `latest professor Docker: ${summary.latestProfessorEngineRunStatus}${summary.latestProfessorEngineRunLevel ? ` (${summary.latestProfessorEngineRunLevel})` : ""}`
+    );
   }
   if (summary.latestStrictEngineRunStatus) {
-    labels.push(`latest strict reviewer: ${summary.latestStrictEngineRunStatus}`);
+    labels.push(
+      `latest strict reviewer: ${summary.latestStrictEngineRunStatus}${summary.latestStrictEngineRunLevel ? ` (${summary.latestStrictEngineRunLevel})` : ""}`
+    );
   }
   return labels.length > 0 ? ` (${labels.join(", ")})` : "";
+}
+
+function credibilityPackSavedEngineLadderSummary(summary = {}, engineRunLedger = {}) {
+  const run = engineRunLedger.strongestSavedLevelRun
+    ?? engineRunLedger.latestStrictReviewerRun
+    ?? engineRunLedger.latestProfessorReviewerRun;
+  const inferred = savedEngineLadderFromRun(run);
+  const level = summary.savedEngineLadderLevel ?? inferred.level;
+  if (!level) {
+    return "missing";
+  }
+  const title = summary.savedEngineLadderLevelTitle ?? inferred.title;
+  return title ? `${level} (${title})` : level;
 }
 
 function credibilityPackSavedEngineCoverageLabel(summary = {}) {

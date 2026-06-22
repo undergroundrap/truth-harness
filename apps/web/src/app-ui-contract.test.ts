@@ -240,9 +240,12 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function credibilityEngineEvidenceTierFromCase(entry)");
     expect(source).toContain("function credibilityEngineEvidenceMeaningFromCase(entry)");
     expect(source).toContain("function credibilityEngineLadderStatusClass(entry)");
+    expect(source).toContain("function credibilityEngineSavedLedgerHtml(pack)");
+    expect(source).toContain("function savedEngineLadderFromRun(run)");
     expect(source).toContain("function credibilityPackEngineEvidenceSummary(pack)");
     expect(source).toContain("function credibilityPackEngineEvidenceSummaryFromSummary(summary = {})");
     expect(source).toContain("function credibilityPackSavedEngineCoverageLabel(summary = {})");
+    expect(source).toContain("function credibilityPackSavedEngineLadderSummary(summary = {}, engineRunLedger = {})");
     expect(source).toContain("function credibilityPackEngineGatePassed(value, summary = {})");
     expect(source).toContain("function credibilityPackEngineGateDetail(summary = {}, kind)");
     expect(source).toContain("current web container probe is informational");
@@ -252,6 +255,8 @@ describe("web UI action contracts", () => {
     expect(source).toContain("pack?.engineEvidenceLadder");
     expect(source).toContain("pack?.engineEvidence?.cases");
     expect(source).toContain("Engine Evidence Ladder");
+    expect(source).toContain('data-testid="credibility-saved-engine-level"');
+    expect(source).toContain('["Saved engine ladder", credibilityPackSavedEngineLadderSummary(summary, pack?.engineRunLedger)]');
     expect(source).toContain("function credibilityBenchmarkCardHtml(pack)");
     expect(source).toContain("function credibilityMathLadderCommand(pack)");
     expect(source).toContain('data-testid="copy-credibility-benchmark-command"');
@@ -304,6 +309,7 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".credibility-pack-action-plan");
     expect(styles).toContain(".credibility-pack-action");
     expect(styles).toContain(".credibility-engine-ladder");
+    expect(styles).toContain(".credibility-engine-saved-level");
     expect(styles).toContain(".credibility-engine-ladder-grid");
     expect(styles).toContain(".credibility-engine-ladder-card");
     expect(styles).toContain("overflow-wrap: anywhere;");
@@ -325,6 +331,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function releaseAuditBenchmarkSummary(summary)");
     expect(source).toContain("function releaseAuditMathLadderSummary(summary)");
     expect(source).toContain("function releaseAuditEngineEvidenceSummary(audit)");
+    expect(source).toContain("function releaseAuditSavedEngineLadderSummary(audit)");
     expect(source).toContain("function releaseAuditReviewerBoardHtml(audit)");
     expect(source).toContain("function releaseAuditReviewerBundleSummary(audit)");
     expect(source).toContain("function releaseAuditGateInspectorHtml(audit, check)");
@@ -377,6 +384,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain('["Reviewer bundle", releaseAuditReviewerBundleSummary(audit)]');
     expect(source).toContain("Saved no-network Docker engine evidence");
     expect(source).toContain('["Engines", releaseAuditEngineEvidenceSummary(audit)]');
+    expect(source).toContain('["Saved engine ladder", releaseAuditSavedEngineLadderSummary(audit)]');
     expect(source).toContain('data-testid="refresh-release-audit"');
     expect(source).toContain('data-testid="copy-release-audit-command"');
     expect(source).toContain('data-testid="copy-release-benchmark-command"');
