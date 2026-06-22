@@ -151,6 +151,12 @@
         "proofAttempt": {
           "$ref": "#/$defs/proofAttempt"
         },
+        "proofAttemptHistory": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/proofAttempt"
+          }
+        },
         "proofRepairTarget": {
           "$ref": "#/$defs/proofRepairTarget"
         },

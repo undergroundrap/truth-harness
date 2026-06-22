@@ -1745,6 +1745,16 @@ describe("workspace run-next", () => {
       createdAt: "2026-06-21T00:01:00.000Z",
       diagnosticSnippet: "type mismatch"
     };
+    const proofAttemptHistory = [
+      proofAttempt,
+      {
+        ...proofAttempt,
+        checkId: "proof_fedcba9876543210",
+        path: ".truth-harness/proofs/2026-06-21-proof_fedcba9876543210.json",
+        createdAt: "2026-06-21T00:00:30.000Z",
+        diagnosticSnippet: "unknown identifier"
+      }
+    ];
     const proofRepairTarget = {
       repairTargetId: "lpr_0123456789abcdef",
       sourcePath: "Proofs/Attempt.lean",
@@ -1776,6 +1786,7 @@ describe("workspace run-next", () => {
       obligationKind: "formal-proof",
       proofDeclaration,
       proofAttempt,
+      proofAttemptHistory,
       proofRepairTarget
     });
     const plan = await createWorkspaceRunNextPlan({
@@ -1790,13 +1801,17 @@ describe("workspace run-next", () => {
 
     expect(plan.item?.proofDeclaration).toEqual(proofDeclaration);
     expect(plan.item?.proofAttempt).toEqual(proofAttempt);
+    expect(plan.item?.proofAttemptHistory).toEqual(proofAttemptHistory);
     expect(plan.item?.proofRepairTarget).toEqual(proofRepairTarget);
     expect(reread.item?.proofDeclaration).toEqual(proofDeclaration);
     expect(reread.item?.proofAttempt).toEqual(proofAttempt);
+    expect(reread.item?.proofAttemptHistory).toEqual(proofAttemptHistory);
     expect(reread.item?.proofRepairTarget).toEqual(proofRepairTarget);
     expect(write.markdown).toContain(`Proof declaration: \`${proofDeclaration.declarationId}\``);
     expect(write.markdown).toContain(`Proof declaration signature sha256: \`${proofDeclaration.signatureSha256}\``);
     expect(write.markdown).toContain(`Proof attempt: \`${proofAttempt.checkId}\``);
+    expect(write.markdown).toContain("Proof attempt history: 2 scoped Lean attempts");
+    expect(write.markdown).toContain("unknown identifier");
     expect(write.markdown).toContain(`Proof repair target: \`${proofRepairTarget.repairTargetId}\``);
     expect(write.markdown).toContain(`Proof repair source sha256: \`${proofRepairTarget.sourceSha256}\``);
     expect(summaries).toContainEqual(
@@ -1835,6 +1850,7 @@ function minimalReview(input: {
   obligationKind?: WorkspaceReview["items"][number]["obligationKind"];
   proofDeclaration?: WorkspaceReview["items"][number]["proofDeclaration"];
   proofAttempt?: WorkspaceReview["items"][number]["proofAttempt"];
+  proofAttemptHistory?: WorkspaceReview["items"][number]["proofAttemptHistory"];
   proofRepairTarget?: WorkspaceReview["items"][number]["proofRepairTarget"];
   sessionId?: string;
   domain?: string;
@@ -1901,6 +1917,7 @@ function minimalReview(input: {
         obligationKind: input.obligationKind,
         proofDeclaration: input.proofDeclaration,
         proofAttempt: input.proofAttempt,
+        proofAttemptHistory: input.proofAttemptHistory,
         proofRepairTarget: input.proofRepairTarget,
         reportId: input.reportId,
         validationPlanId: input.validationPlanId,

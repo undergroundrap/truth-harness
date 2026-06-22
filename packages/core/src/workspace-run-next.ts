@@ -326,6 +326,7 @@ export interface WorkspaceRunNextPlan {
     | "validationGateKind"
     | "proofDeclaration"
     | "proofAttempt"
+    | "proofAttemptHistory"
     | "proofRepairTarget"
     | "reportId"
   >;
@@ -944,6 +945,19 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
           `- Proof source: \`${item.proofAttempt.sourcePath}\`${
             item.proofAttempt.sourceSha256 ? ` sha256:\`${item.proofAttempt.sourceSha256}\`` : ""
           }`
+        ]
+      : []),
+    ...(item?.proofAttemptHistory && item.proofAttemptHistory.length > 0
+      ? [
+          `- Proof attempt history: ${item.proofAttemptHistory.length} scoped Lean attempt${
+            item.proofAttemptHistory.length === 1 ? "" : "s"
+          } (newest first)`,
+          ...item.proofAttemptHistory.map(
+            (attempt) =>
+              `  - \`${attempt.checkId}\` ${attempt.status} ${attempt.sourcePath}${
+                attempt.sourceStatus ? ` (${attempt.sourceStatus})` : ""
+              }${attempt.diagnosticSnippet ? ` - ${attempt.diagnosticSnippet}` : ""}`
+          )
         ]
       : []),
     ...(item?.proofRepairTarget
@@ -1766,6 +1780,7 @@ function workspaceRunNextItemSummary(item: WorkspaceReviewItem): WorkspaceRunNex
     validationGateKind: item.validationGateKind,
     ...(item.proofDeclaration ? { proofDeclaration: item.proofDeclaration } : {}),
     ...(item.proofAttempt ? { proofAttempt: item.proofAttempt } : {}),
+    ...(item.proofAttemptHistory ? { proofAttemptHistory: item.proofAttemptHistory } : {}),
     ...(item.proofRepairTarget ? { proofRepairTarget: item.proofRepairTarget } : {}),
     reportId: item.reportId
   };

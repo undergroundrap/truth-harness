@@ -85,6 +85,7 @@ export interface WorkspaceReviewItem {
   candidateEvidenceRefs?: ValidationEvidenceRef[];
   proofDeclaration?: WorkspaceReviewProofDeclaration;
   proofAttempt?: WorkspaceReviewProofAttempt;
+  proofAttemptHistory?: WorkspaceReviewProofAttempt[];
   proofRepairTarget?: WorkspaceReviewProofRepairTarget;
   taskId?: string;
   checkpointId?: string;
@@ -229,6 +230,7 @@ export interface WorkspaceReviewSummary {
 }
 
 const WORKSPACE_REVIEW_SCHEMA_VERSION = "truth-harness.workspace-review.v0" as const;
+const MAX_PROOF_ATTEMPT_HISTORY = 5;
 
 type ReviewLeanProofCheckSummary = LeanProofCheckSummary & {
   reviewSourceStatus?: NonNullable<WorkspaceReviewProofAttempt["sourceStatus"]>;
@@ -1128,10 +1130,15 @@ function routeObligationItem(
   leanInspection: LeanProjectInspection,
   proofChecks: ReviewLeanProofCheckSummary[]
 ): WorkspaceReviewItem {
-  const latestProofAttempt = latestScopedProofAttemptForRouteObligation(route, obligation, proofChecks);
+  const proofAttemptHistory = scopedProofAttemptHistoryForRouteObligation(route, obligation, proofChecks);
+  const latestProofAttempt = proofAttemptHistory[0];
   const proofDeclaration = latestProofAttempt
     ? latestProofAttempt.declaration
     : concreteLeanDeclarationForRouteObligation(route, obligation, leanInspection);
+  const proofAttemptHistorySummary =
+    proofAttemptHistory.length > 1
+      ? ` ${proofAttemptHistory.length} scoped Lean attempts are recorded for this route obligation; inspect the history before making another repair.`
+      : "";
   const command = commandForRouteObligation(workspacePath, route, obligation, leanInspection, latestProofAttempt);
   const proofAttemptSummary = latestProofAttempt
     ? ` Latest scoped Lean attempt ${latestProofAttempt.checkId} is ${latestProofAttempt.status} for ${latestProofAttempt.sourcePath}; repair that artifact before rerunning the proof check.${proofAttemptSourceStatusSummary(latestProofAttempt)}${latestProofAttempt.diagnosticSnippet ? ` Diagnostic: ${latestProofAttempt.diagnosticSnippet}` : ""}`
@@ -1145,13 +1152,16 @@ function routeObligationItem(
     kind: "route-obligation",
     priority: priorityForRouteObligation(route, obligation, command),
     title: obligation.title,
-    summary: `${route.problem} - ${obligation.requiredBefore}${proofAttemptSummary}`,
+    summary: `${route.problem} - ${obligation.requiredBefore}${proofAttemptSummary}${proofAttemptHistorySummary}`,
     command,
     routeId: route.routeId,
     obligationId: obligation.obligationId,
     obligationKind: obligation.kind,
     ...(proofDeclaration ? { proofDeclaration: workspaceReviewProofDeclaration(proofDeclaration) } : {}),
     ...(latestProofAttempt ? { proofAttempt: workspaceReviewProofAttempt(latestProofAttempt) } : {}),
+    ...(proofAttemptHistory.length > 0
+      ? { proofAttemptHistory: proofAttemptHistory.map((proof) => workspaceReviewProofAttempt(proof)) }
+      : {}),
     trust: route.finalTrust,
     createdAt: route.createdAt,
     source: {
@@ -1233,20 +1243,22 @@ function commandForRouteObligation(
   return obligation.command ?? inspectRouteCommand;
 }
 
-function latestScopedProofAttemptForRouteObligation(
+function scopedProofAttemptHistoryForRouteObligation(
   route: VerifierRoute,
   obligation: ProofObligation,
   proofChecks: ReviewLeanProofCheckSummary[]
-): ReviewLeanProofCheckSummary | undefined {
+): ReviewLeanProofCheckSummary[] {
   if (obligation.kind !== "formal-proof") {
-    return undefined;
+    return [];
   }
 
-  return proofChecks.find((proof) =>
-    proof.scope?.routeId === route.routeId &&
-    proof.scope.obligationId === obligation.obligationId &&
-    (proof.status === "rejected" || proof.status === "error")
-  );
+  return proofChecks
+    .filter((proof) =>
+      proof.scope?.routeId === route.routeId &&
+      proof.scope.obligationId === obligation.obligationId &&
+      (proof.status === "rejected" || proof.status === "error")
+    )
+    .slice(0, MAX_PROOF_ATTEMPT_HISTORY);
 }
 
 function proofRepairCommandForRouteObligation(
@@ -2487,6 +2499,7 @@ function workspaceReviewAcceptanceCriteria(item: WorkspaceReviewItem): string[] 
       criteria.push(sourceCriterion);
     }
     criteria.push(
+      "Review the scoped Lean attempt history before editing so the next repair does not repeat an earlier failed approach.",
       "Edit the same Lean source named in the suggested command; do not start a disconnected proof attempt.",
       "Use the diagnostic preview as a repair hint, but rerun Lean before trusting the fix.",
       "Close this only after an accepted proof-check record is attached to the exact route and obligation."
@@ -2632,6 +2645,17 @@ function workspaceReviewAgentPacket(
         ]
       : []),
     ...(item.proofAttempt?.diagnosticSnippet ? [`Proof diagnostic: ${item.proofAttempt.diagnosticSnippet}`] : []),
+    ...(item.proofAttemptHistory && item.proofAttemptHistory.length > 0
+      ? [
+          `Proof attempt history (${item.proofAttemptHistory.length} newest first):`,
+          ...item.proofAttemptHistory.map(
+            (attempt) =>
+              `- ${attempt.checkId} ${attempt.status} ${attempt.sourcePath} ${attempt.sourceStatus ?? "source-unchecked"}${
+                attempt.diagnosticSnippet ? ` :: ${attempt.diagnosticSnippet}` : ""
+              }`
+          )
+        ]
+      : []),
     ...(item.proofRepairTarget
       ? [
           `Proof repair target: ${item.proofRepairTarget.repairTargetId} ${item.proofRepairTarget.sourcePath}:${item.proofRepairTarget.markerLine}:${item.proofRepairTarget.markerColumn}`,

@@ -143,6 +143,8 @@ When a rejected or errored proof-check record is scoped to a route id and obliga
 
 When a proof-check record contains declaration metadata, agents should preserve that target across repair attempts. If the target declaration id or signature hash changes, treat it as a new proof target and explain why the route or validation gate still matches the intended claim.
 
+If several rejected or errored proof-check records target the same route obligation, workspace review and saved `workspace run-next` handoffs include a bounded `proofAttemptHistory` array, newest first. Agents should read that history before editing so they do not repeat an earlier failed proof strategy. The latest attempt still determines the immediate repair command and source-change preflight; the history is context for repair, not evidence that upgrades trust.
+
 Agents may propose proof repairs, but they should not describe a claim as proved unless the accepted proof-check record exists and the formal statement matches the intended claim.
 
 ## Research Direction

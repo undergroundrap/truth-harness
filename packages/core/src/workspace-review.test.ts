@@ -765,6 +765,20 @@ describe("workspace review", () => {
 
       return { status: 1, stdout: "", stderr: "type mismatch\n" };
     };
+    await writeFile(join(root, "Proofs", "Attempt.lean"), "theorem route_statement : True := by\n  exact ?bad\n", "utf8");
+    const earlierAttempt = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "Proofs/Attempt.lean",
+      declarationName: "route_statement",
+      scope: {
+        routeId: route.route.routeId,
+        obligationId,
+        statement: "route_statement : True"
+      },
+      runner: proofRunner,
+      now: new Date("2026-06-21T00:01:30.000Z")
+    });
+    await writeFile(join(root, "Proofs", "Attempt.lean"), "theorem route_statement : True := by\n  exact False.elim\n", "utf8");
     const attempt = await writeLeanProofCheckRecord({
       rootPath: root,
       sourcePath: "Proofs/Attempt.lean",
@@ -827,6 +841,20 @@ describe("workspace review", () => {
         createdAt: attempt.record.createdAt,
         diagnosticSnippet: "type mismatch"
       },
+      proofAttemptHistory: [
+        expect.objectContaining({
+          checkId: attempt.record.checkId,
+          status: "rejected",
+          sourceStatus: "unchanged",
+          diagnosticSnippet: "type mismatch"
+        }),
+        expect.objectContaining({
+          checkId: earlierAttempt.record.checkId,
+          status: "rejected",
+          sourceStatus: "changed",
+          diagnosticSnippet: "type mismatch"
+        })
+      ],
       evidenceSlots: [
         expect.objectContaining({
           slotId: "lean-proof-repair",
@@ -848,8 +876,11 @@ describe("workspace review", () => {
       agentPacket: expect.stringContaining(`Proof source: Proofs/Attempt.lean sha256:${attempt.record.source.sha256}`)
     });
     expect(item?.agentPacket).toContain("Proof source status: unchanged");
+    expect(item?.agentPacket).toContain("Proof attempt history (2 newest first):");
+    expect(item?.agentPacket).toContain(earlierAttempt.record.checkId);
     expect(item?.agentPacket).toContain("Proof declaration signature sha256:");
     expect(item?.summary).toContain("Source unchanged since that failed attempt");
+    expect(item?.summary).toContain("2 scoped Lean attempts are recorded");
     expect(item?.agentPacket).toContain("Lean proof repair artifact");
     expect(item?.summary).toContain("Diagnostic: type mismatch");
     expect(item?.command).toContain(`--route ${route.route.routeId}`);

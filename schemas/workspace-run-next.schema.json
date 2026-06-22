@@ -123,6 +123,12 @@
           },
           "additionalProperties": false
         },
+        "proofAttemptHistory": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/proofAttempt"
+          }
+        },
         "reportId": { "type": "string" }
       },
       "additionalProperties": false
@@ -632,6 +638,39 @@
           "$ref": "#/$defs/stringArray"
         },
         "boundary": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "proofAttempt": {
+      "type": "object",
+      "required": ["checkId", "path", "sourcePath", "status", "trust", "createdAt"],
+      "properties": {
+        "checkId": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "sourcePath": { "type": "string", "minLength": 1 },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceByteLength": { "type": "integer", "minimum": 0 },
+        "sourceStatus": {
+          "enum": ["unchanged", "changed", "missing", "unchecked"]
+        },
+        "sourceCurrentSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceCurrentByteLength": { "type": "integer", "minimum": 0 },
+        "declarationName": { "type": "string" },
+        "declaration": {
+          "$ref": "#/$defs/proofDeclaration"
+        },
+        "status": {
+          "enum": ["accepted", "rejected", "backend-unavailable", "error"]
+        },
+        "trust": { "type": "string", "minLength": 1 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "diagnosticSnippet": { "type": "string" }
       },
       "additionalProperties": false
     },

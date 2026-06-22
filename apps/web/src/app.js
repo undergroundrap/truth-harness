@@ -5361,6 +5361,7 @@ function workspaceReviewActionFactsHtml(item) {
     ["Obligation", item.obligationId],
     ["Proof declaration", workspaceReviewProofDeclarationText(item)],
     ["Proof attempt", workspaceReviewProofAttemptText(item)],
+    ["Proof attempts", workspaceReviewProofAttemptHistoryText(item)],
     ["Proof repair target", workspaceReviewProofRepairTargetText(item)],
     ["Proof repair command", workspaceReviewProofRepairCommandText(item)],
     ["Proof repair evidence", workspaceReviewProofRepairEvidenceText(item)],
@@ -5394,6 +5395,22 @@ function workspaceReviewProofAttemptText(item) {
   }
 
   return [proofAttempt.checkId, proofAttempt.status, proofAttempt.sourcePath].filter(Boolean).join(" / ");
+}
+
+function workspaceReviewProofAttemptHistoryText(item) {
+  const attempts = Array.isArray(item?.proofAttemptHistory) ? item.proofAttemptHistory : [];
+  if (attempts.length <= 1) {
+    return "";
+  }
+
+  return attempts
+    .slice(0, 5)
+    .map((attempt) =>
+      [attempt.checkId, attempt.status, attempt.sourceStatus, attempt.diagnosticSnippet]
+        .filter(Boolean)
+        .join(" / ")
+    )
+    .join(" ; ");
 }
 
 function workspaceReviewProofRepairTargetText(item) {
