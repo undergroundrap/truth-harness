@@ -628,12 +628,14 @@ async function handleApiRequest(request, response, requestUrl) {
         maxReports: requestUrl.searchParams.get("maxReports")
       });
       const audit = await createReleaseAudit(input);
+      const compact = isTruthyQueryParam(requestUrl.searchParams.get("compact"));
       writeJson(response, 200, {
         schemaVersion: "truth-harness.web-release-audit-response.v0",
         localOnly: true,
         externalCalls: [],
         mode: audit.mode,
-        audit
+        compact,
+        audit: compact ? compactReleaseAudit(audit) : audit
       });
     } catch (error) {
       writeApiError(response, 409, error instanceof Error ? error.message : "Release audit could not be created.", request);
@@ -2272,6 +2274,140 @@ function releaseAuditInputFromValue(value = {}) {
         }
       : undefined
   };
+}
+
+function compactReleaseAudit(audit) {
+  return {
+    schemaVersion: audit.schemaVersion,
+    createdAt: audit.createdAt,
+    localOnly: audit.localOnly,
+    networkAccess: audit.networkAccess,
+    mode: audit.mode,
+    status: audit.status,
+    professorReady: audit.professorReady,
+    publicLaunchReady: audit.publicLaunchReady,
+    workspace: audit.workspace,
+    project: audit.project,
+    summary: audit.summary,
+    checks: Array.isArray(audit.checks) ? audit.checks.map(compactReleaseAuditCheck) : [],
+    commands: audit.commands,
+    limitations: audit.limitations,
+    frontierReadinessLadder: audit.frontierReadinessLadder,
+    reviewerBundleVerification: compactRecord(audit.reviewerBundleVerification, [
+      "schemaVersion",
+      "verificationId",
+      "bundleRef",
+      "bundlePath",
+      "artifactPath",
+      "packId",
+      "passed",
+      "sourceMatchesWorkspace",
+      "manifestDigestStatus",
+      "checkedBundleFiles",
+      "checkedSourceFiles",
+      "changedBundleFiles",
+      "missingBundleFiles",
+      "copiedFileMismatches",
+      "verifiedAt"
+    ]),
+    sandboxEvidence: compactRecord(audit.sandboxEvidence, [
+      "runId",
+      "path",
+      "status",
+      "provider",
+      "networkAccess",
+      "canAttestNetworkNone"
+    ]),
+    webUiReview: compactRecord(audit.webUiReview, [
+      "reviewId",
+      "status",
+      "viewport",
+      "screenshotPath",
+      "createdAt"
+    ]),
+    credibilityPack: compactCredibilityPackForReleaseAudit(audit.credibilityPack)
+  };
+}
+
+function compactReleaseAuditCheck(check) {
+  return compactRecord(check, [
+    "id",
+    "title",
+    "status",
+    "blocking",
+    "summary",
+    "details",
+    "command",
+    "evidenceRefs",
+    "limitations",
+    "nextActions"
+  ]);
+}
+
+function compactCredibilityPackForReleaseAudit(pack) {
+  if (!pack || typeof pack !== "object") {
+    return undefined;
+  }
+
+  return {
+    schemaVersion: pack.schemaVersion,
+    packId: pack.packId,
+    createdAt: pack.createdAt,
+    status: pack.status,
+    summary: pack.summary,
+    reviewerCommands: pack.reviewerCommands,
+    benchmarkLedger: {
+      latestAdversarialRun: compactLedgerRun(pack.benchmarkLedger?.latestAdversarialRun),
+      latestMathCredibilityLadderRun: compactLedgerRun(pack.benchmarkLedger?.latestMathCredibilityLadderRun)
+    },
+    engineRunLedger: {
+      latestProfessorReviewerRun: compactLedgerRun(pack.engineRunLedger?.latestProfessorReviewerRun),
+      latestStrictReviewerRun: compactLedgerRun(pack.engineRunLedger?.latestStrictReviewerRun),
+      strongestSavedLevelRun: compactLedgerRun(pack.engineRunLedger?.strongestSavedLevelRun)
+    },
+    hardMathClosureLedger: {
+      latestExactClosure: compactLedgerRun(pack.hardMathClosureLedger?.latestExactClosure),
+      latestSymbolicClosure: compactLedgerRun(pack.hardMathClosureLedger?.latestSymbolicClosure),
+      latestSmtClosure: compactLedgerRun(pack.hardMathClosureLedger?.latestSmtClosure)
+    }
+  };
+}
+
+function compactLedgerRun(run) {
+  return compactRecord(run, [
+    "artifactId",
+    "runId",
+    "path",
+    "status",
+    "passed",
+    "failed",
+    "total",
+    "requiredPassed",
+    "requiredTotal",
+    "concretePassed",
+    "concreteTotal",
+    "strongestLevelId",
+    "strongestLevelTitle",
+    "trustAccuracy",
+    "replayCommand",
+    "command",
+    "receiptReplays",
+    "createdAt"
+  ]);
+}
+
+function compactRecord(value, keys) {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const out = {};
+  for (const key of keys) {
+    if (value[key] !== undefined) {
+      out[key] = value[key];
+    }
+  }
+  return out;
 }
 
 function quoteCommandArg(value) {

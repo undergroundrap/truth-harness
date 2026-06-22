@@ -405,6 +405,36 @@ describe("local web route ledger API", () => {
     );
     expect(sandboxCheck?.blocking).toBe(sandboxCheck?.status === "pass" ? false : true);
 
+    const compactReleaseAuditResponse = await fetch(
+      `${baseUrl}/api/release-audit?compact=true&requireAllEngines=true&requireSavedStrictEngineRun=true&requireSandbox=true&timeoutMs=50`
+    );
+    expect(compactReleaseAuditResponse.status).toBe(200);
+    const compactReleaseAuditPayload = await compactReleaseAuditResponse.json();
+    expectLocalApiSuccess(compactReleaseAuditResponse, compactReleaseAuditPayload);
+    expect(compactReleaseAuditPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-release-audit-response.v0",
+      compact: true,
+      mode: "public-review"
+    });
+    expect(compactReleaseAuditPayload.audit).toMatchObject({
+      schemaVersion: "truth-harness.release-audit.v0",
+      status: expect.any(String),
+      commands: expect.objectContaining({
+        releaseAudit: expect.stringContaining("--require-all-engines")
+      }),
+      credibilityPack: expect.objectContaining({
+        summary: expect.any(Object),
+        reviewerCommands: expect.any(Object)
+      })
+    });
+    expect(compactReleaseAuditPayload.audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "engine-evidence",
+        blocking: true
+      })
+    );
+    expect(compactReleaseAuditPayload.audit.credibilityPack.reviewerActionPlan).toBeUndefined();
+
     const credibilityWriteResponse = await fetch(`${baseUrl}/api/credibility-pack`, {
       method: "POST",
       headers: {

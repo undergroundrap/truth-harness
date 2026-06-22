@@ -10343,7 +10343,8 @@ async function refreshReleaseAudit({ announce = true } = {}) {
       requireSavedStrictEngineRun: "true",
       requireSandbox: "true",
       timeoutMs: "1500",
-      maxReports: "50"
+      maxReports: "50",
+      compact: "true"
     });
     const response = await fetch(`/api/release-audit?${params.toString()}`, {
       headers: {

@@ -159,6 +159,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("Report save failed");
     expect(source).toContain('fetch(`/api/credibility-pack?${params.toString()}`');
     expect(source).toContain('fetch("/api/credibility-pack"');
+    expect(source).toContain('compact: "true"');
     expect(source).toContain('fetch("/api/credibility-bundle/latest"');
     expect(source).toContain('fetch("/api/credibility-bundle/latest/verify"');
     expect(source).toContain('fetch("/api/credibility-bundle/verifications?limit=8"');
