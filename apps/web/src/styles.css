@@ -4371,6 +4371,53 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   min-height: 0;
 }
 
+.workspace-run-next-proof-diagnostic {
+  border: 1px solid rgba(242, 139, 130, 0.22);
+  border-radius: 7px;
+  background: rgba(64, 24, 20, 0.18);
+  color: #f0d1ca;
+  padding: 8px;
+}
+
+.workspace-run-next-proof-diagnostic .mini-label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.workspace-run-next-proof-history {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: rgba(8, 8, 8, 0.68);
+  padding: 8px;
+}
+
+.workspace-run-next-proof-history ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workspace-run-next-proof-history li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.workspace-run-next-proof-history strong,
+.workspace-run-next-proof-history span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .workspace-run-next-idle-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -794,11 +794,18 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function workspaceRunNextDetailsRows(plan, command)");
     expect(source).toContain("function workspaceRunNextProofRepairRows(item)");
     expect(source).toContain("function workspaceRunNextProofRepairCardHtml(item)");
+    expect(source).toContain("function workspaceRunNextProofAttemptSourceStatusText(attempt)");
+    expect(source).toContain("function workspaceRunNextProofAttemptHistoryCardHtml(history)");
     expect(source).toContain("function workspaceRunNextProofRepairSummaryText(value)");
     expect(source).toContain("function workspaceRunNextProofAttemptHistorySummaryText(value)");
     expect(source).toContain("workspaceRunNextProofRepairCardHtml(plan.item)");
     expect(source).toContain("value?.proofRepairTargetSummary");
     expect(source).toContain("value?.proofAttemptHistorySummary");
+    expect(source).toContain("latest Lean diagnostic");
+    expect(source).toContain("proof attempt history");
+    expect(source).toContain("<div><dt>Attempt artifact</dt><dd>${artifactAwareValueHtml(attempt.path, \"workspace-run-next\")}</dd></div>");
+    expect(source).toContain("<div><dt>Source status</dt><dd>${escapeHtml(workspaceRunNextProofAttemptSourceStatusText(attempt))}</dd></div>");
+    expect(source).toContain("Accepted scoped proof-check record for the same route and obligation.");
     expect(source).toContain("<div><dt>Repair</dt><dd>${escapeHtml(repairSummary)}</dd></div>");
     expect(source).toContain("<div><dt>Proof trail</dt><dd>${escapeHtml(proofAttemptSummary)}</dd></div>");
     expect(source).toContain('["Proof repair target", workspaceReviewProofRepairTargetText(item)]');
@@ -866,6 +873,8 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".workspace-run-next-details");
     expect(styles).toContain(".workspace-run-next-proof-repair");
     expect(styles).toContain(".workspace-run-next-proof-repair-head");
+    expect(styles).toContain(".workspace-run-next-proof-diagnostic");
+    expect(styles).toContain(".workspace-run-next-proof-history");
     expect(styles).toContain(".workspace-run-next-safety");
     expect(styles).toContain(".workspace-run-next-safety-grid");
     expect(styles).toContain(".workspace-run-next-idle-actions");

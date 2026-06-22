@@ -8407,30 +8407,82 @@ function workspaceRunNextProofRepairRows(item) {
 
 function workspaceRunNextProofRepairCardHtml(item) {
   const target = item?.proofRepairTarget;
-  if (!target) {
+  const attempt = item?.proofAttempt;
+  if (!target && !attempt) {
     return "";
   }
 
-  const declaration = target.declarationName ?? target.declarationId ?? "declaration not recorded";
-  const command = target.afterEditCommands?.[0] ?? "truth-harness proof check <source.lean> --write";
-  const evidence = target.evidenceRequired?.join("; ") || "Accepted scoped proof-check evidence.";
+  const declaration = target?.declarationName
+    ?? target?.declarationId
+    ?? attempt?.declarationName
+    ?? attempt?.declaration?.name
+    ?? attempt?.declaration?.declarationId
+    ?? "declaration not recorded";
+  const sourcePath = target?.sourcePath ?? attempt?.sourcePath ?? "source not recorded";
+  const location = target
+    ? `${target.sourcePath}:${target.markerLine}:${target.markerColumn} - ${declaration}`
+    : `${sourcePath} - ${declaration}`;
+  const command = target?.afterEditCommands?.[0] ?? item?.command ?? "truth-harness proof check <source.lean> --write";
+  const evidence = target?.evidenceRequired?.join("; ") || "Accepted scoped proof-check record for the same route and obligation.";
+  const sourceSha256 = target?.sourceSha256 ?? attempt?.sourceSha256;
+  const declarationSha256 = target?.declarationSignatureSha256 ?? attempt?.declaration?.signatureSha256;
+  const status = attempt?.sourceStatus ?? attempt?.status ?? target?.markerKind ?? "repair target";
+  const diagnostic = attempt?.diagnosticSnippet
+    ? `<p class="workspace-run-next-proof-diagnostic"><span class="mini-label">latest Lean diagnostic</span>${escapeHtml(attempt.diagnosticSnippet)}</p>`
+    : "";
+  const attemptRows = attempt
+    ? `
+      <div><dt>Attempt artifact</dt><dd>${artifactAwareValueHtml(attempt.path, "workspace-run-next")}</dd></div>
+      <div><dt>Attempt status</dt><dd>${escapeHtml(`${attempt.status} / ${attempt.trust}`)}</dd></div>
+      <div><dt>Source status</dt><dd>${escapeHtml(workspaceRunNextProofAttemptSourceStatusText(attempt))}</dd></div>
+    `
+    : "";
+  const history = workspaceRunNextProofAttemptHistoryCardHtml(item?.proofAttemptHistory);
   return `<section class="workspace-run-next-proof-repair">
     <div class="workspace-run-next-proof-repair-head">
       <div>
         <span class="mini-label">proof repair target</span>
-        <strong>${escapeHtml(target.repairTargetId)}</strong>
+        <strong>${escapeHtml(target?.repairTargetId ?? attempt?.checkId ?? "proof attempt repair")}</strong>
       </div>
-      <span class="status-pill waiting">${escapeHtml(target.markerKind ?? "marker")}</span>
+      <span class="status-pill waiting">${escapeHtml(status)}</span>
     </div>
-    <p>${escapeHtml(`${target.sourcePath}:${target.markerLine}:${target.markerColumn} - ${declaration}`)}</p>
+    <p>${escapeHtml(location)}</p>
     <dl class="workspace-run-next-mini-details">
-      <div><dt>Source SHA-256</dt><dd>${escapeHtml(target.sourceSha256)}</dd></div>
-      ${target.declarationSignatureSha256 ? `<div><dt>Declaration SHA-256</dt><dd>${escapeHtml(target.declarationSignatureSha256)}</dd></div>` : ""}
+      ${sourceSha256 ? `<div><dt>Source SHA-256</dt><dd>${escapeHtml(sourceSha256)}</dd></div>` : ""}
+      ${declarationSha256 ? `<div><dt>Declaration SHA-256</dt><dd>${escapeHtml(declarationSha256)}</dd></div>` : ""}
       <div><dt>Evidence required</dt><dd>${escapeHtml(evidence)}</dd></div>
+      ${attemptRows}
     </dl>
+    ${diagnostic}
+    ${history}
     <code>${escapeHtml(command)}</code>
-    <p class="workspace-run-next-boundary">${escapeHtml(target.boundary ?? "Repair target is a local planning aid, not proof evidence.")}</p>
+    <p class="workspace-run-next-boundary">${escapeHtml(target?.boundary ?? "Repair attempt is a local planning aid, not proof evidence. Edit the source, rerun Lean, and attach only an accepted scoped proof-check record.")}</p>
   </section>`;
+}
+
+function workspaceRunNextProofAttemptSourceStatusText(attempt) {
+  if (!attempt?.sourceStatus) {
+    return "not recorded";
+  }
+  const current = attempt.sourceCurrentSha256 && attempt.sourceCurrentSha256 !== attempt.sourceSha256
+    ? `; current sha256 ${attempt.sourceCurrentSha256}`
+    : "";
+  return `${attempt.sourceStatus}; failed attempt sha256 ${attempt.sourceSha256 ?? "not recorded"}${current}`;
+}
+
+function workspaceRunNextProofAttemptHistoryCardHtml(history) {
+  if (!Array.isArray(history) || history.length === 0) {
+    return "";
+  }
+  const rows = history.slice(0, 4).map((attempt) => `<li>
+    <strong>${escapeHtml(attempt.checkId ?? "proof attempt")}</strong>
+    <span>${escapeHtml(`${attempt.status ?? "unknown"} / ${attempt.sourceStatus ?? "source unchecked"}`)}</span>
+  </li>`).join("");
+  const remaining = history.length > 4 ? `<li><span>${escapeHtml(`${history.length - 4} older attempt${history.length - 4 === 1 ? "" : "s"} hidden`)}</span></li>` : "";
+  return `<div class="workspace-run-next-proof-history" aria-label="Proof attempt history">
+    <span class="mini-label">proof attempt history</span>
+    <ul>${rows}${remaining}</ul>
+  </div>`;
 }
 
 function workspacePilotLoopDetailsRows(loop) {
