@@ -146,9 +146,77 @@ describe("engine plan", () => {
     expect(plan.warnings.join("\n")).toContain("does not run engines");
   });
 
+  it("routes concurrent Rust systems to sandbox, SMT, proof, and planned model-check evidence without claiming readiness", () => {
+    const plan = createEnginePlan("prove a Rust ECS scheduler is deadlock-free and has no data races", {
+      manifest: manifestWith({
+        "z3-smt-solver": { status: "missing", canMintTrust: false },
+        "cvc5-smt-solver": { status: "missing", canMintTrust: false },
+        "lean-proof-checker": { status: "missing", canMintTrust: false },
+        "code-run-sandbox": { status: "missing", canMintTrust: false }
+      })
+    });
+
+    expect(plan.classifications).toEqual(expect.arrayContaining(["concurrent-systems", "formal-proof"]));
+    expect(plan.status).toBe("route-with-open-gates");
+    expect(plan.targetTrustCeiling).toBe("none");
+    expect(plan.recommendedFirstCommand).toBe(
+      'truth-harness validation plan "prove a Rust ECS scheduler is deadlock-free and has no data races" --domain software --domain engineering'
+    );
+    expect(plan.steps.map((step) => step.capabilityId)).toEqual(
+      expect.arrayContaining([
+        "code-run-sandbox",
+        "z3-smt-solver",
+        "cvc5-smt-solver",
+        "lean-proof-checker",
+        "concurrent-systems-verifier",
+        "claim-ledger"
+      ])
+    );
+    expect(plan.comparisonMatrix).toContainEqual(
+      expect.objectContaining({
+        capabilityId: "concurrent-systems-verifier",
+        role: "planned-upgrade",
+        trustIfSuccessful: "none",
+        honestBoundary: expect.stringContaining("Planned adapters mint no trust")
+      })
+    );
+    expect(plan.nextActions.join("\n")).toContain("narrow the property into a scheduler");
+  });
+
+  it("routes hardware and EDA claims to scoped SMT/proof evidence plus a planned formal adapter", () => {
+    const plan = createEnginePlan("verify a SystemVerilog RTL multiplier circuit before FPGA tape-out", {
+      manifest: manifestWith({
+        "z3-smt-solver": { status: "available", canMintTrust: true },
+        "cvc5-smt-solver": { status: "missing", canMintTrust: false },
+        "lean-proof-checker": { status: "missing", canMintTrust: false }
+      })
+    });
+
+    expect(plan.classifications).toContain("hardware-eda");
+    expect(plan.status).toBe("route-with-open-gates");
+    expect(plan.recommendedFirstCommand).toBe(
+      'truth-harness validation plan "verify a SystemVerilog RTL multiplier circuit before FPGA tape-out" --domain engineering'
+    );
+    expect(plan.readyCapabilityIds).toContain("z3-smt-solver");
+    expect(plan.blockedCapabilityIds).toEqual(expect.arrayContaining(["cvc5-smt-solver", "lean-proof-checker"]));
+    expect(plan.steps.map((step) => step.capabilityId)).toEqual(
+      expect.arrayContaining(["z3-smt-solver", "cvc5-smt-solver", "lean-proof-checker", "hardware-eda-verifier", "claim-ledger"])
+    );
+    expect(plan.comparisonMatrix).toContainEqual(
+      expect.objectContaining({
+        capabilityId: "hardware-eda-verifier",
+        agreementValue: "planned",
+        trustIfSuccessful: "none"
+      })
+    );
+    expect(plan.nextActions.join("\n")).toContain("narrow the HDL/RTL property");
+  });
+
   it("classifies common problem shapes for agents before routing", () => {
     expect(classifyProblem("dimension check force = mass * acceleration")).toContain("dimension-check");
     expect(classifyProblem("solve integer constraints x > 0 and x < 3")).toContain("smt-constraint");
+    expect(classifyProblem("prove a Rust lock-free queue cannot deadlock")).toContain("concurrent-systems");
+    expect(classifyProblem("verify a Verilog ALU equivalence property")).toContain("hardware-eda");
     expect(classifyProblem("cite the paper that supports this theorem")).toEqual(
       expect.arrayContaining(["formal-proof", "source-grounded"])
     );
@@ -174,7 +242,9 @@ function manifestWith(overrides: Record<string, Partial<EngineCapability>> = {})
     ["z3-smt-solver", "adapter", "missing", "smt-checked", false],
     ["cvc5-smt-solver", "adapter", "missing", "smt-checked", false],
     ["rigorous-numerics", "planned-adapter", "planned", "none", false],
-    ["domain-simulation-adapters", "planned-adapter", "planned", "none", false]
+    ["domain-simulation-adapters", "planned-adapter", "planned", "none", false],
+    ["concurrent-systems-verifier", "planned-adapter", "planned", "none", false],
+    ["hardware-eda-verifier", "planned-adapter", "planned", "none", false]
   ];
 
   const capabilities = ids.map(([id, kind, status, strongestTrust, canMintTrust]) =>

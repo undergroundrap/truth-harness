@@ -101,5 +101,29 @@ describe("engine manifest", () => {
         })
       })
     );
+    expect(manifest.capabilities).toContainEqual(
+      expect.objectContaining({
+        id: "concurrent-systems-verifier",
+        lane: "code/systems",
+        strongestTrust: "none",
+        canMintTrust: false,
+        determinism: expect.objectContaining({
+          determinismClass: "planned",
+          primitiveSemantics: "concurrency-model"
+        })
+      })
+    );
+    expect(manifest.capabilities).toContainEqual(
+      expect.objectContaining({
+        id: "hardware-eda-verifier",
+        lane: "hardware/eda",
+        strongestTrust: "none",
+        canMintTrust: false,
+        determinism: expect.objectContaining({
+          determinismClass: "planned",
+          primitiveSemantics: "hardware-description"
+        })
+      })
+    );
   });
 });

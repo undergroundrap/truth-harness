@@ -27,6 +27,8 @@ export type EnginePrimitiveSemantics =
   | "sandbox-measurement"
   | "rigorous-numeric"
   | "simulation-provenance"
+  | "concurrency-model"
+  | "hardware-description"
   | "not-implemented";
 
 export interface EngineDeterminismProfile {
@@ -473,7 +475,19 @@ function plannedCapabilities(): RawEngineCapability[] {
     plannedCapability("lean-lsp-router", "Lean LSP proof workflow", "math", "Goals, diagnostics, formal library search, and interactive proof repair."),
     plannedCapability("local-vector-rag", "Local vector/PDF RAG", "sources", "Source ingestion, citation spans, contradiction checks, and reusable indexes."),
     plannedCapability("rigorous-numerics", "Rigorous numerics", "math", "Ball arithmetic, precision budgets, and reproducible error bounds."),
-    plannedCapability("domain-simulation-adapters", "Domain simulation adapters", "physics/bio/engineering", "Simulation provenance with assumptions, parameters, uncertainty, and validation gates.")
+    plannedCapability("domain-simulation-adapters", "Domain simulation adapters", "physics/bio/engineering", "Simulation provenance with assumptions, parameters, uncertainty, and validation gates."),
+    plannedCapability(
+      "concurrent-systems-verifier",
+      "Concurrent systems verifier",
+      "code/systems",
+      "Model Rust schedulers, lock protocols, ECS/resource access, and deadlock/data-race properties as replayable SMT/model-check/differential-fuzzing artifacts."
+    ),
+    plannedCapability(
+      "hardware-eda-verifier",
+      "Hardware/EDA verifier",
+      "hardware/eda",
+      "Model RTL/HDL properties as scoped SMT/model-check/formal-equivalence artifacts before any AI-generated hardware claim is trusted."
+    )
   ];
 }
 
@@ -626,5 +640,7 @@ function plannedPrimitiveSemantics(id: string): EnginePrimitiveSemantics {
   if (id.includes("smt")) return "smt-lib";
   if (id.includes("numerics")) return "rigorous-numeric";
   if (id.includes("simulation")) return "simulation-provenance";
+  if (id.includes("concurrent")) return "concurrency-model";
+  if (id.includes("hardware") || id.includes("eda")) return "hardware-description";
   return "not-implemented";
 }

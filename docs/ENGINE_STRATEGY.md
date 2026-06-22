@@ -93,6 +93,34 @@ This keeps three future guardrails visible in the current product:
 
 Future Rust work should follow the same ladder: prove or specify critical math where possible, generate or hand-write Rust kernels, run differential fuzzing against trusted engines, record replayable benchmark artifacts, and refuse to label stochastic or simulation output as truth. A differential fuzzing oracle is evidence of agreement over a domain, not formal proof. A Lean proof artifact can support `proved` only for the encoded theorem. A Rust benchmark can support performance and replay claims, not scientific validity by itself.
 
+## Concurrent Systems And EDA Runway
+
+The strongest strategic path is a hybrid:
+
+- use verified concurrent Rust systems as the public dogfood showcase;
+- use hardware/EDA formal verification as the long-term enterprise lane;
+- keep both downstream of the math, SMT, proof, and provenance core rather than starting separate products too early.
+
+Truth Harness now treats those lanes as first-class planned routes in `engines plan` and `workspace run-next`, but they are deliberately not trusted capabilities yet.
+
+For concurrent systems, the planner should recognize prompts about Rust, schedulers, lock-free data structures, ECS resource access, deadlocks, data races, and game loops. The route should point at:
+
+- a measured code-run sandbox boundary before generated code, fuzz harnesses, or model-check scripts run;
+- a scoped SMT/model-check encoding for a specific scheduler, lock, resource-access, or deadlock property;
+- optional solver diversity through Z3 and cvc5;
+- an accepted Lean proof only when the claim outruns bounded/model-check evidence;
+- a future `concurrent-systems-verifier` adapter record tying Rust code, explored schedules, fuzz seeds, solver encodings, and replay commands together.
+
+For hardware/EDA, the planner should recognize prompts about Verilog, SystemVerilog, VHDL, RTL, FPGA, ASIC, circuits, SVA, formal equivalence, and tape-out risk. The route should point at:
+
+- a scoped property specification, not broad AI prose;
+- SMT/model-check artifacts for the encoded property;
+- optional second-solver or formal-equivalence evidence for reviewer-grade confidence;
+- accepted proof artifacts only for exact formal semantics;
+- a future `hardware-eda-verifier` adapter record tying HDL/RTL artifacts, property specs, formal tool output, assumptions, and replay commands together.
+
+Neither lane can claim code correctness, chip safety, deadlock freedom, or tape-out readiness from chat output, tests, benchmarks, screenshots, or a planner result. Until the adapters exist with schemas, fixtures, Docker coverage, and replay records, these lanes are routing commitments only. That is the point: the moat is not saying "yes" faster; it is making agents attack the right formal blocker first and refuse stronger claims until evidence exists.
+
 ## Native Kernels We Should Build
 
 We should build small native kernels when they are:

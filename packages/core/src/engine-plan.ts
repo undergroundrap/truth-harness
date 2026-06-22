@@ -13,6 +13,8 @@ export type EnginePlanProblemKind =
   | "interval-bound"
   | "source-grounded"
   | "simulation-or-engineering"
+  | "concurrent-systems"
+  | "hardware-eda"
   | "unknown";
 
 export type EnginePlanStatus = "ready-to-route" | "route-with-open-gates" | "insufficient-engines";
@@ -174,6 +176,16 @@ export function classifyProblem(problem: string): EnginePlanProblemKind[] {
   if (/\b(simulate|simulation|physics engine|graphics engine|robotics|geometry|numerical|floating|float|ode|pde|finite element)\b/u.test(text)) {
     kinds.push("simulation-or-engineering");
   }
+  if (
+    /\b(rust|concurrent|concurrency|parallel|thread|threads|mutex|lock[-\s]?free|deadlock|data[-\s]?race|scheduler|ecs|game loop|resource access|borrow checker)\b/u.test(
+      text
+    )
+  ) {
+    kinds.push("concurrent-systems");
+  }
+  if (/\b(verilog|systemverilog|vhdl|hdl|rtl|eda|fpga|asic|chip|circuit|circuits|sva|formal equivalence|tape[-\s]?out|hardware)\b/u.test(text)) {
+    kinds.push("hardware-eda");
+  }
   if (looksLikeExactArithmetic(text)) {
     kinds.push("exact-arithmetic");
   }
@@ -254,6 +266,64 @@ function routeTemplatesFor(kinds: EnginePlanProblemKind[]): StepTemplate[] {
       role: "solver-check",
       evidenceRequired: "Second-solver SMT-LIB check for reviewer-grade solver diversity when needed.",
       agreementValue: "independent"
+    });
+  }
+  if (kinds.includes("concurrent-systems")) {
+    templates.push({
+      capabilityId: "code-run-sandbox",
+      role: "provenance-check",
+      evidenceRequired: "Measured no-network sandbox boundary before any generated Rust, fuzz, or model-check harness is executed.",
+      agreementValue: "context"
+    });
+    templates.push({
+      capabilityId: "z3-smt-solver",
+      role: "solver-check",
+      evidenceRequired: "Scoped SMT/model-check encoding of the scheduler, lock protocol, or resource-access property with a replayable solver result.",
+      agreementValue: "independent"
+    });
+    templates.push({
+      capabilityId: "cvc5-smt-solver",
+      role: "solver-check",
+      evidenceRequired: "Second-solver check for the same concurrency property when reviewer-grade assurance is required.",
+      agreementValue: "independent"
+    });
+    templates.push({
+      capabilityId: "lean-proof-checker",
+      role: "proof-check",
+      evidenceRequired: "Accepted proof artifact for the exact concurrency invariant when the claim outruns bounded/model-check evidence.",
+      agreementValue: "stronger-formalization"
+    });
+    templates.push({
+      capabilityId: "concurrent-systems-verifier",
+      role: "planned-upgrade",
+      evidenceRequired: "Future typed concurrency verifier record linking Rust code, model, schedules explored, fuzz seeds, solver encodings, and replay command.",
+      agreementValue: "planned"
+    });
+  }
+  if (kinds.includes("hardware-eda")) {
+    templates.push({
+      capabilityId: "z3-smt-solver",
+      role: "solver-check",
+      evidenceRequired: "Scoped SMT/model-check artifact for the RTL/HDL property or formal-equivalence claim.",
+      agreementValue: "independent"
+    });
+    templates.push({
+      capabilityId: "cvc5-smt-solver",
+      role: "solver-check",
+      evidenceRequired: "Second-solver check for the same hardware property when solver diversity is required.",
+      agreementValue: "independent"
+    });
+    templates.push({
+      capabilityId: "lean-proof-checker",
+      role: "proof-check",
+      evidenceRequired: "Accepted formal proof artifact for hardware semantics or equivalence claims that need theorem-level assurance.",
+      agreementValue: "stronger-formalization"
+    });
+    templates.push({
+      capabilityId: "hardware-eda-verifier",
+      role: "planned-upgrade",
+      evidenceRequired: "Future EDA verifier record linking HDL/RTL artifact, property spec, formal tool result, assumptions, and replay command.",
+      agreementValue: "planned"
     });
   }
   if (kinds.includes("formal-proof") || kinds.includes("universal-claim") || kinds.includes("symbolic-algebra")) {
@@ -369,7 +439,7 @@ function planStatus(steps: EnginePlanStep[], kinds: EnginePlanProblemKind[]): En
   const runnable = nonPlanned.filter((step) => step.canRunNow);
   if (runnable.length === 0) return "insufficient-engines";
   const needsExternalReviewerEngine = kinds.some((kind) =>
-    ["symbolic-algebra", "smt-constraint", "formal-proof", "simulation-or-engineering"].includes(kind)
+    ["symbolic-algebra", "smt-constraint", "formal-proof", "simulation-or-engineering", "concurrent-systems", "hardware-eda"].includes(kind)
   );
   if (needsExternalReviewerEngine && nonPlanned.some((step) => !step.canRunNow && step.role !== "provenance-check")) {
     return "route-with-open-gates";
@@ -378,6 +448,12 @@ function planStatus(steps: EnginePlanStep[], kinds: EnginePlanProblemKind[]): En
 }
 
 function recommendedFirstCommand(problem: string, steps: EnginePlanStep[]): string {
+  if (steps.some((step) => step.capabilityId === "concurrent-systems-verifier")) {
+    return `truth-harness validation plan ${JSON.stringify(problem)} --domain software --domain engineering`;
+  }
+  if (steps.some((step) => step.capabilityId === "hardware-eda-verifier")) {
+    return `truth-harness validation plan ${JSON.stringify(problem)} --domain engineering`;
+  }
   const firstRunnable = steps.find((step) => step.canRunNow && step.command);
   if (!firstRunnable) {
     return `truth-harness verify ${JSON.stringify(problem)} --write`;
@@ -394,7 +470,11 @@ function nextActionsFor(
   missingExternalEngines: string[],
   savedReviewerEvidence: EnginePlanSavedReviewerEvidence
 ): string[] {
-  const actions = [`Run \`${recommendedFirstCommand(problem, steps)}\` to create a verifier route and durable obligation ledger.`];
+  const firstCommand = recommendedFirstCommand(problem, steps);
+  const firstCommandPurpose = firstCommand.startsWith("truth-harness validation plan")
+    ? "create validation gates before any agent records or strengthens a claim"
+    : "create a verifier route and durable obligation ledger";
+  const actions = [`Run \`${firstCommand}\` to ${firstCommandPurpose}.`];
   const missing = steps.filter((step) => !step.canRunNow && step.status !== "planned");
   const savedCoveredMissing = missing.filter((step) => savedReviewerEvidence.coveredCapabilityIds.includes(step.capabilityId));
   if (savedReviewerEvidence.status === "available" && savedCoveredMissing.length > 0) {
@@ -410,6 +490,16 @@ function nextActionsFor(
   }
   if (missing.some((step) => step.capabilityId === "sage-cas")) {
     actions.push("Use `npm run docker:sage` or the all-engine reviewer image when SageMath breadth is required.");
+  }
+  if (steps.some((step) => step.capabilityId === "concurrent-systems-verifier")) {
+    actions.push(
+      "For Rust/concurrency work, first narrow the property into a scheduler, lock, resource-access, or deadlock claim; do not claim code correctness from tests alone."
+    );
+  }
+  if (steps.some((step) => step.capabilityId === "hardware-eda-verifier")) {
+    actions.push(
+      "For hardware/EDA work, first narrow the HDL/RTL property and preserve the formal tool assumptions; do not claim tape-out safety from AI-generated prose."
+    );
   }
   if (missingExternalEngines.length > 0) {
     actions.push(`Missing external engines in this runtime: ${missingExternalEngines.join(", ")}.`);
