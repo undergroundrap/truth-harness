@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -12,6 +13,7 @@ import { addResearchSessionCheckpoint, readResearchSession, writeResearchHarness
 import { listValidationPlans } from "./validation-plan.js";
 import { listWorkspaceSnapshots } from "./workspace-snapshot.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
+import { rebuildWorkspaceCatalog } from "./workspace-catalog.js";
 import {
   createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
@@ -20,6 +22,7 @@ import {
   readWorkspaceRunNextPlan,
   writeWorkspaceRunNextPlan
 } from "./workspace-run-next.js";
+import { listWorkspaceRevisions } from "./workspace-revision.js";
 import { createWorkspaceReview, type WorkspaceReview } from "./workspace-review.js";
 import { writeVerifierRoute } from "./verifier-route.js";
 
@@ -31,6 +34,53 @@ afterEach(async () => {
 });
 
 describe("workspace run-next", () => {
+  it("routes Lean proof-safety blockers into the next autonomous action", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-21T00:00:00.000Z" });
+    await mkdir(join(root, "Proofs"), { recursive: true });
+    await writeFile(join(root, "lean-toolchain"), "leanprover/lean4:v4.12.0\n", "utf8");
+    await writeFile(join(root, "lakefile.lean"), "import Lake\nopen Lake DSL\n", "utf8");
+    await writeFile(
+      join(root, "Proofs", "Gap.lean"),
+      [
+        "def quoted : String := \"sorry should not count\"",
+        "theorem gap : True := by",
+        "  sorry"
+      ].join("\n"),
+      "utf8"
+    );
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-21T00:01:00.000Z"
+    });
+    const dryRun = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-21T00:02:00.000Z"
+    });
+    const executed = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-21T00:03:00.000Z"
+    });
+
+    expect(dryRun.item).toMatchObject({
+      kind: "route-obligation",
+      title: "Resolve Lean proof marker: sorry",
+      obligationKind: "formal-proof"
+    });
+    expect(dryRun.execution.summary).toContain("Dry-run only");
+    expect(executed.status).toBe("blocked");
+    expect(executed.execution).toMatchObject({
+      kind: "lean-proof-safety",
+      status: "blocked",
+      summary: expect.stringContaining("Proof-safety scan still finds 1 blocking Lean marker")
+    });
+    expect(JSON.stringify(executed.execution.result)).toContain("Proofs/Gap.lean");
+  });
+
   it("prioritizes linked validation-plan gates before generic session work", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
@@ -176,7 +226,23 @@ describe("workspace run-next", () => {
       expect.arrayContaining(["sympy-symbolic-adapter", "maxima-cas", "sage-cas", "lean-proof-checker", "claim-ledger"])
     );
     expect(plan.enginePlan?.trustBoundary.planDoesNotMintEvidence).toBe(true);
+    expect(plan.execution.summary).toContain("Engine plan starts with SymPy symbolic adapter");
+    expect(plan.execution.summary).toContain("Concrete SymPy receipt");
+    expect(plan.stopConditions).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Engine evidence required: Concrete SymPy receipt"),
+        expect.stringContaining("Engine trust ceiling: do not claim stronger than")
+      ])
+    );
+    expect(plan.warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Engine plan selected symbolic-algebra route"),
+        expect.stringContaining("Engine plan still has open verifier gates:")
+      ])
+    );
     expect(result.markdown).toContain("## Engine Plan");
+    expect(result.markdown).toContain("| Engine first route | SymPy symbolic adapter");
+    expect(result.markdown).toContain("| Engine evidence required | Concrete SymPy receipt");
     expect(result.markdown).toContain("sympy-symbolic-adapter");
     expect(result.plan.enginePlan?.recommendedFirstCommand).toBe(
       'truth-harness verify "symbolic simplify sin(x)^2 + cos(x)^2" --write'
@@ -274,6 +340,84 @@ describe("workspace run-next", () => {
         decisions: [expect.stringContaining("remains open")]
       })
     );
+  });
+
+  it("blocks unchanged failed Lean proof attempts before rerunning proof check", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-21T00:00:00.000Z" });
+    await mkdir(join(root, "Proofs"), { recursive: true });
+    const sourceText = "theorem route_statement : True := by\n  exact False.elim\n";
+    await writeFile(join(root, "Proofs", "Attempt.lean"), sourceText, "utf8");
+    const proofAttempt = {
+      checkId: "proof_0123456789abcdef",
+      path: ".truth-harness/proofs/2026-06-21-proof_0123456789abcdef.json",
+      sourcePath: "Proofs/Attempt.lean",
+      sourceSha256: sha256Hex(sourceText),
+      sourceByteLength: Buffer.byteLength(sourceText),
+      sourceStatus: "unchanged" as const,
+      sourceCurrentSha256: sha256Hex(sourceText),
+      sourceCurrentByteLength: Buffer.byteLength(sourceText),
+      declarationName: "route_statement",
+      status: "rejected" as const,
+      trust: "unverified" as const,
+      createdAt: "2026-06-21T00:01:00.000Z",
+      diagnosticSnippet: "type mismatch"
+    };
+    const proofDeclaration = {
+      declarationId: "decl_0123456789abcdef",
+      kind: "theorem" as const,
+      name: "route_statement",
+      path: "Proofs/Attempt.lean",
+      line: 1,
+      column: 1,
+      signature: "theorem route_statement : True",
+      signatureSha256: sha256Hex("theorem route_statement : True"),
+      sourceSha256: sha256Hex(sourceText)
+    };
+    const review = minimalReview({
+      rootPath: root,
+      command: "truth-harness proof check Proofs/Attempt.lean --declaration route_statement --write",
+      claimId: "claim_fake",
+      kind: "route-obligation",
+      routeId: "route_0123456789abcdef",
+      obligationId: "obl_0123456789abcdef",
+      obligationKind: "formal-proof",
+      proofDeclaration,
+      proofAttempt
+    });
+
+    const dryRun = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-21T00:01:30.000Z"
+    });
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-21T00:02:00.000Z"
+    });
+    const proofRecords = await readdir(join(root, ".truth-harness", "proofs")).catch(() => []);
+
+    expect(dryRun.status).toBe("planned");
+    expect(dryRun.execution).toMatchObject({
+      status: "planned",
+      kind: "proof-repair-source-unchanged",
+      command: "truth-harness proof check Proofs/Attempt.lean --declaration route_statement --write",
+      summary: expect.stringContaining("Edit the Lean source before running --execute-local")
+    });
+    expect(dryRun.execution.summary).toContain(proofAttempt.checkId);
+    expect(plan.status).toBe("blocked");
+    expect(plan.execution).toMatchObject({
+      status: "blocked",
+      kind: "proof-repair-source-unchanged",
+      command: "truth-harness proof check Proofs/Attempt.lean --declaration route_statement --write",
+      summary: expect.stringContaining("Edit the Lean source before rerunning this proof check")
+    });
+    expect(plan.execution.summary).toContain(proofAttempt.checkId);
+    expect(plan.execution.summary).toContain(`sha256:${proofAttempt.sourceSha256}`);
+    expect(proofRecords).toEqual([]);
   });
 
   it("executes validation attach commands for existing scoped proof artifacts", async () => {
@@ -488,6 +632,91 @@ describe("workspace run-next", () => {
 
     expect(afterClosureReview.items).not.toContainEqual(expect.objectContaining({ validationGateId: proofGate.gateId }));
     expect(afterClosurePlan.item?.validationGateId).not.toBe(proofGate.gateId);
+  });
+
+  it("executes workspace snapshot gates without honoring command path overrides", async () => {
+    const root = await tempRoot();
+    const outsideRoot = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "Close the workspace snapshot gate after scoped evidence is attached.",
+      domains: ["math"],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const validationPlan = harness.validationPlan?.plan;
+    const snapshotGate = validationPlan?.gates.find((gate) => gate.kind === "workspace-snapshot");
+    if (!validationPlan || !snapshotGate) {
+      throw new Error("Expected a linked validation plan with a workspace-snapshot gate.");
+    }
+    const review = minimalReview({
+      rootPath: root,
+      command: `truth-harness workspace snapshot ${outsideRoot} --json`,
+      claimId: "claim_workspace_snapshot_test",
+      kind: "validation-gate",
+      validationPlanId: validationPlan.planId,
+      validationGateId: snapshotGate.gateId,
+      validationGateKind: snapshotGate.kind,
+      sessionId: harness.session.sessionId,
+      domain: "math"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-18T00:02:00.000Z"
+    });
+    const snapshots = await listWorkspaceSnapshots(root);
+    const outsideSnapshots = await readdir(join(outsideRoot, ".truth-harness", "snapshots")).catch(() => []);
+    const updatedPlans = await listValidationPlans(root);
+    const updatedGate = updatedPlans
+      .find((candidate) => candidate.planId === validationPlan.planId)
+      ?.gates.find((gate) => gate.gateId === snapshotGate.gateId);
+    const updatedSession = await readResearchSession(root, harness.session.sessionId);
+
+    expect(plan.status).toBe("executed");
+    expect(plan.execution).toMatchObject({
+      kind: "workspace-snapshot",
+      evidenceRef: expect.stringContaining("snapshot:.truth-harness/snapshots/"),
+      attached: true,
+      result: {
+        snapshot: {
+          snapshotId: expect.stringMatching(/^snap_[a-f0-9]{16}$/u)
+        },
+        jsonPath: expect.stringContaining(".truth-harness/snapshots/"),
+        validationGate: {
+          gateId: snapshotGate.gateId,
+          status: "satisfied",
+          satisfied: true,
+          blocked: false
+        },
+        checkpoint: {
+          evidenceRefs: [expect.objectContaining({ kind: "snapshot" })]
+        }
+      }
+    });
+    expect(plan.execution.summary).toContain("Wrote workspace snapshot");
+    expect(plan.execution.summary).toContain("satisfied by local snapshot evidence");
+    expect((plan.execution.result as { snapshot: { entries?: unknown[] } }).snapshot.entries).toBeUndefined();
+    expect(plan.artifactRefs).not.toContainEqual(
+      expect.objectContaining({
+        source: expect.stringContaining("snapshot.entries")
+      })
+    );
+    expect(snapshots).toContainEqual(
+      expect.objectContaining({
+        snapshotId: (plan.execution.result as { snapshot: { snapshotId: string } }).snapshot.snapshotId
+      })
+    );
+    expect(outsideSnapshots).toEqual([]);
+    expect(updatedGate).toMatchObject({
+      status: "satisfied",
+      evidenceRefs: [expect.objectContaining({ kind: "snapshot" })]
+    });
+    expect(updatedSession.snapshotRefs).toContain(
+      (plan.execution.result as { snapshot: { snapshotId: string } }).snapshot.snapshotId
+    );
   });
 
   it("blocks validation attach commands that target a different review gate", async () => {
@@ -963,6 +1192,16 @@ describe("workspace run-next", () => {
         requiresHumanInput: true
       }),
       expect.objectContaining({
+        actionId: "refresh-strict-docker-professor-rehearsal",
+        command: "npm run docker:professor:all",
+        requiresHumanInput: true
+      }),
+      expect.objectContaining({
+        actionId: "refresh-docker-professor-rehearsal",
+        command: "npm run docker:professor",
+        requiresHumanInput: true
+      }),
+      expect.objectContaining({
         actionId: "refresh-professor-review",
         command: expect.stringContaining("truth-harness workspace credibility-pack"),
         requiresHumanInput: false
@@ -973,15 +1212,53 @@ describe("workspace run-next", () => {
         requiresHumanInput: false
       })
     ]);
+
+    const written = await writeWorkspaceRunNextPlan({ rootPath: root, plan });
+    const inspected = await inspectWorkspaceRunNextPlan(root, written.plan.planId, {
+      verifySnapshot: true,
+      now: "2026-06-14T00:04:00.000Z"
+    });
+    expect(inspected.resumeDecision).toMatchObject({
+      safeToResume: false,
+      status: "choose-idle-action",
+      action: "choose-idle-action",
+      reason: expect.stringContaining("healthy idle action menu")
+    });
+    expect(inspected.resumeDecision.nextCommand).toContain("show-run-next");
+    expect(inspected.sourceRevision).toMatchObject({
+      sourceRevisionStatus: "verified"
+    });
+    expect(inspected.sourceSnapshot).toMatchObject({
+      sourceSnapshotStatus: "verified"
+    });
   });
 
   it("writes dry-run plans into findings with a local artifact event", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    const candidatePath = join(root, ".truth-harness", "artifacts", "candidate.json");
+    const candidateBody = `${JSON.stringify({
+      schemaVersion: "truth-harness.proof-check.v0",
+      status: "accepted",
+      backend: "lean",
+      statement: "example : True := by trivial"
+    })}\n`;
+    await mkdir(join(root, ".truth-harness", "artifacts"), { recursive: true });
+    await writeFile(candidatePath, candidateBody, "utf8");
+    const candidateSha256 = sha256Hex(candidateBody);
+    const citingClaim = await writeClaimLedgerRecord({
+      rootPath: root,
+      title: "Candidate proof consumer",
+      statement: "This downstream claim cites the candidate proof artifact.",
+      domain: "math",
+      evidenceRefs: [{ kind: "proof", ref: ".truth-harness/artifacts/candidate.json" }],
+      now: "2026-06-14T00:01:30.000Z"
+    });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-14T00:01:45.000Z" });
     const review = minimalReview({
       rootPath: root,
       command:
-        "truth-harness validation attach vpl_run_next_test gate_proof_run_next_test --evidence proof:.truth-harness/proofs/candidate.json --json",
+        "truth-harness validation attach vpl_run_next_test gate_proof_run_next_test --evidence proof:.truth-harness/artifacts/candidate.json --json",
       claimId: "claim_fake",
       kind: "validation-gate",
       validationPlanId: "vpl_run_next_test",
@@ -1003,14 +1280,37 @@ describe("workspace run-next", () => {
     expect(result.markdown).toContain("# Truth Harness Run-Next Plan");
     expect(result.markdown).toContain("## Why This Action");
     expect(result.markdown).toContain("| Target | validation proof gate_proof_run_next_test |");
-    expect(result.markdown).toContain("| Candidate evidence | proof:.truth-harness/proofs/candidate.json |");
+    expect(result.markdown).toContain("| Candidate evidence | proof:.truth-harness/artifacts/candidate.json |");
     expect(result.markdown).toContain("It is not proof, not a trust-label upgrade");
     const parsed = JSON.parse(await readFile(result.jsonPath, "utf8")) as {
       schemaVersion?: string;
       planId?: string;
       dryRun?: boolean;
       rationale?: { target?: string; candidateEvidenceRef?: string; executionBoundary?: string };
+      sourceRevision?: {
+        revisionId?: string;
+        path?: string;
+        sourceSnapshotId?: string;
+        sourceSnapshotPath?: string;
+        totalFiles?: number;
+        totalBytes?: number;
+      };
       sourceSnapshot?: { snapshotId?: string; path?: string; totalFiles?: number; totalBytes?: number };
+      artifactRefs?: Array<{ path: string; role: string; source: string }>;
+      impactRefs?: Array<{ refPath: string; citedByPath: string; citedByKind: string; source: string; fieldPath?: string }>;
+      revalidationQueue?: Array<{
+        itemId: string;
+        refPath: string;
+        dependentPath: string;
+        dependentKind: string;
+        source: string;
+        priority: string;
+        command: string;
+        evidenceRequired: string;
+        boundary: string;
+        dependentArtifactId?: string;
+        fieldPath?: string;
+      }>;
     };
     expect(parsed).toMatchObject({
       schemaVersion: "truth-harness.workspace-run-next.v0",
@@ -1018,7 +1318,7 @@ describe("workspace run-next", () => {
       dryRun: true,
       rationale: {
         target: "validation proof gate_proof_run_next_test",
-        candidateEvidenceRef: "proof:.truth-harness/proofs/candidate.json"
+        candidateEvidenceRef: "proof:.truth-harness/artifacts/candidate.json"
       }
     });
     expect(parsed.rationale?.executionBoundary).toContain("Dry-run only");
@@ -1028,11 +1328,98 @@ describe("workspace run-next", () => {
       totalFiles: expect.any(Number),
       totalBytes: expect.any(Number)
     });
+    expect(parsed.sourceRevision).toMatchObject({
+      revisionId: expect.stringMatching(/^rev_[a-f0-9]{16}$/u),
+      path: expect.stringContaining(".truth-harness/revisions/"),
+      sourceSnapshotId: parsed.sourceSnapshot?.snapshotId,
+      sourceSnapshotPath: parsed.sourceSnapshot?.path,
+      totalFiles: parsed.sourceSnapshot?.totalFiles,
+      totalBytes: parsed.sourceSnapshot?.totalBytes
+    });
+    expect(result.markdown).toContain(`| Source revision | \`${parsed.sourceRevision?.revisionId}`);
+    expect(parsed.artifactRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: parsed.sourceRevision?.path ?? "",
+          role: "source-revision",
+          source: "sourceRevision.path",
+          sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+          sha256Scope: "file",
+          citation: expect.stringContaining("sha256:")
+        }),
+        expect.objectContaining({
+          path: ".truth-harness/artifacts/candidate.json",
+          role: "candidate-evidence",
+          source: "rationale.candidateEvidenceRef",
+          sha256: candidateSha256,
+          sha256Scope: "file",
+          sizeBytes: Buffer.byteLength(candidateBody),
+          citation: `.truth-harness/artifacts/candidate.json sha256:${candidateSha256}`
+        }),
+        expect.objectContaining({
+          path: parsed.sourceSnapshot?.path ?? "",
+          role: "source-snapshot",
+          source: "sourceSnapshot.path",
+          sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+          sha256Scope: "file",
+          citation: expect.stringContaining("sha256:")
+        })
+      ])
+    );
+    expect(parsed.impactRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          refPath: ".truth-harness/artifacts/candidate.json",
+          citedByPath: relative(root, citingClaim.jsonPath).replace(/\\/gu, "/"),
+          citedByKind: "claims",
+          source: "workspace-catalog",
+          fieldPath: "$.evidenceRefs[0]"
+        })
+      ])
+    );
+    expect(parsed.revalidationQueue).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          itemId: expect.stringMatching(/^reval_[a-f0-9]{8}$/u),
+          refPath: ".truth-harness/artifacts/candidate.json",
+          dependentPath: relative(root, citingClaim.jsonPath).replace(/\\/gu, "/"),
+          dependentKind: "claims",
+          source: "impact-ref",
+          priority: "high",
+          command: `truth-harness claim review ${citingClaim.claim.claimId} --json`,
+          evidenceRequired: expect.stringContaining("Fresh claim review"),
+          boundary: expect.stringContaining("does not execute commands"),
+          dependentArtifactId: citingClaim.claim.claimId,
+          fieldPath: "$.evidenceRefs[0]"
+        })
+      ])
+    );
+    expect(result.markdown).toContain("## Artifact Refs");
+    expect(result.markdown).toContain("| Role | Path | Source | SHA-256 | Citation |");
+    expect(result.markdown).toContain(
+      `| \`candidate-evidence\` | \`.truth-harness/artifacts/candidate.json\` | rationale.candidateEvidenceRef | \`${candidateSha256}\` | \`.truth-harness/artifacts/candidate.json sha256:${candidateSha256}\` |`
+    );
+    expect(result.markdown).toContain("## Citation Impact");
+    expect(result.markdown).toContain("Citation impact is dependency navigation only");
+    expect(result.markdown).toContain("## Revalidation Queue");
+    expect(result.markdown).toContain(`truth-harness claim review ${citingClaim.claim.claimId} --json`);
+    expect(result.markdown).toContain("Revalidation queue entries are review tasks only");
+    expect(result.markdown).toContain(relative(root, citingClaim.jsonPath).replace(/\\/gu, "/"));
     const snapshots = await listWorkspaceSnapshots(root);
     expect(snapshots).toContainEqual(
       expect.objectContaining({
         snapshotId: parsed.sourceSnapshot?.snapshotId,
         path: parsed.sourceSnapshot?.path
+      })
+    );
+    const revisions = await listWorkspaceRevisions(root);
+    expect(revisions).toContainEqual(
+      expect.objectContaining({
+        revisionId: parsed.sourceRevision?.revisionId,
+        path: parsed.sourceRevision?.path,
+        sessionRefs: [],
+        validationPlanRefs: ["vpl_run_next_test"],
+        claimRefs: ["claim_fake"]
       })
     );
     const list = await listWorkspaceRunNextPlans(root);
@@ -1043,8 +1430,37 @@ describe("workspace run-next", () => {
         dryRun: true,
         executionKind: "dry-run",
         rationaleTarget: "validation proof gate_proof_run_next_test",
-        rationaleCandidateEvidenceRef: "proof:.truth-harness/proofs/candidate.json",
+        rationaleCandidateEvidenceRef: "proof:.truth-harness/artifacts/candidate.json",
         rationaleExecutionBoundary: expect.stringContaining("Dry-run only"),
+        artifactRefs: expect.arrayContaining([
+          expect.objectContaining({
+            path: expect.stringContaining(`${result.plan.planId}-workspace-run-next.json`),
+            role: "run-next-packet"
+          }),
+          expect.objectContaining({
+            path: ".truth-harness/artifacts/candidate.json",
+            role: "candidate-evidence",
+            sha256: candidateSha256,
+            citation: `.truth-harness/artifacts/candidate.json sha256:${candidateSha256}`
+          })
+        ]),
+        impactRefs: expect.arrayContaining([
+          expect.objectContaining({
+            refPath: ".truth-harness/artifacts/candidate.json",
+            citedByPath: relative(root, citingClaim.jsonPath).replace(/\\/gu, "/"),
+            citedByKind: "claims"
+          })
+        ]),
+        revalidationQueue: expect.arrayContaining([
+          expect.objectContaining({
+            refPath: ".truth-harness/artifacts/candidate.json",
+            dependentPath: relative(root, citingClaim.jsonPath).replace(/\\/gu, "/"),
+            dependentKind: "claims",
+            command: `truth-harness claim review ${citingClaim.claim.claimId} --json`
+          })
+        ]),
+        sourceRevisionId: parsed.sourceRevision?.revisionId,
+        sourceRevisionPath: parsed.sourceRevision?.path,
         sourceSnapshotId: parsed.sourceSnapshot?.snapshotId,
         sourceSnapshotPath: parsed.sourceSnapshot?.path,
         resumeDecision: expect.objectContaining({
@@ -1061,11 +1477,17 @@ describe("workspace run-next", () => {
     expect(verifiedList).toContainEqual(
       expect.objectContaining({
         planId: result.plan.planId,
+        sourceRevisionStatus: "verified",
+        sourceRevisionAdded: 0,
+        sourceRevisionChanged: 0,
+        sourceRevisionMissing: 0,
+        sourceRevisionIgnoredAdded: 3,
+        sourceRevisionDriftSummary: expect.stringContaining("still matches"),
         sourceSnapshotStatus: "verified",
         sourceSnapshotAdded: 0,
         sourceSnapshotChanged: 0,
         sourceSnapshotMissing: 0,
-        sourceSnapshotIgnoredAdded: 2,
+        sourceSnapshotIgnoredAdded: 3,
         sourceSnapshotDriftSummary: expect.stringContaining("still matches"),
         resumeDecision: expect.objectContaining({
           safeToResume: true,
@@ -1089,21 +1511,65 @@ describe("workspace run-next", () => {
       schemaVersion: "truth-harness.workspace-run-next-inspection.v0",
       path: expect.stringContaining(`${result.plan.planId}-workspace-run-next.json`),
       plan: {
-        planId: result.plan.planId
+        planId: result.plan.planId,
+        artifactRefs: expect.arrayContaining([
+          expect.objectContaining({
+            path: ".truth-harness/artifacts/candidate.json",
+            role: "candidate-evidence",
+            sha256: candidateSha256,
+            citation: `.truth-harness/artifacts/candidate.json sha256:${candidateSha256}`
+          })
+        ]),
+        impactRefs: expect.arrayContaining([
+          expect.objectContaining({
+            refPath: ".truth-harness/artifacts/candidate.json",
+            citedByPath: relative(root, citingClaim.jsonPath).replace(/\\/gu, "/"),
+            citedByKind: "claims"
+          })
+        ]),
+        revalidationQueue: expect.arrayContaining([
+          expect.objectContaining({
+            refPath: ".truth-harness/artifacts/candidate.json",
+            dependentPath: relative(root, citingClaim.jsonPath).replace(/\\/gu, "/"),
+            dependentKind: "claims",
+            command: `truth-harness claim review ${citingClaim.claim.claimId} --json`
+          })
+        ])
       },
+      artifactRefs: expect.arrayContaining([
+        expect.objectContaining({
+          path: expect.stringContaining(`${result.plan.planId}-workspace-run-next.json`),
+          role: "run-next-packet",
+          sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+          citation: expect.stringContaining("sha256:")
+        }),
+        expect.objectContaining({
+          path: ".truth-harness/artifacts/candidate.json",
+          role: "candidate-evidence",
+          sha256: candidateSha256,
+          citation: `.truth-harness/artifacts/candidate.json sha256:${candidateSha256}`
+        })
+      ]),
       resumeDecision: {
         safeToResume: true,
         status: "safe-to-resume",
         action: "run-selected-command",
         nextCommand:
-          "truth-harness validation attach vpl_run_next_test gate_proof_run_next_test --evidence proof:.truth-harness/proofs/candidate.json --json"
+          "truth-harness validation attach vpl_run_next_test gate_proof_run_next_test --evidence proof:.truth-harness/artifacts/candidate.json --json"
+      },
+      sourceRevision: {
+        sourceRevisionStatus: "verified",
+        sourceRevisionAdded: 0,
+        sourceRevisionChanged: 0,
+        sourceRevisionMissing: 0,
+        sourceRevisionIgnoredAdded: 3
       },
       sourceSnapshot: {
         sourceSnapshotStatus: "verified",
         sourceSnapshotAdded: 0,
         sourceSnapshotChanged: 0,
         sourceSnapshotMissing: 0,
-        sourceSnapshotIgnoredAdded: 2
+        sourceSnapshotIgnoredAdded: 3
       }
     });
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
@@ -1136,6 +1602,9 @@ describe("workspace run-next", () => {
     expect(driftedList).toContainEqual(
       expect.objectContaining({
         planId: result.plan.planId,
+        sourceRevisionStatus: "drifted",
+        sourceRevisionAdded: 1,
+        sourceRevisionDriftSummary: expect.stringContaining("1 added"),
         sourceSnapshotStatus: "drifted",
         sourceSnapshotAdded: 1,
         sourceSnapshotDriftSummary: expect.stringContaining("1 added"),
@@ -1149,6 +1618,11 @@ describe("workspace run-next", () => {
     const driftedInspection = await inspectWorkspaceRunNextPlan(root, result.plan.planId, {
       verifySnapshot: true,
       now: "2026-06-14T00:04:30.000Z"
+    });
+    expect(driftedInspection.sourceRevision).toMatchObject({
+      sourceRevisionStatus: "drifted",
+      sourceRevisionAdded: 1,
+      sourceRevisionDriftSummary: expect.stringContaining("1 added")
     });
     expect(driftedInspection.sourceSnapshot).toMatchObject({
       sourceSnapshotStatus: "drifted",
@@ -1175,6 +1649,44 @@ describe("workspace run-next", () => {
         issueCodes: expect.arrayContaining(["invalid-artifact-schema"])
       })
     );
+  });
+
+  it("limits persisted handoff verification to the newest requested packets", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-14T00:01:00.000Z"
+    });
+
+    const olderPlan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+    const olderWrite = await writeWorkspaceRunNextPlan({ rootPath: root, plan: olderPlan });
+    const newerPlan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-14T00:03:00.000Z"
+    });
+    const newerWrite = await writeWorkspaceRunNextPlan({ rootPath: root, plan: newerPlan });
+
+    const limited = await listWorkspaceRunNextPlans(root, {
+      verifySnapshots: true,
+      limit: 1,
+      now: "2026-06-14T00:04:00.000Z"
+    });
+
+    expect(limited).toHaveLength(1);
+    expect(limited[0]).toMatchObject({
+      planId: newerWrite.plan.planId,
+      sourceRevisionStatus: "verified",
+      sourceSnapshotStatus: "verified"
+    });
+    expect(limited.map((summary) => summary.planId)).not.toContain(olderWrite.plan.planId);
   });
 
   it("rejects malformed run-next handoff packets before writing findings", async () => {
@@ -1204,6 +1716,89 @@ describe("workspace run-next", () => {
 
     await expect(listWorkspaceRunNextPlans(root)).resolves.toEqual([]);
   });
+
+  it("preserves structured proof-attempt context in saved handoff packets", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-21T00:00:00.000Z" });
+    const sourceText = "theorem route_statement : True := by\n  exact False.elim\n";
+    const proofDeclaration = {
+      declarationId: "decl_0123456789abcdef",
+      kind: "theorem" as const,
+      name: "route_statement",
+      path: "Proofs/Attempt.lean",
+      line: 1,
+      column: 1,
+      signature: "theorem route_statement : True",
+      signatureSha256: sha256Hex("theorem route_statement : True"),
+      sourceSha256: sha256Hex(sourceText)
+    };
+    const proofAttempt = {
+      checkId: "proof_0123456789abcdef",
+      path: ".truth-harness/proofs/2026-06-21-proof_0123456789abcdef.json",
+      sourcePath: "Proofs/Attempt.lean",
+      sourceSha256: sha256Hex(sourceText),
+      sourceByteLength: Buffer.byteLength(sourceText),
+      declarationName: "route_statement",
+      declaration: proofDeclaration,
+      status: "rejected" as const,
+      trust: "unverified" as const,
+      createdAt: "2026-06-21T00:01:00.000Z",
+      diagnosticSnippet: "type mismatch"
+    };
+    const proofRepairTarget = {
+      repairTargetId: "lpr_0123456789abcdef",
+      sourcePath: "Proofs/Attempt.lean",
+      sourceSha256: sha256Hex(sourceText),
+      markerKind: "sorry" as const,
+      markerLine: 2,
+      markerColumn: 3,
+      declarationId: proofDeclaration.declarationId,
+      declarationName: "route_statement",
+      declarationSignatureSha256: proofDeclaration.signatureSha256,
+      afterEditCommands: [
+        "truth-harness proof check Proofs/Attempt.lean --declaration route_statement --write",
+        "Rerun the original `truth-harness proof project <project> --json` scan and confirm this repair target is gone."
+      ],
+      evidenceRequired: [
+        "edited workspace-local .lean source",
+        "proof-safety scan with this marker absent",
+        "accepted proof-check record before using the source as proved evidence"
+      ],
+      boundary: "This repair target is a local planning aid. It does not prove the declaration, and it must not upgrade trust until a later accepted proof-check record exists."
+    };
+    const review = minimalReview({
+      rootPath: root,
+      command: "truth-harness proof check Proofs/Attempt.lean --declaration route_statement --write",
+      claimId: "claim_fake",
+      kind: "route-obligation",
+      routeId: "route_0123456789abcdef",
+      obligationId: "obl_0123456789abcdef",
+      obligationKind: "formal-proof",
+      proofDeclaration,
+      proofAttempt,
+      proofRepairTarget
+    });
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-21T00:02:00.000Z"
+    });
+    const write = await writeWorkspaceRunNextPlan({ rootPath: root, plan });
+    const reread = await readWorkspaceRunNextPlan(root, write.plan.planId);
+
+    expect(plan.item?.proofDeclaration).toEqual(proofDeclaration);
+    expect(plan.item?.proofAttempt).toEqual(proofAttempt);
+    expect(plan.item?.proofRepairTarget).toEqual(proofRepairTarget);
+    expect(reread.item?.proofDeclaration).toEqual(proofDeclaration);
+    expect(reread.item?.proofAttempt).toEqual(proofAttempt);
+    expect(reread.item?.proofRepairTarget).toEqual(proofRepairTarget);
+    expect(write.markdown).toContain(`Proof declaration: \`${proofDeclaration.declarationId}\``);
+    expect(write.markdown).toContain(`Proof declaration signature sha256: \`${proofDeclaration.signatureSha256}\``);
+    expect(write.markdown).toContain(`Proof attempt: \`${proofAttempt.checkId}\``);
+    expect(write.markdown).toContain(`Proof repair target: \`${proofRepairTarget.repairTargetId}\``);
+    expect(write.markdown).toContain(`Proof repair source sha256: \`${proofRepairTarget.sourceSha256}\``);
+  });
 });
 
 function minimalReview(input: {
@@ -1218,6 +1813,9 @@ function minimalReview(input: {
   routeId?: string;
   obligationId?: string;
   obligationKind?: WorkspaceReview["items"][number]["obligationKind"];
+  proofDeclaration?: WorkspaceReview["items"][number]["proofDeclaration"];
+  proofAttempt?: WorkspaceReview["items"][number]["proofAttempt"];
+  proofRepairTarget?: WorkspaceReview["items"][number]["proofRepairTarget"];
   sessionId?: string;
   domain?: string;
 }): WorkspaceReview {
@@ -1244,6 +1842,7 @@ function minimalReview(input: {
       reportDrafts: input.reportId ? 1 : 0,
       totalItems: 1,
       routeObligations: 0,
+      leanProofSafetyItems: 0,
       readyRoutesWithoutClaims: 0,
       blockedClaims: 1,
       reportDraftReviewItems: input.reportId ? 1 : 0,
@@ -1280,6 +1879,9 @@ function minimalReview(input: {
         routeId: input.routeId,
         obligationId: input.obligationId,
         obligationKind: input.obligationKind,
+        proofDeclaration: input.proofDeclaration,
+        proofAttempt: input.proofAttempt,
+        proofRepairTarget: input.proofRepairTarget,
         reportId: input.reportId,
         validationPlanId: input.validationPlanId,
         validationGateId: input.validationGateId,
@@ -1302,6 +1904,10 @@ async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-run-next-"));
   roots.push(root);
   return root;
+}
+
+function sha256Hex(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 async function writeBenchmarkSuite(root: string): Promise<void> {

@@ -83,6 +83,9 @@
         },
         "declarationName": {
           "type": "string"
+        },
+        "declaration": {
+          "$ref": "#/$defs/proofDeclaration"
         }
       },
       "additionalProperties": false
@@ -145,6 +148,57 @@
     }
   },
   "$defs": {
+    "proofDeclaration": {
+      "type": "object",
+      "required": [
+        "declarationId",
+        "kind",
+        "path",
+        "line",
+        "column",
+        "signature",
+        "signatureSha256",
+        "sourceSha256"
+      ],
+      "properties": {
+        "declarationId": {
+          "type": "string",
+          "pattern": "^decl_[a-f0-9]{16}$"
+        },
+        "kind": {
+          "enum": ["theorem", "lemma", "example", "def"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "signature": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signatureSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
     "stringArray": {
       "type": "array",
       "items": {

@@ -203,6 +203,7 @@ Initial CLI:
 truth-harness catalog rebuild [workspace] --json
 truth-harness catalog status [workspace] --json
 truth-harness catalog search [workspace] "fractions exact-computed" --kind claims --trust exact-computed --json
+truth-harness catalog search [workspace] --ref .truth-harness/receipts/result.json --kind claims --json
 truth-harness catalog query [workspace] --kind route --open-obligations --json
 ```
 
@@ -212,7 +213,7 @@ Initial MCP:
 - `truth_harness_catalog_rebuild`
 - `truth_harness_catalog_search`
 
-All outputs should be structured JSON-first and include whether the response came from the catalog, a rebuild requirement, or a catalog error. Canonical JSON-scan commands remain separate fallback workflows.
+All outputs should be structured JSON-first and include whether the response came from the catalog, a rebuild requirement, or a catalog error. `--ref`/`ref` reverses the reference table and returns artifacts that cite a local receipt, report, proof, visual, or other indexed reference; it is impact/dependency navigation only and does not satisfy evidence gates. Canonical JSON-scan commands remain separate fallback workflows.
 
 ## Integration Order
 

@@ -1153,6 +1153,7 @@ async function resolveValidationGateEvidence(
         schemaVersion: record.schemaVersion,
         artifactId: record.checkId,
         status: record.status,
+        claimScope: validationClaimScopeFromText(plan, smtCheckClaimBoundary(record), "SMT check query boundary"),
         nextChecks: record.trust === "smt-checked"
           ? []
           : ["SMT solver did not produce a sat/unsat check; attach solver-backed SMT evidence before closing this gate."]
@@ -1168,6 +1169,7 @@ async function resolveValidationGateEvidence(
         schemaVersion: record.schemaVersion,
         artifactId: record.checkId,
         status: record.status,
+        claimScope: validationClaimScopeFromText(plan, symbolicCasClaimBoundary(record), "CAS check symbolic boundary"),
         nextChecks: record.trust === "cross-checked"
           ? []
           : ["CAS evidence is not cross-checked; attach agreeing independent CAS or stronger evidence before closing this gate."]
@@ -1285,11 +1287,28 @@ function assessValidationGateEvidence(
     };
   }
 
+  if (gate.kind === "workspace-snapshot" && evidence.kind === "snapshot") {
+    return {
+      status: "satisfied",
+      nextChecks: [],
+      message: `Validation workspace-snapshot gate ${gate.gateId} satisfied by local snapshot evidence.`
+    };
+  }
+
   return {
     status: gate.status === "missing" ? "in-progress" : gate.status,
     nextChecks: evidence.nextChecks.length > 0 ? evidence.nextChecks : gate.nextChecks,
     message: `Evidence ${evidence.kind}:${evidence.ref} attached to validation gate ${gate.gateId}; gate remains ${gate.status}.`
   };
+}
+
+function smtCheckClaimBoundary(record: ReturnType<typeof parseSmtCheckRecord>): string | undefined {
+  const queryName = record.source.queryName?.trim();
+  return queryName ? `SMT query ${queryName}` : undefined;
+}
+
+function symbolicCasClaimBoundary(record: ReturnType<typeof parseSymbolicCasCheckRecord>): string {
+  return `symbolic ${record.operation} ${record.expression}`;
 }
 
 function validationClaimScopeCheck(

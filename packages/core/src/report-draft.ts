@@ -3,11 +3,17 @@ import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { enrichLocalArtifactRefs, uniqueLocalArtifactRefs, type LocalArtifactRef } from "./local-artifact-ref.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const REPORT_DRAFT_SCHEMA_VERSION = "truth-harness.report-draft.v0" as const;
+export type ReportDraftArtifactRefRole = "report-json" | "report-markdown";
+
+export interface ReportDraftArtifactRef extends LocalArtifactRef {
+  role: ReportDraftArtifactRefRole;
+}
 
 export interface ReportDraft {
   schemaVersion: typeof REPORT_DRAFT_SCHEMA_VERSION;
@@ -30,6 +36,7 @@ export interface ReportDraft {
     json: string;
     markdown: string;
   };
+  artifactRefs: ReportDraftArtifactRef[];
 }
 
 export interface ReportDraftPaths {
@@ -152,7 +159,8 @@ export async function writeReportDraft(input: WriteReportDraftInput): Promise<Re
     paths: {
       json: relativeJson,
       markdown: relativeMarkdown
-    }
+    },
+    artifactRefs: createReportDraftArtifactRefs(relativeJson, relativeMarkdown)
   };
 
   await assertReportDraftSchema(report);
@@ -166,9 +174,10 @@ export async function writeReportDraft(input: WriteReportDraftInput): Promise<Re
     now: createdAt,
     staleReason: "report draft artifact written"
   });
+  const enrichedReport = await withReportDraftArtifactRefIntegrity(status.root, report);
 
   return {
-    report,
+    report: enrichedReport,
     paths: {
       json: jsonPath,
       markdown: markdownPath,
@@ -287,17 +296,25 @@ async function readReportDraftSummary(root: string, jsonPath: string): Promise<R
 
     const markdownPath = resolveUnderRoot(root, report.paths.markdown || toPortablePath(relative(root, jsonPath.replace(/\.json$/u, ".md"))));
     const markdownCheck = await readReportDraftMarkdownCheck(report, markdownPath);
+    const paths = {
+      json: jsonPath,
+      markdown: markdownPath,
+      relativeJson: toPortablePath(relative(root, jsonPath)),
+      relativeMarkdown: toPortablePath(relative(root, markdownPath))
+    };
+    const reportWithArtifactRefs = await withReportDraftArtifactRefIntegrity(root, {
+      ...report,
+      paths: {
+        json: paths.relativeJson,
+        markdown: paths.relativeMarkdown
+      }
+    });
     return {
-      report,
+      report: reportWithArtifactRefs,
       markdownVerified: markdownCheck.verified,
       markdownStatus: markdownCheck.status,
       markdownSha256: markdownCheck.sha256,
-      paths: {
-        json: jsonPath,
-        markdown: markdownPath,
-        relativeJson: toPortablePath(relative(root, jsonPath)),
-        relativeMarkdown: toPortablePath(relative(root, markdownPath))
-      },
+      paths,
       mtimeMs: info.mtimeMs
     };
   } catch (error) {
@@ -346,6 +363,11 @@ function normalizeReportDraft(value: unknown): ReportDraft | undefined {
   const paths = record.paths && typeof record.paths === "object" && !Array.isArray(record.paths)
     ? record.paths as Record<string, unknown>
     : {};
+  const normalizedPaths = {
+    json: typeof paths.json === "string" ? normalizePortablePath(paths.json) : "",
+    markdown: typeof paths.markdown === "string" ? normalizePortablePath(paths.markdown) : ""
+  };
+
   return {
     schemaVersion: REPORT_DRAFT_SCHEMA_VERSION,
     reportId,
@@ -363,10 +385,8 @@ function normalizeReportDraft(value: unknown): ReportDraft | undefined {
     markdownSha256: typeof record.markdownSha256 === "string" ? record.markdownSha256 : "",
     markdownByteLength: typeof record.markdownByteLength === "number" ? record.markdownByteLength : 0,
     warnings: normalizeStringList(record.warnings),
-    paths: {
-      json: typeof paths.json === "string" ? normalizePortablePath(paths.json) : "",
-      markdown: typeof paths.markdown === "string" ? normalizePortablePath(paths.markdown) : ""
-    }
+    paths: normalizedPaths,
+    artifactRefs: normalizeReportDraftArtifactRefs(record.artifactRefs, normalizedPaths)
   };
 }
 
@@ -406,6 +426,73 @@ function normalizeStringList(value: unknown): string[] {
 
 function normalizeBundleVerificationIds(value: string[]): string[] {
   return value.filter((id) => /^cver_[a-f0-9]{16}$/u.test(id)).slice(0, 20);
+}
+
+async function withReportDraftArtifactRefIntegrity(root: string, report: ReportDraft): Promise<ReportDraft> {
+  const artifactRefs = report.artifactRefs.length > 0
+    ? report.artifactRefs
+    : createReportDraftArtifactRefs(report.paths.json, report.paths.markdown);
+  return {
+    ...report,
+    artifactRefs: await enrichLocalArtifactRefs(root, artifactRefs)
+  };
+}
+
+function createReportDraftArtifactRefs(relativeJson: string, relativeMarkdown: string): ReportDraftArtifactRef[] {
+  return uniqueLocalArtifactRefs([
+    {
+      path: relativeJson,
+      role: "report-json",
+      source: "report.paths.json"
+    },
+    {
+      path: relativeMarkdown,
+      role: "report-markdown",
+      source: "report.paths.markdown"
+    }
+  ]);
+}
+
+function normalizeReportDraftArtifactRefs(
+  value: unknown,
+  fallbackPaths: { json: string; markdown: string }
+): ReportDraftArtifactRef[] {
+  const refs = createReportDraftArtifactRefs(fallbackPaths.json, fallbackPaths.markdown);
+  if (!Array.isArray(value)) {
+    return refs;
+  }
+
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      continue;
+    }
+    const record = item as Record<string, unknown>;
+    const path = typeof record.path === "string" ? record.path : "";
+    const role = typeof record.role === "string" && isReportDraftArtifactRefRole(record.role)
+      ? record.role
+      : undefined;
+    const source = typeof record.source === "string" && record.source.trim()
+      ? record.source.trim()
+      : "report.artifactRefs";
+    if (!path || !role) {
+      continue;
+    }
+    refs.push({
+      path,
+      role,
+      source,
+      sizeBytes: typeof record.sizeBytes === "number" ? record.sizeBytes : undefined,
+      sha256: typeof record.sha256 === "string" ? record.sha256 : undefined,
+      sha256Scope: record.sha256Scope === "file" ? "file" : undefined,
+      citation: typeof record.citation === "string" ? record.citation : undefined
+    });
+  }
+
+  return uniqueLocalArtifactRefs(refs);
+}
+
+function isReportDraftArtifactRefRole(value: string): value is ReportDraftArtifactRefRole {
+  return value === "report-json" || value === "report-markdown";
 }
 
 function normalizePortablePath(value: string): string {

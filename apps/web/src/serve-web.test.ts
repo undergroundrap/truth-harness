@@ -8,8 +8,11 @@ import { gunzipSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  createReceipt,
+  initLocalWorkspace,
   verifierRouteStatementBoundaryHash,
   writeCredibilityBundle,
+  writeClaimLedgerRecord,
   writeResearchSession,
   type EngineVerificationCommandRunner
 } from "../../../packages/core/src/index.js";
@@ -64,14 +67,17 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("report-draft-save");
     expect(statusPayload.capabilities).toContain("research-session-list");
     expect(statusPayload.capabilities).toContain("research-harness-start");
+    expect(statusPayload.capabilities).toContain("hard-math-seed");
     expect(statusPayload.capabilities).toContain("research-map");
     expect(statusPayload.capabilities).toContain("visual-artifacts");
+    expect(statusPayload.capabilities).toContain("workspace-artifact-preview");
     expect(statusPayload.capabilities).toContain("catalog-search");
     expect(statusPayload.capabilities).toContain("workspace-events");
     expect(statusPayload.capabilities).toContain("workspace-run-next-dry-run");
     expect(statusPayload.capabilities).toContain("workspace-run-next-save");
     expect(statusPayload.capabilities).toContain("workspace-run-next-list");
     expect(statusPayload.capabilities).toContain("workspace-run-next-show");
+    expect(statusPayload.capabilities).toContain("workspace-pilot-loop-dry-run");
     expect(statusPayload.capabilities).toContain("workspace-maintenance");
     expect(statusPayload.capabilities).toContain("engine-evidence-verification");
     expect(statusPayload.capabilities).toContain("engine-readiness-report");
@@ -122,13 +128,13 @@ describe("local web route ledger API", () => {
     expect(typeof statusPayload.dockerVerifier.recommended).toBe("boolean");
     expect(statusPayload.dockerVerifier.notes).toContain("The web UI never runs Docker automatically; it only exposes copyable commands.");
     expect(statusPayload.dockerVerifier.notes).toContain(
-      "npm run docker:professor writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, math credibility ladder evidence, a credibility pack, and a verified portable reviewer bundle inside the no-network compose service."
+      "npm run docker:professor writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, math credibility ladder evidence, exact/symbolic/SMT hard-math closure evidence, a credibility pack, and a verified portable reviewer bundle inside the no-network compose service."
     );
     expect(statusPayload.dockerVerifier.notes).toContain(
       "npm run docker:all-engines is the heavy strict gate for Maxima, Z3, cvc5, Lean, and SageMath when a reviewer explicitly wants every adapter fixture."
     );
     expect(statusPayload.dockerVerifier.notes).toContain(
-      "npm run docker:professor:all writes the strict all-engine professor packet and portable reviewer bundle from the no-network all-engine service."
+      "npm run docker:professor:all writes the strict all-engine professor packet, closure reports, and portable reviewer bundle from the no-network all-engine service."
     );
     expect(statusPayload.engineVerification).toMatchObject({
       schemaVersion: "truth-harness.engine-verification.v0",
@@ -466,13 +472,21 @@ describe("local web route ledger API", () => {
       manifest: {
         schemaVersion: "truth-harness.credibility-bundle.v0",
         bundleId: bundle.manifest.bundleId,
-        packId: bundle.manifest.packId
+        packId: bundle.manifest.packId,
+        bundleDigest: {
+          algorithm: "sha256",
+          scope: "truth-harness.credibility-bundle-manifest-digest.v0",
+          value: expect.stringMatching(/^[a-f0-9]{64}$/u)
+        }
       },
       verification: {
         schemaVersion: "truth-harness.credibility-bundle-verification.v0",
         bundleId: bundle.manifest.bundleId,
         passed: true,
-        sourceMatchesWorkspace: true
+        sourceMatchesWorkspace: true,
+        manifestDigestStatus: "verified",
+        manifestDigestExpected: bundle.manifest.bundleDigest?.value,
+        manifestDigestActual: bundle.manifest.bundleDigest?.value
       }
     });
     expect(bundlePayload.command).toContain("workspace verify-credibility-bundle");
@@ -493,7 +507,10 @@ describe("local web route ledger API", () => {
         verificationId: expect.stringMatching(/^cver_[a-f0-9]{16}$/u),
         bundleId: bundle.manifest.bundleId,
         passed: true,
-        sourceMatchesWorkspace: true
+        sourceMatchesWorkspace: true,
+        manifestDigestStatus: "verified",
+        manifestDigestExpected: bundle.manifest.bundleDigest?.value,
+        manifestDigestActual: bundle.manifest.bundleDigest?.value
       },
       verificationPaths: {
         json: expect.stringContaining(".truth-harness"),
@@ -519,7 +536,8 @@ describe("local web route ledger API", () => {
           verification: expect.objectContaining({
             schemaVersion: "truth-harness.credibility-bundle-verification.v0",
             verificationId: bundleVerifyPayload.verification.verificationId,
-            bundleId: bundle.manifest.bundleId
+            bundleId: bundle.manifest.bundleId,
+            manifestDigestStatus: "verified"
           }),
           paths: expect.objectContaining({
             relativeJson: expect.stringContaining("credibility-bundle-verification.json")
@@ -539,7 +557,8 @@ describe("local web route ledger API", () => {
     expect(verificationJsonPayload).toMatchObject({
       schemaVersion: "truth-harness.credibility-bundle-verification.v0",
       verificationId,
-      bundleId: bundle.manifest.bundleId
+      bundleId: bundle.manifest.bundleId,
+      manifestDigestStatus: "verified"
     });
 
     const verificationMarkdownResponse = await fetch(
@@ -579,7 +598,10 @@ describe("local web route ledger API", () => {
     const bundleManifestPayload = await bundleManifestResponse.json();
     expect(bundleManifestPayload).toMatchObject({
       schemaVersion: "truth-harness.credibility-bundle.v0",
-      bundleId: bundle.manifest.bundleId
+      bundleId: bundle.manifest.bundleId,
+      bundleDigest: {
+        value: bundle.manifest.bundleDigest?.value
+      }
     });
 
     const bundleArchiveResponse = await fetch(`${baseUrl}/api/credibility-bundle/latest/archive`);
@@ -745,6 +767,19 @@ describe("local web route ledger API", () => {
         trust: "exact-computed"
       })
     );
+    const catalogRefSearchResponse = await fetch(
+      `${baseUrl}/api/catalog/search?kind=claims&ref=${encodeURIComponent(receiptPayload.receiptPaths.ref)}`
+    );
+    expect(catalogRefSearchResponse.status).toBe(200);
+    const catalogRefSearchPayload = await catalogRefSearchResponse.json();
+    expectLocalApiSuccess(catalogRefSearchResponse, catalogRefSearchPayload);
+    expect(catalogRefSearchPayload.search.filters.ref).toBe(receiptPayload.receiptPaths.ref);
+    expect(catalogRefSearchPayload.search.results).toContainEqual(
+      expect.objectContaining({
+        artifactId: receiptClaimPayload.claim.claimId,
+        kind: "claims"
+      })
+    );
 
     const eventLogResponse = await fetch(`${baseUrl}/api/events?limit=50`);
     expect(eventLogResponse.status).toBe(200);
@@ -862,6 +897,113 @@ describe("local web route ledger API", () => {
     expect(forbiddenRunNextWritePayload.externalCalls).toEqual([]);
     expect(forbiddenRunNextWritePayload.error).toContain("dry-run only");
 
+    const workspaceRunNextWriteResponse = await fetch(`${baseUrl}/api/workspace-run-next`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        source: "workspace-review"
+      })
+    });
+    expect(workspaceRunNextWriteResponse.status).toBe(200);
+    const workspaceRunNextWritePayload = await workspaceRunNextWriteResponse.json();
+    expectLocalApiSuccess(workspaceRunNextWriteResponse, workspaceRunNextWritePayload);
+    expect(workspaceRunNextWritePayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-run-next-write-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      source: "workspace-review",
+      mode: "default",
+      plan: {
+        schemaVersion: "truth-harness.workspace-run-next.v0",
+        localOnly: true,
+        networkAccess: "none",
+        dryRun: true,
+        sourceRevision: {
+          revisionId: expect.stringMatching(/^rev_[a-f0-9]{16}$/u),
+          path: expect.stringContaining(".truth-harness/revisions/"),
+          sourceSnapshotId: expect.stringMatching(/^snap_[a-f0-9]{16}$/u)
+        },
+        sourceSnapshot: {
+          snapshotId: expect.stringMatching(/^snap_[a-f0-9]{16}$/u),
+          path: expect.stringContaining(".truth-harness/snapshots/")
+        }
+      }
+    });
+    expect(workspaceRunNextWritePayload.paths.json).toContain(".truth-harness");
+    expect(workspaceRunNextWritePayload.paths.markdown).toContain(".truth-harness");
+    expect(existsSync(workspaceRunNextWritePayload.paths.json)).toBe(true);
+    expect(existsSync(workspaceRunNextWritePayload.paths.markdown)).toBe(true);
+    expect(workspaceRunNextWritePayload.activity).toContainEqual(
+      expect.objectContaining({
+        actor: "local-api",
+        action: "wrote-workspace-run-next-plan"
+      })
+    );
+
+    const workspaceRunNextShowResponse = await fetch(
+      `${baseUrl}/api/workspace-run-nexts/${workspaceRunNextWritePayload.plan.planId}?verifySnapshot=true`
+    );
+    expect(workspaceRunNextShowResponse.status).toBe(200);
+    const workspaceRunNextShowPayload = await workspaceRunNextShowResponse.json();
+    expectLocalApiSuccess(workspaceRunNextShowResponse, workspaceRunNextShowPayload);
+    expect(workspaceRunNextShowPayload.inspection).toMatchObject({
+      plan: {
+        planId: workspaceRunNextWritePayload.plan.planId,
+        sourceRevision: {
+          revisionId: workspaceRunNextWritePayload.plan.sourceRevision.revisionId
+        }
+      },
+      sourceRevision: {
+        sourceRevisionStatus: expect.stringMatching(/^(verified|drifted|missing|not-recorded)$/u)
+      },
+      sourceSnapshot: {
+        sourceSnapshotStatus: expect.stringMatching(/^(verified|drifted|missing|not-recorded)$/u)
+      },
+      resumeDecision: {
+        action: expect.any(String),
+        nextCommand: expect.stringContaining("truth-harness")
+      }
+    });
+
+    const pilotLoopResponse = await fetch(`${baseUrl}/api/workspace-pilot-loop?maxSteps=3`);
+    expect(pilotLoopResponse.status).toBe(200);
+    const pilotLoopPayload = await pilotLoopResponse.json();
+    expectLocalApiSuccess(pilotLoopResponse, pilotLoopPayload);
+    expect(pilotLoopPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-pilot-loop-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      source: "workspace-review",
+      mode: "default",
+      loop: {
+        schemaVersion: "truth-harness.workspace-pilot-loop.v0",
+        localOnly: true,
+        networkAccess: "none",
+        dryRun: true,
+        maxSteps: 3,
+        status: "stopped",
+        stopReason: "dry-run"
+      }
+    });
+    expect(pilotLoopPayload.loop.loopId).toMatch(/^wpl_[a-f0-9]{8}$/u);
+    expect(pilotLoopPayload.loop.summary.plannedSteps).toBeGreaterThanOrEqual(1);
+    expect(pilotLoopPayload.activity).toContainEqual(
+      expect.objectContaining({
+        actor: "local-api",
+        action: "previewed-workspace-pilot-loop"
+      })
+    );
+
+    const forbiddenPilotLoopResponse = await fetch(`${baseUrl}/api/workspace-pilot-loop?executeLocal=true`);
+    expect(forbiddenPilotLoopResponse.status).toBe(400);
+    const forbiddenPilotLoopPayload = await forbiddenPilotLoopResponse.json();
+    expect(forbiddenPilotLoopPayload.schemaVersion).toBe("truth-harness.web-error.v0");
+    expect(forbiddenPilotLoopPayload.localOnly).toBe(true);
+    expect(forbiddenPilotLoopPayload.externalCalls).toEqual([]);
+    expect(forbiddenPilotLoopPayload.error).toContain("dry-run only");
+
     const credibilityRunNextResponse = await fetch(
       `${baseUrl}/api/workspace-run-next?source=credibility-actions&requireAllEngines=true&timeoutMs=50`
     );
@@ -950,9 +1092,11 @@ describe("local web route ledger API", () => {
       schemaVersion: "truth-harness.web-workspace-run-next-list-response.v0",
       localOnly: true,
       externalCalls: [],
-      verifySnapshots: false
+      verifySnapshots: false,
+      limit: 5
     });
     expect(runNextListPayload.total).toBeGreaterThanOrEqual(1);
+    expect(runNextListPayload.plans.length).toBeLessThanOrEqual(5);
     expect(runNextListPayload.plans).toContainEqual(
       expect.objectContaining({
         planId: credibilityRunNextWritePayload.plan.planId,
@@ -979,16 +1123,23 @@ describe("local web route ledger API", () => {
       inspection: {
         schemaVersion: "truth-harness.workspace-run-next-inspection.v0",
         plan: {
-          planId: credibilityRunNextWritePayload.plan.planId,
-          localOnly: true,
-          networkAccess: "none"
-        },
+        planId: credibilityRunNextWritePayload.plan.planId,
+        localOnly: true,
+        networkAccess: "none",
+        sourceRevision: expect.objectContaining({
+          revisionId: expect.stringMatching(/^rev_[a-f0-9]{16}$/u),
+          path: expect.stringContaining(".truth-harness/revisions/")
+        })
+      },
         resumeDecision: expect.objectContaining({
           safeToResume: expect.any(Boolean),
           nextCommand: expect.stringContaining("truth-harness")
         })
       }
     });
+    expect(["verified", "drifted", "missing", "not-recorded"]).toContain(
+      runNextShowPayload.inspection.sourceRevision?.sourceRevisionStatus
+    );
     expect(["verified", "drifted", "missing", "not-recorded"]).toContain(
       runNextShowPayload.inspection.sourceSnapshot?.sourceSnapshotStatus
     );
@@ -1237,6 +1388,56 @@ describe("local web route ledger API", () => {
       expect.objectContaining({
         actor: "local-api",
         action: "wrote-research-run-next-plan"
+      })
+    );
+
+    const hardMathSeedResponse = await fetch(`${baseUrl}/api/workspace-seed/hard-math`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        caseIds: ["symbolic-trig-identity"],
+        writeRunNextPlan: true
+      })
+    });
+    expect(hardMathSeedResponse.status).toBe(200);
+    const hardMathSeedPayload = await hardMathSeedResponse.json();
+    expectLocalApiSuccess(hardMathSeedResponse, hardMathSeedPayload);
+    expect(hardMathSeedPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-hard-math-seed-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      networkAccess: "none",
+      seed: {
+        schemaVersion: "truth-harness.hard-math-seed.v0",
+        localOnly: true,
+        networkAccess: "none",
+        cases: [
+          expect.objectContaining({
+            caseId: "symbolic-trig-identity",
+            sessionId: expect.any(String),
+            validationPlanId: expect.any(String)
+          })
+        ],
+        runNext: {
+          plan: {
+            schemaVersion: "truth-harness.workspace-run-next.v0",
+            localOnly: true,
+            networkAccess: "none",
+            dryRun: true,
+            item: {
+              kind: "validation-gate"
+            }
+          }
+        }
+      }
+    });
+    expect(existsSync(hardMathSeedPayload.seed.runNext.jsonPath)).toBe(true);
+    expect(hardMathSeedPayload.activity).toContainEqual(
+      expect.objectContaining({
+        actor: "local-api",
+        action: "seeded-hard-math-workspace"
       })
     );
 
@@ -1965,6 +2166,165 @@ describe("local web route ledger API", () => {
     });
     expect(routeRef.summary).toContain("is ready for a narrow proved claim");
     expect(claimPayload.claim.finalization.readyForNarrowClaim).toBe(true);
+  }, 30_000);
+
+  it("serves claim-review packets with hash-backed local artifact refs", async () => {
+    tempProjectRoot = await mkdtemp(join(tmpdir(), "truth-harness-web-claim-review-"));
+    await initLocalWorkspace(tempProjectRoot, { now: "2026-06-20T00:00:00.000Z" });
+    const receiptsDir = join(tempProjectRoot, ".truth-harness", "receipts");
+    await mkdir(receiptsDir, { recursive: true });
+    await writeFile(
+      join(receiptsDir, "fraction-sum.json"),
+      `${JSON.stringify(createReceipt("compute 3 / 4 + 5 / 8"), null, 2)}\n`,
+      "utf8"
+    );
+    const claim = await writeClaimLedgerRecord({
+      rootPath: tempProjectRoot,
+      statement: "3 / 4 + 5 / 8 equals 11 / 8.",
+      evidenceRefs: [{ kind: "receipt", ref: ".truth-harness/receipts/fraction-sum.json" }],
+      now: "2026-06-20T00:01:00.000Z"
+    });
+
+    const port = await getFreePort();
+    runningServer = await startWebServer(port, tempProjectRoot);
+    const response = await fetch(`http://127.0.0.1:${port}/api/claims/${claim.claim.claimId}/review`);
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expectLocalApiSuccess(response, payload);
+    expect(payload).toMatchObject({
+      schemaVersion: "truth-harness.web-claim-review-response.v0",
+      localOnly: true,
+      externalCalls: []
+    });
+    expect(payload.review.claimId).toBe(claim.claim.claimId);
+    expect(payload.review.artifactRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "claim-record",
+          sha256Scope: "file",
+          citation: expect.stringContaining("sha256:")
+        }),
+        expect.objectContaining({
+          role: "claim-evidence",
+          path: ".truth-harness/receipts/fraction-sum.json",
+          sha256Scope: "file",
+          citation: expect.stringContaining(".truth-harness/receipts/fraction-sum.json sha256:")
+        })
+      ])
+    );
+  });
+
+  it("previews only text artifacts inside the local .truth-harness workspace", async () => {
+    tempProjectRoot = await mkdtemp(join(tmpdir(), "truth-harness-web-artifact-"));
+    const port = await getFreePort();
+    runningServer = await startWebServer(port, tempProjectRoot);
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    const artifactDirectory = join(tempProjectRoot, ".truth-harness", "release", "reports");
+    await mkdir(artifactDirectory, { recursive: true });
+    const artifactPath = join(artifactDirectory, "gate-result.json");
+    const artifactBody = JSON.stringify({
+      schemaVersion: "truth-harness.test-artifact.v0",
+      trust: "exact-computed",
+      replayCommand: "truth-harness replay .truth-harness/release/reports/gate-result.json"
+    }, null, 2);
+    await writeFile(artifactPath, artifactBody);
+    const artifactSha256 = createHash("sha256").update(artifactBody).digest("hex");
+
+    const response = await fetch(`${baseUrl}/api/workspace-artifact?path=${encodeURIComponent(".truth-harness/release/reports/gate-result.json")}`);
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expectLocalApiSuccess(response, payload);
+    expect(payload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-artifact-preview.v0",
+      localOnly: true,
+      externalCalls: [],
+      artifact: {
+        path: ".truth-harness/release/reports/gate-result.json",
+        kind: "json",
+        extension: ".json",
+        sizeBytes: Buffer.byteLength(artifactBody),
+        previewBytes: Buffer.byteLength(artifactBody),
+        truncated: false,
+        sha256: artifactSha256,
+        sha256Scope: "file",
+        parsed: {
+          schemaVersion: "truth-harness.test-artifact.v0",
+          trust: "exact-computed"
+        }
+      }
+    });
+    expect(payload.artifact.content).toContain("truth-harness.test-artifact.v0");
+    expect(payload.artifact.previewSha256).toBeUndefined();
+
+    const largeArtifactBody = `${"large artifact line\n".repeat(20_000)}final line\n`;
+    const largeArtifactPath = join(artifactDirectory, "large.log");
+    await writeFile(largeArtifactPath, largeArtifactBody);
+    const largeResponse = await fetch(`${baseUrl}/api/workspace-artifact?path=${encodeURIComponent(".truth-harness/release/reports/large.log")}`);
+    expect(largeResponse.status).toBe(200);
+    const largePayload = await largeResponse.json();
+    expectLocalApiSuccess(largeResponse, largePayload);
+    expect(largePayload.artifact).toMatchObject({
+      path: ".truth-harness/release/reports/large.log",
+      kind: "text",
+      extension: ".log",
+      sizeBytes: Buffer.byteLength(largeArtifactBody),
+      previewBytes: 256 * 1024,
+      truncated: true,
+      maxPreviewBytes: 256 * 1024,
+      sha256: createHash("sha256").update(largeArtifactBody).digest("hex"),
+      sha256Scope: "file",
+      previewSha256: createHash("sha256").update(Buffer.from(largeArtifactBody).subarray(0, 256 * 1024)).digest("hex")
+    });
+    expect(largePayload.artifact.content).not.toContain("final line");
+
+    const traversal = await requestText({
+      port,
+      path: `/api/workspace-artifact?path=${encodeURIComponent(".truth-harness/../package.json")}`,
+      headers: {
+        Host: `127.0.0.1:${port}`
+      }
+    });
+    expectLocalApiError(traversal, 403, "Workspace artifact path escapes .truth-harness.", {
+      method: "GET",
+      path: "/api/workspace-artifact"
+    });
+
+    const absolutePath = await requestText({
+      port,
+      path: `/api/workspace-artifact?path=${encodeURIComponent(resolve(tempProjectRoot, ".truth-harness", "release", "reports", "gate-result.json"))}`,
+      headers: {
+        Host: `127.0.0.1:${port}`
+      }
+    });
+    expectLocalApiError(absolutePath, 403, "Workspace artifact preview is limited to .truth-harness artifacts.", {
+      method: "GET",
+      path: "/api/workspace-artifact"
+    });
+
+    const nonArtifactPath = await requestText({
+      port,
+      path: `/api/workspace-artifact?path=${encodeURIComponent("package.json")}`,
+      headers: {
+        Host: `127.0.0.1:${port}`
+      }
+    });
+    expectLocalApiError(nonArtifactPath, 403, "Workspace artifact preview is limited to .truth-harness artifacts.", {
+      method: "GET",
+      path: "/api/workspace-artifact"
+    });
+
+    const missingArtifact = await requestText({
+      port,
+      path: `/api/workspace-artifact?path=${encodeURIComponent(".truth-harness/release/reports/missing.json")}`,
+      headers: {
+        Host: `127.0.0.1:${port}`
+      }
+    });
+    expectLocalApiError(missingArtifact, 404, "Workspace artifact preview path is not a file.", {
+      method: "GET",
+      path: "/api/workspace-artifact"
+    });
   }, 30_000);
 });
 

@@ -176,6 +176,7 @@ const WORKSPACE_DIRECTORY_NAMES: LocalWorkspaceDirectory[] = [
   "cas",
   "proofs",
   "smt",
+  "engine-runs",
   "benchmarks",
   "disclosures",
   "simulations",
@@ -184,6 +185,7 @@ const WORKSPACE_DIRECTORY_NAMES: LocalWorkspaceDirectory[] = [
   "vault",
   "audits",
   "snapshots",
+  "revisions",
   "sessions",
   "reviews",
   "validation",
@@ -217,7 +219,8 @@ const CLEAN_GROUPS: Record<WorkspaceCleanGroup, LocalWorkspaceDirectory[]> = {
     "inventions",
     "patents",
     "vault",
-    "audits"
+    "audits",
+    "revisions"
   ],
   all: WORKSPACE_DIRECTORY_NAMES
 };

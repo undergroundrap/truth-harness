@@ -97,6 +97,42 @@
         }
       },
       "additionalProperties": false
+    },
+    "artifactRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "role", "source"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^\\.truth-harness/"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["report-json", "report-markdown"]
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sha256Scope": {
+            "const": "file"
+          },
+          "citation": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": true

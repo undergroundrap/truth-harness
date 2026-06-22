@@ -13,6 +13,7 @@ import {
   type EngineVerificationRunSummary
 } from "./engine-verification.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import { listHardMathClosureReports, type HardMathClosureReportSummary } from "./hard-math-closure-report.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
@@ -29,6 +30,9 @@ export interface CredibilityPackCommandSet {
   verifyEngines: string;
   runAdversarialBenchmark: string;
   runMathCredibilityLadder: string;
+  runExactHardMathClosure: string;
+  runSymbolicHardMathClosure: string;
+  runSmtHardMathClosure: string;
   reviewWorkspace: string;
   reproducePack: string;
   dockerProfessorEvidence: string;
@@ -49,7 +53,7 @@ export interface CredibilityPackReviewItem {
   source: WorkspaceReviewItem["source"];
 }
 
-export type CredibilityPackActionCategory = "validation" | "engine" | "benchmark" | "workspace-review";
+export type CredibilityPackActionCategory = "validation" | "engine" | "benchmark" | "closure" | "workspace-review";
 
 export interface CredibilityPackActionItem {
   actionId: string;
@@ -77,6 +81,14 @@ export interface CredibilityPackBenchmarkLedger {
   latestRuns: BenchmarkArtifactSummary[];
   latestAdversarialRun?: BenchmarkArtifactSummary;
   latestMathCredibilityLadderRun?: BenchmarkArtifactSummary;
+}
+
+export interface CredibilityPackHardMathClosureLedger {
+  savedReports: number;
+  latestReports: HardMathClosureReportSummary[];
+  latestExactClosure?: HardMathClosureReportSummary;
+  latestSymbolicClosure?: HardMathClosureReportSummary;
+  latestSmtClosure?: HardMathClosureReportSummary;
 }
 
 export interface CredibilityPackEngineEvidenceLadderEntry {
@@ -120,11 +132,16 @@ export interface CredibilityPack {
     latestAdversarialBenchmarkAccuracy?: number;
     latestMathCredibilityLadderStatus: "missing" | "passed" | "failed";
     latestMathCredibilityLadderAccuracy?: number;
+    savedHardMathClosureReports: number;
+    hardMathExactClosureStatus: "missing" | "passed" | "failed";
+    hardMathSymbolicClosureStatus: "missing" | "passed" | "failed";
+    hardMathSmtClosureStatus: "missing" | "passed" | "failed";
     savedReportDrafts: number;
     reportDraftsNeedingAttention: number;
     reviewItems: number;
     criticalReviewItems: number;
     highReviewItems: number;
+    leanProofSafetyItems: number;
     professorReady: boolean;
   };
   embeddedSnapshot: WorkspaceSnapshot;
@@ -141,6 +158,7 @@ export interface CredibilityPack {
   engineEvidenceLadder: CredibilityPackEngineEvidenceLadderEntry[];
   engineRunLedger: CredibilityPackEngineRunLedger;
   benchmarkLedger: CredibilityPackBenchmarkLedger;
+  hardMathClosureLedger: CredibilityPackHardMathClosureLedger;
   workspaceReview: {
     reviewId: string;
     summary: WorkspaceReview["summary"];
@@ -218,6 +236,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
   });
   const engineRunLedger = summarizeEngineRunLedger(await listEngineVerificationRuns(status.root));
   const benchmarkLedger = summarizeBenchmarkLedger(await listBenchmarkArtifacts(status.root));
+  const hardMathClosureLedger = summarizeHardMathClosureLedger(await listHardMathClosureReports(status.root));
   const review = await createWorkspaceReview({
     rootPath: status.root,
     maxRoutes: input.maxRoutes,
@@ -232,6 +251,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
     engineEvidence,
     engineRunLedger,
     benchmarkLedger,
+    hardMathClosureLedger,
     review
   });
   const statusLabel: CredibilityPackStatus = warnings.length === 0 ? "ready-for-review" : "blocked";
@@ -264,11 +284,16 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       latestAdversarialBenchmarkAccuracy: benchmarkLedger.latestAdversarialRun?.trustAccuracy,
       latestMathCredibilityLadderStatus: benchmarkStatus(benchmarkLedger.latestMathCredibilityLadderRun),
       latestMathCredibilityLadderAccuracy: benchmarkLedger.latestMathCredibilityLadderRun?.trustAccuracy,
+      savedHardMathClosureReports: hardMathClosureLedger.savedReports,
+      hardMathExactClosureStatus: closureStatus(hardMathClosureLedger.latestExactClosure),
+      hardMathSymbolicClosureStatus: closureStatus(hardMathClosureLedger.latestSymbolicClosure),
+      hardMathSmtClosureStatus: closureStatus(hardMathClosureLedger.latestSmtClosure),
       savedReportDrafts: review.summary.reportDrafts ?? 0,
       reportDraftsNeedingAttention: review.summary.reportDraftsNeedingAttention ?? 0,
       reviewItems: review.summary.totalItems,
       criticalReviewItems: review.summary.criticalItems,
       highReviewItems: review.summary.highItems,
+      leanProofSafetyItems: review.summary.leanProofSafetyItems,
       professorReady: statusLabel === "ready-for-review"
     },
     embeddedSnapshot: snapshot,
@@ -277,6 +302,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
     engineEvidenceLadder: summarizeEngineEvidenceLadder(engineEvidence),
     engineRunLedger,
     benchmarkLedger,
+    hardMathClosureLedger,
     workspaceReview: {
       reviewId: review.reviewId,
       summary: review.summary,
@@ -294,6 +320,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       engineEvidence,
       engineRunLedger,
       benchmarkLedger,
+      hardMathClosureLedger,
       review,
       reviewerCommands
     }),
@@ -375,9 +402,11 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Saved engine-run ledger: ${pack.summary.savedEngineRuns} saved${formatCredibilityPackSavedEngineRunLedgerLabel(pack)}`,
     `- Adversarial benchmark: ${formatAdversarialBenchmarkSummary(pack.summary.latestAdversarialBenchmarkStatus, pack.summary.latestAdversarialBenchmarkAccuracy)} (${pack.summary.savedBenchmarkRuns} saved benchmark run${pack.summary.savedBenchmarkRuns === 1 ? "" : "s"})`,
     `- Math credibility ladder: ${formatBenchmarkSummary(pack.summary.latestMathCredibilityLadderStatus, pack.summary.latestMathCredibilityLadderAccuracy)}`,
+    `- Hard-math closure: ${formatHardMathClosureSummary(pack)}`,
     `- Saved report drafts: ${formatReportDraftSummary(pack.summary.savedReportDrafts, pack.summary.reportDraftsNeedingAttention)}`,
     `- Embedded artifact snapshot: ${pack.summary.snapshotFiles} files, ${pack.summary.snapshotBytes} bytes`,
     `- Open work queue: ${pack.summary.reviewItems} items (${pack.summary.criticalReviewItems} critical, ${pack.summary.highReviewItems} high)`,
+    `- Lean proof-safety blockers: ${pack.summary.leanProofSafetyItems}`,
     `- Reviewer action plan: ${pack.reviewerActionPlan.totalActions} actions (${pack.reviewerActionPlan.criticalActions} critical, ${pack.reviewerActionPlan.highActions} high)`,
     "",
     "## Reviewer Commands",
@@ -386,6 +415,9 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Verify engines: \`${pack.reviewerCommands.verifyEngines}\``,
     `- Run adversarial benchmark: \`${pack.reviewerCommands.runAdversarialBenchmark}\``,
     `- Run math credibility ladder: \`${pack.reviewerCommands.runMathCredibilityLadder}\``,
+    `- Run exact hard-math closure: \`${pack.reviewerCommands.runExactHardMathClosure}\``,
+    `- Run symbolic hard-math closure: \`${pack.reviewerCommands.runSymbolicHardMathClosure}\``,
+    `- Run SMT hard-math closure: \`${pack.reviewerCommands.runSmtHardMathClosure}\``,
     `- Review open obligations: \`${pack.reviewerCommands.reviewWorkspace}\``,
     `- Reproduce this pack: \`${pack.reviewerCommands.reproducePack}\``,
     `- Docker professor evidence: \`${pack.reviewerCommands.dockerProfessorEvidence}\``,
@@ -512,6 +544,28 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
   }
   lines.push("");
 
+  lines.push("## Hard-Math Closure Ledger", "");
+  if (pack.hardMathClosureLedger.savedReports === 0) {
+    lines.push(
+      "No saved hard-math closure reports were found. Run the Docker closure smokes before claiming autonomous math closure is reviewer-ready.",
+      ""
+    );
+  } else {
+    lines.push(
+      `Saved closure reports: ${pack.hardMathClosureLedger.savedReports}`,
+      `Exact closure: ${formatClosureReportSummary(pack.hardMathClosureLedger.latestExactClosure)}`,
+      `Symbolic closure: ${formatClosureReportSummary(pack.hardMathClosureLedger.latestSymbolicClosure)}`,
+      `SMT closure: ${formatClosureReportSummary(pack.hardMathClosureLedger.latestSmtClosure)}`,
+      ""
+    );
+    for (const report of pack.hardMathClosureLedger.latestReports) {
+      lines.push(
+        `- \`${report.closureId}\`: ${report.runtimeKind}, ${report.passedCases}/${report.totalCases} passed, cases ${report.caseIds.join(", ")}, trusts ${report.trusts.join(", ") || "none"}, \`${report.path}\``
+      );
+    }
+    lines.push("");
+  }
+
   lines.push("## Top Open Work", "");
   if (pack.workspaceReview.topItems.length === 0) {
     lines.push("No open review items were found in the bounded workspace review.", "");
@@ -617,6 +671,16 @@ function summarizeBenchmarkLedger(artifacts: BenchmarkArtifactSummary[]): Credib
   };
 }
 
+function summarizeHardMathClosureLedger(reports: HardMathClosureReportSummary[]): CredibilityPackHardMathClosureLedger {
+  return {
+    savedReports: reports.length,
+    latestReports: reports.slice(0, 5),
+    latestExactClosure: reports.find((report) => closureReportSatisfies(report, "exact-fraction-lemma", "exact-computed")),
+    latestSymbolicClosure: reports.find((report) => closureReportSatisfies(report, "symbolic-cas-closure-fixture", "cross-checked")),
+    latestSmtClosure: reports.find((report) => closureReportSatisfies(report, "smt-bounded-closure-fixture", "smt-checked"))
+  };
+}
+
 function adversarialBenchmarkStatus(run: BenchmarkArtifactSummary | undefined): "missing" | "passed" | "failed" {
   return benchmarkStatus(run);
 }
@@ -627,6 +691,25 @@ function benchmarkStatus(run: BenchmarkArtifactSummary | undefined): "missing" |
   }
 
   return (run.failed ?? 0) === 0 ? "passed" : "failed";
+}
+
+function closureStatus(report: HardMathClosureReportSummary | undefined): "missing" | "passed" | "failed" {
+  if (!report) {
+    return "missing";
+  }
+
+  return report.failedCases === 0 && report.validationErrors === 0 ? "passed" : "failed";
+}
+
+function closureReportSatisfies(report: HardMathClosureReportSummary, caseId: string, trust: string): boolean {
+  return (
+    report.runtimeKind === "docker" &&
+    report.containerized &&
+    report.passedCaseIds.includes(caseId) &&
+    report.failedCases === 0 &&
+    report.validationErrors === 0 &&
+    report.trusts.includes(trust)
+  );
 }
 
 function formatAdversarialBenchmarkSummary(
@@ -653,11 +736,28 @@ function formatReportDraftSummary(saved: number, needingAttention: number): stri
   return `${savedLabel}, ${needingAttention} need${needingAttention === 1 ? "s" : ""} attention`;
 }
 
+function formatHardMathClosureSummary(pack: Pick<CredibilityPack, "summary">): string {
+  return (
+    `${pack.summary.savedHardMathClosureReports} saved ` +
+    `(exact ${pack.summary.hardMathExactClosureStatus}, ` +
+    `symbolic ${pack.summary.hardMathSymbolicClosureStatus}, ` +
+    `SMT ${pack.summary.hardMathSmtClosureStatus})`
+  );
+}
+
+function formatClosureReportSummary(report: HardMathClosureReportSummary | undefined): string {
+  if (!report) {
+    return "missing";
+  }
+  return `${closureStatus(report)} (${report.runtimeKind}, ${report.passedCases}/${report.totalCases}, ${report.closureId}, ${report.path})`;
+}
+
 function createReviewerActionPlan(input: {
   validation: WorkspaceValidation;
   engineEvidence: EngineVerificationReport;
   engineRunLedger: CredibilityPackEngineRunLedger;
   benchmarkLedger: CredibilityPackBenchmarkLedger;
+  hardMathClosureLedger: CredibilityPackHardMathClosureLedger;
   review: WorkspaceReview;
   reviewerCommands: CredibilityPackCommandSet;
 }): CredibilityPack["reviewerActionPlan"] {
@@ -790,6 +890,34 @@ function createReviewerActionPlan(input: {
     });
   }
 
+  pushHardMathClosureAction({
+    report: input.hardMathClosureLedger.latestExactClosure,
+    expectedCaseId: "exact-fraction-lemma",
+    expectedTrust: "exact-computed",
+    title: "Run exact hard-math closure smoke",
+    command: input.reviewerCommands.runExactHardMathClosure,
+    closes: ["hard-math-closure:exact-fraction-lemma", "hard-math-closure-ledger"],
+    pushAction
+  });
+  pushHardMathClosureAction({
+    report: input.hardMathClosureLedger.latestSymbolicClosure,
+    expectedCaseId: "symbolic-cas-closure-fixture",
+    expectedTrust: "cross-checked",
+    title: "Run symbolic CAS hard-math closure smoke",
+    command: input.reviewerCommands.runSymbolicHardMathClosure,
+    closes: ["hard-math-closure:symbolic-cas-closure-fixture", "hard-math-closure-ledger"],
+    pushAction
+  });
+  pushHardMathClosureAction({
+    report: input.hardMathClosureLedger.latestSmtClosure,
+    expectedCaseId: "smt-bounded-closure-fixture",
+    expectedTrust: "smt-checked",
+    title: "Run SMT hard-math closure smoke",
+    command: input.reviewerCommands.runSmtHardMathClosure,
+    closes: ["hard-math-closure:smt-bounded-closure-fixture", "hard-math-closure-ledger"],
+    pushAction
+  });
+
   for (const item of input.review.items.slice(0, 8)) {
     pushAction({
       category: "workspace-review",
@@ -799,6 +927,7 @@ function createReviewerActionPlan(input: {
       command: item.command,
       closes: [
         item.kind,
+        ...reviewItemExtraCloses(item),
         ...(item.routeId ? [`route:${item.routeId}`] : []),
         ...(item.obligationId ? [`obligation:${item.obligationId}`] : []),
         ...(item.claimId ? [`claim:${item.claimId}`] : [])
@@ -837,8 +966,17 @@ function reviewerActionRank(action: CredibilityPackActionItem): number {
   if (action.category === "validation") {
     return 0;
   }
+  if (action.category === "workspace-review" && action.source.ref.startsWith("lean-marker:")) {
+    return 5;
+  }
   if (action.category !== "engine") {
-    return action.category === "benchmark" ? 46 : 50;
+    if (action.category === "benchmark") {
+      return 46;
+    }
+    if (action.category === "closure") {
+      return 47;
+    }
+    return 50;
   }
 
   const engineRank: Record<string, number> = {
@@ -852,14 +990,53 @@ function reviewerActionRank(action: CredibilityPackActionItem): number {
   return engineRank[action.source.ref] ?? 49;
 }
 
+function reviewItemExtraCloses(item: WorkspaceReviewItem): string[] {
+  if (item.source.label === "Lean proof safety") {
+    return ["proof-safety-boundary", `lean-proof-safety:${item.source.ref}`];
+  }
+  return [];
+}
+
 function reviewerActionabilityRank(action: CredibilityPackActionItem): number {
   if (writesVerifierEvidenceCommand(action.command)) {
+    return 0;
+  }
+  if (/^npm\s+run\s+docker:(?:hard-math-closure|symbolic-closure|smt-closure)\b/u.test(action.command)) {
     return 0;
   }
   if (isPassiveReviewerCommand(action.command)) {
     return 2;
   }
   return 1;
+}
+
+function pushHardMathClosureAction(input: {
+  report?: HardMathClosureReportSummary;
+  expectedCaseId: string;
+  expectedTrust: string;
+  title: string;
+  command: string;
+  closes: string[];
+  pushAction: (action: Omit<CredibilityPackActionItem, "actionId">) => void;
+}): void {
+  if (input.report && closureStatus(input.report) === "passed") {
+    return;
+  }
+  const detail = input.report
+    ? `Latest closure report ${input.report.closureId} did not satisfy ${input.expectedCaseId} with Docker ${input.expectedTrust} evidence. Status: ${closureStatus(input.report)}; runtime: ${input.report.runtimeKind}; trusts: ${input.report.trusts.join(", ") || "none"}.`
+    : `No saved Docker hard-math closure report satisfies ${input.expectedCaseId} with ${input.expectedTrust} evidence.`;
+  input.pushAction({
+    category: "closure",
+    priority: "high",
+    title: input.title,
+    detail: `${detail} Run the closure smoke so autonomous run-next proof blockers have a durable reviewer artifact.`,
+    command: input.command,
+    closes: input.closes,
+    source: {
+      kind: "hard-math-closure",
+      ref: input.expectedCaseId
+    }
+  });
 }
 
 function writesVerifierEvidenceCommand(command: string): boolean {
@@ -905,6 +1082,7 @@ function credibilityWarnings(input: {
   engineEvidence: EngineVerificationReport;
   engineRunLedger: CredibilityPackEngineRunLedger;
   benchmarkLedger: CredibilityPackBenchmarkLedger;
+  hardMathClosureLedger: CredibilityPackHardMathClosureLedger;
   review: WorkspaceReview;
 }): string[] {
   const warnings: string[] = [];
@@ -945,8 +1123,14 @@ function credibilityWarnings(input: {
       `Latest \`math-credibility-ladder\` hard-math readiness run has ${input.benchmarkLedger.latestMathCredibilityLadderRun.failed ?? 0} failing case(s).`
     );
   }
+  addHardMathClosureWarnings(warnings, input.hardMathClosureLedger);
   if (input.review.summary.criticalItems > 0) {
     warnings.push(`Workspace review has ${input.review.summary.criticalItems} critical open item(s).`);
+  }
+  if (input.review.summary.leanProofSafetyItems > 0) {
+    warnings.push(
+      `Lean proof-safety scan found ${input.review.summary.leanProofSafetyItems} blocking marker(s); remove or rewrite them before treating affected Lean source as proved.`
+    );
   }
   if ((input.review.summary.reportDraftsNeedingAttention ?? 0) > 0) {
     warnings.push(
@@ -955,6 +1139,34 @@ function credibilityWarnings(input: {
   }
 
   return [...new Set(warnings)];
+}
+
+function addHardMathClosureWarnings(warnings: string[], ledger: CredibilityPackHardMathClosureLedger): void {
+  const required = [
+    {
+      label: "exact-fraction",
+      report: ledger.latestExactClosure,
+      caseId: "exact-fraction-lemma"
+    },
+    {
+      label: "symbolic-CAS",
+      report: ledger.latestSymbolicClosure,
+      caseId: "symbolic-cas-closure-fixture"
+    },
+    {
+      label: "SMT",
+      report: ledger.latestSmtClosure,
+      caseId: "smt-bounded-closure-fixture"
+    }
+  ];
+
+  for (const item of required) {
+    if (!item.report) {
+      warnings.push(`No saved Docker ${item.label} hard-math closure report found for ${item.caseId}.`);
+    } else if (closureStatus(item.report) !== "passed") {
+      warnings.push(`Latest Docker ${item.label} hard-math closure report ${item.report.closureId} is ${closureStatus(item.report)}.`);
+    }
+  }
 }
 
 function createReviewerCommands(input: {
@@ -1000,6 +1212,9 @@ function createReviewerCommands(input: {
     verifyEngines: `truth-harness engines verify --write${engineSuffix}`,
     runAdversarialBenchmark: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
     runMathCredibilityLadder: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
+    runExactHardMathClosure: "npm run docker:hard-math-closure",
+    runSymbolicHardMathClosure: "npm run docker:symbolic-closure",
+    runSmtHardMathClosure: "npm run docker:smt-closure",
     reviewWorkspace: "truth-harness workspace review .",
     reproducePack: `truth-harness workspace credibility-pack .${engineSuffix}`,
     dockerProfessorEvidence: "npm run docker:professor",

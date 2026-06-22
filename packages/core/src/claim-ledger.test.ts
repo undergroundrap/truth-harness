@@ -155,6 +155,25 @@ describe("claim ledger", () => {
       summary: "Exact result: 11/8."
     });
     expect(written.claim.finalization.readyForNarrowClaim).toBe(true);
+
+    const review = await createClaimReviewPacket({ rootPath: root, claimRef: written.claim.claimId });
+    const claimRecordRef = review.artifactRefs.find((ref) => ref.role === "claim-record");
+    const receiptRef = review.artifactRefs.find((ref) => ref.path === ".truth-harness/receipts/fraction-sum.json");
+
+    expect(claimRecordRef).toMatchObject({
+      role: "claim-record",
+      sha256Scope: "file"
+    });
+    expect(claimRecordRef?.sha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(claimRecordRef?.citation).toContain("sha256:");
+    expect(receiptRef).toMatchObject({
+      role: "claim-evidence",
+      source: "evidenceRefs[0].ref",
+      sha256Scope: "file"
+    });
+    expect(receiptRef?.sha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(receiptRef?.citation).toContain(".truth-harness/receipts/fraction-sum.json sha256:");
+    expect(review.markdown).toContain("## Artifact Citations");
   });
 
   it("derives claim trust from ready verifier-route evidence", async () => {

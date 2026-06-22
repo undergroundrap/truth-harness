@@ -129,7 +129,7 @@ describe("proof backend status", () => {
 
     const record = checkLeanProofArtifact({
       sourcePath: "proofs/parity.lean",
-      sourceText: "example : 1 + 1 = 2 := by norm_num\n",
+      sourceText: "theorem one_plus_one : 1 + 1 = 2 := by norm_num\n",
       declarationName: "one_plus_one",
       now: new Date("2026-06-10T00:00:00.000Z"),
       runner
@@ -148,6 +148,17 @@ describe("proof backend status", () => {
     expect(record.backend.version).toBe("Lean (version 4.12.0)");
     expect(record.source.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(record.source.declarationName).toBe("one_plus_one");
+    expect(record.source.declaration).toMatchObject({
+      declarationId: expect.stringMatching(/^decl_[a-f0-9]{16}$/u),
+      kind: "theorem",
+      name: "one_plus_one",
+      path: "proofs/parity.lean",
+      line: 1,
+      column: 1,
+      signature: "theorem one_plus_one : 1 + 1 = 2",
+      signatureSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      sourceSha256: record.source.sha256
+    });
     expect(record.limitations.join(" ")).toContain("formal statement checked by Lean");
   });
 
@@ -209,6 +220,35 @@ describe("proof backend status", () => {
     expect(record.proofCheckerBacked).toBe(false);
     expect(record.limitations.join(" ")).toContain("contains `sorry`");
     expect(record.warnings.join(" ")).toContain("Lean success is necessary but not sufficient");
+  });
+
+  it("does not mint proved for Lean-accepted sources with metavariable holes", () => {
+    const runner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Lean (version 4.12.0)\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "",
+        stderr: ""
+      };
+    };
+
+    const record = checkLeanProofArtifact({
+      sourcePath: "proofs/hole.lean",
+      sourceText: "theorem hole : True := by\n  exact ?_\n",
+      runner
+    });
+
+    expect(record.status).toBe("rejected");
+    expect(record.trust).toBe("unverified");
+    expect(record.proofCheckerBacked).toBe(false);
+    expect(record.limitations.join(" ")).toContain("metavariable hole");
   });
 
   it("does not mint proved for Lean-accepted sources with local axioms", () => {
@@ -306,13 +346,18 @@ describe("proof backend status", () => {
       routeId: "route_0123456789abcdef",
       obligationId: "obl_0123456789abcdef"
     });
+    expect(record.source.declaration).toMatchObject({
+      kind: "example",
+      signature: "example : True",
+      sourceSha256: record.source.sha256
+    });
     expect(validateJsonSchema(record, schema)).toEqual([]);
   });
 
   it("writes, lists, and validates proof-check records in the local workspace", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Proof Check Lab" });
-    await writeFile(join(root, "trivial.lean"), "example : True := by trivial\n", "utf8");
+    await writeFile(join(root, "trivial.lean"), "theorem trivial_true : True := by trivial\n", "utf8");
     const runner: ProofBackendCommandRunner = (_command, args) => {
       if (args[0] === "--version") {
         return {
@@ -333,6 +378,12 @@ describe("proof backend status", () => {
       rootPath: root,
       sourcePath: "trivial.lean",
       declarationName: "trivial_true",
+      scope: {
+        routeId: "route_0123456789abcdef",
+        obligationId: "obl_0123456789abcdef",
+        statementHash: "0123456789abcdef",
+        statement: "example : True"
+      },
       runner
     });
     const list = await listLeanProofChecks(root);
@@ -342,11 +393,28 @@ describe("proof backend status", () => {
     expect(write.jsonPath).toContain(".truth-harness");
     expect(write.markdownPath).toContain(".truth-harness");
     expect(write.markdown).toContain("Lean Proof Check");
+    expect(write.markdown).toContain("Declaration id");
+    expect(write.markdown).toContain("Declaration signature SHA-256");
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
       checkId: write.record.checkId,
       sourcePath: "trivial.lean",
+      sourceSha256: write.record.source.sha256,
+      sourceByteLength: write.record.source.byteLength,
       declarationName: "trivial_true",
+      declaration: {
+        declarationId: write.record.source.declaration?.declarationId,
+        kind: "theorem",
+        name: "trivial_true",
+        signatureSha256: write.record.source.declaration?.signatureSha256,
+        sourceSha256: write.record.source.sha256
+      },
+      scope: {
+        routeId: "route_0123456789abcdef",
+        obligationId: "obl_0123456789abcdef",
+        statementHash: "0123456789abcdef",
+        statement: "example : True"
+      },
       trust: "proved",
       proofCheckerBacked: true
     });
@@ -354,10 +422,84 @@ describe("proof backend status", () => {
     expect(validation.summary.byKind.proofs).toBe(1);
   });
 
+  it("warns when a requested Lean declaration name is not found in the checked source", () => {
+    const runner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Lean (version 4.12.0)\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "",
+        stderr: ""
+      };
+    };
+
+    const record = checkLeanProofArtifact({
+      sourcePath: "proofs/mismatch.lean",
+      sourceText: "theorem actual_name : True := by trivial\n",
+      declarationName: "requested_name",
+      runner
+    });
+
+    expect(record.status).toBe("accepted");
+    expect(record.trust).toBe("proved");
+    expect(record.source.declarationName).toBe("requested_name");
+    expect(record.source.declaration).toBeUndefined();
+    expect(record.warnings.join(" ")).toContain("requested Lean declaration");
+    expect(record.warnings.join(" ")).toContain("whole source file");
+  });
+
+  it("includes bounded diagnostics in listed proof-check summaries", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Proof Repair Lab" });
+    await writeFile(join(root, "bad.lean"), "theorem bad : True := by\n  exact False.elim\n", "utf8");
+    const runner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Lean (version 4.12.0)\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 1,
+        stdout: "",
+        stderr: "type mismatch\n  has type False\n  but is expected to have type True\n"
+      };
+    };
+
+    const write = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "bad.lean",
+      declarationName: "bad",
+      scope: {
+        routeId: "route_0123456789abcdef",
+        obligationId: "obl_0123456789abcdef",
+        statement: "bad : True"
+      },
+      runner
+    });
+    const list = await listLeanProofChecks(root);
+
+    expect(write.record.status).toBe("rejected");
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      checkId: write.record.checkId,
+      status: "rejected",
+      diagnosticSnippet: "type mismatch has type False but is expected to have type True"
+    });
+  });
+
   it("rejects malformed proof-check records before writing artifacts", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Malformed Proof Check Lab" });
-    await writeFile(join(root, "trivial.lean"), "example : True := by trivial\n", "utf8");
+    await writeFile(join(root, "trivial.lean"), "theorem trivial_true : True := by trivial\n", "utf8");
     const runner: ProofBackendCommandRunner = (_command, args) => {
       if (args[0] === "--version") {
         return {
@@ -391,7 +533,7 @@ describe("proof backend status", () => {
   it("writes visual artifacts from proof-check records without upgrading trust", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Proof Visual Lab" });
-    await writeFile(join(root, "trivial.lean"), "example : True := by trivial\n", "utf8");
+    await writeFile(join(root, "trivial.lean"), "theorem trivial_true : True := by trivial\n", "utf8");
     const runner: ProofBackendCommandRunner = (_command, args) => {
       if (args[0] === "--version") {
         return {
@@ -428,6 +570,7 @@ describe("proof backend status", () => {
     expect(visual.renderer.adapter).toBe("lean-proof-check-visual");
     expect(visual.payload.format).toBe("svg");
     expect(String(visual.payload.content)).toContain(proofWrite.record.checkId);
+    expect(String(visual.payload.content)).toContain(proofWrite.record.source.declaration?.declarationId);
     expect(visual.sourceRefs).toContainEqual(
       expect.objectContaining({
         kind: "proof",

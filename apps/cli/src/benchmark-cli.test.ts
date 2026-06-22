@@ -2,9 +2,10 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { createReceipt } from "@truth-harness/core";
+import { createReceipt, writeEngineVerificationRun } from "@truth-harness/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "../../../packages/core/src/proof-backend.js";
+import type { EngineVerificationCommandRunner } from "../../../packages/core/src/engine-verification.js";
 import { writeReportDraft } from "../../../packages/core/src/report-draft.js";
 import { addResearchSessionCheckpoint } from "../../../packages/core/src/research-session.js";
 import { verifierRouteStatementBoundaryHash } from "../../../packages/core/src/verifier-route.js";
@@ -42,6 +43,72 @@ describe("benchmark CLI", () => {
     });
     expect(json.trustBoundary.statusProbeIsNotCheck).toBe(true);
     expect(json.trustBoundary.crossCheckedRequiresIndependentRun).toBe(true);
+  });
+
+  it("shows saved Docker reviewer evidence in engine plans without treating host-missing engines as runnable", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--name", "Engine Plan Lab"]);
+    const savedRun = await writeEngineVerificationRun({
+      rootPath: root,
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      cvc5Command: "cvc5-test",
+      leanCommand: "lean-test",
+      sageCommand: "sage-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      requirements: {
+        maxima: true,
+        z3: true,
+        cvc5: true,
+        lean: true,
+        sage: true
+      },
+      runner: passingEngineRunner
+    });
+
+    const jsonResult = await runCli([
+      "engines",
+      "plan",
+      "prove a theorem with Lean and no sorry",
+      "--workspace",
+      root,
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--json"
+    ]);
+    const humanResult = await runCli([
+      "engines",
+      "plan",
+      "prove a theorem with Lean and no sorry",
+      "--workspace",
+      root,
+      "--lean-command",
+      "truth-harness-missing-lean-command"
+    ]);
+    const plan = JSON.parse(jsonResult.stdout) as {
+      savedReviewerEvidence: { status: string; runId?: string; coveredCapabilityIds: string[]; trustBoundary: string };
+      steps: Array<{ capabilityId: string; status: string; canRunNow: boolean; limitation: string }>;
+      nextActions: string[];
+    };
+    const leanStep = plan.steps.find((step) => step.capabilityId === "lean-proof-checker");
+
+    expect(jsonResult.exitCode).toBe(0);
+    expect(plan.savedReviewerEvidence).toMatchObject({
+      status: "available",
+      runId: savedRun.record.runId,
+      coveredCapabilityIds: expect.arrayContaining(["lean-proof-checker", "sage-cas"])
+    });
+    expect(plan.savedReviewerEvidence.trustBoundary).toContain("each new claim still needs its own concrete");
+    expect(leanStep).toMatchObject({
+      status: "missing",
+      canRunNow: false
+    });
+    expect(leanStep?.limitation).toContain(`Saved reviewer Docker evidence ${savedRun.record.runId} covers this capability`);
+    expect(plan.nextActions.join("\n")).toContain(`Saved reviewer Docker evidence ${savedRun.record.runId} previously covered`);
+    expect(humanResult.stdout).toContain(`Saved reviewer evidence: Saved strict all-engine Docker reviewer run ${savedRun.record.runId}`);
   });
 
   it("writes and reopens visual artifacts from the CLI", async () => {
@@ -599,6 +666,24 @@ describe("benchmark CLI", () => {
     const receipt = createReceipt("compute 3 / 4 + 5 / 8");
     await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
     await writeFile(join(root, ".truth-harness", "receipts", "fraction.json"), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+    const claim = JSON.parse(
+      (
+        await runCli([
+          "claim",
+          "add",
+          "3 / 4 + 5 / 8 equals 11 / 8.",
+          "--workspace",
+          root,
+          "--domain",
+          "math",
+          "--trust",
+          "exact-computed",
+          "--evidence",
+          "receipt:.truth-harness/receipts/fraction.json",
+          "--json"
+        ])
+      ).stdout
+    ) as { claim: { claimId: string } };
 
     const missingStatus = JSON.parse((await runCli(["catalog", "status", root, "--json"])).stdout) as {
       readable: boolean;
@@ -617,6 +702,14 @@ describe("benchmark CLI", () => {
       results: Array<{ kind: string; trust: string; path: string }>;
       warnings: string[];
     };
+    const refSearch = JSON.parse(
+      (await runCli(["catalog", "search", "--workspace", root, "--kind", "claims", "--ref", ".truth-harness/receipts/fraction.json", "--json"]))
+        .stdout
+    ) as {
+      schemaVersion: string;
+      filters: { ref?: string };
+      results: Array<{ kind: string; artifactId?: string }>;
+    };
     const human = await runCli(["catalog", "search", "11/8", "--workspace", root, "--kind", "receipts"]);
 
     expect(missingStatus.readable).toBe(false);
@@ -630,6 +723,13 @@ describe("benchmark CLI", () => {
         kind: "receipts",
         trust: "exact-computed",
         path: ".truth-harness/receipts/fraction.json"
+      })
+    );
+    expect(refSearch.filters.ref).toBe(".truth-harness/receipts/fraction.json");
+    expect(refSearch.results).toContainEqual(
+      expect.objectContaining({
+        kind: "claims",
+        artifactId: claim.claim.claimId
       })
     );
     expect(search.warnings.join("\n")).toContain("do not upgrade trust labels");
@@ -1062,8 +1162,14 @@ describe("benchmark CLI", () => {
       schemaVersion: string;
       readiness: string;
       toolchain: { pinned: boolean };
-      files: { leanFiles: { total: number } };
-      trustBoundary: { noLeanExecution: boolean; provedRequiresProofCheckRecord: boolean };
+      files: { leanFiles: { total: number; sample: Array<{ sha256: string; sha256Scope: string }> } };
+      declarations: {
+        total: number;
+        byKind: { example: number };
+        sample: Array<{ declarationId: string; kind: string; signature: string; signatureSha256: string; sourceSha256: string }>;
+      };
+      proofSafety: { markers: { total: number }; blocksProvedTrust: boolean };
+      trustBoundary: { noLeanExecution: boolean; provedRequiresProofCheckRecord: boolean; proofMarkersBlockProvedTrust: boolean };
     };
 
     expect(result.exitCode).toBe(0);
@@ -1071,10 +1177,31 @@ describe("benchmark CLI", () => {
     expect(json.readiness).toBe("ready");
     expect(json.toolchain.pinned).toBe(true);
     expect(json.files.leanFiles.total).toBe(1);
+    expect(json.files.leanFiles.sample[0]).toMatchObject({
+      sha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      sha256Scope: "file"
+    });
+    expect(json.declarations.total).toBe(1);
+    expect(json.declarations.byKind.example).toBe(1);
+    expect(json.declarations.sample[0]).toMatchObject({
+      declarationId: expect.stringMatching(/^decl_[a-f0-9]{16}$/u),
+      kind: "example",
+      signature: "example : True",
+      signatureSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      sourceSha256: expect.stringMatching(/^[a-f0-9]{64}$/u)
+    });
+    expect(json.proofSafety.markers.total).toBe(0);
+    expect(json.proofSafety.blocksProvedTrust).toBe(false);
     expect(json.trustBoundary.noLeanExecution).toBe(true);
     expect(json.trustBoundary.provedRequiresProofCheckRecord).toBe(true);
+    expect(json.trustBoundary.proofMarkersBlockProvedTrust).toBe(true);
     expect(human.stdout).toContain("Truth Harness Lean project inspection");
     expect(human.stdout).toContain("Readiness: ready");
+    expect(human.stdout).toContain("sha256:");
+    expect(human.stdout).toContain("Formalization targets:");
+    expect(human.stdout).toContain("sig:");
+    expect(human.stdout).toContain("Kinds: theorem=0, lemma=0, example=1, def=0");
+    expect(human.stdout).toContain("Proof safety:");
     expect(human.stdout).toContain("This inspection does not run Lean or prove a claim.");
   });
 
@@ -1635,6 +1762,9 @@ describe("benchmark CLI", () => {
           verifyEngines: string;
           runAdversarialBenchmark: string;
           runMathCredibilityLadder: string;
+          runExactHardMathClosure: string;
+          runSymbolicHardMathClosure: string;
+          runSmtHardMathClosure: string;
           reproducePack: string;
           dockerProfessorEvidence: string;
           dockerStrictProfessorEvidence: string;
@@ -1706,6 +1836,9 @@ describe("benchmark CLI", () => {
     expect(bundle.manifest.reviewerCommands.verifyEngines).toContain("--require-all-engines");
     expect(bundle.manifest.reviewerCommands.runAdversarialBenchmark).toContain("ai-failure-seed");
     expect(bundle.manifest.reviewerCommands.runMathCredibilityLadder).toContain("math-credibility-ladder");
+    expect(bundle.manifest.reviewerCommands.runExactHardMathClosure).toBe("npm run docker:hard-math-closure");
+    expect(bundle.manifest.reviewerCommands.runSymbolicHardMathClosure).toBe("npm run docker:symbolic-closure");
+    expect(bundle.manifest.reviewerCommands.runSmtHardMathClosure).toBe("npm run docker:smt-closure");
     expect(bundle.manifest.reviewerCommands.reproducePack).toContain("--require-all-engines");
     expect(bundle.manifest.reviewerCommands.dockerProfessorEvidence).toBe("npm run docker:professor");
     expect(bundle.manifest.reviewerCommands.dockerStrictProfessorEvidence).toBe("npm run docker:professor:all");
@@ -1923,6 +2056,7 @@ describe("benchmark CLI", () => {
         schemaVersion: string;
         planId: string;
         dryRun: boolean;
+        sourceRevision?: { revisionId: string; path: string; sourceSnapshotId: string; sourceSnapshotPath: string };
         sourceSnapshot?: { snapshotId: string; path: string };
       };
       result: { jsonPath: string; markdownPath: string; markdown: string };
@@ -1970,6 +2104,12 @@ describe("benchmark CLI", () => {
     expect(writtenDryRunPayload.plan).toMatchObject({
       schemaVersion: "truth-harness.workspace-run-next.v0",
       dryRun: true,
+      sourceRevision: {
+        revisionId: expect.stringMatching(/^rev_[a-f0-9]{16}$/u),
+        path: expect.stringContaining(".truth-harness/revisions/"),
+        sourceSnapshotId: expect.stringMatching(/^snap_[a-f0-9]{16}$/u),
+        sourceSnapshotPath: expect.stringContaining(".truth-harness/snapshots/")
+      },
       sourceSnapshot: {
         snapshotId: expect.stringMatching(/^snap_[a-f0-9]{16}$/u),
         path: expect.stringContaining(".truth-harness/snapshots/")
@@ -1991,6 +2131,11 @@ describe("benchmark CLI", () => {
         rationaleTarget?: string;
         rationaleSource?: string;
         rationaleExecutionBoundary?: string;
+        sourceRevisionId?: string;
+        sourceRevisionPath?: string;
+        sourceRevisionStatus?: string;
+        sourceRevisionAdded?: number;
+        sourceRevisionIgnoredAdded?: number;
         sourceSnapshotId?: string;
         sourceSnapshotPath?: string;
         sourceSnapshotStatus?: string;
@@ -2021,6 +2166,8 @@ describe("benchmark CLI", () => {
       rationaleTarget: writtenClaim.claim.claimId,
       rationaleSource: "claim-blocker / high",
       rationaleExecutionBoundary: expect.stringContaining("Dry-run only"),
+      sourceRevisionId: writtenDryRunPayload.plan.sourceRevision?.revisionId,
+      sourceRevisionPath: writtenDryRunPayload.plan.sourceRevision?.path,
       sourceSnapshotId: writtenDryRunPayload.plan.sourceSnapshot?.snapshotId,
       sourceSnapshotPath: writtenDryRunPayload.plan.sourceSnapshot?.path,
       resumeDecision: {
@@ -2039,9 +2186,12 @@ describe("benchmark CLI", () => {
     expect(verifiedPlanList.exitCode).toBe(0);
     expect(verifiedListedPlan).toMatchObject({
       planId: writtenDryRunPayload.plan.planId,
+      sourceRevisionStatus: "verified",
+      sourceRevisionAdded: 0,
+      sourceRevisionIgnoredAdded: 3,
       sourceSnapshotStatus: "verified",
       sourceSnapshotAdded: 0,
-      sourceSnapshotIgnoredAdded: 2,
+      sourceSnapshotIgnoredAdded: 3,
       resumeDecision: {
         safeToResume: true,
         status: "safe-to-resume",
@@ -2049,6 +2199,7 @@ describe("benchmark CLI", () => {
       }
     });
     expect(verifiedHumanList.exitCode).toBe(0);
+    expect(verifiedHumanList.stdout).toContain("Revision drift: verified");
     expect(verifiedHumanList.stdout).toContain("Snapshot drift: verified");
     expect(verifiedHumanList.stdout).toContain("Resume: safe-to-resume (safe)");
     const shownById = await runCli([
@@ -2086,7 +2237,12 @@ describe("benchmark CLI", () => {
       sourceSnapshot: {
         sourceSnapshotStatus: "verified",
         sourceSnapshotAdded: 0,
-        sourceSnapshotIgnoredAdded: 2
+        sourceSnapshotIgnoredAdded: 3
+      },
+      sourceRevision: {
+        sourceRevisionStatus: "verified",
+        sourceRevisionAdded: 0,
+        sourceRevisionIgnoredAdded: 3
       }
     });
     const shownByPath = await runCli([
@@ -2108,11 +2264,58 @@ describe("benchmark CLI", () => {
       root,
       "--verify-snapshot"
     ]);
+    expect(shownHumanWithSnapshot.stdout).toContain("Source revision check:");
     expect(shownHumanWithSnapshot.stdout).toContain("Source snapshot check:");
     expect(shownHumanWithSnapshot.stdout).toContain("Status: verified");
     expect(shownHumanWithSnapshot.stdout).toContain("Resume decision:");
     expect(shownHumanWithSnapshot.stdout).toContain("Safe to resume: yes");
     expect(shownHumanWithSnapshot.stdout).toContain("Action: run-selected-command");
+    const savedPilotLoop = await runCli([
+      "workspace",
+      "pilot-loop",
+      root,
+      "--source",
+      "saved-run-next",
+      "--plan-ref",
+      writtenDryRunPayload.plan.planId,
+      "--json"
+    ]);
+    const savedPilotLoopPayload = JSON.parse(savedPilotLoop.stdout) as {
+      loop: {
+        schemaVersion: string;
+        source: string;
+        dryRun: boolean;
+        status: string;
+        stopReason: string;
+        warnings: string[];
+        steps: Array<{
+          item?: { kind: string; claimId?: string; command: string };
+          execution: { status: string; kind: string };
+        }>;
+      };
+      runNextWrites: unknown[];
+    };
+    expect(savedPilotLoop.exitCode).toBe(0);
+    expect(savedPilotLoopPayload.loop).toMatchObject({
+      schemaVersion: "truth-harness.workspace-pilot-loop.v0",
+      source: "saved-run-next",
+      dryRun: true,
+      status: "stopped",
+      stopReason: "dry-run"
+    });
+    expect(savedPilotLoopPayload.loop.steps[0]).toMatchObject({
+      item: {
+        command: expect.any(String)
+      },
+      execution: {
+        status: "planned",
+        kind: "dry-run"
+      }
+    });
+    expect(savedPilotLoopPayload.loop.warnings).toContainEqual(
+      expect.stringContaining(`resumed ${writtenDryRunPayload.plan.planId}`)
+    );
+    expect(savedPilotLoopPayload.runNextWrites).toEqual([]);
     expect(human.stdout).toContain("Truth Harness workspace run-next");
     expect(human.stdout).toContain("Plan:");
     expect(human.stdout).toContain("Dry run: true");
@@ -2145,6 +2348,16 @@ describe("benchmark CLI", () => {
           requiresHumanInput: true
         }),
         expect.objectContaining({
+          actionId: "refresh-strict-docker-professor-rehearsal",
+          command: "npm run docker:professor:all",
+          requiresHumanInput: true
+        }),
+        expect.objectContaining({
+          actionId: "refresh-docker-professor-rehearsal",
+          command: "npm run docker:professor",
+          requiresHumanInput: true
+        }),
+        expect.objectContaining({
           actionId: "refresh-professor-review",
           command: expect.stringContaining("truth-harness workspace credibility-pack"),
           requiresHumanInput: false
@@ -2158,8 +2371,123 @@ describe("benchmark CLI", () => {
     });
     expect(human.stdout).toContain("Idle next actions:");
     expect(human.stdout).toContain("start-validation-backed-harness");
+    expect(human.stdout).toContain("refresh-strict-docker-professor-rehearsal");
+    expect(human.stdout).toContain("refresh-docker-professor-rehearsal");
     expect(human.stdout).toContain("refresh-professor-review");
     expect(human.stdout).toContain("refresh-release-audit");
+  });
+
+  it("writes, lists, shows, and verifies workspace revisions from the CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    await mkdir(join(root, ".truth-harness", "receipts"), { recursive: true });
+    await writeFile(
+      join(root, ".truth-harness", "receipts", "fraction.json"),
+      `${JSON.stringify(createReceipt("compute 3 / 4 + 5 / 8"), null, 2)}\n`,
+      "utf8"
+    );
+
+    const written = await runCli([
+      "workspace",
+      "revision",
+      root,
+      "--title",
+      "CLI handoff checkpoint",
+      "--reason",
+      "Give the next agent a stable evidence state.",
+      "--session",
+      "rs_cli_demo",
+      "--validation",
+      "vp_cli_demo",
+      "--claim",
+      "claim_cli_demo",
+      "--artifact",
+      ".truth-harness/receipts/fraction.json",
+      "--json"
+    ]);
+    const payload = JSON.parse(written.stdout) as {
+      revision: {
+        revisionId: string;
+        title: string;
+        sourceSnapshot: { snapshotId: string; path: string; sha256: string };
+        artifactRefs: Array<{ path: string; role: string; sha256?: string }>;
+      };
+      path: string;
+      snapshotPath: string;
+    };
+    const list = await runCli(["workspace", "revisions", root, "--json"]);
+    const listPayload = JSON.parse(list.stdout) as {
+      total: number;
+      revisions: Array<{ revisionId: string; title: string; path: string }>;
+    };
+    const shown = await runCli([
+      "workspace",
+      "show-revision",
+      payload.revision.revisionId,
+      "--workspace",
+      root,
+      "--json"
+    ]);
+    const shownPayload = JSON.parse(shown.stdout) as { revisionId: string; sourceSnapshot: { path: string } };
+    const verified = await runCli([
+      "workspace",
+      "verify-revision",
+      payload.revision.revisionId,
+      "--workspace",
+      root,
+      "--json"
+    ]);
+    const verification = JSON.parse(verified.stdout) as {
+      passed: boolean;
+      sourceSnapshotFile: { status: string };
+      snapshotVerification?: { passed: boolean; addedSinceSnapshot: unknown[] };
+    };
+    const human = await runCli(["workspace", "revision", root, "--title", "Human checkpoint", "--reason", "exercise printer"]);
+
+    expect(written.exitCode).toBe(0);
+    expect(payload.revision).toMatchObject({
+      revisionId: expect.stringMatching(/^rev_[a-f0-9]{16}$/u),
+      title: "CLI handoff checkpoint",
+      sourceSnapshot: {
+        snapshotId: expect.stringMatching(/^snap_[a-f0-9]{16}$/u),
+        path: expect.stringContaining(".truth-harness/snapshots/"),
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/u)
+      }
+    });
+    expect(payload.revision.artifactRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ".truth-harness/receipts/fraction.json",
+          role: "linked-artifact",
+          sha256: expect.stringMatching(/^[a-f0-9]{64}$/u)
+        })
+      ])
+    );
+    expect(payload.path.replace(/\\/gu, "/")).toContain(".truth-harness/revisions/");
+    expect(payload.snapshotPath.replace(/\\/gu, "/")).toContain(".truth-harness/snapshots/");
+    expect(listPayload.revisions).toContainEqual(
+      expect.objectContaining({
+        revisionId: payload.revision.revisionId,
+        title: "CLI handoff checkpoint"
+      })
+    );
+    expect(shownPayload).toMatchObject({
+      revisionId: payload.revision.revisionId,
+      sourceSnapshot: {
+        path: payload.revision.sourceSnapshot.path
+      }
+    });
+    expect(verified.exitCode).toBe(0);
+    expect(verification).toMatchObject({
+      passed: true,
+      sourceSnapshotFile: { status: "verified" },
+      snapshotVerification: {
+        passed: true,
+        addedSinceSnapshot: []
+      }
+    });
+    expect(human.stdout).toContain("Wrote workspace revision");
+    expect(human.stdout).toContain("Trust boundary: revisions prove local artifact identity");
   });
 
   it("lists and reads saved report drafts from the workspace CLI", async () => {
@@ -2230,6 +2558,26 @@ describe("benchmark CLI", () => {
   it("prioritizes linked validation gates in workspace run-next", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);
+    const savedRun = await writeEngineVerificationRun({
+      rootPath: root,
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      cvc5Command: "cvc5-test",
+      leanCommand: "lean-test",
+      sageCommand: "sage-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      requirements: {
+        maxima: true,
+        z3: true,
+        cvc5: true,
+        lean: true,
+        sage: true
+      },
+      runner: passingEngineRunner
+    });
     const harness = await runCli([
       "research",
       "harness",
@@ -2267,7 +2615,12 @@ describe("benchmark CLI", () => {
         validationGateKind?: string;
         command: string;
       };
+      enginePlan?: {
+        savedReviewerEvidence?: { status: string; runId?: string; coveredCapabilityIds: string[] };
+        steps: Array<{ capabilityId: string; status: string; canRunNow: boolean; limitation: string }>;
+      };
     };
+    const leanStep = plan.enginePlan?.steps.find((step) => step.capabilityId === "lean-proof-checker");
 
     expect(runNext.exitCode).toBe(0);
     expect(plan.item).toMatchObject({
@@ -2278,6 +2631,16 @@ describe("benchmark CLI", () => {
       validationGateKind: "proof"
     });
     expect(plan.item?.command).toContain("truth-harness verify");
+    expect(plan.enginePlan?.savedReviewerEvidence).toMatchObject({
+      status: "available",
+      runId: savedRun.record.runId,
+      coveredCapabilityIds: expect.arrayContaining(["lean-proof-checker", "sage-cas"])
+    });
+    expect(leanStep).toMatchObject({
+      status: "missing",
+      canRunNow: false
+    });
+    expect(leanStep?.limitation).toContain(`Saved reviewer Docker evidence ${savedRun.record.runId} covers this capability`);
   });
 
   it("executes candidate validation evidence through workspace run-next CLI", async () => {
@@ -2548,7 +2911,13 @@ describe("benchmark CLI", () => {
     const json = JSON.parse(result.stdout) as {
       schemaVersion: string;
       status: string;
-      summary: { blockingFailures: number; catalogFresh: boolean };
+      summary: { blockingFailures: number; catalogFresh: boolean; leanProofSafetyItems: number };
+      frontierReadiness: {
+        schemaVersion: string;
+        status: string;
+        frontierDiscoveryReadiness: string;
+        canClaimWorldHardestProblems: boolean;
+      };
       checks: Array<{ id: string; status: string; blocking: boolean }>;
       commands: { rebuildCatalog: string; engineVerify: string };
     };
@@ -2556,10 +2925,36 @@ describe("benchmark CLI", () => {
     expect(result.exitCode).toBe(1);
     expect(json.schemaVersion).toBe("truth-harness.release-audit.v0");
     expect(json.status).toBe("blocked");
+    expect(json.summary.leanProofSafetyItems).toBe(0);
+    expect(json.frontierReadiness).toMatchObject({
+      schemaVersion: "truth-harness.frontier-readiness.v0",
+      status: "blocked",
+      frontierDiscoveryReadiness: "not-ready",
+      canClaimWorldHardestProblems: false
+    });
     expect(json.summary.blockingFailures).toBeGreaterThan(0);
     expect(json.checks).toContainEqual(expect.objectContaining({ id: "engine-evidence", status: "fail", blocking: true }));
+    expect(json.checks).toContainEqual(expect.objectContaining({ id: "lean-proof-safety", status: "pass", blocking: false }));
     expect(json.commands.rebuildCatalog).toContain("truth-harness catalog rebuild");
     expect(json.commands.engineVerify).toContain("--require-maxima");
+
+    const human = await runCli([
+      "workspace",
+      "release-audit",
+      root,
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--max-sessions",
+      "0",
+      "--timeout-ms",
+      "50"
+    ]);
+
+    expect(human.exitCode).toBe(0);
+    expect(human.stdout).toContain("Truth Harness release audit");
+    expect(human.stdout).toContain("Lean proof-safety blockers: 0");
   });
 
   it("writes and lists web UI review records from the CLI", async () => {
@@ -3141,3 +3536,43 @@ async function tempRoot(): Promise<string> {
   roots.push(root);
   return root;
 }
+
+const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => {
+  if (command === "maxima-test" && args[0] === "--version") {
+    return { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" };
+  }
+  if (command === "maxima-test") {
+    return { status: 0, stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n", stderr: "" };
+  }
+  if (command === "z3-test" && args[0] === "-version") {
+    return { status: 0, stdout: "Z3 version 4.13.0\n", stderr: "" };
+  }
+  if (command === "z3-test") {
+    return { status: 0, stdout: "sat\n", stderr: "" };
+  }
+  if (command === "cvc5-test" && args[0] === "--version") {
+    return { status: 0, stdout: "This is cvc5 version 1.1.2\n", stderr: "" };
+  }
+  if (command === "cvc5-test") {
+    return { status: 0, stdout: "sat\n", stderr: "" };
+  }
+  if (command === "lean-test" && args[0] === "--version") {
+    return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+  }
+  if (command === "lean-test") {
+    return { status: 0, stdout: "", stderr: "" };
+  }
+  if (command === "sage-test" && args[0] === "--version") {
+    return { status: 0, stdout: "SageMath version 10.6\n", stderr: "" };
+  }
+  if (command === "sage-test") {
+    return { status: 0, stdout: "TRUTH_HARNESS_SAGE_STATUS:passed:0\n", stderr: "" };
+  }
+
+  return {
+    status: null,
+    stdout: "",
+    stderr: "",
+    error: { name: "Error", message: `unexpected command ${command} ${args.join(" ")}` }
+  };
+};

@@ -231,6 +231,13 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
     schemaFile: "workspace-snapshot.schema.json",
     idKey: "snapshotId"
   },
+  revisions: {
+    kind: "revisions",
+    schemaVersion: "truth-harness.workspace-revision.v0",
+    schemaFile: "workspace-revision.schema.json",
+    idKey: "revisionId",
+    required: true
+  },
   sessions: {
     kind: "sessions",
     schemaVersion: "truth-harness.research-session.v0",
@@ -309,6 +316,16 @@ const DIRECTORY_RULES: Partial<Record<LocalWorkspaceDirectory, DirectoryValidati
         schemaVersion: "truth-harness.workspace-run-next.v0",
         schemaFile: "workspace-run-next.schema.json",
         idKey: "planId"
+      },
+      {
+        schemaVersion: "truth-harness.workspace-pilot-loop.v0",
+        schemaFile: "workspace-pilot-loop.schema.json",
+        idKey: "loopId"
+      },
+      {
+        schemaVersion: "truth-harness.hard-math-closure.v0",
+        schemaFile: "hard-math-closure.schema.json",
+        idKey: "closureId"
       },
       {
         schemaVersion: "truth-harness.credibility-pack.v0",
@@ -733,7 +750,11 @@ async function validateWorkspaceReferences(
     }
 
     for (const ref of collectWorkspaceReferences(parsed, artifact.path)) {
-      if (isResolvedReference(ref, index) || isInlineValidationPlanAuditReference(ref, parsed, artifact)) {
+      if (
+        isResolvedReference(ref, index) ||
+        isInlineValidationPlanAuditReference(ref, parsed, artifact) ||
+        isEmbeddedValidationPlanAuditReference(ref, artifact)
+      ) {
         continue;
       }
 
@@ -1109,6 +1130,11 @@ function collectWorkspaceReferences(value: unknown, sourcePath: string): Workspa
         continue;
       }
 
+      if (key === "parentRevisionRefs" && Array.isArray(entry)) {
+        collectStringRefs(entry, sourcePath, entryPath, "revision", refs);
+        continue;
+      }
+
       if ((key === "dependsOn" || key === "supersedes") && Array.isArray(entry)) {
         collectStringRefs(entry, sourcePath, entryPath, "claim", refs);
         continue;
@@ -1216,7 +1242,7 @@ function isResolvedReference(
   }
 
   const pathRef = normalizeReferencePath(ref.ref);
-  if (looksLikePathReference(ref.ref)) {
+  if (looksLikePathReference(pathRef)) {
     return index.paths.has(pathRef);
   }
 
@@ -1234,6 +1260,13 @@ function isInlineValidationPlanAuditReference(
 
   const audit = isRecord(source.audit) ? source.audit : undefined;
   return typeof audit?.auditId === "string" && audit.auditId === ref.ref;
+}
+
+function isEmbeddedValidationPlanAuditReference(
+  ref: WorkspaceReference,
+  artifact: WorkspaceValidationArtifact
+): boolean {
+  return artifact.kind === "findings" && ref.kind === "audit" && ref.fieldPath.includes(".validationGate.plan.");
 }
 
 function isResolvedArtifactRef(
@@ -1280,6 +1313,9 @@ function kindToArtifactKind(kind: string | undefined): WorkspaceValidationArtifa
     case "smt":
     case "smt-check":
       return "smt";
+    case "route":
+    case "verifier-route":
+      return "routes";
     case "simulation":
       return "simulations";
     case "experiment":
@@ -1304,6 +1340,9 @@ function kindToArtifactKind(kind: string | undefined): WorkspaceValidationArtifa
       return "audits";
     case "snapshot":
       return "snapshots";
+    case "revision":
+    case "workspace-revision":
+      return "revisions";
     case "workspace-review":
       return "findings";
     case "claim-chart":
@@ -1313,9 +1352,6 @@ function kindToArtifactKind(kind: string | undefined): WorkspaceValidationArtifa
     case "visual":
     case "visual-artifact":
       return "visuals";
-    case "route":
-    case "verifier-route":
-      return "routes";
     default:
       return undefined;
   }
@@ -1334,6 +1370,12 @@ function inferLooseArtifactId(
   }
   if (record?.schemaVersion === "truth-harness.workspace-run-next.v0") {
     return typeof record.planId === "string" ? record.planId : undefined;
+  }
+  if (record?.schemaVersion === "truth-harness.workspace-pilot-loop.v0") {
+    return typeof record.loopId === "string" ? record.loopId : undefined;
+  }
+  if (record?.schemaVersion === "truth-harness.hard-math-closure.v0") {
+    return typeof record.closureId === "string" ? record.closureId : undefined;
   }
   if (record?.schemaVersion === "truth-harness.credibility-pack.v0") {
     return typeof record.packId === "string" ? record.packId : undefined;
@@ -1364,7 +1406,8 @@ function looksLikePathReference(ref: string): boolean {
 
 function normalizeReferencePath(ref: string): string {
   const withoutFragment = (ref.split("#", 1)[0] ?? ref).replace(/\\/g, "/");
-  return withoutFragment.startsWith("./") ? withoutFragment.slice(2) : withoutFragment;
+  const withoutKind = withoutFragment.replace(/^[a-z][a-z0-9-]*:(?=\.?\.truth-harness\/|[^/]*\/)/iu, "");
+  return withoutKind.startsWith("./") ? withoutKind.slice(2) : withoutKind;
 }
 
 function resolveWorkspaceRelativePath(root: string, path: string): string | undefined {

@@ -1,14 +1,33 @@
 import { createReadStream } from "node:fs";
-import { lstat, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
-import { extname, join, normalize, relative, resolve, sep } from "node:path";
+import { extname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
 
 const MAX_JSON_BODY_BYTES = 128 * 1024;
 const MAX_RESEARCH_MAP_SNAPSHOTS = 100;
+const MAX_ARTIFACT_PREVIEW_BYTES = 256 * 1024;
+const PREVIEWABLE_ARTIFACT_EXTENSIONS = new Set([
+  ".csv",
+  ".dot",
+  ".html",
+  ".json",
+  ".lean",
+  ".log",
+  ".md",
+  ".mermaid",
+  ".mmd",
+  ".smt2",
+  ".svg",
+  ".tsv",
+  ".txt",
+  ".xml",
+  ".yaml",
+  ".yml"
+]);
 const VISUAL_ARTIFACT_KINDS = new Set([
   "plot",
   "proof-tree",
@@ -206,8 +225,10 @@ async function handleApiRequest(request, response, requestUrl) {
         "research-session",
         "research-session-list",
         "research-harness-start",
+        "hard-math-seed",
         "research-map",
         "visual-artifacts",
+        "workspace-artifact-preview",
         "catalog-search",
         "workspace-events",
         "validation-plan",
@@ -229,6 +250,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "workspace-run-next-save",
         "workspace-run-next-list",
         "workspace-run-next-show",
+        "workspace-pilot-loop-dry-run",
         "release-audit",
         "docker-verifier-guidance",
         "web-runtime-identity",
@@ -619,6 +641,22 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/workspace-artifact" && request.method === "GET") {
+    try {
+      await ensureLocalWorkspace();
+      const artifact = await readWorkspaceArtifactPreview(requestUrl.searchParams.get("path"));
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-artifact-preview.v0",
+        localOnly: true,
+        externalCalls: [],
+        artifact
+      });
+    } catch (error) {
+      writeApiError(response, error instanceof HttpError ? error.status : 400, error instanceof Error ? error.message : "Workspace artifact preview failed.", request);
+    }
+    return;
+  }
+
   if (requestUrl.pathname === "/api/catalog/status" && request.method === "GET") {
     const { getWorkspaceCatalogStatus } = await loadCoreModule();
     await ensureLocalWorkspace();
@@ -668,6 +706,7 @@ async function handleApiRequest(request, response, requestUrl) {
       const trust = optionalText(requestUrl.searchParams.get("trust"));
       const domain = optionalText(requestUrl.searchParams.get("domain"));
       const tag = optionalText(requestUrl.searchParams.get("tag"));
+      const ref = optionalText(requestUrl.searchParams.get("ref"));
       const limit = boundedPositiveNumberOrUndefined(requestUrl.searchParams.get("limit"), 200);
       const search = await searchWorkspaceCatalog({
         rootPath: projectRoot,
@@ -676,6 +715,7 @@ async function handleApiRequest(request, response, requestUrl) {
         trust,
         domain,
         tag,
+        ref,
         limit
       });
       writeJson(response, 200, {
@@ -924,6 +964,25 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/workspace-seed/hard-math" && request.method === "POST") {
+    try {
+      const input = await readJsonBody(request);
+      const payload = await createWebHardMathSeedPayload(input);
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-hard-math-seed-response.v0",
+        ...payload
+      });
+    } catch (error) {
+      writeApiError(
+        response,
+        error instanceof HttpError ? error.status : 400,
+        error instanceof Error ? error.message : "Hard-math seed workspace could not be created.",
+        request
+      );
+    }
+    return;
+  }
+
   if (requestUrl.pathname === "/api/workspace-review" && request.method === "GET") {
     const { createWorkspaceReview } = await loadCoreModule();
     await ensureLocalWorkspace();
@@ -975,6 +1034,37 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  if (requestUrl.pathname === "/api/workspace-pilot-loop" && request.method === "GET") {
+    try {
+      const payload = await createWebWorkspacePilotLoopPayload({
+        source: requestUrl.searchParams.get("source"),
+        executeLocal: requestUrl.searchParams.get("executeLocal"),
+        write: requestUrl.searchParams.get("write"),
+        maxSteps: requestUrl.searchParams.get("maxSteps"),
+        requireAllEngines:
+          isTruthyQueryParam(requestUrl.searchParams.get("requireAllEngines")) ||
+          requestUrl.searchParams.get("mode") === "all-engines",
+        timeoutMs: requestUrl.searchParams.get("timeoutMs"),
+        maxRoutes: requestUrl.searchParams.get("maxRoutes"),
+        maxClaims: requestUrl.searchParams.get("maxClaims"),
+        maxSessions: requestUrl.searchParams.get("maxSessions"),
+        maxReports: requestUrl.searchParams.get("maxReports")
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-pilot-loop-response.v0",
+        ...payload
+      });
+    } catch (error) {
+      writeApiError(
+        response,
+        error instanceof HttpError ? error.status : 400,
+        error instanceof Error ? error.message : "Workspace pilot loop could not be previewed.",
+        request
+      );
+    }
+    return;
+  }
+
   if (requestUrl.pathname === "/api/workspace-run-nexts" && request.method === "GET") {
     try {
       const { listWorkspaceRunNextPlans } = await loadCoreModule();
@@ -982,7 +1072,8 @@ async function handleApiRequest(request, response, requestUrl) {
       const verifySnapshots = isTruthyQueryParam(requestUrl.searchParams.get("verifySnapshots"));
       const limit = boundedInteger(requestUrl.searchParams.get("limit"), 8, 1, 50);
       const plans = await listWorkspaceRunNextPlans(projectRoot, {
-        verifySnapshots
+        verifySnapshots,
+        limit
       });
       writeJson(response, 200, {
         schemaVersion: "truth-harness.web-workspace-run-next-list-response.v0",
@@ -990,7 +1081,8 @@ async function handleApiRequest(request, response, requestUrl) {
         externalCalls: [],
         verifySnapshots,
         total: plans.length,
-        plans: plans.slice(0, limit)
+        limit,
+        plans
       });
     } catch (error) {
       writeApiError(
@@ -1559,6 +1651,27 @@ async function handleApiRequest(request, response, requestUrl) {
   }
 
   const claimReadMatch = requestUrl.pathname.match(/^\/api\/claims\/([^/]+)$/u);
+  const claimReviewMatch = requestUrl.pathname.match(/^\/api\/claims\/([^/]+)\/review$/u);
+  if (claimReviewMatch && request.method === "GET") {
+    try {
+      const { createClaimReviewPacket } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const review = await createClaimReviewPacket({
+        rootPath: projectRoot,
+        claimRef: decodeURIComponent(claimReviewMatch[1])
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-claim-review-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        review
+      });
+    } catch (error) {
+      writeApiError(response, 404, error instanceof Error ? error.message : "Claim review packet not found.", request);
+    }
+    return;
+  }
+
   if (claimReadMatch && request.method === "GET") {
     try {
       const { readClaimRecord } = await loadCoreModule();
@@ -1970,6 +2083,32 @@ async function createWebResearchHarnessPayload(value = {}) {
   };
 }
 
+async function createWebHardMathSeedPayload(value = {}) {
+  const { writeHardMathSeedWorkspace } = await loadCoreModule();
+  await ensureLocalWorkspace();
+  const seed = await writeHardMathSeedWorkspace({
+    rootPath: projectRoot,
+    now: optionalText(value?.now),
+    caseIds: stringList(value?.caseIds),
+    writeRunNextPlan: value?.writeRunNextPlan === false ? false : true
+  });
+  const runNextPlan = seed.runNext?.plan;
+  return {
+    localOnly: true,
+    externalCalls: [],
+    networkAccess: "none",
+    seed,
+    activity: [
+      {
+        actor: "local-api",
+        action: "seeded-hard-math-workspace",
+        detail: `${seed.cases.length} hard-math validation session${seed.cases.length === 1 ? "" : "s"} created with ${runNextPlan ? `run-next handoff ${runNextPlan.planId}` : "no run-next handoff"}.`,
+        at: seed.createdAt
+      }
+    ]
+  };
+}
+
 async function createWebWorkspaceRunNextPayload(value = {}, options = {}) {
   if (isTruthyInputValue(value?.executeLocal)) {
     throw new HttpError(
@@ -2035,6 +2174,59 @@ async function createWebWorkspaceRunNextPayload(value = {}, options = {}) {
           }
         ]
       : undefined
+  };
+}
+
+async function createWebWorkspacePilotLoopPayload(value = {}) {
+  if (isTruthyInputValue(value?.executeLocal)) {
+    throw new HttpError(
+      400,
+      "The web pilot-loop endpoint is dry-run only. Use the CLI or MCP executeLocal gate for bounded local execution."
+    );
+  }
+  if (isTruthyInputValue(value?.write)) {
+    throw new HttpError(
+      400,
+      "The web pilot-loop endpoint previews only. Use CLI/MCP write mode when a local transcript should be persisted."
+    );
+  }
+
+  const source = optionalText(value?.source) ?? "workspace-review";
+  if (source !== "workspace-review" && source !== "credibility-actions") {
+    throw new HttpError(400, "Unsupported pilot-loop source. Use workspace-review or credibility-actions.");
+  }
+
+  const { runWorkspacePilotLoop } = await loadCoreModule();
+  await ensureLocalWorkspace();
+  const credibilityInput = source === "credibility-actions" ? credibilityPackInputFromValue(value) : undefined;
+  const result = await runWorkspacePilotLoop({
+    rootPath: projectRoot,
+    source,
+    executeLocal: false,
+    writeRunNextPlans: false,
+    maxSteps: boundedInteger(value?.maxSteps, 3, 1, 12),
+    maxRoutes: boundedPositiveNumberOrUndefined(value?.maxRoutes, 100),
+    maxClaims: boundedPositiveNumberOrUndefined(value?.maxClaims, 100),
+    maxSessions: boundedPositiveNumberOrUndefined(value?.maxSessions, 50),
+    maxReports: boundedPositiveNumberOrUndefined(value?.maxReports, 50),
+    timeoutMs: credibilityInput?.timeoutMs,
+    engineRequirements: credibilityInput?.engineRequirements
+  });
+
+  return {
+    localOnly: true,
+    externalCalls: [],
+    source,
+    mode: credibilityInput?.engineRequirements ? "all-engines" : "default",
+    loop: result.loop,
+    activity: [
+      {
+        actor: "local-api",
+        action: "previewed-workspace-pilot-loop",
+        detail: `${result.loop.loopId} previewed ${result.loop.summary.plannedSteps} dry-run step${result.loop.summary.plannedSteps === 1 ? "" : "s"} and stopped at ${result.loop.stopReason}.`,
+        at: result.loop.completedAt
+      }
+    ]
   };
 }
 
@@ -2704,6 +2896,16 @@ function sha256Hex(body) {
   return createHash("sha256").update(body).digest("hex");
 }
 
+function sha256FileHex(path) {
+  return new Promise((resolveHash, rejectHash) => {
+    const hash = createHash("sha256");
+    const stream = createReadStream(path);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", rejectHash);
+    stream.on("end", () => resolveHash(hash.digest("hex")));
+  });
+}
+
 function boundedInteger(value, fallback, min, max) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed)) {
@@ -2920,6 +3122,125 @@ function portablePath(value) {
   return String(value).replace(/\\/gu, "/");
 }
 
+async function readWorkspaceArtifactPreview(pathValue) {
+  const { absolutePath, relativePath } = resolveWorkspaceArtifactPreviewPath(pathValue);
+  let info;
+  try {
+    info = await lstat(absolutePath);
+  } catch (error) {
+    const nodeError = error;
+    if (nodeError?.code === "ENOENT") {
+      throw new HttpError(404, "Workspace artifact preview path is not a file.");
+    }
+    throw error;
+  }
+  if (info.isSymbolicLink()) {
+    throw new HttpError(403, "Workspace artifact preview does not follow symlinks.");
+  }
+  if (!info.isFile()) {
+    throw new HttpError(404, "Workspace artifact preview path is not a file.");
+  }
+
+  const extension = extname(absolutePath).toLowerCase();
+  if (!PREVIEWABLE_ARTIFACT_EXTENSIONS.has(extension)) {
+    throw new HttpError(415, "Workspace artifact preview only supports text artifacts.");
+  }
+
+  const fileSha256 = await sha256FileHex(absolutePath);
+  const readBytes = Math.min(info.size, MAX_ARTIFACT_PREVIEW_BYTES);
+  const fileHandle = await open(absolutePath, "r");
+  let previewBuffer = Buffer.alloc(0);
+  let body;
+  try {
+    const buffer = Buffer.alloc(readBytes);
+    const result = await fileHandle.read(buffer, 0, readBytes, 0);
+    previewBuffer = buffer.subarray(0, result.bytesRead);
+    body = previewBuffer.toString("utf8");
+  } finally {
+    await fileHandle.close();
+  }
+
+  const truncated = info.size > MAX_ARTIFACT_PREVIEW_BYTES;
+  const kind = workspaceArtifactPreviewKind(extension);
+  const artifact = {
+    path: relativePath,
+    kind,
+    extension: extension || "none",
+    sizeBytes: info.size,
+    previewBytes: Buffer.byteLength(body, "utf8"),
+    truncated,
+    maxPreviewBytes: MAX_ARTIFACT_PREVIEW_BYTES,
+    content: body,
+    sha256: fileSha256,
+    sha256Scope: "file",
+    previewSha256: truncated ? sha256Hex(previewBuffer) : undefined
+  };
+
+  if (kind === "json" && !truncated) {
+    try {
+      artifact.parsed = JSON.parse(body);
+    } catch {
+      artifact.parseWarning = "JSON artifact could not be parsed; raw preview is preserved.";
+    }
+  }
+
+  return artifact;
+}
+
+function resolveWorkspaceArtifactPreviewPath(pathValue) {
+  const rawPath = optionalText(pathValue);
+  if (!rawPath) {
+    throw new HttpError(400, "Workspace artifact path is required.");
+  }
+  if (rawPath.includes("\0")) {
+    throw new HttpError(400, "Workspace artifact path is invalid.");
+  }
+
+  let normalizedPath = rawPath.replace(/\\/gu, "/").replace(/^\.\/+/u, "");
+  if (normalizedPath.startsWith("/") || normalizedPath.startsWith("//") || /^[A-Za-z]:/u.test(normalizedPath)) {
+    throw new HttpError(403, "Workspace artifact preview is limited to .truth-harness artifacts.");
+  }
+  if (normalizedPath === ".truth-harness") {
+    throw new HttpError(404, "Workspace artifact preview path is not a file.");
+  }
+  if (!normalizedPath.startsWith(".truth-harness/")) {
+    throw new HttpError(403, "Workspace artifact preview is limited to .truth-harness artifacts.");
+  }
+
+  const artifactRoot = resolve(projectRoot, ".truth-harness");
+  const absolutePath = resolve(projectRoot, normalizedPath);
+  const relativeToArtifactRoot = relative(artifactRoot, absolutePath);
+  if (!relativeToArtifactRoot || relativeToArtifactRoot === ".." || relativeToArtifactRoot.startsWith(`..${sep}`) || isAbsolute(relativeToArtifactRoot)) {
+    throw new HttpError(403, "Workspace artifact path escapes .truth-harness.");
+  }
+
+  normalizedPath = portablePath(relative(projectRoot, absolutePath));
+  if (!normalizedPath.startsWith(".truth-harness/")) {
+    throw new HttpError(403, "Workspace artifact path escapes .truth-harness.");
+  }
+
+  return {
+    absolutePath,
+    relativePath: normalizedPath
+  };
+}
+
+function workspaceArtifactPreviewKind(extension) {
+  if (extension === ".json") {
+    return "json";
+  }
+  if (extension === ".md") {
+    return "markdown";
+  }
+  if (extension === ".csv" || extension === ".tsv") {
+    return "table";
+  }
+  if (extension === ".svg") {
+    return "svg";
+  }
+  return "text";
+}
+
 function requiredText(value, fieldName) {
   const text = optionalText(value);
   if (!text) {
@@ -3121,10 +3442,10 @@ function dockerVerifierGuidance(verification) {
     },
     notes: [
       "The web UI never runs Docker automatically; it only exposes copyable commands.",
-      "npm run docker:professor writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, math credibility ladder evidence, a credibility pack, and a verified portable reviewer bundle inside the no-network compose service.",
+      "npm run docker:professor writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, math credibility ladder evidence, exact/symbolic/SMT hard-math closure evidence, a credibility pack, and a verified portable reviewer bundle inside the no-network compose service.",
       "npm run docker:engines runs concrete Maxima/Z3/cvc5 evidence smoke checks inside the no-network compose service.",
       "npm run docker:all-engines is the heavy strict gate for Maxima, Z3, cvc5, Lean, and SageMath when a reviewer explicitly wants every adapter fixture.",
-      "npm run docker:professor:all writes the strict all-engine professor packet and portable reviewer bundle from the no-network all-engine service.",
+      "npm run docker:professor:all writes the strict all-engine professor packet, closure reports, and portable reviewer bundle from the no-network all-engine service.",
       "npm run docker:proof runs the truth-harness compose service with no external network route after the dev image exists.",
       "npm run docker:verify builds and tests the verification image; image builds may download dependencies.",
       "Docker status does not prove a claim. Trust labels still require concrete Lean, Z3, Maxima, or other accepted evidence artifacts."

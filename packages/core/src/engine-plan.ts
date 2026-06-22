@@ -1,5 +1,6 @@
 import { createEngineReadinessReportFromManifest } from "./engine-readiness.js";
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
+import type { EngineVerificationRunSummary } from "./engine-verification.js";
 import type { TrustLabel } from "./types.js";
 
 export type EnginePlanProblemKind =
@@ -63,6 +64,7 @@ export interface EnginePlan {
   comparisonMatrix: EnginePlanComparisonRow[];
   blockedCapabilityIds: string[];
   readyCapabilityIds: string[];
+  savedReviewerEvidence: EnginePlanSavedReviewerEvidence;
   nextActions: string[];
   trustBoundary: {
     planDoesNotMintEvidence: true;
@@ -78,6 +80,18 @@ export interface EnginePlan {
 export interface CreateEnginePlanOptions extends EngineManifestOptions {
   now?: Date;
   manifest?: EngineManifest;
+  savedEngineRuns?: EngineVerificationRunSummary[];
+}
+
+export interface EnginePlanSavedReviewerEvidence {
+  status: "available" | "none";
+  runId?: string;
+  path?: string;
+  requiredPassed?: number;
+  requiredTotal?: number;
+  coveredCapabilityIds: string[];
+  summary: string;
+  trustBoundary: string;
 }
 
 interface StepTemplate {
@@ -93,7 +107,8 @@ export function createEnginePlan(problem: string, options: CreateEnginePlanOptio
   const readiness = createEngineReadinessReportFromManifest(manifest);
   const classifications = classifyProblem(normalizedProblem);
   const templates = routeTemplatesFor(classifications);
-  const steps = buildPlanSteps(templates, manifest.capabilities);
+  const savedReviewerEvidence = savedReviewerEvidenceFor(options.savedEngineRuns ?? []);
+  const steps = buildPlanSteps(templates, manifest.capabilities, savedReviewerEvidence);
   const readyCapabilityIds = steps.filter((step) => step.canRunNow).map((step) => step.capabilityId);
   const blockedCapabilityIds = steps.filter((step) => !step.canRunNow).map((step) => step.capabilityId);
   const targetTrustCeiling = strongestTrustFor(steps);
@@ -114,7 +129,8 @@ export function createEnginePlan(problem: string, options: CreateEnginePlanOptio
     comparisonMatrix: steps.map((step, index) => comparisonRow(step, templates[index])),
     blockedCapabilityIds,
     readyCapabilityIds,
-    nextActions: nextActionsFor(problem, steps, readiness.summary.missingExternalEngines),
+    savedReviewerEvidence,
+    nextActions: nextActionsFor(problem, steps, readiness.summary.missingExternalEngines, savedReviewerEvidence),
     trustBoundary: {
       planDoesNotMintEvidence: true,
       statusProbeIsNotEvidence: true,
@@ -289,9 +305,21 @@ function routeTemplatesFor(kinds: EnginePlanProblemKind[]): StepTemplate[] {
   return dedupeTemplates(templates);
 }
 
-function buildPlanSteps(templates: StepTemplate[], capabilities: EngineCapability[]): EnginePlanStep[] {
+function buildPlanSteps(
+  templates: StepTemplate[],
+  capabilities: EngineCapability[],
+  savedReviewerEvidence: EnginePlanSavedReviewerEvidence
+): EnginePlanStep[] {
   return templates.map((template, index) => {
     const capability = capabilities.find((entry) => entry.id === template.capabilityId) ?? missingCapability(template.capabilityId);
+    const baseLimitation = capability.limitations[0] ?? capability.trustBoundary;
+    const limitation =
+      savedReviewerEvidence.status === "available" &&
+      capability.status !== "ready" &&
+      capability.status !== "available" &&
+      savedReviewerEvidence.coveredCapabilityIds.includes(capability.id)
+        ? `${baseLimitation} Saved reviewer Docker evidence ${savedReviewerEvidence.runId} covers this capability for prior strict review, but this host plan cannot mint trust from that memory; rerun the engine or attach a concrete proof/SMT/CAS artifact for the current claim.`
+        : baseLimitation;
     return {
       rank: index + 1,
       capabilityId: capability.id,
@@ -302,7 +330,7 @@ function buildPlanSteps(templates: StepTemplate[], capabilities: EngineCapabilit
       trustIfSuccessful: capability.strongestTrust,
       command: capability.command,
       evidenceRequired: template.evidenceRequired,
-      limitation: capability.limitations[0] ?? capability.trustBoundary
+      limitation
     };
   });
 }
@@ -360,9 +388,20 @@ function recommendedFirstCommand(problem: string, steps: EnginePlanStep[]): stri
   return `truth-harness verify ${JSON.stringify(problem)} --write`;
 }
 
-function nextActionsFor(problem: string, steps: EnginePlanStep[], missingExternalEngines: string[]): string[] {
+function nextActionsFor(
+  problem: string,
+  steps: EnginePlanStep[],
+  missingExternalEngines: string[],
+  savedReviewerEvidence: EnginePlanSavedReviewerEvidence
+): string[] {
   const actions = [`Run \`${recommendedFirstCommand(problem, steps)}\` to create a verifier route and durable obligation ledger.`];
   const missing = steps.filter((step) => !step.canRunNow && step.status !== "planned");
+  const savedCoveredMissing = missing.filter((step) => savedReviewerEvidence.coveredCapabilityIds.includes(step.capabilityId));
+  if (savedReviewerEvidence.status === "available" && savedCoveredMissing.length > 0) {
+    actions.push(
+      `Saved reviewer Docker evidence ${savedReviewerEvidence.runId} previously covered ${savedCoveredMissing.map((step) => step.displayName).join(", ")}; rerun the matching Docker gate when this claim needs fresh reviewer evidence.`
+    );
+  }
   if (missing.some((step) => step.capabilityId === "maxima-cas" || step.capabilityId === "z3-smt-solver" || step.capabilityId === "cvc5-smt-solver")) {
     actions.push("Use `npm run docker:engines` or `npm run docker:professor` for no-network CAS/SMT reviewer evidence.");
   }
@@ -377,6 +416,36 @@ function nextActionsFor(problem: string, steps: EnginePlanStep[], missingExterna
   }
   actions.push("Attach only concrete receipt/proof/SMT/CAS/source evidence to claims; keep unsupported steps as open gates.");
   return dedupe(actions).slice(0, 8);
+}
+
+function savedReviewerEvidenceFor(runs: EngineVerificationRunSummary[]): EnginePlanSavedReviewerEvidence {
+  const passedRuns = runs.filter((run) => run.status === "passed" && run.requiredTotal > 0 && run.requiredPassed === run.requiredTotal);
+  const strict = passedRuns.find((run) => run.requiredTotal >= 5);
+  const professor = passedRuns.find((run) => run.requiredTotal >= 4);
+  const selected = strict ?? professor;
+  if (!selected) {
+    return {
+      status: "none",
+      coveredCapabilityIds: [],
+      summary: "No saved passing Docker reviewer engine run was supplied to this plan.",
+      trustBoundary: "Engine plans never mint trust from saved readiness or reviewer evidence."
+    };
+  }
+
+  const coveredCapabilityIds = strict
+    ? ["maxima-cas", "sage-cas", "lean-proof-checker", "z3-smt-solver", "cvc5-smt-solver"]
+    : ["maxima-cas", "lean-proof-checker", "z3-smt-solver", "cvc5-smt-solver"];
+
+  return {
+    status: "available",
+    runId: selected.runId,
+    path: selected.path,
+    requiredPassed: selected.requiredPassed,
+    requiredTotal: selected.requiredTotal,
+    coveredCapabilityIds,
+    summary: `Saved ${strict ? "strict all-engine" : "professor"} Docker reviewer run ${selected.runId} passed ${selected.requiredPassed}/${selected.requiredTotal} required gates.`,
+    trustBoundary: "Saved reviewer evidence can guide routing and reviewer fallback commands, but each new claim still needs its own concrete receipt, proof-check, SMT, CAS, source, or validation artifact."
+  };
 }
 
 function boundaryForStep(step: EnginePlanStep): string {

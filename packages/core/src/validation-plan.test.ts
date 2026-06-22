@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createSimulationLogEntry } from "./simulation-log.js";
+import { writeSymbolicCasCheckRecord, type CasBackendCommandRunner } from "./cas-backend.js";
 import { writeExpertReview } from "./expert-review.js";
 import {
   attachValidationGateEvidence,
@@ -12,6 +13,8 @@ import {
   writeValidationPlan
 } from "./validation-plan.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { solveSmtProblem } from "./smt-problem.js";
+import type { SmtBackendCommandRunner } from "./smt-backend.js";
 import { writeVerifierRoute } from "./verifier-route.js";
 
 const tempRoots: string[] = [];
@@ -308,6 +311,110 @@ describe("validation plans", () => {
     expect(scopedAttachment.evidence.claimScope).toMatchObject({ status: "matched" });
   });
 
+  it("closes proof gates from scoped SMT query evidence only when query boundaries match", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const smt = await solveSmtProblem({
+      rootPath: root,
+      queryName: "bounded_integer_sat",
+      variables: ["x"],
+      constraints: ["x > 0", "x < 3"],
+      includeModel: true,
+      runner: z3SatRunner
+    });
+    const smtRef = toWorkspaceRef(root, smt.check.jsonPath);
+
+    const mismatch = await writeValidationPlan({
+      rootPath: root,
+      claim: "SMT query another_query",
+      domains: ["math"],
+      now: "2026-06-18T02:00:00.000Z"
+    });
+    const mismatchGate = requiredProofGate(mismatch.plan);
+    const mismatchAttachment = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: mismatch.plan.planId,
+      gateId: mismatchGate.gateId,
+      evidenceRef: { kind: "smt", ref: smtRef },
+      now: "2026-06-18T02:01:00.000Z"
+    });
+
+    expect(mismatchAttachment.evidence.trust).toBe("smt-checked");
+    expect(mismatchAttachment.satisfied).toBe(false);
+    expect(mismatchAttachment.evidence.claimScope).toMatchObject({ status: "mismatch" });
+
+    const scoped = await writeValidationPlan({
+      rootPath: root,
+      claim: "SMT query bounded_integer_sat",
+      domains: ["math"],
+      now: "2026-06-18T02:02:00.000Z"
+    });
+    const scopedGate = requiredProofGate(scoped.plan);
+    const scopedAttachment = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: scoped.plan.planId,
+      gateId: scopedGate.gateId,
+      evidenceRef: { kind: "smt", ref: smtRef },
+      now: "2026-06-18T02:03:00.000Z"
+    });
+
+    expect(scopedAttachment.satisfied).toBe(true);
+    expect(scopedAttachment.gate.status).toBe("satisfied");
+    expect(scopedAttachment.evidence.claimScope).toMatchObject({ status: "matched" });
+  });
+
+  it("closes proof gates from scoped independent CAS evidence only when symbolic boundaries match", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const cas = await writeSymbolicCasCheckRecord({
+      rootPath: root,
+      prompt: {
+        operation: "simplify",
+        expression: "sin(x)^2 + cos(x)^2",
+        variable: "x"
+      },
+      result: "1",
+      runner: maximaPassingRunner
+    });
+    const casRef = toWorkspaceRef(root, cas.jsonPath);
+
+    const mismatch = await writeValidationPlan({
+      rootPath: root,
+      claim: "symbolic simplify sin(x)^2",
+      domains: ["math"],
+      now: "2026-06-18T02:10:00.000Z"
+    });
+    const mismatchAttachment = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: mismatch.plan.planId,
+      gateId: requiredProofGate(mismatch.plan).gateId,
+      evidenceRef: { kind: "cas", ref: casRef },
+      now: "2026-06-18T02:11:00.000Z"
+    });
+
+    expect(mismatchAttachment.evidence.trust).toBe("cross-checked");
+    expect(mismatchAttachment.satisfied).toBe(false);
+    expect(mismatchAttachment.evidence.claimScope).toMatchObject({ status: "mismatch" });
+
+    const scoped = await writeValidationPlan({
+      rootPath: root,
+      claim: "symbolic simplify sin(x)^2 + cos(x)^2",
+      domains: ["math"],
+      now: "2026-06-18T02:12:00.000Z"
+    });
+    const scopedAttachment = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: scoped.plan.planId,
+      gateId: requiredProofGate(scoped.plan).gateId,
+      evidenceRef: { kind: "cas", ref: casRef },
+      now: "2026-06-18T02:13:00.000Z"
+    });
+
+    expect(scopedAttachment.satisfied).toBe(true);
+    expect(scopedAttachment.gate.status).toBe("satisfied");
+    expect(scopedAttachment.evidence.claimScope).toMatchObject({ status: "matched" });
+  });
+
   it("requires prior art, claim charts, reduction-to-practice, and patent legal review for invention claims", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);
@@ -340,3 +447,37 @@ async function tempRoot(): Promise<string> {
   tempRoots.push(root);
   return root;
 }
+
+function requiredProofGate(plan: { gates: Array<{ kind: string; gateId: string }> }): { gateId: string } {
+  const gate = plan.gates.find((candidate) => candidate.kind === "proof");
+  if (!gate) {
+    throw new Error("Expected a proof gate.");
+  }
+  return gate;
+}
+
+function toWorkspaceRef(root: string, absolutePath: string): string {
+  return absolutePath.slice(root.length + 1).replace(/\\/g, "/");
+}
+
+const z3SatRunner: SmtBackendCommandRunner = (_command, args) => {
+  if (args.includes("-version")) {
+    return { status: 0, stdout: "Z3 version 4.13.0\n", stderr: "" };
+  }
+  return {
+    status: 0,
+    stdout: "sat\n(\n  (define-fun x () Int\n    1)\n)\n",
+    stderr: ""
+  };
+};
+
+const maximaPassingRunner: CasBackendCommandRunner = (_command, args) => {
+  if (args.includes("--version")) {
+    return { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" };
+  }
+  return {
+    status: 0,
+    stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n",
+    stderr: ""
+  };
+};

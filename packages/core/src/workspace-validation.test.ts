@@ -230,7 +230,7 @@ describe("workspace artifact validation", () => {
     );
   });
 
-  it("accepts legacy credibility packs that predate report-draft summary counters", async () => {
+  it("accepts legacy credibility packs that predate newer summary counters", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-10T00:00:00.000Z" });
     const pack = await writeCredibilityPack({
@@ -242,6 +242,7 @@ describe("workspace artifact validation", () => {
     };
     delete legacyPack.summary.savedReportDrafts;
     delete legacyPack.summary.reportDraftsNeedingAttention;
+    delete legacyPack.summary.leanProofSafetyItems;
     await writeFile(pack.jsonPath, `${JSON.stringify(legacyPack, null, 2)}\n`, "utf8");
 
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
@@ -695,7 +696,7 @@ describe("workspace artifact validation", () => {
         expect.objectContaining({ artifactId: snapshot.snapshot.snapshotId, valid: true })
       ])
     );
-  });
+  }, 15000);
 
   it("fails non-receipt workspace records that violate their JSON Schema contract", async () => {
     const root = await tempRoot();

@@ -29,6 +29,7 @@ export type LocalWorkspaceDirectory =
   | "vault"
   | "audits"
   | "snapshots"
+  | "revisions"
   | "sessions"
   | "reviews"
   | "validation"
@@ -75,6 +76,7 @@ const DEFAULT_WORKSPACE_DIRECTORIES: Record<LocalWorkspaceDirectory, string> = {
   vault: ".truth-harness/vault",
   audits: ".truth-harness/audits",
   snapshots: ".truth-harness/snapshots",
+  revisions: ".truth-harness/revisions",
   sessions: ".truth-harness/sessions",
   reviews: ".truth-harness/reviews",
   validation: ".truth-harness/validation",

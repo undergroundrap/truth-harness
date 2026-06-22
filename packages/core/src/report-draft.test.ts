@@ -38,6 +38,14 @@ describe("saved report drafts", () => {
     expect(written.paths.relativeJson).toContain(".truth-harness/findings/");
     expect(written.paths.relativeMarkdown).toContain(".truth-harness/findings/");
     expect(await readFile(written.paths.markdown, "utf8")).toBe(markdown);
+    const writtenMarkdownRef = written.report.artifactRefs.find((ref) => ref.role === "report-markdown");
+    expect(writtenMarkdownRef).toMatchObject({
+      path: written.paths.relativeMarkdown,
+      source: "report.paths.markdown",
+      sha256: written.report.markdownSha256,
+      sha256Scope: "file",
+      citation: `${written.paths.relativeMarkdown} sha256:${written.report.markdownSha256}`
+    });
 
     const listed = await listReportDrafts({ rootPath: root });
     expect(listed).toHaveLength(1);
@@ -49,11 +57,18 @@ describe("saved report drafts", () => {
       markdownVerified: true,
       markdownStatus: "verified"
     });
+    expect(listed[0].report.artifactRefs.map((ref) => ref.role).sort()).toEqual(["report-json", "report-markdown"]);
+    expect(listed[0].report.artifactRefs.every((ref) => /^[a-f0-9]{64}$/u.test(ref.sha256 ?? ""))).toBe(true);
 
     const read = await readReportDraft({ rootPath: root, reportId: written.report.reportId });
     expect(read.markdown).toBe(markdown);
     expect(read.markdownVerified).toBe(true);
     expect(read.report.warnings).toEqual(written.report.warnings);
+    const readJsonRef = read.report.artifactRefs.find((ref) => ref.role === "report-json");
+    const readMarkdownRef = read.report.artifactRefs.find((ref) => ref.role === "report-markdown");
+    expect(readJsonRef?.citation).toContain(`${written.paths.relativeJson} sha256:`);
+    expect(readMarkdownRef?.sha256).toBe(read.markdownSha256);
+    expect(readMarkdownRef?.citation).toBe(`${written.paths.relativeMarkdown} sha256:${read.markdownSha256}`);
   });
 
   it("validates report draft JSON before writing sidecars", async () => {

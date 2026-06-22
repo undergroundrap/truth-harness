@@ -7,6 +7,12 @@ import { appendArtifactWriteEvent } from "./event-log.js";
 import { withWorkspaceLock } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import {
+  enrichLocalArtifactRefs,
+  normalizeLocalArtifactPath,
+  uniqueLocalArtifactRefs,
+  type LocalArtifactRef
+} from "./local-artifact-ref.js";
+import {
   isPortableBundlePayloadPath,
   validateWorkspaceArtifacts,
   type WorkspaceValidation,
@@ -145,6 +151,7 @@ export interface WorkspaceCatalogSearchInput {
   trust?: TrustLabel;
   domain?: string;
   tag?: string;
+  ref?: string;
   limit?: number;
 }
 
@@ -162,6 +169,7 @@ export interface WorkspaceCatalogSearchResult {
     trust?: TrustLabel;
     domain?: string;
     tag?: string;
+    ref?: string;
     limit: number;
   };
   total: number;
@@ -184,6 +192,13 @@ export interface WorkspaceCatalogSearchRow {
   valid: boolean;
   issueCount: number;
   tags: string[];
+  artifactRefs: WorkspaceCatalogSearchArtifactRef[];
+}
+
+export interface WorkspaceCatalogSearchArtifactRef extends LocalArtifactRef {
+  resolved: boolean;
+  fieldPath: string;
+  refKind?: string;
 }
 
 interface CatalogArtifactRow {
@@ -252,6 +267,15 @@ interface CatalogSearchSqlRow {
   valid: 0 | 1;
   issue_count: number;
   tags: string | null;
+}
+
+interface CatalogArtifactRefSqlRow {
+  from_path: string;
+  to_ref: string;
+  ref_kind: string | null;
+  edge_kind: string;
+  field_path: string;
+  resolved: 0 | 1;
 }
 
 interface CatalogIndexedSnapshotRow {
@@ -764,6 +788,7 @@ export async function searchWorkspaceCatalog(input: WorkspaceCatalogSearchInput)
     const limit = clampLimit(input.limit);
     const conditions: string[] = [];
     const params: Record<string, string | number> = { limit };
+    const refCandidates = catalogReferenceFilterCandidates(input.ref);
     if (input.query?.trim()) {
       conditions.push("a.path IN (SELECT path FROM artifact_fts WHERE artifact_fts MATCH @match)");
       params.match = toFtsQuery(input.query);
@@ -783,6 +808,13 @@ export async function searchWorkspaceCatalog(input: WorkspaceCatalogSearchInput)
     if (input.tag?.trim()) {
       conditions.push("a.path IN (SELECT path FROM artifact_tags WHERE tag = @tag)");
       params.tag = normalizeTag(input.tag);
+    }
+    if (refCandidates.length > 0) {
+      const placeholders = refCandidates.map((_, index) => `@ref${index}`);
+      conditions.push(`a.path IN (SELECT from_path FROM artifact_refs WHERE to_ref IN (${placeholders.join(", ")}))`);
+      refCandidates.forEach((candidate, index) => {
+        params[`ref${index}`] = candidate;
+      });
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -812,6 +844,8 @@ export async function searchWorkspaceCatalog(input: WorkspaceCatalogSearchInput)
       )
       .all(params) as CatalogSearchSqlRow[];
 
+    const resultRows = await attachArtifactRefsToSearchRows(status.root, db, rows.map(searchRowFromSql));
+
     return {
       schemaVersion: "truth-harness.catalog-search.v0",
       catalogSchemaVersion: WORKSPACE_CATALOG_SCHEMA_VERSION,
@@ -826,10 +860,11 @@ export async function searchWorkspaceCatalog(input: WorkspaceCatalogSearchInput)
         trust: input.trust,
         domain: input.domain,
         tag: input.tag ? normalizeTag(input.tag) : undefined,
+        ref: refCandidates[0],
         limit
       },
       total: rows.length,
-      results: rows.map(searchRowFromSql),
+      results: resultRows,
       warnings: catalogWarnings()
     };
   } finally {
@@ -1263,9 +1298,10 @@ function artifactIdForRecord(kind: WorkspaceValidationArtifactKind, record: Reco
     vault: ["vaultId"],
     audits: ["auditId"],
     snapshots: ["snapshotId"],
+    revisions: ["revisionId"],
     sessions: ["sessionId"],
     reviews: ["reviewId"],
-    findings: ["planId", "reviewId", "packId", "bundleId", "verificationId", "reportId", "runId"],
+    findings: ["planId", "loopId", "reviewId", "packId", "bundleId", "verificationId", "reportId", "runId"],
     validation: ["planId"],
     literature: ["recordId"],
     "notebook-runs": ["runRecordId"],
@@ -1372,10 +1408,20 @@ function collectCatalogReferencesWithSets(
         });
         continue;
       }
+      if (key === "parentRevisionRefs" && Array.isArray(entry)) {
+        entry.forEach((ref, index) => {
+          if (typeof ref === "string") pushRef(ref, `${entryPath}[${index}]`, "parent-revision-ref", "revision");
+        });
+        continue;
+      }
       if (key === "selectedContextRefs" && Array.isArray(entry)) {
         entry.forEach((ref, index) => {
           if (typeof ref === "string") pushRef(ref, `${entryPath}[${index}]`, "selected-context-ref");
         });
+        continue;
+      }
+      if (key === "artifactRefs" && Array.isArray(entry)) {
+        entry.forEach((ref, index) => collectArtifactRefEntry(ref, `${entryPath}[${index}]`, pushRef));
         continue;
       }
 
@@ -1401,6 +1447,24 @@ function collectReferenceEntry(
   if (isRecord(entry) && typeof entry.ref === "string") {
     pushRef(entry.ref, path, edgeKind, typeof entry.kind === "string" ? entry.kind : undefined);
   }
+}
+
+function collectArtifactRefEntry(
+  entry: unknown,
+  path: string,
+  pushRef: (value: string, fieldPath: string, edgeKind: string, refKind?: string) => void
+): void {
+  if (typeof entry === "string") {
+    pushRef(entry, path, "artifact-ref", "artifact");
+    return;
+  }
+
+  if (!isRecord(entry) || typeof entry.path !== "string") {
+    return;
+  }
+
+  const role = typeof entry.role === "string" && entry.role.trim() ? entry.role : "artifact-ref";
+  pushRef(entry.path, `${path}.path`, role, "artifact");
 }
 
 function parseReference(value: string, fallbackKind?: string): { kind?: string; ref: string } {
@@ -1445,6 +1509,9 @@ function referenceKindToArtifactKind(kind: string | undefined): string | undefin
       return "smt";
     case "snapshot":
       return "snapshots";
+    case "revision":
+    case "workspace-revision":
+      return "revisions";
     case "literature":
       return "literature";
     case "review":
@@ -1674,8 +1741,55 @@ function searchRowFromSql(row: CatalogSearchSqlRow): WorkspaceCatalogSearchRow {
     updatedAt: row.updated_at ?? undefined,
     valid: row.valid === 1,
     issueCount: row.issue_count,
-    tags: row.tags ? row.tags.split(" ").filter(Boolean).sort() : []
+    tags: row.tags ? row.tags.split(" ").filter(Boolean).sort() : [],
+    artifactRefs: []
   };
+}
+
+async function attachArtifactRefsToSearchRows(
+  rootPath: string,
+  db: Database.Database,
+  rows: WorkspaceCatalogSearchRow[]
+): Promise<WorkspaceCatalogSearchRow[]> {
+  if (rows.length === 0) {
+    return rows;
+  }
+
+  const selectRefs = db.prepare(
+    `SELECT from_path, to_ref, ref_kind, edge_kind, field_path, resolved
+     FROM artifact_refs
+     WHERE from_path = ?
+     ORDER BY field_path ASC, to_ref ASC
+     LIMIT 12`
+  );
+
+  return Promise.all(
+    rows.map(async (row) => {
+      const refRows = selectRefs.all(row.path) as CatalogArtifactRefSqlRow[];
+      const refs = uniqueLocalArtifactRefs(
+        refRows.flatMap((refRow) => {
+          const artifactPath = normalizeLocalArtifactPath(refRow.to_ref);
+          if (!artifactPath) {
+            return [];
+          }
+          return [
+            {
+              path: artifactPath,
+              role: refRow.edge_kind,
+              source: refRow.field_path,
+              resolved: refRow.resolved === 1,
+              fieldPath: refRow.field_path,
+              refKind: refRow.ref_kind ?? undefined
+            } satisfies WorkspaceCatalogSearchArtifactRef
+          ];
+        })
+      );
+      return {
+        ...row,
+        artifactRefs: await enrichLocalArtifactRefs(rootPath, refs)
+      };
+    })
+  );
 }
 
 function workspaceCatalogPath(status: LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }): string {
@@ -1795,6 +1909,39 @@ function toFtsQuery(query: string): string {
     .filter(Boolean)
     .map((token) => `"${token.replaceAll('"', '""')}"`)
     .join(" ");
+}
+
+function catalogReferenceFilterCandidates(value: string | undefined): string[] {
+  if (!value?.trim()) {
+    return [];
+  }
+
+  const candidates = new Set<string>();
+  const pushCandidate = (candidate: string) => {
+    const normalized = normalizeCatalogReferenceValue(candidate);
+    if (normalized) {
+      candidates.add(normalized);
+    }
+  };
+
+  const safeValue = safeText(value);
+  pushCandidate(safeValue);
+  const parsed = parseReference(safeValue);
+  if (parsed.ref !== safeValue) {
+    pushCandidate(parsed.ref);
+  }
+
+  return [...candidates].slice(0, 6);
+}
+
+function normalizeCatalogReferenceValue(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const localArtifactPath = normalizeLocalArtifactPath(trimmed);
+  return localArtifactPath ? normalizePortablePath(localArtifactPath) : trimmed.replace(/\\/gu, "/");
 }
 
 function clampLimit(limit: number | undefined): number {

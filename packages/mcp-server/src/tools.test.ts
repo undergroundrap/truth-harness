@@ -3,8 +3,10 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import {
   createReceipt,
+  writeEngineVerificationRun,
   writeLeanProofCheckRecord,
   writeReportDraft,
+  type EngineVerificationCommandRunner,
   type ProofBackendCommandRunner
 } from "@truth-harness/core";
 import { verifierRouteStatementBoundaryHash } from "../../core/src/verifier-route.js";
@@ -96,9 +98,11 @@ import {
   handleTruthHarnessWorkspaceReview,
   handleTruthHarnessWorkspaceReviewList,
   handleTruthHarnessWorkspaceReviewShow,
+  handleTruthHarnessWorkspaceSeedHardMath,
   handleTruthHarnessWorkspaceRunNext,
   handleTruthHarnessWorkspaceRunNextList,
   handleTruthHarnessWorkspaceRunNextShow,
+  handleTruthHarnessWorkspacePilotLoop,
   handleTruthHarnessWorkspaceUiReview,
   handleTruthHarnessWorkspaceUiReviewList,
   handleTruthHarnessWorkspaceSnapshot,
@@ -556,7 +560,8 @@ describe("MCP tool handlers", () => {
       statement: "3 / 4 + 5 / 8 equals 11 / 8.",
       domain: "math",
       trust: "exact-computed",
-      tags: ["fractions", "catalog-test"]
+      tags: ["fractions", "catalog-test"],
+      evidenceRefs: [{ kind: "receipt", ref: ".truth-harness/receipts/mcp-fraction.json" }]
     });
     const route = await handleTruthHarnessVerify({
       write: true,
@@ -578,6 +583,10 @@ describe("MCP tool handlers", () => {
       trust: "exact-computed",
       limit: 5
     });
+    const refSearch = await handleTruthHarnessCatalogSearch({
+      kind: "claims",
+      ref: ".truth-harness/receipts/mcp-fraction.json"
+    });
 
     expect(rebuild.localOnly).toBe(true);
     expect(rebuild.networkAccess).toBe("none");
@@ -589,6 +598,13 @@ describe("MCP tool handlers", () => {
     expect(claimSearch.total).toBe(1);
     expect(claimSearch.results[0]?.artifactId).toBe(claim.claim.claimId);
     expect(claimSearch.results[0]?.trust).toBe(claim.claim.trust);
+    expect(refSearch.filters.ref).toBe(".truth-harness/receipts/mcp-fraction.json");
+    expect(refSearch.results).toContainEqual(
+      expect.objectContaining({
+        artifactId: claim.claim.claimId,
+        kind: "claims"
+      })
+    );
     expect(routeSearch.results).toContainEqual(
       expect.objectContaining({
         artifactId: route.route.routeId,
@@ -1269,13 +1285,18 @@ describe("MCP tool handlers", () => {
     }
     expect(writtenDryRun.plan).toMatchObject({
       schemaVersion: "truth-harness.workspace-run-next.v0",
-      dryRun: true
+      dryRun: true,
+      sourceRevision: {
+        revisionId: expect.stringMatching(/^rev_[a-f0-9]{16}$/u),
+        path: expect.stringContaining(".truth-harness/revisions/")
+      }
     });
     expect(writtenDryRun.result.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
     expect(writtenDryRun.result.markdown).toContain("Truth Harness Run-Next Plan");
     expect(await readFile(writtenDryRun.result.markdownPath, "utf8")).toContain("not a trust-label upgrade");
-    const runNextList = await handleTruthHarnessWorkspaceRunNextList({});
+    const runNextList = await handleTruthHarnessWorkspaceRunNextList({ limit: 1 });
     expect(runNextList.total).toBe(1);
+    expect(runNextList.limit).toBe(1);
     expect(runNextList.plans[0]).toMatchObject({
       planId: writtenDryRun.plan.planId,
       dryRun: true,
@@ -1291,9 +1312,12 @@ describe("MCP tool handlers", () => {
     });
     expect(verifiedRunNextList.plans[0]).toMatchObject({
       planId: writtenDryRun.plan.planId,
+      sourceRevisionStatus: "drifted",
+      sourceRevisionAdded: 2,
+      sourceRevisionIgnoredAdded: 3,
       sourceSnapshotStatus: "drifted",
       sourceSnapshotAdded: 2,
-      sourceSnapshotIgnoredAdded: 2,
+      sourceSnapshotIgnoredAdded: 3,
       resumeDecision: {
         safeToResume: false,
         status: "rerun-run-next",
@@ -1325,7 +1349,12 @@ describe("MCP tool handlers", () => {
       sourceSnapshot: {
         sourceSnapshotStatus: "drifted",
         sourceSnapshotAdded: 2,
-        sourceSnapshotIgnoredAdded: 2
+        sourceSnapshotIgnoredAdded: 3
+      },
+      sourceRevision: {
+        sourceRevisionStatus: "drifted",
+        sourceRevisionAdded: 2,
+        sourceRevisionIgnoredAdded: 3
       }
     });
     expect(executed.dryRun).toBe(false);
@@ -1345,6 +1374,26 @@ describe("MCP tool handlers", () => {
     const root = await tempRoot();
     process.env.TRUTH_HARNESS_ROOT = root;
     await handleTruthHarnessWorkspaceInit({ name: "MCP Validation Gate Run Next Lab" });
+    const savedRun = await writeEngineVerificationRun({
+      rootPath: root,
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      cvc5Command: "cvc5-test",
+      leanCommand: "lean-test",
+      sageCommand: "sage-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      requirements: {
+        maxima: true,
+        z3: true,
+        cvc5: true,
+        lean: true,
+        sage: true
+      },
+      runner: passingEngineRunner
+    });
     const harness = await handleTruthHarnessResearchHarnessStart({
       objective: "Prove or refute the reusable invariant for a deterministic robotics simulation kernel.",
       domains: ["math", "physics", "code"]
@@ -1371,9 +1420,102 @@ describe("MCP tool handlers", () => {
       problem: "Prove or refute the reusable invariant for a deterministic robotics simulation kernel.",
       classifications: expect.arrayContaining(["formal-proof", "simulation-or-engineering"])
     });
+    expect(plan.enginePlan?.savedReviewerEvidence).toMatchObject({
+      status: "available",
+      runId: savedRun.record.runId,
+      coveredCapabilityIds: expect.arrayContaining(["lean-proof-checker", "sage-cas"])
+    });
     expect(plan.enginePlan?.steps.map((step) => step.capabilityId)).toEqual(
       expect.arrayContaining(["lean-proof-checker", "z3-smt-solver", "claim-ledger"])
     );
+    expect(plan.enginePlan?.steps.find((step) => step.capabilityId === "lean-proof-checker")).toMatchObject({
+      status: "missing",
+      canRunNow: false
+    });
+  });
+
+  it("seeds hard-math validation workspaces for agent handoffs", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+
+    const seed = await handleTruthHarnessWorkspaceSeedHardMath({
+      caseIds: ["symbolic-trig-identity"],
+      now: "2026-06-20T12:00:00.000Z",
+      writeRunNextPlan: true
+    });
+    const list = await handleTruthHarnessWorkspaceRunNextList({});
+
+    expect(seed).toMatchObject({
+      schemaVersion: "truth-harness.hard-math-seed.v0",
+      localOnly: true,
+      networkAccess: "none",
+      cases: [
+        expect.objectContaining({
+          caseId: "symbolic-trig-identity",
+          sessionId: expect.any(String),
+          validationPlanId: expect.any(String),
+          openBlockingGates: expect.any(Number)
+        })
+      ],
+      runNext: {
+        plan: {
+          schemaVersion: "truth-harness.workspace-run-next.v0",
+          dryRun: true,
+          item: {
+            kind: "validation-gate",
+            command: expect.stringContaining("truth-harness verify")
+          }
+        }
+      }
+    });
+    expect("jsonPath" in (seed.runNext ?? {})).toBe(true);
+    expect(list.plans).toContainEqual(
+      expect.objectContaining({
+        planId: seed.runNext?.plan.planId
+      })
+    );
+  });
+
+  it("runs and writes bounded workspace pilot loops for agents", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({ name: "MCP Pilot Loop Lab" });
+    await handleTruthHarnessResearchHarnessStart({
+      objective: "3 / 4 + 5 / 8",
+      domains: ["math"]
+    });
+
+    const result = await handleTruthHarnessWorkspacePilotLoop({
+      executeLocal: true,
+      write: true,
+      maxSteps: 2,
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command"
+    });
+
+    if (!("written" in result)) {
+      throw new Error("Expected written pilot-loop MCP output.");
+    }
+    expect(result.loop).toMatchObject({
+      schemaVersion: "truth-harness.workspace-pilot-loop.v0",
+      localOnly: true,
+      networkAccess: "none",
+      dryRun: false
+    });
+    expect(result.loop.summary.executedSteps).toBeGreaterThanOrEqual(1);
+    expect(result.loop.summary.evidenceRefs).toContainEqual(expect.stringMatching(/^route:/u));
+    expect(result.loop.steps[0]).toMatchObject({
+      execution: {
+        status: "executed",
+        kind: "verifier-route",
+        attached: true
+      },
+      runNextPlanPath: expect.stringContaining(".truth-harness/findings/")
+    });
+    expect(result.result.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(result.result.markdown).toContain("Truth Harness Pilot Loop");
+    expect(result.run.runNextWrites.length).toBeGreaterThanOrEqual(1);
   });
 
   it("can start a hard-problem harness and save the first agent handoff in one call", async () => {
@@ -1410,6 +1552,33 @@ describe("MCP tool handlers", () => {
     expect(savedMarkdown).toContain(harness.runNext.plan.planId);
     expect(savedPlans.total).toBe(1);
     expect(savedPlans.plans[0]?.planId).toBe(harness.runNext.plan.planId);
+
+    const pilot = await handleTruthHarnessWorkspacePilotLoop({
+      source: "saved-run-next",
+      planRef: harness.runNext.plan.planId,
+      maxSteps: 3
+    });
+    if ("written" in pilot) {
+      throw new Error("Expected plain saved-run-next pilot-loop output without write=true.");
+    }
+    expect(pilot.loop).toMatchObject({
+      schemaVersion: "truth-harness.workspace-pilot-loop.v0",
+      source: "saved-run-next",
+      dryRun: true,
+      status: "stopped",
+      stopReason: "dry-run",
+      steps: [
+        expect.objectContaining({
+          item: expect.objectContaining({
+            command: expect.stringContaining("truth-harness verify")
+          }),
+          execution: expect.objectContaining({
+            status: "planned",
+            kind: "dry-run"
+          })
+        })
+      ]
+    });
   });
 
   it("executes candidate validation evidence through agent run-next calls", async () => {
@@ -1581,6 +1750,9 @@ describe("MCP tool handlers", () => {
     expect(bundle.manifest.summary.totalFiles).toBeGreaterThan(0);
     expect(bundle.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
     expect(bundle.manifest.reviewerCommands.verifyEngines).toContain("--require-all-engines");
+    expect(bundle.manifest.reviewerCommands.runExactHardMathClosure).toBe("npm run docker:hard-math-closure");
+    expect(bundle.manifest.reviewerCommands.runSymbolicHardMathClosure).toBe("npm run docker:symbolic-closure");
+    expect(bundle.manifest.reviewerCommands.runSmtHardMathClosure).toBe("npm run docker:smt-closure");
     expect(bundle.manifest.reviewerCommands.dockerStrictProfessorEvidence).toBe("npm run docker:professor:all");
     expect(verification).toMatchObject({
       schemaVersion: "truth-harness.credibility-bundle-verification.v0",
@@ -2445,6 +2617,46 @@ async function tempRoot(): Promise<string> {
   tempRoots.push(root);
   return root;
 }
+
+const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => {
+  if (command === "maxima-test" && args[0] === "--version") {
+    return { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" };
+  }
+  if (command === "maxima-test") {
+    return { status: 0, stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n", stderr: "" };
+  }
+  if (command === "z3-test" && args[0] === "-version") {
+    return { status: 0, stdout: "Z3 version 4.13.0\n", stderr: "" };
+  }
+  if (command === "z3-test") {
+    return { status: 0, stdout: "sat\n", stderr: "" };
+  }
+  if (command === "cvc5-test" && args[0] === "--version") {
+    return { status: 0, stdout: "This is cvc5 version 1.1.2\n", stderr: "" };
+  }
+  if (command === "cvc5-test") {
+    return { status: 0, stdout: "sat\n", stderr: "" };
+  }
+  if (command === "lean-test" && args[0] === "--version") {
+    return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+  }
+  if (command === "lean-test") {
+    return { status: 0, stdout: "", stderr: "" };
+  }
+  if (command === "sage-test" && args[0] === "--version") {
+    return { status: 0, stdout: "SageMath version 10.6\n", stderr: "" };
+  }
+  if (command === "sage-test") {
+    return { status: 0, stdout: "TRUTH_HARNESS_SAGE_STATUS:passed:0\n", stderr: "" };
+  }
+
+  return {
+    status: null,
+    stdout: "",
+    stderr: "",
+    error: { name: "Error", message: `unexpected command ${command} ${args.join(" ")}` }
+  };
+};
 
 function restoreWorkspaceRoot(): void {
   if (originalWorkspaceRoot === undefined) {

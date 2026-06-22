@@ -1,26 +1,33 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://truth-harness.local/schemas/workspace-snapshot.schema.json",
-  "title": "Truth Harness Workspace Snapshot",
+  "$id": "https://truth-harness.local/schemas/workspace-revision.schema.json",
+  "title": "Truth Harness Workspace Revision",
   "type": "object",
   "required": [
     "schemaVersion",
-    "snapshotId",
+    "revisionId",
     "projectId",
     "createdAt",
-    "workspaceDir",
-    "entries",
+    "title",
+    "reason",
+    "sourceSnapshot",
+    "snapshotRefs",
+    "parentRevisionRefs",
+    "sessionRefs",
+    "validationPlanRefs",
+    "claimRefs",
+    "artifactRefs",
     "summary",
     "privacy",
     "warnings"
   ],
   "properties": {
     "schemaVersion": {
-      "const": "truth-harness.workspace-snapshot.v0"
+      "const": "truth-harness.workspace-revision.v0"
     },
-    "snapshotId": {
+    "revisionId": {
       "type": "string",
-      "pattern": "^snap_[a-f0-9]{16}$"
+      "pattern": "^rev_[a-f0-9]{16}$"
     },
     "projectId": {
       "type": "string",
@@ -30,18 +37,63 @@
       "type": "string",
       "format": "date-time"
     },
-    "workspaceDir": {
-      "const": ".truth-harness"
+    "title": {
+      "type": "string",
+      "minLength": 1
     },
-    "entries": {
+    "reason": {
+      "type": "string"
+    },
+    "sourceSnapshot": {
+      "type": "object",
+      "required": ["snapshotId", "path", "sha256", "totalFiles", "totalBytes"],
+      "properties": {
+        "snapshotId": {
+          "type": "string",
+          "pattern": "^snap_[a-f0-9]{16}$"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/snapshots/"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "totalFiles": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "snapshotRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "parentRevisionRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "sessionRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "validationPlanRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "claimRefs": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "artifactRefs": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/entry"
+        "$ref": "#/$defs/artifactRef"
       }
     },
     "summary": {
       "type": "object",
-      "required": ["totalFiles", "totalBytes", "byKind", "bySchema"],
+      "required": ["totalFiles", "totalBytes", "byKind", "bySchema", "linkedRefs"],
       "properties": {
         "totalFiles": {
           "type": "integer",
@@ -64,6 +116,10 @@
             "type": "integer",
             "minimum": 0
           }
+        },
+        "linkedRefs": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false
@@ -76,61 +132,37 @@
     }
   },
   "$defs": {
-    "entry": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "artifactRef": {
       "type": "object",
-      "required": ["path", "kind", "bytes", "sha256"],
+      "required": ["path", "role", "source"],
       "properties": {
         "path": {
           "type": "string",
           "pattern": "^\\.truth-harness/"
         },
-        "kind": {
-          "enum": [
-            "receipts",
-            "claims",
-            "artifacts",
-            "events",
-            "indexes",
-            "findings",
-            "inventions",
-            "cas",
-            "proofs",
-            "smt",
-            "engine-runs",
-            "benchmarks",
-            "disclosures",
-            "simulations",
-            "patents",
-            "experiments",
-            "vault",
-            "audits",
-            "snapshots",
-            "revisions",
-            "sessions",
-            "reviews",
-            "validation",
-            "literature",
-            "notebook-runs",
-            "code-runs",
-            "model-contexts",
-            "visuals",
-            "routes",
-            "manifest",
-            "unknown"
-          ]
+        "role": {
+          "type": "string",
+          "minLength": 1
         },
-        "bytes": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sizeBytes": {
           "type": "integer",
           "minimum": 0
         },
         "sha256": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
+          "$ref": "#/$defs/sha256"
         },
-        "schemaVersion": {
-          "type": "string"
+        "sha256Scope": {
+          "const": "file"
         },
-        "artifactId": {
+        "citation": {
           "type": "string"
         }
       },

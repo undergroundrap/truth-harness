@@ -157,6 +157,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_workspace_events",
         "truth_harness_workspace_graph",
         "truth_harness_workspace_init",
+        "truth_harness_workspace_pilot_loop",
         "truth_harness_workspace_repair",
         "truth_harness_workspace_review",
         "truth_harness_workspace_review_list",
@@ -164,6 +165,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_workspace_run_next",
         "truth_harness_workspace_run_next_list",
         "truth_harness_workspace_run_next_show",
+        "truth_harness_workspace_seed_hard_math",
         "truth_harness_workspace_snapshot",
         "truth_harness_workspace_snapshot_list",
         "truth_harness_workspace_snapshot_verify",
@@ -498,6 +500,22 @@ describe("Truth Harness MCP server", () => {
       expect(workspaceRunNextShowWithSnapshotText).toContain("\"safeToResume\": true");
       expect(workspaceRunNextShowWithSnapshotText).toContain("\"status\": \"safe-to-resume\"");
 
+      const workspacePilotLoop = await client.callTool({
+        name: "truth_harness_workspace_pilot_loop",
+        arguments: {
+          maxRoutes: 1,
+          maxClaims: 20,
+          maxSteps: 1,
+          write: true
+        }
+      });
+      const workspacePilotLoopText = firstText(workspacePilotLoop.content);
+      expect(workspacePilotLoop.isError).not.toBe(true);
+      expect(workspacePilotLoopText).toContain("\"schemaVersion\": \"truth-harness.workspace-pilot-loop.v0\"");
+      expect(workspacePilotLoopText).toContain("\"dryRun\": true");
+      expect(workspacePilotLoopText).toContain("\"networkAccess\": \"none\"");
+      expect(workspacePilotLoopText).toContain("\"written\": true");
+
       const webUiReview = await client.callTool({
         name: "truth_harness_workspace_ui_review",
         arguments: {
@@ -811,6 +829,21 @@ describe("Truth Harness MCP server", () => {
       expect(researchHarnessText).toContain("truth-harness engines readiness");
       expect(researchHarnessText).toContain("Never label a result `proved` unless an accepted proof checker verifies the concrete proof artifact.");
       expect(researchHarnessText).toContain("Identify the first benchmark that would falsify the design.");
+
+      const hardMathSeedResult = await client.callTool({
+        name: "truth_harness_workspace_seed_hard_math",
+        arguments: {
+          caseIds: ["symbolic-trig-identity"],
+          now: "2026-06-20T12:00:00.000Z",
+          writeRunNextPlan: true
+        }
+      });
+      const hardMathSeedText = firstText(hardMathSeedResult.content);
+      expect(hardMathSeedResult.isError).not.toBe(true);
+      expect(hardMathSeedText).toContain("\"schemaVersion\": \"truth-harness.hard-math-seed.v0\"");
+      expect(hardMathSeedText).toContain("\"caseId\": \"symbolic-trig-identity\"");
+      expect(hardMathSeedText).toContain("\"schemaVersion\": \"truth-harness.workspace-run-next.v0\"");
+      expect(hardMathSeedText).toContain("truth-harness verify");
 
       const workspaceGraphResult = await client.callTool({
         name: "truth_harness_workspace_graph",
@@ -1208,7 +1241,7 @@ describe("Truth Harness MCP server", () => {
         name: "truth_harness_validation_plan_list",
         arguments: {}
       });
-      expect(firstText(validationPlanList.content)).toContain("\"total\": 2");
+      expect(firstText(validationPlanList.content)).toContain("\"total\": 3");
 
       const inventionResult = await client.callTool({
         name: "truth_harness_invention_log",

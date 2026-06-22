@@ -1,4 +1,6 @@
-import { mkdir, readdir, readFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import {
@@ -22,6 +24,7 @@ import { createEnginePlan, type CreateEnginePlanOptions, type EnginePlan } from 
 import { writeEngineVerificationRun, type EngineVerificationRequirements } from "./engine-verification.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { inspectLeanProject } from "./lean-project.js";
 import { writeLeanProofCheckRecord } from "./proof-backend.js";
 import { readReportDraft } from "./report-draft.js";
 import { createReceipt } from "./receipt.js";
@@ -47,8 +50,13 @@ import {
   type SatisfyVerifierRouteObligationResult,
   type VerifierRouteEvidenceRef
 } from "./verifier-route.js";
-import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
+import { refreshWorkspaceCatalogArtifact, searchWorkspaceCatalog } from "./workspace-catalog.js";
 import { verifyWorkspaceSnapshot, writeWorkspaceSnapshot } from "./workspace-snapshot.js";
+import {
+  verifyWorkspaceRevision,
+  writeWorkspaceRevision,
+  type WorkspaceRevisionVerification
+} from "./workspace-revision.js";
 import type { WorkspaceReview, WorkspaceReviewItem } from "./workspace-review.js";
 
 export type WorkspaceRunNextStatus = "planned" | "executed" | "blocked";
@@ -68,15 +76,81 @@ export interface WorkspaceRunNextSourceSnapshot {
   totalBytes: number;
 }
 
+export interface WorkspaceRunNextSourceRevision {
+  revisionId: string;
+  path: string;
+  sourceSnapshotId: string;
+  sourceSnapshotPath: string;
+  totalFiles: number;
+  totalBytes: number;
+}
+
+export type WorkspaceRunNextArtifactRefRole =
+  | "run-next-packet"
+  | "source-revision"
+  | "source-snapshot"
+  | "candidate-evidence"
+  | "execution-evidence"
+  | "referenced-artifact";
+
+export interface WorkspaceRunNextArtifactRef {
+  path: string;
+  role: WorkspaceRunNextArtifactRefRole;
+  source: string;
+  sizeBytes?: number;
+  sha256?: string;
+  sha256Scope?: "file";
+  citation?: string;
+}
+
+export interface WorkspaceRunNextImpactRef {
+  refPath: string;
+  citedByPath: string;
+  citedByKind: string;
+  source: "workspace-catalog";
+  citedByArtifactId?: string;
+  citedByTitle?: string;
+  citedByTrust?: TrustLabel;
+  citedByStatus?: string;
+  fieldPath?: string;
+  refKind?: string;
+}
+
+export type WorkspaceRunNextRevalidationPriority = "high" | "medium";
+
+export interface WorkspaceRunNextRevalidationItem {
+  itemId: string;
+  refPath: string;
+  dependentPath: string;
+  dependentKind: string;
+  source: "impact-ref";
+  priority: WorkspaceRunNextRevalidationPriority;
+  reason: string;
+  command: string;
+  evidenceRequired: string;
+  boundary: string;
+  dependentArtifactId?: string;
+  dependentTitle?: string;
+  dependentTrust?: TrustLabel;
+  dependentStatus?: string;
+  fieldPath?: string;
+}
+
 export type WorkspaceRunNextSourceSnapshotStatus = "not-recorded" | "verified" | "drifted" | "missing";
-export type WorkspaceRunNextResumeStatus = "safe-to-resume" | "verify-snapshot-first" | "rerun-run-next";
+export type WorkspaceRunNextResumeStatus =
+  | "safe-to-resume"
+  | "choose-idle-action"
+  | "verify-snapshot-first"
+  | "rerun-run-next";
 export type WorkspaceRunNextResumeAction =
   | "run-selected-command"
+  | "choose-idle-action"
   | "verify-source-snapshot"
   | "rerun-workspace-run-next";
 
 export interface WorkspaceRunNextListOptions {
   verifySnapshots?: boolean;
+  limit?: number;
   now?: string;
 }
 
@@ -91,12 +165,42 @@ export type WorkspaceRunNextSourceSnapshotCheck = Pick<
   | "sourceSnapshotDriftSummary"
 >;
 
+export type WorkspaceRunNextSourceRevisionCheck = Pick<
+  WorkspaceRunNextSummary,
+  | "sourceRevisionStatus"
+  | "sourceRevisionVerifiedAt"
+  | "sourceRevisionMissing"
+  | "sourceRevisionChanged"
+  | "sourceRevisionAdded"
+  | "sourceRevisionIgnoredAdded"
+  | "sourceRevisionDriftSummary"
+>;
+
 export interface WorkspaceRunNextInspection {
   schemaVersion: "truth-harness.workspace-run-next-inspection.v0";
   plan: WorkspaceRunNextPlan;
   path: string;
+  artifactRefs?: WorkspaceRunNextArtifactRef[];
+  impactRefs?: WorkspaceRunNextImpactRef[];
+  revalidationQueue?: WorkspaceRunNextRevalidationItem[];
+  sourceRevision?: WorkspaceRunNextSourceRevisionCheck;
   sourceSnapshot?: WorkspaceRunNextSourceSnapshotCheck;
   resumeDecision: WorkspaceRunNextResumeDecision;
+}
+
+export interface WorkspaceRunNextSavedHandoffInput {
+  rootPath: string;
+  planRef: string;
+  executeLocal: boolean;
+  now?: string;
+  enginePlanOptions?: CreateEnginePlanOptions;
+}
+
+export interface WorkspaceRunNextSavedHandoffResult {
+  plan: WorkspaceRunNextPlan;
+  sourcePlan: WorkspaceRunNextPlan;
+  sourcePlanPath: string;
+  inspection: WorkspaceRunNextInspection;
 }
 
 export interface WorkspaceRunNextResumeDecision {
@@ -131,6 +235,20 @@ export interface WorkspaceRunNextSummary {
   enginePlanClassifications?: EnginePlan["classifications"];
   enginePlanTargetTrustCeiling?: EnginePlan["targetTrustCeiling"];
   enginePlanRecommendedFirstCommand?: string;
+  artifactRefs?: WorkspaceRunNextArtifactRef[];
+  impactRefs?: WorkspaceRunNextImpactRef[];
+  revalidationQueue?: WorkspaceRunNextRevalidationItem[];
+  sourceRevisionId?: string;
+  sourceRevisionPath?: string;
+  sourceRevisionSourceSnapshotId?: string;
+  sourceRevisionSourceSnapshotPath?: string;
+  sourceRevisionStatus?: WorkspaceRunNextSourceSnapshotStatus;
+  sourceRevisionVerifiedAt?: string;
+  sourceRevisionMissing?: number;
+  sourceRevisionChanged?: number;
+  sourceRevisionAdded?: number;
+  sourceRevisionIgnoredAdded?: number;
+  sourceRevisionDriftSummary?: string;
   sourceSnapshotId?: string;
   sourceSnapshotPath?: string;
   sourceSnapshotFiles?: number;
@@ -190,6 +308,9 @@ export interface WorkspaceRunNextPlan {
     | "validationPlanId"
     | "validationGateId"
     | "validationGateKind"
+    | "proofDeclaration"
+    | "proofAttempt"
+    | "proofRepairTarget"
     | "reportId"
   >;
   execution: {
@@ -204,7 +325,11 @@ export interface WorkspaceRunNextPlan {
   rationale?: WorkspaceRunNextRationale;
   enginePlan?: EnginePlan;
   idleNextActions?: WorkspaceRunNextIdleAction[];
+  sourceRevision?: WorkspaceRunNextSourceRevision;
   sourceSnapshot?: WorkspaceRunNextSourceSnapshot;
+  artifactRefs?: WorkspaceRunNextArtifactRef[];
+  impactRefs?: WorkspaceRunNextImpactRef[];
+  revalidationQueue?: WorkspaceRunNextRevalidationItem[];
   stopConditions: string[];
   warnings: string[];
 }
@@ -231,9 +356,11 @@ export async function createWorkspaceRunNextPlan(input: {
   const enginePlan = nextItem
     ? workspaceRunNextEnginePlanFor(nextItem, createdAt, input.enginePlanOptions)
     : undefined;
+  const engineGuidance = workspaceRunNextEngineGuidance(enginePlan);
   const noNextItemSummary = input.review.items.length > 0
     ? "No executable local work item is available; remaining review items are passive inspection blockers."
     : "No open workspace review item is available.";
+  const dryRunExecution = workspaceRunNextDryRunExecution(nextItem, engineGuidance, noNextItemSummary);
   const basePlan: WorkspaceRunNextPlan = {
     schemaVersion: WORKSPACE_RUN_NEXT_SCHEMA_VERSION,
     planId,
@@ -247,22 +374,17 @@ export async function createWorkspaceRunNextPlan(input: {
     reviewId: input.review.reviewId,
     item: nextItem ? workspaceRunNextItemSummary(nextItem) : undefined,
     ...(enginePlan ? { enginePlan } : {}),
-    execution: {
-      status: "planned",
-      kind: "dry-run",
-      summary: nextItem
-        ? "Dry-run only. Re-run with --execute-local to run one supported local Truth Harness action."
-        : noNextItemSummary
-    },
-    stopConditions: input.review.autonomy.stopConditions,
+    execution: dryRunExecution,
+    stopConditions: [...input.review.autonomy.stopConditions, ...engineGuidance.stopConditions],
     warnings: [
       "Run-next never executes shell strings. Only supported local Truth Harness actions can run.",
-      "Execution can create evidence artifacts, but trust labels change only when matching obligations accept those artifacts."
+      "Execution can create evidence artifacts, but trust labels change only when matching obligations accept those artifacts.",
+      ...engineGuidance.warnings
     ]
   };
 
   if (!nextItem) {
-    return withWorkspaceRunNextRationale({
+    return finalizeWorkspaceRunNextPlan(input.rootPath, {
       ...basePlan,
       status: "blocked",
       idleNextActions: workspaceRunNextIdleActions(input.rootPath),
@@ -275,11 +397,11 @@ export async function createWorkspaceRunNextPlan(input: {
   }
 
   if (!input.executeLocal) {
-    return withWorkspaceRunNextRationale(basePlan);
+    return finalizeWorkspaceRunNextPlan(input.rootPath, basePlan);
   }
 
   if (!input.review.autonomy.canRunUnattended) {
-    return withWorkspaceRunNextRationale({
+    return finalizeWorkspaceRunNextPlan(input.rootPath, {
       ...basePlan,
       status: "blocked",
       execution: {
@@ -292,11 +414,85 @@ export async function createWorkspaceRunNextPlan(input: {
   }
 
   const execution = await executeWorkspaceRunNextItem(input.rootPath, nextItem);
-  return withWorkspaceRunNextRationale({
+  return finalizeWorkspaceRunNextPlan(input.rootPath, {
     ...basePlan,
     status: execution.status,
     execution
   });
+}
+
+function workspaceRunNextDryRunExecution(
+  item: WorkspaceReviewItem | undefined,
+  engineGuidance: { dryRunSummary?: string },
+  noNextItemSummary: string
+): WorkspaceRunNextPlan["execution"] {
+  if (!item) {
+    return {
+      status: "planned",
+      kind: "dry-run",
+      summary: noNextItemSummary
+    };
+  }
+
+  const proofRepair = workspaceRunNextProofRepairDryRunExecution(item);
+  if (proofRepair) {
+    return proofRepair;
+  }
+
+  return {
+    status: "planned",
+    kind: "dry-run",
+    summary:
+      engineGuidance.dryRunSummary ??
+      "Dry-run only. Re-run with --execute-local to run one supported local Truth Harness action."
+  };
+}
+
+function workspaceRunNextProofRepairDryRunExecution(
+  item: WorkspaceReviewItem
+): WorkspaceRunNextPlan["execution"] | undefined {
+  const attempt = item.proofAttempt;
+  if (!attempt || !/^truth-harness\s+proof\s+check\b/u.test(item.command)) {
+    return undefined;
+  }
+
+  if (attempt.sourceStatus === "unchanged") {
+    return {
+      status: "planned",
+      kind: "proof-repair-source-unchanged",
+      command: item.command,
+      summary: `Dry-run preflight: proof source ${attempt.sourcePath} is unchanged since failed attempt ${attempt.checkId}. Edit the Lean source before running --execute-local.`
+    };
+  }
+
+  if (attempt.sourceStatus === "changed") {
+    return {
+      status: "planned",
+      kind: "proof-repair-source-changed",
+      command: item.command,
+      summary: `Dry-run preflight: proof source ${attempt.sourcePath} changed since failed attempt ${attempt.checkId}. Re-run this scoped proof check to create fresh evidence.`
+    };
+  }
+
+  if (attempt.sourceStatus === "missing") {
+    return {
+      status: "planned",
+      kind: "proof-repair-source-missing",
+      command: item.command,
+      summary: `Dry-run preflight: proof source ${attempt.sourcePath} is missing. Restore or recreate it before running --execute-local.`
+    };
+  }
+
+  if (attempt.sourceStatus === "unchecked") {
+    return {
+      status: "planned",
+      kind: "proof-repair-source-unchecked",
+      command: item.command,
+      summary: `Dry-run preflight: proof source status for ${attempt.sourcePath} is unchecked. Inspect the proof artifact before running --execute-local.`
+    };
+  }
+
+  return undefined;
 }
 
 export function createWorkspaceReviewFromCredibilityPack(input: {
@@ -321,6 +517,7 @@ export function createWorkspaceReviewFromCredibilityPack(input: {
       reportDrafts: input.pack.workspaceReview.summary.reportDrafts ?? 0,
       totalItems: actions.length,
       routeObligations: 0,
+      leanProofSafetyItems: actions.filter((action) => action.source.ref.startsWith("lean-marker:")).length,
       readyRoutesWithoutClaims: 0,
       blockedClaims: 0,
       reportDraftReviewItems: 0,
@@ -369,24 +566,38 @@ export async function writeWorkspaceRunNextPlan(input: {
   plan: WorkspaceRunNextPlan;
 }): Promise<WorkspaceRunNextWriteResult> {
   const status = await requireRunNextWorkspace(input.rootPath);
-  const basePlan: WorkspaceRunNextPlan = {
+  const basePlan = withWorkspaceRunNextArtifactRefs({
     ...input.plan,
     workspacePath: status.root
-  };
-  await assertWorkspaceRunNextPlanSchema(basePlan);
-  const snapshot = await writeWorkspaceSnapshot({
-    rootPath: status.root,
-    now: input.plan.createdAt
   });
-  const plan: WorkspaceRunNextPlan = {
+  await assertWorkspaceRunNextPlanSchema(basePlan);
+  const revision = await writeWorkspaceRevision({
+    rootPath: status.root,
+    now: input.plan.createdAt,
+    title: workspaceRunNextRevisionTitle(basePlan),
+    reason: workspaceRunNextRevisionReason(basePlan),
+    sessionRefs: uniqueStrings([basePlan.item?.sessionId]),
+    validationPlanRefs: uniqueStrings([basePlan.item?.validationPlanId]),
+    claimRefs: uniqueStrings([basePlan.item?.claimId]),
+    artifactRefs: workspaceRunNextRevisionArtifactRefs(basePlan)
+  });
+  const plan = await finalizeWorkspaceRunNextPlan(status.root, {
     ...basePlan,
+    sourceRevision: {
+      revisionId: revision.revision.revisionId,
+      path: toPortablePath(relative(status.root, revision.path)),
+      sourceSnapshotId: revision.revision.sourceSnapshot.snapshotId,
+      sourceSnapshotPath: revision.revision.sourceSnapshot.path,
+      totalFiles: revision.revision.sourceSnapshot.totalFiles,
+      totalBytes: revision.revision.sourceSnapshot.totalBytes
+    },
     sourceSnapshot: {
-      snapshotId: snapshot.snapshot.snapshotId,
-      path: toPortablePath(relative(status.root, snapshot.path)),
-      totalFiles: snapshot.snapshot.summary.totalFiles,
-      totalBytes: snapshot.snapshot.summary.totalBytes
+      snapshotId: revision.revision.sourceSnapshot.snapshotId,
+      path: revision.revision.sourceSnapshot.path,
+      totalFiles: revision.revision.sourceSnapshot.totalFiles,
+      totalBytes: revision.revision.sourceSnapshot.totalBytes
     }
-  };
+  });
   await assertWorkspaceRunNextPlanSchema(plan);
   const findingsDir = resolve(status.root, status.manifest.directories.findings);
   const baseName = `${plan.createdAt.slice(0, 10)}-${plan.planId}-workspace-run-next`;
@@ -439,26 +650,47 @@ export async function listWorkspaceRunNextPlans(
     throw error;
   }
 
+  const candidates = (
+    await Promise.all(
+      files
+        .filter((file) => file.endsWith(".json"))
+        .map(async (file) => {
+          const path = join(findingsDir, file);
+          const plan = tryParseWorkspaceRunNextJson(await readFile(path, "utf8"));
+          if (!plan) {
+            return undefined;
+          }
+          return {
+            plan,
+            portablePath: toPortablePath(relative(status.root, path))
+          };
+        })
+    )
+  )
+    .filter((candidate): candidate is { plan: WorkspaceRunNextPlan; portablePath: string } => candidate !== undefined)
+    .sort((left, right) => right.plan.createdAt.localeCompare(left.plan.createdAt));
+
+  const selectedCandidates = typeof options.limit === "number" ? candidates.slice(0, options.limit) : candidates;
   const summaries = await Promise.all(
-    files
-      .filter((file) => file.endsWith(".json"))
-      .map(async (file) => {
-        const path = join(findingsDir, file);
-        const plan = tryParseWorkspaceRunNextJson(await readFile(path, "utf8"));
-        if (!plan) {
-          return undefined;
-        }
-        const portablePath = toPortablePath(relative(status.root, path));
-        const snapshotStatus = options.verifySnapshots
-          ? await verifyRunNextSourceSnapshot(status.root, plan, portablePath, options.now)
-          : undefined;
-        return summarizeWorkspaceRunNextPlan(plan, portablePath, snapshotStatus);
-      })
+    selectedCandidates.map(async ({ plan, portablePath }) => {
+      const sourceChecks = options.verifySnapshots
+        ? await verifyRunNextSourceChecks(status.root, plan, portablePath, options.now)
+        : {};
+      const artifactRefs = await enrichWorkspaceRunNextArtifactRefs(
+        status.root,
+        workspaceRunNextPacketArtifactRefs(plan, portablePath)
+      );
+      return summarizeWorkspaceRunNextPlan(
+        plan,
+        portablePath,
+        sourceChecks.sourceSnapshot,
+        sourceChecks.sourceRevision,
+        artifactRefs
+      );
+    })
   );
 
-  return summaries
-    .filter((summary): summary is WorkspaceRunNextSummary => summary !== undefined)
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  return summaries;
 }
 
 export async function readWorkspaceRunNextPlan(rootPath: string, planRef: string): Promise<WorkspaceRunNextPlan> {
@@ -473,16 +705,113 @@ export async function inspectWorkspaceRunNextPlan(
 ): Promise<WorkspaceRunNextInspection> {
   const status = await requireRunNextWorkspace(rootPath);
   const { plan, path } = await readWorkspaceRunNextPlanWithPath(status, planRef);
-  const sourceSnapshot = options.verifySnapshot
-    ? await verifyRunNextSourceSnapshot(status.root, plan, path, options.now)
-    : undefined;
+  const sourceChecks = options.verifySnapshot
+    ? await verifyRunNextSourceChecks(status.root, plan, path, options.now)
+    : {};
+  const sourceRevision = sourceChecks.sourceRevision;
+  const sourceSnapshot = sourceChecks.sourceSnapshot;
 
   return {
     schemaVersion: "truth-harness.workspace-run-next-inspection.v0",
     plan,
     path,
-    resumeDecision: createWorkspaceRunNextResumeDecision(plan, sourceSnapshot),
+    artifactRefs: await enrichWorkspaceRunNextArtifactRefs(status.root, workspaceRunNextPacketArtifactRefs(plan, path)),
+    ...(plan.impactRefs && plan.impactRefs.length > 0 ? { impactRefs: plan.impactRefs } : {}),
+    ...(plan.revalidationQueue && plan.revalidationQueue.length > 0
+      ? { revalidationQueue: plan.revalidationQueue }
+      : {}),
+    resumeDecision: createWorkspaceRunNextResumeDecision(plan, sourceSnapshot, sourceRevision),
+    ...(sourceRevision ? { sourceRevision } : {}),
     ...(sourceSnapshot ? { sourceSnapshot } : {})
+  };
+}
+
+export async function createWorkspaceRunNextPlanFromSavedHandoff(
+  input: WorkspaceRunNextSavedHandoffInput
+): Promise<WorkspaceRunNextSavedHandoffResult> {
+  const status = await requireRunNextWorkspace(input.rootPath);
+  const createdAt = input.now ?? new Date().toISOString();
+  const inspection = await inspectWorkspaceRunNextPlan(status.root, input.planRef, {
+    verifySnapshot: true,
+    now: createdAt
+  });
+  const sourcePlan = inspection.plan;
+  const sourcePlanPath = inspection.path;
+
+  if (!inspection.resumeDecision.safeToResume) {
+    return {
+      plan: await createBlockedSavedHandoffRunNextPlan({
+        status,
+        sourcePlan,
+        sourcePlanPath,
+        createdAt,
+        executeLocal: input.executeLocal,
+        inspection
+      }),
+      sourcePlan,
+      sourcePlanPath,
+      inspection
+    };
+  }
+
+  if (!sourcePlan.item) {
+    return {
+      plan: await createBlockedSavedHandoffRunNextPlan({
+        status,
+        sourcePlan,
+        sourcePlanPath,
+        createdAt,
+        executeLocal: input.executeLocal,
+        inspection: {
+          ...inspection,
+          resumeDecision: {
+            safeToResume: false,
+            status: "rerun-run-next",
+            action: "rerun-workspace-run-next",
+            reason: "Saved handoff has no selected item to resume.",
+            nextCommand: `truth-harness workspace run-next ${quoteCommandArg(status.root)} --json`
+          }
+        }
+      }),
+      sourcePlan,
+      sourcePlanPath,
+      inspection
+    };
+  }
+
+  const review = createWorkspaceReviewFromSavedRunNextPlan({
+    status,
+    sourcePlan,
+    sourcePlanPath,
+    createdAt
+  });
+  const resumedPlan = await createWorkspaceRunNextPlan({
+    rootPath: status.root,
+    review,
+    executeLocal: input.executeLocal,
+    now: createdAt,
+    enginePlanOptions: input.enginePlanOptions
+  });
+
+  return {
+    plan: await finalizeWorkspaceRunNextPlan(status.root, {
+      ...resumedPlan,
+      rationale: {
+        ...workspaceRunNextRationaleFor(resumedPlan),
+        source: `saved-run-next:${sourcePlanPath}`,
+        candidateEvidenceRef: sourcePlanPath,
+        executionBoundary: input.executeLocal
+          ? "Resumed from a saved run-next handoff after source revision and source snapshot verification."
+          : "Dry-run resume preview from a saved run-next handoff after source revision and source snapshot verification."
+      },
+      warnings: uniqueStrings([
+        `Resumed from saved run-next handoff ${sourcePlan.planId} at ${sourcePlanPath}.`,
+        ...resumedPlan.warnings
+      ])
+    }),
+    sourcePlan,
+    sourcePlanPath,
+    inspection
   };
 }
 
@@ -552,6 +881,9 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
     `| Plan | \`${plan.planId}\` |`,
     `| Review | \`${plan.reviewId}\` |`,
     `| Created | ${escapeMarkdownTable(plan.createdAt)} |`,
+    ...(plan.sourceRevision
+      ? [`| Source revision | \`${plan.sourceRevision.revisionId}\` (${escapeMarkdownTable(plan.sourceRevision.path)}) |`]
+      : []),
     ...(plan.sourceSnapshot
       ? [`| Source snapshot | \`${plan.sourceSnapshot.snapshotId}\` (${escapeMarkdownTable(plan.sourceSnapshot.path)}) |`]
       : []),
@@ -582,6 +914,32 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
     ...(item?.validationGateId
       ? [`- Validation gate: \`${item.validationGateId}\` (${item.validationGateKind ?? "gate"})`]
       : []),
+    ...(item?.proofDeclaration
+      ? [
+          `- Proof declaration: \`${item.proofDeclaration.declarationId}\` ${item.proofDeclaration.path}:${item.proofDeclaration.line}:${item.proofDeclaration.column}`,
+          `- Proof declaration signature: \`${item.proofDeclaration.signature}\``,
+          `- Proof declaration signature sha256: \`${item.proofDeclaration.signatureSha256}\``,
+          `- Proof declaration source sha256: \`${item.proofDeclaration.sourceSha256}\``
+        ]
+      : []),
+    ...(item?.proofAttempt
+      ? [
+          `- Proof attempt: \`${item.proofAttempt.checkId}\` (${item.proofAttempt.status}, ${item.proofAttempt.path})`,
+          `- Proof source: \`${item.proofAttempt.sourcePath}\`${
+            item.proofAttempt.sourceSha256 ? ` sha256:\`${item.proofAttempt.sourceSha256}\`` : ""
+          }`
+        ]
+      : []),
+    ...(item?.proofRepairTarget
+      ? [
+          `- Proof repair target: \`${item.proofRepairTarget.repairTargetId}\` ${item.proofRepairTarget.sourcePath}:${item.proofRepairTarget.markerLine}:${item.proofRepairTarget.markerColumn}`,
+          `- Proof repair source sha256: \`${item.proofRepairTarget.sourceSha256}\``,
+          ...(item.proofRepairTarget.declarationSignatureSha256
+            ? [`- Proof repair declaration signature sha256: \`${item.proofRepairTarget.declarationSignatureSha256}\``]
+            : []),
+          `- Proof repair after-edit command: \`${item.proofRepairTarget.afterEditCommands[0]}\``
+        ]
+      : []),
     ...(item?.reportId ? [`- Report: \`${item.reportId}\``] : []),
     "",
     "## Execution",
@@ -592,6 +950,52 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
     ...(plan.execution.command ? [`- Command: \`${plan.execution.command}\``] : []),
     ...(plan.execution.evidenceRef ? [`- Evidence ref: \`${plan.execution.evidenceRef}\``] : []),
     ...(typeof plan.execution.attached === "boolean" ? [`- Attached: \`${String(plan.execution.attached)}\``] : []),
+    ...(plan.artifactRefs && plan.artifactRefs.length > 0
+      ? [
+          "",
+          "## Artifact Refs",
+          "",
+          "| Role | Path | Source | SHA-256 | Citation |",
+          "| --- | --- | --- | --- | --- |",
+          ...plan.artifactRefs.map((ref) =>
+            `| \`${ref.role}\` | \`${escapeMarkdownTable(ref.path)}\` | ${escapeMarkdownTable(ref.source)} | ${
+              ref.sha256 ? `\`${ref.sha256}\`` : "not recorded"
+            } | ${ref.citation ? `\`${escapeMarkdownTable(ref.citation)}\`` : "not recorded"} |`
+          )
+        ]
+      : []),
+    ...(plan.impactRefs && plan.impactRefs.length > 0
+      ? [
+          "",
+          "## Citation Impact",
+          "",
+          "| Referenced artifact | Cited by | Kind | Field |",
+          "| --- | --- | --- | --- |",
+          ...plan.impactRefs.map((ref) =>
+            `| \`${escapeMarkdownTable(ref.refPath)}\` | \`${escapeMarkdownTable(ref.citedByPath)}\` | \`${escapeMarkdownTable(ref.citedByKind)}\` | ${
+              ref.fieldPath ? `\`${escapeMarkdownTable(ref.fieldPath)}\`` : "not recorded"
+            } |`
+          ),
+          "",
+          "Citation impact is dependency navigation only; it does not close gates or upgrade trust labels."
+        ]
+      : []),
+    ...(plan.revalidationQueue && plan.revalidationQueue.length > 0
+      ? [
+          "",
+          "## Revalidation Queue",
+          "",
+          "| Priority | Dependent artifact | Required evidence | Command |",
+          "| --- | --- | --- | --- |",
+          ...plan.revalidationQueue.map((item) =>
+            `| \`${item.priority}\` | \`${escapeMarkdownTable(item.dependentPath)}\` | ${escapeMarkdownTable(
+              item.evidenceRequired
+            )} | \`${escapeMarkdownTable(item.command)}\` |`
+          ),
+          "",
+          "Revalidation queue entries are review tasks only; they do not execute commands, close gates, or upgrade trust labels."
+        ]
+      : []),
     ...(plan.enginePlan
       ? [
           "",
@@ -650,6 +1054,7 @@ function workspaceRunNextWhyRows(plan: WorkspaceRunNextPlan): Array<[string, str
   return [
     ["Target", rationale.target],
     ["Source", rationale.source],
+    ...workspaceRunNextEngineWhyRows(plan.enginePlan),
     ["Candidate evidence", rationale.candidateEvidenceRef ?? "No candidate evidence ref selected."],
     ["Execution boundary", rationale.executionBoundary],
     ["First stop condition", rationale.firstStopCondition ?? "No stop condition recorded."],
@@ -658,10 +1063,16 @@ function workspaceRunNextWhyRows(plan: WorkspaceRunNextPlan): Array<[string, str
 }
 
 function withWorkspaceRunNextRationale(plan: WorkspaceRunNextPlan): WorkspaceRunNextPlan {
-  return {
+  return withWorkspaceRunNextArtifactRefs({
     ...plan,
-    rationale: workspaceRunNextRationaleFor(plan)
-  };
+    rationale: plan.rationale ?? workspaceRunNextRationaleFor(plan)
+  });
+}
+
+async function finalizeWorkspaceRunNextPlan(rootPath: string, plan: WorkspaceRunNextPlan): Promise<WorkspaceRunNextPlan> {
+  const withRefs = await withWorkspaceRunNextArtifactRefIntegrity(rootPath, withWorkspaceRunNextRationale(plan));
+  const withImpact = await withWorkspaceRunNextImpactRefs(rootPath, withRefs);
+  return withWorkspaceRunNextRevalidationQueue(withImpact);
 }
 
 function workspaceRunNextRationaleFor(plan: WorkspaceRunNextPlan): WorkspaceRunNextRationale {
@@ -690,6 +1101,76 @@ function workspaceRunNextTarget(item: WorkspaceRunNextPlan["item"] | undefined):
     return `${item.obligationKind ?? "obligation"} ${item.obligationId}`;
   }
   return item.claimId ?? item.routeId ?? item.reportId ?? item.sessionId ?? "workspace queue";
+}
+
+function workspaceRunNextEngineGuidance(enginePlan: EnginePlan | undefined): {
+  dryRunSummary?: string;
+  stopConditions: string[];
+  warnings: string[];
+} {
+  if (!enginePlan) {
+    return { stopConditions: [], warnings: [] };
+  }
+
+  const firstStep = workspaceRunNextFirstEngineStep(enginePlan);
+  const openGates = workspaceRunNextOpenEngineGates(enginePlan);
+  const firstStepSummary = firstStep
+    ? `${firstStep.displayName} (${firstStep.capabilityId})`
+    : "no runnable verifier capability";
+  const evidenceRequired = firstStep?.evidenceRequired ?? "Install or enable a local verifier before attempting this item.";
+
+  return {
+    dryRunSummary:
+      `Dry-run only. Engine plan starts with ${firstStepSummary}; evidence required: ${evidenceRequired} ` +
+      "Re-run with --execute-local only when the local action is explicitly approved.",
+    stopConditions: [
+      `Engine evidence required: ${evidenceRequired}`,
+      `Engine trust ceiling: do not claim stronger than ${enginePlan.targetTrustCeiling} without concrete accepted artifacts.`
+    ],
+    warnings: [
+      `Engine plan selected ${enginePlan.classifications.join(", ")} route; first command: ${enginePlan.recommendedFirstCommand}.`,
+      openGates.length > 0
+        ? `Engine plan still has open verifier gates: ${openGates.map((step) => step.capabilityId).join(", ")}.`
+        : "Engine plan has no unavailable required verifier gates in this runtime."
+    ]
+  };
+}
+
+function workspaceRunNextEngineWhyRows(enginePlan: EnginePlan | undefined): Array<[string, string]> {
+  if (!enginePlan) {
+    return [];
+  }
+
+  const firstStep = workspaceRunNextFirstEngineStep(enginePlan);
+  const openGates = workspaceRunNextOpenEngineGates(enginePlan);
+  return [
+    [
+      "Engine first route",
+      firstStep
+        ? `${firstStep.displayName} (${firstStep.capabilityId}, ${firstStep.role}, ${firstStep.status})`
+        : "No runnable verifier capability is available."
+    ],
+    ["Engine evidence required", firstStep?.evidenceRequired ?? "Install or enable a local verifier first."],
+    [
+      "Engine open gates",
+      openGates.length > 0 ? openGates.map((step) => `${step.capabilityId} (${step.status})`).join(", ") : "None."
+    ]
+  ];
+}
+
+function workspaceRunNextFirstEngineStep(enginePlan: EnginePlan): EnginePlan["steps"][number] | undefined {
+  return (
+    enginePlan.steps.find(
+      (step) => step.canRunNow && step.role !== "provenance-check" && step.role !== "planned-upgrade"
+    ) ??
+    enginePlan.steps.find((step) => step.canRunNow) ??
+    enginePlan.steps.find((step) => step.role !== "planned-upgrade") ??
+    enginePlan.steps[0]
+  );
+}
+
+function workspaceRunNextOpenEngineGates(enginePlan: EnginePlan): EnginePlan["steps"] {
+  return enginePlan.steps.filter((step) => !step.canRunNow && step.role !== "planned-upgrade");
 }
 
 function workspaceRunNextEnginePlanFor(
@@ -790,13 +1271,33 @@ function workspaceRunNextIdleActions(rootPath: string): WorkspaceRunNextIdleActi
       requiresHumanInput: true
     },
     {
+      actionId: "refresh-strict-docker-professor-rehearsal",
+      title: "Refresh the strict all-engine professor rehearsal",
+      command: "npm run docker:professor:all",
+      reason:
+        "Writes the no-network Maxima/Z3/cvc5/Lean/SageMath reviewer evidence, closure reports, credibility pack, and portable reviewer bundle in one strict route.",
+      boundary:
+        "Starts the heavier all-engine Docker image through npm. Run-next will not execute this command; a human or approved agent must accept the container boundary first.",
+      requiresHumanInput: true
+    },
+    {
+      actionId: "refresh-docker-professor-rehearsal",
+      title: "Refresh the Docker professor reviewer rehearsal",
+      command: "npm run docker:professor",
+      reason:
+        "Writes no-network Maxima/Z3/cvc5/Lean evidence, adversarial and math-ladder benchmark evidence, exact/symbolic/SMT closure reports, the credibility pack, and the portable reviewer bundle in one practical route.",
+      boundary:
+        "Starts Docker through npm without SageMath. Run-next will not execute this command; a human or approved agent must accept the container boundary first.",
+      requiresHumanInput: true
+    },
+    {
       actionId: "refresh-professor-review",
       title: "Refresh the professor credibility packet",
       command: `truth-harness workspace credibility-pack ${workspace} --require-all-engines`,
       reason:
-        "Recomputes the reviewer packet from local artifacts so a professor or agent can see whether new blockers appeared.",
+        "Recomputes the reviewer packet from already-saved local artifacts so a professor or agent can see whether new blockers appeared.",
       boundary:
-        "Reads local evidence and engine-run records; it does not prove new claims or execute Docker by itself.",
+        "Reads local evidence and engine-run records only; use the Docker professor rehearsal first when reviewer artifacts need to be refreshed.",
       requiresHumanInput: false
     },
     {
@@ -836,7 +1337,9 @@ function tryParseWorkspaceRunNextJson(raw: string): WorkspaceRunNextPlan | undef
 function summarizeWorkspaceRunNextPlan(
   plan: WorkspaceRunNextPlan,
   path: string,
-  sourceSnapshotCheck?: WorkspaceRunNextSourceSnapshotCheck
+  sourceSnapshotCheck?: WorkspaceRunNextSourceSnapshotCheck,
+  sourceRevisionCheck?: WorkspaceRunNextSourceRevisionCheck,
+  artifactRefs = workspaceRunNextPacketArtifactRefs(plan, path)
 ): WorkspaceRunNextSummary {
   const rationale = plan.rationale ?? workspaceRunNextRationaleFor(plan);
 
@@ -864,11 +1367,19 @@ function summarizeWorkspaceRunNextPlan(
     enginePlanClassifications: plan.enginePlan?.classifications,
     enginePlanTargetTrustCeiling: plan.enginePlan?.targetTrustCeiling,
     enginePlanRecommendedFirstCommand: plan.enginePlan?.recommendedFirstCommand,
+    artifactRefs,
+    impactRefs: plan.impactRefs,
+    revalidationQueue: plan.revalidationQueue,
+    sourceRevisionId: plan.sourceRevision?.revisionId,
+    sourceRevisionPath: plan.sourceRevision?.path,
+    sourceRevisionSourceSnapshotId: plan.sourceRevision?.sourceSnapshotId,
+    sourceRevisionSourceSnapshotPath: plan.sourceRevision?.sourceSnapshotPath,
     sourceSnapshotId: plan.sourceSnapshot?.snapshotId,
     sourceSnapshotPath: plan.sourceSnapshot?.path,
     sourceSnapshotFiles: plan.sourceSnapshot?.totalFiles,
     sourceSnapshotBytes: plan.sourceSnapshot?.totalBytes,
-    resumeDecision: createWorkspaceRunNextResumeDecision(plan, sourceSnapshotCheck),
+    resumeDecision: createWorkspaceRunNextResumeDecision(plan, sourceSnapshotCheck, sourceRevisionCheck),
+    ...(sourceRevisionCheck ?? {}),
     ...(sourceSnapshotCheck ?? {})
   };
 }
@@ -893,7 +1404,7 @@ async function verifyRunNextSourceSnapshot(
       now
     });
     const ignoredSelfAdded = verification.addedSinceSnapshot.filter((entry) =>
-      isRunNextSelfAddedPath(planPath, entry.path)
+      isRunNextExpectedAddedPath(planPath, entry.path)
     );
     const added = verification.addedSinceSnapshot.length - ignoredSelfAdded.length;
     const missing = verification.missing.length;
@@ -920,6 +1431,46 @@ async function verifyRunNextSourceSnapshot(
   }
 }
 
+async function verifyRunNextSourceChecks(
+  rootPath: string,
+  plan: WorkspaceRunNextPlan,
+  planPath: string,
+  now?: string
+): Promise<{
+  sourceRevision?: WorkspaceRunNextSourceRevisionCheck;
+  sourceSnapshot?: WorkspaceRunNextSourceSnapshotCheck;
+}> {
+  if (!plan.sourceRevision?.revisionId) {
+    return {
+      sourceSnapshot: await verifyRunNextSourceSnapshot(rootPath, plan, planPath, now)
+    };
+  }
+
+  try {
+    const verification = await verifyWorkspaceRevision({
+      rootPath,
+      revisionRef: plan.sourceRevision.revisionId,
+      ignoreAddedPaths: runNextSelfAddedPaths(planPath),
+      now
+    });
+    return {
+      sourceRevision: runNextSourceRevisionCheckFromVerification(verification, planPath),
+      sourceSnapshot: runNextSourceSnapshotCheckFromRevisionVerification(verification)
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Source revision could not be verified.";
+    const sourceSnapshot = await verifyRunNextSourceSnapshot(rootPath, plan, planPath, now);
+    return {
+      sourceRevision: {
+        sourceRevisionStatus: "missing",
+        sourceRevisionMissing: 1,
+        sourceRevisionDriftSummary: message
+      },
+      sourceSnapshot
+    };
+  }
+}
+
 function isRunNextSelfAddedPath(planPath: string, addedPath: string): boolean {
   if (addedPath === planPath) {
     return true;
@@ -927,10 +1478,143 @@ function isRunNextSelfAddedPath(planPath: string, addedPath: string): boolean {
   return planPath.endsWith(".json") && addedPath === planPath.replace(/\.json$/u, ".md");
 }
 
+function runNextSourceSnapshotCheckFromRevisionVerification(
+  verification: WorkspaceRevisionVerification
+): WorkspaceRunNextSourceSnapshotCheck {
+  const snapshotVerification = verification.snapshotVerification;
+  if (!snapshotVerification) {
+    if (verification.sourceSnapshotFile.status === "missing") {
+      return {
+        sourceSnapshotStatus: "missing",
+        sourceSnapshotVerifiedAt: verification.verifiedAt,
+        sourceSnapshotMissing: 1,
+        sourceSnapshotChanged: 0,
+        sourceSnapshotAdded: 0,
+        sourceSnapshotIgnoredAdded: 0,
+        sourceSnapshotDriftSummary: "Source snapshot file recorded by the source revision is missing."
+      };
+    }
+
+    return {
+      sourceSnapshotStatus: "drifted",
+      sourceSnapshotVerifiedAt: verification.verifiedAt,
+      sourceSnapshotMissing: 0,
+      sourceSnapshotChanged: verification.sourceSnapshotFile.status === "changed" ? 1 : 0,
+      sourceSnapshotAdded: 0,
+      sourceSnapshotIgnoredAdded: 0,
+      sourceSnapshotDriftSummary:
+        verification.sourceSnapshotFile.status === "changed"
+          ? "Source snapshot file hash no longer matches the source revision."
+          : "Source snapshot could not be verified from the source revision."
+    };
+  }
+
+  const missing = snapshotVerification.missing.length;
+  const changed = snapshotVerification.changed.length;
+  const added = snapshotVerification.addedSinceSnapshot.length;
+  const ignored = ignoredAddedCountFromRevisionWarnings(verification.warnings);
+  const status =
+    verification.sourceSnapshotFile.status === "missing"
+      ? "missing"
+      : snapshotVerification.passed && verification.sourceSnapshotFile.status === "verified"
+        ? "verified"
+        : "drifted";
+
+  return {
+    sourceSnapshotStatus: status,
+    sourceSnapshotVerifiedAt: verification.verifiedAt,
+    sourceSnapshotMissing: missing,
+    sourceSnapshotChanged: changed,
+    sourceSnapshotAdded: added,
+    sourceSnapshotIgnoredAdded: ignored,
+    sourceSnapshotDriftSummary:
+      status === "verified"
+        ? `Source snapshot still matches after ignoring ${ignored} expected handoff/revision file(s).`
+        : `${missing} missing, ${changed} changed, ${added} added since source snapshot.`
+  };
+}
+
+function runNextSourceRevisionCheckFromVerification(
+  verification: WorkspaceRevisionVerification,
+  planPath: string
+): WorkspaceRunNextSourceRevisionCheck {
+  const snapshotVerification = verification.snapshotVerification;
+  const missing =
+    snapshotVerification?.missing.length ?? (verification.sourceSnapshotFile.status === "missing" ? 1 : 0);
+  const changed =
+    snapshotVerification?.changed.length ?? (verification.sourceSnapshotFile.status === "changed" ? 1 : 0);
+  const added = snapshotVerification?.addedSinceSnapshot.length ?? 0;
+  const ignored = ignoredAddedCountFromRevisionWarnings(verification.warnings);
+  const status =
+    verification.passed
+      ? "verified"
+      : verification.sourceSnapshotFile.status === "missing"
+        ? "missing"
+        : "drifted";
+
+  return {
+    sourceRevisionStatus: status,
+    sourceRevisionVerifiedAt: verification.verifiedAt,
+    sourceRevisionMissing: missing,
+    sourceRevisionChanged: changed,
+    sourceRevisionAdded: added,
+    sourceRevisionIgnoredAdded: ignored,
+    sourceRevisionDriftSummary: verification.passed
+      ? `Source revision still matches after ignoring ${ignored} expected handoff/revision file(s).`
+      : `${missing} missing, ${changed} changed, ${added} added since source revision ${planPath}.`
+  };
+}
+
+function ignoredAddedCountFromRevisionWarnings(warnings: string[]): number {
+  return warnings.reduce((total, warning) => {
+    const match = /^Ignored\s+(\d+)\s+/u.exec(warning);
+    return total + (match ? Number.parseInt(match[1], 10) : 0);
+  }, 0);
+}
+
+function runNextSelfAddedPaths(planPath: string): string[] {
+  return planPath.endsWith(".json") ? [planPath, planPath.replace(/\.json$/u, ".md")] : [planPath];
+}
+
+function isRunNextExpectedAddedPath(planPath: string, addedPath: string): boolean {
+  return isRunNextSelfAddedPath(planPath, addedPath) || isRevisionManifestPath(addedPath);
+}
+
+function isRevisionManifestPath(path: string): boolean {
+  return path.startsWith(".truth-harness/revisions/") && path.endsWith(".json");
+}
+
 function createWorkspaceRunNextResumeDecision(
   plan: WorkspaceRunNextPlan,
-  sourceSnapshot: WorkspaceRunNextSourceSnapshotCheck | undefined
+  sourceSnapshot: WorkspaceRunNextSourceSnapshotCheck | undefined,
+  sourceRevision: WorkspaceRunNextSourceRevisionCheck | undefined
 ): WorkspaceRunNextResumeDecision {
+  if (plan.sourceRevision) {
+    if (!sourceRevision) {
+      return {
+        safeToResume: false,
+        status: "verify-snapshot-first",
+        action: "verify-source-snapshot",
+        reason: "This handoff has not been checked against its source workspace revision in this inspection.",
+        nextCommand: `truth-harness workspace show-run-next ${quoteCommandArg(plan.planId)} --workspace ${quoteCommandArg(
+          plan.workspacePath
+        )} --verify-snapshot --json`
+      };
+    }
+
+    if (sourceRevision.sourceRevisionStatus !== "verified") {
+      return {
+        safeToResume: false,
+        status: "rerun-run-next",
+        action: "rerun-workspace-run-next",
+        reason:
+          sourceRevision.sourceRevisionDriftSummary ??
+          `Source revision status is ${sourceRevision.sourceRevisionStatus ?? "unknown"}, so the saved handoff should not be resumed.`,
+        nextCommand: `truth-harness workspace run-next ${quoteCommandArg(plan.workspacePath)} --json`
+      };
+    }
+  }
+
   if (!sourceSnapshot) {
     return {
       safeToResume: false,
@@ -956,6 +1640,19 @@ function createWorkspaceRunNextResumeDecision(
   }
 
   const selectedCommand = plan.item?.command ?? plan.execution.command;
+  if (plan.mode === "idle" && plan.idleNextActions && plan.idleNextActions.length > 0) {
+    return {
+      safeToResume: false,
+      status: "choose-idle-action",
+      action: "choose-idle-action",
+      reason:
+        "The source snapshot is verified and this packet is a healthy idle action menu, not a single resumable command. Choose one idle action explicitly.",
+      nextCommand: `truth-harness workspace show-run-next ${quoteCommandArg(plan.planId)} --workspace ${quoteCommandArg(
+        plan.workspacePath
+      )} --verify-snapshot --json`
+    };
+  }
+
   if (plan.status !== "planned" || !plan.dryRun || !selectedCommand) {
     return {
       safeToResume: false,
@@ -970,7 +1667,9 @@ function createWorkspaceRunNextResumeDecision(
     safeToResume: true,
     status: "safe-to-resume",
     action: "run-selected-command",
-    reason: "The source workspace snapshot still matches, and this packet is a pending dry-run handoff.",
+    reason: plan.sourceRevision
+      ? "The source workspace revision still matches, its source snapshot is verified, and this packet is a pending dry-run handoff."
+      : "The source workspace snapshot still matches, and this packet is a pending dry-run handoff.",
     nextCommand: selectedCommand
   };
 }
@@ -1023,8 +1722,190 @@ function workspaceRunNextItemSummary(item: WorkspaceReviewItem): WorkspaceRunNex
     validationPlanId: item.validationPlanId,
     validationGateId: item.validationGateId,
     validationGateKind: item.validationGateKind,
+    ...(item.proofDeclaration ? { proofDeclaration: item.proofDeclaration } : {}),
+    ...(item.proofAttempt ? { proofAttempt: item.proofAttempt } : {}),
+    ...(item.proofRepairTarget ? { proofRepairTarget: item.proofRepairTarget } : {}),
     reportId: item.reportId
   };
+}
+
+function createWorkspaceReviewFromSavedRunNextPlan(input: {
+  status: LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
+  sourcePlan: WorkspaceRunNextPlan;
+  sourcePlanPath: string;
+  createdAt: string;
+}): WorkspaceReview {
+  const sourceItem = input.sourcePlan.item;
+  if (!sourceItem) {
+    throw new Error(`Saved run-next handoff ${input.sourcePlan.planId} has no selected item.`);
+  }
+  const item: WorkspaceReviewItem = {
+    ...sourceItem,
+    source: {
+      label: "saved run-next handoff",
+      ref: input.sourcePlanPath
+    },
+    acceptanceCriteria: [
+      `Resume saved run-next handoff ${input.sourcePlan.planId} only after its source revision and source snapshot verify cleanly.`,
+      `Produce the evidence required by ${sourceItem.title}.`
+    ],
+    agentPacket: [
+      "# Saved Truth Harness Run-Next Handoff",
+      "",
+      `Saved plan: ${input.sourcePlan.planId}`,
+      `Source path: ${input.sourcePlanPath}`,
+      `Selected command: ${sourceItem.command}`,
+      "",
+      "This packet was reopened by the pilot loop after source revision and source snapshot verification. It remains bounded by the same run-next executor and never executes shell strings."
+    ].join("\n")
+  };
+  const priorityCounts = workspaceReviewPriorityCounts([item]);
+
+  return {
+    schemaVersion: "truth-harness.workspace-review.v0",
+    reviewId: `wrev_saved_${input.sourcePlan.planId.replace(/^wrn_/u, "")}`,
+    projectId: input.status.manifest.projectId,
+    createdAt: input.createdAt,
+    workspacePath: input.status.root,
+    localOnly: true,
+    networkAccess: "none",
+    privacy: input.status.manifest.privacy,
+    summary: {
+      routes: 0,
+      claims: 0,
+      sessions: item.sessionId ? 1 : 0,
+      reportDrafts: item.reportId ? 1 : 0,
+      totalItems: 1,
+      routeObligations: item.kind === "route-obligation" ? 1 : 0,
+      leanProofSafetyItems: item.source.label === "Lean proof safety" ? 1 : 0,
+      readyRoutesWithoutClaims: item.kind === "route-ready-claim" ? 1 : 0,
+      blockedClaims: item.kind === "claim-blocker" ? 1 : 0,
+      reportDraftReviewItems: item.kind === "report-draft-review" ? 1 : 0,
+      reportDraftsNeedingAttention: item.kind === "report-draft-review" ? 1 : 0,
+      sessionTasks: item.kind === "session-task" ? 1 : 0,
+      sessionNextChecks: item.kind === "session-next-check" ? 1 : 0,
+      criticalItems: priorityCounts.critical,
+      highItems: priorityCounts.high,
+      mediumItems: priorityCounts.medium,
+      lowItems: priorityCounts.low
+    },
+    autonomy: {
+      mode: input.sourcePlan.mode,
+      canRunUnattended: input.sourcePlan.mode === "local-verifier-loop",
+      suggestedBatchSize: 1,
+      nextItemId: item.itemId,
+      nextCommand: item.command,
+      allowedActions: [
+        "Resume only the structured item from the verified saved run-next handoff.",
+        "Use the bounded in-process run-next executor; never execute the saved command as a shell string."
+      ],
+      blockedActions: [
+        "Do not resume when the saved handoff source revision or source snapshot drifted.",
+        "Do not reinterpret old chat history as evidence."
+      ],
+      stopConditions: uniqueStrings([
+        ...input.sourcePlan.stopConditions,
+        "Stop when the saved handoff is executed, blocked, or no durable local evidence is produced."
+      ]),
+      requiredArtifacts: [
+        `Verified source revision/snapshot for ${input.sourcePlan.planId}.`,
+        `Evidence required by ${item.title}.`
+      ],
+      humanReviewRequiredFor: input.sourcePlan.mode === "human-review-gated" ? [item.itemId] : [],
+      agentPacket: item.agentPacket ?? `Resume saved run-next handoff ${input.sourcePlan.planId}.`
+    },
+    items: [item],
+    warnings: uniqueStrings([
+      `Saved run-next source: ${input.sourcePlanPath}.`,
+      ...input.sourcePlan.warnings
+    ]),
+    markdown: `# Saved Run-Next Review\n\nSaved plan ${input.sourcePlan.planId} from ${input.sourcePlanPath} is being resumed through the bounded run-next executor.\n`
+  };
+}
+
+function workspaceReviewPriorityCounts(items: WorkspaceReviewItem[]): Record<WorkspaceReviewPriorityName, number> {
+  return {
+    critical: items.filter((item) => item.priority === "critical").length,
+    high: items.filter((item) => item.priority === "high").length,
+    medium: items.filter((item) => item.priority === "medium").length,
+    low: items.filter((item) => item.priority === "low").length
+  };
+}
+
+type WorkspaceReviewPriorityName = "critical" | "high" | "medium" | "low";
+
+async function createBlockedSavedHandoffRunNextPlan(input: {
+  status: LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
+  sourcePlan: WorkspaceRunNextPlan;
+  sourcePlanPath: string;
+  createdAt: string;
+  executeLocal: boolean;
+  inspection: WorkspaceRunNextInspection;
+}): Promise<WorkspaceRunNextPlan> {
+  return finalizeWorkspaceRunNextPlan(input.status.root, {
+    schemaVersion: WORKSPACE_RUN_NEXT_SCHEMA_VERSION,
+    planId: workspaceRunNextPlanId(input.createdAt, `${input.sourcePlan.reviewId}:${input.sourcePlan.planId}:saved-run-next`),
+    createdAt: input.createdAt,
+    workspacePath: input.status.root,
+    localOnly: true,
+    networkAccess: "none",
+    dryRun: !input.executeLocal,
+    status: "blocked",
+    mode: input.sourcePlan.mode,
+    reviewId: `wrev_saved_${input.sourcePlan.planId.replace(/^wrn_/u, "")}`,
+    ...(input.sourcePlan.item ? { item: input.sourcePlan.item } : {}),
+    execution: {
+      status: "blocked",
+      kind: "saved-run-next-source-check",
+      command: input.inspection.resumeDecision.nextCommand,
+      summary: `Saved run-next handoff ${input.sourcePlan.planId} cannot be resumed: ${input.inspection.resumeDecision.reason}`
+    },
+    rationale: {
+      target: input.sourcePlan.item ? workspaceRunNextTarget(input.sourcePlan.item) : `saved handoff ${input.sourcePlan.planId}`,
+      source: `saved-run-next:${input.sourcePlanPath}`,
+      candidateEvidenceRef: input.sourcePlanPath,
+      executionBoundary:
+        "Saved handoff execution is blocked until the source revision and source snapshot are verified cleanly.",
+      firstWarning: input.inspection.resumeDecision.reason
+    },
+    stopConditions: uniqueStrings([
+      ...input.sourcePlan.stopConditions,
+      "Stop instead of resuming saved handoffs when source revision or source snapshot drift is detected."
+    ]),
+    warnings: uniqueStrings([
+      `Saved run-next ${input.sourcePlan.planId} was not resumed: ${input.inspection.resumeDecision.reason}`,
+      ...input.sourcePlan.warnings
+    ])
+  });
+}
+
+function workspaceRunNextRevisionTitle(plan: WorkspaceRunNextPlan): string {
+  const target = workspaceRunNextTarget(plan.item);
+  return plan.item ? `Run-next handoff for ${target}` : "Run-next idle handoff checkpoint";
+}
+
+function workspaceRunNextRevisionReason(plan: WorkspaceRunNextPlan): string {
+  const rationale = plan.rationale ?? workspaceRunNextRationaleFor(plan);
+  return `Checkpoint workspace evidence before saved run-next packet ${plan.planId}; selected target: ${rationale.target}.`;
+}
+
+function workspaceRunNextRevisionArtifactRefs(plan: WorkspaceRunNextPlan): WorkspaceRunNextArtifactRef[] {
+  const ignoredRoles = new Set<WorkspaceRunNextArtifactRefRole>(["run-next-packet", "source-revision", "source-snapshot"]);
+  return (plan.artifactRefs ?? [])
+    .filter((ref) => !ignoredRoles.has(ref.role))
+    .map((ref) => ({
+      path: ref.path,
+      role: ref.role,
+      source: `workspace-run-next:${ref.source}`,
+      ...(typeof ref.sizeBytes === "number" ? { sizeBytes: ref.sizeBytes } : {}),
+      ...(ref.sha256 ? { sha256: ref.sha256 } : {}),
+      ...(ref.sha256Scope ? { sha256Scope: ref.sha256Scope } : {}),
+      ...(ref.citation ? { citation: ref.citation } : {})
+    }));
+}
+
+function uniqueStrings(values: Array<string | undefined>): string[] {
+  return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))].sort();
 }
 
 async function executeWorkspaceRunNextItem(
@@ -1330,6 +2211,73 @@ async function executeWorkspaceRunNextItem(
       };
     }
 
+    if (group === "workspace" && action === "snapshot") {
+      const result = await writeWorkspaceSnapshot({ rootPath: workspace });
+      const snapshotRef = workspaceLocalRef(workspace, result.path);
+      const evidenceRef: ValidationEvidenceRef = {
+        kind: "snapshot",
+        ref: snapshotRef,
+        summary: `Workspace snapshot ${result.snapshot.snapshotId} captured ${result.snapshot.summary.totalFiles} local artifact(s).`
+      };
+      const validationGate = await maybeAttachValidationGateEvidence(workspace, item, evidenceRef);
+      const checkpoint = item.sessionId
+        ? await addResearchSessionCheckpoint({
+            rootPath: workspace,
+            sessionRef: item.sessionId,
+            summary: `Captured workspace snapshot ${result.snapshot.snapshotId} for ${item.validationGateId ?? "workspace review item"}.`,
+            evidenceRefs: [toResearchEvidenceRef(evidenceRef)],
+            snapshotRefs: [result.snapshot.snapshotId],
+            decisions: [
+              validationGate.result?.message ??
+                `Recorded snapshot:${snapshotRef} as local workspace state evidence for review.`
+            ],
+            nextChecks: validationGate.result
+              ? nextChecksForValidationAttachment(validationGate.result)
+              : [`Review snapshot:${snapshotRef} against the targeted validation gate.`]
+          })
+        : undefined;
+      const attached = validationGate.attached || Boolean(checkpoint);
+      const summaries = [
+        `Wrote workspace snapshot ${result.snapshot.snapshotId}.`,
+        validationGate.attached ? validationGate.summary : undefined,
+        checkpoint ? `Checkpointed research session ${item.sessionId}.` : undefined
+      ].filter((value): value is string => Boolean(value));
+
+      return {
+        status: "executed",
+        kind: "workspace-snapshot",
+        command: item.command,
+        evidenceRef: `snapshot:${snapshotRef}`,
+        attached,
+        summary: summaries.join(" "),
+        result: {
+          snapshot: {
+            schemaVersion: result.snapshot.schemaVersion,
+            snapshotId: result.snapshot.snapshotId,
+            projectId: result.snapshot.projectId,
+            createdAt: result.snapshot.createdAt,
+            workspaceDir: result.snapshot.workspaceDir,
+            summary: result.snapshot.summary,
+            privacy: result.snapshot.privacy,
+            warnings: result.snapshot.warnings
+          },
+          jsonPath: snapshotRef,
+          validationGate: validationGate.result
+            ? {
+                planId: validationGate.result.plan.planId,
+                gateId: validationGate.result.gate.gateId,
+                status: validationGate.result.gate.status,
+                closed: validationGate.result.closed,
+                satisfied: validationGate.result.satisfied,
+                blocked: validationGate.result.blocked,
+                message: validationGate.result.message
+              }
+            : undefined,
+          checkpoint: checkpoint?.checkpoint
+        }
+      };
+    }
+
     if (group === "engines" && action === "verify") {
       if (options.write !== true) {
         return {
@@ -1409,6 +2357,10 @@ async function executeWorkspaceRunNextItem(
       if (!sourcePath || sourcePath.includes("<") || sourcePath.includes(">")) {
         return blockedPlaceholderCommand(item.command, "proof-check");
       }
+      const unchangedAttempt = await blockUnchangedRejectedProofAttempt(workspace, item, sourcePath);
+      if (unchangedAttempt) {
+        return unchangedAttempt;
+      }
       const result = await writeLeanProofCheckRecord({
         rootPath: workspace,
         sourcePath,
@@ -1432,6 +2384,42 @@ async function executeWorkspaceRunNextItem(
         attached: attachment.attached,
         summary: attachment.summary,
         result: { proof: result.record, attachment: attachment.result }
+      };
+    }
+
+    if (group === "proof" && action === "project") {
+      const projectPath = rest[0] ?? ".";
+      if (projectPath.includes("<") || projectPath.includes(">")) {
+        return blockedPlaceholderCommand(item.command, "lean-proof-safety");
+      }
+      const inspection = await inspectLeanProject({
+        rootPath: workspace,
+        projectPath,
+        maxLeanFiles: parseOptionalPositiveIntegerOption(options["max-lean-files"], 40)
+      });
+      const markerCount = inspection.proofSafety.markers.total;
+      const firstMarker = inspection.proofSafety.markers.sample[0];
+
+      if (markerCount > 0) {
+        return {
+          status: "blocked",
+          kind: "lean-proof-safety",
+          command: item.command,
+          attached: false,
+          summary: firstMarker
+            ? `Proof-safety scan still finds ${markerCount} blocking Lean marker(s); first marker is ${firstMarker.kind} at ${firstMarker.path}:${firstMarker.line}:${firstMarker.column}.`
+            : `Proof-safety scan still finds ${markerCount} blocking Lean marker(s).`,
+          result: inspection
+        };
+      }
+
+      return {
+        status: "executed",
+        kind: "lean-proof-safety",
+        command: item.command,
+        attached: false,
+        summary: `Proof-safety scan found no blocking Lean markers in ${inspection.proofSafety.scannedFiles} scanned file(s).`,
+        result: inspection
       };
     }
 
@@ -1574,6 +2562,45 @@ function blockedPlaceholderCommand(command: string, kind: string): WorkspaceRunN
     kind,
     command,
     summary: "The next command contains a placeholder path. Prepare a concrete workspace-local artifact before executing it."
+  };
+}
+
+async function blockUnchangedRejectedProofAttempt(
+  rootPath: string,
+  item: WorkspaceReviewItem,
+  sourcePath: string
+): Promise<WorkspaceRunNextPlan["execution"] | undefined> {
+  const attempt = item.proofAttempt;
+  if (!attempt || !["rejected", "error"].includes(attempt.status) || !attempt.sourceSha256) {
+    return undefined;
+  }
+
+  if (toPortablePath(sourcePath) !== toPortablePath(attempt.sourcePath)) {
+    return undefined;
+  }
+
+  const absoluteSourcePath = resolveUnderRoot(rootPath, sourcePath);
+  let sourceSha256: string;
+  try {
+    sourceSha256 = await sha256FileHex(absoluteSourcePath);
+  } catch {
+    return {
+      status: "blocked",
+      kind: "proof-repair-source-missing",
+      command: item.command,
+      summary: `Cannot rerun failed proof attempt ${attempt.checkId}: source file ${attempt.sourcePath} is missing or unreadable. Restore or recreate the proof source before running Lean again.`
+    };
+  }
+
+  if (sourceSha256 !== attempt.sourceSha256) {
+    return undefined;
+  }
+
+  return {
+    status: "blocked",
+    kind: "proof-repair-source-unchanged",
+    command: item.command,
+    summary: `Proof source ${attempt.sourcePath} still matches failed attempt ${attempt.checkId} (sha256:${attempt.sourceSha256}). Edit the Lean source before rerunning this proof check so the agent does not create duplicate failed evidence.`
   };
 }
 
@@ -2230,6 +3257,363 @@ function workspaceLocalRef(rootPath: string, path: string): string {
   return relative(resolve(rootPath), resolve(path)).replace(/\\/gu, "/");
 }
 
+function withWorkspaceRunNextArtifactRefs(plan: WorkspaceRunNextPlan): WorkspaceRunNextPlan {
+  const nextPlan: WorkspaceRunNextPlan = { ...plan };
+  delete nextPlan.artifactRefs;
+  delete nextPlan.impactRefs;
+  delete nextPlan.revalidationQueue;
+  const artifactRefs = collectWorkspaceRunNextArtifactRefs(nextPlan);
+  return artifactRefs.length > 0 ? { ...nextPlan, artifactRefs } : nextPlan;
+}
+
+async function withWorkspaceRunNextArtifactRefIntegrity(
+  rootPath: string,
+  plan: WorkspaceRunNextPlan
+): Promise<WorkspaceRunNextPlan> {
+  if (!plan.artifactRefs || plan.artifactRefs.length === 0) {
+    return plan;
+  }
+  return {
+    ...plan,
+    artifactRefs: await enrichWorkspaceRunNextArtifactRefs(rootPath, plan.artifactRefs)
+  };
+}
+
+async function enrichWorkspaceRunNextArtifactRefs(
+  rootPath: string,
+  refs: WorkspaceRunNextArtifactRef[]
+): Promise<WorkspaceRunNextArtifactRef[]> {
+  return Promise.all(refs.map((ref) => enrichWorkspaceRunNextArtifactRef(rootPath, ref)));
+}
+
+async function withWorkspaceRunNextImpactRefs(rootPath: string, plan: WorkspaceRunNextPlan): Promise<WorkspaceRunNextPlan> {
+  if (!plan.artifactRefs || plan.artifactRefs.length === 0) {
+    return plan;
+  }
+
+  const refPaths = uniqueWorkspaceRunNextImpactSourcePaths(plan.artifactRefs);
+  if (refPaths.length === 0) {
+    return plan;
+  }
+
+  const impactRefs: WorkspaceRunNextImpactRef[] = [];
+  const warnings = [...plan.warnings];
+  for (const refPath of refPaths) {
+    try {
+      const search = await searchWorkspaceCatalog({
+        rootPath,
+        ref: refPath,
+        limit: 6
+      });
+      for (const row of search.results) {
+        const citedByPath = normalizeWorkspaceRunNextArtifactPath(row.path);
+        if (!citedByPath || citedByPath === refPath) {
+          continue;
+        }
+        const matchedRef = row.artifactRefs.find((ref) => normalizeWorkspaceRunNextArtifactPath(ref.path) === refPath);
+        impactRefs.push({
+          refPath,
+          citedByPath,
+          citedByKind: row.kind,
+          source: "workspace-catalog",
+          ...(row.artifactId ? { citedByArtifactId: row.artifactId } : {}),
+          ...(row.title ? { citedByTitle: row.title } : {}),
+          ...(row.trust ? { citedByTrust: row.trust } : {}),
+          ...(row.status ? { citedByStatus: row.status } : {}),
+          ...(matchedRef?.fieldPath ? { fieldPath: matchedRef.fieldPath } : {}),
+          ...(matchedRef?.refKind ? { refKind: matchedRef.refKind } : {})
+        });
+      }
+    } catch (error) {
+      warnings.push(
+        `Citation impact lookup unavailable for ${refPath}: ${
+          error instanceof Error ? error.message : String(error)
+        } Impact refs require a fresh local catalog and do not affect trust labels.`
+      );
+      break;
+    }
+  }
+
+  const uniqueImpactRefs = uniqueWorkspaceRunNextImpactRefs(impactRefs);
+  return {
+    ...plan,
+    ...(uniqueImpactRefs.length > 0 ? { impactRefs: uniqueImpactRefs } : {}),
+    warnings
+  };
+}
+
+function uniqueWorkspaceRunNextImpactSourcePaths(refs: WorkspaceRunNextArtifactRef[]): string[] {
+  const ignoredRoles = new Set<WorkspaceRunNextArtifactRefRole>(["run-next-packet"]);
+  const seen = new Set<string>();
+  const paths: string[] = [];
+  for (const ref of refs) {
+    if (ignoredRoles.has(ref.role)) {
+      continue;
+    }
+    const normalized = normalizeWorkspaceRunNextArtifactPath(ref.path);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    paths.push(normalized);
+  }
+  return paths.slice(0, 8);
+}
+
+function uniqueWorkspaceRunNextImpactRefs(refs: WorkspaceRunNextImpactRef[]): WorkspaceRunNextImpactRef[] {
+  const seen = new Set<string>();
+  const unique: WorkspaceRunNextImpactRef[] = [];
+  for (const ref of refs) {
+    const key = `${ref.refPath}:${ref.citedByPath}:${ref.fieldPath ?? ""}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(ref);
+  }
+  return unique.slice(0, 24);
+}
+
+function withWorkspaceRunNextRevalidationQueue(plan: WorkspaceRunNextPlan): WorkspaceRunNextPlan {
+  if (!plan.impactRefs || plan.impactRefs.length === 0) {
+    return plan;
+  }
+
+  const queue = uniqueWorkspaceRunNextRevalidationItems(
+    plan.impactRefs.map((ref) => workspaceRunNextRevalidationItemForImpact(ref))
+  );
+  return queue.length > 0 ? { ...plan, revalidationQueue: queue } : plan;
+}
+
+function workspaceRunNextRevalidationItemForImpact(ref: WorkspaceRunNextImpactRef): WorkspaceRunNextRevalidationItem {
+  return {
+    itemId: workspaceRunNextStableId("reval", `${ref.refPath}:${ref.citedByPath}:${ref.fieldPath ?? ""}`),
+    refPath: ref.refPath,
+    dependentPath: ref.citedByPath,
+    dependentKind: ref.citedByKind,
+    source: "impact-ref",
+    priority: workspaceRunNextRevalidationPriority(ref),
+    reason: `${ref.citedByKind} artifact cites ${ref.refPath}; revalidate it before relying on or mutating that evidence.`,
+    command: workspaceRunNextRevalidationCommand(ref),
+    evidenceRequired: workspaceRunNextRevalidationEvidenceRequired(ref),
+    boundary:
+      "Dependency revalidation only; this queue item does not execute commands, close validation gates, or upgrade trust labels.",
+    ...(ref.citedByArtifactId ? { dependentArtifactId: ref.citedByArtifactId } : {}),
+    ...(ref.citedByTitle ? { dependentTitle: ref.citedByTitle } : {}),
+    ...(ref.citedByTrust ? { dependentTrust: ref.citedByTrust } : {}),
+    ...(ref.citedByStatus ? { dependentStatus: ref.citedByStatus } : {}),
+    ...(ref.fieldPath ? { fieldPath: ref.fieldPath } : {})
+  };
+}
+
+function workspaceRunNextRevalidationPriority(ref: WorkspaceRunNextImpactRef): WorkspaceRunNextRevalidationPriority {
+  return ref.citedByKind === "claims" || ref.citedByKind === "findings" || ref.citedByTrust === "proved"
+    ? "high"
+    : "medium";
+}
+
+function workspaceRunNextRevalidationCommand(ref: WorkspaceRunNextImpactRef): string {
+  if (ref.citedByKind === "claims" && ref.citedByArtifactId) {
+    return `truth-harness claim review ${ref.citedByArtifactId} --json`;
+  }
+
+  return `truth-harness catalog search --ref ${ref.refPath} --json`;
+}
+
+function workspaceRunNextRevalidationEvidenceRequired(ref: WorkspaceRunNextImpactRef): string {
+  if (ref.citedByKind === "claims") {
+    return "Fresh claim review showing the cited evidence still supports the dependent claim.";
+  }
+  if (ref.citedByKind === "findings") {
+    return "Fresh handoff or reviewer packet showing the cited evidence is still valid for the intended report.";
+  }
+  if (ref.citedByKind === "routes") {
+    return "Fresh route readiness or obligation state after inspecting the cited evidence.";
+  }
+  return "Fresh local review of the dependent artifact and cited evidence boundary.";
+}
+
+function uniqueWorkspaceRunNextRevalidationItems(
+  items: WorkspaceRunNextRevalidationItem[]
+): WorkspaceRunNextRevalidationItem[] {
+  const seen = new Set<string>();
+  const unique: WorkspaceRunNextRevalidationItem[] = [];
+  for (const item of items) {
+    const key = `${item.refPath}:${item.dependentPath}:${item.fieldPath ?? ""}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(item);
+  }
+  return unique
+    .sort((left, right) => workspaceRunNextPriorityRank(left.priority) - workspaceRunNextPriorityRank(right.priority))
+    .slice(0, 24);
+}
+
+function workspaceRunNextPriorityRank(priority: WorkspaceRunNextRevalidationPriority): number {
+  return priority === "high" ? 0 : 1;
+}
+
+async function enrichWorkspaceRunNextArtifactRef(
+  rootPath: string,
+  ref: WorkspaceRunNextArtifactRef
+): Promise<WorkspaceRunNextArtifactRef> {
+  const artifactPath = normalizeWorkspaceRunNextArtifactPath(ref.path);
+  if (!artifactPath) {
+    return ref;
+  }
+
+  try {
+    const absolutePath = resolveUnderRoot(rootPath, artifactPath);
+    const artifactStat = await stat(absolutePath);
+    if (!artifactStat.isFile()) {
+      return ref;
+    }
+    const sha256 = await sha256FileHex(absolutePath);
+    return {
+      ...ref,
+      path: artifactPath,
+      sizeBytes: artifactStat.size,
+      sha256,
+      sha256Scope: "file",
+      citation: `${artifactPath} sha256:${sha256}`
+    };
+  } catch {
+    return ref;
+  }
+}
+
+function sha256FileHex(path: string): Promise<string> {
+  return new Promise((resolveHash, rejectHash) => {
+    const hash = createHash("sha256");
+    const stream = createReadStream(path);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", rejectHash);
+    stream.on("end", () => resolveHash(hash.digest("hex")));
+  });
+}
+
+function workspaceRunNextPacketArtifactRefs(
+  plan: WorkspaceRunNextPlan,
+  packetPath: string
+): WorkspaceRunNextArtifactRef[] {
+  return uniqueWorkspaceRunNextArtifactRefs([
+    {
+      path: packetPath,
+      role: "run-next-packet",
+      source: "workspace-run-next packet"
+    },
+    ...(plan.artifactRefs ?? [])
+  ]);
+}
+
+function collectWorkspaceRunNextArtifactRefs(plan: WorkspaceRunNextPlan): WorkspaceRunNextArtifactRef[] {
+  const refs: WorkspaceRunNextArtifactRef[] = [];
+  if (plan.sourceRevision?.path) {
+    refs.push({
+      path: plan.sourceRevision.path,
+      role: "source-revision",
+      source: "sourceRevision.path"
+    });
+  }
+  if (plan.sourceSnapshot?.path) {
+    refs.push({
+      path: plan.sourceSnapshot.path,
+      role: "source-snapshot",
+      source: "sourceSnapshot.path"
+    });
+  }
+  const rationale = plan.rationale ?? workspaceRunNextRationaleFor(plan);
+  addWorkspaceRunNextArtifactRefFromString(refs, rationale.candidateEvidenceRef, "candidate-evidence", "rationale.candidateEvidenceRef");
+  addWorkspaceRunNextArtifactRefFromString(refs, plan.execution.evidenceRef, "execution-evidence", "execution.evidenceRef");
+  addWorkspaceRunNextArtifactRefsFromUnknown(refs, plan.item, "item");
+  addWorkspaceRunNextArtifactRefsFromUnknown(refs, plan.execution, "execution");
+  addWorkspaceRunNextArtifactRefsFromUnknown(refs, plan.enginePlan, "enginePlan");
+  addWorkspaceRunNextArtifactRefsFromUnknown(refs, plan.idleNextActions, "idleNextActions");
+  return uniqueWorkspaceRunNextArtifactRefs(refs);
+}
+
+function addWorkspaceRunNextArtifactRefsFromUnknown(
+  refs: WorkspaceRunNextArtifactRef[],
+  value: unknown,
+  source: string,
+  seen = new WeakSet<object>()
+): void {
+  if (typeof value === "string") {
+    addWorkspaceRunNextArtifactRefFromString(refs, value, "referenced-artifact", source);
+    return;
+  }
+  if (!value || typeof value !== "object") {
+    return;
+  }
+  if (seen.has(value)) {
+    return;
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => addWorkspaceRunNextArtifactRefsFromUnknown(refs, entry, `${source}[${index}]`, seen));
+    return;
+  }
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === "artifactRefs") {
+      continue;
+    }
+    addWorkspaceRunNextArtifactRefsFromUnknown(refs, entry, `${source}.${key}`, seen);
+  }
+}
+
+function addWorkspaceRunNextArtifactRefFromString(
+  refs: WorkspaceRunNextArtifactRef[],
+  value: string | undefined,
+  role: WorkspaceRunNextArtifactRefRole,
+  source: string
+): void {
+  if (!value) {
+    return;
+  }
+  for (const path of workspaceRunNextArtifactPathsFromString(value)) {
+    refs.push({ path, role, source });
+  }
+}
+
+function workspaceRunNextArtifactPathsFromString(value: string): string[] {
+  const paths = new Set<string>();
+  const pattern = /(?:[A-Za-z]:[\\/][^\s"'`<>|]*?\.truth-harness[^\s"'`<>|]*|\.truth-harness[\\/][^\s"'`<>|]+)/gu;
+  for (const match of value.matchAll(pattern)) {
+    const normalized = normalizeWorkspaceRunNextArtifactPath(match[0]);
+    if (normalized) {
+      paths.add(normalized);
+    }
+  }
+  return [...paths];
+}
+
+function normalizeWorkspaceRunNextArtifactPath(value: string): string | undefined {
+  let normalized = value.trim().replace(/\\/gu, "/");
+  normalized = normalized.replace(/[),.;:\]]+$/gu, "");
+  const marker = ".truth-harness/";
+  const markerIndex = normalized.indexOf(marker);
+  if (markerIndex < 0) {
+    return undefined;
+  }
+  return normalized.slice(markerIndex);
+}
+
+function uniqueWorkspaceRunNextArtifactRefs(refs: WorkspaceRunNextArtifactRef[]): WorkspaceRunNextArtifactRef[] {
+  const seen = new Set<string>();
+  const unique: WorkspaceRunNextArtifactRef[] = [];
+  for (const ref of refs) {
+    const key = `${ref.role}:${ref.path}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(ref);
+  }
+  return unique;
+}
+
 async function requireRunNextWorkspace(rootPath: string): Promise<
   LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> }
 > {
@@ -2246,13 +3630,16 @@ async function requireRunNextWorkspace(rootPath: string): Promise<
 }
 
 function workspaceRunNextPlanId(createdAt: string, reviewId: string): string {
-  const seed = `${createdAt}:${reviewId}`;
+  return workspaceRunNextStableId("wrn", `${createdAt}:${reviewId}`);
+}
+
+function workspaceRunNextStableId(prefix: string, seed: string): string {
   let hash = 0x811c9dc5;
   for (let index = 0; index < seed.length; index += 1) {
     hash ^= seed.charCodeAt(index);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
-  return `wrn_${hash.toString(16).padStart(8, "0")}`;
+  return `${prefix}_${hash.toString(16).padStart(8, "0")}`;
 }
 
 function renderCredibilityActionAgentPacket(pack: CredibilityPack): string {

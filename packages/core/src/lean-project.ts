@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 
@@ -38,11 +39,14 @@ export interface LeanProjectInspection {
     likelyUsesMathlib: boolean;
     evidence: string[];
   };
+  declarations: LeanProjectDeclarationInventory;
+  proofSafety: LeanProjectProofSafety;
   trustBoundary: {
     inspectionIsNotProof: true;
     noLeanExecution: true;
     noNetworkAccess: true;
     provedRequiresProofCheckRecord: true;
+    proofMarkersBlockProvedTrust: true;
   };
   warnings: string[];
   nextActions: string[];
@@ -51,9 +55,90 @@ export interface LeanProjectInspection {
 export interface LeanProjectFileSummary {
   path: string;
   byteLength: number;
+  sha256: string;
+  sha256Scope: "file";
+}
+
+export type LeanProjectDeclarationKind = "theorem" | "lemma" | "example" | "def";
+
+export interface LeanProjectDeclaration {
+  declarationId: string;
+  kind: LeanProjectDeclarationKind;
+  name?: string;
+  path: string;
+  line: number;
+  column: number;
+  signature: string;
+  signatureSha256: string;
+  snippet: string;
+  sourceSha256: string;
+}
+
+export interface LeanProjectDeclarationInventory {
+  scannedFiles: number;
+  completeProjectScan: boolean;
+  total: number;
+  byKind: Record<LeanProjectDeclarationKind, number>;
+  sample: LeanProjectDeclaration[];
+  truncated: boolean;
+}
+
+export type LeanProjectProofMarkerKind = "sorry" | "admit" | "axiom" | "constant" | "hole";
+
+export interface LeanProjectProofMarker {
+  kind: LeanProjectProofMarkerKind;
+  path: string;
+  line: number;
+  column: number;
+  snippet: string;
+  declaration?: LeanProjectProofMarkerDeclaration;
+  repairTarget: LeanProjectProofMarkerRepairTarget;
+  severity: "blocking";
+  message: string;
+}
+
+export interface LeanProjectProofMarkerRepairTarget {
+  repairTargetId: string;
+  sourcePath: string;
+  sourceSha256: string;
+  markerKind: LeanProjectProofMarkerKind;
+  markerLine: number;
+  markerColumn: number;
+  declarationId?: string;
+  declarationName?: string;
+  declarationSignatureSha256?: string;
+  afterEditCommands: string[];
+  evidenceRequired: string[];
+  boundary: string;
+}
+
+export type LeanProjectProofMarkerDeclaration = Pick<
+  LeanProjectDeclaration,
+  "declarationId" | "kind" | "name" | "path" | "line" | "column" | "signature" | "signatureSha256" | "sourceSha256"
+>;
+
+export interface LeanProjectProofSafety {
+  scannedFiles: number;
+  completeProjectScan: boolean;
+  blocksProvedTrust: boolean;
+  markers: {
+    total: number;
+    sample: LeanProjectProofMarker[];
+    truncated: boolean;
+  };
 }
 
 const DEFAULT_MAX_LEAN_FILES = 40;
+const DEFAULT_MAX_PROOF_MARKERS = 25;
+const DEFAULT_MAX_DECLARATIONS = 40;
+
+const PROOF_MARKER_MESSAGES: Record<LeanProjectProofMarkerKind, string> = {
+  sorry: "`sorry` is an unfinished proof placeholder.",
+  admit: "`admit` is an unfinished proof placeholder.",
+  axiom: "`axiom` introduces a local unproved assumption.",
+  constant: "`constant` can introduce a local unchecked assumption.",
+  hole: "A Lean metavariable hole such as `?_` or `?goal` is an unfinished proof target."
+};
 
 export async function inspectLeanProject(input: LeanProjectInspectionInput): Promise<LeanProjectInspection> {
   const root = resolve(input.rootPath);
@@ -77,16 +162,21 @@ export async function inspectLeanProject(input: LeanProjectInspectionInput): Pro
     lakefileToml: Boolean(lakefileToml),
     lakeManifest: Boolean(lakeManifest)
   });
+  const [declarations, proofSafety] = await Promise.all([
+    inspectLeanDeclarations(root, leanFiles),
+    inspectLeanProofSafety(root, leanFiles)
+  ]);
   const hasLakefile = Boolean(lakefileLean || lakefileToml);
   const hasLeanFiles = leanFiles.total > 0;
   const readiness = leanToolchain && hasLakefile && hasLeanFiles ? "ready" : hasLeanFiles || hasLakefile || leanToolchain ? "partial" : "missing";
+  const projectPath = toPortablePath(relative(root, projectRoot)) || ".";
 
   return {
     schemaVersion: LEAN_PROJECT_INSPECTION_SCHEMA_VERSION,
     inspectedAt: new Date().toISOString(),
     localOnly: true,
     networkAccess: "none",
-    projectPath: toPortablePath(relative(root, projectRoot)) || ".",
+    projectPath,
     readiness,
     files: {
       ...(leanToolchain ? { leanToolchain } : {}),
@@ -97,14 +187,34 @@ export async function inspectLeanProject(input: LeanProjectInspectionInput): Pro
     },
     ...(toolchain ? { toolchain } : {}),
     mathlib,
+    declarations,
+    proofSafety,
     trustBoundary: {
       inspectionIsNotProof: true,
       noLeanExecution: true,
       noNetworkAccess: true,
-      provedRequiresProofCheckRecord: true
+      provedRequiresProofCheckRecord: true,
+      proofMarkersBlockProvedTrust: true
     },
-    warnings: buildWarnings({ readiness, leanToolchain: Boolean(leanToolchain), hasLakefile, hasLeanFiles, lakeManifest: Boolean(lakeManifest) }),
-    nextActions: buildNextActions({ readiness, leanToolchain: Boolean(leanToolchain), hasLakefile, hasLeanFiles, lakeManifest: Boolean(lakeManifest) })
+    warnings: buildWarnings({
+      readiness,
+      leanToolchain: Boolean(leanToolchain),
+      hasLakefile,
+      hasLeanFiles,
+      lakeManifest: Boolean(lakeManifest),
+      declarations,
+      proofSafety
+    }),
+    nextActions: buildNextActions({
+      readiness,
+      leanToolchain: Boolean(leanToolchain),
+      hasLakefile,
+      hasLeanFiles,
+      lakeManifest: Boolean(lakeManifest),
+      declarations,
+      proofSafety,
+      projectPath
+    })
   };
 }
 
@@ -115,10 +225,7 @@ async function summarizeFileIfPresent(root: string, path: string): Promise<LeanP
       return undefined;
     }
 
-    return {
-      path: toPortablePath(relative(root, path)),
-      byteLength: fileStat.size
-    };
+    return summarizeExistingFile(root, path, fileStat.size);
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === "ENOENT") {
@@ -127,6 +234,16 @@ async function summarizeFileIfPresent(root: string, path: string): Promise<LeanP
 
     throw error;
   }
+}
+
+async function summarizeExistingFile(root: string, path: string, byteLength?: number): Promise<LeanProjectFileSummary> {
+  const bytes = await readFile(path);
+  return {
+    path: toPortablePath(relative(root, path)),
+    byteLength: byteLength ?? bytes.byteLength,
+    sha256: sha256Hex(bytes),
+    sha256Scope: "file"
+  };
 }
 
 async function collectLeanFiles(
@@ -161,10 +278,7 @@ async function collectLeanFiles(
       total += 1;
       if (sample.length < maxLeanFiles) {
         const fileStat = await stat(path);
-        sample.push({
-          path: toPortablePath(relative(root, path)),
-          byteLength: fileStat.size
-        });
+        sample.push(await summarizeExistingFile(root, path, fileStat.size));
       }
     }
   }
@@ -213,12 +327,388 @@ async function detectMathlib(
   };
 }
 
+async function inspectLeanProofSafety(
+  root: string,
+  leanFiles: LeanProjectInspection["files"]["leanFiles"]
+): Promise<LeanProjectProofSafety> {
+  let total = 0;
+  const sample: LeanProjectProofMarker[] = [];
+
+  for (const file of leanFiles.sample) {
+    const sourceText = await readFile(resolve(root, file.path), "utf8");
+    const markers = findLeanProofMarkers(sourceText, file.path);
+    total += markers.length;
+
+    for (const marker of markers) {
+      if (sample.length < DEFAULT_MAX_PROOF_MARKERS) {
+        sample.push(marker);
+      }
+    }
+  }
+
+  return {
+    scannedFiles: leanFiles.sample.length,
+    completeProjectScan: !leanFiles.truncated,
+    blocksProvedTrust: total > 0,
+    markers: {
+      total,
+      sample,
+      truncated: total > sample.length
+    }
+  };
+}
+
+async function inspectLeanDeclarations(
+  root: string,
+  leanFiles: LeanProjectInspection["files"]["leanFiles"]
+): Promise<LeanProjectDeclarationInventory> {
+  const byKind: Record<LeanProjectDeclarationKind, number> = {
+    theorem: 0,
+    lemma: 0,
+    example: 0,
+    def: 0
+  };
+  const sample: LeanProjectDeclaration[] = [];
+  let total = 0;
+
+  for (const file of leanFiles.sample) {
+    const sourceText = await readFile(resolve(root, file.path), "utf8");
+    const declarations = findLeanDeclarations(sourceText, file.path);
+    for (const declaration of declarations) {
+      total += 1;
+      byKind[declaration.kind] += 1;
+      if (sample.length < DEFAULT_MAX_DECLARATIONS) {
+        sample.push(declaration);
+      }
+    }
+  }
+
+  return {
+    scannedFiles: leanFiles.sample.length,
+    completeProjectScan: !leanFiles.truncated,
+    total,
+    byKind,
+    sample,
+    truncated: total > sample.length
+  };
+}
+
+export function findLeanDeclarations(sourceText: string, path: string): LeanProjectDeclaration[] {
+  const masked = maskLeanCommentsAndStrings(sourceText);
+  const rawLines = sourceText.split(/\r\n|\n|\r/u);
+  const maskedLines = masked.split(/\r\n|\n|\r/u);
+  const sourceSha256 = sha256Hex(sourceText);
+  const declarations: LeanProjectDeclaration[] = [];
+
+  for (let index = 0; index < maskedLines.length; index += 1) {
+    const maskedLine = maskedLines[index] ?? "";
+    const theoremLike = maskedLine.match(/^\s*(?:private\s+|protected\s+)?(theorem|lemma|def)\s+([A-Za-z_][A-Za-z0-9_'.]*)\b/u);
+    const exampleLike = theoremLike ? undefined : maskedLine.match(/^\s*example\b/u);
+    if (!theoremLike && !exampleLike) {
+      continue;
+    }
+
+    const rawLine = rawLines[index] ?? "";
+    const kind = (theoremLike?.[1] ?? "example") as LeanProjectDeclarationKind;
+    const name = theoremLike?.[2];
+    const column = (theoremLike ? theoremLike.index ?? 0 : exampleLike?.index ?? 0) + 1;
+    const snippet = normalizeLeanSnippet(rawLine);
+    const signature = declarationSignature(snippet);
+    declarations.push({
+      declarationId: leanDeclarationId({ path, kind, name, signature }),
+      kind,
+      ...(name ? { name } : {}),
+      path,
+      line: index + 1,
+      column,
+      signature,
+      signatureSha256: sha256Hex(signature),
+      snippet,
+      sourceSha256
+    });
+  }
+
+  return declarations;
+}
+
+function leanDeclarationId(input: {
+  path: string;
+  kind: LeanProjectDeclarationKind;
+  name?: string;
+  signature: string;
+}): string {
+  return `decl_${sha256Hex(`${input.path}\n${input.kind}\n${input.name ?? ""}\n${input.signature}`).slice(0, 16)}`;
+}
+
+function sha256Hex(value: string | Buffer): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function quoteCommandArg(value: string): string {
+  return /^[A-Za-z0-9_./:@=+-]+$/u.test(value) ? value : JSON.stringify(value);
+}
+
+function normalizeLeanSnippet(line: string): string {
+  const normalized = line.trim().replace(/\s+/gu, " ");
+  return normalized.length > 180 ? `${normalized.slice(0, 177)}...` : normalized;
+}
+
+function declarationSignature(snippet: string): string {
+  const [beforeProof] = snippet.split(":=");
+  const signature = beforeProof?.trim() ?? snippet;
+  return signature.length > 180 ? `${signature.slice(0, 177)}...` : signature;
+}
+
+export function findLeanProofMarkers(sourceText: string, path: string): LeanProjectProofMarker[] {
+  const masked = maskLeanCommentsAndStrings(sourceText);
+  const lines = sourceText.split(/\r\n|\n|\r/u);
+  const declarations = findLeanDeclarations(sourceText, path);
+  const markers: LeanProjectProofMarker[] = [];
+  const pattern = /\b(sorry|admit|axiom|constant)\b/gu;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(masked)) !== null) {
+    const kind = match[1] as LeanProjectProofMarkerKind;
+    markers.push(leanProofMarker(sourceText, lines, declarations, path, kind, match.index));
+  }
+
+  const holePattern = /(^|[^\w'])\?[_A-Za-z][A-Za-z0-9_'.]*/gmu;
+  while ((match = holePattern.exec(masked)) !== null) {
+    const markerIndex = match.index + (match[1]?.length ?? 0);
+    markers.push(leanProofMarker(sourceText, lines, declarations, path, "hole", markerIndex));
+  }
+
+  return markers.sort((left, right) => left.line - right.line || left.column - right.column || left.kind.localeCompare(right.kind));
+}
+
+function leanProofMarker(
+  sourceText: string,
+  lines: string[],
+  declarations: LeanProjectDeclaration[],
+  path: string,
+  kind: LeanProjectProofMarkerKind,
+  index: number
+): LeanProjectProofMarker {
+  const location = lineColumnAt(sourceText, index);
+  const rawSnippet = lines[location.line - 1]?.trim().replace(/\s+/gu, " ") ?? "";
+  const declaration = kind === "axiom" || kind === "constant" ? undefined : declarationForMarker(declarations, location);
+  const sourceSha256 = sha256Hex(sourceText);
+  return {
+    kind,
+    path,
+    line: location.line,
+    column: location.column,
+    snippet: rawSnippet.length > 160 ? `${rawSnippet.slice(0, 157)}...` : rawSnippet,
+    ...(declaration ? { declaration } : {}),
+    repairTarget: leanProofMarkerRepairTarget({
+      path,
+      sourceSha256,
+      kind,
+      location,
+      snippet: rawSnippet,
+      declaration
+    }),
+    severity: "blocking",
+    message: PROOF_MARKER_MESSAGES[kind]
+  };
+}
+
+function leanProofMarkerRepairTarget(input: {
+  path: string;
+  sourceSha256: string;
+  kind: LeanProjectProofMarkerKind;
+  location: { line: number; column: number };
+  snippet: string;
+  declaration?: LeanProjectProofMarkerDeclaration;
+}): LeanProjectProofMarkerRepairTarget {
+  const declarationArg = input.declaration?.name ? ` --declaration ${quoteCommandArg(input.declaration.name)}` : "";
+  const proofCheckCommand = `truth-harness proof check ${quoteCommandArg(input.path)}${declarationArg} --write`;
+  const targetHash = sha256Hex(
+    [
+      input.path,
+      input.sourceSha256,
+      input.kind,
+      String(input.location.line),
+      String(input.location.column),
+      input.snippet,
+      input.declaration?.declarationId ?? "",
+      input.declaration?.signatureSha256 ?? ""
+    ].join("\n")
+  );
+
+  return {
+    repairTargetId: `lpr_${targetHash.slice(0, 16)}`,
+    sourcePath: input.path,
+    sourceSha256: input.sourceSha256,
+    markerKind: input.kind,
+    markerLine: input.location.line,
+    markerColumn: input.location.column,
+    ...(input.declaration
+      ? {
+          declarationId: input.declaration.declarationId,
+          ...(input.declaration.name ? { declarationName: input.declaration.name } : {}),
+          declarationSignatureSha256: input.declaration.signatureSha256
+        }
+      : {}),
+    afterEditCommands: [
+      proofCheckCommand,
+      "Rerun the original `truth-harness proof project <project> --json` scan and confirm this repair target is gone."
+    ],
+    evidenceRequired: [
+      "edited workspace-local .lean source",
+      "proof-safety scan with this marker absent",
+      "accepted proof-check record before using the source as proved evidence"
+    ],
+    boundary: "This repair target is a local planning aid. It does not prove the declaration, and it must not upgrade trust until a later accepted proof-check record exists."
+  };
+}
+
+function declarationForMarker(
+  declarations: LeanProjectDeclaration[],
+  location: { line: number; column: number }
+): LeanProjectProofMarkerDeclaration | undefined {
+  const declaration = declarations
+    .filter(
+      (candidate) =>
+        candidate.line < location.line || (candidate.line === location.line && candidate.column <= location.column)
+    )
+    .at(-1);
+  if (!declaration) {
+    return undefined;
+  }
+
+  return {
+    declarationId: declaration.declarationId,
+    kind: declaration.kind,
+    ...(declaration.name ? { name: declaration.name } : {}),
+    path: declaration.path,
+    line: declaration.line,
+    column: declaration.column,
+    signature: declaration.signature,
+    signatureSha256: declaration.signatureSha256,
+    sourceSha256: declaration.sourceSha256
+  };
+}
+
+function maskLeanCommentsAndStrings(sourceText: string): string {
+  const chars = sourceText.split("");
+  let index = 0;
+
+  while (index < sourceText.length) {
+    if (sourceText.startsWith("--", index)) {
+      index = maskLineComment(chars, sourceText, index);
+      continue;
+    }
+
+    if (sourceText.startsWith("/-", index)) {
+      index = maskBlockComment(chars, sourceText, index);
+      continue;
+    }
+
+    if (sourceText[index] === "\"") {
+      index = maskStringLiteral(chars, sourceText, index);
+      continue;
+    }
+
+    index += 1;
+  }
+
+  return chars.join("");
+}
+
+function maskLineComment(chars: string[], sourceText: string, start: number): number {
+  let index = start;
+  while (index < sourceText.length && sourceText[index] !== "\n" && sourceText[index] !== "\r") {
+    chars[index] = " ";
+    index += 1;
+  }
+
+  return index;
+}
+
+function maskBlockComment(chars: string[], sourceText: string, start: number): number {
+  let index = start;
+  let depth = 0;
+
+  while (index < sourceText.length) {
+    if (sourceText.startsWith("/-", index)) {
+      depth += 1;
+      chars[index] = " ";
+      chars[index + 1] = " ";
+      index += 2;
+      continue;
+    }
+
+    if (sourceText.startsWith("-/", index)) {
+      chars[index] = " ";
+      chars[index + 1] = " ";
+      index += 2;
+      depth -= 1;
+      if (depth <= 0) {
+        return index;
+      }
+      continue;
+    }
+
+    if (sourceText[index] !== "\n" && sourceText[index] !== "\r") {
+      chars[index] = " ";
+    }
+    index += 1;
+  }
+
+  return index;
+}
+
+function maskStringLiteral(chars: string[], sourceText: string, start: number): number {
+  let index = start;
+  while (index < sourceText.length) {
+    const char = sourceText[index];
+    if (char !== "\n" && char !== "\r") {
+      chars[index] = " ";
+    }
+
+    if (char === "\\" && index + 1 < sourceText.length) {
+      index += 1;
+      if (sourceText[index] !== "\n" && sourceText[index] !== "\r") {
+        chars[index] = " ";
+      }
+    } else if (char === "\"" && index > start) {
+      index += 1;
+      return index;
+    }
+
+    index += 1;
+  }
+
+  return index;
+}
+
+function lineColumnAt(text: string, index: number): { line: number; column: number } {
+  let line = 1;
+  let lineStart = 0;
+
+  for (let cursor = 0; cursor < index; cursor += 1) {
+    const char = text[cursor];
+    if (char === "\n") {
+      line += 1;
+      lineStart = cursor + 1;
+    }
+  }
+
+  return {
+    line,
+    column: index - lineStart + 1
+  };
+}
+
 function buildWarnings(input: {
   readiness: LeanProjectReadiness;
   leanToolchain: boolean;
   hasLakefile: boolean;
   hasLeanFiles: boolean;
   lakeManifest: boolean;
+  declarations: LeanProjectDeclarationInventory;
+  proofSafety: LeanProjectProofSafety;
 }): string[] {
   const warnings = [
     "Lean project inspection reads local files only; it does not run Lean, Lake, or network commands.",
@@ -234,8 +724,17 @@ function buildWarnings(input: {
   if (!input.hasLeanFiles) {
     warnings.push("No .lean files were found in the inspected project path.");
   }
+  if (input.hasLeanFiles && input.declarations.total === 0) {
+    warnings.push("No theorem, lemma, example, or def declarations were found in sampled Lean files. Add named formalization targets before reviewer handoff.");
+  }
   if (input.hasLakefile && !input.lakeManifest) {
     warnings.push("No lake-manifest.json found. Dependency revisions may be unresolved until Lake writes a manifest.");
+  }
+  if (!input.proofSafety.completeProjectScan) {
+    warnings.push("Proof-marker scan was truncated with the Lean file sample. Increase --max-lean-files before claiming the whole project is free of unfinished proof markers.");
+  }
+  if (input.proofSafety.markers.total > 0) {
+    warnings.push(`Found ${input.proofSafety.markers.total} blocking Lean proof marker(s). Remove or justify them before any affected source can support \`proved\`.`);
   }
 
   return warnings;
@@ -247,8 +746,16 @@ function buildNextActions(input: {
   hasLakefile: boolean;
   hasLeanFiles: boolean;
   lakeManifest: boolean;
+  declarations: LeanProjectDeclarationInventory;
+  proofSafety: LeanProjectProofSafety;
+  projectPath: string;
 }): string[] {
   const actions: string[] = [];
+  const firstMarker = input.proofSafety.markers.sample[0];
+  if (firstMarker) {
+    actions.push(`Resolve blocking Lean marker ${firstMarker.kind} at ${firstMarker.path}:${firstMarker.line}:${firstMarker.column}, then rerun \`truth-harness proof project ${input.projectPath} --json\`.`);
+    actions.push("Do not use an affected Lean source for `proved` trust until `sorry`, `admit`, Lean metavariable holes, local `axiom`, and local `constant` markers are gone.");
+  }
   if (!input.leanToolchain) {
     actions.push("Add a lean-toolchain file pinned to the intended Lean release before claiming reproducible proof environment readiness.");
   }
@@ -257,6 +764,9 @@ function buildNextActions(input: {
   }
   if (!input.hasLeanFiles) {
     actions.push("Add at least one workspace-local .lean proof artifact, then run `truth-harness proof check <file> --write`.");
+  }
+  if (input.hasLeanFiles && input.declarations.total === 0) {
+    actions.push("Add named theorem or lemma declarations so agents and reviewers can target exact formal statements.");
   }
   if (input.hasLakefile && !input.lakeManifest) {
     actions.push("Generate and review lake-manifest.json in a controlled environment before relying on dependency revisions.");

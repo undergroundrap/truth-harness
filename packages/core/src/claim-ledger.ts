@@ -3,6 +3,12 @@ import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import {
+  enrichLocalArtifactRefs,
+  localArtifactPathsFromString,
+  uniqueLocalArtifactRefs,
+  type LocalArtifactRef
+} from "./local-artifact-ref.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { parseReceiptJson } from "./receipt-validation.js";
@@ -164,6 +170,11 @@ export interface ClaimLedgerGraph {
 }
 
 export type ClaimReviewStatus = "ready" | "blocked" | "refuted" | "inactive";
+export type ClaimReviewArtifactRefRole = "claim-record" | "claim-evidence";
+
+export interface ClaimReviewArtifactRef extends LocalArtifactRef {
+  role: ClaimReviewArtifactRefRole;
+}
 
 export interface ClaimReviewAction {
   kind: "run-verifier-route" | "cite-sources" | "attach-proof" | "request-human-review" | "clear-finalization-check" | "record-successor";
@@ -196,6 +207,7 @@ export interface ClaimReviewPacket {
   blockingChecks: string[];
   verification: ClaimVerificationStep[];
   evidenceRefs: ClaimLedgerEvidenceRef[];
+  artifactRefs: ClaimReviewArtifactRef[];
   nextActions: ClaimReviewAction[];
   commands: {
     showJson: string;
@@ -395,6 +407,7 @@ export async function createClaimReviewPacket(input: {
     .map((candidate) => candidate.claimId)
     .sort();
   const reviewStatus = reviewStatusForClaim(claim);
+  const artifactRefs = await enrichLocalArtifactRefs(status.root, collectClaimReviewArtifactRefs(claim, path));
   const packetWithoutMarkdown = {
     schemaVersion: "truth-harness.claim-review.v0" as const,
     claimId: claim.claimId,
@@ -418,6 +431,7 @@ export async function createClaimReviewPacket(input: {
     blockingChecks: blockingChecksForClaim(claim),
     verification: claim.verification,
     evidenceRefs: claim.evidenceRefs,
+    artifactRefs,
     nextActions: claimReviewActions(claim, reviewStatus, status.root),
     commands: {
       showJson: `truth-harness claim show ${quoteCommandArg(claim.claimId)} --workspace ${quoteCommandArg(status.root)} --json`,
@@ -577,6 +591,26 @@ export function renderClaimReviewPacketMarkdown(packet: Omit<ClaimReviewPacket, 
     }
   }
 
+  lines.push("", "## Artifact Citations", "", "| Role | Path | SHA-256 | Citation | Source |", "| --- | --- | --- | --- | --- |");
+  if (packet.artifactRefs.length === 0) {
+    lines.push("|  |  |  | No local artifact files referenced. |  |");
+  } else {
+    for (const ref of packet.artifactRefs) {
+      lines.push(
+        [
+          `\`${ref.role}\``,
+          escapeMarkdownTable(ref.path),
+          ref.sha256 ? `\`${ref.sha256}\`` : "not available",
+          ref.citation ? `\`${escapeMarkdownTable(ref.citation)}\`` : "not available",
+          escapeMarkdownTable(ref.source)
+        ]
+          .join(" | ")
+          .replace(/^/, "| ")
+          .replace(/$/, " |")
+      );
+    }
+  }
+
   lines.push("", "## Agent Next Actions", "");
   if (packet.nextActions.length === 0) {
     lines.push("- No next action required before citing the current narrow claim.", "");
@@ -625,6 +659,36 @@ export function renderClaimReviewPacketMarkdown(packet: Omit<ClaimReviewPacket, 
   );
 
   return `${lines.join("\n")}\n`;
+}
+
+function collectClaimReviewArtifactRefs(claim: ClaimLedgerRecord, claimPath: string): ClaimReviewArtifactRef[] {
+  const refs: ClaimReviewArtifactRef[] = [];
+  addClaimReviewArtifactRefsFromString(refs, claimPath, "claim-record", "claimPath");
+  claim.evidenceRefs.forEach((ref, index) => {
+    addClaimReviewArtifactRefsFromString(refs, ref.ref, "claim-evidence", `evidenceRefs[${index}].ref`);
+    addClaimReviewArtifactRefsFromString(refs, ref.summary, "claim-evidence", `evidenceRefs[${index}].summary`);
+  });
+  claim.verification.forEach((step, stepIndex) => {
+    step.evidenceRefs.forEach((ref, refIndex) => {
+      addClaimReviewArtifactRefsFromString(refs, ref.ref, "claim-evidence", `verification[${stepIndex}].evidenceRefs[${refIndex}].ref`);
+      addClaimReviewArtifactRefsFromString(refs, ref.summary, "claim-evidence", `verification[${stepIndex}].evidenceRefs[${refIndex}].summary`);
+    });
+  });
+  return uniqueLocalArtifactRefs(refs);
+}
+
+function addClaimReviewArtifactRefsFromString(
+  refs: ClaimReviewArtifactRef[],
+  value: string | undefined,
+  role: ClaimReviewArtifactRefRole,
+  source: string
+): void {
+  if (!value) {
+    return;
+  }
+  for (const path of localArtifactPathsFromString(value)) {
+    refs.push({ path, role, source });
+  }
 }
 
 async function readClaimRecordRef(

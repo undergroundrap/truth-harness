@@ -102,6 +102,7 @@ import {
   listWorkspaceEvents,
   listWorkspaceRunNextPlans,
   listWorkspaceReviews,
+  listWorkspaceRevisions,
   listWorkspaceSnapshots,
   listWebUiReviews,
   listVaultEntries,
@@ -113,6 +114,7 @@ import {
   readResearchSession,
   readVisualArtifact,
   readWorkspaceReview,
+  readWorkspaceRevision,
   readVerifierRoute,
   renderReceipt,
   renderGraphvizVisualArtifact,
@@ -123,6 +125,7 @@ import {
   rebuildWorkspaceCatalog,
   restoreLocalWorkspaceArchive,
   replayReceipt,
+  runWorkspacePilotLoop,
   runWorkspaceStress,
   searchLocalCorpus,
   searchWorkspaceCatalog,
@@ -147,6 +150,7 @@ import {
   verifyVaultEntry,
   verifyEngineEvidence,
   verifyCredibilityBundle,
+  verifyWorkspaceRevision,
   verifyWorkspaceSnapshot,
   writeBenchmarkComparisonRecord,
   writeBenchmarkRunRecord,
@@ -169,10 +173,13 @@ import {
   writeNotebookRun,
   writeResearchHarness,
   writeResearchSession,
+  writeHardMathSeedWorkspace,
   writeValidationPlan,
   writeVerifierRoute,
   writeWorkspaceReview,
+  writeWorkspaceRevision,
   writeWorkspaceRunNextPlan,
+  writeWorkspacePilotLoopRecord,
   writeWorkspaceSnapshot,
   writeWebUiReview,
   writeClaimChart,
@@ -235,6 +242,7 @@ import {
   type ExternalDisclosureLogEntry,
   type ExternalDisclosureStatus,
   type ExternalDisclosureWriteResult,
+  type HardMathSeedResult,
   type InventionEvidenceRef,
   type InventionLogEntry,
   type InventionValidationStage,
@@ -313,12 +321,18 @@ import {
   type WorkspaceSnapshotSummary,
   type WorkspaceSnapshotVerification,
   type WorkspaceSnapshotWriteResult,
+  type WorkspaceRevision,
+  type WorkspaceRevisionSummary,
+  type WorkspaceRevisionVerification,
+  type WorkspaceRevisionWriteResult,
   type TrustLabel,
   type WorkspaceValidation,
   type WorkspaceGraph,
   type WorkspaceRunNextInspection,
   type WorkspaceRunNextPlan,
   type WorkspaceRunNextSummary,
+  type WorkspacePilotLoopRecord,
+  type WorkspacePilotLoopWriteResult,
   type WorkspaceReview,
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
@@ -2847,6 +2861,7 @@ catalog
   .option("--trust <trust>", "Filter by trust label", parseTrustLabel)
   .option("--domain <domain>", "Filter by domain")
   .option("--tag <tag>", "Filter by tag, with or without #")
+  .option("--ref <ref>", "Filter to artifacts that cite or reference this local artifact/ref")
   .option("--limit <count>", "Maximum results to return", parsePositiveInteger, 25)
   .option("--json", "Print the full catalog search JSON")
   .action(
@@ -2858,6 +2873,7 @@ catalog
         trust?: TrustLabel;
         domain?: string;
         tag?: string;
+        ref?: string;
         limit: number;
         json?: boolean;
       }
@@ -2869,6 +2885,7 @@ catalog
         trust: options.trust,
         domain: options.domain,
         tag: options.tag,
+        ref: options.ref,
         limit: options.limit
       });
 
@@ -3751,6 +3768,40 @@ workspace
   );
 
 workspace
+  .command("seed-hard-math")
+  .description("Seed a local workspace with hard-math validation sessions and a dry-run run-next handoff.")
+  .argument("[path]", "Project root path", ".")
+  .option("--case <case>", "Seed case id to include; repeatable. Defaults to all hard-math cases.", collectRepeated, [])
+  .option("--now <iso>", "Deterministic creation timestamp for reproducible tests and demos")
+  .option("--no-run-next", "Create linked validation sessions without writing the first run-next handoff")
+  .option("--json", "Print the full hard-math seed JSON")
+  .action(
+    async (
+      path: string,
+      options: {
+        case: string[];
+        now?: string;
+        runNext?: boolean;
+        json?: boolean;
+      }
+    ) => {
+      const result = await writeHardMathSeedWorkspace({
+        rootPath: path,
+        now: options.now,
+        caseIds: options.case,
+        writeRunNextPlan: options.runNext !== false
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printHardMathSeed(result);
+    }
+  );
+
+workspace
   .command("run-next")
   .description("Plan or execute the next local action allowed by the workspace autonomy contract.")
   .argument("[path]", "Project root path", ".")
@@ -3821,7 +3872,8 @@ workspace
           sageCommand: options.sageCommand,
           leanCommand: options.leanCommand,
           z3Command: options.z3Command,
-          cvc5Command: options.cvc5Command
+          cvc5Command: options.cvc5Command,
+          savedEngineRuns: await listEngineVerificationRunsIfWorkspace(path)
         }
       });
       const writeResult = options.write
@@ -3851,18 +3903,129 @@ workspace
   );
 
 workspace
+  .command("pilot-loop")
+  .description("Run a bounded verifier-directed loop over workspace run-next actions.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full pilot-loop JSON")
+  .option("--execute-local", "Execute supported local Truth Harness actions; dry-run planning is the default")
+  .option("--write", "Write the pilot-loop transcript and per-step run-next packets into .truth-harness/findings")
+  .option("--max-steps <count>", "Maximum bounded iterations, capped at 12", parsePositiveInteger, 3)
+  .option("--source <source>", "Source queue: workspace-review, credibility-actions, or saved-run-next", "workspace-review")
+  .option("--plan-ref <ref>", "Saved run-next plan id/path when --source saved-run-next; defaults to newest safe handoff")
+  .option("--max-routes <count>", "Maximum route summaries to inspect; use 0 to skip routes", parseNonNegativeInteger)
+  .option("--max-claims <count>", "Maximum claim records to inspect; use 0 to skip claims", parseNonNegativeInteger)
+  .option("--max-sessions <count>", "Maximum research sessions to inspect; use 0 to skip sessions", parseNonNegativeInteger)
+  .option("--max-reports <count>", "Maximum saved report drafts to inspect when source is workspace-review; use 0 to skip reports", parseNonNegativeInteger)
+  .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds for credibility-actions", parsePositiveInteger, 3000)
+  .option("--maxima-command <command>", "Override Maxima executable for credibility-actions and engine plans")
+  .option("--sage-command <command>", "Override SageMath executable for credibility-actions and engine plans")
+  .option("--lean-command <command>", "Override Lean executable for credibility-actions and engine plans")
+  .option("--z3-command <command>", "Override Z3 executable for credibility-actions and engine plans")
+  .option("--cvc5-command <command>", "Override cvc5 executable for credibility-actions and engine plans")
+  .option("--smt-source <path>", "Workspace-local SMT-LIB source for credibility-actions", "docs/examples/constraints.smt2")
+  .option("--lean-source <path>", "Workspace-local Lean source for credibility-actions", "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean")
+  .option("--require-maxima", "Require Maxima for credibility-actions")
+  .option("--require-z3", "Require Z3 for credibility-actions")
+  .option("--require-cvc5", "Require cvc5 for credibility-actions")
+  .option("--require-lean", "Require Lean for credibility-actions")
+  .option("--require-sage", "Require SageMath for credibility-actions")
+  .option("--require-docker-core", "Require Docker-core Maxima, Z3, and cvc5 evidence gates for credibility-actions")
+  .option("--require-all-concrete", "Require Maxima, Z3, and Lean concrete evidence gates for credibility-actions")
+  .option("--require-all-engines", "Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates for credibility-actions")
+  .option("--fail-on-blocked", "Exit non-zero if the loop stops on a blocker")
+  .action(
+    async (
+      path: string,
+      options: {
+        json?: boolean;
+        executeLocal?: boolean;
+        write?: boolean;
+        maxSteps: number;
+        source: string;
+        planRef?: string;
+        maxRoutes?: number;
+        maxClaims?: number;
+        maxSessions?: number;
+        maxReports?: number;
+        timeoutMs: number;
+        maximaCommand?: string;
+        sageCommand?: string;
+        leanCommand?: string;
+        z3Command?: string;
+        cvc5Command?: string;
+        smtSource: string;
+        leanSource: string;
+        requireMaxima?: boolean;
+        requireZ3?: boolean;
+        requireCvc5?: boolean;
+        requireLean?: boolean;
+        requireSage?: boolean;
+        requireDockerCore?: boolean;
+        requireAllConcrete?: boolean;
+        requireAllEngines?: boolean;
+        failOnBlocked?: boolean;
+      }
+    ) => {
+      const result = await runWorkspacePilotLoop({
+        rootPath: path,
+        source: parseWorkspacePilotLoopSource(options.source),
+        planRef: options.planRef,
+        executeLocal: Boolean(options.executeLocal),
+        writeRunNextPlans: Boolean(options.write),
+        maxSteps: options.maxSteps,
+        maxRoutes: options.maxRoutes,
+        maxClaims: options.maxClaims,
+        maxSessions: options.maxSessions,
+        maxReports: options.maxReports,
+        timeoutMs: options.timeoutMs,
+        maximaCommand: options.maximaCommand,
+        sageCommand: options.sageCommand,
+        leanCommand: options.leanCommand,
+        z3Command: options.z3Command,
+        cvc5Command: options.cvc5Command,
+        smtSourcePath: options.smtSource,
+        leanSourcePath: options.leanSource,
+        engineRequirements: engineRequirementsFromOptions(options)
+      });
+      const writeResult = options.write
+        ? await writeWorkspacePilotLoopRecord({
+            rootPath: path,
+            loop: result.loop
+          })
+        : undefined;
+      const loop = writeResult?.loop ?? result.loop;
+
+      if (options.json) {
+        printJson({
+          loop,
+          runNextWrites: result.runNextWrites,
+          ...(writeResult ? { written: true, result: writeResult } : {})
+        });
+      } else {
+        printWorkspacePilotLoop(loop, writeResult);
+      }
+
+      if (options.failOnBlocked && loop.status === "blocked") {
+        process.exitCode = 1;
+      }
+    }
+  );
+
+workspace
   .command("run-nexts")
   .description("List persisted workspace run-next intent packets.")
   .argument("[path]", "Project root path", ".")
-  .option("--verify-snapshots", "Verify each source snapshot and report whether saved handoffs drifted")
+  .option("--verify-snapshots", "Verify each source revision/snapshot and report whether saved handoffs drifted")
+  .option("--limit <count>", "Maximum saved handoffs to list or verify", parsePositiveInteger, 25)
   .option("--json", "Print the full workspace run-next list JSON")
-  .action(async (path: string, options: { verifySnapshots?: boolean; json?: boolean }) => {
+  .action(async (path: string, options: { verifySnapshots?: boolean; limit: number; json?: boolean }) => {
     const plans = await listWorkspaceRunNextPlans(path, {
-      verifySnapshots: Boolean(options.verifySnapshots)
+      verifySnapshots: Boolean(options.verifySnapshots),
+      limit: options.limit
     });
 
     if (options.json) {
-      printJson({ total: plans.length, plans });
+      printJson({ total: plans.length, limit: options.limit, plans });
       return;
     }
 
@@ -3874,7 +4037,7 @@ workspace
   .description("Show a persisted workspace run-next plan by plan id or workspace-local JSON path.")
   .argument("<plan>", "Plan id such as wrn_<hash> or workspace-local JSON path")
   .option("--workspace <path>", "Project root path", ".")
-  .option("--verify-snapshot", "Verify the plan's source snapshot and include drift status")
+  .option("--verify-snapshot", "Verify the plan's source revision/snapshot and include drift status")
   .option("--json", "Print the full workspace run-next plan JSON")
   .action(async (planRef: string, options: { workspace: string; verifySnapshot?: boolean; json?: boolean }) => {
     const inspection = await inspectWorkspaceRunNextPlan(options.workspace, planRef, {
@@ -3887,6 +4050,9 @@ workspace
     }
 
     printWorkspaceRunNextPlan(inspection.plan);
+    if (inspection.sourceRevision) {
+      printWorkspaceRunNextRevisionCheck(inspection.sourceRevision);
+    }
     if (inspection.sourceSnapshot) {
       printWorkspaceRunNextSnapshotCheck(inspection.sourceSnapshot);
     }
@@ -4012,6 +4178,115 @@ workspace
     }
 
     printWorkspaceSnapshotVerification(verification);
+    if (!verification.passed) {
+      process.exitCode = 1;
+    }
+  });
+
+workspace
+  .command("revision")
+  .description("Write a workspace revision anchored to a fresh source snapshot.")
+  .argument("[path]", "Project root path", ".")
+  .option("--title <title>", "Human title for the revision")
+  .option("--reason <reason>", "Why this revision is being recorded")
+  .option("--parent <revision>", "Parent revision id. Repeatable", collectRepeated, [])
+  .option("--session <session>", "Research session id linked to this revision. Repeatable", collectRepeated, [])
+  .option("--validation <plan>", "Validation plan id linked to this revision. Repeatable", collectRepeated, [])
+  .option("--claim <claim>", "Claim id linked to this revision. Repeatable", collectRepeated, [])
+  .option("--artifact <path>", "Workspace-local artifact path to cite in the revision. Repeatable", collectRepeated, [])
+  .option("--json", "Print the full workspace revision JSON")
+  .action(
+    async (
+      path: string,
+      options: {
+        title?: string;
+        reason?: string;
+        parent: string[];
+        session: string[];
+        validation: string[];
+        claim: string[];
+        artifact: string[];
+        json?: boolean;
+      }
+    ) => {
+      const result = await writeWorkspaceRevision({
+        rootPath: path,
+        title: options.title,
+        reason: options.reason,
+        parentRevisionRefs: options.parent,
+        sessionRefs: options.session,
+        validationPlanRefs: options.validation,
+        claimRefs: options.claim,
+        artifactRefs: options.artifact.map((artifactPath) => ({
+          path: artifactPath,
+          role: "linked-artifact",
+          source: "workspace revision cli"
+        }))
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printWorkspaceRevisionWrite(result);
+    }
+  );
+
+workspace
+  .command("revisions")
+  .description("List saved workspace revisions.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full workspace revision list JSON")
+  .action(async (path: string, options: { json?: boolean }) => {
+    const revisions = await listWorkspaceRevisions(path);
+
+    if (options.json) {
+      printJson({ total: revisions.length, revisions });
+      return;
+    }
+
+    printWorkspaceRevisionList(revisions);
+  });
+
+workspace
+  .command("show-revision")
+  .description("Show a workspace revision by revision id or workspace-local JSON path.")
+  .argument("<revision>", "Revision id such as rev_<hash> or workspace-local revision JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--json", "Print the full workspace revision JSON")
+  .action(async (revisionRef: string, options: { workspace: string; json?: boolean }) => {
+    const revision = await readWorkspaceRevision(options.workspace, revisionRef);
+
+    if (options.json) {
+      printJson(revision);
+      return;
+    }
+
+    printWorkspaceRevision(revision);
+  });
+
+workspace
+  .command("verify-revision")
+  .description("Verify a workspace revision's source snapshot and current workspace drift.")
+  .argument("<revision>", "Revision id or workspace-local revision JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--json", "Print the full workspace revision verification JSON")
+  .action(async (revisionRef: string, options: { workspace: string; json?: boolean }) => {
+    const verification = await verifyWorkspaceRevision({
+      rootPath: options.workspace,
+      revisionRef
+    });
+
+    if (options.json) {
+      printJson(verification);
+      if (!verification.passed) {
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    printWorkspaceRevisionVerification(verification);
     if (!verification.passed) {
       process.exitCode = 1;
     }
@@ -4505,6 +4780,7 @@ engines
   .description("Plan the verifier stack for a problem without running engines or minting evidence.")
   .argument("<problem>", "Problem or claim to route through the engine ladder")
   .option("--json", "Print the full engine plan JSON")
+  .option("--workspace <path>", "Workspace root used for saved Docker reviewer evidence hints", ".")
   .option("--timeout-ms <ms>", "Backend probe timeout in milliseconds", parsePositiveInteger, 1500)
   .option("--maxima-command <command>", "Override Maxima executable for this probe")
   .option("--sage-command <command>", "Override SageMath executable for this probe")
@@ -4512,8 +4788,9 @@ engines
   .option("--z3-command <command>", "Override Z3 executable for this probe")
   .option("--cvc5-command <command>", "Override cvc5 executable for this probe")
   .action(
-    (problem: string, options: {
+    async (problem: string, options: {
       json?: boolean;
+      workspace: string;
       timeoutMs: number;
       maximaCommand?: string;
       sageCommand?: string;
@@ -4541,7 +4818,8 @@ engines
         sageCommand: options.sageCommand ?? parentCliStringOption("sageCommand", parentOptions.sageCommand),
         leanCommand: options.leanCommand ?? parentCliStringOption("leanCommand", parentOptions.leanCommand),
         z3Command: options.z3Command ?? parentCliStringOption("z3Command", parentOptions.z3Command),
-        cvc5Command: options.cvc5Command ?? parentCliStringOption("cvc5Command", parentOptions.cvc5Command)
+        cvc5Command: options.cvc5Command ?? parentCliStringOption("cvc5Command", parentOptions.cvc5Command),
+        savedEngineRuns: await listEngineVerificationRunsIfWorkspace(options.workspace)
       });
       const json = Boolean(options.json || parentOptions.json);
 
@@ -5616,6 +5894,10 @@ function printEnginePlan(plan: EnginePlan): void {
   console.log(`Classified as: ${plan.classifications.join(", ")}`);
   console.log(`Trust ceiling available now: ${plan.targetTrustCeiling}`);
   console.log(`Network: ${plan.networkAccess}`);
+  const savedReviewerEvidence = plan.savedReviewerEvidence;
+  if (savedReviewerEvidence?.status === "available") {
+    console.log(`Saved reviewer evidence: ${savedReviewerEvidence.summary}`);
+  }
   console.log("");
   console.log("Recommended first command:");
   console.log(`  ${plan.recommendedFirstCommand}`);
@@ -5746,6 +6028,14 @@ async function latestPassingSandboxRunForReadiness(workspacePath: string) {
     return runs.find((run) => run.status === "passed" && run.canAttestNetworkNone);
   } catch {
     return undefined;
+  }
+}
+
+async function listEngineVerificationRunsIfWorkspace(workspacePath: string) {
+  try {
+    return await listEngineVerificationRuns(resolve(workspacePath));
+  } catch {
+    return [];
   }
 }
 
@@ -5995,6 +6285,16 @@ async function createRunNextReviewFromOptions(path: string, options: RunNextSour
   throw new Error(`Unsupported run-next source ${JSON.stringify(options.source)}. Use workspace-review or credibility-actions.`);
 }
 
+function parseWorkspacePilotLoopSource(value: string): "workspace-review" | "credibility-actions" | "saved-run-next" {
+  if (value === "workspace-review" || value === "credibility-actions" || value === "saved-run-next") {
+    return value;
+  }
+
+  throw new Error(
+    `Unsupported pilot-loop source ${JSON.stringify(value)}. Use workspace-review, credibility-actions, or saved-run-next.`
+  );
+}
+
 type WorkspaceRunNextWrite = Awaited<ReturnType<typeof writeWorkspaceRunNextPlan>>;
 
 async function writeResearchHarnessInitialRunNextPlan(input: { rootPath: string }): Promise<WorkspaceRunNextWrite> {
@@ -6004,7 +6304,10 @@ async function writeResearchHarnessInitialRunNextPlan(input: { rootPath: string 
   const plan = await createWorkspaceRunNextPlan({
     rootPath: input.rootPath,
     review,
-    executeLocal: false
+    executeLocal: false,
+    enginePlanOptions: {
+      savedEngineRuns: await listEngineVerificationRunsIfWorkspace(input.rootPath)
+    }
   });
   return writeWorkspaceRunNextPlan({
     rootPath: input.rootPath,
@@ -6161,6 +6464,19 @@ function printProofBackendStatus(status: ProofBackendStatusReport): void {
 }
 
 function printLeanProjectInspection(inspection: LeanProjectInspection): void {
+  const declarations = inspection.declarations ?? {
+    scannedFiles: 0,
+    completeProjectScan: true,
+    total: 0,
+    byKind: {
+      theorem: 0,
+      lemma: 0,
+      example: 0,
+      def: 0
+    },
+    sample: [],
+    truncated: false
+  };
   console.log("Truth Harness Lean project inspection");
   console.log(`Path: ${inspection.projectPath}`);
   console.log(`Readiness: ${inspection.readiness}`);
@@ -6190,8 +6506,40 @@ function printLeanProjectInspection(inspection: LeanProjectInspection): void {
     console.log("");
     console.log("Lean file sample:");
     for (const file of inspection.files.leanFiles.sample.slice(0, 8)) {
-      console.log(`  ${file.path} (${file.byteLength} bytes)`);
+      const hash = file.sha256 ? `; sha256:${file.sha256.slice(0, 12)}` : "";
+      console.log(`  ${file.path} (${file.byteLength} bytes${hash})`);
     }
+  }
+
+  console.log("");
+  console.log("Formalization targets:");
+  console.log(`  Declarations: ${declarations.total}${declarations.truncated ? " (sample truncated)" : ""}`);
+  console.log(
+    `  Kinds: theorem=${declarations.byKind.theorem}, lemma=${declarations.byKind.lemma}, example=${declarations.byKind.example}, def=${declarations.byKind.def}`
+  );
+  for (const declaration of declarations.sample.slice(0, 8)) {
+    const name = declaration.name ? ` ${declaration.name}` : "";
+    const signatureHash = declaration.signatureSha256 ? `; sig:${declaration.signatureSha256.slice(0, 12)}` : "";
+    console.log(
+      `  ${declaration.path}:${declaration.line}:${declaration.column} ${declaration.kind}${name} - ${declaration.signature}${signatureHash}`
+    );
+  }
+
+  console.log("");
+  console.log("Proof safety:");
+  console.log(`  Scanned files: ${inspection.proofSafety.scannedFiles}`);
+  console.log(`  Complete project scan: ${String(inspection.proofSafety.completeProjectScan)}`);
+  console.log(`  Blocking markers: ${inspection.proofSafety.markers.total}`);
+  console.log(`  Markers block proved trust: ${String(inspection.trustBoundary.proofMarkersBlockProvedTrust)}`);
+  for (const marker of inspection.proofSafety.markers.sample.slice(0, 8)) {
+    const declaration = marker.declaration
+      ? `; declaration:${marker.declaration.declarationId}; sig:${marker.declaration.signatureSha256.slice(0, 12)}`
+      : "";
+    console.log(`  ${marker.path}:${marker.line}:${marker.column} ${marker.kind}${declaration} - ${marker.message}`);
+    console.log(`    repair target: ${marker.repairTarget.repairTargetId}; after edit: ${marker.repairTarget.afterEditCommands[0]}`);
+  }
+  if (inspection.proofSafety.markers.truncated) {
+    console.log("  Marker sample truncated.");
   }
 
   console.log("");
@@ -6277,9 +6625,22 @@ function printLeanProofCheckList(checks: LeanProofCheckSummary[]): void {
     if (check.declarationName) {
       console.log(`  Declaration: ${check.declarationName}`);
     }
+    if (check.scope?.routeId || check.scope?.obligationId || check.scope?.statementHash || check.scope?.statement) {
+      console.log(`  Scope route: ${check.scope.routeId ?? "n/a"}`);
+      console.log(`  Scope obligation: ${check.scope.obligationId ?? "n/a"}`);
+      if (check.scope.statementHash) {
+        console.log(`  Scope statement hash: ${check.scope.statementHash}`);
+      }
+      if (check.scope.statement) {
+        console.log(`  Scope statement: ${check.scope.statement}`);
+      }
+    }
     console.log(`  Status: ${check.status}`);
     console.log(`  Trust: ${check.trust}`);
     console.log(`  Proof-checker backed: ${String(check.proofCheckerBacked)}`);
+    if (check.diagnosticSnippet) {
+      console.log(`  Diagnostic: ${check.diagnosticSnippet}`);
+    }
     console.log(`  Path: ${check.path}`);
   }
 }
@@ -6848,6 +7209,7 @@ function printReleaseAudit(audit: ReleaseAudit): void {
       `${audit.summary.catalogFresh ? "fresh" : "stale-or-missing"}`
   );
   console.log(`Engines: ${formatReleaseAuditEngineSummary(audit)}`);
+  console.log(`Lean proof-safety blockers: ${audit.summary.leanProofSafetyItems}`);
   console.log(
     `Review queue: ${audit.summary.reviewItems} item(s), ${audit.summary.criticalReviewItems} critical`
   );
@@ -6855,6 +7217,9 @@ function printReleaseAudit(audit: ReleaseAudit): void {
     `Research sessions: ${audit.summary.researchSessions} inspected, ${audit.summary.sessionContinuationItems} continuation item(s)`
   );
   console.log(`Code-run sandbox: ${audit.summary.sandboxAvailable ? "available" : "not measured"}`);
+  console.log(`Frontier readiness: ${audit.frontierReadiness.status}`);
+  console.log(`Frontier discovery: ${audit.frontierReadiness.frontierDiscoveryReadiness}`);
+  console.log(`Strongest honest claim: ${audit.frontierReadiness.strongestHonestClaim}`);
 
   const failed = audit.checks.filter((check) => check.status === "fail");
   const warnings = audit.checks.filter((check) => check.status === "warn");
@@ -6897,6 +7262,16 @@ function printReleaseAudit(audit: ReleaseAudit): void {
     console.log("Next actions:");
     for (const action of audit.nextActions) {
       console.log(`  ${action}`);
+    }
+  }
+
+  console.log("");
+  console.log("Frontier readiness ladder:");
+  for (const stage of audit.frontierReadiness.stages) {
+    console.log(`  ${stage.status.toUpperCase()} ${stage.title}`);
+    console.log(`    ${stage.summary}`);
+    if (stage.nextAction && stage.status !== "ready") {
+      console.log(`    Next: ${stage.nextAction}`);
     }
   }
 
@@ -7231,6 +7606,9 @@ function printWorkspaceCatalogSearch(result: WorkspaceCatalogSearchResult): void
     if (row.tags.length > 0) {
       console.log(`  Tags: ${row.tags.join(" ")}`);
     }
+    if (row.artifactRefs.length > 0) {
+      printCliArtifactRefs(row.artifactRefs, "  Artifact refs", 4);
+    }
     if (!row.valid || row.issueCount > 0) {
       console.log(`  Validation: ${row.valid ? "valid" : "invalid"} (${row.issueCount} issues)`);
     }
@@ -7444,6 +7822,12 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
         ? ""
         : ` (${(pack.summary.latestMathCredibilityLadderAccuracy * 100).toFixed(1)}%)`)
   );
+  console.log(
+    `Hard-math closure: ${pack.summary.savedHardMathClosureReports} saved ` +
+      `(exact ${pack.summary.hardMathExactClosureStatus}, ` +
+      `symbolic ${pack.summary.hardMathSymbolicClosureStatus}, ` +
+      `SMT ${pack.summary.hardMathSmtClosureStatus})`
+  );
   console.log(`Embedded snapshot: ${pack.embeddedSnapshot.snapshotId} (${pack.summary.snapshotFiles} files)`);
   console.log(`Review queue: ${pack.summary.reviewItems} items (${pack.summary.criticalReviewItems} critical, ${pack.summary.highReviewItems} high)`);
   console.log(
@@ -7457,6 +7841,9 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
   console.log(`  ${pack.reviewerCommands.verifyEngines}`);
   console.log(`  ${pack.reviewerCommands.runAdversarialBenchmark}`);
   console.log(`  ${pack.reviewerCommands.runMathCredibilityLadder}`);
+  console.log(`  ${pack.reviewerCommands.runExactHardMathClosure}`);
+  console.log(`  ${pack.reviewerCommands.runSymbolicHardMathClosure}`);
+  console.log(`  ${pack.reviewerCommands.runSmtHardMathClosure}`);
   console.log(`  ${pack.reviewerCommands.reviewWorkspace}`);
   console.log(`  ${pack.reviewerCommands.reproducePack}`);
   console.log(`  ${pack.reviewerCommands.dockerProfessorEvidence}`);
@@ -7571,6 +7958,9 @@ function printCredibilityBundle(result: CredibilityBundleWriteResult): void {
   console.log(`  ${manifest.reviewerCommands.verifyEngines}`);
   console.log(`  ${manifest.reviewerCommands.runAdversarialBenchmark}`);
   console.log(`  ${manifest.reviewerCommands.runMathCredibilityLadder}`);
+  console.log(`  ${manifest.reviewerCommands.runExactHardMathClosure}`);
+  console.log(`  ${manifest.reviewerCommands.runSymbolicHardMathClosure}`);
+  console.log(`  ${manifest.reviewerCommands.runSmtHardMathClosure}`);
   console.log(`  ${manifest.reviewerCommands.reviewWorkspace}`);
   console.log(`  ${manifest.reviewerCommands.reproducePack}`);
   console.log(`  ${manifest.reviewerCommands.dockerProfessorEvidence}`);
@@ -7602,6 +7992,9 @@ function printCredibilityBundleVerification(verification: CredibilityBundleVerif
   console.log(`Source workspace: ${verification.sourceMatchesWorkspace ? "matches bundle" : "drifted"}`);
   console.log(`Checked bundle files: ${verification.checkedBundleFiles}`);
   console.log(`Checked source files: ${verification.checkedSourceFiles}`);
+  if (verification.manifestDigestStatus) {
+    console.log(`Manifest digest: ${verification.manifestDigestStatus}`);
+  }
 
   if (verification.missingBundleFiles.length > 0 || verification.changedBundleFiles.length > 0) {
     console.log("");
@@ -7649,6 +8042,13 @@ function printReportDraftList(reports: ReportDraftSummary[]): void {
     console.log(`  Markdown: ${item.markdownStatus}${item.markdownSha256 ? ` (${item.markdownSha256})` : ""}`);
     console.log(`  JSON: ${item.paths.relativeJson}`);
     console.log(`  Markdown path: ${item.paths.relativeMarkdown}`);
+    if (item.report.artifactRefs.length > 0) {
+      console.log(`  Artifact refs: ${item.report.artifactRefs.length}`);
+      for (const ref of item.report.artifactRefs.slice(0, 3)) {
+        const hash = ref.sha256 ? ` sha256:${ref.sha256.slice(0, 16)}...` : "";
+        console.log(`    ${ref.role}: ${ref.path}${hash}`);
+      }
+    }
   }
 }
 
@@ -7664,6 +8064,7 @@ function printReportDraft(result: ReportDraftReadResult): void {
   console.log(`Markdown verified: ${result.markdownVerified ? "yes" : "no"}`);
   console.log(`JSON: ${result.paths.relativeJson}`);
   console.log(`Markdown: ${result.paths.relativeMarkdown}`);
+  printCliArtifactRefs(result.report.artifactRefs, "Artifact refs");
   if (!result.markdownVerified) {
     console.log("Warning: saved Markdown does not match the report draft JSON sidecar.");
   }
@@ -7679,6 +8080,110 @@ function printReportDraft(result: ReportDraftReadResult): void {
   }
 }
 
+function printHardMathSeed(result: HardMathSeedResult): void {
+  console.log("Truth Harness hard-math seed");
+  console.log(`Seed: ${result.seedId}`);
+  console.log(`Workspace: ${result.workspacePath}`);
+  console.log(`Local only: ${result.localOnly ? "yes" : "no"}`);
+  console.log("");
+  console.log("Seeded validation sessions:");
+  for (const seedCase of result.cases) {
+    const gateText =
+      typeof seedCase.openBlockingGates === "number"
+        ? `${seedCase.openBlockingGates} blocking gate${seedCase.openBlockingGates === 1 ? "" : "s"}`
+        : "blocking gates not counted";
+    console.log(`  - ${seedCase.title}`);
+    console.log(`    case: ${seedCase.caseId}`);
+    console.log(`    session: ${seedCase.sessionId}`);
+    console.log(`    validation: ${seedCase.validationPlanId ?? "not written"} (${seedCase.validationReadiness ?? "unknown"}, ${gateText})`);
+  }
+
+  const runNext = result.runNext;
+  const runNextPlan = runNext?.plan;
+  const runNextWrite = runNext && "jsonPath" in runNext ? runNext : undefined;
+  if (runNextPlan) {
+    console.log("");
+    console.log("First dry-run handoff:");
+    console.log(`  plan: ${runNextPlan.planId}`);
+    console.log(`  status: ${runNextPlan.status}`);
+    if (runNextPlan.item) {
+      console.log(`  target: ${workspaceRunNextCliTarget(runNextPlan.item)}`);
+      console.log(`  command: ${runNextPlan.item.command}`);
+    }
+    if (runNextWrite) {
+      console.log(`  JSON: ${runNextWrite.jsonPath}`);
+      console.log(`  Markdown: ${runNextWrite.markdownPath}`);
+    }
+  }
+
+  if (result.warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const warning of result.warnings) {
+      console.log(`  - ${warning}`);
+    }
+  }
+}
+
+function printWorkspacePilotLoop(
+  loop: WorkspacePilotLoopRecord,
+  writeResult: WorkspacePilotLoopWriteResult | undefined
+): void {
+  console.log("Truth Harness workspace pilot-loop");
+  console.log(`Loop: ${loop.loopId}`);
+  console.log(`Status: ${loop.status}`);
+  console.log(`Stop reason: ${loop.stopReason}`);
+  console.log(`Source: ${loop.source}`);
+  console.log(`Dry run: ${String(loop.dryRun)}`);
+  console.log(`Network: ${loop.networkAccess}`);
+  console.log(
+    `Steps: ${loop.summary.executedSteps} executed / ${loop.summary.plannedSteps} planned, ${loop.summary.blockedSteps} blocked`
+  );
+  if (loop.summary.evidenceRefs.length > 0) {
+    console.log(`Evidence: ${loop.summary.evidenceRefs.join(", ")}`);
+  }
+
+  for (const step of loop.steps) {
+    console.log("");
+    console.log(`${step.index}. ${step.item?.title ?? "No open item"}`);
+    console.log(`   Plan: ${step.planId}`);
+    if (step.runNextPlanPath) {
+      console.log(`   Run-next packet: ${step.runNextPlanPath}`);
+    }
+    console.log(`   Execution: ${step.execution.status} (${step.execution.kind})`);
+    console.log(`   ${step.execution.summary}`);
+    if (step.item?.command) {
+      console.log(`   Command: ${step.item.command}`);
+    }
+    if (step.execution.evidenceRef) {
+      console.log(`   Evidence: ${step.execution.evidenceRef}`);
+    }
+    if (step.enginePlan) {
+      console.log(
+        `   Engine plan: ${step.enginePlan.status}, ${step.enginePlan.classifications.join(", ")} -> ${
+          step.enginePlan.targetTrustCeiling
+        }`
+      );
+    }
+    if (step.stopReason) {
+      console.log(`   Step stop: ${step.stopReason}`);
+    }
+  }
+
+  console.log("");
+  console.log("Warnings:");
+  for (const warning of loop.warnings) {
+    console.log(`  ${warning}`);
+  }
+
+  if (writeResult) {
+    console.log("");
+    console.log("Written:");
+    console.log(`  JSON: ${writeResult.jsonPath}`);
+    console.log(`  Markdown: ${writeResult.markdownPath}`);
+  }
+}
+
 function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
   console.log("Truth Harness workspace run-next");
   console.log(`Plan: ${plan.planId}`);
@@ -7687,6 +8192,9 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
   console.log(`Status: ${plan.status}`);
   console.log(`Dry run: ${String(plan.dryRun)}`);
   console.log(`Network: ${plan.networkAccess}`);
+  if (plan.sourceRevision) {
+    console.log(`Source revision: ${plan.sourceRevision.revisionId} (${plan.sourceRevision.path})`);
+  }
   if (plan.sourceSnapshot) {
     console.log(`Source snapshot: ${plan.sourceSnapshot.snapshotId} (${plan.sourceSnapshot.path})`);
   }
@@ -7745,6 +8253,24 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
     }
   }
 
+  if (plan.artifactRefs && plan.artifactRefs.length > 0) {
+    printWorkspaceRunNextArtifactRefs(plan.artifactRefs);
+  }
+
+  if (plan.revalidationQueue && plan.revalidationQueue.length > 0) {
+    console.log("");
+    console.log("Revalidation queue:");
+    for (const item of plan.revalidationQueue.slice(0, 8)) {
+      console.log(`  ${item.priority}: ${item.dependentKind} ${item.dependentArtifactId ?? item.dependentPath}`);
+      console.log(`    Ref: ${item.refPath}`);
+      console.log(`    Evidence: ${item.evidenceRequired}`);
+      console.log(`    Command: ${item.command}`);
+    }
+    if (plan.revalidationQueue.length > 8) {
+      console.log(`  ... ${plan.revalidationQueue.length - 8} more`);
+    }
+  }
+
   if (plan.idleNextActions && plan.idleNextActions.length > 0) {
     console.log("");
     console.log("Idle next actions:");
@@ -7761,6 +8287,29 @@ function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
   console.log("Stop conditions:");
   for (const condition of plan.stopConditions) {
     console.log(`  ${condition}`);
+  }
+}
+
+function printWorkspaceRunNextRevisionCheck(check: NonNullable<WorkspaceRunNextInspection["sourceRevision"]>): void {
+  console.log("");
+  console.log("Source revision check:");
+  console.log(`  Status: ${check.sourceRevisionStatus ?? "unknown"}`);
+  if (
+    typeof check.sourceRevisionMissing === "number" ||
+    typeof check.sourceRevisionChanged === "number" ||
+    typeof check.sourceRevisionAdded === "number"
+  ) {
+    console.log(
+      `  Drift: ${check.sourceRevisionMissing ?? 0} missing, ${check.sourceRevisionChanged ?? 0} changed, ${
+        check.sourceRevisionAdded ?? 0
+      } added`
+    );
+  }
+  if (typeof check.sourceRevisionIgnoredAdded === "number") {
+    console.log(`  Ignored expected files: ${check.sourceRevisionIgnoredAdded}`);
+  }
+  if (check.sourceRevisionDriftSummary) {
+    console.log(`  ${check.sourceRevisionDriftSummary}`);
   }
 }
 
@@ -7795,6 +8344,46 @@ function printWorkspaceRunNextResumeDecision(decision: WorkspaceRunNextInspectio
   console.log(`  Action: ${decision.action}`);
   console.log(`  Reason: ${decision.reason}`);
   console.log(`  Next command: ${decision.nextCommand}`);
+}
+
+function printWorkspaceRunNextArtifactRefs(refs: NonNullable<WorkspaceRunNextPlan["artifactRefs"]>): void {
+  printCliArtifactRefs(refs, "Artifact refs");
+}
+
+type CliArtifactRef = {
+  path: string;
+  role: string;
+  source?: string;
+  sizeBytes?: number;
+  sha256?: string;
+  citation?: string;
+};
+
+function printCliArtifactRefs(refs: readonly CliArtifactRef[], heading: string, limit = 12): void {
+  if (refs.length === 0) {
+    return;
+  }
+
+  console.log("");
+  console.log(`${heading}:`);
+  for (const ref of refs.slice(0, limit)) {
+    console.log(`  ${ref.role}: ${ref.path}`);
+    if (ref.source) {
+      console.log(`    Source: ${ref.source}`);
+    }
+    if (ref.sha256) {
+      console.log(`    File SHA-256: ${ref.sha256}`);
+    }
+    if (typeof ref.sizeBytes === "number") {
+      console.log(`    Size: ${ref.sizeBytes} bytes`);
+    }
+    if (ref.citation) {
+      console.log(`    Citation: ${ref.citation}`);
+    }
+  }
+  if (refs.length > limit) {
+    console.log(`  ... ${refs.length - limit} more`);
+  }
 }
 
 function workspaceRunNextCliRationale(plan: WorkspaceRunNextPlan): NonNullable<WorkspaceRunNextPlan["rationale"]> {
@@ -7857,6 +8446,24 @@ function printWorkspaceRunNextList(plans: WorkspaceRunNextSummary[]): void {
     if (plan.rationaleCandidateEvidenceRef) {
       console.log(`  Candidate evidence: ${plan.rationaleCandidateEvidenceRef}`);
     }
+    if (plan.artifactRefs && plan.artifactRefs.length > 0) {
+      console.log(`  Artifact refs: ${plan.artifactRefs.length}`);
+      for (const ref of plan.artifactRefs.slice(0, 3)) {
+        console.log(`    ${ref.role}: ${ref.path}`);
+      }
+      if (plan.artifactRefs.length > 3) {
+        console.log(`    ... ${plan.artifactRefs.length - 3} more`);
+      }
+    }
+    if (plan.revalidationQueue && plan.revalidationQueue.length > 0) {
+      console.log(`  Revalidations: ${plan.revalidationQueue.length}`);
+      for (const item of plan.revalidationQueue.slice(0, 3)) {
+        console.log(`    ${item.priority}: ${item.dependentKind} ${item.dependentArtifactId ?? item.dependentPath}`);
+      }
+      if (plan.revalidationQueue.length > 3) {
+        console.log(`    ... ${plan.revalidationQueue.length - 3} more`);
+      }
+    }
     if (plan.rationaleExecutionBoundary) {
       console.log(`  Boundary: ${plan.rationaleExecutionBoundary}`);
     }
@@ -7864,6 +8471,17 @@ function printWorkspaceRunNextList(plans: WorkspaceRunNextSummary[]): void {
       `  Resume: ${plan.resumeDecision.status} (${plan.resumeDecision.safeToResume ? "safe" : "hold"})`
     );
     console.log(`  Resume command: ${plan.resumeDecision.nextCommand}`);
+    if (plan.sourceRevisionId) {
+      console.log(
+        `  Source revision: ${plan.sourceRevisionId}${plan.sourceRevisionPath ? ` (${plan.sourceRevisionPath})` : ""}`
+      );
+    }
+    if (plan.sourceRevisionStatus) {
+      console.log(`  Revision drift: ${plan.sourceRevisionStatus}`);
+      if (plan.sourceRevisionDriftSummary) {
+        console.log(`    ${plan.sourceRevisionDriftSummary}`);
+      }
+    }
     if (plan.sourceSnapshotId) {
       console.log(
         `  Source snapshot: ${plan.sourceSnapshotId}${plan.sourceSnapshotPath ? ` (${plan.sourceSnapshotPath})` : ""}`
@@ -8062,6 +8680,89 @@ function printWorkspaceSnapshotVerification(verification: WorkspaceSnapshotVerif
   if (verification.warnings.length > 0) {
     console.log("");
     console.log("Verification warnings:");
+    for (const warning of verification.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printWorkspaceRevisionWrite(result: WorkspaceRevisionWriteResult): void {
+  console.log(`Wrote workspace revision ${result.revision.revisionId}`);
+  console.log(`Path: ${result.path}`);
+  console.log(`Title: ${result.revision.title}`);
+  console.log(`Reason: ${result.revision.reason}`);
+  console.log(`Source snapshot: ${result.revision.sourceSnapshot.snapshotId}`);
+  console.log(`Snapshot path: ${result.revision.sourceSnapshot.path}`);
+  console.log(`Snapshot SHA-256: ${result.revision.sourceSnapshot.sha256}`);
+  console.log(`Files: ${result.revision.summary.totalFiles}`);
+  console.log(`Linked refs: ${result.revision.summary.linkedRefs}`);
+  console.log("Trust boundary: revisions prove local artifact identity and drift state, not mathematical truth.");
+}
+
+function printWorkspaceRevisionList(revisions: WorkspaceRevisionSummary[]): void {
+  console.log(`Truth Harness workspace revisions: ${revisions.length}`);
+
+  for (const revision of revisions) {
+    console.log("");
+    console.log(`${revision.revisionId} ${revision.createdAt}`);
+    console.log(`  ${revision.title}`);
+    console.log(`  Path: ${revision.path}`);
+    console.log(`  Source snapshot: ${revision.sourceSnapshot.snapshotId}`);
+    console.log(`  Files: ${revision.sourceSnapshot.totalFiles}; bytes: ${revision.sourceSnapshot.totalBytes}`);
+    console.log(`  Linked refs: ${revision.linkedRefs}`);
+  }
+}
+
+function printWorkspaceRevision(revision: WorkspaceRevision): void {
+  console.log(`${revision.revisionId} ${revision.createdAt}`);
+  console.log(revision.title);
+  console.log(`Reason: ${revision.reason}`);
+  console.log(`Source snapshot: ${revision.sourceSnapshot.snapshotId}`);
+  console.log(`Snapshot path: ${revision.sourceSnapshot.path}`);
+  console.log(`Snapshot SHA-256: ${revision.sourceSnapshot.sha256}`);
+  console.log(`Files: ${revision.summary.totalFiles}`);
+  console.log(`Kinds: ${formatRecordCounts(revision.summary.byKind)}`);
+  console.log(`Parent revisions: ${revision.parentRevisionRefs.join(", ") || "none"}`);
+  console.log(`Sessions: ${revision.sessionRefs.join(", ") || "none"}`);
+  console.log(`Validation plans: ${revision.validationPlanRefs.join(", ") || "none"}`);
+  console.log(`Claims: ${revision.claimRefs.join(", ") || "none"}`);
+
+  if (revision.artifactRefs.length > 0) {
+    console.log("");
+    console.log("Artifact refs:");
+    for (const ref of revision.artifactRefs) {
+      const hash = ref.sha256 ? ` sha256:${ref.sha256.slice(0, 16)}...` : "";
+      console.log(`  ${ref.role}: ${ref.path}${hash}`);
+    }
+  }
+
+  if (revision.warnings.length > 0) {
+    console.log("");
+    console.log("Revision warnings:");
+    for (const warning of revision.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printWorkspaceRevisionVerification(verification: WorkspaceRevisionVerification): void {
+  console.log(`Workspace revision verification ${verification.revisionId}`);
+  console.log(`Status: ${verification.passed ? "passed" : "failed"}`);
+  console.log(`Source snapshot file: ${verification.sourceSnapshotFile.status}`);
+  console.log(`Snapshot path: ${verification.sourceSnapshotFile.path}`);
+  console.log(`Expected SHA-256: ${verification.sourceSnapshotFile.expectedSha256}`);
+  if (verification.sourceSnapshotFile.actualSha256) {
+    console.log(`Actual SHA-256: ${verification.sourceSnapshotFile.actualSha256}`);
+  }
+
+  if (verification.snapshotVerification) {
+    console.log("");
+    printWorkspaceSnapshotVerification(verification.snapshotVerification);
+  }
+
+  if (verification.warnings.length > 0) {
+    console.log("");
+    console.log("Revision verification warnings:");
     for (const warning of verification.warnings) {
       console.log(`  ${warning}`);
     }
@@ -8323,6 +9024,7 @@ function printClaimReviewPacket(packet: ClaimReviewPacket): void {
   for (const step of packet.verification) {
     console.log(`  ${step.stage}: ${step.status} - ${step.summary}`);
   }
+  printCliArtifactRefs(packet.artifactRefs, "Artifact refs");
 
   console.log("");
   console.log("Next actions:");

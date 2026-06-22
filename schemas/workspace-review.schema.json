@@ -56,6 +56,7 @@
         "reportDrafts",
         "totalItems",
         "routeObligations",
+        "leanProofSafetyItems",
         "readyRoutesWithoutClaims",
         "blockedClaims",
         "reportDraftReviewItems",
@@ -74,6 +75,7 @@
         "reportDrafts": { "type": "integer", "minimum": 0 },
         "totalItems": { "type": "integer", "minimum": 0 },
         "routeObligations": { "type": "integer", "minimum": 0 },
+        "leanProofSafetyItems": { "type": "integer", "minimum": 0 },
         "readyRoutesWithoutClaims": { "type": "integer", "minimum": 0 },
         "blockedClaims": { "type": "integer", "minimum": 0 },
         "reportDraftReviewItems": { "type": "integer", "minimum": 0 },
@@ -143,6 +145,15 @@
             "$ref": "#/$defs/evidenceRef"
           }
         },
+        "proofDeclaration": {
+          "$ref": "#/$defs/proofDeclaration"
+        },
+        "proofAttempt": {
+          "$ref": "#/$defs/proofAttempt"
+        },
+        "proofRepairTarget": {
+          "$ref": "#/$defs/proofRepairTarget"
+        },
         "taskId": { "type": "string" },
         "checkpointId": { "type": "string" },
         "reportId": { "type": "string" },
@@ -168,6 +179,122 @@
           },
           "additionalProperties": false
         }
+      },
+      "additionalProperties": false
+    },
+    "proofDeclaration": {
+      "type": "object",
+      "required": [
+        "declarationId",
+        "kind",
+        "path",
+        "line",
+        "column",
+        "signature",
+        "signatureSha256",
+        "sourceSha256"
+      ],
+      "properties": {
+        "declarationId": {
+          "type": "string",
+          "pattern": "^decl_[a-f0-9]{16}$"
+        },
+        "kind": {
+          "enum": ["theorem", "lemma", "example", "def"]
+        },
+        "name": { "type": "string" },
+        "path": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "signature": { "type": "string", "minLength": 1 },
+        "signatureSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "proofRepairTarget": {
+      "type": "object",
+      "required": [
+        "repairTargetId",
+        "sourcePath",
+        "sourceSha256",
+        "markerKind",
+        "markerLine",
+        "markerColumn",
+        "afterEditCommands",
+        "evidenceRequired",
+        "boundary"
+      ],
+      "properties": {
+        "repairTargetId": {
+          "type": "string",
+          "pattern": "^lpr_[a-f0-9]{16}$"
+        },
+        "sourcePath": { "type": "string", "minLength": 1 },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "markerKind": {
+          "enum": ["sorry", "admit", "axiom", "constant", "hole"]
+        },
+        "markerLine": { "type": "integer", "minimum": 1 },
+        "markerColumn": { "type": "integer", "minimum": 1 },
+        "declarationId": {
+          "type": "string",
+          "pattern": "^decl_[a-f0-9]{16}$"
+        },
+        "declarationName": { "type": "string" },
+        "declarationSignatureSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "afterEditCommands": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "evidenceRequired": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "boundary": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "proofAttempt": {
+      "type": "object",
+      "required": ["checkId", "path", "sourcePath", "status", "trust", "createdAt"],
+      "properties": {
+        "checkId": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "sourcePath": { "type": "string", "minLength": 1 },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceByteLength": { "type": "integer", "minimum": 0 },
+        "sourceStatus": {
+          "enum": ["unchanged", "changed", "missing", "unchecked"]
+        },
+        "sourceCurrentSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceCurrentByteLength": { "type": "integer", "minimum": 0 },
+        "declarationName": { "type": "string" },
+        "declaration": {
+          "$ref": "#/$defs/proofDeclaration"
+        },
+        "status": {
+          "enum": ["accepted", "rejected", "backend-unavailable", "error"]
+        },
+        "trust": { "type": "string", "minLength": 1 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "diagnosticSnippet": { "type": "string" }
       },
       "additionalProperties": false
     },

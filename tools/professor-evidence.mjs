@@ -60,6 +60,36 @@ const steps = [
     ]
   },
   {
+    label: "write exact hard-math closure evidence",
+    command: "node",
+    args: [
+      "tools/hard-math-closure.mjs",
+      "exact-fraction-lemma",
+      "--require-trust",
+      "exact-computed"
+    ]
+  },
+  {
+    label: "write symbolic CAS hard-math closure evidence",
+    command: "node",
+    args: [
+      "tools/hard-math-closure.mjs",
+      "symbolic-cas-closure-fixture",
+      "--require-trust",
+      "cross-checked"
+    ]
+  },
+  {
+    label: "write SMT hard-math closure evidence",
+    command: "node",
+    args: [
+      "tools/hard-math-closure.mjs",
+      "smt-bounded-closure-fixture",
+      "--require-trust",
+      "smt-checked"
+    ]
+  },
+  {
     label: `write ${strictAllEngines ? "strict " : ""}professor credibility pack`,
     command: "node",
     args: [
@@ -115,6 +145,7 @@ runStep({
     "verify-credibility-bundle",
     ".",
     bundleRef,
+    "--write",
     "--fail-on-bundle-change",
     "--fail-on-source-drift"
   ]
@@ -122,7 +153,7 @@ runStep({
 
 console.log("");
 console.log(`${strictAllEngines ? "Strict all-engine p" : "P"}rofessor evidence sequence completed.`);
-console.log("Generated local engine, benchmark, credibility-pack, and reviewer-bundle artifacts are under .truth-harness/.");
+console.log("Generated local engine, benchmark, closure, credibility-pack, and reviewer-bundle artifacts are under .truth-harness/.");
 console.log(`Verified portable reviewer bundle: ${bundleRef}`);
 if (strictAllEngines) {
   console.log("This strict reviewer packet required Maxima, Z3, cvc5, Lean, and SageMath to earn scoped evidence.");

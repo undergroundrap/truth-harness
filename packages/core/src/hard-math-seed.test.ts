@@ -1,0 +1,216 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { listWorkspaceEvents } from "./event-log.js";
+import { writeHardMathSeedWorkspace } from "./hard-math-seed.js";
+import { listResearchSessions } from "./research-session.js";
+import { listValidationPlans } from "./validation-plan.js";
+import { validateWorkspaceArtifacts } from "./workspace-validation.js";
+import { runWorkspacePilotLoop } from "./workspace-pilot-loop.js";
+
+const roots: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
+  roots.length = 0;
+});
+
+describe("hard-math seed workspace", () => {
+  it("creates validation-backed math sessions and a gate-first run-next handoff", async () => {
+    const root = await tempRoot();
+
+    const result = await writeHardMathSeedWorkspace({
+      rootPath: root,
+      now: "2026-06-20T12:00:00.000Z",
+      writeRunNextPlan: true
+    });
+
+    expect(result).toMatchObject({
+      schemaVersion: "truth-harness.hard-math-seed.v0",
+      localOnly: true,
+      networkAccess: "none"
+    });
+    expect(result.cases).toHaveLength(6);
+    expect(result.cases).toContainEqual(
+      expect.objectContaining({
+        caseId: "exact-fraction-lemma",
+        validationReadiness: "not-ready",
+        openBlockingGates: expect.any(Number)
+      })
+    );
+    expect(result.cases).toContainEqual(
+      expect.objectContaining({
+        caseId: "symbolic-trig-identity",
+        validationReadiness: "not-ready",
+        openBlockingGates: expect.any(Number)
+      })
+    );
+    expect(result.cases).toContainEqual(
+      expect.objectContaining({
+        caseId: "symbolic-cas-closure-fixture",
+        validationReadiness: "not-ready",
+        openBlockingGates: expect.any(Number)
+      })
+    );
+    expect(result.cases).toContainEqual(
+      expect.objectContaining({
+        caseId: "smt-bounded-closure-fixture",
+        validationReadiness: "not-ready",
+        openBlockingGates: expect.any(Number)
+      })
+    );
+    expect(result.runNext?.plan).toMatchObject({
+      schemaVersion: "truth-harness.workspace-run-next.v0",
+      status: "planned",
+      dryRun: true,
+      item: {
+        kind: "validation-gate",
+        command: expect.stringContaining("truth-harness verify")
+      }
+    });
+
+    const sessions = await listResearchSessions(root);
+    const plans = await listValidationPlans(root);
+    expect(sessions).toHaveLength(6);
+    expect(plans).toHaveLength(6);
+    expect(plans.map((plan) => plan.planId).sort()).toEqual(
+      result.cases.map((seedCase) => seedCase.validationPlanId).sort()
+    );
+    expect(sessions.every((session) => session.evidenceRefs.some((ref) => ref.kind === "validation"))).toBe(true);
+
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+    expect(validation.passed).toBe(true);
+
+    const loop = await runWorkspacePilotLoop({
+      rootPath: root,
+      maxSteps: 2,
+      executeLocal: false,
+      now: "2026-06-20T12:01:00.000Z"
+    });
+    expect(loop.loop.stopReason).toBe("dry-run");
+    expect(loop.loop.steps[0]?.item).toMatchObject({
+      kind: "validation-gate",
+      validationGateKind: "proof"
+    });
+
+    const events = await listWorkspaceEvents(root, 30);
+    expect(events.events).toContainEqual(
+      expect.objectContaining({
+        action: "artifact-written",
+        kind: "sessions",
+        localOnly: true,
+        networkAccess: "none"
+      })
+    );
+  });
+
+  it("can seed one selected case without writing a run-next handoff", async () => {
+    const root = await tempRoot();
+
+    const result = await writeHardMathSeedWorkspace({
+      rootPath: root,
+      now: "2026-06-20T12:00:00.000Z",
+      caseIds: ["bounded-integer-smt"],
+      writeRunNextPlan: false
+    });
+
+    expect(result.cases).toEqual([
+      expect.objectContaining({
+        caseId: "bounded-integer-smt",
+        validationPlanId: expect.any(String)
+      })
+    ]);
+    expect(result.runNext).toEqual({
+      plan: expect.objectContaining({
+        dryRun: true,
+        item: expect.objectContaining({
+          kind: "validation-gate"
+        })
+      })
+    });
+  });
+
+  it("closes the exact-fraction seed through the bounded pilot loop", async () => {
+    const root = await tempRoot();
+
+    const seed = await writeHardMathSeedWorkspace({
+      rootPath: root,
+      now: "2026-06-20T12:00:00.000Z",
+      caseIds: ["exact-fraction-lemma"],
+      writeRunNextPlan: true
+    });
+
+    const result = await runWorkspacePilotLoop({
+      rootPath: root,
+      maxSteps: 3,
+      executeLocal: true,
+      writeRunNextPlans: true,
+      now: "2026-06-20T12:05:00.000Z",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command"
+    });
+
+    expect(result.loop.dryRun).toBe(false);
+    expect(result.loop.summary.executedSteps).toBeGreaterThanOrEqual(1);
+    expect(result.loop.summary.evidenceRefs).toContainEqual(expect.stringContaining("route:.truth-harness/routes/"));
+    expect(result.loop.steps[0]).toMatchObject({
+      status: "executed",
+      execution: {
+        status: "executed",
+        kind: "verifier-route",
+        attached: true,
+        evidenceRef: expect.stringContaining("route:.truth-harness/routes/")
+      }
+    });
+
+    const plans = await listValidationPlans(root);
+    const plan = plans.find((candidate) => candidate.planId === seed.cases[0]?.validationPlanId);
+    expect(plan?.gates.find((gate) => gate.kind === "proof")).toMatchObject({
+      status: "satisfied",
+      evidenceRefs: [expect.objectContaining({ kind: "route", trust: "exact-computed" })]
+    });
+
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+    expect(validation.passed).toBe(true);
+  });
+
+  it("closes the symbolic CAS fixture through a scoped verifier route", async () => {
+    const root = await tempRoot();
+
+    const seed = await writeHardMathSeedWorkspace({
+      rootPath: root,
+      now: "2026-06-20T12:00:00.000Z",
+      caseIds: ["symbolic-cas-closure-fixture"],
+      writeRunNextPlan: true
+    });
+
+    const result = await runWorkspacePilotLoop({
+      rootPath: root,
+      maxSteps: 3,
+      executeLocal: true,
+      writeRunNextPlans: true,
+      now: "2026-06-20T12:05:00.000Z",
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command"
+    });
+
+    expect(result.loop.summary.executedSteps).toBeGreaterThanOrEqual(1);
+    expect(result.loop.summary.evidenceRefs).toContainEqual(expect.stringContaining("route:.truth-harness/routes/"));
+
+    const plans = await listValidationPlans(root);
+    const plan = plans.find((candidate) => candidate.planId === seed.cases[0]?.validationPlanId);
+    const gate = plan?.gates.find((candidate) => candidate.kind === "proof");
+    expect(gate?.status).toBe("satisfied");
+    expect(gate?.evidenceRefs[0]).toMatchObject({ kind: "route" });
+    expect(["exact-computed", "cross-checked"]).toContain(gate?.evidenceRefs[0]?.trust);
+  });
+});
+
+async function tempRoot(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "truth-harness-hard-math-seed-"));
+  roots.push(root);
+  return root;
+}

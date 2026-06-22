@@ -127,6 +127,14 @@ export {
   SUPPORTED_CORPUS_EXTENSIONS
 } from "./local-corpus.js";
 export {
+  enrichLocalArtifactRef,
+  enrichLocalArtifactRefs,
+  localArtifactPathsFromString,
+  normalizeLocalArtifactPath,
+  uniqueLocalArtifactRefs,
+  workspaceRelativeArtifactPath
+} from "./local-artifact-ref.js";
+export {
   createInventionLogEntry,
   INVENTION_VALIDATION_STAGES,
   isInventionValidationStage,
@@ -215,6 +223,13 @@ export {
   verifyWorkspaceSnapshot,
   writeWorkspaceSnapshot
 } from "./workspace-snapshot.js";
+export {
+  listWorkspaceRevisions,
+  parseWorkspaceRevision,
+  readWorkspaceRevision,
+  verifyWorkspaceRevision,
+  writeWorkspaceRevision
+} from "./workspace-revision.js";
 export { validateWorkspaceArtifacts } from "./workspace-validation.js";
 export { createWorkspaceGraph } from "./workspace-graph.js";
 export {
@@ -227,6 +242,7 @@ export {
 } from "./workspace-review.js";
 export {
   createWorkspaceReviewFromCredibilityPack,
+  createWorkspaceRunNextPlanFromSavedHandoff,
   createWorkspaceRunNextPlan,
   inspectWorkspaceRunNextPlan,
   listWorkspaceRunNextPlans,
@@ -235,6 +251,22 @@ export {
   renderWorkspaceRunNextMarkdown,
   writeWorkspaceRunNextPlan
 } from "./workspace-run-next.js";
+export {
+  renderWorkspacePilotLoopMarkdown,
+  runWorkspacePilotLoop,
+  writeWorkspacePilotLoopRecord
+} from "./workspace-pilot-loop.js";
+export {
+  HARD_MATH_SEED_CASES,
+  HARD_MATH_SEED_SCHEMA_VERSION,
+  writeHardMathSeedWorkspace
+} from "./hard-math-seed.js";
+export {
+  HARD_MATH_CLOSURE_REPORT_SCHEMA_VERSION,
+  listHardMathClosureReports,
+  renderHardMathClosureReportMarkdown,
+  writeHardMathClosureReport
+} from "./hard-math-closure-report.js";
 export {
   renderCredibilityBundleVerificationMarkdown,
   verifyCredibilityBundle,
@@ -266,11 +298,43 @@ export type {
   WorkspaceRunNextResumeAction,
   WorkspaceRunNextResumeDecision,
   WorkspaceRunNextResumeStatus,
+  WorkspaceRunNextSavedHandoffInput,
+  WorkspaceRunNextSavedHandoffResult,
   WorkspaceRunNextSourceSnapshotCheck,
   WorkspaceRunNextStatus,
   WorkspaceRunNextSummary,
   WorkspaceRunNextWriteResult
 } from "./workspace-run-next.js";
+export type {
+  WorkspacePilotLoopInput,
+  WorkspacePilotLoopRecord,
+  WorkspacePilotLoopRunResult,
+  WorkspacePilotLoopSource,
+  WorkspacePilotLoopStatus,
+  WorkspacePilotLoopStep,
+  WorkspacePilotLoopWriteResult
+} from "./workspace-pilot-loop.js";
+export type {
+  WorkspaceRevision,
+  WorkspaceRevisionSourceSnapshot,
+  WorkspaceRevisionSummary,
+  WorkspaceRevisionVerification,
+  WorkspaceRevisionWriteInput,
+  WorkspaceRevisionWriteResult
+} from "./workspace-revision.js";
+export type {
+  HardMathSeedCase,
+  HardMathSeedInput,
+  HardMathSeedResult
+} from "./hard-math-seed.js";
+export type {
+  HardMathClosureCaseReport,
+  HardMathClosureGateEvidenceSummary,
+  HardMathClosureReport,
+  HardMathClosureReportSummary,
+  HardMathClosureReportWriteResult,
+  WriteHardMathClosureReportInput
+} from "./hard-math-closure-report.js";
 export {
   createVisualArtifact,
   listVisualArtifacts,
@@ -317,6 +381,7 @@ export {
 } from "./verifier-route.js";
 export { proveUniversalParity } from "./parity-proof.js";
 export {
+  findLeanProofMarkers,
   inspectLeanProject
 } from "./lean-project.js";
 export {
@@ -461,6 +526,9 @@ export type {
   CodeRunSandboxStatus
 } from "./sandbox.js";
 export type {
+  LocalArtifactRef
+} from "./local-artifact-ref.js";
+export type {
   CreateWebUiReviewInput,
   WebUiLayoutAuditSummary,
   WebUiReviewChecklistItem,
@@ -480,6 +548,8 @@ export type {
   ClaimLedgerRecord,
   ClaimLedgerStatus,
   ClaimLedgerWriteResult,
+  ClaimReviewArtifactRef,
+  ClaimReviewArtifactRefRole,
   ClaimReviewAction,
   ClaimReviewPacket,
   ClaimReviewStatus,
@@ -695,6 +765,8 @@ export type {
   ReadReportDraftInput,
   ReportDraft,
   ReportDraftActivity,
+  ReportDraftArtifactRef,
+  ReportDraftArtifactRefRole,
   ReportDraftPaths,
   ReportDraftReadResult,
   ReportDraftSummary,
@@ -763,6 +835,7 @@ export type {
   EnginePlan,
   EnginePlanComparisonRow,
   EnginePlanProblemKind,
+  EnginePlanSavedReviewerEvidence,
   EnginePlanStatus,
   EnginePlanStep,
   EnginePlanStepRole
@@ -788,6 +861,7 @@ export type {
   EngineVerificationCase,
   EngineVerificationCaseId,
   EngineVerificationCaseStatus,
+  EngineVerificationCommandRunner,
   EngineVerificationEvidence,
   EngineVerificationInput,
   EngineVerificationReport,
@@ -857,9 +931,17 @@ export type {
   WriteSymbolicCasCheckInput
 } from "./cas-backend.js";
 export type {
+  LeanProjectDeclaration,
+  LeanProjectDeclarationInventory,
+  LeanProjectDeclarationKind,
   LeanProjectFileSummary,
   LeanProjectInspection,
   LeanProjectInspectionInput,
+  LeanProjectProofMarker,
+  LeanProjectProofMarkerDeclaration,
+  LeanProjectProofMarkerKind,
+  LeanProjectProofMarkerRepairTarget,
+  LeanProjectProofSafety,
   LeanProjectReadiness
 } from "./lean-project.js";
 export type {
@@ -870,6 +952,7 @@ export type {
   ProofBackendStatus,
   ProofBackendStatusOptions,
   ProofBackendStatusReport,
+  LeanProofCheckDeclaration,
   LeanProofCheckInput,
   LeanProofCheckRecord,
   LeanProofCheckStatus,

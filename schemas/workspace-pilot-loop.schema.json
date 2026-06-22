@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/workspace-pilot-loop.schema.json",
+  "title": "Truth Harness Workspace Pilot Loop",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "loopId",
+    "createdAt",
+    "completedAt",
+    "workspacePath",
+    "localOnly",
+    "networkAccess",
+    "dryRun",
+    "source",
+    "maxSteps",
+    "status",
+    "stopReason",
+    "summary",
+    "steps",
+    "stopConditions",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.workspace-pilot-loop.v0"
+    },
+    "loopId": {
+      "type": "string",
+      "pattern": "^wpl_[a-f0-9]{8}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "workspacePath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "source": {
+      "enum": ["workspace-review", "credibility-actions", "saved-run-next"]
+    },
+    "maxSteps": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 12
+    },
+    "status": {
+      "enum": ["completed", "blocked", "stopped"]
+    },
+    "stopReason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "object",
+      "required": ["plannedSteps", "executedSteps", "blockedSteps", "attachedEvidenceSteps", "evidenceRefs"],
+      "properties": {
+        "plannedSteps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "executedSteps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blockedSteps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "attachedEvidenceSteps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evidenceRefs": {
+          "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "createdAt", "reviewId", "planId", "execution", "status"],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reviewId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "planId": {
+            "type": "string",
+            "pattern": "^wrn_[a-f0-9]{8}$"
+          },
+          "runNextPlanPath": {
+            "type": "string"
+          },
+          "runNextMarkdownPath": {
+            "type": "string"
+          },
+          "item": {
+            "type": "object",
+            "required": ["itemId", "kind", "priority", "title", "summary", "command"],
+            "properties": {
+              "itemId": { "type": "string", "minLength": 1 },
+              "kind": { "type": "string", "minLength": 1 },
+              "priority": { "type": "string", "minLength": 1 },
+              "title": { "type": "string", "minLength": 1 },
+              "summary": { "type": "string", "minLength": 1 },
+              "command": { "type": "string", "minLength": 1 },
+              "routeId": { "type": "string" },
+              "obligationId": { "type": "string" },
+              "obligationKind": { "type": "string" },
+              "claimId": { "type": "string" },
+              "sessionId": { "type": "string" },
+              "validationPlanId": { "type": "string" },
+              "validationGateId": { "type": "string" },
+              "validationGateKind": { "type": "string" },
+              "reportId": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "enginePlan": {
+            "type": "object",
+            "required": [
+              "status",
+              "classifications",
+              "targetTrustCeiling",
+              "recommendedFirstCommand",
+              "readyCapabilityIds",
+              "blockedCapabilityIds"
+            ],
+            "properties": {
+              "status": { "type": "string", "minLength": 1 },
+              "classifications": { "$ref": "#/$defs/stringArray" },
+              "targetTrustCeiling": { "type": "string", "minLength": 1 },
+              "recommendedFirstCommand": { "type": "string", "minLength": 1 },
+              "readyCapabilityIds": { "$ref": "#/$defs/stringArray" },
+              "blockedCapabilityIds": { "$ref": "#/$defs/stringArray" }
+            },
+            "additionalProperties": false
+          },
+          "execution": {
+            "type": "object",
+            "required": ["status", "kind", "summary"],
+            "properties": {
+              "status": {
+                "enum": ["planned", "executed", "blocked"]
+              },
+              "kind": {
+                "type": "string",
+                "minLength": 1
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1
+              },
+              "command": {
+                "type": "string"
+              },
+              "evidenceRef": {
+                "type": "string"
+              },
+              "attached": {
+                "type": "boolean"
+              },
+              "result": {
+                "type": ["object", "array", "string", "number", "boolean", "null"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "status": {
+            "enum": ["planned", "executed", "blocked"]
+          },
+          "stopReason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "stopConditions": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

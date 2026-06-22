@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/hard-math-closure.schema.json",
+  "title": "Truth Harness Hard-Math Closure Report",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "closureId",
+    "createdAt",
+    "completedAt",
+    "localOnly",
+    "networkAccess",
+    "reportWorkspacePath",
+    "runtime",
+    "summary",
+    "cases",
+    "trustBoundary",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "truth-harness.hard-math-closure.v0"
+    },
+    "closureId": {
+      "type": "string",
+      "pattern": "^hmc_[a-f0-9]{12}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "localOnly": {
+      "const": true
+    },
+    "networkAccess": {
+      "const": "none"
+    },
+    "reportWorkspacePath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["kind", "command", "containerized"],
+      "properties": {
+        "kind": {
+          "enum": ["native", "docker"]
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "containerized": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "totalCases",
+        "passedCases",
+        "failedCases",
+        "validationErrors",
+        "validationWarnings",
+        "cleanedTransientWorkspaces"
+      ],
+      "properties": {
+        "totalCases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passedCases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failedCases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "validationErrors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "validationWarnings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cleanedTransientWorkspaces": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "caseId",
+          "passed",
+          "transientWorkspacePath",
+          "transientWorkspaceCleaned",
+          "gateEvidence",
+          "executedSteps",
+          "attachedEvidenceSteps",
+          "loopStatus",
+          "loopStopReason",
+          "validationPassed",
+          "validationErrors",
+          "validationWarnings",
+          "warnings"
+        ],
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "requiredTrust": {
+            "type": "string"
+          },
+          "transientWorkspacePath": {
+            "type": "string",
+            "minLength": 1
+          },
+          "transientWorkspaceCleaned": {
+            "type": "boolean"
+          },
+          "validationPlanId": {
+            "type": "string"
+          },
+          "proofGateStatus": {
+            "type": "string"
+          },
+          "gateEvidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["kind"],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "trust": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "executedSteps": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "attachedEvidenceSteps": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "loopStatus": {
+            "type": "string",
+            "minLength": 1
+          },
+          "loopStopReason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "validationPassed": {
+            "type": "boolean"
+          },
+          "validationErrors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "validationWarnings": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "evidenceSummary": {
+            "type": "string"
+          },
+          "warnings": {
+            "$ref": "#/$defs/stringArray"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "trustBoundary": {
+      "type": "object",
+      "required": [
+        "reportIsNotProof",
+        "tempArtifactsMayBeCleaned",
+        "gatesCloseOnlyFromScopedEvidence",
+        "strongerClaimsNeedSeparateProof"
+      ],
+      "properties": {
+        "reportIsNotProof": {
+          "const": true
+        },
+        "tempArtifactsMayBeCleaned": {
+          "const": true
+        },
+        "gatesCloseOnlyFromScopedEvidence": {
+          "const": true
+        },
+        "strongerClaimsNeedSeparateProof": {
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "warnings": {
+      "$ref": "#/$defs/stringArray"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

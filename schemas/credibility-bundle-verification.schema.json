@@ -58,6 +58,18 @@
       "type": "integer",
       "minimum": 0
     },
+    "manifestDigest": {
+      "$ref": "#/$defs/manifestDigest"
+    },
+    "manifestDigestStatus": {
+      "enum": ["verified", "mismatch", "not-recorded"]
+    },
+    "manifestDigestExpected": {
+      "$ref": "#/$defs/sha256"
+    },
+    "manifestDigestActual": {
+      "$ref": "#/$defs/sha256"
+    },
     "missingBundleFiles": {
       "type": "array",
       "items": {
@@ -132,6 +144,22 @@
     "sha256": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
+    },
+    "manifestDigest": {
+      "type": "object",
+      "required": ["algorithm", "scope", "value"],
+      "properties": {
+        "algorithm": {
+          "const": "sha256"
+        },
+        "scope": {
+          "const": "truth-harness.credibility-bundle-manifest-digest.v0"
+        },
+        "value": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "additionalProperties": false
     },
     "stringArray": {
       "type": "array",

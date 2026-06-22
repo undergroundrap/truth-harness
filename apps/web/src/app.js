@@ -194,6 +194,9 @@ const seedReceipts = {
 
 const receiptStore = new Map(Object.entries(seedReceipts));
 const claimLedgerStore = new Map();
+const claimReviewPacketStore = new Map();
+const claimReviewPacketLoading = new Set();
+const claimReviewPacketErrors = new Map();
 const routeLedgerStore = new Map();
 const casCheckStore = new Map();
 const smtCheckStore = new Map();
@@ -215,8 +218,13 @@ let workspaceRunNextError;
 let workspaceRunNextSummaries = [];
 let workspaceRunNextSummariesError;
 let workspaceRunNextSummariesVerified = false;
+let workspaceRunNextSummariesLoading = false;
+let workspaceRunNextSummariesLoadedAt = 0;
 let workspaceRunNextOpenedInspection;
 let workspaceRunNextOpenedError;
+let workspaceRunNextSaving = false;
+let workspacePilotLoop;
+let workspacePilotLoopError;
 let claimLedgerGraph = {
   schemaVersion: "truth-harness.claim-graph.v0",
   nodes: [],
@@ -336,9 +344,20 @@ const state = {
   releaseAudit: undefined,
   releaseAuditLoading: false,
   releaseAuditError: undefined,
+  selectedReleaseAuditCheckId: undefined,
+  releaseAuditArtifactPreviewPath: undefined,
+  releaseAuditArtifactPreview: undefined,
+  releaseAuditArtifactPreviewLoading: false,
+  releaseAuditArtifactPreviewError: undefined,
+  workspaceArtifactPreviewSurface: undefined,
+  workspaceArtifactPreviewPath: undefined,
+  workspaceArtifactPreview: undefined,
+  workspaceArtifactPreviewLoading: false,
+  workspaceArtifactPreviewError: undefined,
   workspaceReadiness: undefined,
   catalogStatus: undefined,
   catalogSearch: undefined,
+  catalogRefFilter: undefined,
   catalogSearchLoading: false,
   catalogError: undefined,
   catalogRebuildLoading: false,
@@ -363,6 +382,7 @@ const sidebarSearchCount = document.querySelector("#sidebar-search-count");
 const catalogSearchStatus = document.querySelector("#catalog-search-status");
 const catalogRebuildButton = document.querySelector("#catalog-rebuild");
 const catalogResultList = document.querySelector("#catalog-result-list");
+const catalogArtifactPreview = document.querySelector("#catalog-artifact-preview");
 const maintenanceStatus = document.querySelector("#maintenance-status");
 const maintenanceMetrics = document.querySelector("#maintenance-metrics");
 const maintenanceDetail = document.querySelector("#maintenance-detail");
@@ -472,12 +492,26 @@ const workspaceRunNextTitle = document.querySelector("#workspace-run-next-title"
 const workspaceRunNextSummary = document.querySelector("#workspace-run-next-summary");
 const workspaceRunNextCommand = document.querySelector("#workspace-run-next-command");
 const workspaceRunNextDetails = document.querySelector("#workspace-run-next-details");
+const workspaceRunNextEngine = document.querySelector("#workspace-run-next-engine");
+const workspaceRunNextSafety = document.querySelector("#workspace-run-next-safety");
+const workspaceRunNextArtifactPreview = document.querySelector("#workspace-run-next-artifact-preview");
 const workspaceRunNextIdleActions = document.querySelector("#workspace-run-next-idle-actions");
 const startResearchHarnessButton = document.querySelector("#start-research-harness");
+const seedHardMathButton = document.querySelector("#seed-hard-math");
+const saveRunNextHandoffButton = document.querySelector("#save-run-next-handoff");
 const refreshRunNextButton = document.querySelector("#refresh-run-next");
 const copyRunNextCommandButton = document.querySelector("#copy-run-next-command");
+const workspacePilotLoopStatus = document.querySelector("#workspace-pilot-loop-status");
+const workspacePilotLoopTitle = document.querySelector("#workspace-pilot-loop-title");
+const workspacePilotLoopSummary = document.querySelector("#workspace-pilot-loop-summary");
+const workspacePilotLoopCommand = document.querySelector("#workspace-pilot-loop-command");
+const workspacePilotLoopDetails = document.querySelector("#workspace-pilot-loop-details");
+const workspacePilotLoopSteps = document.querySelector("#workspace-pilot-loop-steps");
+const refreshPilotLoopButton = document.querySelector("#refresh-pilot-loop");
+const copyPilotLoopCommandButton = document.querySelector("#copy-pilot-loop-command");
 const workspaceRunNextHistoryTitle = document.querySelector("#workspace-run-next-history-title");
 const workspaceRunNextList = document.querySelector("#workspace-run-next-list");
+const workspaceRunNextHistoryArtifactPreview = document.querySelector("#workspace-run-next-history-artifact-preview");
 const workspaceRunNextInspection = document.querySelector("#workspace-run-next-inspection");
 const refreshRunNextsButton = document.querySelector("#refresh-run-nexts");
 const verifyRunNextsButton = document.querySelector("#verify-run-nexts");
@@ -515,6 +549,7 @@ const replayProgressBar = document.querySelector("#replay-progress-bar");
 const inspectorTrust = document.querySelector("#inspector-trust");
 const routeLedgerStatus = document.querySelector("#route-ledger-status");
 const routeLedgerDetails = document.querySelector("#route-ledger-details");
+const routeLedgerArtifactPreview = document.querySelector("#route-ledger-artifact-preview");
 const copyRouteLedgerButton = document.querySelector("#copy-route-ledger");
 const downloadRouteLedgerButton = document.querySelector("#download-route-ledger");
 const mathCoreList = document.querySelector("#math-core-list");
@@ -1180,6 +1215,7 @@ void refreshResearchMap();
 void refreshVisualArtifacts();
 void refreshWorkspaceReview();
 void refreshWorkspaceRunNext({ announce: false });
+void refreshWorkspacePilotLoop({ announce: false });
 void refreshWorkspaceRunNextHandoffs({ announce: false });
 void refreshWorkspaceGraph();
 void refreshCasChecks();
@@ -1260,6 +1296,7 @@ function render() {
   renderAgentRoutes(receipt);
   renderRunbook(receipt);
   renderWorkspaceRunNext();
+  renderWorkspacePilotLoop();
   renderWorkspaceRunNextHandoffs();
   renderVerificationMatrix(receipt);
   renderReleaseAuditGate();
@@ -1399,12 +1436,22 @@ function renderRouteLedger(receipt) {
     ["Status", "not persisted"],
     ["Next", "Submit a prompt to write a local verifier route."]
   ];
+  const allowedArtifactPaths = rows
+    .map(([, value]) => value)
+    .map((value) => normalizedWorkspaceArtifactRef(value))
+    .filter((value) => workspaceArtifactRefIsPreviewable(value));
 
   routeLedgerStatus.textContent = route ? "persisted locally" : "seed receipt";
   routeLedgerStatus.className = route ? "mini-label route-ledger-status-live" : "mini-label";
   routeLedgerDetails.innerHTML = rows
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${routeLedgerValueHtml(label, value)}</dd></div>`)
     .join("");
+  if (routeLedgerArtifactPreview) {
+    routeLedgerArtifactPreview.innerHTML = workspaceArtifactPreviewHtml("route-ledger", {
+      allowedPaths: allowedArtifactPaths,
+      emptyHtml: ""
+    });
+  }
 
   copyRouteLedgerButton.disabled = !route;
   downloadRouteLedgerButton.disabled = !route;
@@ -1433,6 +1480,13 @@ function routeLedgerValueHtml(label, value) {
   const codeLabels = new Set(["Route ID", "Replay", "JSON", "Markdown"]);
   if (!codeLabels.has(label)) {
     return escapeHtml(value);
+  }
+
+  if (workspaceArtifactRefIsPreviewable(value)) {
+    return artifactRefControlHtml(value, {
+      surface: "route-ledger",
+      label: "Open"
+    });
   }
 
   return `<code title="${escapeHtml(value)}">${escapeHtml(value)}</code>`;
@@ -5016,7 +5070,7 @@ function renderRouteHistory() {
         const readiness = routeReadiness(route);
         const capabilities = route.usedCapabilities?.slice(0, 3).join(", ") || "no capabilities recorded";
         const created = formatRouteDate(route.createdAt);
-        return `<button class="route-record ${active ? "active" : ""}" data-route-id="${escapeHtml(route.routeId)}" type="button">
+        return `<button class="route-record ${active ? "active" : ""}" data-testid="route-record" data-route-id="${escapeHtml(route.routeId)}" type="button">
           <span class="trust-dot ${trustClass(route.finalTrust)}"></span>
           <span>
             <strong>${escapeHtml(route.problem)}</strong>
@@ -5028,13 +5082,6 @@ function renderRouteHistory() {
         </button>`;
       })
       .join("");
-
-  routeHistoryList.querySelectorAll(".route-record").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      void openSavedRoute(button.dataset.routeId);
-    });
-  });
 }
 
 function renderWorkspaceReview() {
@@ -5312,12 +5359,48 @@ function workspaceReviewActionFactsHtml(item) {
     ["Source", workspaceReviewSourceText(item)],
     ["Route", item.routeId],
     ["Obligation", item.obligationId],
+    ["Proof declaration", workspaceReviewProofDeclarationText(item)],
+    ["Proof attempt", workspaceReviewProofAttemptText(item)],
+    ["Proof source", workspaceReviewProofSourceText(item)],
+    ["Proof diagnostic", item.proofAttempt?.diagnosticSnippet],
     ["Claim", item.claimId],
     ["Session", item.sessionId]
   ]
     .filter(([, value]) => value)
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join("");
+}
+
+function workspaceReviewProofDeclarationText(item) {
+  const declaration = item?.proofDeclaration;
+  if (!declaration) {
+    return "";
+  }
+
+  const location = [declaration.path, declaration.line ? `${declaration.line}:${declaration.column ?? 1}` : ""]
+    .filter(Boolean)
+    .join(":");
+  const signatureHash = declaration.signatureSha256 ? `sig ${declaration.signatureSha256.slice(0, 12)}` : "";
+  return [declaration.declarationId, declaration.signature, signatureHash, location].filter(Boolean).join(" / ");
+}
+
+function workspaceReviewProofAttemptText(item) {
+  const proofAttempt = item?.proofAttempt;
+  if (!proofAttempt) {
+    return "";
+  }
+
+  return [proofAttempt.checkId, proofAttempt.status, proofAttempt.sourcePath].filter(Boolean).join(" / ");
+}
+
+function workspaceReviewProofSourceText(item) {
+  const proofAttempt = item?.proofAttempt;
+  if (!proofAttempt?.sourceStatus) {
+    return "";
+  }
+
+  const current = proofAttempt.sourceCurrentSha256 ? ` current ${proofAttempt.sourceCurrentSha256.slice(0, 12)}` : "";
+  return `${proofAttempt.sourceStatus}${current}`;
 }
 
 function workspaceReviewSlotCountText(item) {
@@ -5781,11 +5864,105 @@ async function refreshWorkspaceRunNext({ announce = true } = {}) {
   }
 }
 
+async function saveWorkspaceRunNextHandoffFromUi() {
+  if (workspaceRunNextSaving) {
+    return;
+  }
+
+  workspaceRunNextSaving = true;
+  workspaceRunNextError = undefined;
+  renderWorkspaceRunNext();
+
+  try {
+    const response = await fetch("/api/workspace-run-next", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        source: "workspace-review"
+      })
+    });
+    const payload = await readLocalApiJson(response, "Local workspace run-next save failed.");
+    workspaceRunNextPlan = payload.plan;
+    workspaceRunNextOpenedError = undefined;
+    workspaceRunNextError = undefined;
+    addActivity(
+      "local-api",
+      "Saved revision-backed handoff",
+      payload.activity?.[0]?.detail ??
+        `${payload.plan?.planId ?? "run-next plan"} saved with source revision ${payload.plan?.sourceRevision?.revisionId ?? "not recorded"}.`,
+      workspaceRunNextTrust(payload.plan?.status),
+      payload.plan?.createdAt
+    );
+    void refreshCatalogStatus({ announce: false });
+    void refreshWorkspaceEvents({ announce: false });
+    await refreshWorkspaceRunNextHandoffs({ announce: false, verifySnapshots: true });
+    if (payload.plan?.planId) {
+      await openWorkspaceRunNextHandoff(payload.plan.planId);
+    }
+  } catch (error) {
+    workspaceRunNextError = error instanceof Error ? error.message : "Unknown workspace run-next save failure.";
+    addActivity("local-api", "Save handoff failed", workspaceRunNextError, "refuted");
+  } finally {
+    workspaceRunNextSaving = false;
+    renderWorkspaceRunNext();
+    renderWorkspaceRunNextHandoffs();
+  }
+}
+
+async function refreshWorkspacePilotLoop({ announce = true } = {}) {
+  if (!workspacePilotLoopTitle) {
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({
+      maxSteps: "3"
+    });
+    const response = await fetch(`/api/workspace-pilot-loop?${params.toString()}`, {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local workspace pilot-loop API failed.");
+    workspacePilotLoop = payload.loop;
+    workspacePilotLoopError = undefined;
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded pilot-loop preview",
+        localApiSuccessMessage(payload, workspacePilotLoopActivitySummary(workspacePilotLoop)),
+        workspacePilotLoopTrust(workspacePilotLoop?.status)
+      );
+    }
+    renderWorkspacePilotLoop();
+  } catch (error) {
+    workspacePilotLoop = undefined;
+    workspacePilotLoopError = error instanceof Error ? error.message : "Unknown workspace pilot-loop failure.";
+    renderWorkspacePilotLoop();
+    addActivity("local-api", "Pilot-loop preview unavailable", workspacePilotLoopError, "waiting");
+  }
+}
+
+function refreshWorkspaceRunNextHandoffsIfStale({ maxAgeMs = 5000 } = {}) {
+  const neverLoaded = workspaceRunNextSummariesLoadedAt === 0;
+  const stale = Date.now() - workspaceRunNextSummariesLoadedAt > maxAgeMs;
+  if (!workspaceRunNextSummariesLoading && (neverLoaded || stale)) {
+    void refreshWorkspaceRunNextHandoffs({ announce: false });
+  }
+}
+
 async function refreshWorkspaceRunNextHandoffs({ announce = true, verifySnapshots = false } = {}) {
   if (!workspaceRunNextList) {
     return;
   }
+  if (workspaceRunNextSummariesLoading) {
+    return;
+  }
 
+  workspaceRunNextSummariesLoading = true;
+  renderWorkspaceRunNextHandoffs();
   try {
     const params = new URLSearchParams({
       limit: "8"
@@ -5801,6 +5978,7 @@ async function refreshWorkspaceRunNextHandoffs({ announce = true, verifySnapshot
     workspaceRunNextSummaries = Array.isArray(payload.plans) ? payload.plans : [];
     workspaceRunNextSummariesVerified = Boolean(payload.verifySnapshots);
     workspaceRunNextSummariesError = undefined;
+    workspaceRunNextSummariesLoadedAt = Date.now();
     if (announce) {
       addActivity(
         "local-api",
@@ -5809,26 +5987,34 @@ async function refreshWorkspaceRunNextHandoffs({ announce = true, verifySnapshot
         "passed"
       );
     }
-    renderWorkspaceRunNextHandoffs();
   } catch (error) {
     workspaceRunNextSummaries = [];
     workspaceRunNextSummariesVerified = false;
     workspaceRunNextSummariesError = error instanceof Error ? error.message : "Unknown saved run-next failure.";
-    renderWorkspaceRunNextHandoffs();
+    workspaceRunNextSummariesLoadedAt = Date.now();
     addActivity("local-api", "Saved handoffs unavailable", workspaceRunNextSummariesError, "waiting");
+  } finally {
+    workspaceRunNextSummariesLoading = false;
+    renderWorkspaceRunNextHandoffs();
   }
 }
 
-async function openWorkspaceRunNextHandoff(planRef) {
+async function openWorkspaceRunNextHandoff(planRef, { verifySnapshot = false } = {}) {
   const ref = String(planRef ?? "").trim();
   if (!ref) {
     return;
   }
 
   workspaceRunNextOpenedError = undefined;
-  addActivity("web-ui", "Opening saved handoff", `GET /api/workspace-run-nexts/${ref}?verifySnapshot=true`, "waiting");
+  const verifyParam = verifySnapshot ? "?verifySnapshot=true" : "";
+  addActivity(
+    "web-ui",
+    verifySnapshot ? "Verifying saved handoff" : "Opening saved handoff",
+    `GET /api/workspace-run-nexts/${ref}${verifyParam}`,
+    "waiting"
+  );
   try {
-    const response = await fetch(`/api/workspace-run-nexts/${encodeURIComponent(ref)}?verifySnapshot=true`, {
+    const response = await fetch(`/api/workspace-run-nexts/${encodeURIComponent(ref)}${verifyParam}`, {
       method: "GET",
       cache: "no-store"
     });
@@ -5838,8 +6024,12 @@ async function openWorkspaceRunNextHandoff(planRef) {
     workspaceRunNextError = undefined;
     addActivity(
       "local-api",
-      "Opened saved handoff",
-      localApiSuccessMessage(payload, workspaceRunNextOpenedInspection?.resumeDecision?.reason ?? `${ref} opened with snapshot drift status.`),
+      verifySnapshot ? "Verified saved handoff" : "Opened saved handoff",
+      localApiSuccessMessage(
+        payload,
+        workspaceRunNextOpenedInspection?.resumeDecision?.reason ??
+          (verifySnapshot ? `${ref} opened with snapshot drift status.` : `${ref} opened for fast reading; verify before resuming agent work.`)
+      ),
       workspaceRunNextOpenedInspection?.resumeDecision?.safeToResume ? "passed" : "waiting"
     );
     render();
@@ -5914,6 +6104,56 @@ async function startResearchHarnessFromUi() {
     if (startResearchHarnessButton) {
       startResearchHarnessButton.disabled = false;
       startResearchHarnessButton.textContent = "Start harness";
+    }
+  }
+}
+
+async function seedHardMathWorkspaceFromUi() {
+  if (seedHardMathButton) {
+    seedHardMathButton.disabled = true;
+    seedHardMathButton.textContent = "Seeding";
+  }
+  addActivity(
+    "web-ui",
+    "Seeding hard-math workspace",
+    "POST /api/workspace-seed/hard-math will write local validation sessions and a dry-run run-next handoff.",
+    "waiting"
+  );
+
+  try {
+    const response = await fetch("/api/workspace-seed/hard-math", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        writeRunNextPlan: true
+      })
+    });
+    const payload = await readLocalApiJson(response, "Local hard-math seed API failed.");
+    for (const item of payload.activity ?? []) {
+      addActivity(item.actor, item.action, localApiSuccessMessage(payload, item.detail), "passed", item.at);
+    }
+    if (payload.seed?.runNext?.plan) {
+      workspaceRunNextPlan = payload.seed.runNext.plan;
+      workspaceRunNextError = undefined;
+    }
+    await refreshResearchSessions({ announce: false });
+    await refreshWorkspaceReview({ announce: false });
+    await refreshWorkspaceRunNext({ announce: false });
+    await refreshWorkspacePilotLoop({ announce: false });
+    await refreshWorkspaceRunNextHandoffs({ announce: false });
+    await refreshWorkspaceGraph({ announce: false });
+    await refreshWorkspaceReadiness({ announce: false });
+    await refreshWorkspaceEvents({ announce: false });
+    state.surface = "runbook";
+    render();
+  } catch (error) {
+    addActivity("local-api", "Hard-math seed failed", error instanceof Error ? error.message : "Unknown hard-math seed failure.", "refuted");
+  } finally {
+    if (seedHardMathButton) {
+      seedHardMathButton.disabled = false;
+      seedHardMathButton.textContent = "Seed hard math";
     }
   }
 }
@@ -6312,11 +6552,48 @@ async function refreshClaimLedger({ announce = true } = {}) {
   }
 }
 
+async function ensureClaimReviewPacket(claimId) {
+  if (!claimId || claimReviewPacketStore.has(claimId) || claimReviewPacketLoading.has(claimId) || claimReviewPacketErrors.has(claimId)) {
+    return;
+  }
+
+  claimReviewPacketLoading.add(claimId);
+  claimReviewPacketErrors.delete(claimId);
+  try {
+    const response = await fetch(`/api/claims/${encodeURIComponent(claimId)}/review`, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json"
+      }
+    });
+    const payload = await readLocalApiJson(response, "Local claim review packet failed.");
+    if (payload.review?.claimId) {
+      claimReviewPacketStore.set(payload.review.claimId, payload.review);
+    }
+  } catch (error) {
+    claimReviewPacketErrors.set(claimId, error instanceof Error ? error.message : "Unknown claim review packet failure.");
+  } finally {
+    claimReviewPacketLoading.delete(claimId);
+    render();
+  }
+}
+
 function applyClaimLedgerPayload(payload) {
   claimLedgerStore.clear();
+  const activeClaimIds = new Set();
   for (const claim of payload.claims ?? []) {
     if (claim?.claimId) {
       claimLedgerStore.set(claim.claimId, claim);
+      activeClaimIds.add(claim.claimId);
+    }
+  }
+
+  for (const claimId of claimReviewPacketStore.keys()) {
+    if (!activeClaimIds.has(claimId)) {
+      claimReviewPacketStore.delete(claimId);
+      claimReviewPacketLoading.delete(claimId);
+      claimReviewPacketErrors.delete(claimId);
     }
   }
 
@@ -7492,9 +7769,16 @@ function renderWorkspaceRunNext() {
       ["Boundary", "Planner failed before any local action could be selected."],
       ["Fallback", "Use CLI or MCP run-next after checking the local API."]
     ]);
+    renderWorkspaceRunNextEnginePlan();
+    renderWorkspaceRunNextSafety();
+    renderWorkspaceRunNextArtifactPreview();
     renderWorkspaceRunNextIdleActions();
     if (copyRunNextCommandButton) {
       copyRunNextCommandButton.disabled = false;
+    }
+    if (saveRunNextHandoffButton) {
+      saveRunNextHandoffButton.disabled = true;
+      saveRunNextHandoffButton.textContent = workspaceRunNextSaving ? "Saving" : "Save handoff";
     }
     return;
   }
@@ -7509,9 +7793,16 @@ function renderWorkspaceRunNext() {
       ["Boundary", "Browser planning is dry-run only."],
       ["Execution", "CLI/MCP gates are required before local work runs."]
     ]);
+    renderWorkspaceRunNextEnginePlan();
+    renderWorkspaceRunNextSafety();
+    renderWorkspaceRunNextArtifactPreview();
     renderWorkspaceRunNextIdleActions();
     if (copyRunNextCommandButton) {
       copyRunNextCommandButton.disabled = true;
+    }
+    if (saveRunNextHandoffButton) {
+      saveRunNextHandoffButton.disabled = true;
+      saveRunNextHandoffButton.textContent = workspaceRunNextSaving ? "Saving" : "Save handoff";
     }
     return;
   }
@@ -7525,10 +7816,103 @@ function renderWorkspaceRunNext() {
   workspaceRunNextSummary.textContent = workspaceRunNextPlan.execution?.summary ?? "Browser-visible planning only; use CLI/MCP gates for bounded local execution.";
   workspaceRunNextCommand.textContent = command;
   setWorkspaceRunNextDetails(workspaceRunNextDetailsRows(workspaceRunNextPlan, command));
+  renderWorkspaceRunNextEnginePlan(workspaceRunNextPlan);
+  renderWorkspaceRunNextSafety(workspaceRunNextPlan);
+  renderWorkspaceRunNextArtifactPreview(workspaceRunNextPlan);
   renderWorkspaceRunNextIdleActions(workspaceRunNextPlan);
   if (copyRunNextCommandButton) {
     copyRunNextCommandButton.disabled = !command;
   }
+  if (saveRunNextHandoffButton) {
+    saveRunNextHandoffButton.disabled = workspaceRunNextSaving;
+    saveRunNextHandoffButton.textContent = workspaceRunNextSaving
+      ? "Saving"
+      : workspaceRunNextPlan.sourceRevision
+        ? "Save fresh handoff"
+        : "Save handoff";
+  }
+}
+
+function renderWorkspacePilotLoop() {
+  if (!workspacePilotLoopStatus || !workspacePilotLoopTitle || !workspacePilotLoopSummary || !workspacePilotLoopCommand) {
+    return;
+  }
+
+  const supervisedCommand = "truth-harness workspace pilot-loop . --execute-local --write --max-steps 3";
+  workspacePilotLoopCommand.textContent = supervisedCommand;
+
+  if (workspacePilotLoopError) {
+    workspacePilotLoopStatus.textContent = "unavailable";
+    workspacePilotLoopStatus.className = "status-pill waiting";
+    workspacePilotLoopTitle.textContent = "Local pilot-loop preview unavailable.";
+    workspacePilotLoopSummary.textContent = workspacePilotLoopError;
+    setDefinitionRows(workspacePilotLoopDetails, [
+      ["Boundary", "Preview failed before any autonomous loop could be inspected."],
+      ["Fallback", "Use CLI or MCP pilot-loop after checking the local API."]
+    ]);
+    renderWorkspacePilotLoopSteps();
+    if (copyPilotLoopCommandButton) {
+      copyPilotLoopCommandButton.disabled = false;
+    }
+    return;
+  }
+
+  if (!workspacePilotLoop) {
+    workspacePilotLoopStatus.textContent = "loading";
+    workspacePilotLoopStatus.className = "status-pill waiting";
+    workspacePilotLoopTitle.textContent = "Loading bounded loop preview.";
+    workspacePilotLoopSummary.textContent = "Truth Harness will simulate the next verifier-directed loop without executing anything in the browser.";
+    workspacePilotLoopCommand.textContent = "GET /api/workspace-pilot-loop";
+    setDefinitionRows(workspacePilotLoopDetails, [
+      ["Boundary", "Browser loop preview is dry-run only."],
+      ["Execution", "CLI/MCP gates are required before local work runs."]
+    ]);
+    renderWorkspacePilotLoopSteps();
+    if (copyPilotLoopCommandButton) {
+      copyPilotLoopCommandButton.disabled = true;
+    }
+    return;
+  }
+
+  const firstStep = workspacePilotLoop.steps?.[0];
+  const status = workspacePilotLoop.status ?? "stopped";
+  workspacePilotLoopStatus.textContent = `${workspacePilotLoopStatusLabel(status)} preview`;
+  workspacePilotLoopStatus.className = `status-pill ${workspacePilotLoopTrust(status)}`;
+  workspacePilotLoopTitle.textContent = firstStep?.item?.title ?? "No open verifier-directed item.";
+  workspacePilotLoopSummary.textContent = firstStep?.execution?.summary ?? `Pilot loop stopped at ${workspacePilotLoop.stopReason}.`;
+  setDefinitionRows(workspacePilotLoopDetails, workspacePilotLoopDetailsRows(workspacePilotLoop));
+  renderWorkspacePilotLoopSteps(workspacePilotLoop);
+  if (copyPilotLoopCommandButton) {
+    copyPilotLoopCommandButton.disabled = false;
+  }
+}
+
+function renderWorkspacePilotLoopSteps(loop) {
+  if (!workspacePilotLoopSteps) {
+    return;
+  }
+
+  const steps = Array.isArray(loop?.steps) ? loop.steps : [];
+  if (steps.length === 0) {
+    workspacePilotLoopSteps.innerHTML = `<div class="workspace-run-next-empty">No pilot-loop step selected yet. Start a validation-backed harness or refresh the reviewer queue to create a concrete blocker.</div>`;
+    return;
+  }
+
+  workspacePilotLoopSteps.innerHTML = steps
+    .slice(0, 3)
+    .map((step) => {
+      const command = step.item?.command ?? step.execution?.command ?? "no command selected";
+      const label = step.stopReason ?? step.execution?.kind ?? step.status ?? "planned";
+      return `<article class="workspace-pilot-loop-step">
+        <div class="workspace-run-next-row-head">
+          <span class="status-pill ${workspaceRunNextTrust(step.status)}">${escapeHtml(label)}</span>
+          <strong>${escapeHtml(step.item?.title ?? "No open item")}</strong>
+        </div>
+        <p>${escapeHtml(step.execution?.summary ?? "No execution summary recorded.")}</p>
+        <code>${escapeHtml(command)}</code>
+      </article>`;
+    })
+    .join("");
 }
 
 function renderWorkspaceRunNextIdleActions(plan) {
@@ -7588,11 +7972,29 @@ function fallbackWorkspaceRunNextIdleActions(workspacePath) {
       requiresHumanInput: true
     },
     {
+      actionId: "refresh-strict-docker-professor-rehearsal",
+      title: "Refresh the strict all-engine professor rehearsal",
+      command: "npm run docker:professor:all",
+      reason:
+        "Writes the no-network Maxima/Z3/cvc5/Lean/SageMath reviewer evidence, closure reports, credibility pack, and portable reviewer bundle.",
+      boundary: "Starts the heavier all-engine Docker image through npm; the browser and run-next planner never execute this automatically.",
+      requiresHumanInput: true
+    },
+    {
+      actionId: "refresh-docker-professor-rehearsal",
+      title: "Refresh the Docker professor reviewer rehearsal",
+      command: "npm run docker:professor",
+      reason:
+        "Writes no-network Maxima/Z3/cvc5/Lean evidence, benchmarks, closure reports, the credibility pack, and the portable reviewer bundle.",
+      boundary: "Starts Docker through npm without SageMath; the browser and run-next planner never execute this automatically.",
+      requiresHumanInput: true
+    },
+    {
       actionId: "refresh-professor-review",
       title: "Refresh the professor credibility packet",
       command: `truth-harness workspace credibility-pack ${workspace} --require-all-engines`,
-      reason: "Recompute the reviewer packet from local artifacts so blockers are visible before the next loop.",
-      boundary: "Reads local evidence only; it does not prove new claims or run Docker by itself.",
+      reason: "Recompute the reviewer packet from saved local artifacts so blockers are visible before the next loop.",
+      boundary: "Reads local evidence only; run the Docker professor rehearsal first when reviewer artifacts need refresh.",
       requiresHumanInput: false
     },
     {
@@ -7607,23 +8009,307 @@ function fallbackWorkspaceRunNextIdleActions(workspacePath) {
 }
 
 function setWorkspaceRunNextDetails(rows) {
-  if (!workspaceRunNextDetails) {
+  setArtifactAwareDefinitionRows(workspaceRunNextDetails, rows, "workspace-run-next");
+}
+
+function renderWorkspaceRunNextEnginePlan(plan) {
+  if (!workspaceRunNextEngine) {
     return;
   }
 
-  workspaceRunNextDetails.innerHTML = rows
+  const enginePlan = plan?.enginePlan;
+  if (!enginePlan) {
+    workspaceRunNextEngine.hidden = true;
+    workspaceRunNextEngine.innerHTML = "";
+    return;
+  }
+
+  workspaceRunNextEngine.hidden = false;
+  workspaceRunNextEngine.innerHTML = workspaceRunNextEnginePlanHtml(enginePlan);
+}
+
+function workspaceRunNextEnginePlanHtml(enginePlan) {
+  const firstStep = workspaceRunNextEngineFirstStep(enginePlan);
+  const openGates = workspaceRunNextEngineOpenGates(enginePlan);
+  const classifications = Array.isArray(enginePlan.classifications) && enginePlan.classifications.length > 0
+    ? enginePlan.classifications.join(", ")
+    : "unknown";
+  const openGateSummary = openGates.length > 0
+    ? openGates.map((step) => `${step.capabilityId} (${step.status})`).join(", ")
+    : "No unavailable verifier gates for this route.";
+  const steps = Array.isArray(enginePlan.steps) ? enginePlan.steps.slice(0, 6) : [];
+
+  return `<section class="workspace-run-next-engine-card">
+    <div class="workspace-run-next-engine-head">
+      <div>
+        <span class="mini-label">engine route</span>
+        <strong>${escapeHtml(firstStep?.displayName ?? "No verifier route selected")}</strong>
+      </div>
+      <span class="status-pill ${workspaceRunNextEngineStatusTrust(enginePlan.status)}">${escapeHtml(enginePlan.status ?? "planned")}</span>
+    </div>
+    <p>${escapeHtml(firstStep?.evidenceRequired ?? "No concrete verifier evidence requirement recorded.")}</p>
+    <dl class="workspace-run-next-engine-facts">
+      <div><dt>Problem</dt><dd>${escapeHtml(enginePlan.problem ?? "not recorded")}</dd></div>
+      <div><dt>Classification</dt><dd>${escapeHtml(classifications)}</dd></div>
+      <div><dt>Trust ceiling</dt><dd>${escapeHtml(enginePlan.targetTrustCeiling ?? "none")}</dd></div>
+      <div><dt>Open gates</dt><dd>${escapeHtml(openGateSummary)}</dd></div>
+    </dl>
+    <div class="workspace-run-next-engine-command">
+      <span>first durable command</span>
+      <code>${escapeHtml(enginePlan.recommendedFirstCommand ?? "truth-harness workspace run-next . --json")}</code>
+    </div>
+    ${steps.length > 0 ? `<div class="workspace-run-next-engine-steps">
+      ${steps.map((step) => workspaceRunNextEngineStepHtml(step)).join("")}
+    </div>` : ""}
+    <p class="workspace-run-next-boundary">Engine plans route work only. Trust labels move after concrete receipts, CAS/SMT/proof records, source citations, or validation attachments are written and accepted.</p>
+  </section>`;
+}
+
+function workspaceRunNextEngineStepHtml(step) {
+  return `<article class="workspace-run-next-engine-step ${step.canRunNow ? "ready" : "blocked"}">
+    <div>
+      <span>${escapeHtml(String(step.rank ?? ""))}</span>
+      <strong>${escapeHtml(step.displayName ?? step.capabilityId ?? "engine")}</strong>
+    </div>
+    <small>${escapeHtml([step.role, step.trustIfSuccessful, step.status].filter(Boolean).join(" / "))}</small>
+  </article>`;
+}
+
+function workspaceRunNextEngineFirstStep(enginePlan) {
+  const steps = Array.isArray(enginePlan?.steps) ? enginePlan.steps : [];
+  return (
+    steps.find((step) => step.canRunNow && step.role !== "provenance-check" && step.role !== "planned-upgrade") ??
+    steps.find((step) => step.canRunNow) ??
+    steps.find((step) => step.role !== "planned-upgrade") ??
+    steps[0]
+  );
+}
+
+function workspaceRunNextEngineOpenGates(enginePlan) {
+  return (Array.isArray(enginePlan?.steps) ? enginePlan.steps : []).filter((step) => !step.canRunNow && step.role !== "planned-upgrade");
+}
+
+function workspaceRunNextEngineStatusTrust(status) {
+  if (status === "ready-to-route") {
+    return "passed";
+  }
+  if (status === "insufficient-engines") {
+    return "refuted";
+  }
+  return "waiting";
+}
+
+function renderWorkspaceRunNextArtifactPreview(plan) {
+  if (!workspaceRunNextArtifactPreview) {
+    return;
+  }
+  if (!plan) {
+    workspaceRunNextArtifactPreview.innerHTML = "";
+    return;
+  }
+
+  const artifactRefs = workspaceArtifactRefObjects(plan);
+  const allowedPaths = workspaceArtifactPathsForValue(plan);
+  workspaceRunNextArtifactPreview.innerHTML = `${workspaceRunNextArtifactRefsHtml(artifactRefs, "workspace-run-next", {
+    compact: true,
+    emptyHtml: ""
+  })}${workspaceRunNextRevalidationQueueHtml(plan, "workspace-run-next", {
+    compact: true,
+    limit: 4,
+    emptyHtml: ""
+  })}${workspaceArtifactPreviewHtml("workspace-run-next", {
+    allowedPaths,
+    emptyHtml: ""
+  })}`;
+}
+
+function renderWorkspaceRunNextSafety(value) {
+  if (!workspaceRunNextSafety) {
+    return;
+  }
+  workspaceRunNextSafety.innerHTML = workspaceRunNextSafetyHtml(value, { surface: "workspace-run-next" });
+}
+
+function workspaceRunNextSafetyHtml(value, { surface = "workspace-run-next", compact = false } = {}) {
+  const status = workspaceRunNextCheckpointStatus(value);
+  if (status.empty) {
+    return "";
+  }
+
+  const decision = workspaceRunNextDecisionFromValue(value);
+  const revision = workspaceRunNextRevisionFromValue(value);
+  const snapshot = workspaceRunNextSnapshotFromValue(value);
+  const drift = workspaceRunNextDriftSummary(value, revision, snapshot);
+  const command = decision?.nextCommand ?? value?.plan?.item?.command ?? value?.item?.command ?? value?.execution?.command;
+  const revisionValue = escapeHtml(revision.id ?? revision.path ?? revision.status ?? "not recorded");
+  const snapshotValue = escapeHtml(snapshot.id ?? snapshot.path ?? snapshot.status ?? "not recorded");
+  const checkedAt = revision.verifiedAt ?? snapshot.verifiedAt;
+
+  return `<section class="workspace-run-next-safety ${compact ? "compact" : ""}" aria-label="Run-next resume safety">
+    <div class="workspace-run-next-safety-head">
+      <div>
+        <span class="mini-label">resume safety</span>
+        <strong>${escapeHtml(status.title)}</strong>
+      </div>
+      <span class="status-pill ${workspaceRunNextResumeTrust(decision)}">${escapeHtml(status.label)}</span>
+    </div>
+    <p>${escapeHtml(status.reason)}</p>
+    <dl class="workspace-run-next-safety-grid">
+      <div><dt>Source revision</dt><dd>${revisionValue}</dd></div>
+      <div><dt>Source snapshot</dt><dd>${snapshotValue}</dd></div>
+      <div><dt>Drift check</dt><dd>${escapeHtml(drift)}</dd></div>
+      <div><dt>Checked</dt><dd>${escapeHtml(checkedAt ? formatActivityTime(checkedAt) : "not checked")}</dd></div>
+    </dl>
+    ${command && !compact ? `<code>${escapeHtml(command)}</code>` : ""}
+  </section>`;
+}
+
+function workspaceRunNextCheckpointStatus(value) {
+  const plan = value?.plan ?? value;
+  const decision = workspaceRunNextDecisionFromValue(value);
+  const revision = workspaceRunNextRevisionFromValue(value);
+  const snapshot = workspaceRunNextSnapshotFromValue(value);
+  const hasRevision = Boolean(plan?.sourceRevision || revision.id);
+  const hasSnapshot = Boolean(plan?.sourceSnapshot || snapshot.id);
+
+  if (!hasRevision && !hasSnapshot) {
+    return {
+      empty: false,
+      label: "write first",
+      title: "No resume checkpoint yet",
+      reason: "This preview has not been saved. Save a handoff before giving it to an autonomous agent."
+    };
+  }
+
+  if (!hasRevision && hasSnapshot && !decision?.safeToResume && decision?.status !== "rerun-run-next") {
+    return {
+      label: "legacy checkpoint",
+      title: "Snapshot-only handoff",
+      reason: decision?.reason ?? "This older packet predates revision-backed handoffs; verify its source snapshot or save a fresh handoff."
+    };
+  }
+
+  if (decision?.safeToResume) {
+    return {
+      label: "safe to resume",
+      title: hasRevision ? "Checkpoint verified" : "Legacy checkpoint verified",
+      reason: decision.reason ?? "The saved handoff still matches its source revision and snapshot."
+    };
+  }
+
+  if (decision?.status === "choose-idle-action") {
+    return {
+      label: "choose action",
+      title: "Idle checkpoint verified",
+      reason: decision.reason ?? "This saved handoff is a verified idle action menu; choose one local next action explicitly."
+    };
+  }
+
+  if (decision?.status === "rerun-run-next" || revision.status === "drifted" || snapshot.status === "drifted") {
+    return {
+      label: "rerun needed",
+      title: "Workspace drift detected",
+      reason: decision?.reason ?? revision.summary ?? snapshot.summary ?? "The saved handoff no longer matches the checked workspace state."
+    };
+  }
+
+  return {
+    label: "verify first",
+    title: "Checkpoint recorded",
+    reason: decision?.reason ?? "Open or verify this handoff before resuming agent work."
+  };
+}
+
+function workspaceRunNextDecisionFromValue(value) {
+  return value?.resumeDecision ?? value?.plan?.resumeDecision;
+}
+
+function workspaceRunNextRevisionFromValue(value) {
+  const plan = value?.plan ?? value;
+  const check = value?.sourceRevision ?? value;
+  return {
+    id: plan?.sourceRevision?.revisionId ?? value?.sourceRevisionId,
+    path: plan?.sourceRevision?.path ?? value?.sourceRevisionPath,
+    status: check?.sourceRevisionStatus ?? value?.sourceRevisionStatus,
+    summary: check?.sourceRevisionDriftSummary ?? value?.sourceRevisionDriftSummary,
+    verifiedAt: check?.sourceRevisionVerifiedAt ?? value?.sourceRevisionVerifiedAt,
+    missing: check?.sourceRevisionMissing ?? value?.sourceRevisionMissing,
+    changed: check?.sourceRevisionChanged ?? value?.sourceRevisionChanged,
+    added: check?.sourceRevisionAdded ?? value?.sourceRevisionAdded,
+    ignoredAdded: check?.sourceRevisionIgnoredAdded ?? value?.sourceRevisionIgnoredAdded
+  };
+}
+
+function workspaceRunNextSnapshotFromValue(value) {
+  const plan = value?.plan ?? value;
+  const check = value?.sourceSnapshot ?? value;
+  return {
+    id: plan?.sourceSnapshot?.snapshotId ?? value?.sourceSnapshotId,
+    path: plan?.sourceSnapshot?.path ?? value?.sourceSnapshotPath,
+    status: check?.sourceSnapshotStatus ?? value?.sourceSnapshotStatus,
+    summary: check?.sourceSnapshotDriftSummary ?? value?.sourceSnapshotDriftSummary,
+    verifiedAt: check?.sourceSnapshotVerifiedAt ?? value?.sourceSnapshotVerifiedAt,
+    missing: check?.sourceSnapshotMissing ?? value?.sourceSnapshotMissing,
+    changed: check?.sourceSnapshotChanged ?? value?.sourceSnapshotChanged,
+    added: check?.sourceSnapshotAdded ?? value?.sourceSnapshotAdded,
+    ignoredAdded: check?.sourceSnapshotIgnoredAdded ?? value?.sourceSnapshotIgnoredAdded
+  };
+}
+
+function workspaceRunNextDriftSummary(value, revision, snapshot) {
+  const source = revision.status && revision.status !== "not-recorded" ? revision : snapshot;
+  if (source.summary) {
+    return source.summary;
+  }
+  if (!source.status) {
+    return value?.plan?.sourceRevision || value?.sourceRevisionId ? "recorded, not checked" : "not recorded";
+  }
+  if (source.status === "verified") {
+    const ignored = source.ignoredAdded ? `; ${source.ignoredAdded} expected generated file${source.ignoredAdded === 1 ? "" : "s"} ignored` : "";
+    return `verified${ignored}`;
+  }
+  if (source.status === "not-recorded") {
+    return "not recorded";
+  }
+  const missing = source.missing ?? 0;
+  const changed = source.changed ?? 0;
+  const added = source.added ?? 0;
+  return `${source.status}: ${missing} missing, ${changed} changed, ${added} added`;
+}
+
+function setDefinitionRows(element, rows) {
+  if (!element) {
+    return;
+  }
+
+  element.innerHTML = rows
     .filter((row) => row[1])
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join("");
 }
 
+function setArtifactAwareDefinitionRows(element, rows, surface) {
+  if (!element) {
+    return;
+  }
+
+  element.innerHTML = rows
+    .filter((row) => row[1])
+    .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${artifactAwareValueHtml(value, surface)}</dd></div>`)
+    .join("");
+}
+
 function workspaceRunNextDetailsRows(plan, command) {
   const idleActions = plan?.idleNextActions?.map((action) => action.title).join(" / ");
+  const revalidations = workspaceRunNextRevalidationSummary(plan);
   if (plan?.rationale) {
     return [
       ["Target", plan.rationale.target],
       ["Source", plan.rationale.source],
       ["Evidence", plan.rationale.candidateEvidenceRef],
+      ["Revision", plan.sourceRevision?.path],
+      ["Snapshot", plan.sourceSnapshot?.path],
+      ["Revalidations", revalidations],
       ["Session", plan.item?.sessionId],
       ["Execution", plan.execution?.kind ?? "dry-run"],
       ["Boundary", plan.rationale.executionBoundary],
@@ -7650,12 +8336,30 @@ function workspaceRunNextDetailsRows(plan, command) {
     ["Target", gate],
     ["Source", source || "workspace-review"],
     ["Evidence", evidence],
+    ["Revision", plan?.sourceRevision?.path],
+    ["Snapshot", plan?.sourceSnapshot?.path],
+    ["Revalidations", revalidations],
     ["Session", item?.sessionId],
     ["Execution", execution?.kind ?? "dry-run"],
     ["Boundary", boundary],
     ["Stop", plan?.stopConditions?.[0]],
     ["Warning", plan?.warnings?.[0]],
     ["Idle actions", idleActions]
+  ];
+}
+
+function workspacePilotLoopDetailsRows(loop) {
+  const firstStep = loop?.steps?.[0];
+  const firstCommand = firstStep?.item?.command ?? firstStep?.execution?.command;
+  return [
+    ["Loop", loop?.loopId],
+    ["Source", loop?.source],
+    ["Stop", loop?.stopReason],
+    ["Steps", `${loop?.summary?.plannedSteps ?? 0} planned / ${loop?.summary?.executedSteps ?? 0} executed`],
+    ["Evidence", loop?.summary?.evidenceRefs?.join(", ")],
+    ["First command", firstCommand],
+    ["Boundary", loop?.dryRun ? "Preview only; browser cannot execute." : "Bounded local execution."],
+    ["Warning", loop?.warnings?.[0]]
   ];
 }
 
@@ -7667,6 +8371,23 @@ function renderWorkspaceRunNextHandoffs() {
   if (workspaceRunNextSummariesError) {
     workspaceRunNextHistoryTitle.textContent = "Saved handoffs unavailable.";
     workspaceRunNextList.innerHTML = `<div class="workspace-run-next-empty">${escapeHtml(workspaceRunNextSummariesError)}</div>`;
+    if (workspaceRunNextHistoryArtifactPreview) {
+      workspaceRunNextHistoryArtifactPreview.innerHTML = "";
+    }
+    workspaceRunNextInspection.innerHTML = "";
+    return;
+  }
+
+  if (workspaceRunNextSummariesLoading && workspaceRunNextSummaries.length === 0) {
+    workspaceRunNextHistoryTitle.textContent = "Loading saved handoffs...";
+    workspaceRunNextList.innerHTML = `<div class="workspace-run-next-empty">${
+      workspaceRunNextSummariesVerified
+        ? "Checking local run-next packets, source revisions, and source snapshots."
+        : "Loading local run-next packets without expensive snapshot verification."
+    }</div>`;
+    if (workspaceRunNextHistoryArtifactPreview) {
+      workspaceRunNextHistoryArtifactPreview.innerHTML = "";
+    }
     workspaceRunNextInspection.innerHTML = "";
     return;
   }
@@ -7678,6 +8399,9 @@ function renderWorkspaceRunNextHandoffs() {
 
   if (count === 0) {
     workspaceRunNextList.innerHTML = `<div class="workspace-run-next-empty">Use Start harness, Save plan in the Report tab, or CLI/MCP write mode to create resumable local intent packets.</div>`;
+    if (workspaceRunNextHistoryArtifactPreview) {
+      workspaceRunNextHistoryArtifactPreview.innerHTML = "";
+    }
     workspaceRunNextInspection.innerHTML = "";
     return;
   }
@@ -7685,6 +8409,12 @@ function renderWorkspaceRunNextHandoffs() {
   workspaceRunNextList.innerHTML = workspaceRunNextSummaries
     .map((summary) => renderWorkspaceRunNextSummary(summary))
     .join("");
+  if (workspaceRunNextHistoryArtifactPreview) {
+    workspaceRunNextHistoryArtifactPreview.innerHTML = workspaceArtifactPreviewHtml("workspace-run-next-history", {
+      allowedPaths: workspaceArtifactPathsForValue(workspaceRunNextSummaries),
+      emptyHtml: ""
+    });
+  }
 
   workspaceRunNextInspection.innerHTML = workspaceRunNextOpenedError
     ? `<div class="workspace-run-next-empty refuted">${escapeHtml(workspaceRunNextOpenedError)}</div>`
@@ -7694,8 +8424,25 @@ function renderWorkspaceRunNextHandoffs() {
 function renderWorkspaceRunNextSummary(summary) {
   const command = summary.resumeDecision?.nextCommand ?? `truth-harness workspace show-run-next ${summary.planId} --json`;
   const status = summary.resumeDecision?.status ?? "verify-snapshot-first";
+  const revision = summary.sourceRevisionStatus ?? (summary.sourceRevisionId ? "not checked" : "not recorded");
   const snapshot = summary.sourceSnapshotStatus ?? (summary.sourceSnapshotId ? "not checked" : "not recorded");
   const itemTitle = summary.itemTitle ?? "No open work item.";
+  const packetPathHtml = workspaceArtifactRefIsPreviewable(summary.path)
+    ? artifactRefControlHtml(summary.path, {
+        surface: "workspace-run-next-history",
+        label: "Open"
+      })
+    : escapeHtml(summary.path ?? "not recorded");
+  const artifactRefsHtml = workspaceRunNextArtifactRefsHtml(workspaceArtifactRefObjects(summary), "workspace-run-next-history", {
+    compact: true,
+    limit: 4,
+    emptyHtml: ""
+  });
+  const revalidationHtml = workspaceRunNextRevalidationQueueHtml(summary, "workspace-run-next-history", {
+    compact: true,
+    limit: 2,
+    emptyHtml: ""
+  });
   return `<article class="workspace-run-next-row" data-plan-id="${escapeHtml(summary.planId)}">
     <div class="workspace-run-next-row-main">
       <div class="workspace-run-next-row-head">
@@ -7707,12 +8454,18 @@ function renderWorkspaceRunNextSummary(summary) {
       <dl class="workspace-run-next-mini-details">
         <div><dt>Plan</dt><dd>${escapeHtml(summary.planId)}</dd></div>
         <div><dt>Saved</dt><dd>${escapeHtml(formatActivityTime(summary.createdAt))}</dd></div>
+        <div><dt>Revision</dt><dd>${escapeHtml(revision)}</dd></div>
         <div><dt>Snapshot</dt><dd>${escapeHtml(snapshot)}</dd></div>
         <div><dt>Source</dt><dd>${escapeHtml(summary.rationaleSource ?? summary.itemKind ?? "workspace-review")}</dd></div>
+        <div><dt>Packet</dt><dd>${packetPathHtml}</dd></div>
       </dl>
+      ${workspaceRunNextSafetyHtml(summary, { surface: "workspace-run-next-history", compact: true })}
+      ${artifactRefsHtml}
+      ${revalidationHtml}
     </div>
     <div class="workspace-run-next-row-actions">
       <button class="text-button compact-button open-run-next-handoff" data-plan-id="${escapeHtml(summary.planId)}" type="button">Open</button>
+      <button class="text-button compact-button verify-run-next-handoff" data-plan-id="${escapeHtml(summary.planId)}" type="button">Verify</button>
       <button class="text-button compact-button copy-run-next-handoff-command" data-command="${escapeHtml(command)}" type="button">Copy</button>
     </div>
   </article>`;
@@ -7726,10 +8479,23 @@ function renderWorkspaceRunNextInspection(inspection) {
   const decision = inspection.resumeDecision;
   const plan = inspection.plan;
   const command = decision?.nextCommand ?? plan.item?.command ?? plan.execution?.command ?? `truth-harness workspace show-run-next ${plan.planId} --json`;
+  const sourceRevision = inspection.sourceRevision;
+  const revisionSummary = sourceRevision
+    ? sourceRevision.sourceRevisionDriftSummary ?? sourceRevision.sourceRevisionStatus
+    : "revision not verified in this view";
   const sourceSnapshot = inspection.sourceSnapshot;
   const snapshotSummary = sourceSnapshot
     ? sourceSnapshot.sourceSnapshotDriftSummary ?? sourceSnapshot.sourceSnapshotStatus
     : "snapshot not verified in this view";
+  const packetPath = inspection.path ?? plan.sourceSnapshot?.path ?? "not recorded";
+  const sourceRevisionPath = plan.sourceRevision?.path;
+  const sourceSnapshotPath = plan.sourceSnapshot?.path;
+  const artifactRefs = workspaceArtifactRefObjects(inspection);
+  const allowedPaths = workspaceArtifactPathsForValue(inspection);
+  const revalidationHtml = workspaceRunNextRevalidationQueueHtml(inspection, "workspace-run-next-inspection", {
+    limit: 6,
+    emptyHtml: ""
+  });
   return `<div class="workspace-run-next-opened">
     <div class="workspace-run-next-opened-head">
       <div>
@@ -7740,13 +8506,31 @@ function renderWorkspaceRunNextInspection(inspection) {
     </div>
     <p>${escapeHtml(decision?.reason ?? "Inspect the saved plan before resuming work.")}</p>
     <code>${escapeHtml(command)}</code>
+    ${workspaceRunNextSafetyHtml(inspection, { surface: "workspace-run-next-inspection" })}
     <dl class="workspace-run-next-details compact">
       <div><dt>Plan</dt><dd>${escapeHtml(plan.planId)}</dd></div>
-      <div><dt>Path</dt><dd>${escapeHtml(inspection.path ?? plan.sourceSnapshot?.path ?? "not recorded")}</dd></div>
+      <div><dt>Packet</dt><dd>${artifactAwareValueHtml(packetPath, "workspace-run-next-inspection")}</dd></div>
+      ${sourceRevisionPath ? `<div><dt>Revision file</dt><dd>${artifactAwareValueHtml(sourceRevisionPath, "workspace-run-next-inspection")}</dd></div>` : ""}
+      ${sourceSnapshotPath ? `<div><dt>Snapshot file</dt><dd>${artifactAwareValueHtml(sourceSnapshotPath, "workspace-run-next-inspection")}</dd></div>` : ""}
+      <div><dt>Revision</dt><dd>${escapeHtml(revisionSummary)}</dd></div>
       <div><dt>Snapshot</dt><dd>${escapeHtml(snapshotSummary)}</dd></div>
       <div><dt>Boundary</dt><dd>${escapeHtml(plan.rationale?.executionBoundary ?? "Browser inspection only.")}</dd></div>
     </dl>
+    ${workspaceRunNextArtifactRefsHtml(artifactRefs, "workspace-run-next-inspection", {
+      limit: 8,
+      emptyHtml: ""
+    })}
+    ${revalidationHtml}
+    ${workspaceArtifactPreviewHtml("workspace-run-next-inspection", {
+      allowedPaths,
+      emptyHtml: ""
+    })}
     <div class="workspace-run-next-actions">
+      ${
+        decision?.status === "verify-snapshot-first"
+          ? `<button class="text-button compact-button verify-run-next-handoff" data-plan-id="${escapeHtml(plan.planId)}" type="button">Verify source checkpoint</button>`
+          : ""
+      }
       <button class="text-button compact-button copy-run-next-handoff-command" data-command="${escapeHtml(command)}" type="button">Copy resume command</button>
     </div>
   </div>`;
@@ -7755,6 +8539,9 @@ function renderWorkspaceRunNextInspection(inspection) {
 function workspaceRunNextResumeLabel(status) {
   if (status === "safe-to-resume") {
     return "safe to resume";
+  }
+  if (status === "choose-idle-action") {
+    return "choose action";
   }
   if (status === "rerun-run-next") {
     return "rerun needed";
@@ -7768,6 +8555,9 @@ function workspaceRunNextResumeLabel(status) {
 function workspaceRunNextResumeTrust(decision) {
   if (decision?.safeToResume) {
     return "exact";
+  }
+  if (decision?.action === "choose-idle-action") {
+    return "waiting";
   }
   if (decision?.action === "rerun-workspace-run-next") {
     return "refuted";
@@ -7806,12 +8596,40 @@ function workspaceRunNextTrust(status) {
   return "waiting";
 }
 
+function workspacePilotLoopStatusLabel(status) {
+  if (status === "blocked") {
+    return "blocked";
+  }
+  if (status === "completed") {
+    return "complete";
+  }
+  return "stopped";
+}
+
+function workspacePilotLoopTrust(status) {
+  if (status === "blocked") {
+    return "refuted";
+  }
+  if (status === "completed") {
+    return "passed";
+  }
+  return "waiting";
+}
+
 function workspaceRunNextActivitySummary(plan) {
   if (!plan?.item) {
     return "No open local work item is available.";
   }
 
   return `Next dry-run item: ${plan.item.title}.`;
+}
+
+function workspacePilotLoopActivitySummary(loop) {
+  if (!loop) {
+    return "Pilot-loop preview did not return a loop record.";
+  }
+
+  return `Pilot-loop preview stopped at ${loop.stopReason} after ${loop.summary?.plannedSteps ?? 0} planned step${loop.summary?.plannedSteps === 1 ? "" : "s"}.`;
 }
 
 function createRunbookPacket(receipt) {
@@ -9329,6 +10147,10 @@ async function refreshReleaseAudit({ announce = true } = {}) {
 
   state.releaseAuditLoading = true;
   state.releaseAuditError = undefined;
+  state.releaseAuditArtifactPreviewPath = undefined;
+  state.releaseAuditArtifactPreview = undefined;
+  state.releaseAuditArtifactPreviewLoading = false;
+  state.releaseAuditArtifactPreviewError = undefined;
   renderReleaseAuditGate();
 
   try {
@@ -9366,6 +10188,114 @@ async function refreshReleaseAudit({ announce = true } = {}) {
     }
   } finally {
     state.releaseAuditLoading = false;
+    renderReleaseAuditGate();
+  }
+}
+
+async function openWorkspaceArtifactPreview(path, { surface = "workspace" } = {}) {
+  const artifactPath = normalizedWorkspaceArtifactRef(path);
+  if (!artifactPath || !workspaceArtifactRefIsPreviewable(artifactPath)) {
+    return;
+  }
+
+  state.workspaceArtifactPreviewSurface = surface;
+  state.workspaceArtifactPreviewPath = artifactPath;
+  state.workspaceArtifactPreview = undefined;
+  state.workspaceArtifactPreviewError = undefined;
+  state.workspaceArtifactPreviewLoading = true;
+  renderWorkspaceArtifactPreviewSurface(surface);
+
+  try {
+    const params = new URLSearchParams({ path: artifactPath });
+    const response = await fetch(`/api/workspace-artifact?${params.toString()}`, {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local workspace artifact preview failed.");
+    state.workspaceArtifactPreview = payload.artifact;
+    state.workspaceArtifactPreviewError = undefined;
+    addActivity(
+      "local-api",
+      "Opened workspace artifact",
+      localApiSuccessMessage(payload, `${payload.artifact?.path ?? artifactPath} previewed read-only from .truth-harness.`),
+      "passed"
+    );
+  } catch (error) {
+    state.workspaceArtifactPreview = undefined;
+    state.workspaceArtifactPreviewError = error instanceof Error ? error.message : "Unknown workspace artifact preview failure.";
+    addActivity("local-api", "Workspace artifact unavailable", state.workspaceArtifactPreviewError, "waiting");
+  } finally {
+    state.workspaceArtifactPreviewLoading = false;
+    renderWorkspaceArtifactPreviewSurface(surface);
+  }
+}
+
+function renderWorkspaceArtifactPreviewSurface(surface) {
+  const receipt = receiptStore.get(state.receiptKey);
+  if (surface === "route-ledger" && receipt) {
+    renderRouteLedger(receipt);
+    return;
+  }
+  if (surface === "claim-evidence" && receipt) {
+    renderMainGraph(receipt);
+    return;
+  }
+  if (surface === "workspace-run-next") {
+    renderWorkspaceRunNext();
+    return;
+  }
+  if (surface === "workspace-run-next-history" || surface === "workspace-run-next-inspection") {
+    renderWorkspaceRunNextHandoffs();
+    return;
+  }
+  if (surface === "report-drafts") {
+    renderReportDraftHistory(receipt);
+    return;
+  }
+  if (surface === "saved-report-draft" && state.openedReportDraft) {
+    renderSavedReportDraftPreview(state.openedReportDraft);
+    return;
+  }
+  render();
+}
+
+async function openReleaseAuditArtifactPreview(path) {
+  const artifactPath = typeof path === "string" ? path.trim() : "";
+  if (!artifactPath) {
+    return;
+  }
+
+  state.releaseAuditArtifactPreviewPath = artifactPath;
+  state.releaseAuditArtifactPreview = undefined;
+  state.releaseAuditArtifactPreviewError = undefined;
+  state.releaseAuditArtifactPreviewLoading = true;
+  renderReleaseAuditGate();
+
+  try {
+    const params = new URLSearchParams({ path: artifactPath });
+    const response = await fetch(`/api/workspace-artifact?${params.toString()}`, {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local workspace artifact preview failed.");
+    state.releaseAuditArtifactPreview = payload.artifact;
+    state.releaseAuditArtifactPreviewError = undefined;
+    addActivity(
+      "local-api",
+      "Opened evidence artifact",
+      localApiSuccessMessage(payload, `${payload.artifact?.path ?? artifactPath} previewed read-only from .truth-harness.`),
+      "passed"
+    );
+  } catch (error) {
+    state.releaseAuditArtifactPreview = undefined;
+    state.releaseAuditArtifactPreviewError = error instanceof Error ? error.message : "Unknown workspace artifact preview failure.";
+    addActivity("local-api", "Evidence artifact unavailable", state.releaseAuditArtifactPreviewError, "waiting");
+  } finally {
+    state.releaseAuditArtifactPreviewLoading = false;
     renderReleaseAuditGate();
   }
 }
@@ -9676,7 +10606,9 @@ async function refreshCatalogSearch({ force = false, announce = false } = {}) {
   }
 
   const query = state.sidebarQuery.trim();
-  if (!force && query.length < 2) {
+  const refFilter = normalizedWorkspaceArtifactRef(state.catalogRefFilter);
+  const hasRefFilter = Boolean(refFilter);
+  if (!force && !hasRefFilter && query.length < 2) {
     state.catalogSearch = undefined;
     state.catalogError = undefined;
     renderCatalogSearchPanel();
@@ -9694,10 +10626,12 @@ async function refreshCatalogSearch({ force = false, announce = false } = {}) {
 
   try {
     const params = new URLSearchParams();
-    if (query) {
+    if (hasRefFilter) {
+      params.set("ref", refFilter);
+    } else if (query) {
       params.set("query", query);
     }
-    params.set("limit", "8");
+    params.set("limit", hasRefFilter ? "20" : "8");
     const response = await fetch(`/api/catalog/search?${params.toString()}`, {
       headers: {
         Accept: "application/json"
@@ -9711,7 +10645,12 @@ async function refreshCatalogSearch({ force = false, announce = false } = {}) {
       addActivity(
         "local-api",
         "Searched catalog",
-        localApiSuccessMessage(payload, `${payload.search?.total ?? 0} catalog rows matched ${query || "all indexed artifacts"}.`),
+        localApiSuccessMessage(
+          payload,
+          hasRefFilter
+            ? `${payload.search?.total ?? 0} catalog rows cite ${refFilter}.`
+            : `${payload.search?.total ?? 0} catalog rows matched ${query || "all indexed artifacts"}.`
+        ),
         "passed"
       );
     }
@@ -9731,37 +10670,43 @@ function renderCatalogSearchPanel() {
   }
 
   const query = state.sidebarQuery.trim();
+  const refFilter = normalizedWorkspaceArtifactRef(state.catalogRefFilter);
+  const hasRefFilter = Boolean(refFilter);
   const searchFocused = document.activeElement === sidebarSearch;
-  const quietStatus = query.length === 0 && !searchFocused && !state.catalogSearchLoading && !state.catalogError;
+  const quietStatus = !hasRefFilter && query.length === 0 && !searchFocused && !state.catalogSearchLoading && !state.catalogError;
   const catalog = state.catalogStatus;
   const results = state.catalogSearch?.results ?? [];
   catalogRebuildButton.disabled = state.catalogRebuildLoading;
   catalogRebuildButton.textContent = state.catalogRebuildLoading ? "Rebuilding" : "Rebuild";
   catalogSearchStatus.textContent = state.catalogSearchLoading
-    ? "catalog searching"
+    ? hasRefFilter ? "catalog citations" : "catalog searching"
     : state.catalogError
       ? "catalog needs attention"
-      : catalogStatusSummary(catalog);
+      : hasRefFilter ? "cited-by lookup" : catalogStatusSummary(catalog);
   catalogResultList.hidden = false;
 
   if (quietStatus) {
     catalogResultList.hidden = true;
     catalogResultList.innerHTML = "";
+    clearCatalogArtifactPreview();
     return;
   }
 
   if (state.catalogError) {
     catalogResultList.innerHTML = `<div class="sidebar-empty">${escapeHtml(state.catalogError)}</div>`;
+    clearCatalogArtifactPreview();
     return;
   }
 
   if (!catalog) {
     catalogResultList.innerHTML = `<div class="sidebar-empty">Checking local catalog status.</div>`;
+    clearCatalogArtifactPreview();
     return;
   }
 
   if (!catalog.readable) {
     catalogResultList.innerHTML = `<div class="sidebar-empty">Rebuild the local catalog to search receipts, routes, claims, visuals, and reviews.</div>`;
+    clearCatalogArtifactPreview();
     return;
   }
 
@@ -9771,27 +10716,65 @@ function renderCatalogSearchPanel() {
       ? `${freshness.changedArtifacts ?? 0} changed, ${freshness.newArtifacts ?? 0} new, ${freshness.missingArtifacts ?? 0} missing.`
       : "Freshness was not checked.";
     catalogResultList.innerHTML = `<div class="sidebar-empty">Catalog is stale. Rebuild before relying on search completeness. ${escapeHtml(detail)}</div>`;
+    clearCatalogArtifactPreview();
     return;
   }
 
-  if (query.length < 2) {
+  if (!hasRefFilter && query.length < 2) {
     catalogResultList.innerHTML = `<div class="sidebar-empty">Type 2+ characters to search ${catalog.artifactCount ?? 0} indexed artifacts.</div>`;
+    clearCatalogArtifactPreview();
     return;
   }
 
   if (state.catalogSearchLoading) {
-    catalogResultList.innerHTML = `<div class="sidebar-empty">Searching local catalog.</div>`;
+    catalogResultList.innerHTML = hasRefFilter
+      ? `${catalogRefFilterHtml(refFilter)}<div class="sidebar-empty">Finding local artifacts that cite this ref.</div>`
+      : `<div class="sidebar-empty">Searching local catalog.</div>`;
+    clearCatalogArtifactPreview();
     return;
   }
 
-  catalogResultList.innerHTML = results.length === 0
-    ? `<div class="sidebar-empty">No catalog rows match this search.</div>`
-    : results.map(catalogResultHtml).join("");
+  const refFilterHtml = hasRefFilter ? catalogRefFilterHtml(refFilter) : "";
+  const emptyHtml = hasRefFilter
+    ? `<div class="sidebar-empty">No indexed artifacts cite this ref yet.</div>`
+    : `<div class="sidebar-empty">No catalog rows match this search.</div>`;
+  catalogResultList.innerHTML = `${refFilterHtml}${results.length === 0
+    ? emptyHtml
+    : results.map(catalogResultHtml).join("")}`;
+  renderCatalogArtifactPreview();
+}
+
+function catalogRefFilterHtml(refFilter) {
+  return `<div class="catalog-ref-filter">
+    <div>
+      <span class="mini-label">cited by</span>
+      <code>${escapeHtml(refFilter)}</code>
+    </div>
+    <button class="text-button compact-button clear-catalog-ref-filter" type="button">Clear</button>
+  </div>`;
+}
+
+function clearCatalogArtifactPreview() {
+  if (!catalogArtifactPreview) {
+    return;
+  }
+  catalogArtifactPreview.hidden = true;
+  catalogArtifactPreview.innerHTML = "";
+}
+
+function renderCatalogArtifactPreview() {
+  if (!catalogArtifactPreview) {
+    return;
+  }
+  const html = workspaceArtifactPreviewHtml("catalog-search", { emptyHtml: "" });
+  catalogArtifactPreview.hidden = html.trim().length === 0;
+  catalogArtifactPreview.innerHTML = html;
 }
 
 function catalogResultHtml(row) {
   const title = row.title || row.summary || row.artifactId || row.path;
   const subtitle = [row.path, row.summary].filter(Boolean).join(" - ");
+  const artifactRefsHtml = catalogArtifactRefsSummaryHtml(row);
   return `<button class="catalog-result-row" data-catalog-kind="${escapeHtml(row.kind)}" data-catalog-artifact-id="${escapeHtml(row.artifactId ?? "")}" data-catalog-path="${escapeHtml(row.path)}" type="button">
     <strong>${escapeHtml(title)}</strong>
     <small>${escapeHtml(subtitle || row.kind)}</small>
@@ -9800,7 +10783,27 @@ function catalogResultHtml(row) {
       ${row.trust ? `<span>${escapeHtml(row.trust)}</span>` : ""}
       ${row.domain ? `<span>${escapeHtml(row.domain)}</span>` : ""}
     </span>
+    ${artifactRefsHtml}
   </button>`;
+}
+
+function catalogArtifactRefsSummaryHtml(row) {
+  const refs = Array.isArray(row.artifactRefs) ? row.artifactRefs : [];
+  if (refs.length === 0) {
+    return "";
+  }
+
+  const visibleRefs = refs.slice(0, 2);
+  const summary = visibleRefs
+    .map((ref) => {
+      const hash = ref.sha256 ? ` sha ${shortHash(ref.sha256)}` : "";
+      return `${ref.role}: ${ref.path}${hash}`;
+    })
+    .join(" | ");
+  const hidden = refs.length > visibleRefs.length ? ` | +${refs.length - visibleRefs.length} more` : "";
+  return `<span class="catalog-result-refs" title="${escapeHtml(refs.map((ref) => ref.citation || ref.path).join("\n"))}">
+    ${escapeHtml(`${refs.length} local artifact ${refs.length === 1 ? "ref" : "refs"} - ${summary}${hidden}`)}
+  </span>`;
 }
 
 function catalogStatusSummary(catalog) {
@@ -9935,6 +10938,7 @@ function openCatalogResult(button) {
   const kind = button.dataset.catalogKind;
   const artifactId = button.dataset.catalogArtifactId;
   const path = button.dataset.catalogPath;
+  const previewPath = normalizedWorkspaceArtifactRef(path);
 
   if (kind === "routes" && artifactId) {
     void openSavedRoute(artifactId);
@@ -9955,7 +10959,39 @@ function openCatalogResult(button) {
     }
   }
 
+  if (workspaceArtifactRefIsPreviewable(previewPath)) {
+    void openWorkspaceArtifactPreview(previewPath, { surface: "catalog-search" });
+    return;
+  }
+
   addActivity("human", "Opened catalog row", `${artifactId || path || kind} is indexed locally; open the matching artifact from its ledger or CLI path.`, "waiting");
+}
+
+async function searchCatalogCitations(ref) {
+  const refFilter = normalizedWorkspaceArtifactRef(ref);
+  if (!refFilter) {
+    addActivity("human", "Cited-by lookup skipped", "No local artifact reference was available for this row.", "waiting");
+    return;
+  }
+
+  state.catalogRefFilter = refFilter;
+  state.catalogSearch = undefined;
+  state.catalogError = undefined;
+  if (sidebarSearch) {
+    sidebarSearch.value = "";
+  }
+  state.sidebarQuery = "";
+  renderClaimList();
+  applySidebarSearch();
+  await refreshCatalogSearch({ force: true, announce: true });
+}
+
+function clearCatalogCitationSearch() {
+  state.catalogRefFilter = undefined;
+  state.catalogSearch = undefined;
+  state.catalogError = undefined;
+  renderCatalogSearchPanel();
+  scheduleCatalogSearch();
 }
 
 function renderSafetyStatus() {
@@ -10150,6 +11186,7 @@ function renderReleaseAuditGate() {
   const statusClass = releaseAuditStatusClass(status);
   const command = audit?.commands?.releaseAudit ?? "truth-harness workspace release-audit . --require-all-engines";
   const summary = audit?.summary ?? {};
+  const reviewerBoard = releaseAuditReviewerBoardHtml(audit);
   const failedChecks = Array.isArray(audit?.checks)
     ? audit.checks.filter((check) => check.status === "fail")
     : [];
@@ -10169,8 +11206,11 @@ function renderReleaseAuditGate() {
     ? [
         ["Checks", `${summary.passedChecks ?? 0} pass / ${summary.warningChecks ?? 0} warn / ${summary.failedChecks ?? 0} fail`],
         ["Engines", releaseAuditEngineEvidenceSummary(audit)],
+        ["Reviewer bundle", releaseAuditReviewerBundleSummary(audit)],
         ["Adversarial benchmark", releaseAuditBenchmarkSummary(summary)],
         ["Math ladder", releaseAuditMathLadderSummary(summary)],
+        ["Hard math", summary.hardMathClosure ?? "missing"],
+        ["Lean proof safety", `${summary.leanProofSafetyItems ?? 0} blocker${summary.leanProofSafetyItems === 1 ? "" : "s"}`],
         ["Report drafts", `${summary.reportDrafts ?? 0} saved / ${summary.reportDraftsNeedingAttention ?? 0} attention`],
         ["Research sessions", `${summary.researchSessions ?? 0} sessions / ${summary.sessionContinuationItems ?? 0} open`],
         ["Review queue", `${summary.reviewItems ?? 0} open / ${summary.criticalReviewItems ?? 0} critical`],
@@ -10217,8 +11257,15 @@ function renderReleaseAuditGate() {
       <span>Replayable audit</span>
       <code>${escapeHtml(command)}</code>
     </div>
-    ${benchmarkCards}
-    ${checkCards ? `<div class="release-audit-check-grid">${checkCards}</div>` : `<p>No blocking or warning checks returned for this audit scope.</p>`}
+    ${reviewerBoard}
+    <div class="release-audit-benchmark-row">${benchmarkCards}</div>
+    <details class="release-audit-details release-audit-ledger" open>
+      <summary>
+        <strong>Blocking Ledger</strong>
+        <span>${visibleChecks.length} blocking or warning check${visibleChecks.length === 1 ? "" : "s"}</span>
+      </summary>
+      ${checkCards ? `<div class="release-audit-check-grid">${checkCards}</div>` : `<p>No blocking or warning checks returned for this audit scope.</p>`}
+    </details>
     ${actionCards ? `<details class="release-audit-details">
       <summary>
         <strong>Next Blocking Actions</strong>
@@ -10282,6 +11329,803 @@ function renderReleaseAuditGate() {
       });
     });
   });
+  releaseAuditGate.querySelectorAll(".select-release-audit-check").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const target = event.currentTarget;
+      if (state.selectedReleaseAuditCheckId !== target.dataset.checkId) {
+        state.releaseAuditArtifactPreviewPath = undefined;
+        state.releaseAuditArtifactPreview = undefined;
+        state.releaseAuditArtifactPreviewError = undefined;
+      }
+      state.selectedReleaseAuditCheckId = target.dataset.checkId;
+      renderReleaseAuditGate();
+    });
+  });
+  releaseAuditGate.querySelectorAll(".copy-release-gate-command").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const target = event.currentTarget;
+      const commandText = target.dataset.command ?? "";
+      void copyOrDownloadText({
+        button: target,
+        text: `${commandText}\n`,
+        filename: `truth-harness-release-gate-command-${safeFilenameTimestamp()}.txt`,
+        type: "text/plain",
+        copiedTitle: "Copied gate command",
+        copiedDetail: "Release gate command copied from the Checks tab inspector.",
+        fallbackTitle: "Downloaded gate command",
+        fallbackDetail: "the release gate command was saved as a local text file instead."
+      });
+    });
+  });
+  releaseAuditGate.querySelectorAll(".copy-release-gate-evidence").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const target = event.currentTarget;
+      const evidenceText = target.dataset.evidence ?? "";
+      void copyOrDownloadText({
+        button: target,
+        text: `${evidenceText}\n`,
+        filename: `truth-harness-release-gate-evidence-${safeFilenameTimestamp()}.txt`,
+        type: "text/plain",
+        copiedTitle: "Copied gate evidence",
+        copiedDetail: "Release gate evidence refs copied from the Checks tab inspector.",
+        fallbackTitle: "Downloaded gate evidence",
+        fallbackDetail: "the release gate evidence refs were saved as a local text file instead."
+      });
+    });
+  });
+  releaseAuditGate.querySelectorAll(".open-release-artifact-preview").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const target = event.currentTarget;
+      void openReleaseAuditArtifactPreview(target.dataset.path);
+    });
+  });
+}
+
+const RELEASE_AUDIT_REVIEWER_GROUPS = [
+  {
+    title: "Workspace Spine",
+    note: "Local project, schema validation, and catalog state.",
+    ids: ["workspace", "workspace-validation", "catalog"]
+  },
+  {
+    title: "Verifier Evidence",
+    note: "Strict engines, Docker reviewer run, and portable bundle verification.",
+    ids: ["engine-evidence", "saved-strict-engine-run", "reviewer-bundle-verification"]
+  },
+  {
+    title: "Math Credibility",
+    note: "AI-failure benchmark, hard-math ladder, Lean proof-safety, and closure fixtures.",
+    ids: ["adversarial-ai-benchmark", "math-credibility-ladder", "lean-proof-safety", "hard-math-closure"]
+  },
+  {
+    title: "Review Handoff",
+    note: "Reports, sessions, human review queue, sandbox, and UI review.",
+    ids: ["report-drafts", "research-session-continuity", "review-queue", "code-run-sandbox", "web-ui-smoke"]
+  }
+];
+
+function releaseAuditReviewerBoardHtml(audit) {
+  if (!audit) {
+    return `<section class="release-audit-board empty" data-testid="release-audit-board">
+      <div class="release-audit-scoreboard">
+        <article class="release-audit-score-card waiting">
+          <span class="mini-label">reviewer readiness</span>
+          <strong>Not loaded</strong>
+          <p>Refresh the release gate to inspect local evidence.</p>
+        </article>
+      </div>
+    </section>`;
+  }
+
+  const summary = audit.summary ?? {};
+  const selectedCheck = releaseAuditSelectedCheck(audit);
+  const scoreCards = [
+    {
+      label: "Professor review",
+      value: audit.professorReady ? "ready" : "blocked",
+      status: audit.professorReady ? "pass" : "fail",
+      detail: `${summary.blockingFailures ?? 0} blocking failure${summary.blockingFailures === 1 ? "" : "s"}`
+    },
+    {
+      label: "Public launch",
+      value: audit.publicLaunchReady ? "ready" : "not yet",
+      status: audit.publicLaunchReady ? "pass" : "warn",
+      detail: `${summary.warningChecks ?? 0} warning${summary.warningChecks === 1 ? "" : "s"}`
+    },
+    {
+      label: "Reviewer bundle",
+      value: releaseAuditReviewerBundleSummary(audit),
+      status: releaseAuditCheckById(audit, "reviewer-bundle-verification")?.status ?? "warn",
+      detail: audit.reviewerBundleVerification
+        ? `${audit.reviewerBundleVerification.checkedBundleFiles} bundle files / ${audit.reviewerBundleVerification.checkedSourceFiles} source files`
+        : "portable bundle not verified"
+    },
+    {
+      label: "Hard math closure",
+      value: summary.hardMathClosure ?? "missing",
+      status: releaseAuditCheckById(audit, "hard-math-closure")?.status ?? "warn",
+      detail: "exact, symbolic, and SMT fixtures"
+    },
+    {
+      label: "Lean proof safety",
+      value: `${summary.leanProofSafetyItems ?? 0} blocker${summary.leanProofSafetyItems === 1 ? "" : "s"}`,
+      status: releaseAuditCheckById(audit, "lean-proof-safety")?.status ?? "warn",
+      detail: "sorry, admit, local axiom, and local constant scan"
+    }
+  ];
+
+  return `<section class="release-audit-board" data-testid="release-audit-board">
+    <div class="release-audit-scoreboard">
+      ${scoreCards.map((card) => releaseAuditScoreCardHtml(card)).join("")}
+    </div>
+    <div class="release-audit-group-grid">
+      ${RELEASE_AUDIT_REVIEWER_GROUPS.map((group) => releaseAuditReviewerGroupHtml(audit, group, selectedCheck?.id)).join("")}
+    </div>
+    ${releaseAuditGateInspectorHtml(audit, selectedCheck)}
+  </section>`;
+}
+
+function releaseAuditScoreCardHtml(card) {
+  const statusClass = card.status === "fail" ? "refuted" : card.status === "warn" ? "waiting" : "exact";
+  return `<article class="release-audit-score-card ${escapeHtml(card.status)}">
+    <span class="mini-label">${escapeHtml(card.label)}</span>
+    <strong>${escapeHtml(card.value)}</strong>
+    <p>${escapeHtml(card.detail)}</p>
+    <span class="status-pill ${statusClass}">${escapeHtml(releaseAuditGateStatusLabel(card.status))}</span>
+  </article>`;
+}
+
+function releaseAuditReviewerGroupHtml(audit, group, selectedCheckId) {
+  const checks = group.ids.map((id) => releaseAuditCheckById(audit, id));
+  const presentChecks = checks.filter(Boolean);
+  const groupStatus = releaseAuditWorstStatus(presentChecks);
+  const passed = presentChecks.filter((check) => check.status === "pass").length;
+  const statusClass = groupStatus === "fail" ? "refuted" : groupStatus === "warn" ? "waiting" : "exact";
+
+  return `<section class="release-audit-group ${escapeHtml(groupStatus)}">
+    <div class="release-audit-group-head">
+      <div>
+        <strong>${escapeHtml(group.title)}</strong>
+        <p>${escapeHtml(group.note)}</p>
+      </div>
+      <span class="status-pill ${statusClass}">${passed}/${group.ids.length}</span>
+    </div>
+    <div class="release-audit-group-list">
+      ${group.ids.map((id) => releaseAuditGateRowHtml(releaseAuditCheckById(audit, id), id, selectedCheckId)).join("")}
+    </div>
+  </section>`;
+}
+
+function releaseAuditGateRowHtml(check, id, selectedCheckId) {
+  if (!check) {
+    return `<button class="release-audit-gate-row warn" data-check-id="${escapeHtml(id)}" type="button" disabled>
+      <span class="task-state waiting"></span>
+      <div>
+        <strong>${escapeHtml(id)}</strong>
+        <p>Gate was not returned by the local release audit.</p>
+      </div>
+      <small>missing</small>
+    </button>`;
+  }
+
+  const statusClass = check.status === "fail" ? "refuted" : check.status === "warn" ? "waiting" : "exact";
+  const command = check.command ? `<code>${escapeHtml(check.command)}</code>` : "";
+  const selected = check.id === selectedCheckId ? " selected" : "";
+  return `<button class="release-audit-gate-row select-release-audit-check ${escapeHtml(check.status)}${selected}" data-check-id="${escapeHtml(check.id)}" type="button">
+    <span class="task-state ${statusClass}"></span>
+    <div>
+      <strong>${escapeHtml(check.title)}</strong>
+      <p>${escapeHtml(check.summary)}</p>
+      ${command}
+    </div>
+    <small>${escapeHtml(releaseAuditGateStatusLabel(check.status))}</small>
+  </button>`;
+}
+
+function releaseAuditSelectedCheck(audit) {
+  const checks = Array.isArray(audit?.checks) ? audit.checks : [];
+  const selected = checks.find((check) => check.id === state.selectedReleaseAuditCheckId);
+  if (selected) {
+    return selected;
+  }
+  return checks.find((check) => check.status === "fail") ??
+    checks.find((check) => check.status === "warn") ??
+    checks.find((check) => check.id === "reviewer-bundle-verification") ??
+    checks[0];
+}
+
+function releaseAuditGateInspectorHtml(audit, check) {
+  if (!audit || !check) {
+    return `<aside class="release-audit-inspector empty" data-testid="release-audit-gate-inspector">
+      <span class="mini-label">gate inspector</span>
+      <strong>No gate selected</strong>
+      <p>Refresh the release audit or select a reviewer gate to inspect evidence.</p>
+    </aside>`;
+  }
+
+  const statusClass = check.status === "fail" ? "refuted" : check.status === "warn" ? "waiting" : "exact";
+  const details = Array.isArray(check.details) ? check.details.slice(0, 10) : [];
+  const refs = releaseAuditGateEvidenceRefs(audit, check);
+  const evidenceText = [
+    `Gate: ${check.title}`,
+    `Gate ID: ${check.id}`,
+    `Status: ${check.status}`,
+    `Blocking: ${String(check.blocking)}`,
+    check.command ? `Command: ${check.command}` : undefined,
+    refs.length > 0 ? "Evidence refs:" : undefined,
+    ...refs.map((ref) => `- ${ref.label}: ${ref.value}`),
+    details.length > 0 ? "Details:" : undefined,
+    ...details.map((detail) => `- ${detail}`)
+  ].filter(Boolean).join("\n");
+
+  const facts = [
+    ["Gate ID", check.id],
+    ["Status", releaseAuditGateStatusLabel(check.status)],
+    ["Blocking", check.blocking ? "yes" : "no"],
+    ["Command", check.command ? "available" : "not required"]
+  ];
+
+  return `<aside class="release-audit-inspector ${escapeHtml(check.status)}" data-testid="release-audit-gate-inspector">
+    <div class="release-audit-inspector-head">
+      <div>
+        <span class="mini-label">selected gate</span>
+        <strong>${escapeHtml(check.title)}</strong>
+      </div>
+      <span class="status-pill ${statusClass}">${escapeHtml(releaseAuditGateStatusLabel(check.status))}</span>
+    </div>
+    <p>${escapeHtml(check.summary)}</p>
+    <dl class="release-audit-inspector-facts">
+      ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+    </dl>
+    ${check.command ? `<div class="release-audit-inspector-command">
+      <code>${escapeHtml(check.command)}</code>
+      <button class="text-button compact-button copy-release-gate-command" data-command="${escapeHtml(check.command)}" type="button">Copy command</button>
+    </div>` : ""}
+    ${refs.length > 0 ? `<div class="release-audit-evidence-refs">
+      <strong>Evidence refs</strong>
+      <ul>
+        ${refs.map((ref) => releaseAuditEvidenceRefHtml(ref)).join("")}
+      </ul>
+    </div>` : ""}
+    ${releaseAuditArtifactPreviewHtml()}
+    <div class="release-audit-inspector-detail-list">
+      <strong>Recorded details</strong>
+      ${details.length > 0 ? `<ul>${details.map((detail) => `<li>${escapeHtml(detail)}</li>`).join("")}</ul>` : `<p>No additional detail strings were returned by this gate.</p>`}
+    </div>
+    <button class="text-button compact-button copy-release-gate-evidence" data-evidence="${escapeHtml(evidenceText)}" type="button">Copy evidence packet</button>
+  </aside>`;
+}
+
+function releaseAuditEvidenceRefHtml(ref) {
+  const previewable = releaseAuditArtifactRefIsPreviewable(ref.value);
+  const current = state.releaseAuditArtifactPreviewPath === ref.value;
+  const label = current && state.releaseAuditArtifactPreviewLoading ? "Opening" : current ? "Open" : "Open";
+  return `<li>
+    <span>${escapeHtml(ref.label)}</span>
+    <div class="release-audit-evidence-ref-value">
+      <code>${escapeHtml(ref.value)}</code>
+      ${previewable ? `<button class="text-button compact-button open-release-artifact-preview${current ? " selected" : ""}" data-path="${escapeHtml(ref.value)}" type="button" ${state.releaseAuditArtifactPreviewLoading && current ? "disabled" : ""}>${label}</button>` : ""}
+    </div>
+  </li>`;
+}
+
+function releaseAuditArtifactRefIsPreviewable(value) {
+  return workspaceArtifactRefIsPreviewable(value);
+}
+
+function releaseAuditArtifactPreviewHtml() {
+  const path = state.releaseAuditArtifactPreviewPath;
+  if (!path) {
+    return "";
+  }
+
+  if (state.releaseAuditArtifactPreviewLoading) {
+    return `<section class="release-audit-artifact-preview loading" data-testid="release-audit-artifact-preview">
+      <div class="release-audit-artifact-preview-head">
+        <div>
+          <span class="mini-label">artifact preview</span>
+          <strong>Opening local evidence</strong>
+        </div>
+        <span class="status-pill waiting">read-only</span>
+      </div>
+      <p>${escapeHtml(path)}</p>
+    </section>`;
+  }
+
+  if (state.releaseAuditArtifactPreviewError) {
+    return `<section class="release-audit-artifact-preview error" data-testid="release-audit-artifact-preview">
+      <div class="release-audit-artifact-preview-head">
+        <div>
+          <span class="mini-label">artifact preview</span>
+          <strong>Preview unavailable</strong>
+        </div>
+        <span class="status-pill waiting">blocked</span>
+      </div>
+      <p>${escapeHtml(state.releaseAuditArtifactPreviewError)}</p>
+    </section>`;
+  }
+
+  const artifact = state.releaseAuditArtifactPreview;
+  if (!artifact) {
+    return "";
+  }
+
+  const content = artifact.kind === "json" && artifact.parsed
+    ? JSON.stringify(artifact.parsed, null, 2)
+    : String(artifact.content ?? "");
+  const facts = [
+    ["Kind", artifact.kind ?? "text"],
+    ["Size", formatBytes(artifact.sizeBytes ?? 0)],
+    ["Preview", artifact.truncated ? `first ${formatBytes(artifact.previewBytes ?? 0)}` : "complete"],
+    ["File SHA-256", artifact.sha256 ?? "not reported"],
+    ...(artifact.previewSha256 ? [["Preview SHA-256", artifact.previewSha256]] : [])
+  ];
+
+  return `<section class="release-audit-artifact-preview" data-testid="release-audit-artifact-preview">
+    <div class="release-audit-artifact-preview-head">
+      <div>
+        <span class="mini-label">artifact preview</span>
+        <strong>${escapeHtml(artifact.path ?? path)}</strong>
+      </div>
+      <span class="status-pill exact">read-only</span>
+    </div>
+    <dl class="release-audit-artifact-preview-facts">
+      ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+    </dl>
+    ${artifact.parseWarning ? `<p>${escapeHtml(artifact.parseWarning)}</p>` : ""}
+    <pre>${escapeHtml(content || "(empty artifact)")}</pre>
+  </section>`;
+}
+
+function workspaceArtifactRefIsPreviewable(value) {
+  const text = normalizedWorkspaceArtifactRef(value);
+  return text.startsWith(".truth-harness/") &&
+    /\.(csv|dot|html|json|lean|log|md|mermaid|mmd|smt2|svg|tsv|txt|xml|ya?ml)$/iu.test(text);
+}
+
+function normalizedWorkspaceArtifactRef(value) {
+  return relativeArtifactRef(String(value ?? "")).trim().replace(/\\/gu, "/").replace(/^\.\/+/u, "");
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values.filter((value) => typeof value === "string" && value.trim()))];
+}
+
+function workspaceArtifactRefsFromText(value) {
+  const text = typeof value === "string" ? value : "";
+  if (!text.includes(".truth-harness")) {
+    return [];
+  }
+
+  const matches = text.match(/(?:[A-Za-z]:[\\/][^\s"'`<>]+[\\/]\.truth-harness[^\s"'`<>]*|\/[^\s"'`<>]*\.truth-harness\/[^\s"'`<>]*|\.truth-harness\/[^\s"'`<>]*)/giu) ?? [];
+  return uniqueStrings(matches
+    .map((match) => normalizedWorkspaceArtifactRef(match).replace(/[),.;:\]`]+$/gu, ""))
+    .filter((ref) => workspaceArtifactRefIsPreviewable(ref)));
+}
+
+function collectWorkspaceArtifactRefs(value, refs = [], seen = new WeakSet()) {
+  if (typeof value === "string") {
+    for (const ref of workspaceArtifactRefsFromText(value)) {
+      refs.push(ref);
+    }
+    return uniqueStrings(refs);
+  }
+
+  if (!value || typeof value !== "object") {
+    return uniqueStrings(refs);
+  }
+
+  if (seen.has(value)) {
+    return uniqueStrings(refs);
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectWorkspaceArtifactRefs(item, refs, seen);
+    }
+    return uniqueStrings(refs);
+  }
+
+  for (const item of Object.values(value)) {
+    collectWorkspaceArtifactRefs(item, refs, seen);
+  }
+  return uniqueStrings(refs);
+}
+
+function workspaceArtifactPathsForValue(value) {
+  return uniqueStrings([
+    ...workspaceArtifactRefObjects(value).map((ref) => ref.path),
+    ...collectWorkspaceArtifactRefs(value)
+  ]).filter((ref) => workspaceArtifactRefIsPreviewable(ref));
+}
+
+function workspaceArtifactRefObjects(value, refs = [], seen = new WeakSet()) {
+  if (!value || typeof value !== "object") {
+    return refs;
+  }
+  if (seen.has(value)) {
+    return refs;
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      workspaceArtifactRefObjects(item, refs, seen);
+    }
+    return uniqueWorkspaceArtifactRefObjects(refs);
+  }
+
+  if (Array.isArray(value.artifactRefs)) {
+    for (const ref of value.artifactRefs) {
+      if (!ref || typeof ref !== "object") {
+        continue;
+      }
+      const path = normalizedWorkspaceArtifactRef(ref.path ?? "");
+      if (!workspaceArtifactRefIsPreviewable(path)) {
+        continue;
+      }
+      refs.push({
+        path,
+        role: String(ref.role ?? "referenced-artifact"),
+        source: String(ref.source ?? "artifactRefs"),
+        ...(typeof ref.sizeBytes === "number" ? { sizeBytes: ref.sizeBytes } : {}),
+        ...(typeof ref.sha256 === "string" ? { sha256: ref.sha256 } : {}),
+        ...(typeof ref.sha256Scope === "string" ? { sha256Scope: ref.sha256Scope } : {}),
+        ...(typeof ref.citation === "string" ? { citation: ref.citation } : {})
+      });
+    }
+  }
+
+  for (const item of Object.values(value)) {
+    if (Array.isArray(item) || (item && typeof item === "object")) {
+      workspaceArtifactRefObjects(item, refs, seen);
+    }
+  }
+  return uniqueWorkspaceArtifactRefObjects(refs);
+}
+
+function uniqueWorkspaceArtifactRefObjects(refs) {
+  const seen = new Set();
+  const unique = [];
+  for (const ref of refs) {
+    const key = `${ref.role}:${ref.path}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(ref);
+  }
+  return unique;
+}
+
+function workspaceRunNextArtifactRefsHtml(refs, surface, { limit = 6, compact = false, emptyHtml = "" } = {}) {
+  const visibleRefs = Array.isArray(refs) ? refs.slice(0, limit) : [];
+  if (visibleRefs.length === 0) {
+    return emptyHtml;
+  }
+
+  const hiddenCount = Math.max(0, refs.length - visibleRefs.length);
+  return `<section class="workspace-run-next-artifact-refs${compact ? " compact" : ""}" aria-label="Workspace run-next artifact refs">
+    <div class="workspace-run-next-artifact-refs-head">
+      <span class="mini-label">artifact refs</span>
+      <span>${escapeHtml(`${refs.length} local ${refs.length === 1 ? "file" : "files"}`)}</span>
+    </div>
+    <div class="workspace-run-next-artifact-ref-list">
+      ${visibleRefs.map((ref) => `<article class="workspace-run-next-artifact-ref">
+        <div>
+          <span class="mini-label">${escapeHtml(ref.role)}</span>
+          <small>${escapeHtml(ref.source)}</small>
+          ${ref.sha256 ? `<small class="workspace-artifact-integrity">sha256 ${escapeHtml(shortHash(ref.sha256))}${typeof ref.sizeBytes === "number" ? ` - ${escapeHtml(formatBytes(ref.sizeBytes))}` : ""}</small>` : ""}
+        </div>
+        ${artifactRefControlHtml(ref.path, { surface, label: "Open", citation: artifactRefCitation(ref) })}
+      </article>`).join("")}
+    </div>
+    ${hiddenCount > 0 ? `<p>${escapeHtml(`${hiddenCount} more artifact refs are available in the JSON packet.`)}</p>` : ""}
+  </section>`;
+}
+
+function workspaceRunNextRevalidationItems(value) {
+  const queue = Array.isArray(value?.revalidationQueue)
+    ? value.revalidationQueue
+    : Array.isArray(value?.plan?.revalidationQueue)
+      ? value.plan.revalidationQueue
+      : [];
+  return queue.filter((item) => item && typeof item === "object");
+}
+
+function workspaceRunNextRevalidationSummary(value) {
+  const queue = workspaceRunNextRevalidationItems(value);
+  if (queue.length === 0) {
+    return undefined;
+  }
+  const high = queue.filter((item) => item.priority === "high").length;
+  return `${queue.length} downstream review${queue.length === 1 ? "" : "s"}${high > 0 ? `, ${high} high priority` : ""}`;
+}
+
+function workspaceRunNextRevalidationQueueHtml(value, surface, { limit = 4, compact = false, emptyHtml = "" } = {}) {
+  const queue = workspaceRunNextRevalidationItems(value);
+  if (queue.length === 0) {
+    return emptyHtml;
+  }
+
+  const visibleItems = queue.slice(0, limit);
+  const hiddenCount = Math.max(0, queue.length - visibleItems.length);
+  return `<section class="workspace-run-next-revalidations${compact ? " compact" : ""}" aria-label="Workspace run-next revalidation queue">
+    <div class="workspace-run-next-revalidations-head">
+      <span class="mini-label">revalidation queue</span>
+      <span>${escapeHtml(`${queue.length} downstream review${queue.length === 1 ? "" : "s"}`)}</span>
+    </div>
+    <div class="workspace-run-next-revalidation-list">
+      ${visibleItems.map((item) => workspaceRunNextRevalidationItemHtml(item, surface, compact)).join("")}
+    </div>
+    ${hiddenCount > 0 ? `<p>${escapeHtml(`${hiddenCount} more revalidation tasks are available in the JSON packet.`)}</p>` : ""}
+    ${compact ? "" : `<p class="workspace-run-next-boundary">Revalidation tasks are dependency review only; they do not close gates or upgrade trust.</p>`}
+  </section>`;
+}
+
+function workspaceRunNextRevalidationItemHtml(item, surface, compact) {
+  const priority = item.priority === "high" ? "high" : "medium";
+  const label = item.dependentTitle ?? item.dependentArtifactId ?? item.dependentKind ?? "dependent artifact";
+  const command = item.command ?? "truth-harness workspace run-next . --json";
+  const dependent = item.dependentPath ? artifactAwareValueHtml(item.dependentPath, surface) : escapeHtml(item.dependentKind ?? "not recorded");
+  const ref = item.refPath ? artifactAwareValueHtml(item.refPath, surface) : "not recorded";
+  return `<article class="workspace-run-next-revalidation ${priority}">
+    <div class="workspace-run-next-revalidation-head">
+      <span class="status-pill ${priority === "high" ? "waiting" : "passed"}">${escapeHtml(priority)}</span>
+      <strong>${escapeHtml(label)}</strong>
+    </div>
+    <p>${escapeHtml(item.evidenceRequired ?? item.reason ?? "Review the dependent artifact before relying on this evidence.")}</p>
+    ${compact ? "" : `<dl class="workspace-run-next-mini-details">
+      <div><dt>Ref</dt><dd>${ref}</dd></div>
+      <div><dt>Dependent</dt><dd>${dependent}</dd></div>
+      <div><dt>Kind</dt><dd>${escapeHtml(item.dependentKind ?? "artifact")}</dd></div>
+      <div><dt>Field</dt><dd>${escapeHtml(item.fieldPath ?? "not recorded")}</dd></div>
+    </dl>`}
+    <code>${escapeHtml(command)}</code>
+    <div class="workspace-run-next-row-actions">
+      <button class="text-button compact-button copy-run-next-revalidation-command" data-command="${escapeHtml(command)}" type="button">Copy review</button>
+    </div>
+  </article>`;
+}
+
+function artifactAwareValueHtml(value, surface) {
+  const text = String(value ?? "");
+  const refs = workspaceArtifactRefsFromText(text);
+  if (refs.length === 0) {
+    return escapeHtml(text);
+  }
+
+  const directRef = normalizedWorkspaceArtifactRef(text);
+  if (refs.length === 1 && directRef === refs[0]) {
+    return artifactRefControlHtml(text, {
+      surface,
+      label: "Open"
+    });
+  }
+
+  return `<span class="workspace-artifact-value-text">${escapeHtml(text)}</span>
+    <span class="workspace-artifact-ref-list">
+      ${refs.map((ref) => artifactRefControlHtml(ref, { surface, label: "Open" })).join("")}
+    </span>`;
+}
+
+function artifactRefControlHtml(value, { surface, label = "Open", citation } = {}) {
+  const previewPath = normalizedWorkspaceArtifactRef(value);
+  const current = state.workspaceArtifactPreviewSurface === surface && state.workspaceArtifactPreviewPath === previewPath;
+  const opening = current && state.workspaceArtifactPreviewLoading;
+  const citationText = citation ?? previewPath;
+  return `<span class="workspace-artifact-ref-control">
+    <code title="${escapeHtml(value)}">${escapeHtml(value)}</code>
+    <span class="workspace-artifact-ref-actions">
+      <button class="text-button compact-button open-workspace-artifact-preview${current ? " selected" : ""}" data-artifact-preview-surface="${escapeHtml(surface)}" data-path="${escapeHtml(previewPath)}" type="button" ${opening ? "disabled" : ""}>${opening ? "Opening" : escapeHtml(label)}</button>
+      <button class="text-button compact-button search-catalog-citations" data-ref="${escapeHtml(previewPath)}" type="button">Cited by</button>
+      <button class="text-button compact-button copy-workspace-artifact-citation" data-citation="${escapeHtml(citationText)}" type="button">Copy citation</button>
+    </span>
+  </span>`;
+}
+
+function artifactRefCitation(ref) {
+  const path = normalizedWorkspaceArtifactRef(ref?.path);
+  if (!path) {
+    return "";
+  }
+  return typeof ref?.citation === "string" && ref.citation.trim()
+    ? ref.citation.trim()
+    : ref?.sha256
+      ? `${path} sha256:${ref.sha256}`
+      : path;
+}
+
+function shortHash(value) {
+  const text = String(value ?? "");
+  return text.length > 12 ? `${text.slice(0, 12)}...` : text;
+}
+
+function workspaceArtifactPreviewHtml(surface, { allowedPaths = [], emptyHtml = "" } = {}) {
+  const path = state.workspaceArtifactPreviewPath;
+  if (state.workspaceArtifactPreviewSurface !== surface || !path) {
+    return emptyHtml;
+  }
+  if (allowedPaths.length > 0 && !allowedPaths.includes(path)) {
+    return emptyHtml;
+  }
+
+  if (state.workspaceArtifactPreviewLoading) {
+    return `<section class="release-audit-artifact-preview workspace-artifact-preview loading" data-testid="workspace-artifact-preview">
+      <div class="release-audit-artifact-preview-head workspace-artifact-preview-head">
+        <div>
+          <span class="mini-label">artifact preview</span>
+          <strong>Opening local evidence</strong>
+        </div>
+        <span class="status-pill waiting">read-only</span>
+      </div>
+      <p>${escapeHtml(path)}</p>
+    </section>`;
+  }
+
+  if (state.workspaceArtifactPreviewError) {
+    return `<section class="release-audit-artifact-preview workspace-artifact-preview error" data-testid="workspace-artifact-preview">
+      <div class="release-audit-artifact-preview-head workspace-artifact-preview-head">
+        <div>
+          <span class="mini-label">artifact preview</span>
+          <strong>Preview unavailable</strong>
+        </div>
+        <span class="status-pill waiting">blocked</span>
+      </div>
+      <p>${escapeHtml(state.workspaceArtifactPreviewError)}</p>
+    </section>`;
+  }
+
+  const artifact = state.workspaceArtifactPreview;
+  if (!artifact) {
+    return emptyHtml;
+  }
+
+  const content = artifact.kind === "json" && artifact.parsed
+    ? JSON.stringify(artifact.parsed, null, 2)
+    : String(artifact.content ?? "");
+  const facts = [
+    ["Kind", artifact.kind ?? "text"],
+    ["Size", formatBytes(artifact.sizeBytes ?? 0)],
+    ["Preview", artifact.truncated ? `first ${formatBytes(artifact.previewBytes ?? 0)}` : "complete"],
+    ["File SHA-256", artifact.sha256 ?? "not reported"],
+    ...(artifact.previewSha256 ? [["Preview SHA-256", artifact.previewSha256]] : [])
+  ];
+
+  return `<section class="release-audit-artifact-preview workspace-artifact-preview" data-testid="workspace-artifact-preview">
+    <div class="release-audit-artifact-preview-head workspace-artifact-preview-head">
+      <div>
+        <span class="mini-label">artifact preview</span>
+        <strong>${escapeHtml(artifact.path ?? path)}</strong>
+      </div>
+      <div class="workspace-artifact-preview-actions">
+        <button class="text-button compact-button search-catalog-citations" data-ref="${escapeHtml(artifact.path ?? path)}" type="button">Cited by</button>
+        <span class="status-pill exact">read-only</span>
+      </div>
+    </div>
+    <dl class="release-audit-artifact-preview-facts workspace-artifact-preview-facts">
+      ${facts.map(([factLabel, value]) => `<div><dt>${escapeHtml(factLabel)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}
+    </dl>
+    ${artifact.parseWarning ? `<p>${escapeHtml(artifact.parseWarning)}</p>` : ""}
+    <pre>${escapeHtml(content || "(empty artifact)")}</pre>
+  </section>`;
+}
+
+function releaseAuditGateEvidenceRefs(audit, check) {
+  const pack = audit?.credibilityPack;
+  const refs = [];
+  const add = (label, value) => {
+    if (typeof value === "string" && value.trim()) {
+      refs.push({ label, value });
+    }
+  };
+
+  if (check.id === "reviewer-bundle-verification") {
+    add("verification artifact", audit.reviewerBundleVerification?.artifactPath);
+    add("bundle ref", audit.reviewerBundleVerification?.bundleRef);
+    add("pack id", audit.reviewerBundleVerification?.packId);
+    add("verification id", audit.reviewerBundleVerification?.verificationId);
+  }
+  if (check.id === "adversarial-ai-benchmark") {
+    const run = pack?.benchmarkLedger?.latestAdversarialRun;
+    add("benchmark artifact", run?.path);
+    add("benchmark id", run?.artifactId);
+    add("replay command", run?.replayCommand);
+    for (const replay of run?.receiptReplays?.slice(0, 3) ?? []) {
+      add("receipt replay", replay);
+    }
+  }
+  if (check.id === "math-credibility-ladder") {
+    const run = pack?.benchmarkLedger?.latestMathCredibilityLadderRun;
+    add("ladder artifact", run?.path);
+    add("ladder id", run?.artifactId);
+    add("replay command", run?.replayCommand);
+    for (const replay of run?.receiptReplays?.slice(0, 3) ?? []) {
+      add("receipt replay", replay);
+    }
+  }
+  if (check.id === "hard-math-closure") {
+    const reports = [
+      ["exact closure", pack?.hardMathClosureLedger?.latestExactClosure],
+      ["symbolic closure", pack?.hardMathClosureLedger?.latestSymbolicClosure],
+      ["SMT closure", pack?.hardMathClosureLedger?.latestSmtClosure]
+    ];
+    for (const [label, report] of reports) {
+      add(`${label} artifact`, report?.path);
+      add(`${label} command`, report?.command);
+    }
+  }
+  if (check.id === "saved-strict-engine-run") {
+    const run = pack?.engineRunLedger?.latestStrictReviewerRun;
+    add("engine run artifact", run?.path);
+    add("engine run id", run?.runId);
+  }
+  if (check.id === "engine-evidence") {
+    const professor = pack?.engineRunLedger?.latestProfessorReviewerRun;
+    const strict = pack?.engineRunLedger?.latestStrictReviewerRun;
+    add("professor engine run", professor?.path);
+    add("strict engine run", strict?.path);
+    add("engine verify command", pack?.reviewerCommands?.verifyEngines);
+  }
+  if (check.id === "code-run-sandbox") {
+    add("sandbox evidence", audit.sandboxEvidence?.path);
+    add("sandbox run id", audit.sandboxEvidence?.runId);
+  }
+  if (check.id === "web-ui-smoke") {
+    add("UI review id", audit.webUiReview?.reviewId);
+    add("UI review screenshot", audit.webUiReview?.screenshotPath);
+  }
+  if (check.id === "report-drafts") {
+    add("credibility pack", pack?.packId);
+    add("reproduce pack", pack?.reviewerCommands?.reproducePack);
+  }
+  if (check.command) {
+    add("gate command", check.command);
+  }
+
+  return refs;
+}
+
+function releaseAuditCheckById(audit, id) {
+  return Array.isArray(audit?.checks) ? audit.checks.find((check) => check.id === id) : undefined;
+}
+
+function releaseAuditWorstStatus(checks) {
+  if (checks.some((check) => check.status === "fail")) {
+    return "fail";
+  }
+  if (checks.some((check) => check.status === "warn") || checks.length === 0) {
+    return "warn";
+  }
+  return "pass";
+}
+
+function releaseAuditGateStatusLabel(status) {
+  if (status === "pass") {
+    return "passed";
+  }
+  if (status === "warn") {
+    return "warning";
+  }
+  return "blocking";
+}
+
+function releaseAuditReviewerBundleSummary(audit) {
+  const verification = audit?.reviewerBundleVerification;
+  if (!verification) {
+    return "not verified";
+  }
+  if (!verification.passed) {
+    return "failed integrity";
+  }
+  if (!verification.sourceMatchesWorkspace) {
+    return "source drift";
+  }
+  if (verification.manifestDigestStatus !== "verified") {
+    return verification.manifestDigestStatus === "mismatch" ? "digest mismatch" : "digest missing";
+  }
+  return `${verification.checkedBundleFiles}/${verification.checkedSourceFiles} files verified`;
 }
 
 function releaseAuditBenchmarkCardHtml(audit) {
@@ -10446,7 +12290,7 @@ function releaseAuditEngineEvidenceSummary(audit) {
     engineCheck?.status === "pass" &&
     checkSummary.includes("Saved no-network Docker engine evidence")
   ) {
-    return `${checkSummary} (live host: ${concreteGates} concrete, ${requiredGates} required)`;
+    return `saved Docker evidence; live host ${concreteGates} concrete / ${requiredGates} required`;
   }
 
   return `${requiredGates} required / ${concreteGates} concrete`;
@@ -11743,8 +13587,12 @@ function renderGraphDetail(receipt, entry, index) {
     ? renderRevisionCompare(currentClaim, previousClaim)
     : "";
   const finalization = claim ? claimFinalizationSummary(claim) : undefined;
+  if (claim?.claimId) {
+    void ensureClaimReviewPacket(claim.claimId);
+  }
+  const claimReviewPacket = claim?.claimId ? claimReviewPacketStore.get(claim.claimId) : undefined;
   const openChecksHtml = claim ? renderClaimOpenChecksHtml(claim) : "";
-  const evidenceRefsHtml = claim ? renderClaimEvidenceRefsHtml(claim) : "";
+  const evidenceRefsHtml = claim ? renderClaimEvidenceRefsHtml(claim, claimReviewPacket) : "";
   const claimHtml = claim
     ? `<dl class="graph-detail-facts">
         <div><dt>Claim ID</dt><dd><code>${escapeHtml(claim.claimId)}</code></dd></div>
@@ -12028,20 +13876,63 @@ function renderClaimOpenChecksHtml(claim) {
   </section>`;
 }
 
-function renderClaimEvidenceRefsHtml(claim) {
+function renderClaimEvidenceRefsHtml(claim, reviewPacket) {
   const refs = Array.isArray(claim?.evidenceRefs) ? claim.evidenceRefs : [];
+  const claimId = claim?.claimId;
+  const reviewLoading = claimId ? claimReviewPacketLoading.has(claimId) : false;
+  const reviewError = claimId ? claimReviewPacketErrors.get(claimId) : undefined;
+  const artifactRefs = workspaceArtifactRefObjects(reviewPacket ?? claim);
   if (refs.length === 0) {
-    return `<section class="claim-review-panel"><h5>Evidence Refs</h5><p>No local evidence refs attached.</p></section>`;
+    return `<section class="claim-review-panel">
+      <h5>Evidence Refs</h5>
+      <p>No local evidence refs attached.</p>
+      ${claimReviewPacketStatusHtml(reviewLoading, reviewError, reviewPacket)}
+      ${workspaceRunNextArtifactRefsHtml(artifactRefs, "claim-evidence", {
+        compact: true,
+        emptyHtml: ""
+      })}
+    </section>`;
   }
+
+  const visibleRefs = refs.slice(0, 6);
+  const allowedArtifactPaths = uniqueStrings([
+    ...visibleRefs
+      .map((ref) => ref.ref)
+      .map((ref) => normalizedWorkspaceArtifactRef(ref))
+      .filter((ref) => workspaceArtifactRefIsPreviewable(ref)),
+    ...workspaceArtifactPathsForValue(reviewPacket ?? claim)
+  ]);
 
   return `<section class="claim-review-panel">
     <h5>Evidence Refs</h5>
-    <ul>${refs.slice(0, 6).map((ref) => {
+    <ul>${visibleRefs.map((ref) => {
       const trust = ref.trust ? ` (${ref.trust})` : "";
       const summary = ref.summary ? ` - ${ref.summary}` : "";
-      return `<li><code>${escapeHtml(ref.kind)}:${escapeHtml(ref.ref)}</code>${escapeHtml(trust)}${summary ? `<span>${escapeHtml(summary)}</span>` : ""}</li>`;
+      const refHtml = workspaceArtifactRefIsPreviewable(ref.ref)
+        ? `<span class="claim-evidence-ref-kind">${escapeHtml(ref.kind)}:</span>${artifactRefControlHtml(ref.ref, { surface: "claim-evidence", label: "Open" })}`
+        : `<code>${escapeHtml(ref.kind)}:${escapeHtml(ref.ref)}</code>`;
+      return `<li>${refHtml}${escapeHtml(trust)}${summary ? `<span>${escapeHtml(summary)}</span>` : ""}</li>`;
     }).join("")}</ul>
+    ${claimReviewPacketStatusHtml(reviewLoading, reviewError, reviewPacket)}
+    ${workspaceRunNextArtifactRefsHtml(artifactRefs, "claim-evidence", {
+      compact: true,
+      emptyHtml: ""
+    })}
+    ${workspaceArtifactPreviewHtml("claim-evidence", { allowedPaths: allowedArtifactPaths })}
   </section>`;
+}
+
+function claimReviewPacketStatusHtml(loading, error, reviewPacket) {
+  if (reviewPacket?.artifactRefs?.length > 0) {
+    return `<p class="claim-review-packet-status">Review packet loaded with ${escapeHtml(String(reviewPacket.artifactRefs.length))} local artifact citation${reviewPacket.artifactRefs.length === 1 ? "" : "s"}.</p>`;
+  }
+  if (loading) {
+    return `<p class="claim-review-packet-status">Loading local claim-review artifact citations...</p>`;
+  }
+  if (error) {
+    return `<p class="claim-review-packet-status warning">Claim-review packet unavailable: ${escapeHtml(error)}</p>`;
+  }
+  return "";
 }
 
 function renderRevisionCompare(currentClaim, previousClaim) {
@@ -12322,6 +14213,24 @@ async function copyWorkspaceRunNextCommand() {
   });
 }
 
+async function copyWorkspacePilotLoopCommand() {
+  const command = workspacePilotLoopCommand?.textContent?.trim();
+  if (!command) {
+    return;
+  }
+
+  await copyOrDownloadText({
+    text: `${command}\n`,
+    filename: `truth-harness-pilot-loop-${safeFilenameTimestamp()}.txt`,
+    type: "text/plain",
+    button: copyPilotLoopCommandButton,
+    copiedTitle: "Copied pilot-loop command",
+    copiedDetail: "Bounded workspace pilot-loop command copied for supervised agent work.",
+    fallbackTitle: "Downloaded pilot-loop command",
+    fallbackDetail: "Workspace pilot-loop command was saved as plain text instead."
+  });
+}
+
 async function copyWorkspaceRunNextHandoffCommand(command, button) {
   const text = String(command ?? "").trim();
   if (!text) {
@@ -12337,6 +14246,24 @@ async function copyWorkspaceRunNextHandoffCommand(command, button) {
     copiedDetail: "Saved run-next resume/recovery command copied for an agent.",
     fallbackTitle: "Downloaded handoff command",
     fallbackDetail: "Saved run-next command was saved as plain text instead."
+  });
+}
+
+async function copyWorkspaceArtifactCitation(citation, button) {
+  const text = String(citation ?? "").trim();
+  if (!text) {
+    return;
+  }
+
+  await copyOrDownloadText({
+    text: `${text}\n`,
+    filename: `truth-harness-artifact-citation-${safeFilenameTimestamp()}.txt`,
+    type: "text/plain",
+    button,
+    copiedTitle: "Copied artifact citation",
+    copiedDetail: "Local artifact path and file hash copied for review or agent handoff.",
+    fallbackTitle: "Downloaded artifact citation",
+    fallbackDetail: "the artifact citation was saved as a local text file instead."
   });
 }
 
@@ -13198,6 +15125,7 @@ function credibilityBundleCardHtml() {
   const strictAllEngine = credibilityBundleIsStrictAllEngine(manifest);
   const verifying = state.credibilityBundleVerifying;
   const bundleError = state.credibilityBundleError ?? state.credibilityBundleVerifyError;
+  const verificationStatus = credibilityBundleVerificationStatus(verification, manifest);
   const status = bundleError
     ? "error"
     : state.credibilityBundleLoading || verifying
@@ -13205,17 +15133,23 @@ function credibilityBundleCardHtml() {
       : hasBundle
         ? !strictAllEngine
           ? "standard"
-          : verification?.passed && verification?.sourceMatchesWorkspace
+          : verificationStatus.statusText === "clean"
           ? "verified"
-          : "drift"
+          : verificationStatus.statusText === "metadata unchecked"
+            ? "unchecked"
+            : verificationStatus.statusText === "source drift"
+              ? "drift"
+              : "error"
         : "missing";
-  const statusClass = status === "verified" ? "exact" : status === "drift" ? "waiting" : status === "error" ? "refuted" : "waiting";
+  const statusClass = status === "verified" ? "exact" : status === "drift" || status === "unchecked" ? "waiting" : status === "error" ? "refuted" : "waiting";
   const statusLabel = state.credibilityBundleLoading
     ? "checking"
     : verifying
       ? "verifying"
     : status === "verified"
       ? "strict verified"
+      : status === "unchecked"
+        ? "metadata unchecked"
       : status === "standard"
         ? "standard bundle"
       : status === "drift"
@@ -13227,7 +15161,9 @@ function credibilityBundleCardHtml() {
     ? bundleError
     : hasBundle
       ? strictAllEngine
-        ? "Latest portable reviewer bundle includes strict all-engine evidence. Hash verification checks copied files and reports live source drift separately."
+        ? verificationStatus.statusText === "clean"
+          ? "Latest portable reviewer bundle includes strict all-engine evidence. Copied file hashes, manifest metadata, and live source drift are all checked separately."
+          : `${credibilityBundleDigestDetail(verification, manifest)} Copied file hashes and live source drift are shown separately below.`
         : "A portable reviewer bundle exists, but it is not the strict all-engine professor packet. Regenerate with the strict Docker route before serious outside review."
       : "Run the strict Docker professor route to create a portable reviewer bundle after engine and benchmark gates pass.";
   const command = credibilityBundleCommand();
@@ -13242,7 +15178,8 @@ function credibilityBundleCardHtml() {
         ["Pack", manifest.packId],
         ["Pack status", manifest.packStatus],
         ["Engine gates", credibilityPackEngineEvidenceSummaryFromSummary(manifest.packSummary)],
-        ["Bundle integrity", verification?.passed ? "passed" : "changed"],
+        ["Copied files", credibilityBundleCopiedFilesLabel(verification)],
+        ["Manifest digest", credibilityBundleDigestLabel(verification, manifest)],
         ["Source workspace", verification?.sourceMatchesWorkspace ? "matches bundle" : "drifted"],
         ["Files", `${verification?.checkedBundleFiles ?? manifest.summary?.totalFiles ?? 0} checked`],
         ["Last web verify", state.credibilityBundleVerifiedAt ? formatActivityTime(state.credibilityBundleVerifiedAt) : "not clicked"],
@@ -13323,15 +15260,13 @@ function credibilityBundleVerificationHistoryHtml() {
 function credibilityBundleVerificationHistoryItemHtml(item) {
   const verification = item?.verification ?? {};
   const verificationId = typeof verification.verificationId === "string" ? verification.verificationId : "";
-  const passed = verification.passed === true;
-  const sourceMatches = verification.sourceMatchesWorkspace === true;
-  const statusClass = passed && sourceMatches ? "exact" : passed ? "waiting" : "refuted";
-  const statusText = passed && sourceMatches ? "clean" : passed ? "source drift" : "bundle changed";
+  const status = credibilityBundleVerificationStatus(verification);
   const jsonHref = verificationId ? `/api/credibility-bundle/verifications/file?id=${encodeURIComponent(verificationId)}&kind=json` : "";
   const markdownHref = verificationId ? `/api/credibility-bundle/verifications/file?id=${encodeURIComponent(verificationId)}&kind=markdown` : "";
   const facts = [
     ["Bundle", verification.bundleId ?? "unknown"],
     ["Checked", `${verification.checkedBundleFiles ?? 0} bundle, ${verification.checkedSourceFiles ?? 0} source`],
+    ["Manifest digest", credibilityBundleDigestLabel(verification)],
     ["Verified", verification.verifiedAt ? formatActivityTime(verification.verifiedAt) : "unknown"],
     ["Artifact", item?.paths?.relativeJson ?? item?.paths?.json ?? "unknown"]
   ];
@@ -13339,7 +15274,7 @@ function credibilityBundleVerificationHistoryItemHtml(item) {
   return `<article class="credibility-verification-history-item">
     <div class="credibility-verification-history-row">
       <strong>${credibilityBundleValueHtml(verification.verificationId ?? "unidentified verification")}</strong>
-      <span class="status-pill ${statusClass}">${escapeHtml(statusText)}</span>
+      <span class="status-pill ${status.statusClass}">${escapeHtml(status.statusText)}</span>
     </div>
     <dl>
       ${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${credibilityBundleValueHtml(value)}</dd></div>`).join("")}
@@ -13371,11 +15306,17 @@ function credibilityReviewerChecklistHtml(pack) {
       command: credibilityStrictProfessorCommand(manifest)
     },
     {
-      label: "Bundle hash integrity",
-      passed: Boolean(verification?.passed),
-      detail: verification?.passed
+      label: "Copied file hashes",
+      passed: credibilityBundleCopiedFilesClean(verification),
+      detail: credibilityBundleCopiedFilesClean(verification)
         ? `${verification.checkedBundleFiles ?? 0} bundled files match the manifest${state.credibilityBundleVerifiedAt ? `; web verified ${formatActivityTime(state.credibilityBundleVerifiedAt)}` : ""}.`
         : "Click Verify now or run the verify command before handoff.",
+      command: credibilityBundleCommand()
+    },
+    {
+      label: "Manifest metadata digest",
+      passed: credibilityBundleDigestStatus(verification, manifest) === "verified",
+      detail: credibilityBundleDigestDetail(verification, manifest),
       command: credibilityBundleCommand()
     },
     {
@@ -13511,6 +15452,92 @@ function credibilityBundleReviewerStandard(manifest) {
     : "standard reviewer packet";
 }
 
+function credibilityBundleDigestStatus(verification, manifest) {
+  const status = verification?.manifestDigestStatus;
+  if (status === "verified" || status === "mismatch" || status === "not-recorded") {
+    return status;
+  }
+  return manifest?.bundleDigest?.value ? "recorded" : "not-recorded";
+}
+
+function credibilityBundleDigestLabel(verification, manifest) {
+  const status = credibilityBundleDigestStatus(verification, manifest);
+  if (status === "verified") {
+    return "verified";
+  }
+  if (status === "mismatch") {
+    return "mismatch";
+  }
+  if (status === "recorded") {
+    return "recorded; verify now";
+  }
+  return "not recorded";
+}
+
+function credibilityBundleDigestDetail(verification, manifest) {
+  const status = credibilityBundleDigestStatus(verification, manifest);
+  if (status === "verified") {
+    return "Reviewer commands, limitations, summary, provenance, and file lists still match the export-time manifest digest.";
+  }
+  if (status === "mismatch") {
+    return "The manifest metadata changed after export. Treat reviewer commands, limitations, summary, and provenance as edited until investigated.";
+  }
+  if (status === "recorded") {
+    return "A manifest digest is recorded, but this browser view has not run bundle verification yet.";
+  }
+  return "This older bundle predates manifest digests. Copied file hashes can still be checked, but reviewer metadata has no digest self-check.";
+}
+
+function credibilityBundleCopiedFilesClean(verification) {
+  return Boolean(
+    verification &&
+    Array.isArray(verification.missingBundleFiles) &&
+    Array.isArray(verification.changedBundleFiles) &&
+    verification.missingBundleFiles.length === 0 &&
+    verification.changedBundleFiles.length === 0
+  );
+}
+
+function credibilityBundleCopiedFilesLabel(verification) {
+  if (!verification) {
+    return "not verified";
+  }
+  return credibilityBundleCopiedFilesClean(verification) ? "passed" : "changed";
+}
+
+function credibilityBundleVerificationStatus(verification, manifest) {
+  const digestStatus = credibilityBundleDigestStatus(verification, manifest);
+  const copiedFilesClean = credibilityBundleCopiedFilesClean(verification);
+  if (!copiedFilesClean) {
+    return {
+      statusText: "bundle changed",
+      statusClass: "refuted"
+    };
+  }
+  if (digestStatus === "mismatch") {
+    return {
+      statusText: "metadata changed",
+      statusClass: "refuted"
+    };
+  }
+  if (verification?.sourceMatchesWorkspace !== true) {
+    return {
+      statusText: "source drift",
+      statusClass: "waiting"
+    };
+  }
+  if (digestStatus !== "verified") {
+    return {
+      statusText: "metadata unchecked",
+      statusClass: "waiting"
+    };
+  }
+  return {
+    statusText: "clean",
+    statusClass: "exact"
+  };
+}
+
 function credibilityStrictProfessorCommand(manifest = state.credibilityBundle?.manifest) {
   return manifest?.reviewerCommands?.dockerStrictProfessorEvidence ?? "npm run docker:professor:all";
 }
@@ -13534,7 +15561,11 @@ function credibilityBundleTrust(payload) {
   if (!payload?.latest) {
     return "waiting";
   }
-  return payload.verification?.passed && payload.verification?.sourceMatchesWorkspace ? "passed" : "waiting";
+  return payload.verification?.passed &&
+    payload.verification?.sourceMatchesWorkspace &&
+    credibilityBundleDigestStatus(payload.verification, payload.manifest) === "verified"
+    ? "passed"
+    : "waiting";
 }
 
 function credibilityBundleActivitySummary(payload) {
@@ -13545,7 +15576,7 @@ function credibilityBundleActivitySummary(payload) {
   const manifest = payload.manifest ?? {};
   const verification = payload.verification ?? {};
   const standard = credibilityBundleReviewerStandard(manifest);
-  return `${manifest.bundleId ?? "bundle"} for ${manifest.packId ?? "pack"} (${standard}); integrity ${verification.passed ? "passed" : "changed"}, source ${verification.sourceMatchesWorkspace ? "matches" : "drifted"}.`;
+  return `${manifest.bundleId ?? "bundle"} for ${manifest.packId ?? "pack"} (${standard}); copied files ${credibilityBundleCopiedFilesLabel(verification)}, manifest digest ${credibilityBundleDigestLabel(verification, manifest)}, source ${verification.sourceMatchesWorkspace ? "matches" : "drifted"}.`;
 }
 
 function credibilityBenchmarkCardHtml(pack) {
@@ -13948,15 +15979,14 @@ function credibilityBundleVerificationReportItems(limit = 5) {
   return items.slice(0, limit).map((item) => {
     const verification = item?.verification ?? {};
     const verificationId = typeof verification.verificationId === "string" ? verification.verificationId : "";
-    const passed = verification.passed === true;
-    const sourceMatches = verification.sourceMatchesWorkspace === true;
-    const status = passed && sourceMatches ? "clean" : passed ? "source drift" : "bundle changed";
+    const status = credibilityBundleVerificationStatus(verification);
     return {
       verification,
       verificationId,
       bundleId: verification.bundleId ?? "unknown",
-      status,
-      statusClass: passed && sourceMatches ? "exact" : passed ? "waiting" : "refuted",
+      status: status.statusText,
+      statusClass: status.statusClass,
+      manifestDigest: credibilityBundleDigestLabel(verification),
       checkedBundleFiles: verification.checkedBundleFiles ?? 0,
       checkedSourceFiles: verification.checkedSourceFiles ?? 0,
       verifiedAt: verification.verifiedAt ?? "unknown",
@@ -13993,6 +16023,7 @@ function credibilityBundleVerificationReportHtml() {
         <dl>
           <div><dt>Bundle</dt><dd>${escapeHtml(item.bundleId)}</dd></div>
           <div><dt>Verified</dt><dd>${escapeHtml(formatActivityTime(item.verifiedAt))}</dd></div>
+          <div><dt>Manifest digest</dt><dd>${escapeHtml(item.manifestDigest)}</dd></div>
           <div><dt>Checked files</dt><dd>${escapeHtml(`${item.checkedBundleFiles} bundle, ${item.checkedSourceFiles} source`)}</dd></div>
           <div><dt>JSON artifact</dt><dd><code>${escapeHtml(item.relativeJson)}</code></dd></div>
           <div><dt>Markdown artifact</dt><dd><code>${escapeHtml(item.relativeMarkdown)}</code></dd></div>
@@ -14031,6 +16062,7 @@ function credibilityBundleVerificationReportMarkdown() {
       `- ${item.verificationId || "unidentified verification"}: ${item.status}`,
       `  - Bundle: ${item.bundleId}`,
       `  - Verified: ${item.verifiedAt}`,
+      `  - Manifest digest: ${item.manifestDigest}`,
       `  - Checked files: ${item.checkedBundleFiles} bundle, ${item.checkedSourceFiles} source`,
       `  - JSON artifact: \`${item.relativeJson}\``,
       `  - Markdown artifact: \`${item.relativeMarkdown}\``,
@@ -14078,7 +16110,10 @@ function renderReportDraftHistory(receipt = receiptStore.get(state.receiptKey)) 
 
   reportDraftList.innerHTML = `${reportDraftIntegritySummaryHtml(drafts)}${drafts
     .map((item) => reportDraftHistoryRowHtml(item, receipt))
-    .join("")}`;
+    .join("")}${workspaceArtifactPreviewHtml("report-drafts", {
+      allowedPaths: workspaceArtifactPathsForValue(drafts),
+      emptyHtml: ""
+    })}`;
 }
 
 function reportDraftIntegritySummary(drafts) {
@@ -14197,6 +16232,12 @@ function reportDraftHistoryRowHtml(item, receipt) {
   const title = report.title ?? report.reportId ?? "Saved report draft";
   const createdAt = report.createdAt ? formatActivityTime(report.createdAt) : "local draft";
   const markdownPath = item.paths?.relativeMarkdown ?? report.paths?.markdown ?? "local markdown path not recorded";
+  const jsonPath = item.paths?.relativeJson ?? report.paths?.json ?? "local JSON path not recorded";
+  const artifactRefsHtml = reportDraftArtifactRefsHtml(item, "report-drafts", {
+    compact: true,
+    fallbackMarkdownPath: markdownPath,
+    fallbackJsonPath: jsonPath
+  });
   const command = reportDraftReviewCommand(item);
   return `<article class="report-draft-row ${active ? "active" : ""}" data-report-id="${escapeHtml(report.reportId ?? "")}">
     <div class="report-draft-main">
@@ -14204,7 +16245,9 @@ function reportDraftHistoryRowHtml(item, receipt) {
         <strong>${escapeHtml(title)}</strong>
         <small>${escapeHtml(createdAt)} - ${escapeHtml(report.trust ?? "unlabeled")}${current ? " - current receipt" : ""}</small>
       </div>
-      <code>${escapeHtml(markdownPath)}</code>
+      <div class="report-draft-paths">
+        ${artifactRefsHtml}
+      </div>
       <p>${escapeHtml(reportDraftIntegrityDetail(item))}</p>
     </div>
     <div class="report-draft-side">
@@ -14213,6 +16256,28 @@ function reportDraftHistoryRowHtml(item, receipt) {
       <button class="text-button compact-button copy-report-draft-command" data-report-id="${escapeHtml(report.reportId ?? "")}" data-command="${escapeHtml(command)}" type="button">Copy command</button>
     </div>
   </article>`;
+}
+
+function reportDraftArtifactRefsHtml(item, surface, { compact = false, fallbackMarkdownPath, fallbackJsonPath } = {}) {
+  const artifactRefs = workspaceArtifactRefObjects(item);
+  if (artifactRefs.length > 0) {
+    return workspaceRunNextArtifactRefsHtml(artifactRefs, surface, {
+      compact,
+      limit: 4,
+      emptyHtml: ""
+    });
+  }
+
+  const markdownPath = fallbackMarkdownPath ?? item?.paths?.relativeMarkdown ?? item?.report?.paths?.markdown;
+  const jsonPath = fallbackJsonPath ?? item?.paths?.relativeJson ?? item?.report?.paths?.json;
+  return [
+    workspaceArtifactRefIsPreviewable(markdownPath)
+      ? artifactRefControlHtml(markdownPath, { surface, label: "Open Markdown" })
+      : `<code>${escapeHtml(markdownPath ?? "local markdown path not recorded")}</code>`,
+    workspaceArtifactRefIsPreviewable(jsonPath)
+      ? artifactRefControlHtml(jsonPath, { surface, label: "Open JSON" })
+      : ""
+  ].join("");
 }
 
 async function refreshReportDrafts({ announce = true } = {}) {
@@ -14295,6 +16360,14 @@ function renderSavedReportDraftPreview(payload) {
   const statusLabel = reportDraftIntegrityLabel(status);
   const command = reportDraftReviewCommand({ report });
   const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+  const markdownPath = payload.paths?.relativeMarkdown ?? report.paths?.markdown ?? "not recorded";
+  const jsonPath = payload.paths?.relativeJson ?? report.paths?.json ?? "not recorded";
+  const allowedPaths = workspaceArtifactPathsForValue(payload);
+  const artifactRefsHtml = reportDraftArtifactRefsHtml(payload, "saved-report-draft", {
+    compact: true,
+    fallbackMarkdownPath: markdownPath,
+    fallbackJsonPath: jsonPath
+  });
   reportPreview.innerHTML = `
     <header class="saved-report-header">
       <div>
@@ -14320,9 +16393,14 @@ function renderSavedReportDraftPreview(payload) {
       <div><dt>Markdown SHA-256</dt><dd><code>${escapeHtml(payload.markdownSha256 ?? report.markdownSha256 ?? "not recorded")}</code></dd></div>
       <div><dt>Expected SHA-256</dt><dd><code>${escapeHtml(report.markdownSha256 ?? "not recorded")}</code></dd></div>
       <div><dt>Byte length</dt><dd>${escapeHtml(String(report.markdownByteLength ?? "not recorded"))}</dd></div>
-      <div><dt>Markdown path</dt><dd><code>${escapeHtml(payload.paths?.relativeMarkdown ?? report.paths?.markdown ?? "not recorded")}</code></dd></div>
-      <div><dt>JSON path</dt><dd><code>${escapeHtml(payload.paths?.relativeJson ?? report.paths?.json ?? "not recorded")}</code></dd></div>
+      <div><dt>Markdown path</dt><dd>${artifactAwareValueHtml(markdownPath, "saved-report-draft")}</dd></div>
+      <div><dt>JSON path</dt><dd>${artifactAwareValueHtml(jsonPath, "saved-report-draft")}</dd></div>
     </dl>
+    ${artifactRefsHtml}
+    ${workspaceArtifactPreviewHtml("saved-report-draft", {
+      allowedPaths,
+      emptyHtml: ""
+    })}
     ${warnings.length > 0 ? `<ul class="report-sublist">${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>` : ""}
     <section class="saved-report-markdown">${renderMarkdownSubset(payload.markdown ?? "")}</section>
   `;
@@ -15490,6 +17568,7 @@ laneButtons.forEach((button) => {
 
 sidebarSearch.addEventListener("input", () => {
   state.sidebarQuery = sidebarSearch.value;
+  state.catalogRefFilter = undefined;
   renderClaimList();
   applySidebarSearch();
   scheduleCatalogSearch();
@@ -15554,6 +17633,52 @@ casArtifactList.addEventListener("click", (event) => {
       trust: attachButton.dataset.evidenceTrust,
       summary: attachButton.dataset.evidenceSummary
     }
+  });
+});
+
+document.addEventListener("click", (event) => {
+  const routeButton = event.target.closest(".route-record[data-route-id]");
+  if (routeButton) {
+    event.stopPropagation();
+    void openSavedRoute(routeButton.dataset.routeId);
+    return;
+  }
+
+  const citationButton = event.target.closest(".copy-workspace-artifact-citation");
+  if (citationButton) {
+    event.stopPropagation();
+    void copyWorkspaceArtifactCitation(citationButton.dataset.citation, citationButton);
+    return;
+  }
+
+  const citedByButton = event.target.closest(".search-catalog-citations");
+  if (citedByButton) {
+    event.stopPropagation();
+    void searchCatalogCitations(citedByButton.dataset.ref);
+    return;
+  }
+
+  const revalidationCopyButton = event.target.closest(".copy-run-next-revalidation-command");
+  if (revalidationCopyButton?.dataset.command) {
+    event.stopPropagation();
+    void copyWorkspaceRunNextHandoffCommand(revalidationCopyButton.dataset.command, revalidationCopyButton);
+    return;
+  }
+
+  const clearCitedByButton = event.target.closest(".clear-catalog-ref-filter");
+  if (clearCitedByButton) {
+    event.stopPropagation();
+    clearCatalogCitationSearch();
+    return;
+  }
+
+  const previewButton = event.target.closest(".open-workspace-artifact-preview");
+  if (!previewButton) {
+    return;
+  }
+
+  void openWorkspaceArtifactPreview(previewButton.dataset.path, {
+    surface: previewButton.dataset.artifactPreviewSurface ?? "workspace"
   });
 });
 
@@ -15630,6 +17755,9 @@ surfaceTabs.forEach((button) => {
     state.surface = nextSurface;
     if (nextSurface === "plot") {
       requestVisualFit();
+    }
+    if (nextSurface === "runbook") {
+      refreshWorkspaceRunNextHandoffsIfStale();
     }
     if (nextSurface === "report" && !state.credibilityPack && !state.credibilityPackLoading) {
       void refreshCredibilityPack({ announce: false });
@@ -15747,6 +17875,18 @@ startResearchHarnessButton?.addEventListener("click", () => {
   });
 });
 
+seedHardMathButton?.addEventListener("click", () => {
+  seedHardMathWorkspaceFromUi().catch((error) => {
+    addActivity("web-ui", "Seed hard math failed", error instanceof Error ? error.message : "Unknown hard-math seed failure.", "refuted");
+  });
+});
+
+saveRunNextHandoffButton?.addEventListener("click", () => {
+  saveWorkspaceRunNextHandoffFromUi().catch((error) => {
+    addActivity("web-ui", "Save handoff failed", error instanceof Error ? error.message : "Unknown run-next save failure.", "refuted");
+  });
+});
+
 refreshRunNextButton?.addEventListener("click", () => {
   void refreshWorkspaceRunNext();
 });
@@ -15754,6 +17894,16 @@ refreshRunNextButton?.addEventListener("click", () => {
 copyRunNextCommandButton?.addEventListener("click", () => {
   copyWorkspaceRunNextCommand().catch((error) => {
     addActivity("web-ui", "Copy next action failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+  });
+});
+
+refreshPilotLoopButton?.addEventListener("click", () => {
+  void refreshWorkspacePilotLoop();
+});
+
+copyPilotLoopCommandButton?.addEventListener("click", () => {
+  copyWorkspacePilotLoopCommand().catch((error) => {
+    addActivity("web-ui", "Copy pilot-loop failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
   });
 });
 
@@ -15773,9 +17923,19 @@ verifyRunNextsButton?.addEventListener("click", () => {
 });
 
 workspaceRunNextList?.addEventListener("click", (event) => {
+  if (event.target.closest(".open-workspace-artifact-preview")) {
+    return;
+  }
+
   const openButton = event.target.closest(".open-run-next-handoff");
   if (openButton?.dataset.planId) {
     void openWorkspaceRunNextHandoff(openButton.dataset.planId);
+    return;
+  }
+
+  const verifyButton = event.target.closest(".verify-run-next-handoff");
+  if (verifyButton?.dataset.planId) {
+    void openWorkspaceRunNextHandoff(verifyButton.dataset.planId, { verifySnapshot: true });
     return;
   }
 
@@ -15786,6 +17946,16 @@ workspaceRunNextList?.addEventListener("click", (event) => {
 });
 
 workspaceRunNextInspection?.addEventListener("click", (event) => {
+  if (event.target.closest(".open-workspace-artifact-preview")) {
+    return;
+  }
+
+  const verifyButton = event.target.closest(".verify-run-next-handoff");
+  if (verifyButton?.dataset.planId) {
+    void openWorkspaceRunNextHandoff(verifyButton.dataset.planId, { verifySnapshot: true });
+    return;
+  }
+
   const copyButton = event.target.closest(".copy-run-next-handoff-command");
   if (copyButton?.dataset.command) {
     void copyWorkspaceRunNextHandoffCommand(copyButton.dataset.command, copyButton);
@@ -16054,6 +18224,10 @@ refreshReportDraftsButton?.addEventListener("click", () => {
 showCurrentReportButton?.addEventListener("click", showCurrentReportDraft);
 
 reportDraftList?.addEventListener("click", (event) => {
+  if (event.target.closest(".open-workspace-artifact-preview")) {
+    return;
+  }
+
   const copyButton = event.target.closest(".copy-report-draft-command, .copy-report-drafts-command");
   if (copyButton) {
     copyOrDownloadText({

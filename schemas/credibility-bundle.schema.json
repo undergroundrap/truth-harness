@@ -77,6 +77,9 @@
       "type": "string",
       "pattern": "^snap_[a-f0-9]{16}$"
     },
+    "bundleDigest": {
+      "$ref": "#/$defs/bundleDigest"
+    },
     "files": {
       "type": "array",
       "items": {
@@ -147,7 +150,9 @@
     "workspaceKind": {
       "enum": [
         "receipts",
+        "claims",
         "artifacts",
+        "events",
         "indexes",
         "findings",
         "inventions",
@@ -163,6 +168,7 @@
         "vault",
         "audits",
         "snapshots",
+        "revisions",
         "sessions",
         "reviews",
         "validation",
@@ -306,6 +312,22 @@
     "sha256": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
+    },
+    "bundleDigest": {
+      "type": "object",
+      "required": ["algorithm", "scope", "value"],
+      "properties": {
+        "algorithm": {
+          "const": "sha256"
+        },
+        "scope": {
+          "const": "truth-harness.credibility-bundle-manifest-digest.v0"
+        },
+        "value": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "additionalProperties": false
     },
     "stringArray": {
       "type": "array",

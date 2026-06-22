@@ -33,6 +33,12 @@ export interface CredibilityBundleGeneratedFile {
   sha256: string;
 }
 
+export interface CredibilityBundleDigest {
+  algorithm: "sha256";
+  scope: "truth-harness.credibility-bundle-manifest-digest.v0";
+  value: string;
+}
+
 export interface CredibilityBundleReportDraft {
   reportId: string;
   title: string;
@@ -64,6 +70,7 @@ export interface CredibilityBundleManifest {
   packStatus: CredibilityPackStatus;
   packSummary: CredibilityPack["summary"];
   embeddedSnapshotId: string;
+  bundleDigest?: CredibilityBundleDigest;
   files: CredibilityBundleFile[];
   generatedFiles: CredibilityBundleGeneratedFile[];
   reportDrafts: CredibilityBundleReportDraft[];
@@ -85,6 +92,9 @@ export interface CredibilityBundleManifest {
     verifyEngines: string;
     runAdversarialBenchmark: string;
     runMathCredibilityLadder: string;
+    runExactHardMathClosure: string;
+    runSymbolicHardMathClosure: string;
+    runSmtHardMathClosure: string;
     reviewWorkspace: string;
     reproducePack: string;
     dockerProfessorEvidence: string;
@@ -137,6 +147,10 @@ export interface CredibilityBundleVerification {
   sourceMatchesWorkspace: boolean;
   checkedBundleFiles: number;
   checkedSourceFiles: number;
+  manifestDigest?: CredibilityBundleDigest;
+  manifestDigestStatus?: "verified" | "mismatch" | "not-recorded";
+  manifestDigestExpected?: string;
+  manifestDigestActual?: string;
   missingBundleFiles: CredibilityBundleVerificationEntry[];
   changedBundleFiles: CredibilityBundleVerificationEntry[];
   missingSourceFiles: CredibilityBundleVerificationEntry[];
@@ -153,6 +167,7 @@ export interface CredibilityBundleVerificationWriteResult {
 
 const CREDIBILITY_BUNDLE_SCHEMA_VERSION = "truth-harness.credibility-bundle.v0" as const;
 const CREDIBILITY_BUNDLE_VERIFY_SCHEMA_VERSION = "truth-harness.credibility-bundle-verification.v0" as const;
+const CREDIBILITY_BUNDLE_DIGEST_SCOPE = "truth-harness.credibility-bundle-manifest-digest.v0" as const;
 
 export async function writeCredibilityBundle(input: WriteCredibilityBundleInput): Promise<CredibilityBundleWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
@@ -205,7 +220,7 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
   ]);
   const artifactBytes = files.reduce((total, file) => total + file.bytes, 0);
   const generatedBytes = generatedFiles.reduce((total, file) => total + file.bytes, 0);
-  const manifest: CredibilityBundleManifest = {
+  const manifest = withCredibilityBundleDigest({
     schemaVersion: CREDIBILITY_BUNDLE_SCHEMA_VERSION,
     bundleId,
     title: "Truth Harness Portable Reviewer Bundle",
@@ -241,6 +256,9 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
       verifyEngines: pack.reviewerCommands.verifyEngines,
       runAdversarialBenchmark: pack.reviewerCommands.runAdversarialBenchmark,
       runMathCredibilityLadder: pack.reviewerCommands.runMathCredibilityLadder,
+      runExactHardMathClosure: pack.reviewerCommands.runExactHardMathClosure ?? "npm run docker:hard-math-closure",
+      runSymbolicHardMathClosure: pack.reviewerCommands.runSymbolicHardMathClosure ?? "npm run docker:symbolic-closure",
+      runSmtHardMathClosure: pack.reviewerCommands.runSmtHardMathClosure ?? "npm run docker:smt-closure",
       reviewWorkspace: pack.reviewerCommands.reviewWorkspace,
       reproducePack: pack.reviewerCommands.reproducePack,
       dockerProfessorEvidence: pack.reviewerCommands.dockerProfessorEvidence,
@@ -254,7 +272,7 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
       "`proved` remains reserved for accepted proof-checker output over a concrete formal artifact."
     ],
     warnings: pack.warnings
-  };
+  });
   const manifestPath = join(bundleDir, "manifest.json");
   await assertCredibilityBundleManifestSchema(manifest);
   await writeJsonFileAtomic(manifestPath, manifest);
@@ -284,6 +302,7 @@ export async function verifyCredibilityBundle(input: VerifyCredibilityBundleInpu
   const changedBundleFiles: CredibilityBundleVerificationEntry[] = [];
   const missingSourceFiles: CredibilityBundleVerificationEntry[] = [];
   const changedSourceFiles: CredibilityBundleVerificationEntry[] = [];
+  const manifestDigestCheck = checkCredibilityBundleDigest(manifest);
 
   for (const file of manifest.files) {
     const bundlePath = resolveUnderRoot(bundleDir, file.bundledPath, "Credibility bundle file path escapes bundle root");
@@ -336,24 +355,35 @@ export async function verifyCredibilityBundle(input: VerifyCredibilityBundleInpu
   }
 
   const verifiedAt = input.now ?? new Date().toISOString();
+  const warnings = [
+    "Bundle verification checks copied file identity, not mathematical, scientific, medical, legal, or patent truth.",
+    "Source workspace drift is reported separately from bundle integrity because a valid exported bundle can outlive later local edits.",
+    "The manifest digest is a local tamper-evidence check over reviewer-critical bundle metadata, not a cryptographic signature."
+  ];
+  if (manifestDigestCheck.status === "not-recorded") {
+    warnings.push("This bundle predates manifest digests; copied files can still be checked, but reviewer-command metadata has no digest self-check.");
+  } else if (manifestDigestCheck.status === "mismatch") {
+    warnings.push("The manifest digest does not match the current manifest contents. Treat reviewer commands, limitations, summaries, or provenance as edited after export until investigated.");
+  }
   const verificationWithoutId = {
     schemaVersion: CREDIBILITY_BUNDLE_VERIFY_SCHEMA_VERSION,
     bundleId: manifest.bundleId,
     packId: manifest.packId,
     verifiedAt,
     bundlePath: bundleDir,
-    passed: missingBundleFiles.length === 0 && changedBundleFiles.length === 0,
+    passed: missingBundleFiles.length === 0 && changedBundleFiles.length === 0 && manifestDigestCheck.status !== "mismatch",
     sourceMatchesWorkspace: missingSourceFiles.length === 0 && changedSourceFiles.length === 0,
     checkedBundleFiles: manifest.files.length + manifest.generatedFiles.length,
     checkedSourceFiles: manifest.files.length,
+    manifestDigest: manifest.bundleDigest,
+    manifestDigestStatus: manifestDigestCheck.status,
+    manifestDigestExpected: manifestDigestCheck.expected,
+    manifestDigestActual: manifestDigestCheck.actual,
     missingBundleFiles,
     changedBundleFiles,
     missingSourceFiles,
     changedSourceFiles,
-    warnings: [
-      "Bundle verification checks copied file identity, not mathematical, scientific, medical, legal, or patent truth.",
-      "Source workspace drift is reported separately from bundle integrity because a valid exported bundle can outlive later local edits."
-    ]
+    warnings
   };
 
   return {
@@ -411,6 +441,7 @@ export function renderCredibilityBundleVerificationMarkdown(verification: Credib
     `- Source workspace drift: ${verification.sourceMatchesWorkspace ? "matches bundle" : "drifted"}`,
     `- Bundle files checked: ${verification.checkedBundleFiles}`,
     `- Source files checked: ${verification.checkedSourceFiles}`,
+    `- Manifest digest: ${verification.manifestDigestStatus ?? "not-recorded"}`,
     "",
     "## Boundaries",
     "",
@@ -431,6 +462,51 @@ export function renderCredibilityBundleVerificationMarkdown(verification: Credib
   appendVerificationEntries(lines, "Changed Source Files", verification.changedSourceFiles);
 
   return `${lines.join("\n").trim()}\n`;
+}
+
+function withCredibilityBundleDigest(manifest: Omit<CredibilityBundleManifest, "bundleDigest">): CredibilityBundleManifest {
+  return {
+    ...manifest,
+    bundleDigest: computeCredibilityBundleDigest(manifest)
+  };
+}
+
+function computeCredibilityBundleDigest(manifest: Omit<CredibilityBundleManifest, "bundleDigest"> | CredibilityBundleManifest): CredibilityBundleDigest {
+  const { bundleDigest: _ignored, ...digestInput } = JSON.parse(JSON.stringify(manifest)) as CredibilityBundleManifest;
+  return {
+    algorithm: "sha256",
+    scope: CREDIBILITY_BUNDLE_DIGEST_SCOPE,
+    value: stableHash({
+      scope: CREDIBILITY_BUNDLE_DIGEST_SCOPE,
+      manifest: digestInput
+    })
+  };
+}
+
+function checkCredibilityBundleDigest(manifest: CredibilityBundleManifest): {
+  status: "verified" | "mismatch" | "not-recorded";
+  expected?: string;
+  actual: string;
+} {
+  const actual = computeCredibilityBundleDigest(manifest).value;
+  if (!manifest.bundleDigest) {
+    return {
+      status: "not-recorded",
+      actual
+    };
+  }
+
+  const expected = manifest.bundleDigest.value;
+  const isValid =
+    manifest.bundleDigest.algorithm === "sha256" &&
+    manifest.bundleDigest.scope === CREDIBILITY_BUNDLE_DIGEST_SCOPE &&
+    expected === actual;
+
+  return {
+    status: isValid ? "verified" : "mismatch",
+    expected,
+    actual
+  };
 }
 
 async function assertCredibilityBundleManifestSchema(manifest: CredibilityBundleManifest): Promise<void> {
@@ -563,6 +639,7 @@ function renderCredibilityBundleReadme(input: {
     `- Saved report drafts: ${input.reportDrafts.length}`,
     `- Snapshot: \`${input.pack.embeddedSnapshot.snapshotId}\``,
     `- Engine gates: ${input.pack.summary.concreteEngineGates} concrete, ${input.pack.summary.requiredEngineGates} required`,
+    `- Hard-math closure: ${input.pack.summary.savedHardMathClosureReports} saved (exact ${input.pack.summary.hardMathExactClosureStatus}, symbolic ${input.pack.summary.hardMathSymbolicClosureStatus}, SMT ${input.pack.summary.hardMathSmtClosureStatus})`,
     `- Review queue: ${input.pack.summary.reviewItems} items (${input.pack.summary.criticalReviewItems} critical)`,
     ""
   ];

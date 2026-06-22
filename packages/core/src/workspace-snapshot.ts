@@ -98,8 +98,42 @@ export interface VerifyWorkspaceSnapshotInput {
 
 const SNAPSHOT_SCHEMA_VERSION = "truth-harness.workspace-snapshot.v0" as const;
 const SNAPSHOT_VERIFY_SCHEMA_VERSION = "truth-harness.workspace-snapshot-verification.v0" as const;
-const JSON_ID_KEYS = [
+const JSON_ID_KEYS_BY_KIND: Partial<Record<WorkspaceSnapshotEntryKind, readonly string[]>> = {
+  manifest: ["projectId"],
+  receipts: ["runId"],
+  claims: ["claimId"],
+  routes: ["routeId"],
+  visuals: ["visualId"],
+  cas: ["checkId"],
+  proofs: ["checkId"],
+  smt: ["checkId"],
+  "engine-runs": ["runId"],
+  benchmarks: ["benchmarkRunId", "comparisonId"],
+  disclosures: ["disclosureId"],
+  simulations: ["simulationId"],
+  patents: ["chartId"],
+  experiments: ["experimentId"],
+  vault: ["vaultId"],
+  audits: ["auditId"],
+  snapshots: ["snapshotId"],
+  revisions: ["revisionId"],
+  sessions: ["sessionId"],
+  reviews: ["reviewId"],
+  findings: ["planId", "loopId", "reviewId", "packId", "bundleId", "verificationId", "reportId", "runId"],
+  validation: ["planId"],
+  literature: ["recordId"],
+  "notebook-runs": ["runRecordId"],
+  "code-runs": ["runId"],
+  "model-contexts": ["packetId"],
+  inventions: ["entryId"],
+  indexes: ["projectId"]
+} as const;
+const JSON_ID_FALLBACK_KEYS = [
   "runId",
+  "claimId",
+  "routeId",
+  "visualId",
+  "checkId",
   "auditId",
   "vaultId",
   "simulationId",
@@ -119,9 +153,11 @@ const JSON_ID_KEYS = [
   "packetId",
   "packId",
   "bundleId",
+  "revisionId",
   "reportId",
-  "projectId",
-  "documentId"
+  "verificationId",
+  "documentId",
+  "projectId"
 ] as const;
 
 export async function createWorkspaceSnapshot(input: CreateWorkspaceSnapshotInput): Promise<WorkspaceSnapshot> {
@@ -344,7 +380,8 @@ function parseJsonMetadata(path: string, bytes: Buffer): { schemaVersion?: strin
   try {
     const parsed = JSON.parse(bytes.toString("utf8")) as Record<string, unknown>;
     const schemaVersion = typeof parsed.schemaVersion === "string" ? parsed.schemaVersion : undefined;
-    const artifactId = JSON_ID_KEYS.map((key) => parsed[key]).find((value): value is string => typeof value === "string");
+    const idKeys = JSON_ID_KEYS_BY_KIND[kindForPortablePath(path)] ?? JSON_ID_FALLBACK_KEYS;
+    const artifactId = idKeys.map((key) => parsed[key]).find((value): value is string => typeof value === "string");
 
     return {
       schemaVersion,
@@ -375,6 +412,7 @@ function kindForPortablePath(path: string): WorkspaceSnapshotEntryKind {
 function isWorkspaceDirectory(value: string | undefined): value is LocalWorkspaceDirectory {
   return (
     value === "receipts" ||
+    value === "claims" ||
     value === "artifacts" ||
     value === "events" ||
     value === "indexes" ||
@@ -383,6 +421,7 @@ function isWorkspaceDirectory(value: string | undefined): value is LocalWorkspac
     value === "cas" ||
     value === "proofs" ||
     value === "smt" ||
+    value === "engine-runs" ||
     value === "benchmarks" ||
     value === "disclosures" ||
     value === "simulations" ||
@@ -391,6 +430,7 @@ function isWorkspaceDirectory(value: string | undefined): value is LocalWorkspac
     value === "vault" ||
     value === "audits" ||
     value === "snapshots" ||
+    value === "revisions" ||
     value === "sessions" ||
     value === "reviews" ||
     value === "validation" ||
@@ -398,6 +438,7 @@ function isWorkspaceDirectory(value: string | undefined): value is LocalWorkspac
     value === "notebook-runs" ||
     value === "code-runs" ||
     value === "model-contexts" ||
+    value === "visuals" ||
     value === "routes"
   );
 }

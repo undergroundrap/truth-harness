@@ -55,6 +55,7 @@ import {
   listClaimCharts,
   listCodeRuns,
   listEvidenceAudits,
+  listEngineVerificationRuns,
   listExperimentLogEntries,
   listExternalDisclosureLogEntries,
   listInventionLogEntries,
@@ -98,6 +99,7 @@ import {
   verifyWorkspaceSnapshot,
   renderReceipt,
   replayReceipt,
+  runWorkspacePilotLoop,
   searchLocalCorpus,
   searchWorkspaceCatalog,
   satisfyVerifierRouteObligation,
@@ -119,6 +121,7 @@ import {
   writeNotebookRun,
   writeResearchHarness,
   writeResearchSession,
+  writeHardMathSeedWorkspace,
   writeValidationPlan,
   writeVerifierRoute,
   writeReceiptPlotVisualArtifact,
@@ -126,6 +129,7 @@ import {
   writeWorkspaceGraphVisualArtifact,
   writeWorkspaceReview,
   writeWorkspaceRunNextPlan,
+  writeWorkspacePilotLoopRecord,
   writeWorkspaceSnapshot,
   writeWebUiReview,
   type BenchmarkArtifactSummary,
@@ -177,6 +181,7 @@ import {
   type ExternalDisclosureLogEntry,
   type ExternalDisclosureStatus,
   type ExternalDisclosureWriteResult,
+  type HardMathSeedResult,
   type InventionEvidenceRef,
   type InventionLogEntry,
   type InventionLogWriteResult,
@@ -260,6 +265,9 @@ import {
   type WorkspaceRunNextPlan,
   type WorkspaceRunNextSummary,
   type WorkspaceRunNextWriteResult,
+  type WorkspacePilotLoopRecord,
+  type WorkspacePilotLoopRunResult,
+  type WorkspacePilotLoopWriteResult,
   type WorkspaceReview,
   type WorkspaceReviewSummary,
   type WorkspaceReviewWriteResult,
@@ -330,6 +338,7 @@ export interface TruthHarnessEngineManifestInput {
 }
 
 export interface TruthHarnessEnginePlanInput extends TruthHarnessEngineManifestInput {
+  workspacePath?: string;
   problem: string;
 }
 
@@ -390,6 +399,7 @@ export interface TruthHarnessCatalogSearchInput {
   trust?: TrustLabel;
   domain?: string;
   tag?: string;
+  ref?: string;
   limit?: number;
 }
 
@@ -664,6 +674,13 @@ export interface TruthHarnessWorkspaceReviewInput {
   write?: boolean;
 }
 
+export interface TruthHarnessWorkspaceSeedHardMathInput {
+  workspacePath?: string;
+  caseIds?: string[];
+  now?: string;
+  writeRunNextPlan?: boolean;
+}
+
 export interface TruthHarnessWorkspaceRunNextInput {
   workspacePath?: string;
   source?: "workspace-review" | "credibility-actions";
@@ -694,12 +711,42 @@ export interface TruthHarnessWorkspaceRunNextInput {
 export interface TruthHarnessWorkspaceRunNextListInput {
   workspacePath?: string;
   verifySnapshots?: boolean;
+  limit?: number;
 }
 
 export interface TruthHarnessWorkspaceRunNextShowInput {
   workspacePath?: string;
   planRef: string;
   verifySnapshot?: boolean;
+}
+
+export interface TruthHarnessWorkspacePilotLoopInput {
+  workspacePath?: string;
+  source?: "workspace-review" | "credibility-actions" | "saved-run-next";
+  planRef?: string;
+  maxSteps?: number;
+  executeLocal?: boolean;
+  write?: boolean;
+  maxRoutes?: number;
+  maxClaims?: number;
+  maxSessions?: number;
+  maxReports?: number;
+  timeoutMs?: number;
+  maximaCommand?: string;
+  sageCommand?: string;
+  leanCommand?: string;
+  z3Command?: string;
+  cvc5Command?: string;
+  smtSourcePath?: string;
+  leanSourcePath?: string;
+  requireMaxima?: boolean;
+  requireZ3?: boolean;
+  requireCvc5?: boolean;
+  requireLean?: boolean;
+  requireSage?: boolean;
+  requireDockerCore?: boolean;
+  requireAllConcrete?: boolean;
+  requireAllEngines?: boolean;
 }
 
 export interface TruthHarnessWorkspaceReviewListInput {
@@ -736,6 +783,17 @@ export interface TruthHarnessWorkspaceRunNextWriteOutput {
 }
 
 export type TruthHarnessWorkspaceRunNextOutput = WorkspaceRunNextPlan | TruthHarnessWorkspaceRunNextWriteOutput;
+
+export interface TruthHarnessWorkspacePilotLoopWriteOutput {
+  loop: WorkspacePilotLoopRecord;
+  run: WorkspacePilotLoopRunResult;
+  written: true;
+  result: WorkspacePilotLoopWriteResult;
+}
+
+export type TruthHarnessWorkspacePilotLoopOutput =
+  | WorkspacePilotLoopRunResult
+  | TruthHarnessWorkspacePilotLoopWriteOutput;
 
 export interface TruthHarnessWorkspaceSnapshotVerifyInput {
   workspacePath?: string;
@@ -1362,14 +1420,16 @@ export function handleTruthHarnessEngineManifest(input: TruthHarnessEngineManife
   });
 }
 
-export function handleTruthHarnessEnginePlan(input: TruthHarnessEnginePlanInput): EnginePlan {
+export async function handleTruthHarnessEnginePlan(input: TruthHarnessEnginePlanInput): Promise<EnginePlan> {
+  const rootPath = input.workspacePath ? resolveWorkspaceRoot(input.workspacePath) : resolveWorkspaceRoot(undefined);
   return createEnginePlan(input.problem, {
     timeoutMs: input.timeoutMs,
     maximaCommand: input.maximaCommand,
     sageCommand: input.sageCommand,
     leanCommand: input.leanCommand,
     z3Command: input.z3Command,
-    cvc5Command: input.cvc5Command
+    cvc5Command: input.cvc5Command,
+    savedEngineRuns: await listEngineVerificationRunsIfWorkspace(rootPath)
   });
 }
 
@@ -1454,6 +1514,7 @@ export async function handleTruthHarnessCatalogSearch(
     trust: input.trust,
     domain: input.domain,
     tag: input.tag,
+    ref: input.ref,
     limit: input.limit
   });
 }
@@ -1875,6 +1936,17 @@ export async function handleTruthHarnessWorkspaceReview(
   return createWorkspaceReview(reviewInput);
 }
 
+export async function handleTruthHarnessWorkspaceSeedHardMath(
+  input: TruthHarnessWorkspaceSeedHardMathInput
+): Promise<HardMathSeedResult> {
+  return writeHardMathSeedWorkspace({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    caseIds: input.caseIds,
+    now: input.now,
+    writeRunNextPlan: input.writeRunNextPlan !== false
+  });
+}
+
 export async function handleTruthHarnessWorkspaceUiReview(
   input: TruthHarnessWorkspaceUiReviewInput
 ): Promise<TruthHarnessWorkspaceUiReviewOutput> {
@@ -1919,15 +1991,17 @@ export async function handleTruthHarnessWorkspaceRunNext(
       sageCommand: input.sageCommand,
       leanCommand: input.leanCommand,
       z3Command: input.z3Command,
-      cvc5Command: input.cvc5Command
+      cvc5Command: input.cvc5Command,
+      savedEngineRuns: await listEngineVerificationRunsIfWorkspace(rootPath)
     }
   });
 
   if (input.write) {
+    const result = await writeWorkspaceRunNextPlan({ rootPath, plan });
     return {
-      plan,
+      plan: result.plan,
       written: true,
-      result: await writeWorkspaceRunNextPlan({ rootPath, plan })
+      result
     };
   }
 
@@ -1974,13 +2048,16 @@ async function createRunNextReviewFromInput(
 
 export async function handleTruthHarnessWorkspaceRunNextList(input: TruthHarnessWorkspaceRunNextListInput): Promise<{
   total: number;
+  limit?: number;
   plans: WorkspaceRunNextSummary[];
 }> {
   const plans = await listWorkspaceRunNextPlans(resolveWorkspaceRoot(input.workspacePath), {
-    verifySnapshots: Boolean(input.verifySnapshots)
+    verifySnapshots: Boolean(input.verifySnapshots),
+    limit: input.limit
   });
   return {
     total: plans.length,
+    ...(input.limit ? { limit: input.limit } : {}),
     plans
   };
 }
@@ -1994,6 +2071,48 @@ export async function handleTruthHarnessWorkspaceRunNextShow(
   }
 
   return readWorkspaceRunNextPlan(rootPath, input.planRef);
+}
+
+export async function handleTruthHarnessWorkspacePilotLoop(
+  input: TruthHarnessWorkspacePilotLoopInput
+): Promise<TruthHarnessWorkspacePilotLoopOutput> {
+  const rootPath = resolveWorkspaceRoot(input.workspacePath);
+  const run = await runWorkspacePilotLoop({
+    rootPath,
+    source: input.source,
+    planRef: input.planRef,
+    executeLocal: input.executeLocal === true,
+    writeRunNextPlans: input.write === true,
+    maxSteps: input.maxSteps,
+    maxRoutes: input.maxRoutes,
+    maxClaims: input.maxClaims,
+    maxSessions: input.maxSessions,
+    maxReports: input.maxReports,
+    timeoutMs: input.timeoutMs,
+    maximaCommand: input.maximaCommand,
+    sageCommand: input.sageCommand,
+    leanCommand: input.leanCommand,
+    z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command,
+    smtSourcePath: input.smtSourcePath,
+    leanSourcePath: input.leanSourcePath,
+    engineRequirements: credibilityEngineRequirementsFromInput(input)
+  });
+
+  if (input.write) {
+    const result = await writeWorkspacePilotLoopRecord({
+      rootPath,
+      loop: run.loop
+    });
+    return {
+      loop: result.loop,
+      run,
+      written: true,
+      result
+    };
+  }
+
+  return run;
 }
 
 export async function handleTruthHarnessWorkspaceReviewList(input: TruthHarnessWorkspaceReviewListInput): Promise<{
@@ -2589,7 +2708,10 @@ export async function handleTruthHarnessResearchHarnessStart(
   const plan = await createWorkspaceRunNextPlan({
     rootPath,
     review,
-    executeLocal: false
+    executeLocal: false,
+    enginePlanOptions: {
+      savedEngineRuns: await listEngineVerificationRunsIfWorkspace(rootPath)
+    }
   });
 
   return {
@@ -2883,6 +3005,17 @@ function resolveWorkspaceRoot(path?: string): string {
   }
 
   return resolveWorkspacePath(path);
+}
+
+async function listEngineVerificationRunsIfWorkspace(rootPath: string) {
+  try {
+    return await listEngineVerificationRuns(rootPath);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("No Truth Harness workspace found")) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 function resolveWorkspacePath(path: string): string {

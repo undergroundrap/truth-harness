@@ -18,6 +18,7 @@ import {
   writeResearchSession
 } from "./research-session.js";
 import { createSimulationLogEntry } from "./simulation-log.js";
+import { writeReportDraft } from "./report-draft.js";
 import {
   markWorkspaceCatalogStale,
   rebuildWorkspaceCatalog,
@@ -136,6 +137,95 @@ describe("workspace catalog", () => {
       })
     );
     expect(claimSearch.warnings.join("\n")).toContain("do not upgrade trust labels");
+  });
+
+  it("returns hash-backed local artifact refs on catalog search rows", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Catalog Citation Lab", now: "2026-06-14T00:00:00.000Z" });
+    await writeReceipt(root, "fraction-citation.json", createReceipt("compute 3 / 4 + 5 / 8"));
+    const claim = await writeClaimLedgerRecord({
+      rootPath: root,
+      title: "Hash backed catalog claim",
+      statement: "3 / 4 + 5 / 8 equals 11 / 8.",
+      domain: "math",
+      evidenceRefs: [{ kind: "receipt", ref: ".truth-harness/receipts/fraction-citation.json" }],
+      now: "2026-06-14T00:00:01.000Z"
+    });
+    const report = await writeReportDraft({
+      rootPath: root,
+      title: "Catalog Citation Report",
+      summary: "Report draft search should carry local artifact citations.",
+      markdown: "# Catalog Citation Report\n\nEvery cited local file must remain replayable.",
+      claimId: claim.claim.claimId,
+      trust: "exact-computed",
+      now: "2026-06-14T00:00:02.000Z"
+    });
+
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-14T00:00:03.000Z" });
+    const claimSearch = await searchWorkspaceCatalog({
+      rootPath: root,
+      query: "hash backed catalog claim",
+      kind: "claims"
+    });
+    const reportSearch = await searchWorkspaceCatalog({
+      rootPath: root,
+      query: "Catalog Citation Report",
+      kind: "findings"
+    });
+    const receiptRefSearch = await searchWorkspaceCatalog({
+      rootPath: root,
+      kind: "claims",
+      ref: ".truth-harness\\receipts\\fraction-citation.json"
+    });
+    const reportRefSearch = await searchWorkspaceCatalog({
+      rootPath: root,
+      kind: "findings",
+      ref: report.paths.relativeMarkdown
+    });
+
+    const claimRow = claimSearch.results.find((row) => row.artifactId === claim.claim.claimId);
+    const reportRow = reportSearch.results.find((row) => row.artifactId === report.report.reportId);
+    expect(claimRow?.artifactRefs).toContainEqual(
+      expect.objectContaining({
+        path: ".truth-harness/receipts/fraction-citation.json",
+        role: "evidence-ref",
+        refKind: "receipt",
+        resolved: true,
+        sha256: expect.any(String),
+        sha256Scope: "file",
+        citation: expect.stringContaining(".truth-harness/receipts/fraction-citation.json sha256:")
+      })
+    );
+    expect(reportRow?.artifactRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: report.paths.relativeJson,
+          role: "report-json",
+          sha256: expect.any(String),
+          citation: expect.stringContaining(`${report.paths.relativeJson} sha256:`)
+        }),
+        expect.objectContaining({
+          path: report.paths.relativeMarkdown,
+          role: "report-markdown",
+          sha256: expect.any(String),
+          citation: expect.stringContaining(`${report.paths.relativeMarkdown} sha256:`)
+        })
+      ])
+    );
+    expect(receiptRefSearch.filters.ref).toBe(".truth-harness/receipts/fraction-citation.json");
+    expect(receiptRefSearch.results).toContainEqual(
+      expect.objectContaining({
+        artifactId: claim.claim.claimId,
+        kind: "claims"
+      })
+    );
+    expect(reportRefSearch.filters.ref).toBe(report.paths.relativeMarkdown);
+    expect(reportRefSearch.results).toContainEqual(
+      expect.objectContaining({
+        artifactId: report.report.reportId,
+        kind: "findings"
+      })
+    );
   });
 
   it("reports missing and corrupt catalogs as rebuildable cache failures", async () => {

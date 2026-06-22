@@ -92,9 +92,11 @@ import {
   handleTruthHarnessWorkspaceReview,
   handleTruthHarnessWorkspaceReviewList,
   handleTruthHarnessWorkspaceReviewShow,
+  handleTruthHarnessWorkspaceSeedHardMath,
   handleTruthHarnessWorkspaceRunNext,
   handleTruthHarnessWorkspaceRunNextList,
   handleTruthHarnessWorkspaceRunNextShow,
+  handleTruthHarnessWorkspacePilotLoop,
   handleTruthHarnessWorkspaceUiReview,
   handleTruthHarnessWorkspaceUiReviewList,
   handleTruthHarnessWorkspaceSnapshot,
@@ -382,7 +384,7 @@ export function createTruthHarnessMcpServer(): McpServer {
     {
       title: "Search Workspace Catalog",
       description:
-        "Search the local catalog cache by text, artifact kind, trust label, domain, tag, and limit. Requires a prior catalog rebuild if the cache is missing or stale.",
+        "Search the local catalog cache by text, artifact kind, trust label, domain, tag, reference dependency, and limit. Requires a prior catalog rebuild if the cache is missing or stale.",
       inputSchema: {
         workspacePath: z
           .string()
@@ -393,6 +395,10 @@ export function createTruthHarnessMcpServer(): McpServer {
         trust: claimTrustSchema.optional().describe("Trust label filter. Catalog rows do not upgrade trust labels."),
         domain: z.string().optional().describe("Domain/lane filter when the artifact records one."),
         tag: z.string().optional().describe("Tag filter, with or without # prefix."),
+        ref: z
+          .string()
+          .optional()
+          .describe("Return only artifacts that cite or reference this local artifact path/ref, such as .truth-harness/receipts/result.json."),
         limit: z.number().int().positive().max(200).optional().describe("Maximum rows to return. Defaults to 25.")
       },
       annotations: {
@@ -762,6 +768,10 @@ export function createTruthHarnessMcpServer(): McpServer {
           .string()
           .min(1)
           .describe("Problem, claim, or research subclaim to classify and route through Truth Harness engines."),
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace root used to load saved strict Docker reviewer engine evidence for routing hints."),
         maximaCommand: z
           .string()
           .optional()
@@ -795,7 +805,7 @@ export function createTruthHarnessMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async (input) => toolJson(handleTruthHarnessEnginePlan(input))
+    async (input) => toolJson(await handleTruthHarnessEnginePlan(input))
   );
 
   server.registerTool(
@@ -1489,6 +1499,45 @@ export function createTruthHarnessMcpServer(): McpServer {
   );
 
   server.registerTool(
+    "truth_harness_workspace_seed_hard_math",
+    {
+      title: "Seed Hard-Math Workspace",
+      description:
+        "Create deterministic local hard-math research sessions with linked validation plans and a dry-run run-next handoff. This writes queue artifacts only; it does not execute solvers, call models, or upgrade trust labels.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        caseIds: z
+          .array(
+            z.enum([
+              "exact-fraction-lemma",
+              "symbolic-cas-closure-fixture",
+              "smt-bounded-closure-fixture",
+              "symbolic-trig-identity",
+              "integer-parity-invariant",
+              "bounded-integer-smt"
+            ])
+          )
+          .optional()
+          .describe("Optional seed case ids. Defaults to all hard-math seed cases."),
+        now: z.string().optional().describe("Optional deterministic ISO timestamp for reproducible tests and handoffs."),
+        writeRunNextPlan: z
+          .boolean()
+          .optional()
+          .describe("When false, return but do not persist the first run-next handoff. Defaults to true.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, caseIds, now, writeRunNextPlan }) =>
+      toolJson(await handleTruthHarnessWorkspaceSeedHardMath({ workspacePath, caseIds, now, writeRunNextPlan }))
+  );
+
+  server.registerTool(
     "truth_harness_workspace_run_next",
     {
       title: "Run Next Workspace Action",
@@ -1585,15 +1634,22 @@ export function createTruthHarnessMcpServer(): McpServer {
         verifySnapshots: z
           .boolean()
           .optional()
-          .describe("When true, verify each source snapshot and report whether saved handoffs drifted.")
+          .describe("When true, verify each selected source revision/snapshot and report whether saved handoffs drifted."),
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(50)
+          .optional()
+          .describe("Maximum saved handoffs to list or verify. Defaults to the core list behavior.")
       },
       annotations: {
         readOnlyHint: true,
         openWorldHint: false
       }
     },
-    async ({ workspacePath, verifySnapshots }) =>
-      toolJson(await handleTruthHarnessWorkspaceRunNextList({ workspacePath, verifySnapshots }))
+    async ({ workspacePath, verifySnapshots, limit }) =>
+      toolJson(await handleTruthHarnessWorkspaceRunNextList({ workspacePath, verifySnapshots, limit }))
   );
 
   server.registerTool(
@@ -1611,7 +1667,7 @@ export function createTruthHarnessMcpServer(): McpServer {
         verifySnapshot: z
           .boolean()
           .optional()
-          .describe("When true, verify the plan's source snapshot and include drift status.")
+          .describe("When true, verify the plan's source revision/snapshot and include drift status.")
       },
       annotations: {
         readOnlyHint: true,
@@ -1620,6 +1676,80 @@ export function createTruthHarnessMcpServer(): McpServer {
     },
     async ({ workspacePath, planRef, verifySnapshot }) =>
       toolJson(await handleTruthHarnessWorkspaceRunNextShow({ workspacePath, planRef, verifySnapshot }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_pilot_loop",
+    {
+      title: "Run Bounded Workspace Pilot Loop",
+      description:
+        "Run a small verifier-directed loop over workspace run-next. Dry-run by default; executeLocal repeats only supported in-process Truth Harness actions, writes no shell commands, and stops on blockers, repeated targets, or maxSteps.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        source: z
+          .enum(["workspace-review", "credibility-actions", "saved-run-next"])
+          .optional()
+          .describe("Source queue to loop over. Defaults to workspace-review."),
+        planRef: z
+          .string()
+          .optional()
+          .describe("Saved run-next plan id/path when source is saved-run-next. Defaults to the newest safe saved handoff."),
+        maxSteps: z
+          .number()
+          .int()
+          .min(1)
+          .max(12)
+          .optional()
+          .describe("Maximum bounded iterations. Defaults to 3 and is capped at 12."),
+        executeLocal: z
+          .boolean()
+          .optional()
+          .describe("When true, execute supported local Truth Harness actions in-process. Defaults to false."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write per-step run-next packets and the pilot-loop transcript into .truth-harness/findings."),
+        maxRoutes: z.number().int().min(0).max(500).optional().describe("Maximum route summaries to inspect."),
+        maxClaims: z.number().int().min(0).max(1000).optional().describe("Maximum claim records to inspect."),
+        maxSessions: z.number().int().min(0).max(500).optional().describe("Maximum research sessions to inspect."),
+        maxReports: z.number().int().min(0).max(200).optional().describe("Maximum saved report drafts to inspect."),
+        timeoutMs: z
+          .number()
+          .int()
+          .min(1)
+          .max(300000)
+          .optional()
+          .describe("Concrete engine check timeout in milliseconds when source is credibility-actions."),
+        maximaCommand: z.string().optional().describe("Override Maxima executable for credibility-actions and engine plans."),
+        sageCommand: z.string().optional().describe("Override SageMath executable for credibility-actions and engine plans."),
+        leanCommand: z.string().optional().describe("Override Lean executable for credibility-actions and engine plans."),
+        z3Command: z.string().optional().describe("Override Z3 executable for credibility-actions and engine plans."),
+        cvc5Command: z.string().optional().describe("Override cvc5 executable for credibility-actions and engine plans."),
+        smtSourcePath: z.string().optional().describe("Workspace-local SMT-LIB source for credibility-actions."),
+        leanSourcePath: z.string().optional().describe("Workspace-local Lean source for credibility-actions."),
+        requireMaxima: z.boolean().optional().describe("Require Maxima for credibility-actions."),
+        requireZ3: z.boolean().optional().describe("Require Z3 for credibility-actions."),
+        requireCvc5: z.boolean().optional().describe("Require cvc5 for credibility-actions."),
+        requireLean: z.boolean().optional().describe("Require Lean for credibility-actions."),
+        requireSage: z.boolean().optional().describe("Require SageMath for credibility-actions."),
+        requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima, Z3, and cvc5 evidence gates."),
+        requireAllConcrete: z.boolean().optional().describe("Require Maxima, Z3, and Lean concrete evidence gates."),
+        requireAllEngines: z.boolean().optional().describe("Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) =>
+      toolJson(
+        await handleTruthHarnessWorkspacePilotLoop({
+          ...input
+        })
+      )
   );
 
   server.registerTool(

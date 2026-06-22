@@ -325,6 +325,7 @@ const ARTIFACT_ID_KEYS = [
   "sessionId",
   "mapId",
   "planId",
+  "loopId",
   "reviewId",
   "recordId",
   "runRecordId",

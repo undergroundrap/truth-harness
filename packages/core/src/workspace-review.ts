@@ -1,9 +1,18 @@
+import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
-import { createClaimReviewPacket, listClaimRecords, type ClaimLedgerRecord } from "./claim-ledger.js";
+import { createClaimReviewPacket, listClaimRecords, type ClaimLedgerDomain, type ClaimLedgerRecord } from "./claim-ledger.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
+import {
+  inspectLeanProject,
+  type LeanProjectDeclaration,
+  type LeanProjectInspection,
+  type LeanProjectProofMarker,
+  type LeanProjectProofMarkerRepairTarget
+} from "./lean-project.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { listLeanProofChecks, type LeanProofCheckSummary } from "./proof-backend.js";
 import { listReportDrafts, type ReportDraftSummary } from "./report-draft.js";
 import {
   listVerifierRoutes,
@@ -74,6 +83,9 @@ export interface WorkspaceReviewItem {
   validationGateId?: string;
   validationGateKind?: string;
   candidateEvidenceRefs?: ValidationEvidenceRef[];
+  proofDeclaration?: WorkspaceReviewProofDeclaration;
+  proofAttempt?: WorkspaceReviewProofAttempt;
+  proofRepairTarget?: WorkspaceReviewProofRepairTarget;
   taskId?: string;
   checkpointId?: string;
   reportId?: string;
@@ -87,6 +99,52 @@ export interface WorkspaceReviewItem {
     label: string;
     ref: string;
   };
+}
+
+export interface WorkspaceReviewProofDeclaration {
+  declarationId: string;
+  kind: LeanProjectDeclaration["kind"];
+  name?: string;
+  path: string;
+  line: number;
+  column: number;
+  signature: string;
+  signatureSha256: string;
+  sourceSha256: string;
+}
+
+type WorkspaceReviewProofDeclarationSource = WorkspaceReviewProofDeclaration;
+
+export interface WorkspaceReviewProofRepairTarget {
+  repairTargetId: string;
+  sourcePath: string;
+  sourceSha256: string;
+  markerKind: LeanProjectProofMarkerRepairTarget["markerKind"];
+  markerLine: number;
+  markerColumn: number;
+  declarationId?: string;
+  declarationName?: string;
+  declarationSignatureSha256?: string;
+  afterEditCommands: string[];
+  evidenceRequired: string[];
+  boundary: string;
+}
+
+export interface WorkspaceReviewProofAttempt {
+  checkId: string;
+  path: string;
+  sourcePath: string;
+  sourceSha256?: string;
+  sourceByteLength?: number;
+  sourceStatus?: "unchanged" | "changed" | "missing" | "unchecked";
+  sourceCurrentSha256?: string;
+  sourceCurrentByteLength?: number;
+  declarationName?: string;
+  declaration?: WorkspaceReviewProofDeclaration;
+  status: LeanProofCheckSummary["status"];
+  trust: TrustLabel;
+  createdAt: string;
+  diagnosticSnippet?: string;
 }
 
 export interface WorkspaceReviewAutonomyContract {
@@ -119,6 +177,7 @@ export interface WorkspaceReview {
     reportDrafts: number;
     totalItems: number;
     routeObligations: number;
+    leanProofSafetyItems: number;
     readyRoutesWithoutClaims: number;
     blockedClaims: number;
     reportDraftReviewItems: number;
@@ -171,6 +230,12 @@ export interface WorkspaceReviewSummary {
 
 const WORKSPACE_REVIEW_SCHEMA_VERSION = "truth-harness.workspace-review.v0" as const;
 
+type ReviewLeanProofCheckSummary = LeanProofCheckSummary & {
+  reviewSourceStatus?: NonNullable<WorkspaceReviewProofAttempt["sourceStatus"]>;
+  reviewSourceCurrentSha256?: string;
+  reviewSourceCurrentByteLength?: number;
+};
+
 export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): Promise<WorkspaceReview> {
   const status = await requireLocalWorkspace(input.rootPath);
   const createdAt = input.now ?? new Date().toISOString();
@@ -179,6 +244,13 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const sessions = (await listResearchSessions(status.root)).slice(0, input.maxSessions ?? 100);
   const reportDrafts = await listReportDrafts({ rootPath: status.root, limit: input.maxReports ?? 50 });
   const validationPlans = await listValidationPlans(status.root);
+  const proofChecks = await enrichProofChecksWithSourceStatus(status.root, await listLeanProofChecks(status.root));
+  const leanInspection = await inspectLeanProject({
+    rootPath: status.root,
+    projectPath: ".",
+    maxLeanFiles: 40
+  });
+  const proofSafetyItems = leanProofSafetyReviewItems(status.root, leanInspection);
   const claimsByRouteRef = claimsByRouteEvidence(claims);
   const claimsByStatementKey = claimsByReviewStatementKey(claims);
   const supersededClaimIds = supersededClaimIdSet(claims);
@@ -190,8 +262,11 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
     claims.map((claim) => claimReviewItems(status.root, claim, supersededClaimIds, readyRoutesByStatementKey))
   )).flat();
   const candidateItems = sortReviewItems([
-    ...sessions.flatMap((session) => linkedValidationGateItems(status.root, session, validationPlans)),
-    ...activeRoutes.flatMap((route) => routeReviewItems(status.root, route, claimsByRouteRef, claimsByStatementKey)),
+    ...proofSafetyItems,
+    ...sessions.flatMap((session) => linkedValidationGateItems(status.root, session, validationPlans, readyRoutesByStatementKey)),
+    ...activeRoutes.flatMap((route) =>
+      routeReviewItems(status.root, route, claimsByRouteRef, claimsByStatementKey, leanInspection, proofChecks)
+    ),
     ...claimItems,
     ...reportDrafts.flatMap((report) => reportDraftReviewItems(status.root, report)),
     ...sessions.flatMap((session) => sessionReviewItems(status.root, session))
@@ -424,6 +499,95 @@ function tryParseWorkspaceReviewJson(raw: string): WorkspaceReview | undefined {
   }
 }
 
+function leanProofSafetyReviewItems(workspacePath: string, inspection: LeanProjectInspection): WorkspaceReviewItem[] {
+  if (!inspection.proofSafety.blocksProvedTrust) {
+    return [];
+  }
+
+  const scanCommand = `truth-harness proof project ${quoteCommandArg(inspection.projectPath)} --workspace ${quoteCommandArg(workspacePath)} --max-lean-files 40 --json`;
+  return inspection.proofSafety.markers.sample.slice(0, 5).map((marker) =>
+    leanProofSafetyReviewItem({
+      command: scanCommand,
+      marker,
+      totalMarkers: inspection.proofSafety.markers.total,
+      completeProjectScan: inspection.proofSafety.completeProjectScan
+    })
+  );
+}
+
+function leanProofSafetyReviewItem(input: {
+  command: string;
+  marker: LeanProjectProofMarker;
+  totalMarkers: number;
+  completeProjectScan: boolean;
+}): WorkspaceReviewItem {
+  const markerRef = `${input.marker.path}:${input.marker.line}:${input.marker.column}`;
+  return {
+    itemId: itemIdFor({
+      kind: "lean-proof-safety",
+      path: input.marker.path,
+      line: input.marker.line,
+      column: input.marker.column,
+      marker: input.marker.kind
+    }),
+    kind: "route-obligation",
+    priority: "critical",
+    title: `Resolve Lean proof marker: ${input.marker.kind}`,
+    summary: `${markerRef} contains ${input.marker.kind}. ${input.marker.message} Truth Harness found ${input.totalMarkers} blocking Lean marker(s) and will not treat affected source as proved until each marker is removed or the proof boundary is rewritten. ${input.completeProjectScan ? "" : "The project scan was truncated; increase --max-lean-files for full coverage."}`.trim(),
+    command: input.command,
+    obligationKind: "formal-proof",
+    domain: "math",
+    trust: "unverified",
+    createdAt: "1970-01-01T00:00:00.000Z",
+    ...(input.marker.declaration ? { proofDeclaration: workspaceReviewMarkerProofDeclaration(input.marker) } : {}),
+    proofRepairTarget: workspaceReviewProofRepairTarget(input.marker.repairTarget),
+    source: {
+      label: "Lean proof safety",
+      ref: `lean-marker:${markerRef}`
+    }
+  };
+}
+
+function workspaceReviewProofRepairTarget(
+  repairTarget: LeanProjectProofMarkerRepairTarget
+): WorkspaceReviewProofRepairTarget {
+  return {
+    repairTargetId: repairTarget.repairTargetId,
+    sourcePath: repairTarget.sourcePath,
+    sourceSha256: repairTarget.sourceSha256,
+    markerKind: repairTarget.markerKind,
+    markerLine: repairTarget.markerLine,
+    markerColumn: repairTarget.markerColumn,
+    ...(repairTarget.declarationId ? { declarationId: repairTarget.declarationId } : {}),
+    ...(repairTarget.declarationName ? { declarationName: repairTarget.declarationName } : {}),
+    ...(repairTarget.declarationSignatureSha256
+      ? { declarationSignatureSha256: repairTarget.declarationSignatureSha256 }
+      : {}),
+    afterEditCommands: [...repairTarget.afterEditCommands],
+    evidenceRequired: [...repairTarget.evidenceRequired],
+    boundary: repairTarget.boundary
+  };
+}
+
+function workspaceReviewMarkerProofDeclaration(marker: LeanProjectProofMarker): WorkspaceReviewProofDeclaration {
+  const declaration = marker.declaration;
+  if (!declaration) {
+    throw new Error("Lean proof marker has no enclosing declaration.");
+  }
+
+  return {
+    declarationId: declaration.declarationId,
+    kind: declaration.kind,
+    ...(declaration.name ? { name: declaration.name } : {}),
+    path: declaration.path,
+    line: declaration.line,
+    column: declaration.column,
+    signature: declaration.signature,
+    signatureSha256: declaration.signatureSha256,
+    sourceSha256: declaration.sourceSha256
+  };
+}
+
 function summarizeWorkspaceReview(review: WorkspaceReview, path: string): WorkspaceReviewSummary {
   return {
     schemaVersion: review.schemaVersion,
@@ -485,11 +649,12 @@ function toPortablePath(value: string): string {
 function linkedValidationGateItems(
   workspacePath: string,
   session: ResearchSession,
-  validationPlans: ValidationPlan[]
+  validationPlans: ValidationPlan[],
+  readyRoutesByStatementKey: Map<string, VerifierRoute>
 ): WorkspaceReviewItem[] {
   const plans = linkedValidationPlansForSession(session, validationPlans);
   return plans.flatMap((plan) =>
-    openValidationGates(plan).map((gate) => validationGateItem(workspacePath, session, plan, gate))
+    openValidationGates(plan).map((gate) => validationGateItem(workspacePath, session, plan, gate, readyRoutesByStatementKey))
   );
 }
 
@@ -525,9 +690,10 @@ function validationGateItem(
   workspacePath: string,
   session: ResearchSession,
   plan: ValidationPlan,
-  gate: ValidationGate
+  gate: ValidationGate,
+  readyRoutesByStatementKey: Map<string, VerifierRoute>
 ): WorkspaceReviewItem {
-  const candidateEvidenceRefs = candidateEvidenceRefsForValidationGate(session, gate);
+  const candidateEvidenceRefs = candidateEvidenceRefsForValidationGate(session, plan, gate, readyRoutesByStatementKey);
 
   return {
     itemId: itemIdFor({
@@ -558,14 +724,15 @@ function validationGateItem(
 
 function candidateEvidenceRefsForValidationGate(
   session: ResearchSession,
-  gate: ValidationGate
+  plan: ValidationPlan,
+  gate: ValidationGate,
+  readyRoutesByStatementKey: Map<string, VerifierRoute>
 ): ValidationEvidenceRef[] {
   const attached = new Set(gate.evidenceRefs.map((ref) => validationEvidenceKey(ref)));
   const candidates: ValidationEvidenceRef[] = [];
   const seen = new Set<string>();
-  const collect = (ref: ResearchEvidenceRef): void => {
-    const candidate = toValidationEvidenceRef(ref);
-    if (!candidate || !isEvidenceCandidateForValidationGate(candidate, gate)) {
+  const collectCandidate = (candidate: ValidationEvidenceRef): void => {
+    if (!isEvidenceCandidateForValidationGate(candidate, gate)) {
       return;
     }
     const key = validationEvidenceKey(candidate);
@@ -575,10 +742,29 @@ function candidateEvidenceRefsForValidationGate(
     seen.add(key);
     candidates.push(candidate);
   };
+  const collect = (ref: ResearchEvidenceRef): void => {
+    const candidate = toValidationEvidenceRef(ref);
+    if (!candidate) {
+      return;
+    }
+    collectCandidate(candidate);
+  };
 
   session.evidenceRefs.forEach(collect);
   for (const checkpoint of session.checkpoints) {
     checkpoint.evidenceRefs.forEach(collect);
+  }
+  for (const key of reviewStatementKeys(plan.claim)) {
+    const route = readyRoutesByStatementKey.get(key);
+    if (!route) {
+      continue;
+    }
+    collectCandidate({
+      kind: "route",
+      ref: route.routeId,
+      trust: verifierRouteReadiness(route).strongestTrust,
+      summary: `Ready verifier route ${route.routeId} matches validation claim ${JSON.stringify(plan.claim)}.`
+    });
   }
 
   return rankValidationEvidenceCandidates(candidates, gate);
@@ -697,7 +883,10 @@ function isEvidenceCandidateForValidationGate(ref: ValidationEvidenceRef, gate: 
   if (gate.kind === "claim-chart") {
     return ref.kind === "claim-chart" || ref.kind === "invention";
   }
-  if (gate.kind === "workspace-snapshot" || gate.kind === "replay") {
+  if (gate.kind === "workspace-snapshot") {
+    return ref.kind === "snapshot";
+  }
+  if (gate.kind === "replay") {
     return ref.kind === "snapshot" || ref.kind === "receipt" || ref.kind === "route";
   }
 
@@ -764,6 +953,11 @@ function commandForValidationGate(
     return validationGateAttachCommandForEvidence(plan.planId, gate.gateId, candidate);
   }
 
+  const escalationCommand = commandForAttachedValidationGate(gate);
+  if (escalationCommand) {
+    return escalationCommand;
+  }
+
   if (gate.kind === "proof") {
     return `truth-harness verify ${quoteCommandArg(plan.claim)} --write --workspace ${quoteCommandArg(workspacePath)} --json`;
   }
@@ -776,25 +970,55 @@ function commandForValidationGate(
     return `truth-harness bench run packages/benchmarks/suites/foundations-seed.json --write --workspace ${quoteCommandArg(workspacePath)} --json`;
   }
 
+  if (gate.kind === "workspace-snapshot") {
+    return `truth-harness workspace snapshot ${quoteCommandArg(workspacePath)} --json`;
+  }
+
   return `truth-harness research show ${quoteCommandArg(session.sessionId)} --workspace ${quoteCommandArg(workspacePath)} --json`;
+}
+
+function commandForAttachedValidationGate(gate: ValidationGate): string | undefined {
+  if (gate.kind !== "proof" || gate.evidenceRefs.length === 0 || gate.status !== "in-progress") {
+    return undefined;
+  }
+
+  for (const nextCheck of gate.nextChecks) {
+    const normalized = nextCheck.toLowerCase();
+    if (/\bsage\b|sagemath/u.test(normalized)) {
+      return "npm run docker:sage";
+    }
+    if (/\blean\b|proof checker|proof-checker|proof project/u.test(normalized)) {
+      return "docker compose run --rm lean-proof";
+    }
+    if (/\bmaxima\b|\bcas\b|\bz3\b|\bcvc5\b|\bsmt\b|solver|docker-derived/u.test(normalized)) {
+      return "npm run docker:engines";
+    }
+  }
+
+  return undefined;
 }
 
 function routeReviewItems(
   workspacePath: string,
   route: VerifierRoute,
   claimsByRouteRef: Map<string, ClaimLedgerRecord[]>,
-  claimsByStatementKey: Map<string, ClaimLedgerRecord[]>
+  claimsByStatementKey: Map<string, ClaimLedgerRecord[]>,
+  leanInspection: LeanProjectInspection,
+  proofChecks: ReviewLeanProofCheckSummary[]
 ): WorkspaceReviewItem[] {
   const readiness = verifierRouteReadiness(route);
   const openObligations = (route.proofObligations ?? []).filter((obligation) => obligation.status === "open");
-  const items = openObligations.map((obligation) => routeObligationItem(workspacePath, route, obligation));
+  const items = openObligations.map((obligation) =>
+    routeObligationItem(workspacePath, route, obligation, leanInspection, proofChecks)
+  );
   const hasClaim = (claimsByRouteRef.get(route.routeId)?.length ?? 0) > 0;
 
   if (readiness.readyForNarrowClaim && !hasClaim) {
     const equivalentClaim = firstEquivalentClaim(route.problem, claimsByStatementKey);
+    const claimDomain = claimDomainForVerifierRoute(route);
     const command = equivalentClaim
       ? `truth-harness claim review ${quoteCommandArg(equivalentClaim.claimId)} --workspace ${quoteCommandArg(workspacePath)} --json`
-      : `truth-harness claim add ${quoteCommandArg(route.problem)} --workspace ${quoteCommandArg(workspacePath)} --evidence ${quoteCommandArg(`route:${route.routeId}`)} --trust ${quoteCommandArg(readiness.strongestTrust)} --json`;
+      : `truth-harness claim add ${quoteCommandArg(route.problem)} --workspace ${quoteCommandArg(workspacePath)} --domain ${quoteCommandArg(claimDomain)} --evidence ${quoteCommandArg(`route:${route.routeId}`)} --trust ${quoteCommandArg(readiness.strongestTrust)} --json`;
 
     items.push({
       itemId: itemIdFor({
@@ -811,6 +1035,7 @@ function routeReviewItems(
       command,
       routeId: route.routeId,
       claimId: equivalentClaim?.claimId,
+      domain: claimDomain,
       trust: readiness.strongestTrust,
       createdAt: route.createdAt,
       source: {
@@ -821,6 +1046,24 @@ function routeReviewItems(
   }
 
   return items;
+}
+
+function claimDomainForVerifierRoute(route: VerifierRoute): ClaimLedgerDomain {
+  switch (route.evidenceKind) {
+    case "exact-arithmetic":
+    case "universal-parity":
+    case "symbolic-cas":
+    case "interval-bound":
+      return "math";
+    case "dimension-analysis":
+      return "physics";
+    case "source-citation":
+      return "sources";
+    case "unsupported":
+      return route.finalTrust === "smt-checked" ? "math" : "general";
+    default:
+      return "general";
+  }
 }
 
 function staleEquivalentVerifierRouteIds(routes: VerifierRoute[]): Set<string> {
@@ -878,8 +1121,21 @@ function routeSupersedesForReview(candidate: VerifierRoute, stale: VerifierRoute
   return candidateRank > staleRank || (candidateRank === staleRank && candidate.createdAt.localeCompare(stale.createdAt) > 0);
 }
 
-function routeObligationItem(workspacePath: string, route: VerifierRoute, obligation: ProofObligation): WorkspaceReviewItem {
-  const command = commandForRouteObligation(workspacePath, route, obligation);
+function routeObligationItem(
+  workspacePath: string,
+  route: VerifierRoute,
+  obligation: ProofObligation,
+  leanInspection: LeanProjectInspection,
+  proofChecks: ReviewLeanProofCheckSummary[]
+): WorkspaceReviewItem {
+  const latestProofAttempt = latestScopedProofAttemptForRouteObligation(route, obligation, proofChecks);
+  const proofDeclaration = latestProofAttempt
+    ? latestProofAttempt.declaration
+    : concreteLeanDeclarationForRouteObligation(route, obligation, leanInspection);
+  const command = commandForRouteObligation(workspacePath, route, obligation, leanInspection, latestProofAttempt);
+  const proofAttemptSummary = latestProofAttempt
+    ? ` Latest scoped Lean attempt ${latestProofAttempt.checkId} is ${latestProofAttempt.status} for ${latestProofAttempt.sourcePath}; repair that artifact before rerunning the proof check.${proofAttemptSourceStatusSummary(latestProofAttempt)}${latestProofAttempt.diagnosticSnippet ? ` Diagnostic: ${latestProofAttempt.diagnosticSnippet}` : ""}`
+    : "";
   return {
     itemId: itemIdFor({
       kind: "route-obligation",
@@ -889,11 +1145,13 @@ function routeObligationItem(workspacePath: string, route: VerifierRoute, obliga
     kind: "route-obligation",
     priority: priorityForRouteObligation(route, obligation, command),
     title: obligation.title,
-    summary: `${route.problem} - ${obligation.requiredBefore}`,
+    summary: `${route.problem} - ${obligation.requiredBefore}${proofAttemptSummary}`,
     command,
     routeId: route.routeId,
     obligationId: obligation.obligationId,
     obligationKind: obligation.kind,
+    ...(proofDeclaration ? { proofDeclaration: workspaceReviewProofDeclaration(proofDeclaration) } : {}),
+    ...(latestProofAttempt ? { proofAttempt: workspaceReviewProofAttempt(latestProofAttempt) } : {}),
     trust: route.finalTrust,
     createdAt: route.createdAt,
     source: {
@@ -903,11 +1161,60 @@ function routeObligationItem(workspacePath: string, route: VerifierRoute, obliga
   };
 }
 
-function commandForRouteObligation(workspacePath: string, route: VerifierRoute, obligation: ProofObligation): string {
+function workspaceReviewProofDeclaration(declaration: WorkspaceReviewProofDeclarationSource): WorkspaceReviewProofDeclaration {
+  return {
+    declarationId: declaration.declarationId,
+    kind: declaration.kind,
+    ...(declaration.name ? { name: declaration.name } : {}),
+    path: declaration.path,
+    line: declaration.line,
+    column: declaration.column,
+    signature: declaration.signature,
+    signatureSha256: declaration.signatureSha256,
+    sourceSha256: declaration.sourceSha256
+  };
+}
+
+function workspaceReviewProofAttempt(proof: ReviewLeanProofCheckSummary): WorkspaceReviewProofAttempt {
+  return {
+    checkId: proof.checkId,
+    path: proof.path,
+    sourcePath: proof.sourcePath,
+    sourceSha256: proof.sourceSha256,
+    sourceByteLength: proof.sourceByteLength,
+    sourceStatus: proof.reviewSourceStatus,
+    sourceCurrentSha256: proof.reviewSourceCurrentSha256,
+    sourceCurrentByteLength: proof.reviewSourceCurrentByteLength,
+    declarationName: proof.declarationName,
+    ...(proof.declaration ? { declaration: workspaceReviewProofDeclaration(proof.declaration) } : {}),
+    status: proof.status,
+    trust: proof.trust,
+    createdAt: proof.createdAt,
+    diagnosticSnippet: proof.diagnosticSnippet
+  };
+}
+
+function commandForRouteObligation(
+  workspacePath: string,
+  route: VerifierRoute,
+  obligation: ProofObligation,
+  leanInspection: LeanProjectInspection,
+  latestProofAttempt: ReviewLeanProofCheckSummary | undefined
+): string {
   const inspectRouteCommand = `truth-harness route show ${quoteCommandArg(route.routeId)} --workspace ${quoteCommandArg(workspacePath)} --json`;
   const concreteSmtCommand = concreteSmtCommandForRouteObligation(route, obligation);
   if (concreteSmtCommand) {
     return concreteSmtCommand;
+  }
+
+  const repairLeanCommand = proofRepairCommandForRouteObligation(route, obligation, latestProofAttempt);
+  if (repairLeanCommand) {
+    return repairLeanCommand;
+  }
+
+  const concreteLeanCommand = concreteLeanProofCommandForRouteObligation(route, obligation, leanInspection);
+  if (concreteLeanCommand) {
+    return concreteLeanCommand;
   }
 
   if (smtCommandNeedsConcreteSource(obligation.command)) {
@@ -924,6 +1231,176 @@ function commandForRouteObligation(workspacePath: string, route: VerifierRoute, 
   }
 
   return obligation.command ?? inspectRouteCommand;
+}
+
+function latestScopedProofAttemptForRouteObligation(
+  route: VerifierRoute,
+  obligation: ProofObligation,
+  proofChecks: ReviewLeanProofCheckSummary[]
+): ReviewLeanProofCheckSummary | undefined {
+  if (obligation.kind !== "formal-proof") {
+    return undefined;
+  }
+
+  return proofChecks.find((proof) =>
+    proof.scope?.routeId === route.routeId &&
+    proof.scope.obligationId === obligation.obligationId &&
+    (proof.status === "rejected" || proof.status === "error")
+  );
+}
+
+function proofRepairCommandForRouteObligation(
+  route: VerifierRoute,
+  obligation: ProofObligation,
+  proof: ReviewLeanProofCheckSummary | undefined
+): string | undefined {
+  if (!proof) {
+    return undefined;
+  }
+
+  const declarationArg = proof.declarationName ? ` --declaration ${quoteCommandArg(proof.declarationName)}` : "";
+  const baseCommand = `truth-harness proof check ${quoteCommandArg(proof.sourcePath)}${declarationArg} --write`;
+  return scopedProofCommand(baseCommand, route.routeId, obligation.obligationId, proof.scope?.statement ?? obligation.statement);
+}
+
+async function enrichProofChecksWithSourceStatus(
+  rootPath: string,
+  proofChecks: LeanProofCheckSummary[]
+): Promise<ReviewLeanProofCheckSummary[]> {
+  return Promise.all(
+    proofChecks.map(async (proof): Promise<ReviewLeanProofCheckSummary> => {
+      if (!proof.sourceSha256) {
+        return { ...proof, reviewSourceStatus: "unchecked" };
+      }
+
+      let bytes: Buffer;
+      try {
+        bytes = await readFile(resolveUnderRoot(rootPath, proof.sourcePath));
+      } catch {
+        return { ...proof, reviewSourceStatus: "missing" };
+      }
+
+      const currentSha256 = createHash("sha256").update(bytes).digest("hex");
+      return {
+        ...proof,
+        reviewSourceStatus: currentSha256 === proof.sourceSha256 ? "unchanged" : "changed",
+        reviewSourceCurrentSha256: currentSha256,
+        reviewSourceCurrentByteLength: bytes.byteLength
+      };
+    })
+  );
+}
+
+function proofAttemptSourceStatusSummary(proof: ReviewLeanProofCheckSummary): string {
+  if (proof.reviewSourceStatus === "unchanged") {
+    return " Source unchanged since that failed attempt; edit the file before rerunning.";
+  }
+  if (proof.reviewSourceStatus === "changed") {
+    return " Source changed since that failed attempt; rerun the scoped proof check to create fresh evidence.";
+  }
+  if (proof.reviewSourceStatus === "missing") {
+    return " Source file is missing; restore or recreate it before rerunning.";
+  }
+  if (proof.reviewSourceStatus === "unchecked") {
+    return " Source hash was unavailable; inspect the proof artifact before rerunning.";
+  }
+  return "";
+}
+
+function concreteLeanProofCommandForRouteObligation(
+  route: VerifierRoute,
+  obligation: ProofObligation,
+  leanInspection: LeanProjectInspection
+): string | undefined {
+  const declaration = concreteLeanDeclarationForRouteObligation(route, obligation, leanInspection);
+  if (!declaration) {
+    return undefined;
+  }
+
+  const declarationArg = declaration.name ? ` --declaration ${quoteCommandArg(declaration.name)}` : "";
+  const baseCommand = `truth-harness proof check ${quoteCommandArg(declaration.path)}${declarationArg} --write`;
+  return scopedProofCommand(baseCommand, route.routeId, obligation.obligationId, obligation.statement);
+}
+
+function concreteLeanDeclarationForRouteObligation(
+  route: VerifierRoute,
+  obligation: ProofObligation,
+  leanInspection: LeanProjectInspection
+): LeanProjectDeclaration | undefined {
+  if (obligation.kind !== "formal-proof" || !proofCommandNeedsConcreteSource(obligation.command)) {
+    return undefined;
+  }
+  if (leanInspection.proofSafety.blocksProvedTrust) {
+    return undefined;
+  }
+
+  return findLeanDeclarationForRouteObligation(route, obligation, leanInspection);
+}
+
+function findLeanDeclarationForRouteObligation(
+  route: VerifierRoute,
+  obligation: ProofObligation,
+  leanInspection: LeanProjectInspection
+): LeanProjectDeclaration | undefined {
+  const targets = uniqueSorted([obligation.statement, route.problem, route.normalizedProblem]);
+  return leanInspection.declarations.sample.find((declaration) =>
+    declaration.kind !== "def" && targets.some((target) => leanDeclarationMatchesTarget(declaration, target))
+  );
+}
+
+function leanDeclarationMatchesTarget(declaration: LeanProjectDeclaration, target: string): boolean {
+  const targetText = normalizeLeanMatchText(target);
+  const declarationText = normalizeLeanMatchText(
+    [declaration.name, declaration.signature, declaration.snippet].filter(Boolean).join(" ")
+  );
+  if (!targetText || !declarationText) {
+    return false;
+  }
+
+  if (targetText.length >= 6 && (declarationText.includes(targetText) || targetText.includes(declarationText))) {
+    return true;
+  }
+
+  const targetTokens = significantLeanMatchTokens(targetText);
+  if (targetTokens.length < 2) {
+    return false;
+  }
+
+  const declarationTokens = new Set(significantLeanMatchTokens(declarationText));
+  const overlap = targetTokens.filter((token) => declarationTokens.has(token)).length;
+  return overlap >= Math.max(2, Math.ceil(targetTokens.length * 0.75));
+}
+
+function normalizeLeanMatchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/gu, "$1/$2")
+    .replace(/\\operatorname\{([^{}]+)\}/gu, "$1")
+    .replace(/:=.*$/u, " ")
+    .replace(/[_'.]/gu, " ")
+    .replace(/\\/gu, " ")
+    .replace(/[{}[\],;:]/gu, " ")
+    .replace(/[^a-z0-9/+*^=<>()-]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function significantLeanMatchTokens(value: string): string[] {
+  const stop = new Set([
+    "theorem",
+    "lemma",
+    "example",
+    "def",
+    "by",
+    "prop",
+    "type",
+    "true",
+    "false"
+  ]);
+  return value
+    .split(/\s+/u)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2 && !stop.has(token));
 }
 
 function concreteSmtCommandForRouteObligation(route: VerifierRoute, obligation: ProofObligation): string | undefined {
@@ -1238,10 +1715,13 @@ function sessionNextCheckItem(
 function recentSessionNextChecks(
   session: ResearchSession
 ): Array<{ checkpoint: ResearchSessionCheckpoint; check: string }> {
-  return [...session.checkpoints]
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    .flatMap((checkpoint) => checkpoint.nextChecks.map((check) => ({ checkpoint, check })))
-    .slice(0, 20);
+  const latestCheckpoint = [...session.checkpoints].sort((left, right) =>
+    right.createdAt.localeCompare(left.createdAt)
+  )[0];
+
+  return latestCheckpoint
+    ? latestCheckpoint.nextChecks.map((check) => ({ checkpoint: latestCheckpoint, check })).slice(0, 20)
+    : [];
 }
 
 function claimsByRouteEvidence(claims: ClaimLedgerRecord[]): Map<string, ClaimLedgerRecord[]> {
@@ -1367,6 +1847,7 @@ function summarizeItems(input: {
     reportDrafts: input.reportDrafts,
     totalItems: input.items.length,
     routeObligations: input.items.filter((item) => item.kind === "route-obligation").length,
+    leanProofSafetyItems: input.items.filter(isLeanProofSafetyItem).length,
     readyRoutesWithoutClaims: input.items.filter((item) => item.kind === "route-ready-claim").length,
     blockedClaims: input.items.filter((item) => item.kind === "claim-blocker").length,
     reportDraftReviewItems: input.items.filter((item) => item.kind === "report-draft-review").length,
@@ -1574,12 +2055,24 @@ function priorityForClaim(claim: ClaimLedgerRecord): WorkspaceReviewPriority {
 }
 
 function priorityForValidationGate(gate: ValidationGate): WorkspaceReviewPriority {
-  if (gate.status === "blocked" || gate.kind === "proof") {
+  if (gate.status === "blocked") {
+    return gate.blocking ? "critical" : "high";
+  }
+
+  if (gate.kind === "proof") {
+    if (gate.evidenceRefs.length > 0 && (gate.status === "planned" || gate.status === "in-progress")) {
+      return "low";
+    }
+
     return gate.blocking ? "critical" : "high";
   }
 
   if (gate.blocking) {
     return "high";
+  }
+
+  if (gate.kind === "workspace-snapshot") {
+    return "low";
   }
 
   if (gate.status === "missing" || gate.status === "planned") {
@@ -1605,8 +2098,8 @@ function sortReviewItems(items: WorkspaceReviewItem[]): WorkspaceReviewItem[] {
     low: 3
   };
   const kindRank: Record<WorkspaceReviewItemKind, number> = {
-    "validation-gate": 0,
-    "route-obligation": 1,
+    "route-obligation": 0,
+    "validation-gate": 1,
     "claim-blocker": 2,
     "report-draft-review": 3,
     "session-task": 4,
@@ -1785,6 +2278,10 @@ function workspaceReviewEvidenceSlots(item: WorkspaceReviewItem): WorkspaceRevie
   return [];
 }
 
+function isLeanProofSafetyItem(item: WorkspaceReviewItem): boolean {
+  return item.kind === "route-obligation" && item.source.label === "Lean proof safety";
+}
+
 function acceptedArtifactsForValidationGate(kind: string | undefined): string[] {
   switch (kind) {
     case "proof":
@@ -1821,12 +2318,58 @@ function acceptedArtifactsForValidationGate(kind: string | undefined): string[] 
 }
 
 function routeObligationEvidenceSlot(item: WorkspaceReviewItem): WorkspaceReviewEvidenceSlot {
+  if (isLeanProofSafetyItem(item)) {
+    const declarationInstruction = workspaceReviewProofDeclarationInstruction(item);
+    const repairTargetInstruction = item.proofRepairTarget
+      ? `Repair target ${item.proofRepairTarget.repairTargetId} requires source sha256 ${item.proofRepairTarget.sourceSha256}; after editing, run ${item.proofRepairTarget.afterEditCommands[0]}.`
+      : undefined;
+    return {
+      slotId: "lean-proof-safety-clearance",
+      label: "Lean proof marker clearance",
+      required: true,
+      status: "open",
+      description: [
+        "Close this only by editing the workspace-local Lean source so the blocking marker is gone, then rerunning the project scan and proof check.",
+        declarationInstruction,
+        repairTargetInstruction
+      ].filter((value): value is string => Boolean(value)).join(" "),
+      acceptedArtifacts: [
+        "workspace-local .lean source without the named marker",
+        "truth-harness proof project <project> --json with zero blocking markers for the affected source",
+        "truth-harness proof check <file> --write"
+      ],
+      suggestedCommand: item.command
+    };
+  }
+
   const attachTo = {
     routeId: item.routeId,
     obligationId: item.obligationId
   };
 
   if (item.obligationKind === "formal-proof") {
+    if (isScopedLeanProofRepairItem(item)) {
+      const sourceInstruction = proofRepairSourceInstruction(item);
+      return {
+        slotId: "lean-proof-repair",
+        label: "Lean proof repair artifact",
+        required: true,
+        status: "open",
+        description: [
+          "Repair the same workspace-local Lean file from the failed scoped attempt, rerun the suggested proof check until Lean accepts it, then attach that accepted proof-check record to this exact route obligation.",
+          sourceInstruction
+        ].filter((value): value is string => Boolean(value)).join(" "),
+        acceptedArtifacts: [
+          "edited workspace-local .lean source",
+          "accepted truth-harness proof check --route <route_id> --obligation <obl_id>",
+          ".truth-harness/proofs/*.json with status accepted"
+        ],
+        suggestedCommand: item.command,
+        attachCommand: routeObligationAttachCommand(item, "proof:<proof-check-id-or-path>"),
+        attachTo
+      };
+    }
+
     return {
       slotId: "accepted-proof-check",
       label: "Accepted proof-check artifact",
@@ -1835,6 +2378,7 @@ function routeObligationEvidenceSlot(item: WorkspaceReviewItem): WorkspaceReview
       description: "Close this only with an accepted proof-checking backend record scoped to this exact route obligation.",
       acceptedArtifacts: ["truth-harness proof check --route <route_id> --obligation <obl_id>", ".truth-harness/proofs/*.json"],
       suggestedCommand: item.command,
+      attachCommand: routeObligationAttachCommand(item, "proof:<proof-check-id-or-path>"),
       attachTo
     };
   }
@@ -1848,6 +2392,7 @@ function routeObligationEvidenceSlot(item: WorkspaceReviewItem): WorkspaceReview
       description: "Close this with a replayable SMT record that encodes the exact scoped claim and earns smt-checked or stronger.",
       acceptedArtifacts: ["truth-harness smt check", "truth-harness smt solve", ".truth-harness/smt/*.json"],
       suggestedCommand: item.command,
+      attachCommand: routeObligationAttachCommand(item, "smt:<smt-check-id-or-path>"),
       attachTo
     };
   }
@@ -1861,6 +2406,7 @@ function routeObligationEvidenceSlot(item: WorkspaceReviewItem): WorkspaceReview
       description: "Close this with an independent CAS, SMT, or proof artifact that agrees with the current route result.",
       acceptedArtifacts: ["truth-harness cas check", "truth-harness smt check", ".truth-harness/cas/*.json", ".truth-harness/smt/*.json"],
       suggestedCommand: item.command,
+      attachCommand: routeObligationAttachCommand(item, "<kind>:<evidence-id-or-path>"),
       attachTo
     };
   }
@@ -1873,14 +2419,79 @@ function routeObligationEvidenceSlot(item: WorkspaceReviewItem): WorkspaceReview
     description: "Attach replayable local evidence that satisfies this obligation without widening the claim.",
     acceptedArtifacts: [".truth-harness/**/*.json", "proof/CAS/SMT/source/review artifact"],
     suggestedCommand: item.command,
+    attachCommand: routeObligationAttachCommand(item, "<kind>:<evidence-id-or-path>"),
     attachTo
   };
+}
+
+function isScopedLeanProofRepairItem(item: WorkspaceReviewItem): boolean {
+  return (
+    item.kind === "route-obligation" &&
+    item.obligationKind === "formal-proof" &&
+    /^truth-harness\s+proof\s+check\b/u.test(item.command) &&
+    /\bLatest scoped Lean attempt\b/u.test(item.summary)
+  );
+}
+
+function proofRepairSourceInstruction(item: WorkspaceReviewItem): string | undefined {
+  switch (item.proofAttempt?.sourceStatus) {
+    case "unchanged":
+      return "The source is unchanged since the failed attempt; edit it before rerunning Lean.";
+    case "changed":
+      return "The source changed since the failed attempt; rerun the scoped proof check to write fresh evidence.";
+    case "missing":
+      return "The recorded source file is missing; restore or recreate it before running Lean.";
+    case "unchecked":
+      return "The source status is unchecked; inspect the proof artifact and source before rerunning Lean.";
+    default:
+      return undefined;
+  }
+}
+
+function workspaceReviewProofDeclarationInstruction(item: WorkspaceReviewItem): string | undefined {
+  const declaration = item.proofDeclaration;
+  if (!declaration) {
+    return undefined;
+  }
+
+  const name = declaration.name ? `${declaration.kind} ${declaration.name}` : declaration.kind;
+  return `Target declaration: ${name} (${declaration.declarationId}) at ${declaration.path}:${declaration.line}:${declaration.column}, signature sha256 ${declaration.signatureSha256}.`;
+}
+
+function routeObligationAttachCommand(item: WorkspaceReviewItem, evidencePlaceholder: string): string | undefined {
+  if (!item.routeId || !item.obligationId) {
+    return undefined;
+  }
+
+  return `truth-harness route satisfy ${quoteCommandArg(item.routeId)} ${quoteCommandArg(item.obligationId)} --evidence ${quoteCommandArg(evidencePlaceholder)} --json`;
 }
 
 function workspaceReviewAcceptanceCriteria(item: WorkspaceReviewItem): string[] {
   const criteria: string[] = [];
 
-  if (item.kind === "route-obligation") {
+  if (isLeanProofSafetyItem(item)) {
+    const declarationCriterion = workspaceReviewProofDeclarationCriterion(item);
+    const repairTargetCriterion = item.proofRepairTarget
+      ? `Resolve repair target ${item.proofRepairTarget.repairTargetId} in ${item.proofRepairTarget.sourcePath}; preserve or explain any source/declaration hash change.`
+      : undefined;
+    criteria.push(
+      "Open the named Lean source and replace the proof placeholder or local unchecked assumption with real proof structure, a reviewed import, or a narrower theorem.",
+      ...(declarationCriterion ? [declarationCriterion] : []),
+      ...(repairTargetCriterion ? [repairTargetCriterion] : []),
+      "Rerun the exact proof project scan command and confirm the named marker no longer appears.",
+      "Only after the marker is gone, run a scoped `truth-harness proof check <file> --write` before using the source as proof evidence."
+    );
+  } else if (isScopedLeanProofRepairItem(item)) {
+    const sourceCriterion = proofRepairSourceCriterion(item);
+    if (sourceCriterion) {
+      criteria.push(sourceCriterion);
+    }
+    criteria.push(
+      "Edit the same Lean source named in the suggested command; do not start a disconnected proof attempt.",
+      "Use the diagnostic preview as a repair hint, but rerun Lean before trusting the fix.",
+      "Close this only after an accepted proof-check record is attached to the exact route and obligation."
+    );
+  } else if (item.kind === "route-obligation") {
     criteria.push(
       "Open the source route and satisfy this exact obligation before upgrading trust.",
       "Attach the resulting proof, solver, CAS, or review artifact to the route.",
@@ -1956,6 +2567,31 @@ function workspaceReviewAcceptanceCriteria(item: WorkspaceReviewItem): string[] 
   return criteria;
 }
 
+function workspaceReviewProofDeclarationCriterion(item: WorkspaceReviewItem): string | undefined {
+  const declaration = item.proofDeclaration;
+  if (!declaration) {
+    return undefined;
+  }
+
+  const name = declaration.name ? `${declaration.kind} ${declaration.name}` : declaration.kind;
+  return `Repair the enclosing ${name} with signature hash ${declaration.signatureSha256}; do not move the work to an unrelated declaration.`;
+}
+
+function proofRepairSourceCriterion(item: WorkspaceReviewItem): string | undefined {
+  switch (item.proofAttempt?.sourceStatus) {
+    case "unchanged":
+      return "Do not rerun the proof check until the workspace-local Lean source changes from the rejected attempt hash.";
+    case "changed":
+      return "The Lean source has changed since the rejected attempt; rerun the suggested scoped proof check to create fresh evidence.";
+    case "missing":
+      return "Restore or recreate the recorded Lean source path before running the suggested proof check.";
+    case "unchecked":
+      return "Inspect the proof-check record and source path before rerunning because the source status could not be checked.";
+    default:
+      return undefined;
+  }
+}
+
 function workspaceReviewAgentPacket(
   item: WorkspaceReviewItem,
   acceptanceCriteria: string[],
@@ -1977,6 +2613,36 @@ function workspaceReviewAgentPacket(
     `Validation gate: ${item.validationGateId ?? "n/a"} (${item.validationGateKind ?? "n/a"})`,
     `Report: ${item.reportId ?? "n/a"}`,
     `Obligation: ${item.obligationId ?? "n/a"}`,
+    ...(item.proofDeclaration
+      ? [
+          `Proof declaration: ${item.proofDeclaration.declarationId} ${item.proofDeclaration.path}:${item.proofDeclaration.line}:${item.proofDeclaration.column}`,
+          `Proof declaration signature: ${item.proofDeclaration.signature}`,
+          `Proof declaration signature sha256:${item.proofDeclaration.signatureSha256}`
+        ]
+      : []),
+    `Proof attempt: ${item.proofAttempt ? `${item.proofAttempt.checkId} (${item.proofAttempt.status}, ${item.proofAttempt.path})` : "n/a"}`,
+    ...(item.proofAttempt?.sourceSha256
+      ? [`Proof source: ${item.proofAttempt.sourcePath} sha256:${item.proofAttempt.sourceSha256}`]
+      : []),
+    ...(item.proofAttempt?.sourceStatus
+      ? [
+          `Proof source status: ${item.proofAttempt.sourceStatus}${
+            item.proofAttempt.sourceCurrentSha256 ? ` (current sha256:${item.proofAttempt.sourceCurrentSha256})` : ""
+          }`
+        ]
+      : []),
+    ...(item.proofAttempt?.diagnosticSnippet ? [`Proof diagnostic: ${item.proofAttempt.diagnosticSnippet}`] : []),
+    ...(item.proofRepairTarget
+      ? [
+          `Proof repair target: ${item.proofRepairTarget.repairTargetId} ${item.proofRepairTarget.sourcePath}:${item.proofRepairTarget.markerLine}:${item.proofRepairTarget.markerColumn}`,
+          `Proof repair source sha256:${item.proofRepairTarget.sourceSha256}`,
+          ...(item.proofRepairTarget.declarationSignatureSha256
+            ? [`Proof repair declaration signature sha256:${item.proofRepairTarget.declarationSignatureSha256}`]
+            : []),
+          `Proof repair after-edit command: ${item.proofRepairTarget.afterEditCommands[0]}`,
+          `Proof repair boundary: ${item.proofRepairTarget.boundary}`
+        ]
+      : []),
     `Trust: ${item.trust ?? "n/a"}`,
     "",
     "Command:",

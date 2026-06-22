@@ -23,6 +23,7 @@ import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import type { TrustLabel } from "./types.js";
 import { writeVisualArtifact, type VisualArtifactWriteResult } from "./visual-artifact.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
+import { findLeanDeclarations, type LeanProjectDeclaration, type LeanProjectDeclarationKind } from "./lean-project.js";
 
 export type ProofBackendId = "lean";
 export type ProofBackendStatus = "available" | "missing" | "error";
@@ -122,6 +123,7 @@ export interface LeanProofCheckRecord {
     sha256: string;
     byteLength: number;
     declarationName?: string;
+    declaration?: LeanProofCheckDeclaration;
   };
   scope?: LeanProofCheckScope;
   status: LeanProofCheckStatus;
@@ -135,6 +137,18 @@ export interface LeanProofCheckRecord {
   error?: string;
   limitations: string[];
   warnings: string[];
+}
+
+export interface LeanProofCheckDeclaration {
+  declarationId: string;
+  kind: LeanProjectDeclarationKind;
+  name?: string;
+  path: string;
+  line: number;
+  column: number;
+  signature: string;
+  signatureSha256: string;
+  sourceSha256: string;
 }
 
 export interface WriteLeanProofCheckInput {
@@ -174,12 +188,17 @@ export interface LeanProofCheckSummary {
   checkId: string;
   createdAt: string;
   sourcePath: string;
+  sourceSha256: string;
+  sourceByteLength: number;
   declarationName?: string;
+  declaration?: LeanProofCheckDeclaration;
+  scope?: LeanProofCheckScope;
   status: LeanProofCheckStatus;
   trust: TrustLabel;
   proofCheckerBacked: boolean;
   backendId: "lean";
   backendVersion?: string;
+  diagnosticSnippet?: string;
   warnings: string[];
 }
 
@@ -231,6 +250,8 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
   const sourceSha256 = sha256(input.sourceText);
   const sourceByteLength = Buffer.byteLength(input.sourceText, "utf8");
   const declarationName = normalizeOptional(input.declarationName);
+  const declaration = leanProofCheckDeclarationFor(input.sourceText, sourceRef, declarationName);
+  const declarationWarnings = leanProofCheckDeclarationWarnings(declarationName, declaration);
   const scope = normalizeProofCheckScope(input.scope);
   const backendProbe = probeLeanBackend({
     command: leanCommand,
@@ -255,7 +276,8 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       path: sourceRef,
       sha256: sourceSha256,
       byteLength: sourceByteLength,
-      ...(declarationName ? { declarationName } : {})
+      ...(declarationName ? { declarationName } : {}),
+      ...(declaration ? { declaration } : {})
     },
     ...(scope ? { scope } : {}),
     localOnly: true as const,
@@ -281,6 +303,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
         "This record cannot support a `proved` trust label."
       ],
       warnings: [
+        ...declarationWarnings,
         "No accepted local proof-checking run completed. Treat the claim as unverified until Lean accepts the concrete proof artifact."
       ]
     });
@@ -310,6 +333,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
         "This record cannot support a `proved` trust label."
       ],
       warnings: [
+        ...declarationWarnings,
         "No accepted local proof-checking run completed. Treat the claim as unverified until Lean accepts the concrete proof artifact."
       ]
     });
@@ -333,6 +357,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
         "Execution errors cannot support `proved` trust labels."
       ],
       warnings: [
+        ...declarationWarnings,
         "The proof artifact was not accepted by an accepted proof checker. Treat the claim as unverified."
       ]
     });
@@ -356,7 +381,8 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
         ...sourceSafetyFindings
       ],
       warnings: [
-        "Lean success is necessary but not sufficient for Truth Harness `proved`: the checked source must not contain `sorry`, `admit`, local `axiom`, or local `constant` declarations."
+        ...declarationWarnings,
+        "Lean success is necessary but not sufficient for Truth Harness `proved`: the checked source must not contain `sorry`, `admit`, Lean metavariable holes, local `axiom`, or local `constant` declarations."
       ]
     });
   }
@@ -378,6 +404,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
         "This proves only the formal statement checked by Lean, not surrounding informal, scientific, medical, safety, regulatory, or patent claims."
       ],
       warnings: [
+        ...declarationWarnings,
         "Review the Lean statement and imports to confirm they match the intended human claim."
       ]
     });
@@ -399,6 +426,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       "A rejected, incomplete, or malformed proof attempt does not refute the claim; it leaves the claim unverified."
     ],
     warnings: [
+      ...declarationWarnings,
       "Lean rejected this proof artifact, so Truth Harness must not label the claim `proved`."
     ]
   });
@@ -533,6 +561,8 @@ export async function writeLeanProofCheckVisualArtifact(input: LeanProofVisualIn
         ["checkId", record.checkId],
         ["source", record.source.path],
         ["declaration", record.source.declarationName ?? ""],
+        ["declarationId", record.source.declaration?.declarationId ?? ""],
+        ["signatureSha256", record.source.declaration?.signatureSha256 ?? ""],
         ["backend", record.backend.displayName],
         ["status", record.status],
         ["trust", record.trust],
@@ -575,6 +605,12 @@ export function parseLeanProofCheckRecord(raw: string, sourcePath = "proof-check
     expectNonEmptyString(source, "path", "$.source.path", issues);
     expectPattern(source, "sha256", /^[a-f0-9]{64}$/u, "$.source.sha256", issues);
     expectNonNegativeInteger(source, "byteLength", "$.source.byteLength", issues);
+    if (source.declaration !== undefined) {
+      const declaration = expectRecord(source, "declaration", "$.source.declaration", issues);
+      if (declaration) {
+        validateLeanProofCheckDeclaration(declaration, "$.source.declaration", issues);
+      }
+    }
   }
 
   if (isRecord(parsed.scope)) {
@@ -625,6 +661,18 @@ export function renderLeanProofCheckMarkdown(record: LeanProofCheckRecord): stri
 
   if (record.source.declarationName) {
     lines.push(`- Declaration: \`${record.source.declarationName}\``);
+  }
+
+  if (record.source.declaration) {
+    const declaration = record.source.declaration;
+    lines.push(
+      `- Declaration id: \`${declaration.declarationId}\``,
+      `- Declaration kind: \`${declaration.kind}\``,
+      `- Declaration location: \`${declaration.path}:${declaration.line}:${declaration.column}\``,
+      `- Declaration signature: \`${declaration.signature}\``,
+      `- Declaration signature SHA-256: \`${declaration.signatureSha256}\``,
+      `- Declaration source SHA-256: \`${declaration.sourceSha256}\``
+    );
   }
 
   if (record.scope) {
@@ -701,14 +749,15 @@ export function renderLeanProofCheckVisualSvg(record: LeanProofCheckRecord): str
   const resultStroke = accepted ? "#70d6a1" : record.status === "rejected" ? "#ff8b7e" : "#e2c766";
   const resultFill = accepted ? "#0b2518" : record.status === "rejected" ? "#2a1210" : "#241f0d";
   const proofBacked = record.proofCheckerBacked ? "accepted proof checker run" : "no accepted proof checker run";
-  const declaration = record.source.declarationName ?? "not recorded";
+  const declaration = record.source.declaration?.name ?? record.source.declarationName ?? "not recorded";
+  const declarationId = record.source.declaration?.declarationId ?? "declaration id not recorded";
   const version = record.backend.version ?? "version not recorded";
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-label="Lean proof check visualization">
   <rect width="960" height="540" rx="20" fill="#0f0f0f"/>
   <text x="56" y="58" fill="#f5f2ea" font-size="26" font-family="Inter, system-ui, sans-serif" font-weight="700">Lean Proof Check</text>
   <text x="56" y="88" fill="#aaa59d" font-size="14" font-family="Inter, system-ui, sans-serif">Visual evidence view generated from a local Truth Harness proof-check record.</text>
-  ${svgBox(58, 136, 250, 120, "Source artifact", [record.source.path, `sha256 ${record.source.sha256.slice(0, 12)}...`, `declaration ${declaration}`], "#d8ca9d", "#19160f")}
+  ${svgBox(58, 136, 250, 120, "Source artifact", [record.source.path, `sha256 ${record.source.sha256.slice(0, 12)}...`, `declaration ${declaration}`, declarationId], "#d8ca9d", "#19160f")}
   ${svgBox(356, 136, 250, 120, "Accepted backend", [record.backend.displayName, record.backend.adapter, version], "#7aa2f7", "#101827")}
   ${svgBox(654, 136, 250, 120, "Check result", [`status ${record.status}`, `trust ${record.trust}`, proofBacked], resultStroke, resultFill)}
   ${svgLine(308, 196, 356, 196)}
@@ -892,7 +941,11 @@ function leanSourceSafetyFindings(sourceText: string): string[] {
     [/\bsorry\b/u, "The proof source contains `sorry`, which can mask an incomplete proof."],
     [/\badmit\b/u, "The proof source contains `admit`, which can mask an incomplete proof."],
     [/\baxiom\b/u, "The proof source declares a local `axiom`, which introduces an unproved assumption."],
-    [/\bconstant\b/u, "The proof source declares a local `constant`, which can introduce an unchecked assumption."]
+    [/\bconstant\b/u, "The proof source declares a local `constant`, which can introduce an unchecked assumption."],
+    [
+      /(^|[^\w'])\?[_A-Za-z][A-Za-z0-9_'.]*/mu,
+      "The proof source contains a Lean metavariable hole such as `?_` or `?goal`, which is an unfinished proof target."
+    ]
   ] as const;
 
   return findings
@@ -929,6 +982,72 @@ function validateProofCheckScope(scope: Record<string, unknown>, issues: string[
   if (scope.statement !== undefined && (typeof scope.statement !== "string" || scope.statement.trim().length === 0)) {
     issues.push("$.scope.statement must be a non-empty string when present");
   }
+}
+
+function validateLeanProofCheckDeclaration(
+  declaration: Record<string, unknown>,
+  path: string,
+  issues: string[]
+): void {
+  expectPattern(declaration, "declarationId", /^decl_[a-f0-9]{16}$/u, `${path}.declarationId`, issues);
+  expectOneOf(declaration, "kind", ["theorem", "lemma", "example", "def"], `${path}.kind`, issues);
+  if (declaration.name !== undefined && (typeof declaration.name !== "string" || declaration.name.trim().length === 0)) {
+    issues.push(`${path}.name must be a non-empty string when present`);
+  }
+  expectNonEmptyString(declaration, "path", `${path}.path`, issues);
+  expectNonNegativeInteger(declaration, "line", `${path}.line`, issues);
+  expectNonNegativeInteger(declaration, "column", `${path}.column`, issues);
+  if (typeof declaration.line === "number" && declaration.line < 1) {
+    issues.push(`${path}.line must be at least 1`);
+  }
+  if (typeof declaration.column === "number" && declaration.column < 1) {
+    issues.push(`${path}.column must be at least 1`);
+  }
+  expectNonEmptyString(declaration, "signature", `${path}.signature`, issues);
+  expectPattern(declaration, "signatureSha256", /^[a-f0-9]{64}$/u, `${path}.signatureSha256`, issues);
+  expectPattern(declaration, "sourceSha256", /^[a-f0-9]{64}$/u, `${path}.sourceSha256`, issues);
+}
+
+function leanProofCheckDeclarationFor(
+  sourceText: string,
+  sourcePath: string,
+  declarationName: string | undefined
+): LeanProofCheckDeclaration | undefined {
+  const declarations = findLeanDeclarations(sourceText, sourcePath);
+  const declaration = declarationName
+    ? declarations.find((candidate) => candidate.name === declarationName || candidate.declarationId === declarationName)
+    : declarations.length === 1
+      ? declarations[0]
+      : undefined;
+
+  return declaration ? leanProofCheckDeclaration(declaration) : undefined;
+}
+
+function leanProofCheckDeclaration(declaration: LeanProjectDeclaration): LeanProofCheckDeclaration {
+  return {
+    declarationId: declaration.declarationId,
+    kind: declaration.kind,
+    ...(declaration.name ? { name: declaration.name } : {}),
+    path: declaration.path,
+    line: declaration.line,
+    column: declaration.column,
+    signature: declaration.signature,
+    signatureSha256: declaration.signatureSha256,
+    sourceSha256: declaration.sourceSha256
+  };
+}
+
+function leanProofCheckDeclarationWarnings(
+  declarationName: string | undefined,
+  declaration: LeanProofCheckDeclaration | undefined
+): string[] {
+  if (!declarationName || declaration) {
+    return [];
+  }
+
+  return [
+    `The requested Lean declaration ${JSON.stringify(declarationName)} was not found by the local declaration parser. The proof-check result still reflects Lean checking the whole source file, but declaration-scoped reviewers should inspect the source before relying on this as a targeted proof.`
+  ];
 }
 
 function validateOptionalPattern(
@@ -1052,16 +1171,30 @@ function summarizeLeanProofCheck(
     checkId: record.checkId,
     createdAt: record.createdAt,
     sourcePath: record.source.path,
+    sourceSha256: record.source.sha256,
+    sourceByteLength: record.source.byteLength,
     declarationName: record.source.declarationName,
+    declaration: record.source.declaration,
+    scope: record.scope,
     status: record.status,
     trust: record.trust,
     proofCheckerBacked: record.proofCheckerBacked,
     backendId: record.backend.id,
     backendVersion: record.backend.version,
+    diagnosticSnippet: proofCheckDiagnosticSnippet(record),
     warnings: record.warnings
   };
 }
 
 function toPortablePath(path: string): string {
   return path.split(sep).join("/");
+}
+
+function proofCheckDiagnosticSnippet(record: LeanProofCheckRecord): string | undefined {
+  const diagnostic = singleLine(record.stderr || record.stdout || record.error || "");
+  if (!diagnostic) {
+    return undefined;
+  }
+
+  return diagnostic.length > 180 ? `${diagnostic.slice(0, 177)}...` : diagnostic;
 }

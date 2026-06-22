@@ -14,7 +14,7 @@ theorem modus_ponens (p q : Prop) : (p -> q) -> p -> q := by
   intro hpq hp
   exact hpq hp
 
-theorem and_swap (p q : Prop) : p ∧ q -> q ∧ p := by
+theorem and_swap (p q : Prop) : p /\ q -> q /\ p := by
   intro hpq
   exact And.intro hpq.right hpq.left
 

@@ -52,6 +52,49 @@ describe("engine plan", () => {
     expect(plan.nextActions.join("\n")).toContain("Lean");
   });
 
+  it("uses saved reviewer Docker evidence as guidance without making host-missing engines runnable", () => {
+    const plan = createEnginePlan("prove a theorem with Lean and no sorry", {
+      manifest: manifestWith({
+        "lean-proof-checker": { status: "missing", canMintTrust: false }
+      }),
+      savedEngineRuns: [
+        {
+          runId: "engine_run_1111111111111111",
+          title: "Strict all-engine reviewer evidence",
+          summary: "passed",
+          createdAt: "2026-06-20T00:00:00.000Z",
+          status: "passed",
+          concretePassed: 5,
+          concreteTotal: 5,
+          requiredPassed: 5,
+          requiredTotal: 5,
+          evidenceMinted: 5,
+          path: ".truth-harness/engine-runs/2026-06-20-engine_run_1111111111111111.json",
+          tags: ["lean-proof-checker", "maxima-cas", "sage-cas", "z3-smt-solver", "cvc5-smt-solver"],
+          warnings: []
+        }
+      ]
+    });
+
+    const leanStep = plan.steps.find((step) => step.capabilityId === "lean-proof-checker");
+
+    expect(plan.savedReviewerEvidence).toMatchObject({
+      status: "available",
+      runId: "engine_run_1111111111111111",
+      requiredPassed: 5,
+      requiredTotal: 5,
+      coveredCapabilityIds: expect.arrayContaining(["lean-proof-checker", "sage-cas"])
+    });
+    expect(leanStep).toMatchObject({
+      canRunNow: false,
+      status: "missing",
+      trustIfSuccessful: "proved"
+    });
+    expect(leanStep?.limitation).toContain("Saved reviewer Docker evidence engine_run_1111111111111111 covers this capability");
+    expect(plan.nextActions.join("\n")).toContain("Saved reviewer Docker evidence engine_run_1111111111111111 previously covered");
+    expect(plan.trustBoundary.planDoesNotMintEvidence).toBe(true);
+  });
+
   it("pushes universal claims toward refutation, SMT, and formal proof checks", () => {
     const plan = createEnginePlan("for all integers n, n^2+n+1 is even", {
       manifest: manifestWith({

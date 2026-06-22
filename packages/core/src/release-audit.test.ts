@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -6,8 +6,10 @@ import { initLocalWorkspace } from "./local-workspace.js";
 import { createReleaseAudit, formatReleaseAuditEngineSummary, renderReleaseAuditMarkdown } from "./release-audit.js";
 import { rebuildWorkspaceCatalog } from "./workspace-catalog.js";
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
+import { writeCredibilityBundle, writeCredibilityBundleVerification } from "./credibility-bundle.js";
 import { createReceipt } from "./receipt.js";
 import { writeEngineVerificationRun, type EngineVerificationCommandRunner } from "./engine-verification.js";
+import { writeHardMathClosureReport } from "./hard-math-closure-report.js";
 import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchSession } from "./research-session.js";
 import { detectCodeRunSandboxStatus, writeCodeRunSandboxRun } from "./sandbox.js";
@@ -58,6 +60,21 @@ describe("release audit", () => {
     expect(audit.status).toBe("ready");
     expect(audit.professorReady).toBe(true);
     expect(audit.publicLaunchReady).toBe(false);
+    expect(audit.frontierReadiness).toMatchObject({
+      schemaVersion: "truth-harness.frontier-readiness.v0",
+      status: "bounded-hard-math-harness",
+      frontierDiscoveryReadiness: "not-ready",
+      canClaimWorldHardestProblems: false,
+      nextMilestone: "Formal theorem workflows"
+    });
+    expect(audit.frontierReadiness.strongestHonestClaim).toContain("bounded, local-first hard-math verification harness");
+    expect(audit.frontierReadiness.stages).toContainEqual(
+      expect.objectContaining({
+        id: "autonomous-frontier-discovery",
+        status: "blocked",
+        summary: expect.stringContaining("cannot responsibly claim autonomous solutions")
+      })
+    );
     expect(audit.summary).toMatchObject({
       validationPassed: true,
       catalogFresh: true,
@@ -123,6 +140,8 @@ describe("release audit", () => {
       })
     );
     expect(markdown).toContain("# Truth Harness Release Audit");
+    expect(markdown).toContain("## Frontier Readiness");
+    expect(markdown).toContain("Can claim world-hardest-problem solving: `false`");
     expect(markdown).toContain("Required engine gates: 5/5");
     expect(markdown).toContain("Adversarial benchmark: passed");
     expect(markdown).toContain("Math credibility ladder: passed");
@@ -191,6 +210,103 @@ describe("release audit", () => {
         ])
       })
     );
+  });
+
+  it("blocks release readiness when Lean proof-safety markers remain", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Lean Safety Audit", now: "2026-06-21T00:00:00.000Z" });
+    await mkdir(join(root, "Proofs"), { recursive: true });
+    await writeFile(join(root, "lean-toolchain"), "leanprover/lean4:v4.12.0\n", "utf8");
+    await writeFile(join(root, "lakefile.lean"), "import Lake\nopen Lake DSL\n", "utf8");
+    await writeFile(
+      join(root, "Proofs", "Gap.lean"),
+      [
+        "theorem unfinished : True := by",
+        "  sorry"
+      ].join("\n"),
+      "utf8"
+    );
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-21T00:01:00.000Z",
+      runner: passingEngineRunner
+    });
+    const markdown = renderReleaseAuditMarkdown(audit);
+
+    expect(audit.status).toBe("blocked");
+    expect(audit.professorReady).toBe(false);
+    expect(audit.summary.leanProofSafetyItems).toBe(1);
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "lean-proof-safety",
+        status: "fail",
+        blocking: true,
+        summary: "1 Lean proof-safety blocker(s) remain open.",
+        details: expect.arrayContaining([
+          expect.stringContaining("local `axiom`"),
+          expect.stringContaining("Resolve Lean proof marker: sorry (lean-marker:Proofs/Gap.lean:2:3)")
+        ])
+      })
+    );
+    expect(audit.frontierReadiness.stages).toContainEqual(
+      expect.objectContaining({
+        id: "local-verification-harness",
+        blockers: expect.arrayContaining([
+          expect.stringContaining("Lean proof-safety evidence")
+        ]),
+        nextAction: "truth-harness workspace credibility-actions . --priority critical --json"
+      })
+    );
+    expect(markdown).toContain("Lean proof-safety blockers: 1");
+    expect(markdown).toContain("### FAIL Lean proof-safety boundary");
+  });
+
+  it("promotes saved reviewer bundle verification into the release audit", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Bundle Verification Audit", now: "2026-06-17T00:00:00.000Z" });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:00.500Z" });
+    const bundle = await writeCredibilityBundle({
+      rootPath: root,
+      now: "2026-06-17T00:00:01.000Z",
+      runner: passingEngineRunner
+    });
+    const written = await writeCredibilityBundleVerification({
+      rootPath: root,
+      bundleRef: bundle.bundleDir,
+      now: "2026-06-17T00:00:02.000Z"
+    });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:03.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-17T00:00:04.000Z",
+      runner: passingEngineRunner
+    });
+    const markdown = renderReleaseAuditMarkdown(audit);
+
+    expect(audit.reviewerBundleVerification).toMatchObject({
+      verificationId: written.verification.verificationId,
+      bundleId: bundle.manifest.bundleId,
+      passed: true,
+      sourceMatchesWorkspace: true,
+      manifestDigestStatus: "verified"
+    });
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "reviewer-bundle-verification",
+        status: "pass",
+        blocking: false,
+        summary: expect.stringContaining(written.verification.verificationId),
+        details: expect.arrayContaining([
+          `Verification: ${written.verification.verificationId}.`,
+          `Bundle: ${bundle.manifest.bundleId}.`,
+          "Manifest digest: verified."
+        ])
+      })
+    );
+    expect(markdown).toContain("Reviewer bundle verification");
+    expect(markdown).toContain("Manifest digest: verified.");
   });
 
   it("does not clear launch polish from a thin passing web UI review", async () => {
@@ -460,6 +576,17 @@ describe("release audit", () => {
     });
 
     expect(audit.status).toBe("blocked");
+    expect(audit.frontierReadiness).toMatchObject({
+      status: "blocked",
+      frontierDiscoveryReadiness: "not-ready",
+      canClaimWorldHardestProblems: false
+    });
+    expect(audit.frontierReadiness.stages).toContainEqual(
+      expect.objectContaining({
+        id: "local-verification-harness",
+        status: "blocked"
+      })
+    );
     expect(audit.commands.dockerProfessorAll).toBe("npm run docker:professor:all");
     expect(audit.professorReady).toBe(false);
     expect(audit.summary.blockingFailures).toBeGreaterThanOrEqual(2);
@@ -740,7 +867,7 @@ function benchmarkRun(receipt: ReturnType<typeof createReceipt>) {
 
 async function writeMathCredibilityLadderRun(root: string, now: string) {
   const receipt = createReceipt("3 / 4 + 5 / 8");
-  return writeBenchmarkRunRecord({
+  const result = await writeBenchmarkRunRecord({
     rootPath: root,
     run: {
       suiteId: "math-credibility-ladder",
@@ -773,10 +900,74 @@ async function writeMathCredibilityLadderRun(root: string, now: string) {
     workingDirectory: root,
     now
   });
+  await writePassingHardMathClosures(root, now);
+  return result;
 }
 
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-release-audit-"));
   roots.push(root);
   return root;
+}
+
+async function writePassingHardMathClosures(root: string, baseNow: string): Promise<void> {
+  await writeHardMathClosureReport({
+    rootPath: root,
+    createdAt: bumpIsoMilliseconds(baseNow, 10),
+    completedAt: bumpIsoMilliseconds(baseNow, 20),
+    runtime: {
+      kind: "docker",
+      command: "npm run docker:hard-math-closure",
+      containerized: true
+    },
+    cases: [closureCase("exact-fraction-lemma", "exact-computed")]
+  });
+  await writeHardMathClosureReport({
+    rootPath: root,
+    createdAt: bumpIsoMilliseconds(baseNow, 30),
+    completedAt: bumpIsoMilliseconds(baseNow, 40),
+    runtime: {
+      kind: "docker",
+      command: "npm run docker:symbolic-closure",
+      containerized: true
+    },
+    cases: [closureCase("symbolic-cas-closure-fixture", "cross-checked", "cross-checked")]
+  });
+  await writeHardMathClosureReport({
+    rootPath: root,
+    createdAt: bumpIsoMilliseconds(baseNow, 50),
+    completedAt: bumpIsoMilliseconds(baseNow, 60),
+    runtime: {
+      kind: "docker",
+      command: "npm run docker:smt-closure",
+      containerized: true
+    },
+    cases: [closureCase("smt-bounded-closure-fixture", "smt-checked", "smt-checked")]
+  });
+}
+
+function closureCase(caseId: string, trust: "exact-computed" | "cross-checked" | "smt-checked", requiredTrust?: string) {
+  return {
+    caseId,
+    passed: true,
+    ...(requiredTrust ? { requiredTrust } : {}),
+    transientWorkspacePath: "/tmp/truth-harness-hard-math-closure-test",
+    transientWorkspaceCleaned: true,
+    validationPlanId: "plan_hard_math_release_test",
+    proofGateStatus: "satisfied",
+    gateEvidence: [{ kind: trust === "smt-checked" ? "smt" : "route", trust }],
+    executedSteps: trust === "smt-checked" ? 1 : 3,
+    attachedEvidenceSteps: 1,
+    loopStatus: "completed",
+    loopStopReason: "no-open-item",
+    validationPassed: true,
+    validationErrors: 0,
+    validationWarnings: 0,
+    evidenceSummary: `${caseId} closed with ${trust} evidence.`,
+    warnings: []
+  };
+}
+
+function bumpIsoMilliseconds(value: string, milliseconds: number): string {
+  return new Date(new Date(value).getTime() + milliseconds).toISOString();
 }

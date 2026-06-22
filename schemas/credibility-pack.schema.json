@@ -102,11 +102,16 @@
         "latestAdversarialBenchmarkAccuracy": { "type": "number", "minimum": 0, "maximum": 1 },
         "latestMathCredibilityLadderStatus": { "enum": ["missing", "passed", "failed"] },
         "latestMathCredibilityLadderAccuracy": { "type": "number", "minimum": 0, "maximum": 1 },
+        "savedHardMathClosureReports": { "type": "integer", "minimum": 0 },
+        "hardMathExactClosureStatus": { "enum": ["missing", "passed", "failed"] },
+        "hardMathSymbolicClosureStatus": { "enum": ["missing", "passed", "failed"] },
+        "hardMathSmtClosureStatus": { "enum": ["missing", "passed", "failed"] },
         "savedReportDrafts": { "type": "integer", "minimum": 0 },
         "reportDraftsNeedingAttention": { "type": "integer", "minimum": 0 },
         "reviewItems": { "type": "integer", "minimum": 0 },
         "criticalReviewItems": { "type": "integer", "minimum": 0 },
         "highReviewItems": { "type": "integer", "minimum": 0 },
+        "leanProofSafetyItems": { "type": "integer", "minimum": 0 },
         "professorReady": { "type": "boolean" }
       },
       "additionalProperties": true
@@ -184,6 +189,21 @@
         }
       },
       "additionalProperties": true
+    },
+    "hardMathClosureLedger": {
+      "type": "object",
+      "required": ["savedReports", "latestReports"],
+      "properties": {
+        "savedReports": { "type": "integer", "minimum": 0 },
+        "latestReports": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/hardMathClosureSummary" }
+        },
+        "latestExactClosure": { "$ref": "#/$defs/hardMathClosureSummary" },
+        "latestSymbolicClosure": { "$ref": "#/$defs/hardMathClosureSummary" },
+        "latestSmtClosure": { "$ref": "#/$defs/hardMathClosureSummary" }
+      },
+      "additionalProperties": false
     },
     "workspaceReview": {
       "type": "object",
@@ -293,7 +313,7 @@
       "required": ["actionId", "category", "priority", "title", "detail", "command", "closes", "source"],
       "properties": {
         "actionId": { "type": "string", "pattern": "^cred_action_[a-f0-9]{16}$" },
-        "category": { "enum": ["validation", "engine", "benchmark", "workspace-review"] },
+        "category": { "enum": ["validation", "engine", "benchmark", "closure", "workspace-review"] },
         "priority": { "enum": ["critical", "high", "medium", "low"] },
         "title": { "type": "string", "minLength": 1 },
         "detail": { "type": "string", "minLength": 1 },
@@ -311,6 +331,52 @@
           },
           "additionalProperties": false
         }
+      },
+      "additionalProperties": false
+    },
+    "hardMathClosureSummary": {
+      "type": "object",
+      "required": [
+        "closureId",
+        "path",
+        "createdAt",
+        "completedAt",
+        "runtimeKind",
+        "containerized",
+        "command",
+        "totalCases",
+        "passedCases",
+        "failedCases",
+        "validationErrors",
+        "validationWarnings",
+        "cleanedTransientWorkspaces",
+        "caseIds",
+        "passedCaseIds",
+        "failedCaseIds",
+        "trusts",
+        "requiredTrusts",
+        "warnings"
+      ],
+      "properties": {
+        "closureId": { "type": "string", "pattern": "^hmc_[a-f0-9]{12}$" },
+        "path": { "type": "string", "minLength": 1 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "runtimeKind": { "enum": ["native", "docker"] },
+        "containerized": { "type": "boolean" },
+        "command": { "type": "string", "minLength": 1 },
+        "totalCases": { "type": "integer", "minimum": 0 },
+        "passedCases": { "type": "integer", "minimum": 0 },
+        "failedCases": { "type": "integer", "minimum": 0 },
+        "validationErrors": { "type": "integer", "minimum": 0 },
+        "validationWarnings": { "type": "integer", "minimum": 0 },
+        "cleanedTransientWorkspaces": { "type": "integer", "minimum": 0 },
+        "caseIds": { "type": "array", "items": { "type": "string" } },
+        "passedCaseIds": { "type": "array", "items": { "type": "string" } },
+        "failedCaseIds": { "type": "array", "items": { "type": "string" } },
+        "trusts": { "type": "array", "items": { "type": "string" } },
+        "requiredTrusts": { "type": "array", "items": { "type": "string" } },
+        "warnings": { "type": "array", "items": { "type": "string" } }
       },
       "additionalProperties": false
     }

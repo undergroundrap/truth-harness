@@ -5,7 +5,9 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { EngineVerificationCommandRunner } from "./engine-verification.js";
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
+import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { writeHardMathClosureReport } from "./hard-math-closure-report.js";
 import { createReceipt } from "./receipt.js";
 import { rebuildWorkspaceCatalog, searchWorkspaceCatalog } from "./workspace-catalog.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
@@ -22,6 +24,15 @@ describe("credibility reviewer bundle", () => {
   it("writes a portable bundle with copied artifacts, manifest hashes, and catalog visibility", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+    const claimLedger = await writeClaimLedgerRecord({
+      rootPath: root,
+      statement: "3 / 4 + 5 / 8 = 11 / 8",
+      domain: "math",
+      trust: "exact-computed",
+      tags: ["bundle-regression", "claims-kind"],
+      authors: ["Truth Harness test"],
+      now: "2026-06-16T00:00:10.000Z"
+    });
     await writeBenchmarkRunRecord({
       rootPath: root,
       run: benchmarkRun(createReceipt("for all integers n, n^2+n+1 is even")),
@@ -40,6 +51,7 @@ describe("credibility reviewer bundle", () => {
       workingDirectory: root,
       now: "2026-06-16T00:00:31.000Z"
     });
+    await writePassingHardMathClosures(root);
     const reportDraft = await writeReportDraftFixture(root);
 
     const result = await writeCredibilityBundle({
@@ -59,11 +71,26 @@ describe("credibility reviewer bundle", () => {
 
     expect(result.manifest.schemaVersion).toBe("truth-harness.credibility-bundle.v0");
     expect(result.manifest.bundleId).toMatch(/^cbun_[a-f0-9]{16}$/u);
+    expect(result.manifest.bundleDigest).toEqual(
+      expect.objectContaining({
+        algorithm: "sha256",
+        scope: "truth-harness.credibility-bundle-manifest-digest.v0",
+        value: expect.stringMatching(/^[a-f0-9]{64}$/u)
+      })
+    );
     expect(result.manifest.packStatus).toBe("ready-for-review");
     expect(result.manifest.summary.artifactFiles).toBeGreaterThan(0);
     expect(result.manifest.generatedFiles).toHaveLength(3);
     expect(result.manifest.summary.reportDrafts).toBe(1);
     expect(result.manifest.summary.reportDraftFiles).toBe(2);
+    expect(result.manifest.files).toContainEqual(
+      expect.objectContaining({
+        kind: "claims",
+        sourcePath: expect.stringContaining("/claims/"),
+        artifactId: claimLedger.claim.claimId,
+        schemaVersion: "truth-harness.claim.v0"
+      })
+    );
     expect(result.manifest.files).toContainEqual(
       expect.objectContaining({
         sourcePath: reportDraft.relativeJson,
@@ -83,10 +110,14 @@ describe("credibility reviewer bundle", () => {
     expect(result.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
     expect(result.manifest.reviewerCommands.runAdversarialBenchmark).toContain("ai-failure-seed");
     expect(result.manifest.reviewerCommands.runMathCredibilityLadder).toContain("math-credibility-ladder");
+    expect(result.manifest.reviewerCommands.runExactHardMathClosure).toBe("npm run docker:hard-math-closure");
+    expect(result.manifest.reviewerCommands.runSymbolicHardMathClosure).toBe("npm run docker:symbolic-closure");
+    expect(result.manifest.reviewerCommands.runSmtHardMathClosure).toBe("npm run docker:smt-closure");
     expect(result.manifest.reviewerCommands.dockerStrictProfessorEvidence).toBe("npm run docker:professor:all");
     expect(result.manifest.reviewerCommands.dockerAllEngines).toBe("npm run docker:all-engines:write");
     const readme = await readFile(result.readmePath, "utf8");
     expect(readme).toContain("Truth Harness Portable Reviewer Bundle");
+    expect(readme).toContain("Hard-math closure:");
     expect(readme).toContain("Saved Report Drafts");
     expect(readme).toContain(reportDraft.report.reportId);
     const bundledDraft = result.manifest.reportDrafts[0]!;
@@ -101,6 +132,9 @@ describe("credibility reviewer bundle", () => {
     expect(verification.verificationId).toMatch(/^cver_[a-f0-9]{16}$/u);
     expect(verification.sourceMatchesWorkspace).toBe(true);
     expect(verification.checkedBundleFiles).toBe(result.manifest.summary.totalFiles);
+    expect(verification.manifestDigestStatus).toBe("verified");
+    expect(verification.manifestDigestExpected).toBe(result.manifest.bundleDigest!.value);
+    expect(verification.manifestDigestActual).toBe(result.manifest.bundleDigest!.value);
 
     const writtenVerification = await writeCredibilityBundleVerification({
       rootPath: root,
@@ -215,6 +249,49 @@ describe("credibility reviewer bundle", () => {
     expect(verification.sourceMatchesWorkspace).toBe(true);
     expect(verification.changedBundleFiles).toContainEqual(expect.objectContaining({ path: copiedManifest!.bundledPath }));
     expect(verification.changedSourceFiles).toHaveLength(0);
+  });
+
+  it("fails bundle integrity when reviewer-critical manifest metadata is edited after export", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
+    const result = await writeCredibilityBundle({
+      rootPath: root,
+      now: "2026-06-16T00:01:00.000Z",
+      runner: passingEngineRunner
+    });
+    const originalManifest = JSON.parse(await readFile(result.manifestPath, "utf8")) as {
+      limitations: string[];
+    };
+    await writeFile(
+      result.manifestPath,
+      `${JSON.stringify(
+        {
+          ...originalManifest,
+          limitations: [...originalManifest.limitations, "tampered reviewer metadata"]
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const verification = await verifyCredibilityBundle({
+      rootPath: root,
+      bundleRef: result.manifest.bundleId,
+      now: "2026-06-16T00:02:00.000Z"
+    });
+
+    expect(verification.passed).toBe(false);
+    expect(verification.sourceMatchesWorkspace).toBe(true);
+    expect(verification.missingBundleFiles).toHaveLength(0);
+    expect(verification.changedBundleFiles).toHaveLength(0);
+    expect(verification.manifestDigestStatus).toBe("mismatch");
+    expect(verification.manifestDigestExpected).toBe(result.manifest.bundleDigest!.value);
+    expect(verification.manifestDigestActual).toMatch(/^[a-f0-9]{64}$/u);
+    expect(verification.manifestDigestActual).not.toBe(result.manifest.bundleDigest!.value);
+    expect(verification.warnings).toContain(
+      "The manifest digest does not match the current manifest contents. Treat reviewer commands, limitations, summaries, or provenance as edited after export until investigated."
+    );
   });
 
   it("validates bundle manifests before writing the reviewer manifest", async () => {
@@ -455,4 +532,62 @@ async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-credibility-bundle-"));
   roots.push(root);
   return root;
+}
+
+async function writePassingHardMathClosures(root: string): Promise<void> {
+  await writeHardMathClosureReport({
+    rootPath: root,
+    createdAt: "2026-06-16T00:00:47.000Z",
+    completedAt: "2026-06-16T00:00:48.000Z",
+    runtime: {
+      kind: "docker",
+      command: "npm run docker:hard-math-closure",
+      containerized: true
+    },
+    cases: [closureCase("exact-fraction-lemma", "exact-computed")]
+  });
+  await writeHardMathClosureReport({
+    rootPath: root,
+    createdAt: "2026-06-16T00:00:49.000Z",
+    completedAt: "2026-06-16T00:00:50.000Z",
+    runtime: {
+      kind: "docker",
+      command: "npm run docker:symbolic-closure",
+      containerized: true
+    },
+    cases: [closureCase("symbolic-cas-closure-fixture", "cross-checked", "cross-checked")]
+  });
+  await writeHardMathClosureReport({
+    rootPath: root,
+    createdAt: "2026-06-16T00:00:51.000Z",
+    completedAt: "2026-06-16T00:00:52.000Z",
+    runtime: {
+      kind: "docker",
+      command: "npm run docker:smt-closure",
+      containerized: true
+    },
+    cases: [closureCase("smt-bounded-closure-fixture", "smt-checked", "smt-checked")]
+  });
+}
+
+function closureCase(caseId: string, trust: "exact-computed" | "cross-checked" | "smt-checked", requiredTrust?: string) {
+  return {
+    caseId,
+    passed: true,
+    ...(requiredTrust ? { requiredTrust } : {}),
+    transientWorkspacePath: "/tmp/truth-harness-hard-math-closure-test",
+    transientWorkspaceCleaned: true,
+    validationPlanId: "plan_hard_math_closure_test",
+    proofGateStatus: "satisfied",
+    gateEvidence: [{ kind: trust === "smt-checked" ? "smt" : "route", trust }],
+    executedSteps: trust === "smt-checked" ? 1 : 3,
+    attachedEvidenceSteps: 1,
+    loopStatus: "completed",
+    loopStopReason: "no-open-item",
+    validationPassed: true,
+    validationErrors: 0,
+    validationWarnings: 0,
+    evidenceSummary: `${caseId} closed with ${trust} evidence.`,
+    warnings: []
+  };
 }

@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,6 +7,7 @@ import { rebuildWorkspaceCatalog, searchWorkspaceCatalog } from "./workspace-cat
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createCredibilityPack, writeCredibilityPack } from "./credibility-pack.js";
 import { writeEngineVerificationRun, type EngineVerificationCommandRunner } from "./engine-verification.js";
+import { writeHardMathClosureReport } from "./hard-math-closure-report.js";
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
 import { createReceipt } from "./receipt.js";
 import { writeReportDraft } from "./report-draft.js";
@@ -79,6 +80,7 @@ describe("professor credibility pack", () => {
       workingDirectory: root,
       now: "2026-06-16T00:00:46.000Z"
     });
+    await writePassingHardMathClosures(root);
 
     const result = await writeCredibilityPack({
       rootPath: root,
@@ -112,6 +114,10 @@ describe("professor credibility pack", () => {
       latestAdversarialBenchmarkAccuracy: 1,
       latestMathCredibilityLadderStatus: "passed",
       latestMathCredibilityLadderAccuracy: 1,
+      savedHardMathClosureReports: 3,
+      hardMathExactClosureStatus: "passed",
+      hardMathSymbolicClosureStatus: "passed",
+      hardMathSmtClosureStatus: "passed",
       professorReady: true
     });
     expect(result.pack.embeddedSnapshot.entries.length).toBeGreaterThan(0);
@@ -130,6 +136,8 @@ describe("professor credibility pack", () => {
     expect(result.markdown).toContain("Saved engine-run ledger: 1 saved");
     expect(result.markdown).toContain("Adversarial benchmark: passed (100.0%)");
     expect(result.markdown).toContain("Math credibility ladder: passed (100.0%)");
+    expect(result.markdown).toContain("Hard-math closure: 3 saved (exact passed, symbolic passed, SMT passed)");
+    expect(result.markdown).toContain("## Hard-Math Closure Ledger");
     expect(result.markdown).toContain("## Engine Evidence Ladder");
     expect(result.markdown).toContain("| Lean proof fixture | required | `passed` | `proved` | earned evidence | Concrete `proved` evidence earned");
     expect(result.markdown).toContain("## Saved Engine Run Ledger");
@@ -177,6 +185,9 @@ describe("professor credibility pack", () => {
     expect(result.pack.reviewerCommands.runMathCredibilityLadder).toBe(
       "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures"
     );
+    expect(result.pack.reviewerCommands.runExactHardMathClosure).toBe("npm run docker:hard-math-closure");
+    expect(result.pack.reviewerCommands.runSymbolicHardMathClosure).toBe("npm run docker:symbolic-closure");
+    expect(result.pack.reviewerCommands.runSmtHardMathClosure).toBe("npm run docker:smt-closure");
 
     const json = await readFile(result.jsonPath, "utf8");
     expect(json).toContain(result.pack.packId);
@@ -269,10 +280,11 @@ describe("professor credibility pack", () => {
     expect(pack.warnings).toContain("Concrete engine smoke gates are incomplete: 0/3 passed.");
     expect(pack.warnings).toContain("No saved `ai-failure-seed` adversarial benchmark run found.");
     expect(pack.warnings).toContain("No saved `math-credibility-ladder` hard-math readiness run found.");
+    expect(pack.warnings).toContain("No saved Docker exact-fraction hard-math closure report found for exact-fraction-lemma.");
     expect(pack.reviewerActionPlan).toMatchObject({
-      totalActions: 5,
+      totalActions: 8,
       criticalActions: 3,
-      highActions: 2
+      highActions: 5
     });
     expect(pack.reviewerActionPlan.actions).toContainEqual(
       expect.objectContaining({
@@ -313,6 +325,14 @@ describe("professor credibility pack", () => {
         closes: expect.arrayContaining(["benchmark:math-credibility-ladder"])
       })
     );
+    expect(pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({
+        category: "closure",
+        priority: "high",
+        title: "Run exact hard-math closure smoke",
+        command: "npm run docker:hard-math-closure"
+      })
+    );
     expect(pack.reviewerActionPlan.actions.map((action) => action.detail).join("\n")).not.toContain("spawn");
     expect(pack.reviewerActionPlan.actions.map((action) => action.detail).join("\n")).toContain("engine executable was not found");
     expect(pack.reviewerActionPlan.actions.map((action) => action.detail).join("\n")).toContain(
@@ -323,6 +343,53 @@ describe("professor credibility pack", () => {
     expect(pack.markdown).toContain("## Engine Evidence Ladder");
     expect(pack.markdown).toContain("| Maxima symbolic cross-check | required | `missing` | `unverified` | missing evidence | Required evidence is missing");
     expect(pack.markdown).toContain("## Blocking Warnings");
+  });
+
+  it("surfaces Lean proof-safety blockers as first-class professor review actions", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-21T00:00:00.000Z" });
+    await mkdir(join(root, "Proofs"), { recursive: true });
+    await writeFile(join(root, "lean-toolchain"), "leanprover/lean4:v4.12.0\n", "utf8");
+    await writeFile(join(root, "lakefile.lean"), "import Lake\nopen Lake DSL\n", "utf8");
+    await writeFile(
+      join(root, "Proofs", "Gap.lean"),
+      [
+        "theorem unfinished : True := by",
+        "  sorry"
+      ].join("\n"),
+      "utf8"
+    );
+
+    const pack = await createCredibilityPack({
+      rootPath: root,
+      now: "2026-06-21T00:01:00.000Z",
+      engineRequirements: {},
+      runner: passingEngineRunner
+    });
+
+    expect(pack.status).toBe("blocked");
+    expect(pack.summary.leanProofSafetyItems).toBe(1);
+    expect(pack.workspaceReview.summary.leanProofSafetyItems).toBe(1);
+    expect(pack.warnings).toContain(
+      "Lean proof-safety scan found 1 blocking marker(s); remove or rewrite them before treating affected Lean source as proved."
+    );
+    expect(pack.markdown).toContain("- Lean proof-safety blockers: 1");
+    expect(pack.workspaceReview.topItems[0]).toMatchObject({
+      title: "Resolve Lean proof marker: sorry",
+      source: {
+        label: "Lean proof safety",
+        ref: "lean-marker:Proofs/Gap.lean:2:3"
+      }
+    });
+    expect(pack.reviewerActionPlan.actions[0]).toMatchObject({
+      category: "workspace-review",
+      priority: "critical",
+      title: "Resolve Lean proof marker: sorry",
+      closes: expect.arrayContaining([
+        "proof-safety-boundary",
+        "lean-proof-safety:lean-marker:Proofs/Gap.lean:2:3"
+      ])
+    });
   });
 
   it("accepts saved Docker professor engine evidence when host probes are unavailable", async () => {
@@ -376,6 +443,7 @@ describe("professor credibility pack", () => {
       workingDirectory: root,
       now: "2026-06-16T00:00:46.000Z"
     });
+    await writePassingHardMathClosures(root);
 
     const pack = await createCredibilityPack({
       rootPath: root,
@@ -401,6 +469,9 @@ describe("professor credibility pack", () => {
       latestProfessorEngineRunStatus: "passed",
       latestAdversarialBenchmarkStatus: "passed",
       latestMathCredibilityLadderStatus: "passed",
+      hardMathExactClosureStatus: "passed",
+      hardMathSymbolicClosureStatus: "passed",
+      hardMathSmtClosureStatus: "passed",
       professorReady: true
     });
     expect(pack.engineRunLedger.latestProfessorReviewerRun).toMatchObject({
@@ -726,4 +797,62 @@ async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-credibility-pack-"));
   roots.push(root);
   return root;
+}
+
+async function writePassingHardMathClosures(root: string): Promise<void> {
+  await writeHardMathClosureReport({
+    rootPath: root,
+    createdAt: "2026-06-16T00:00:47.000Z",
+    completedAt: "2026-06-16T00:00:48.000Z",
+    runtime: {
+      kind: "docker",
+      command: "npm run docker:hard-math-closure",
+      containerized: true
+    },
+    cases: [closureCase("exact-fraction-lemma", "exact-computed")]
+  });
+  await writeHardMathClosureReport({
+    rootPath: root,
+    createdAt: "2026-06-16T00:00:49.000Z",
+    completedAt: "2026-06-16T00:00:50.000Z",
+    runtime: {
+      kind: "docker",
+      command: "npm run docker:symbolic-closure",
+      containerized: true
+    },
+    cases: [closureCase("symbolic-cas-closure-fixture", "cross-checked", "cross-checked")]
+  });
+  await writeHardMathClosureReport({
+    rootPath: root,
+    createdAt: "2026-06-16T00:00:51.000Z",
+    completedAt: "2026-06-16T00:00:52.000Z",
+    runtime: {
+      kind: "docker",
+      command: "npm run docker:smt-closure",
+      containerized: true
+    },
+    cases: [closureCase("smt-bounded-closure-fixture", "smt-checked", "smt-checked")]
+  });
+}
+
+function closureCase(caseId: string, trust: "exact-computed" | "cross-checked" | "smt-checked", requiredTrust?: string) {
+  return {
+    caseId,
+    passed: true,
+    ...(requiredTrust ? { requiredTrust } : {}),
+    transientWorkspacePath: "/tmp/truth-harness-hard-math-closure-test",
+    transientWorkspaceCleaned: true,
+    validationPlanId: "plan_hard_math_closure_test",
+    proofGateStatus: "satisfied",
+    gateEvidence: [{ kind: trust === "smt-checked" ? "smt" : "route", trust }],
+    executedSteps: trust === "smt-checked" ? 1 : 3,
+    attachedEvidenceSteps: 1,
+    loopStatus: "completed",
+    loopStopReason: "no-open-item",
+    validationPassed: true,
+    validationErrors: 0,
+    validationWarnings: 0,
+    evidenceSummary: `${caseId} closed with ${trust} evidence.`,
+    warnings: []
+  };
 }

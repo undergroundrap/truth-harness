@@ -84,6 +84,45 @@
         "validationPlanId": { "type": "string" },
         "validationGateId": { "type": "string" },
         "validationGateKind": { "type": "string" },
+        "proofDeclaration": {
+          "$ref": "#/$defs/proofDeclaration"
+        },
+        "proofRepairTarget": {
+          "$ref": "#/$defs/proofRepairTarget"
+        },
+        "proofAttempt": {
+          "type": "object",
+          "required": ["checkId", "path", "sourcePath", "status", "trust", "createdAt"],
+          "properties": {
+            "checkId": { "type": "string", "minLength": 1 },
+            "path": { "type": "string", "minLength": 1 },
+            "sourcePath": { "type": "string", "minLength": 1 },
+            "sourceSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "sourceByteLength": { "type": "integer", "minimum": 0 },
+            "sourceStatus": {
+              "enum": ["unchanged", "changed", "missing", "unchecked"]
+            },
+            "sourceCurrentSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "sourceCurrentByteLength": { "type": "integer", "minimum": 0 },
+            "declarationName": { "type": "string" },
+            "declaration": {
+              "$ref": "#/$defs/proofDeclaration"
+            },
+            "status": {
+              "enum": ["accepted", "rejected", "backend-unavailable", "error"]
+            },
+            "trust": { "type": "string", "minLength": 1 },
+            "createdAt": { "type": "string", "format": "date-time" },
+            "diagnosticSnippet": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
         "reportId": { "type": "string" }
       },
       "additionalProperties": false
@@ -313,6 +352,197 @@
       },
       "additionalProperties": false
     },
+    "sourceRevision": {
+      "type": "object",
+      "required": ["revisionId", "path", "sourceSnapshotId", "sourceSnapshotPath", "totalFiles", "totalBytes"],
+      "properties": {
+        "revisionId": {
+          "type": "string",
+          "pattern": "^rev_[a-f0-9]{16}$"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/revisions/"
+        },
+        "sourceSnapshotId": {
+          "type": "string",
+          "pattern": "^snap_[a-f0-9]{16}$"
+        },
+        "sourceSnapshotPath": {
+          "type": "string",
+          "pattern": "^\\.truth-harness/snapshots/"
+        },
+        "totalFiles": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifactRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "role", "source"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^\\.truth-harness/"
+          },
+          "role": {
+            "enum": [
+              "run-next-packet",
+              "source-revision",
+              "source-snapshot",
+              "candidate-evidence",
+              "execution-evidence",
+              "referenced-artifact"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sha256Scope": {
+            "const": "file"
+          },
+          "citation": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "impactRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["refPath", "citedByPath", "citedByKind", "source"],
+        "properties": {
+          "refPath": {
+            "type": "string",
+            "pattern": "^\\.truth-harness/"
+          },
+          "citedByPath": {
+            "type": "string",
+            "pattern": "^\\.truth-harness/"
+          },
+          "citedByKind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "const": "workspace-catalog"
+          },
+          "citedByArtifactId": {
+            "type": "string"
+          },
+          "citedByTitle": {
+            "type": "string"
+          },
+          "citedByTrust": {
+            "type": "string"
+          },
+          "citedByStatus": {
+            "type": "string"
+          },
+          "fieldPath": {
+            "type": "string"
+          },
+          "refKind": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "revalidationQueue": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "itemId",
+          "refPath",
+          "dependentPath",
+          "dependentKind",
+          "source",
+          "priority",
+          "reason",
+          "command",
+          "evidenceRequired",
+          "boundary"
+        ],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "pattern": "^reval_[a-f0-9]{8}$"
+          },
+          "refPath": {
+            "type": "string",
+            "pattern": "^\\.truth-harness/"
+          },
+          "dependentPath": {
+            "type": "string",
+            "pattern": "^\\.truth-harness/"
+          },
+          "dependentKind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "const": "impact-ref"
+          },
+          "priority": {
+            "enum": ["high", "medium"]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidenceRequired": {
+            "type": "string",
+            "minLength": 1
+          },
+          "boundary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dependentArtifactId": {
+            "type": "string"
+          },
+          "dependentTitle": {
+            "type": "string"
+          },
+          "dependentTrust": {
+            "type": "string"
+          },
+          "dependentStatus": {
+            "type": "string"
+          },
+          "fieldPath": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "stopConditions": {
       "$ref": "#/$defs/stringArray"
     },
@@ -322,6 +552,89 @@
   },
   "additionalProperties": true,
   "$defs": {
+    "proofDeclaration": {
+      "type": "object",
+      "required": [
+        "declarationId",
+        "kind",
+        "path",
+        "line",
+        "column",
+        "signature",
+        "signatureSha256",
+        "sourceSha256"
+      ],
+      "properties": {
+        "declarationId": {
+          "type": "string",
+          "pattern": "^decl_[a-f0-9]{16}$"
+        },
+        "kind": {
+          "enum": ["theorem", "lemma", "example", "def"]
+        },
+        "name": { "type": "string" },
+        "path": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "signature": { "type": "string", "minLength": 1 },
+        "signatureSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "proofRepairTarget": {
+      "type": "object",
+      "required": [
+        "repairTargetId",
+        "sourcePath",
+        "sourceSha256",
+        "markerKind",
+        "markerLine",
+        "markerColumn",
+        "afterEditCommands",
+        "evidenceRequired",
+        "boundary"
+      ],
+      "properties": {
+        "repairTargetId": {
+          "type": "string",
+          "pattern": "^lpr_[a-f0-9]{16}$"
+        },
+        "sourcePath": { "type": "string", "minLength": 1 },
+        "sourceSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "markerKind": {
+          "enum": ["sorry", "admit", "axiom", "constant", "hole"]
+        },
+        "markerLine": { "type": "integer", "minimum": 1 },
+        "markerColumn": { "type": "integer", "minimum": 1 },
+        "declarationId": {
+          "type": "string",
+          "pattern": "^decl_[a-f0-9]{16}$"
+        },
+        "declarationName": { "type": "string" },
+        "declarationSignatureSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "afterEditCommands": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "evidenceRequired": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "boundary": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
     "status": {
       "enum": ["planned", "executed", "blocked"]
     },

@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,6 +8,7 @@ import { initLocalWorkspace } from "./local-workspace.js";
 import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
 import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchHarness, writeResearchSession } from "./research-session.js";
+import { attachValidationGateEvidence } from "./validation-plan.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createWorkspaceReview, listWorkspaceReviews, readWorkspaceReview, writeWorkspaceReview } from "./workspace-review.js";
 import { writeVerifierRoute } from "./verifier-route.js";
@@ -23,6 +25,91 @@ describe("workspace review", () => {
     const root = await tempRoot();
 
     await expect(createWorkspaceReview({ rootPath: root })).rejects.toThrow("No Truth Harness workspace found");
+  });
+
+  it("prioritizes Lean proof-safety markers before generic proof work", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-21T00:00:00.000Z"
+    });
+    await mkdir(join(root, "Proofs"), { recursive: true });
+    await writeFile(join(root, "lean-toolchain"), "leanprover/lean4:v4.12.0\n", "utf8");
+    await writeFile(join(root, "lakefile.lean"), "import Lake\nopen Lake DSL\n", "utf8");
+    const gapSource = [
+      "-- comments mentioning sorry should not count",
+      "theorem gap : True := by",
+      "  sorry"
+    ].join("\n");
+    await writeFile(join(root, "Proofs", "Gap.lean"), gapSource, "utf8");
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-21T00:01:00.000Z"
+    });
+
+    expect(review.items[0]).toMatchObject({
+      kind: "route-obligation",
+      priority: "critical",
+      title: "Resolve Lean proof marker: sorry",
+      command: `truth-harness proof project . --workspace ${root} --max-lean-files 40 --json`,
+      obligationKind: "formal-proof",
+      source: {
+        label: "Lean proof safety",
+        ref: "lean-marker:Proofs/Gap.lean:3:3"
+      },
+      proofDeclaration: {
+        declarationId: expect.stringMatching(/^decl_[a-f0-9]{16}$/u),
+        kind: "theorem",
+        name: "gap",
+        path: "Proofs/Gap.lean",
+        line: 2,
+        column: 1,
+        signature: "theorem gap : True",
+        signatureSha256: sha256Hex("theorem gap : True"),
+        sourceSha256: sha256Hex(gapSource)
+      },
+      proofRepairTarget: {
+        repairTargetId: expect.stringMatching(/^lpr_[a-f0-9]{16}$/u),
+        sourcePath: "Proofs/Gap.lean",
+        sourceSha256: sha256Hex(gapSource),
+        markerKind: "sorry",
+        markerLine: 3,
+        markerColumn: 3,
+        declarationId: expect.stringMatching(/^decl_[a-f0-9]{16}$/u),
+        declarationName: "gap",
+        declarationSignatureSha256: sha256Hex("theorem gap : True"),
+        afterEditCommands: [
+          "truth-harness proof check Proofs/Gap.lean --declaration gap --write",
+          expect.stringContaining("proof project <project> --json")
+        ],
+        evidenceRequired: expect.arrayContaining([
+          "edited workspace-local .lean source",
+          "proof-safety scan with this marker absent",
+          "accepted proof-check record before using the source as proved evidence"
+        ]),
+        boundary: expect.stringContaining("must not upgrade trust")
+      },
+      evidenceSlots: [
+        expect.objectContaining({
+          slotId: "lean-proof-safety-clearance",
+          label: "Lean proof marker clearance",
+          description: expect.stringContaining("Target declaration: theorem gap")
+        })
+      ],
+      acceptanceCriteria: expect.arrayContaining([
+        expect.stringContaining("replace the proof placeholder"),
+        expect.stringContaining("Repair the enclosing theorem gap"),
+        expect.stringContaining("Resolve repair target")
+      ])
+    });
+    expect(review.items[0]?.agentPacket).toContain("Proof declaration:");
+    expect(review.items[0]?.agentPacket).toContain("Proof declaration signature sha256:");
+    expect(review.items[0]?.agentPacket).toContain("Proof repair target:");
+    expect(review.items[0]?.agentPacket).toContain("Proof repair after-edit command:");
+    expect(review.items[0]?.evidenceSlots?.[0]?.description).toContain("after editing, run truth-harness proof check Proofs/Gap.lean --declaration gap --write");
+    expect(review.summary.leanProofSafetyItems).toBe(1);
+    expect(review.autonomy.nextItemId).toBe(review.items[0]?.itemId);
+    expect(review.autonomy.nextCommand).toBe(review.items[0]?.command);
   });
 
   it("exposes validation gate attach commands in evidence slots", async () => {
@@ -144,6 +231,147 @@ describe("workspace review", () => {
     });
   });
 
+  it("lets concrete route obligations lead after a validation gate has weak attached evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-18T00:00:00.000Z"
+    });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "Prove a deliberately unverified symbolic research claim.",
+      domains: ["math"],
+      claims: ["Prove the symbolic research claim H."],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const plan = harness.validationPlan?.plan;
+    const proofGate = plan?.gates.find((gate) => gate.kind === "proof");
+    if (!plan || !proofGate) {
+      throw new Error("Expected a linked proof validation gate.");
+    }
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "Prove the symbolic research claim H.",
+      now: new Date("2026-06-18T00:02:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const storedRoute = JSON.parse(await readFile(route.jsonPath, "utf8")) as {
+      proofObligations: Array<Record<string, unknown>>;
+    };
+    storedRoute.proofObligations = [
+      {
+        obligationId: "obl_cas_escalation_after_weak_gate_evidence",
+        kind: "independent-check",
+        status: "open",
+        severity: "critical",
+        sourceCapabilityId: "maxima-cas",
+        title: "Independent CAS cross-check obligation",
+        statement: "symbolic simplify sin(x)^2 + cos(x)^2",
+        requiredBefore: "Before labeling this scoped claim cross-checked.",
+        acceptanceCriteria: ["Attach an independent CAS agreement record."],
+        command: 'truth-harness cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write'
+      }
+    ];
+    await writeFile(route.jsonPath, JSON.stringify(storedRoute, null, 2), "utf8");
+    await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: plan.planId,
+      gateId: proofGate.gateId,
+      evidenceRef: {
+        kind: "route",
+        ref: route.route.routeId,
+        trust: route.route.finalTrust
+      },
+      now: "2026-06-18T00:03:00.000Z"
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-18T00:04:00.000Z"
+    });
+    const validationItem = review.items.find(
+      (candidate) => candidate.kind === "validation-gate" && candidate.validationGateId === proofGate.gateId
+    );
+    const snapshotItem = review.items.find(
+      (candidate) => candidate.kind === "validation-gate" && candidate.validationGateKind === "workspace-snapshot"
+    );
+
+    expect(validationItem).toMatchObject({
+      kind: "validation-gate",
+      priority: "low",
+      command: expect.stringMatching(/^(npm run docker:engines|npm run docker:sage|docker compose run --rm lean-proof)$/u)
+    });
+    expect(validationItem?.command).not.toContain("truth-harness verify");
+    expect(snapshotItem).toMatchObject({
+      kind: "validation-gate",
+      priority: "low",
+      command: `truth-harness workspace snapshot ${root} --json`,
+      candidateEvidenceRefs: []
+    });
+    expect(review.items[0]).toMatchObject({
+      kind: "route-obligation",
+      routeId: route.route.routeId
+    });
+    expect(review.autonomy.nextItemId).toBe(review.items[0]?.itemId);
+    expect(review.autonomy.nextCommand).toBe(review.items[0]?.command);
+    expect(review.autonomy.nextCommand).not.toBe(validationItem?.command);
+  });
+
+  it("uses a matching ready route as validation-gate evidence before recording a claim", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-18T00:00:00.000Z"
+    });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const plan = harness.validationPlan?.plan;
+    const proofGate = plan?.gates.find((gate) => gate.kind === "proof");
+    if (!plan || !proofGate) {
+      throw new Error("Expected a linked proof validation gate.");
+    }
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "3 / 4 + 5 / 8",
+      now: new Date("2026-06-18T00:02:00.000Z")
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-18T00:03:00.000Z"
+    });
+    const validationItem = review.items.find(
+      (candidate) => candidate.kind === "validation-gate" && candidate.validationGateId === proofGate.gateId
+    );
+    const readyClaimItem = review.items.find((candidate) => candidate.kind === "route-ready-claim");
+
+    expect(validationItem).toMatchObject({
+      kind: "validation-gate",
+      priority: "critical",
+      command: `truth-harness validation attach ${plan.planId} ${proofGate.gateId} --evidence route:${route.route.routeId} --json`,
+      candidateEvidenceRefs: [
+        expect.objectContaining({
+          kind: "route",
+          ref: route.route.routeId,
+          trust: "exact-computed"
+        })
+      ]
+    });
+    expect(readyClaimItem).toMatchObject({
+      kind: "route-ready-claim",
+      routeId: route.route.routeId,
+      domain: "math",
+      command: `truth-harness claim add "3 / 4 + 5 / 8" --workspace ${root} --domain math --evidence route:${route.route.routeId} --trust exact-computed --json`
+    });
+    expect(review.items[0]?.itemId).toBe(validationItem?.itemId);
+    expect(review.autonomy.nextCommand).toBe(validationItem?.command);
+  });
+
   it("orders route obligations and blocked claims into a local work queue", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {
@@ -222,6 +450,7 @@ describe("workspace review", () => {
         kind: "route-ready-claim",
         routeId: readyRoute.route.routeId,
         command: expect.stringContaining("truth-harness claim add"),
+        domain: "math",
         acceptanceCriteria: expect.arrayContaining([
           "Record a narrow claim that cites this route as evidence.",
           "Use the route's strongest trust label without upgrading it."
@@ -412,6 +641,258 @@ describe("workspace review", () => {
     expect(routeItems[evidenceCommandIndex]?.command).toContain("--write");
     expect(review.autonomy.nextCommand).toBe(routeItems[evidenceCommandIndex]?.command);
     expect(review.warnings).toContainEqual(expect.stringContaining("1 passive route obligation remains on verifier routes"));
+  });
+
+  it("uses Lean declaration inventory to make placeholder proof obligations concrete", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-21T00:00:00.000Z"
+    });
+    await mkdir(join(root, "Proofs"), { recursive: true });
+    await writeFile(join(root, "lean-toolchain"), "leanprover/lean4:v4.12.0\n", "utf8");
+    await writeFile(join(root, "lakefile.lean"), "import Lake\nopen Lake DSL\n", "utf8");
+    const leanSource = "theorem route_statement : True := by trivial\n";
+    await writeFile(join(root, "Proofs", "RouteStatement.lean"), leanSource, "utf8");
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "route_statement : True",
+      now: new Date("2026-06-21T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const stored = JSON.parse(await readFile(route.jsonPath, "utf8")) as {
+      proofObligations: Array<Record<string, unknown>>;
+    };
+    stored.proofObligations = [
+      {
+        obligationId: "obl_lean_declaration_target",
+        kind: "formal-proof",
+        status: "open",
+        severity: "critical",
+        sourceCapabilityId: "lean-proof-checker",
+        title: "Formal proof-checker obligation",
+        statement: "route_statement : True",
+        requiredBefore: "Before labeling this scoped claim proved.",
+        acceptanceCriteria: ["Attach an accepted proof-check record scoped to this route obligation."],
+        command: "truth-harness proof check <workspace-local.lean> --write"
+      }
+    ];
+    await writeFile(route.jsonPath, JSON.stringify(stored, null, 2), "utf8");
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-21T00:02:00.000Z"
+    });
+    const item = review.items.find(
+      (candidate) =>
+        candidate.kind === "route-obligation" &&
+        candidate.routeId === route.route.routeId &&
+        candidate.obligationId === "obl_lean_declaration_target"
+    );
+
+    expect(item).toMatchObject({
+      kind: "route-obligation",
+      obligationKind: "formal-proof",
+      command: expect.stringContaining("truth-harness proof check Proofs/RouteStatement.lean --declaration route_statement --write")
+    });
+    expect(item?.command).toContain(`--route ${route.route.routeId}`);
+    expect(item?.command).toContain("--obligation obl_lean_declaration_target");
+    expect(item?.command).toContain('--statement "route_statement : True"');
+    expect(item?.command).toContain("--statement-hash");
+    expect(item?.command).not.toContain("route show");
+    expect(item?.proofDeclaration).toMatchObject({
+      declarationId: expect.stringMatching(/^decl_[a-f0-9]{16}$/u),
+      kind: "theorem",
+      name: "route_statement",
+      path: "Proofs/RouteStatement.lean",
+      line: 1,
+      column: 1,
+      signature: "theorem route_statement : True",
+      signatureSha256: sha256Hex("theorem route_statement : True"),
+      sourceSha256: sha256Hex(leanSource)
+    });
+    expect(item?.agentPacket).toContain("Proof declaration:");
+    expect(item?.agentPacket).toContain("Proof declaration signature sha256:");
+    expect(review.autonomy.nextCommand).toBe(item?.command);
+  });
+
+  it("reuses the latest rejected scoped Lean attempt as the next proof repair target", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-21T00:00:00.000Z"
+    });
+    await mkdir(join(root, "Proofs"), { recursive: true });
+    await writeFile(join(root, "lean-toolchain"), "leanprover/lean4:v4.12.0\n", "utf8");
+    await writeFile(join(root, "lakefile.lean"), "import Lake\nopen Lake DSL\n", "utf8");
+    await writeFile(join(root, "Proofs", "Attempt.lean"), "theorem route_statement : True := by\n  exact False.elim\n", "utf8");
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: "route_statement : True",
+      now: new Date("2026-06-21T00:01:00.000Z"),
+      maximaCommand: "truth-harness-missing-maxima-command",
+      leanCommand: "truth-harness-missing-lean-command",
+      z3Command: "truth-harness-missing-z3-command",
+      timeoutMs: 50
+    });
+    const obligationId = "obl_0123456789abce01";
+    const stored = JSON.parse(await readFile(route.jsonPath, "utf8")) as {
+      proofObligations: Array<Record<string, unknown>>;
+    };
+    stored.proofObligations = [
+      {
+        obligationId,
+        kind: "formal-proof",
+        status: "open",
+        severity: "critical",
+        sourceCapabilityId: "lean-proof-checker",
+        title: "Formal proof-checker obligation",
+        statement: "route_statement : True",
+        requiredBefore: "Before labeling this scoped claim proved.",
+        acceptanceCriteria: ["Attach an accepted proof-check record scoped to this route obligation."],
+        command: "truth-harness proof check <workspace-local.lean> --write"
+      }
+    ];
+    await writeFile(route.jsonPath, JSON.stringify(stored, null, 2), "utf8");
+    const proofRunner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+      }
+
+      return { status: 1, stdout: "", stderr: "type mismatch\n" };
+    };
+    const attempt = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "Proofs/Attempt.lean",
+      declarationName: "route_statement",
+      scope: {
+        routeId: route.route.routeId,
+        obligationId,
+        statement: "route_statement : True"
+      },
+      runner: proofRunner,
+      now: new Date("2026-06-21T00:02:00.000Z")
+    });
+    const expectedDeclaration = {
+      declarationId: expect.stringMatching(/^decl_[a-f0-9]{16}$/u),
+      kind: "theorem",
+      name: "route_statement",
+      path: "Proofs/Attempt.lean",
+      line: 1,
+      column: 1,
+      signature: "theorem route_statement : True",
+      signatureSha256: sha256Hex("theorem route_statement : True"),
+      sourceSha256: attempt.record.source.sha256
+    };
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-21T00:03:00.000Z"
+    });
+    const item = review.items.find(
+      (candidate) =>
+        candidate.kind === "route-obligation" &&
+        candidate.routeId === route.route.routeId &&
+        candidate.obligationId === obligationId
+    );
+
+    expect(attempt.record.status).toBe("rejected");
+    expect(attempt.record.source.declaration).toMatchObject(expectedDeclaration);
+    expect(item).toMatchObject({
+      kind: "route-obligation",
+      obligationKind: "formal-proof",
+      command: expect.stringContaining("truth-harness proof check Proofs/Attempt.lean --declaration route_statement --write"),
+      summary: expect.stringContaining(`Latest scoped Lean attempt ${attempt.record.checkId} is rejected`),
+      proofDeclaration: expectedDeclaration,
+      proofAttempt: {
+        checkId: attempt.record.checkId,
+        path: expect.stringContaining(".truth-harness/proofs/"),
+        sourcePath: "Proofs/Attempt.lean",
+        sourceSha256: attempt.record.source.sha256,
+        sourceByteLength: attempt.record.source.byteLength,
+        sourceStatus: "unchanged",
+        sourceCurrentSha256: attempt.record.source.sha256,
+        sourceCurrentByteLength: attempt.record.source.byteLength,
+        declarationName: "route_statement",
+        declaration: expectedDeclaration,
+        status: "rejected",
+        trust: "unverified",
+        createdAt: attempt.record.createdAt,
+        diagnosticSnippet: "type mismatch"
+      },
+      evidenceSlots: [
+        expect.objectContaining({
+          slotId: "lean-proof-repair",
+          label: "Lean proof repair artifact",
+          description: expect.stringContaining("source is unchanged"),
+          attachCommand: `truth-harness route satisfy ${route.route.routeId} ${obligationId} --evidence "proof:<proof-check-id-or-path>" --json`,
+          attachTo: expect.objectContaining({
+            routeId: route.route.routeId,
+            obligationId
+          })
+        })
+      ],
+      acceptanceCriteria: expect.arrayContaining([
+        "Do not rerun the proof check until the workspace-local Lean source changes from the rejected attempt hash.",
+        "Edit the same Lean source named in the suggested command; do not start a disconnected proof attempt.",
+        "Use the diagnostic preview as a repair hint, but rerun Lean before trusting the fix.",
+        "Close this only after an accepted proof-check record is attached to the exact route and obligation."
+      ]),
+      agentPacket: expect.stringContaining(`Proof source: Proofs/Attempt.lean sha256:${attempt.record.source.sha256}`)
+    });
+    expect(item?.agentPacket).toContain("Proof source status: unchanged");
+    expect(item?.agentPacket).toContain("Proof declaration signature sha256:");
+    expect(item?.summary).toContain("Source unchanged since that failed attempt");
+    expect(item?.agentPacket).toContain("Lean proof repair artifact");
+    expect(item?.summary).toContain("Diagnostic: type mismatch");
+    expect(item?.command).toContain(`--route ${route.route.routeId}`);
+    expect(item?.command).toContain(`--obligation ${obligationId}`);
+    expect(item?.command).toContain('--statement "route_statement : True"');
+    expect(item?.command).not.toContain("route show");
+    expect(review.autonomy.nextCommand).toBe(item?.command);
+
+    await writeFile(join(root, "Proofs", "Attempt.lean"), "theorem route_statement : True := by\n  trivial\n", "utf8");
+    const changedReview = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 1,
+      maxClaims: 0,
+      maxSessions: 0,
+      now: "2026-06-21T00:04:00.000Z"
+    });
+    const changedItem = changedReview.items.find(
+      (candidate) =>
+        candidate.kind === "route-obligation" &&
+        candidate.routeId === route.route.routeId &&
+        candidate.obligationId === obligationId
+    );
+
+    expect(changedItem).toMatchObject({
+      proofAttempt: {
+        checkId: attempt.record.checkId,
+        sourceStatus: "changed",
+        sourceCurrentSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        sourceCurrentByteLength: Buffer.byteLength("theorem route_statement : True := by\n  trivial\n")
+      },
+      evidenceSlots: [
+        expect.objectContaining({
+          slotId: "lean-proof-repair",
+          description: expect.stringContaining("source changed")
+        })
+      ],
+      acceptanceCriteria: expect.arrayContaining([
+        "The Lean source has changed since the rejected attempt; rerun the suggested scoped proof check to create fresh evidence."
+      ]),
+      summary: expect.stringContaining("Source changed since that failed attempt")
+    });
+    expect(changedItem?.proofAttempt?.sourceCurrentSha256).not.toBe(attempt.record.source.sha256);
+    expect(changedItem?.agentPacket).toContain("Proof source status: changed");
   });
 
   it("derives missing independent SMT commands from sibling route SMT sources", async () => {
@@ -739,7 +1220,8 @@ describe("workspace review", () => {
     expect(review.items[0]).toMatchObject({
       kind: "route-ready-claim",
       routeId: readyRoute.route.routeId,
-      command: expect.stringContaining("truth-harness claim add")
+      domain: "math",
+      command: expect.stringContaining("--domain math")
     });
     expect(review.autonomy.nextCommand).toBe(review.items[0]?.command);
     expect(review.warnings).toContainEqual(expect.stringContaining("1 passive route obligation remains on verifier routes"));
@@ -992,6 +1474,57 @@ describe("workspace review", () => {
     expect(skipped.summary.totalItems).toBe(0);
   });
 
+  it("uses the latest research checkpoint as the active next-check frontier", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const start = await writeResearchSession({
+      rootPath: root,
+      title: "Symbolic route cleanup",
+      objective: "Keep stale checkpoint branches out of the current agent queue.",
+      domains: ["math"],
+      tasks: [],
+      now: "2026-06-13T00:01:00.000Z"
+    });
+    await addResearchSessionCheckpoint({
+      rootPath: root,
+      sessionRef: start.session.sessionId,
+      summary: "Older branch still needed a checker.",
+      nextChecks: ["Install Maxima and rerun the symbolic route."],
+      now: "2026-06-13T00:02:00.000Z"
+    });
+    await addResearchSessionCheckpoint({
+      rootPath: root,
+      sessionRef: start.session.sessionId,
+      summary: "Newer branch completed and chose the next current action.",
+      nextChecks: ["Write the final local reviewer handoff."],
+      now: "2026-06-13T00:03:00.000Z"
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 1,
+      now: "2026-06-13T00:04:00.000Z"
+    });
+
+    expect(review.summary.sessionTasks).toBe(0);
+    expect(review.summary.sessionNextChecks).toBe(1);
+    expect(review.items).toContainEqual(
+      expect.objectContaining({
+        kind: "session-next-check",
+        title: "Session next check: Write the final local reviewer handoff."
+      })
+    );
+    expect(review.items).not.toContainEqual(
+      expect.objectContaining({
+        title: "Session next check: Install Maxima and rerun the symbolic route."
+      })
+    );
+  });
+
   it("queues only report drafts that need integrity review", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {
@@ -1148,4 +1681,8 @@ async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-review-"));
   roots.push(root);
   return root;
+}
+
+function sha256Hex(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }

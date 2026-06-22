@@ -5,9 +5,9 @@ function main() {
   const strictAllEngines = process.argv.slice(2).some((arg) => arg === "--all-engines" || arg === "--strict");
   console.log("Truth Harness Docker reviewer flow");
   if (strictAllEngines) {
-    console.log("This builds the strict all-engine reviewer image, then writes no-network Maxima/Z3/cvc5/Lean/SageMath professor evidence.");
+    console.log("This builds the strict all-engine reviewer image, then writes no-network Maxima/Z3/cvc5/Lean/SageMath professor and closure evidence.");
   } else {
-    console.log("This builds the pinned Lean reviewer image, then writes no-network professor evidence.");
+    console.log("This builds the pinned Lean reviewer image, then writes no-network professor and closure evidence.");
   }
   console.log("Use `npm run docker:storage` to inspect Docker disk use before or after the run.");
   console.log("");
@@ -16,11 +16,11 @@ function main() {
     runDocker(["compose", "build", "all-engines"], "build the strict all-engine professor evidence image");
     runDocker(
       ["compose", "run", "--rm", "professor-evidence-all"],
-      "write strict all-engine professor evidence inside the no-network compose service"
+      "write strict all-engine professor and closure evidence inside the no-network compose service"
     );
   } else {
     runDocker(["compose", "build", "lean-proof"], "build the pinned Lean professor evidence image");
-    runDocker(["compose", "run", "--rm", "professor-evidence"], "write professor evidence inside the no-network compose service");
+    runDocker(["compose", "run", "--rm", "professor-evidence"], "write professor and closure evidence inside the no-network compose service");
   }
   console.log("");
   console.log("Docker reviewer flow completed.");

@@ -1,4 +1,6 @@
-import { resolve } from "node:path";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import type { CredibilityBundleVerification } from "./credibility-bundle.js";
 import { createCredibilityPack, type CredibilityPack, type CreateCredibilityPackInput } from "./credibility-pack.js";
 import type { EngineVerificationCommandRunner, EngineVerificationRequirements } from "./engine-verification.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
@@ -14,6 +16,11 @@ import { getWorkspaceCatalogStatus, type WorkspaceCatalogStatus } from "./worksp
 export type ReleaseAuditStatus = "ready" | "blocked";
 export type ReleaseAuditMode = "prototype" | "public-review";
 export type ReleaseAuditCheckStatus = "pass" | "warn" | "fail";
+export type ReleaseAuditFrontierReadinessStatus =
+  | "blocked"
+  | "credible-verification-harness"
+  | "bounded-hard-math-harness";
+export type ReleaseAuditFrontierStageStatus = "ready" | "partial" | "blocked";
 
 export interface ReleaseAuditCheck {
   id: string;
@@ -23,6 +30,27 @@ export interface ReleaseAuditCheck {
   summary: string;
   command?: string;
   details: string[];
+}
+
+export interface ReleaseAuditFrontierReadinessStage {
+  id: string;
+  title: string;
+  status: ReleaseAuditFrontierStageStatus;
+  summary: string;
+  evidence: string[];
+  blockers: string[];
+  nextAction?: string;
+}
+
+export interface ReleaseAuditFrontierReadiness {
+  schemaVersion: "truth-harness.frontier-readiness.v0";
+  status: ReleaseAuditFrontierReadinessStatus;
+  frontierDiscoveryReadiness: "not-ready";
+  canClaimWorldHardestProblems: false;
+  strongestHonestClaim: string;
+  summary: string;
+  nextMilestone: string;
+  stages: ReleaseAuditFrontierReadinessStage[];
 }
 
 export interface CreateReleaseAuditInput
@@ -59,6 +87,7 @@ export interface ReleaseAudit {
   status: ReleaseAuditStatus;
   professorReady: boolean;
   publicLaunchReady: boolean;
+  frontierReadiness: ReleaseAuditFrontierReadiness;
   localOnly: true;
   networkAccess: "none";
   workspacePath: string;
@@ -75,8 +104,10 @@ export interface ReleaseAudit {
     concreteEngineGates: string;
     adversarialBenchmark: string;
     mathCredibilityLadder: string;
+    hardMathClosure: string;
     reportDrafts: number;
     reportDraftsNeedingAttention: number;
+    leanProofSafetyItems: number;
     researchSessions: number;
     sessionContinuationItems: number;
     reviewItems: number;
@@ -89,6 +120,7 @@ export interface ReleaseAudit {
   sandbox: CodeRunSandboxStatus;
   sandboxEvidence?: CodeRunSandboxRunSummary;
   webUiReview?: WebUiReviewSummary;
+  reviewerBundleVerification?: ReleaseAuditReviewerBundleVerificationSummary;
   credibilityPack?: CredibilityPack;
   checks: ReleaseAuditCheck[];
   commands: {
@@ -99,6 +131,9 @@ export interface ReleaseAudit {
     credibilityActions: string;
     adversarialBenchmark: string;
     mathCredibilityLadder: string;
+    hardMathExactClosure: string;
+    hardMathSymbolicClosure: string;
+    hardMathSmtClosure: string;
     engineVerify: string;
     dockerProfessor: string;
     dockerProfessorAll: string;
@@ -114,6 +149,20 @@ export interface ReleaseAudit {
   limitations: string[];
 }
 
+export interface ReleaseAuditReviewerBundleVerificationSummary {
+  verificationId: string;
+  bundleId: string;
+  packId: string;
+  verifiedAt: string;
+  artifactPath: string;
+  bundleRef: string;
+  passed: boolean;
+  sourceMatchesWorkspace: boolean;
+  checkedBundleFiles: number;
+  checkedSourceFiles: number;
+  manifestDigestStatus: "verified" | "mismatch" | "not-recorded";
+}
+
 export async function createReleaseAudit(input: CreateReleaseAuditInput): Promise<ReleaseAudit> {
   const rootPath = resolve(input.rootPath);
   const createdAt = input.now ?? new Date().toISOString();
@@ -127,6 +176,9 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
   const sandbox = getCodeRunSandboxStatus();
   const sandboxEvidence = workspace.exists && workspace.manifest ? await latestPassingSandboxRun(rootPath) : undefined;
   const webUiReview = workspace.exists && workspace.manifest ? await latestWebUiReview(rootPath) : undefined;
+  const reviewerBundleVerification = workspace.exists && workspace.manifest
+    ? await latestReviewerBundleVerification(rootPath)
+    : undefined;
 
   if (!workspace.exists || !workspace.manifest) {
     const checks = [
@@ -148,6 +200,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
       sandbox,
       sandboxEvidence,
       webUiReview,
+      reviewerBundleVerification,
       commands,
       checks,
       validationPassed: false,
@@ -156,8 +209,10 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
       concreteEngineGates: "0/0",
       adversarialBenchmark: "missing",
       mathCredibilityLadder: "missing",
+      hardMathClosure: "missing",
       reportDrafts: 0,
       reportDraftsNeedingAttention: 0,
+      leanProofSafetyItems: 0,
       researchSessions: 0,
       sessionContinuationItems: 0,
       reviewItems: 0,
@@ -193,9 +248,12 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     engineCheck(credibilityPack, hasRequiredEngine(engineRequirements)),
     adversarialBenchmarkCheck(credibilityPack),
     mathCredibilityLadderCheck(credibilityPack),
+    hardMathClosureCheck(credibilityPack),
     reportDraftsCheck(credibilityPack),
+    leanProofSafetyCheck(credibilityPack),
     researchSessionContinuityCheck(credibilityPack),
     savedStrictEngineRunCheck(credibilityPack, input.requireSavedStrictEngineRun === true),
+    reviewerBundleVerificationCheck(reviewerBundleVerification),
     reviewQueueCheck(credibilityPack),
     sandboxCheck(sandbox, input.requireSandbox === true, sandboxEvidence),
     manualUiCheck(webUiReview)
@@ -210,6 +268,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     sandbox,
     sandboxEvidence,
     webUiReview,
+    reviewerBundleVerification,
     credibilityPack,
     commands,
     checks,
@@ -219,8 +278,10 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     concreteEngineGates: credibilityPack.summary.concreteEngineGates,
     adversarialBenchmark: credibilityPack.summary.latestAdversarialBenchmarkStatus,
     mathCredibilityLadder: credibilityPack.summary.latestMathCredibilityLadderStatus,
+    hardMathClosure: hardMathClosureSummary(credibilityPack),
     reportDrafts: credibilityPack.summary.savedReportDrafts,
     reportDraftsNeedingAttention: credibilityPack.summary.reportDraftsNeedingAttention,
+    leanProofSafetyItems: credibilityPack.summary.leanProofSafetyItems,
     researchSessions: credibilityPack.workspaceReview.summary.sessions,
     sessionContinuationItems:
       credibilityPack.workspaceReview.summary.sessionTasks + credibilityPack.workspaceReview.summary.sessionNextChecks,
@@ -251,15 +312,42 @@ export function renderReleaseAuditMarkdown(audit: ReleaseAudit): string {
     `- Concrete engine gates: ${audit.summary.concreteEngineGates}`,
     `- Adversarial benchmark: ${audit.summary.adversarialBenchmark}`,
     `- Math credibility ladder: ${audit.summary.mathCredibilityLadder}`,
+    `- Hard-math closure: ${audit.summary.hardMathClosure}`,
     `- Report drafts: ${audit.summary.reportDrafts} saved, ${audit.summary.reportDraftsNeedingAttention} needing attention`,
+    `- Lean proof-safety blockers: ${audit.summary.leanProofSafetyItems}`,
     `- Research sessions: ${audit.summary.researchSessions} inspected, ${audit.summary.sessionContinuationItems} continuation item(s)`,
     `- Review queue: ${audit.summary.reviewItems} item(s), ${audit.summary.criticalReviewItems} critical`,
     `- Code-run sandbox: ${audit.summary.sandboxAvailable ? "available" : "not measured"}`,
     `- Web UI review: ${audit.summary.webUiReview}`,
     "",
-    "## Checks",
+    "## Frontier Readiness",
+    "",
+    `- Current honest position: \`${audit.frontierReadiness.status}\``,
+    `- Frontier discovery readiness: \`${audit.frontierReadiness.frontierDiscoveryReadiness}\``,
+    `- Can claim world-hardest-problem solving: \`${String(audit.frontierReadiness.canClaimWorldHardestProblems)}\``,
+    `- Strongest honest claim: ${audit.frontierReadiness.strongestHonestClaim}`,
+    `- Summary: ${audit.frontierReadiness.summary}`,
+    `- Next milestone: ${audit.frontierReadiness.nextMilestone}`,
+    "",
+    "### Frontier Stages",
     ""
   ];
+
+  for (const stage of audit.frontierReadiness.stages) {
+    lines.push(`- \`${stage.status}\` ${stage.title}: ${stage.summary}`);
+    if (stage.nextAction) {
+      lines.push(`  - Next: \`${stage.nextAction}\``);
+    }
+    if (stage.blockers.length > 0) {
+      lines.push(`  - Blockers: ${stage.blockers.join("; ")}`);
+    }
+  }
+
+  lines.push(
+    "",
+    "## Checks",
+    ""
+  );
 
   for (const check of audit.checks) {
     lines.push(`### ${check.status.toUpperCase()} ${check.title}`);
@@ -320,6 +408,7 @@ function buildAudit(input: {
   sandbox: CodeRunSandboxStatus;
   sandboxEvidence?: CodeRunSandboxRunSummary;
   webUiReview?: WebUiReviewSummary;
+  reviewerBundleVerification?: ReleaseAuditReviewerBundleVerificationSummary;
   credibilityPack?: CredibilityPack;
   commands: ReleaseAudit["commands"];
   checks: ReleaseAuditCheck[];
@@ -329,8 +418,10 @@ function buildAudit(input: {
   concreteEngineGates: string;
   adversarialBenchmark: string;
   mathCredibilityLadder: string;
+  hardMathClosure: string;
   reportDrafts: number;
   reportDraftsNeedingAttention: number;
+  leanProofSafetyItems: number;
   researchSessions: number;
   sessionContinuationItems: number;
   reviewItems: number;
@@ -341,6 +432,16 @@ function buildAudit(input: {
   const warningChecks = input.checks.filter((check) => check.status === "warn").length;
   const failedChecks = input.checks.filter((check) => check.status === "fail").length;
   const professorReady = Boolean(input.credibilityPack?.summary.professorReady) && input.catalogFresh && blockingFailures === 0;
+  const frontierReadiness = frontierReadinessFor({
+    checks: input.checks,
+    commands: input.commands,
+    credibilityPack: input.credibilityPack,
+    professorReady,
+    requiredEngineGates: input.requiredEngineGates,
+    concreteEngineGates: input.concreteEngineGates,
+    hardMathClosure: input.hardMathClosure,
+    catalogFresh: input.catalogFresh
+  });
 
   return {
     schemaVersion: "truth-harness.release-audit.v0",
@@ -349,6 +450,7 @@ function buildAudit(input: {
     status,
     professorReady,
     publicLaunchReady: status === "ready" && professorReady && warningChecks === 0,
+    frontierReadiness,
     localOnly: true,
     networkAccess: "none",
     workspacePath: input.rootPath,
@@ -365,8 +467,10 @@ function buildAudit(input: {
       concreteEngineGates: input.concreteEngineGates,
       adversarialBenchmark: input.adversarialBenchmark,
       mathCredibilityLadder: input.mathCredibilityLadder,
+      hardMathClosure: input.hardMathClosure,
       reportDrafts: input.reportDrafts,
       reportDraftsNeedingAttention: input.reportDraftsNeedingAttention,
+      leanProofSafetyItems: input.leanProofSafetyItems,
       researchSessions: input.researchSessions,
       sessionContinuationItems: input.sessionContinuationItems,
       reviewItems: input.reviewItems,
@@ -379,6 +483,7 @@ function buildAudit(input: {
     sandbox: input.sandbox,
     sandboxEvidence: input.sandboxEvidence,
     webUiReview: input.webUiReview,
+    reviewerBundleVerification: input.reviewerBundleVerification,
     credibilityPack: input.credibilityPack,
     checks: input.checks,
     commands: input.commands,
@@ -390,6 +495,179 @@ function buildAudit(input: {
       "Docker commands are recommended for strict reviewer gates, but this audit does not start Docker by itself."
     ]
   };
+}
+
+function frontierReadinessFor(input: {
+  checks: ReleaseAuditCheck[];
+  commands: ReleaseAudit["commands"];
+  credibilityPack?: CredibilityPack;
+  professorReady: boolean;
+  requiredEngineGates: string;
+  concreteEngineGates: string;
+  hardMathClosure: string;
+  catalogFresh: boolean;
+}): ReleaseAuditFrontierReadiness {
+  const localHarnessReady =
+    checkPassed(input.checks, "workspace") &&
+    checkPassed(input.checks, "workspace-validation") &&
+    checkPassed(input.checks, "catalog") &&
+    checkPassed(input.checks, "adversarial-ai-benchmark") &&
+    checkPassed(input.checks, "math-credibility-ladder") &&
+    checkPassed(input.checks, "lean-proof-safety");
+  const engineEvidenceReady = checkPassed(input.checks, "engine-evidence");
+  const hardMathClosureReady = checkPassed(input.checks, "hard-math-closure");
+  const strictAllEngineEvidenceReady =
+    input.credibilityPack?.summary.latestStrictEngineRunStatus === "passed" ||
+    (engineEvidenceReady &&
+      gateRatioAtLeast(input.requiredEngineGates, 5, 5) &&
+      gateRatioAtLeast(input.concreteEngineGates, 5, 5));
+  const leanFixtureReady =
+    input.credibilityPack?.engineEvidenceLadder.some(
+      (entry) =>
+        entry.status === "passed" &&
+        (entry.displayName.toLowerCase().includes("lean") || entry.trust === "proved")
+    ) === true ||
+    input.credibilityPack?.summary.latestStrictEngineRunStatus === "passed" ||
+    input.credibilityPack?.summary.latestProfessorEngineRunStatus === "passed";
+  const boundedHardMathReady = input.professorReady && engineEvidenceReady && hardMathClosureReady;
+  const status: ReleaseAuditFrontierReadinessStatus = boundedHardMathReady
+    ? "bounded-hard-math-harness"
+    : localHarnessReady
+      ? "credible-verification-harness"
+      : "blocked";
+  const stages: ReleaseAuditFrontierReadinessStage[] = [
+    {
+      id: "local-verification-harness",
+      title: "Credible local verification harness",
+      status: localHarnessReady ? "ready" : input.catalogFresh ? "partial" : "blocked",
+      summary: localHarnessReady
+        ? "Workspace validation, catalog freshness, adversarial AI-failure checks, and the native math ladder are present."
+        : "The local evidence floor is not complete yet.",
+      evidence: [
+        `Workspace: ${checkSummary(input.checks, "workspace")}.`,
+        `Validation: ${checkSummary(input.checks, "workspace-validation")}.`,
+        `Catalog: ${checkSummary(input.checks, "catalog")}.`,
+        `AI-failure benchmark: ${checkSummary(input.checks, "adversarial-ai-benchmark")}.`,
+        `Math ladder: ${checkSummary(input.checks, "math-credibility-ladder")}.`,
+        `Lean proof safety: ${checkSummary(input.checks, "lean-proof-safety")}.`
+      ],
+      blockers: localHarnessReady
+        ? []
+        : ["Complete the local validation, catalog, adversarial benchmark, native hard-math ladder, and Lean proof-safety evidence."],
+      nextAction: localHarnessReady ? undefined : firstCommand(input.checks, ["lean-proof-safety", "catalog", "adversarial-ai-benchmark", "math-credibility-ladder"])
+    },
+    {
+      id: "independent-engine-stack",
+      title: "Independent engine stack",
+      status: strictAllEngineEvidenceReady ? "ready" : engineEvidenceReady ? "partial" : "blocked",
+      summary: strictAllEngineEvidenceReady
+        ? "Maxima, Z3, cvc5, Lean, and SageMath have a strict reviewer evidence path."
+        : engineEvidenceReady
+          ? "Some concrete engine evidence is present, but the strict all-engine gate is not fully cited here."
+          : "The required engine evidence gate is not satisfied.",
+      evidence: [
+        `Engine check: ${checkSummary(input.checks, "engine-evidence")}.`,
+        `Live concrete gates: ${input.concreteEngineGates}.`,
+        `Live required gates: ${input.requiredEngineGates}.`,
+        `Saved strict engine run: ${input.credibilityPack?.summary.latestStrictEngineRunStatus ?? "missing"}.`
+      ],
+      blockers: strictAllEngineEvidenceReady
+        ? []
+        : ["Earn or cite the strict no-network all-engine reviewer run before claiming broad independent verifier coverage."],
+      nextAction: strictAllEngineEvidenceReady ? undefined : input.commands.dockerAllEngines
+    },
+    {
+      id: "bounded-hard-math-autonomy",
+      title: "Bounded hard-math autonomy",
+      status: hardMathClosureReady && localHarnessReady ? "ready" : localHarnessReady ? "partial" : "blocked",
+      summary: hardMathClosureReady
+        ? "Seeded exact, symbolic CAS, and SMT validation blockers have replayable closure reports."
+        : "The harness still needs saved closure reports proving it can close scoped validation-plan gates.",
+      evidence: [
+        `Hard-math closure: ${input.hardMathClosure}.`,
+        `Research continuity: ${checkSummary(input.checks, "research-session-continuity")}.`,
+        `Review queue: ${checkSummary(input.checks, "review-queue")}.`
+      ],
+      blockers: hardMathClosureReady
+        ? []
+        : ["Run the Docker hard-math closure smokes for exact, symbolic CAS, and SMT blockers."],
+      nextAction: hardMathClosureReady ? undefined : input.commands.hardMathExactClosure
+    },
+    {
+      id: "formal-theorem-workflows",
+      title: "Formal theorem workflows",
+      status: leanFixtureReady ? "partial" : "blocked",
+      summary: leanFixtureReady
+        ? "Lean fixture evidence exists, but this is not yet a mature proof-search or mathlib-scale workflow."
+        : "No accepted Lean proof fixture is cited in this audit scope.",
+      evidence: [
+        `Lean/proved fixture evidence: ${leanFixtureReady ? "present" : "missing"}.`,
+        "`proved` remains reserved for accepted proof-checker artifacts."
+      ],
+      blockers: [
+        "Add larger Lean/mathlib templates, proof-hole tracking, theorem corpora, and external mathematical review before treating this as frontier theorem infrastructure."
+      ],
+      nextAction: leanFixtureReady ? "Expand Lean/mathlib fixtures and proof-hole workflows." : input.commands.dockerProof
+    },
+    {
+      id: "autonomous-frontier-discovery",
+      title: "Autonomous frontier discovery",
+      status: "blocked",
+      summary:
+        "Not ready: the harness can route, verify, and audit bounded claims, but cannot responsibly claim autonomous solutions to frontier open problems.",
+      evidence: [
+        "No local audit artifact can by itself establish a new frontier result.",
+        "Breakthrough claims still require formal proof, independent replay, expert review, and domain-specific validation."
+      ],
+      blockers: [
+        "Long-horizon benchmark suites",
+        "Proof-search regression budgets",
+        "Independent verifier diversity on real research tasks",
+        "Human expert review and publication-grade artifacts"
+      ],
+      nextAction: "Grow from bounded fixtures into curated professor-reviewed hard-problem benchmark suites."
+    }
+  ];
+  const nextMilestone = stages.find((stage) => stage.status !== "ready")?.title ?? "External professor review";
+  const strongestHonestClaim =
+    status === "bounded-hard-math-harness"
+      ? "Truth Harness is a bounded, local-first hard-math verification harness for scoped claims with replayable evidence."
+      : status === "credible-verification-harness"
+        ? "Truth Harness is a credible local verification harness for narrow supported claims, with larger autonomy gates still open."
+        : "Truth Harness is still blocked from professor-level readiness until the local evidence floor is complete.";
+
+  return {
+    schemaVersion: "truth-harness.frontier-readiness.v0",
+    status,
+    frontierDiscoveryReadiness: "not-ready",
+    canClaimWorldHardestProblems: false,
+    strongestHonestClaim,
+    summary:
+      "We are building the evidence layer needed before agents attack hard problems; we are not yet an autonomous frontier solver.",
+    nextMilestone,
+    stages
+  };
+}
+
+function checkPassed(checks: ReleaseAuditCheck[], id: string): boolean {
+  return checks.find((check) => check.id === id)?.status === "pass";
+}
+
+function checkSummary(checks: ReleaseAuditCheck[], id: string): string {
+  const check = checks.find((candidate) => candidate.id === id);
+  return check ? `${check.status} - ${check.summary}` : "missing";
+}
+
+function firstCommand(checks: ReleaseAuditCheck[], ids: string[]): string | undefined {
+  return ids.map((id) => checks.find((check) => check.id === id)?.command).find(Boolean);
+}
+
+function gateRatioAtLeast(value: string, numerator: number, denominator: number): boolean {
+  const match = /^(\d+)\/(\d+)$/u.exec(value.trim());
+  if (!match) {
+    return false;
+  }
+  return Number(match[1]) >= numerator && Number(match[2]) >= denominator;
 }
 
 function workspaceCheck(status: LocalWorkspaceStatus): ReleaseAuditCheck {
@@ -650,6 +928,98 @@ function savedStrictEngineRunCheck(pack: CredibilityPack, required: boolean): Re
   });
 }
 
+function reviewerBundleVerificationCheck(
+  verification: ReleaseAuditReviewerBundleVerificationSummary | undefined
+): ReleaseAuditCheck {
+  if (!verification) {
+    return warnCheck({
+      id: "reviewer-bundle-verification",
+      title: "Reviewer bundle verification",
+      blocking: false,
+      summary: "No saved portable reviewer bundle verification was found.",
+      command: "truth-harness workspace verify-credibility-bundle . <bundle-ref> --write",
+      details: [
+        "Write and verify a credibility bundle before external review so copied artifacts, manifest metadata, and source drift have a citeable local check.",
+        "A missing reviewer-bundle verification does not change claim trust labels, but public handoff should include one."
+      ]
+    });
+  }
+
+  const command = `truth-harness workspace verify-credibility-bundle . ${verification.bundleRef} --write`;
+  const details = [
+    `Verification: ${verification.verificationId}.`,
+    `Bundle: ${verification.bundleId}.`,
+    `Artifact: ${verification.artifactPath}.`,
+    `Bundle files checked: ${verification.checkedBundleFiles}.`,
+    `Source files checked: ${verification.checkedSourceFiles}.`,
+    `Manifest digest: ${verification.manifestDigestStatus}.`
+  ];
+
+  if (!verification.passed) {
+    return failCheck({
+      id: "reviewer-bundle-verification",
+      title: "Reviewer bundle verification",
+      blocking: true,
+      summary: `Latest reviewer bundle verification ${verification.verificationId} failed copied-file integrity.`,
+      command,
+      details: [
+        ...details,
+        "The portable reviewer packet cannot be trusted as a faithful local artifact snapshot until copied-file differences are investigated."
+      ]
+    });
+  }
+
+  if (verification.manifestDigestStatus === "mismatch") {
+    return failCheck({
+      id: "reviewer-bundle-verification",
+      title: "Reviewer bundle verification",
+      blocking: true,
+      summary: `Latest reviewer bundle verification ${verification.verificationId} found a manifest digest mismatch.`,
+      command,
+      details: [
+        ...details,
+        "Reviewer-critical metadata changed after export or the bundle is corrupted; regenerate or investigate before release."
+      ]
+    });
+  }
+
+  if (!verification.sourceMatchesWorkspace) {
+    return failCheck({
+      id: "reviewer-bundle-verification",
+      title: "Reviewer bundle verification",
+      blocking: true,
+      summary: `Latest reviewer bundle ${verification.bundleId} no longer matches the current source workspace.`,
+      command,
+      details: [
+        ...details,
+        "A valid exported bundle can outlive later edits, but release handoff should regenerate the bundle after source drift."
+      ]
+    });
+  }
+
+  if (verification.manifestDigestStatus !== "verified") {
+    return warnCheck({
+      id: "reviewer-bundle-verification",
+      title: "Reviewer bundle verification",
+      blocking: false,
+      summary: `Latest reviewer bundle verification ${verification.verificationId} predates manifest digest checks.`,
+      command,
+      details: [
+        ...details,
+        "Copied-file hashes passed, but reviewer commands, limitations, summaries, and provenance metadata have no manifest digest self-check."
+      ]
+    });
+  }
+
+  return passCheck({
+    id: "reviewer-bundle-verification",
+    title: "Reviewer bundle verification",
+    summary: `Latest reviewer bundle verification ${verification.verificationId} passed copied-file, manifest-digest, and source-drift checks.`,
+    command,
+    details
+  });
+}
+
 function adversarialBenchmarkCheck(pack: CredibilityPack): ReleaseAuditCheck {
   const status = pack.summary.latestAdversarialBenchmarkStatus;
   const accuracy = pack.summary.latestAdversarialBenchmarkAccuracy;
@@ -793,6 +1163,75 @@ function mathCredibilityLadderEvidenceDetails(pack: CredibilityPack): string[] {
   return details;
 }
 
+function hardMathClosureCheck(pack: CredibilityPack): ReleaseAuditCheck {
+  const statuses = [
+    pack.summary.hardMathExactClosureStatus,
+    pack.summary.hardMathSymbolicClosureStatus,
+    pack.summary.hardMathSmtClosureStatus
+  ];
+  const details = hardMathClosureEvidenceDetails(pack);
+  if (statuses.every((status) => status === "passed")) {
+    return passCheck({
+      id: "hard-math-closure",
+      title: "Hard-math autonomous closure",
+      summary: `Docker closure reports are passing for exact, symbolic, and SMT fixtures (${pack.summary.savedHardMathClosureReports} saved report(s)).`,
+      command: pack.reviewerCommands.runSmtHardMathClosure,
+      details: [
+        ...details,
+        "Closure reports prove the bounded harness can route a seeded validation blocker to scoped evidence and record a reviewer artifact; they do not prove broader math claims."
+      ]
+    });
+  }
+
+  return failCheck({
+    id: "hard-math-closure",
+    title: "Hard-math autonomous closure",
+    blocking: true,
+    summary: `Closure reports are incomplete: ${hardMathClosureSummary(pack)}.`,
+    command: firstHardMathClosureCommand(pack),
+    details: [
+      ...details,
+      "Run all three Docker closure smokes before treating autonomous math closure as professor-ready.",
+      "Required: exact fraction route evidence, symbolic CAS cross-check evidence, and SMT solver evidence attached through run-next."
+    ]
+  });
+}
+
+function hardMathClosureSummary(pack: CredibilityPack): string {
+  return (
+    `exact ${pack.summary.hardMathExactClosureStatus}, ` +
+    `symbolic ${pack.summary.hardMathSymbolicClosureStatus}, ` +
+    `SMT ${pack.summary.hardMathSmtClosureStatus}`
+  );
+}
+
+function hardMathClosureEvidenceDetails(pack: CredibilityPack): string[] {
+  return [
+    `Saved closure reports: ${pack.summary.savedHardMathClosureReports}.`,
+    `Exact closure: ${formatClosureCheckDetail(pack.hardMathClosureLedger.latestExactClosure)}.`,
+    `Symbolic closure: ${formatClosureCheckDetail(pack.hardMathClosureLedger.latestSymbolicClosure)}.`,
+    `SMT closure: ${formatClosureCheckDetail(pack.hardMathClosureLedger.latestSmtClosure)}.`
+  ];
+}
+
+function formatClosureCheckDetail(report: CredibilityPack["hardMathClosureLedger"]["latestExactClosure"]): string {
+  if (!report) {
+    return "missing";
+  }
+  const status = report.failedCases === 0 && report.validationErrors === 0 ? "passed" : "failed";
+  return `${status} ${report.closureId}, ${report.runtimeKind}, ${report.passedCases}/${report.totalCases}, ${report.trusts.join(", ") || "no trust"}, ${report.path}`;
+}
+
+function firstHardMathClosureCommand(pack: CredibilityPack): string {
+  if (pack.summary.hardMathExactClosureStatus !== "passed") {
+    return pack.reviewerCommands.runExactHardMathClosure;
+  }
+  if (pack.summary.hardMathSymbolicClosureStatus !== "passed") {
+    return pack.reviewerCommands.runSymbolicHardMathClosure;
+  }
+  return pack.reviewerCommands.runSmtHardMathClosure;
+}
+
 function reportDraftsCheck(pack: CredibilityPack): ReleaseAuditCheck {
   const saved = pack.summary.savedReportDrafts;
   const needingAttention = pack.summary.reportDraftsNeedingAttention;
@@ -821,6 +1260,39 @@ function reportDraftsCheck(pack: CredibilityPack): ReleaseAuditCheck {
     command: "truth-harness workspace reports .",
     details: [
       "Report drafts are shareable summaries, not proof. Their trust remains bounded by cited receipts, bundles, and replay commands."
+    ]
+  });
+}
+
+function leanProofSafetyCheck(pack: CredibilityPack): ReleaseAuditCheck {
+  const count = pack.summary.leanProofSafetyItems;
+  const actions = pack.reviewerActionPlan.actions
+    .filter((action) => action.closes.includes("proof-safety-boundary"))
+    .slice(0, 5);
+
+  if (count === 0) {
+    return passCheck({
+      id: "lean-proof-safety",
+      title: "Lean proof-safety boundary",
+      summary: "No blocking Lean proof-safety markers were found in the inspected workspace review scope.",
+      command: "truth-harness proof project . --json",
+      details: [
+        "This is a source-boundary check only: a clean proof-safety scan does not prove a theorem.",
+        "A concrete accepted proof-check record is still required before any claim can earn `proved`."
+      ]
+    });
+  }
+
+  return failCheck({
+    id: "lean-proof-safety",
+    title: "Lean proof-safety boundary",
+    blocking: true,
+    summary: `${count} Lean proof-safety blocker(s) remain open.`,
+    command: "truth-harness workspace credibility-actions . --priority critical --json",
+    details: [
+      "`sorry`, `admit`, Lean metavariable holes, local `axiom`, and local `constant` markers block `proved` trust for affected Lean source.",
+      "Remove or rewrite each marker, rerun the project scan, then write a scoped accepted proof-check record before relying on the source.",
+      ...actions.map((action) => `${action.priority}: ${action.title} (${action.source.ref}) - ${action.command}`)
     ]
   });
 }
@@ -1063,6 +1535,98 @@ async function latestWebUiReview(rootPath: string): Promise<WebUiReviewSummary |
   return reviews[0];
 }
 
+async function latestReviewerBundleVerification(
+  rootPath: string
+): Promise<ReleaseAuditReviewerBundleVerificationSummary | undefined> {
+  const findingsDir = join(rootPath, ".truth-harness", "findings");
+  let entries;
+  try {
+    entries = await readdir(findingsDir, { withFileTypes: true });
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+
+  const candidates: Array<ReleaseAuditReviewerBundleVerificationSummary & { sortTime: number }> = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith("-credibility-bundle-verification.json")) {
+      continue;
+    }
+
+    const jsonPath = join(findingsDir, entry.name);
+    try {
+      const [raw, info] = await Promise.all([readFile(jsonPath, "utf8"), stat(jsonPath)]);
+      const record = JSON.parse(raw) as Partial<CredibilityBundleVerification>;
+      if (record.schemaVersion !== "truth-harness.credibility-bundle-verification.v0") {
+        continue;
+      }
+      if (!record.verificationId || !record.bundleId || !record.packId || !record.verifiedAt) {
+        continue;
+      }
+
+      const artifactPath = toPortableWorkspacePath(rootPath, jsonPath);
+      const summary: ReleaseAuditReviewerBundleVerificationSummary & { sortTime: number } = {
+        verificationId: record.verificationId,
+        bundleId: record.bundleId,
+        packId: record.packId,
+        verifiedAt: record.verifiedAt,
+        artifactPath,
+        bundleRef: bundleRefForReleaseAudit(rootPath, record.bundlePath),
+        passed: record.passed === true,
+        sourceMatchesWorkspace: record.sourceMatchesWorkspace === true,
+        checkedBundleFiles: Number.isFinite(record.checkedBundleFiles) ? record.checkedBundleFiles ?? 0 : 0,
+        checkedSourceFiles: Number.isFinite(record.checkedSourceFiles) ? record.checkedSourceFiles ?? 0 : 0,
+        manifestDigestStatus: record.manifestDigestStatus ?? "not-recorded",
+        sortTime: Date.parse(record.verifiedAt) || info.mtimeMs
+      };
+      candidates.push(summary);
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+
+  candidates.sort((left, right) => right.sortTime - left.sortTime);
+  const latest = candidates[0];
+  if (!latest) {
+    return undefined;
+  }
+  const { sortTime: _sortTime, ...summary } = latest;
+  return summary;
+}
+
+function bundleRefForReleaseAudit(rootPath: string, bundlePath: string | undefined): string {
+  const normalized = (bundlePath ?? "").trim().replace(/\\/gu, "/");
+  if (normalized.startsWith("/workspace/")) {
+    return normalized.slice("/workspace/".length);
+  }
+  if (normalized === "/workspace") {
+    return ".";
+  }
+  if (bundlePath && isAbsolute(bundlePath)) {
+    return toPortableWorkspacePath(rootPath, bundlePath);
+  }
+  return normalized || "<bundle-ref>";
+}
+
+function toPortableWorkspacePath(rootPath: string, artifactPath: string): string {
+  const root = resolve(rootPath);
+  const resolved = resolve(artifactPath);
+  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
+  if (resolved === root) {
+    return ".";
+  }
+  if (resolved.startsWith(rootWithSep)) {
+    return relative(root, resolved).replace(/\\/gu, "/");
+  }
+  return artifactPath.replace(/\\/gu, "/");
+}
+
 function nextActions(checks: ReleaseAuditCheck[], pack: CredibilityPack | undefined): string[] {
   const actionCommands = checks
     .filter((check) => check.status === "fail" && check.command)
@@ -1095,6 +1659,9 @@ function releaseAuditCommands(
     credibilityActions: `truth-harness workspace credibility-actions ${quotedRoot}${requirementFlags}`,
     adversarialBenchmark: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
     mathCredibilityLadder: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
+    hardMathExactClosure: "npm run docker:hard-math-closure",
+    hardMathSymbolicClosure: "npm run docker:symbolic-closure",
+    hardMathSmtClosure: "npm run docker:smt-closure",
     engineVerify: `truth-harness engines verify --write${requirementFlags}`,
     dockerProfessor: "npm run docker:professor",
     dockerProfessorAll: "npm run docker:professor:all",
