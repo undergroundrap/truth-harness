@@ -429,6 +429,7 @@ const matrixNextCommand = document.querySelector("#matrix-next-command");
 const checksWorkOrder = document.querySelector("#checks-work-order");
 const verificationMatrix = document.querySelector("#verification-matrix");
 const engineEvidenceGate = document.querySelector("#engine-evidence-gate");
+const reviewerReadinessConsole = document.querySelector("#reviewer-readiness-console");
 const releaseAuditGate = document.querySelector("#release-audit-gate");
 const claimReviewGate = document.querySelector("#claim-review-gate");
 const claimReviewStatus = document.querySelector("#claim-review-status");
@@ -1299,6 +1300,7 @@ function render() {
   renderWorkspacePilotLoop();
   renderWorkspaceRunNextHandoffs();
   renderVerificationMatrix(receipt);
+  renderReviewerReadinessConsole();
   renderReleaseAuditGate();
   renderCapabilityLedger();
   renderMaintenancePanel();
@@ -10063,6 +10065,7 @@ async function refreshCredibilityBundle({ announce = true } = {}) {
   state.credibilityBundleLoading = true;
   state.credibilityBundleError = undefined;
   renderCredibilityPackPanel();
+  renderReviewerReadinessConsole();
 
   try {
     const response = await fetch("/api/credibility-bundle/latest", {
@@ -10103,6 +10106,7 @@ async function refreshCredibilityBundle({ announce = true } = {}) {
   } finally {
     state.credibilityBundleLoading = false;
     renderCredibilityPackPanel();
+    renderReviewerReadinessConsole();
     renderReport(receiptStore.get(state.receiptKey));
   }
 }
@@ -10150,6 +10154,7 @@ async function verifyCredibilityBundleFromUi(button) {
   } finally {
     state.credibilityBundleVerifying = false;
     renderCredibilityPackPanel();
+    renderReviewerReadinessConsole();
     renderReport(receiptStore.get(state.receiptKey));
   }
 }
@@ -10328,6 +10333,7 @@ async function refreshReleaseAudit({ announce = true } = {}) {
   state.releaseAuditArtifactPreview = undefined;
   state.releaseAuditArtifactPreviewLoading = false;
   state.releaseAuditArtifactPreviewError = undefined;
+  renderReviewerReadinessConsole();
   renderReleaseAuditGate();
 
   try {
@@ -10365,6 +10371,7 @@ async function refreshReleaseAudit({ announce = true } = {}) {
     }
   } finally {
     state.releaseAuditLoading = false;
+    renderReviewerReadinessConsole();
     renderReleaseAuditGate();
   }
 }
@@ -11347,6 +11354,271 @@ function renderWorkspaceReadinessStatus(payload = state.workspaceReadiness) {
   workspaceReadinessNotes.innerHTML = (notes.length > 0 ? notes.slice(0, 5) : ["No workspace readiness notes returned."])
     .map((note) => `<li>${escapeHtml(note)}</li>`)
     .join("");
+}
+
+function renderReviewerReadinessConsole() {
+  if (!reviewerReadinessConsole) {
+    return;
+  }
+
+  const audit = state.releaseAudit;
+  const bundlePayload = state.credibilityBundle;
+  const manifest = bundlePayload?.manifest;
+  const bundleVerification = audit?.reviewerBundleVerification ?? bundlePayload?.verification;
+  const auditCommand = audit?.commands?.releaseAudit ?? "truth-harness workspace release-audit . --require-all-engines --require-saved-strict-engine-run --require-sandbox";
+  const strictProfessorCommand = audit?.commands?.dockerProfessorAll ?? manifest?.reviewerCommands?.dockerStrictProfessorEvidence ?? "npm run docker:professor:all";
+  const dockerProfessorCommand = audit?.commands?.dockerProfessor ?? manifest?.reviewerCommands?.dockerProfessorEvidence ?? "npm run docker:professor";
+  const leanRepairCommand = audit?.commands?.dockerLeanRepairGate ?? manifest?.reviewerCommands?.dockerLeanRepairGate ?? "npm run docker:proof-repair";
+  const bundleVerifyCommand = bundlePayload?.command ??
+    manifest?.reviewerCommands?.verifyBundle ??
+    "truth-harness workspace verify-credibility-bundle . <bundle-ref> --write";
+  const loading = state.releaseAuditLoading || state.credibilityBundleLoading || state.credibilityBundleVerifying;
+  const errors = [
+    state.releaseAuditError,
+    state.credibilityBundleError,
+    state.credibilityBundleVerifyError
+  ].filter(Boolean);
+  const bundleClean = reviewerBundleVerificationClean(bundleVerification);
+  const strictEngineCheck = releaseAuditCheckById(audit, "saved-strict-engine-run");
+  const engineCheck = releaseAuditCheckById(audit, "engine-evidence");
+  const hardMathCheck = releaseAuditCheckById(audit, "hard-math-closure");
+  const leanSafetyCheck = releaseAuditCheckById(audit, "lean-proof-safety");
+  const sandboxCheck = releaseAuditCheckById(audit, "code-run-sandbox");
+  const bundleCheck = releaseAuditCheckById(audit, "reviewer-bundle-verification");
+  const nextCommand = reviewerReadinessNextCommand({
+    audit,
+    bundleClean,
+    strictProfessorCommand,
+    dockerProfessorCommand,
+    leanRepairCommand,
+    bundleVerifyCommand,
+    auditCommand
+  });
+  const status = reviewerReadinessStatus({ audit, bundleClean, loading, errors });
+  const statusClass = status === "ready" ? "exact" : status === "checking" ? "waiting" : "refuted";
+  const headline = status === "ready"
+    ? "Ready for serious outside review"
+    : status === "checking"
+      ? "Checking reviewer evidence"
+      : "Not ready for professor review yet";
+  const detail = status === "ready"
+    ? "Strict local evidence, reviewer bundle integrity, and source-workspace match are all visible from one place."
+    : errors.length > 0
+      ? errors[0]
+      : "The console fails closed until strict evidence, bundle verification, and source workspace match are all present.";
+  const cards = [
+    reviewerReadinessCard({
+      label: "Professor gate",
+      value: audit?.professorReady ? "ready" : loading ? "checking" : "blocked",
+      status: audit?.professorReady ? "pass" : loading ? "warn" : "fail",
+      detail: audit ? `${audit.summary?.blockingFailures ?? 0} blocking failure${audit.summary?.blockingFailures === 1 ? "" : "s"}` : "Release audit has not loaded yet.",
+      command: auditCommand
+    }),
+    reviewerReadinessCard({
+      label: "Reviewer bundle",
+      value: audit ? releaseAuditReviewerBundleSummary(audit) : bundlePayload?.latest ? credibilityBundleCopiedFilesLabel(bundlePayload.verification) : "not exported",
+      status: bundleClean ? "pass" : bundlePayload?.latest || audit ? "warn" : "fail",
+      detail: reviewerBundleVerificationDetail(bundleVerification),
+      command: bundleVerifyCommand
+    }),
+    reviewerReadinessCard({
+      label: "Lean repair gate",
+      value: leanSafetyCheck?.status === "pass" && hardMathCheck?.status === "pass" ? "gated" : "run gate",
+      status: leanSafetyCheck?.status === "pass" && hardMathCheck?.status === "pass" ? "pass" : "warn",
+      detail: "Runs the no-network proof-repair fixture before reviewer packets are trusted.",
+      command: leanRepairCommand
+    }),
+    reviewerReadinessCard({
+      label: "Strict engines",
+      value: strictEngineCheck?.status === "pass" ? "saved" : engineCheck?.status === "pass" ? "core saved" : "missing",
+      status: strictEngineCheck?.status ?? engineCheck?.status ?? "fail",
+      detail: strictEngineCheck?.summary ?? engineCheck?.summary ?? "Maxima, Z3, cvc5, Lean, and Sage evidence must be saved for strict review.",
+      command: strictProfessorCommand
+    }),
+    reviewerReadinessCard({
+      label: "Sandbox",
+      value: sandboxCheck?.status === "pass" ? "measured" : sandboxCheck?.status === "warn" ? "warning" : "not measured",
+      status: sandboxCheck?.status ?? "warn",
+      detail: sandboxCheck?.summary ?? "Code-run claims should not be trusted without measured sandbox evidence.",
+      command: auditCommand
+    })
+  ];
+  const blockers = reviewerReadinessBlockers(audit, bundleClean);
+
+  reviewerReadinessConsole.innerHTML = `
+    <div class="reviewer-readiness-head">
+      <div>
+        <span class="mini-label">reviewer readiness</span>
+        <h3>${escapeHtml(headline)}</h3>
+        <p>${escapeHtml(detail)}</p>
+      </div>
+      <span class="status-pill ${statusClass}">${escapeHtml(reviewerReadinessStatusLabel(status))}</span>
+    </div>
+    <div class="reviewer-readiness-main">
+      <section class="reviewer-readiness-next">
+        <span class="mini-label">next safest action</span>
+        <strong>${escapeHtml(reviewerReadinessNextLabel({ audit, bundleClean, errors }))}</strong>
+        <code>${escapeHtml(nextCommand)}</code>
+        <div class="reviewer-readiness-actions">
+          <button class="text-button compact-button strong-action copy-reviewer-readiness-command" data-testid="copy-reviewer-readiness-next-command" data-command="${escapeHtml(nextCommand)}" type="button">Copy next</button>
+          <button class="text-button compact-button refresh-release-audit-from-console" data-testid="refresh-reviewer-readiness" type="button" ${state.releaseAuditLoading ? "disabled" : ""}>${state.releaseAuditLoading ? "Refreshing" : "Refresh"}</button>
+        </div>
+      </section>
+      <div class="reviewer-readiness-grid">
+        ${cards.join("")}
+      </div>
+    </div>
+    <details class="reviewer-readiness-blockers" ${blockers.length > 0 ? "open" : ""}>
+      <summary>
+        <strong>Open blockers</strong>
+        <span>${blockers.length} item${blockers.length === 1 ? "" : "s"}</span>
+      </summary>
+      ${blockers.length > 0 ? `<ul>${blockers.map((blocker) => `<li>${escapeHtml(blocker)}</li>`).join("")}</ul>` : "<p>No reviewer blockers are visible from the latest local audit.</p>"}
+    </details>
+  `;
+
+  reviewerReadinessConsole.querySelector(".refresh-release-audit-from-console")?.addEventListener("click", () => {
+    void refreshReleaseAudit({ announce: true });
+    void refreshCredibilityBundle({ announce: false });
+  });
+  reviewerReadinessConsole.querySelectorAll(".copy-reviewer-readiness-command").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const target = event.currentTarget;
+      void copyOrDownloadText({
+        button: target,
+        text: `${target.dataset.command ?? ""}\n`,
+        filename: `truth-harness-reviewer-readiness-${safeFilenameTimestamp()}.txt`,
+        type: "text/plain",
+        copiedTitle: "Copied reviewer command",
+        copiedDetail: "Reviewer readiness command copied from the Checks tab.",
+        fallbackTitle: "Downloaded reviewer command",
+        fallbackDetail: "the reviewer readiness command was saved as a local text file instead."
+      });
+    });
+  });
+}
+
+function reviewerReadinessStatus({ audit, bundleClean, loading, errors }) {
+  if (loading) {
+    return "checking";
+  }
+  if (errors.length > 0) {
+    return "blocked";
+  }
+  if (audit?.professorReady && bundleClean) {
+    return "ready";
+  }
+  return "blocked";
+}
+
+function reviewerReadinessStatusLabel(status) {
+  if (status === "ready") {
+    return "review-ready";
+  }
+  if (status === "checking") {
+    return "checking";
+  }
+  return "blocked";
+}
+
+function reviewerBundleVerificationClean(verification) {
+  return Boolean(
+    verification?.passed &&
+    verification?.sourceMatchesWorkspace &&
+    (verification.manifestDigestStatus === "verified" || verification.manifestDigestStatus === undefined)
+  );
+}
+
+function reviewerBundleVerificationDetail(verification) {
+  if (!verification) {
+    return "No saved bundle verification is loaded yet.";
+  }
+  if (!verification.passed) {
+    return "Copied reviewer files changed or are missing.";
+  }
+  if (!verification.sourceMatchesWorkspace) {
+    return "The live workspace has drifted since the bundle was exported.";
+  }
+  if (verification.manifestDigestStatus && verification.manifestDigestStatus !== "verified") {
+    return `Manifest digest is ${verification.manifestDigestStatus}; reviewer metadata needs investigation.`;
+  }
+  return `${verification.checkedBundleFiles ?? 0} bundle files and ${verification.checkedSourceFiles ?? 0} source files verified.`;
+}
+
+function reviewerReadinessNextCommand({ audit, bundleClean, strictProfessorCommand, dockerProfessorCommand, leanRepairCommand, bundleVerifyCommand, auditCommand }) {
+  const firstAction = Array.isArray(audit?.nextActions) ? audit.nextActions[0] : undefined;
+  if (firstAction) {
+    return firstAction;
+  }
+  if (!audit) {
+    return auditCommand;
+  }
+  const bundleCheck = releaseAuditCheckById(audit, "reviewer-bundle-verification");
+  if (!bundleClean || bundleCheck?.status !== "pass") {
+    return bundleVerifyCommand;
+  }
+  if (releaseAuditCheckById(audit, "hard-math-closure")?.status !== "pass") {
+    return dockerProfessorCommand;
+  }
+  if (releaseAuditCheckById(audit, "lean-proof-safety")?.status !== "pass") {
+    return leanRepairCommand;
+  }
+  if (releaseAuditCheckById(audit, "saved-strict-engine-run")?.status !== "pass") {
+    return strictProfessorCommand;
+  }
+  return auditCommand;
+}
+
+function reviewerReadinessNextLabel({ audit, bundleClean, errors }) {
+  if (errors.length > 0) {
+    return "Fix local API or audit loading before trusting the panel.";
+  }
+  if (!audit) {
+    return "Load the strict release audit.";
+  }
+  if (!bundleClean) {
+    return "Verify or regenerate the reviewer bundle.";
+  }
+  if (audit.professorReady) {
+    return "Export or inspect the reviewer packet.";
+  }
+  return "Close the highest-priority release audit blocker.";
+}
+
+function reviewerReadinessBlockers(audit, bundleClean) {
+  const blockers = [];
+  if (!audit) {
+    blockers.push("Release audit has not loaded yet.");
+    return blockers;
+  }
+  if (!bundleClean) {
+    blockers.push("Reviewer bundle has not been verified cleanly against the current workspace.");
+  }
+  for (const check of Array.isArray(audit.checks) ? audit.checks : []) {
+    if (check.status === "fail" || (check.status === "warn" && check.blocking)) {
+      blockers.push(`${check.title}: ${check.summary}`);
+    }
+    if (blockers.length >= 6) {
+      break;
+    }
+  }
+  return blockers;
+}
+
+function reviewerReadinessCard({ label, value, status, detail, command }) {
+  const statusClass = status === "pass" ? "exact" : status === "fail" ? "refuted" : "waiting";
+  return `<article class="reviewer-readiness-card ${escapeHtml(status)}">
+    <div>
+      <span class="mini-label">${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </div>
+    <span class="status-pill ${statusClass}">${escapeHtml(releaseAuditGateStatusLabel(status))}</span>
+    <p>${escapeHtml(detail)}</p>
+    ${command ? `<div class="reviewer-readiness-command">
+      <code>${escapeHtml(command)}</code>
+      <button class="text-button compact-button copy-reviewer-readiness-command" data-command="${escapeHtml(command)}" type="button">Copy</button>
+    </div>` : ""}
+  </article>`;
 }
 
 function renderReleaseAuditGate() {

@@ -323,8 +323,13 @@ describe("web UI action contracts", () => {
     ]);
 
     expect(html).toContain('id="release-audit-gate"');
+    expect(html).toContain('id="reviewer-readiness-console"');
     expect(source).toContain('fetch(`/api/release-audit?${params.toString()}`');
     expect(source).toContain("function refreshReleaseAudit({ announce = true } = {})");
+    expect(source).toContain("function renderReviewerReadinessConsole()");
+    expect(source).toContain("function reviewerReadinessNextCommand");
+    expect(source).toContain("data-testid=\"copy-reviewer-readiness-next-command\"");
+    expect(source).toContain("data-testid=\"refresh-reviewer-readiness\"");
     expect(source).toContain("function renderReleaseAuditGate()");
     expect(source).toContain("function releaseAuditBenchmarkCardHtml(audit)");
     expect(source).toContain("function releaseAuditMathLadderCardHtml(audit)");
@@ -403,6 +408,10 @@ describe("web UI action contracts", () => {
     expect(source).toContain("Strict release-audit command copied from the Checks tab.");
     expect(source).toContain("command copied from the Checks tab.");
     expect(source).toContain("Release-audit next action copied from the Checks tab.");
+    expect(styles).toContain(".reviewer-readiness-console");
+    expect(styles).toContain(".reviewer-readiness-main");
+    expect(styles).toContain(".reviewer-readiness-grid");
+    expect(styles).toContain(".reviewer-readiness-command");
     expect(styles).toContain(".release-audit-gate");
     expect(styles).toContain(".release-audit-summary");
     expect(styles).toContain(".release-audit-board");
