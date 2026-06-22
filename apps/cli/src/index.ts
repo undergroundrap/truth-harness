@@ -3774,6 +3774,7 @@ workspace
   .description("Seed a local workspace with hard-math validation sessions and a dry-run run-next handoff.")
   .argument("[path]", "Project root path", ".")
   .option("--case <case>", "Seed case id to include; repeatable. Defaults to all hard-math cases.", collectRepeated, [])
+  .option("--preset <preset>", "Seed preset: all or professor-challenge", "all")
   .option("--now <iso>", "Deterministic creation timestamp for reproducible tests and demos")
   .option("--no-run-next", "Create linked validation sessions without writing the first run-next handoff")
   .option("--json", "Print the full hard-math seed JSON")
@@ -3782,6 +3783,7 @@ workspace
       path: string,
       options: {
         case: string[];
+        preset?: string;
         now?: string;
         runNext?: boolean;
         json?: boolean;
@@ -3791,6 +3793,39 @@ workspace
         rootPath: path,
         now: options.now,
         caseIds: options.case,
+        preset: parseHardMathSeedPreset(options.preset),
+        writeRunNextPlan: options.runNext !== false
+      });
+
+      if (options.json) {
+        printJson(result);
+        return;
+      }
+
+      printHardMathSeed(result);
+    }
+  );
+
+workspace
+  .command("seed-professor-challenge")
+  .description("Seed the five-case professor challenge workspace: refutation, exact arithmetic, CAS, SMT, and Lean proof boundaries.")
+  .argument("[path]", "Project root path", ".")
+  .option("--now <iso>", "Deterministic creation timestamp for reproducible tests and demos")
+  .option("--no-run-next", "Create linked validation sessions without writing the first run-next handoff")
+  .option("--json", "Print the full professor challenge seed JSON")
+  .action(
+    async (
+      path: string,
+      options: {
+        now?: string;
+        runNext?: boolean;
+        json?: boolean;
+      }
+    ) => {
+      const result = await writeHardMathSeedWorkspace({
+        rootPath: path,
+        now: options.now,
+        preset: "professor-challenge",
         writeRunNextPlan: options.runNext !== false
       });
 
@@ -8151,8 +8186,9 @@ function printReportDraft(result: ReportDraftReadResult): void {
 }
 
 function printHardMathSeed(result: HardMathSeedResult): void {
-  console.log("Truth Harness hard-math seed");
+  console.log(result.preset === "professor-challenge" ? "Truth Harness professor challenge seed" : "Truth Harness hard-math seed");
   console.log(`Seed: ${result.seedId}`);
+  console.log(`Preset: ${result.preset}`);
   console.log(`Workspace: ${result.workspacePath}`);
   console.log(`Local only: ${result.localOnly ? "yes" : "no"}`);
   console.log("");
@@ -10065,6 +10101,15 @@ function parseClaimLedgerDomain(value: string): ClaimLedgerDomain {
   }
 
   throw new Error(`Unsupported claim ledger domain ${JSON.stringify(value)}.`);
+}
+
+function parseHardMathSeedPreset(value: string | undefined): "all" | "professor-challenge" {
+  const preset = value ?? "all";
+  if (preset === "all" || preset === "professor-challenge") {
+    return preset;
+  }
+
+  throw new Error(`Unsupported hard-math seed preset ${JSON.stringify(value)}. Use "all" or "professor-challenge".`);
 }
 
 function parseClaimLedgerStatus(value: string): ClaimLedgerStatus {

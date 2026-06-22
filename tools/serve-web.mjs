@@ -2092,6 +2092,7 @@ async function createWebHardMathSeedPayload(value = {}) {
     rootPath: projectRoot,
     now: optionalText(value?.now),
     caseIds: stringList(value?.caseIds),
+    preset: normalizeHardMathSeedPresetInput(value?.preset),
     writeRunNextPlan: value?.writeRunNextPlan === false ? false : true
   });
   const runNextPlan = seed.runNext?.plan;
@@ -2104,11 +2105,20 @@ async function createWebHardMathSeedPayload(value = {}) {
       {
         actor: "local-api",
         action: "seeded-hard-math-workspace",
-        detail: `${seed.cases.length} hard-math validation session${seed.cases.length === 1 ? "" : "s"} created with ${runNextPlan ? `run-next handoff ${runNextPlan.planId}` : "no run-next handoff"}.`,
+        detail: `${seed.cases.length} ${seed.preset === "professor-challenge" ? "professor challenge" : "hard-math"} validation session${seed.cases.length === 1 ? "" : "s"} created with ${runNextPlan ? `run-next handoff ${runNextPlan.planId}` : "no run-next handoff"}.`,
         at: seed.createdAt
       }
     ]
   };
+}
+
+function normalizeHardMathSeedPresetInput(value) {
+  const preset = optionalText(value);
+  if (!preset || preset === "all" || preset === "professor-challenge") {
+    return preset === "professor-challenge" ? "professor-challenge" : "all";
+  }
+
+  throw new HttpError(400, "Unsupported hard-math seed preset. Use all or professor-challenge.");
 }
 
 async function createWebWorkspaceRunNextPayload(value = {}, options = {}) {

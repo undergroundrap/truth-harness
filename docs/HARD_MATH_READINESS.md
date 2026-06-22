@@ -81,6 +81,25 @@ npm run docker:smt-closure
 
 These commands write `truth-harness.hard-math-closure.v0` reports under `.truth-harness/findings/`. They are deliberately narrower than a general solver: exact closure must earn `exact-computed`, symbolic closure must earn `cross-checked`, and SMT closure must earn `smt-checked` for their seeded fixtures. A passing closure report proves the harness closed that scoped validation gate; it does not prove unrelated math claims.
 
+## Professor Challenge Preset
+
+Use the professor challenge when a human reviewer or autonomous agent needs a compact hard-math workout before trusting the workspace loop:
+
+```bash
+truth-harness workspace seed-professor-challenge .
+truth-harness workspace seed-hard-math . --preset professor-challenge
+```
+
+The preset writes five local research sessions and linked validation plans:
+
+- a false parity trap that should be refuted with a counterexample
+- an exact fraction lemma that should close through exact arithmetic
+- a symbolic identity that needs independent CAS evidence
+- a bounded integer constraint that needs SMT evidence
+- a Lean fixture boundary that reinforces that `proved` requires an accepted proof checker
+
+This preset is not a benchmark score and does not prove that Truth Harness can solve frontier math. It is a reusable professor/reviewer rehearsal: agents should run `workspace run-next` on the seeded workspace and close the highest-value open gate with concrete local evidence before making stronger claims.
+
 ## Readiness Stages
 
 1. **Foundational correctness:** native-safe receipt ladder passes with exact/refuted/unverified labels where expected.

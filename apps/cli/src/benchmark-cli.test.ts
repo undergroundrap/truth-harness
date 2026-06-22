@@ -1210,6 +1210,44 @@ describe("benchmark CLI", () => {
     expect(json.warnings.join(" ")).toContain("route obligation remains open");
   });
 
+  it("seeds the professor challenge workspace from the CLI", async () => {
+    const root = await tempRoot();
+    const result = await runCli([
+      "workspace",
+      "seed-professor-challenge",
+      root,
+      "--now",
+      "2026-06-20T12:00:00.000Z",
+      "--json"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      schemaVersion: string;
+      preset: string;
+      cases: Array<{ caseId: string; validationPlanId?: string }>;
+      runNext?: { plan?: { schemaVersion: string; dryRun: boolean; item?: { kind: string } } };
+    };
+
+    expect(result.exitCode).toBe(0);
+    expect(json).toMatchObject({
+      schemaVersion: "truth-harness.hard-math-seed.v0",
+      preset: "professor-challenge"
+    });
+    expect(json.cases.map((seedCase) => seedCase.caseId)).toEqual([
+      "exact-fraction-lemma",
+      "false-parity-trap",
+      "symbolic-cas-closure-fixture",
+      "smt-bounded-closure-fixture",
+      "lean-trivial-proof-boundary"
+    ]);
+    expect(json.runNext?.plan).toMatchObject({
+      schemaVersion: "truth-harness.workspace-run-next.v0",
+      dryRun: true,
+      item: {
+        kind: "validation-gate"
+      }
+    });
+  });
+
   it("inspects Lean project readiness without running Lean", async () => {
     const root = await tempRoot();
     await mkdir(join(root, "Proofs"), { recursive: true });

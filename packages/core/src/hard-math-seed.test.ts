@@ -28,10 +28,11 @@ describe("hard-math seed workspace", () => {
 
     expect(result).toMatchObject({
       schemaVersion: "truth-harness.hard-math-seed.v0",
+      preset: "all",
       localOnly: true,
       networkAccess: "none"
     });
-    expect(result.cases).toHaveLength(6);
+    expect(result.cases).toHaveLength(8);
     expect(result.cases).toContainEqual(
       expect.objectContaining({
         caseId: "exact-fraction-lemma",
@@ -72,8 +73,8 @@ describe("hard-math seed workspace", () => {
 
     const sessions = await listResearchSessions(root);
     const plans = await listValidationPlans(root);
-    expect(sessions).toHaveLength(6);
-    expect(plans).toHaveLength(6);
+    expect(sessions).toHaveLength(8);
+    expect(plans).toHaveLength(8);
     expect(plans.map((plan) => plan.planId).sort()).toEqual(
       result.cases.map((seedCase) => seedCase.validationPlanId).sort()
     );
@@ -103,6 +104,51 @@ describe("hard-math seed workspace", () => {
         networkAccess: "none"
       })
     );
+  });
+
+  it("creates the five-case professor challenge preset", async () => {
+    const root = await tempRoot();
+
+    const result = await writeHardMathSeedWorkspace({
+      rootPath: root,
+      now: "2026-06-20T12:00:00.000Z",
+      preset: "professor-challenge",
+      writeRunNextPlan: true
+    });
+
+    expect(result).toMatchObject({
+      schemaVersion: "truth-harness.hard-math-seed.v0",
+      preset: "professor-challenge",
+      localOnly: true,
+      networkAccess: "none"
+    });
+    expect(result.cases.map((seedCase) => seedCase.caseId)).toEqual([
+      "exact-fraction-lemma",
+      "false-parity-trap",
+      "symbolic-cas-closure-fixture",
+      "smt-bounded-closure-fixture",
+      "lean-trivial-proof-boundary"
+    ]);
+    expect(result.cases).toHaveLength(5);
+    expect(result.warnings.join("\n")).toContain("Professor challenge seeds are a credibility workout");
+    expect(result.runNext?.plan).toMatchObject({
+      schemaVersion: "truth-harness.workspace-run-next.v0",
+      dryRun: true,
+      item: {
+        kind: "validation-gate"
+      }
+    });
+
+    const sessions = await listResearchSessions(root);
+    const plans = await listValidationPlans(root);
+    expect(sessions).toHaveLength(5);
+    expect(plans).toHaveLength(5);
+    expect(plans.map((plan) => plan.planId).sort()).toEqual(
+      result.cases.map((seedCase) => seedCase.validationPlanId).sort()
+    );
+
+    const validation = await validateWorkspaceArtifacts({ rootPath: root });
+    expect(validation.passed).toBe(true);
   });
 
   it("can seed one selected case without writing a run-next handoff", async () => {

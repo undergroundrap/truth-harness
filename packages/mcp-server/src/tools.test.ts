@@ -1447,6 +1447,7 @@ describe("MCP tool handlers", () => {
 
     expect(seed).toMatchObject({
       schemaVersion: "truth-harness.hard-math-seed.v0",
+      preset: "all",
       localOnly: true,
       networkAccess: "none",
       cases: [
@@ -1474,6 +1475,23 @@ describe("MCP tool handlers", () => {
         planId: seed.runNext?.plan.planId
       })
     );
+
+    const challenge = await handleTruthHarnessWorkspaceSeedHardMath({
+      preset: "professor-challenge",
+      now: "2026-06-20T12:05:00.000Z",
+      writeRunNextPlan: false
+    });
+    expect(challenge).toMatchObject({
+      schemaVersion: "truth-harness.hard-math-seed.v0",
+      preset: "professor-challenge"
+    });
+    expect(challenge.cases.map((seedCase) => seedCase.caseId)).toEqual([
+      "exact-fraction-lemma",
+      "false-parity-trap",
+      "symbolic-cas-closure-fixture",
+      "smt-bounded-closure-fixture",
+      "lean-trivial-proof-boundary"
+    ]);
   });
 
   it("runs and writes bounded workspace pilot loops for agents", async () => {

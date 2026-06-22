@@ -15,10 +15,14 @@ export interface HardMathSeedCase {
   tasks: string[];
 }
 
+export const HARD_MATH_SEED_PRESETS = ["all", "professor-challenge"] as const;
+export type HardMathSeedPreset = (typeof HARD_MATH_SEED_PRESETS)[number];
+
 export interface HardMathSeedInput {
   rootPath: string;
   now?: string;
   caseIds?: string[];
+  preset?: HardMathSeedPreset;
   writeRunNextPlan?: boolean;
 }
 
@@ -26,6 +30,7 @@ export interface HardMathSeedResult {
   schemaVersion: typeof HARD_MATH_SEED_SCHEMA_VERSION;
   seedId: string;
   createdAt: string;
+  preset: HardMathSeedPreset;
   localOnly: true;
   networkAccess: "none";
   workspacePath: string;
@@ -56,6 +61,22 @@ export const HARD_MATH_SEED_CASES: HardMathSeedCase[] = [
       "Parse the expression as exact rational arithmetic rather than floating-point arithmetic.",
       "Run the smallest supported local verifier route and attach its receipt-backed route evidence to the validation gate.",
       "Keep the trust label at exact-computed unless an accepted proof checker or independent symbolic backend is attached."
+    ]
+  },
+  {
+    caseId: "false-parity-trap",
+    title: "False universal parity trap",
+    objective:
+      "Refute the fluent-but-wrong universal claim that n^2 + n + 1 is even for every integer n, then record the counterexample as replayable evidence instead of letting an AI prose proof stand.",
+    validationClaim: "For every integer n, n^2 + n + 1 is even.",
+    hypotheses: [
+      "A single exact integer counterexample is enough to refute the universal claim.",
+      "A route that returns refuted evidence must block any attempt to file a proved or exact-computed positive claim."
+    ],
+    tasks: [
+      "Preserve the universal quantifier and integer domain before checking.",
+      "Run counterexample search or an SMT route that can expose a concrete violating integer.",
+      "Attach the refutation evidence to the validation gate and mark the positive claim as refuted, not merely unverified."
     ]
   },
   {
@@ -137,8 +158,32 @@ export const HARD_MATH_SEED_CASES: HardMathSeedCase[] = [
       "Attach an SMT solver artifact or route evidence that records the exact bounds and backend.",
       "Keep the claim blocked if the solver is unavailable or the encoding is not replayable."
     ]
+  },
+  {
+    caseId: "lean-trivial-proof-boundary",
+    title: "Lean proof boundary fixture",
+    objective:
+      "Demonstrate that the workbench only earns `proved` from an accepted Lean proof artifact by routing a tiny theorem through the formal-proof gate and refusing proof-grade trust from prose or CAS output.",
+    validationClaim: "The Lean fixture theorem `smoke : True` is accepted by the configured proof checker.",
+    hypotheses: [
+      "A proof gate is satisfied only by an accepted proof-check record scoped to the exact theorem artifact.",
+      "If Lean is unavailable, the correct output is an open proof obligation with a reproducible Docker command, not a downgraded fake proof."
+    ],
+    tasks: [
+      "Use the pinned Lean fixture project or Docker proof-repair gate as the source of formal evidence.",
+      "Attach only accepted proof-check evidence to the validation plan proof gate.",
+      "Keep `proved` unavailable when Lean is missing, rejected, or replaced by natural-language explanation."
+    ]
   }
 ];
+
+export const PROFESSOR_CHALLENGE_CASE_IDS = [
+  "false-parity-trap",
+  "exact-fraction-lemma",
+  "symbolic-cas-closure-fixture",
+  "smt-bounded-closure-fixture",
+  "lean-trivial-proof-boundary"
+] as const;
 
 const DEFAULT_SEED_CREATED_AT = "2026-06-20T12:00:00.000Z";
 
@@ -148,7 +193,8 @@ export async function writeHardMathSeedWorkspace(input: HardMathSeedInput): Prom
     displayName: "Truth Harness",
     now: createdAt
   });
-  const selectedCases = selectSeedCases(input.caseIds);
+  const preset = normalizeHardMathSeedPreset(input.preset);
+  const selectedCases = selectSeedCases(input.caseIds, preset);
   const harnesses: Array<{ seedCase: HardMathSeedCase; result: ResearchHarnessWriteResult }> = [];
 
   for (const [index, seedCase] of selectedCases.entries()) {
@@ -187,8 +233,9 @@ export async function writeHardMathSeedWorkspace(input: HardMathSeedInput): Prom
 
   return {
     schemaVersion: HARD_MATH_SEED_SCHEMA_VERSION,
-    seedId: `hmseed_${stableHash({ createdAt, caseIds: selectedCases.map((seedCase) => seedCase.caseId), workspace: workspace.manifest.projectId }).slice(0, 16)}`,
+    seedId: `hmseed_${stableHash({ createdAt, preset, caseIds: selectedCases.map((seedCase) => seedCase.caseId), workspace: workspace.manifest.projectId }).slice(0, 16)}`,
     createdAt,
+    preset,
     localOnly: true,
     networkAccess: "none",
     workspacePath: workspace.root,
@@ -203,15 +250,24 @@ export async function writeHardMathSeedWorkspace(input: HardMathSeedInput): Prom
     runNext,
     warnings: [
       "Hard-math seeds create validation queues; they do not prove any seeded claim.",
+      ...(preset === "professor-challenge"
+        ? [
+            "Professor challenge seeds are a credibility workout: false claims, exact computation, CAS, SMT, and Lean boundaries must each earn their evidence."
+          ]
+        : []),
       "The saved run-next handoff is dry-run intent. Use workspace pilot-loop or run-next execution gates explicitly.",
       "Re-running the seed refreshes deterministic local artifacts instead of minting stronger trust labels."
     ]
   };
 }
 
-function selectSeedCases(caseIds: string[] | undefined): HardMathSeedCase[] {
+function selectSeedCases(caseIds: string[] | undefined, preset: HardMathSeedPreset): HardMathSeedCase[] {
   const requested = new Set((caseIds ?? []).map((caseId) => caseId.trim()).filter(Boolean));
   if (requested.size === 0) {
+    if (preset === "professor-challenge") {
+      const challengeIds = new Set<string>(PROFESSOR_CHALLENGE_CASE_IDS);
+      return HARD_MATH_SEED_CASES.filter((seedCase) => challengeIds.has(seedCase.caseId));
+    }
     return HARD_MATH_SEED_CASES;
   }
 
@@ -221,6 +277,10 @@ function selectSeedCases(caseIds: string[] | undefined): HardMathSeedCase[] {
     throw new Error(`Unknown hard-math seed case(s): ${missing.join(", ")}`);
   }
   return selected;
+}
+
+function normalizeHardMathSeedPreset(value: HardMathSeedPreset | undefined): HardMathSeedPreset {
+  return HARD_MATH_SEED_PRESETS.includes(value ?? "all") ? value ?? "all" : "all";
 }
 
 function timestampOffset(createdAt: string, seconds: number): string {

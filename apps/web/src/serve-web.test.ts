@@ -1429,7 +1429,7 @@ describe("local web route ledger API", () => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        caseIds: ["symbolic-trig-identity"],
+        preset: "professor-challenge",
         writeRunNextPlan: true
       })
     });
@@ -1443,15 +1443,9 @@ describe("local web route ledger API", () => {
       networkAccess: "none",
       seed: {
         schemaVersion: "truth-harness.hard-math-seed.v0",
+        preset: "professor-challenge",
         localOnly: true,
         networkAccess: "none",
-        cases: [
-          expect.objectContaining({
-            caseId: "symbolic-trig-identity",
-            sessionId: expect.any(String),
-            validationPlanId: expect.any(String)
-          })
-        ],
         runNext: {
           plan: {
             schemaVersion: "truth-harness.workspace-run-next.v0",
@@ -1465,6 +1459,13 @@ describe("local web route ledger API", () => {
         }
       }
     });
+    expect(hardMathSeedPayload.seed.cases.map((seedCase: { caseId: string }) => seedCase.caseId)).toEqual([
+      "exact-fraction-lemma",
+      "false-parity-trap",
+      "symbolic-cas-closure-fixture",
+      "smt-bounded-closure-fixture",
+      "lean-trivial-proof-boundary"
+    ]);
     expect(existsSync(hardMathSeedPayload.seed.runNext.jsonPath)).toBe(true);
     expect(hardMathSeedPayload.activity).toContainEqual(
       expect.objectContaining({

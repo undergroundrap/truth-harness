@@ -1513,15 +1513,21 @@ export function createTruthHarnessMcpServer(): McpServer {
           .array(
             z.enum([
               "exact-fraction-lemma",
+              "false-parity-trap",
               "symbolic-cas-closure-fixture",
               "smt-bounded-closure-fixture",
               "symbolic-trig-identity",
               "integer-parity-invariant",
-              "bounded-integer-smt"
+              "bounded-integer-smt",
+              "lean-trivial-proof-boundary"
             ])
           )
           .optional()
           .describe("Optional seed case ids. Defaults to all hard-math seed cases."),
+        preset: z
+          .enum(["all", "professor-challenge"])
+          .optional()
+          .describe("Use professor-challenge to seed the five-case professor review workout when caseIds are omitted."),
         now: z.string().optional().describe("Optional deterministic ISO timestamp for reproducible tests and handoffs."),
         writeRunNextPlan: z
           .boolean()
@@ -1533,8 +1539,8 @@ export function createTruthHarnessMcpServer(): McpServer {
         openWorldHint: false
       }
     },
-    async ({ workspacePath, caseIds, now, writeRunNextPlan }) =>
-      toolJson(await handleTruthHarnessWorkspaceSeedHardMath({ workspacePath, caseIds, now, writeRunNextPlan }))
+    async ({ workspacePath, caseIds, preset, now, writeRunNextPlan }) =>
+      toolJson(await handleTruthHarnessWorkspaceSeedHardMath({ workspacePath, caseIds, preset, now, writeRunNextPlan }))
   );
 
   server.registerTool(

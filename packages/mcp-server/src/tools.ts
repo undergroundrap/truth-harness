@@ -677,6 +677,7 @@ export interface TruthHarnessWorkspaceReviewInput {
 export interface TruthHarnessWorkspaceSeedHardMathInput {
   workspacePath?: string;
   caseIds?: string[];
+  preset?: "all" | "professor-challenge";
   now?: string;
   writeRunNextPlan?: boolean;
 }
@@ -1942,6 +1943,7 @@ export async function handleTruthHarnessWorkspaceSeedHardMath(
   return writeHardMathSeedWorkspace({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     caseIds: input.caseIds,
+    preset: input.preset,
     now: input.now,
     writeRunNextPlan: input.writeRunNextPlan !== false
   });
