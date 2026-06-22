@@ -122,6 +122,12 @@
         "$ref": "#/$defs/caseRecord"
       }
     },
+    "levels": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/levelRecord"
+      }
+    },
     "replay": {
       "type": "object",
       "required": ["deterministic", "requiresManualReplay", "notes"],
@@ -216,6 +222,9 @@
           "type": "string",
           "minLength": 1
         },
+        "level": {
+          "type": "string"
+        },
         "category": {
           "type": "string"
         },
@@ -271,6 +280,33 @@
         },
         "failures": {
           "$ref": "#/$defs/stringArray"
+        }
+      },
+      "additionalProperties": false
+    },
+    "levelRecord": {
+      "type": "object",
+      "required": ["level", "total", "passed", "failed", "trustAccuracy"],
+      "properties": {
+        "level": {
+          "type": "string",
+          "minLength": 1
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "trustAccuracy": {
+          "type": "number",
+          "minimum": 0
         }
       },
       "additionalProperties": false

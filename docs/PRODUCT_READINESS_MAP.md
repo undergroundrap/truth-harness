@@ -132,7 +132,7 @@ First harness: `truth-harness workspace stress <path> --receipts 100 --claims 50
 7. **Agent session log:** unified timeline for human actions, agent actions, CLI commands, API calls, receipts, notes, and reports.
 8. **Sage credibility gate hardening:** direct constrained Sage check records and the separate `sage-math` Docker gate exist; next is build-time performance testing, a smaller image strategy if possible, and a reviewer fixture beyond the trigonometric identity smoke.
 9. **Lean runtime design:** expand the pinned Lean fixture toward real project templates, Mathlib-aware diagnostics, and proof records that support meaningful `proved` claims.
-10. **Adversarial benchmark suite:** the first 16-case seed suite is wired into professor/release readiness, and the math credibility ladder now guards the native-safe hard-math floor; expand both into a public false-claims and hallucination-catcher corpus before public launch.
+10. **Adversarial benchmark suite:** the first 16-case seed suite is wired into professor/release readiness, and the math credibility ladder now guards the native-safe hard-math floor with named level summaries in saved benchmark records; expand both into a public false-claims and hallucination-catcher corpus before public launch.
 11. **Security rehearsal:** re-run threat model around code-run, MCP, Docker, filesystem writes, and local reports.
 
 ## Product Principle

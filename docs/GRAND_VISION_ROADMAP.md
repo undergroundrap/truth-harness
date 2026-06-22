@@ -73,7 +73,7 @@ Required gates:
 - `npm run check` passes.
 - Docker core engines pass: Maxima, Z3, cvc5.
 - Strict all-engine path passes: Maxima, Z3, cvc5, Lean, Sage.
-- Math credibility ladder stays green.
+- Math credibility ladder stays green, with named capability levels in saved records.
 - Exact, symbolic, and SMT closure reports stay green.
 - Release audit can explain exactly why the project is or is not ready.
 - Code-run and MCP stay fail-closed unless policy explicitly allows them.
@@ -87,7 +87,7 @@ Goal: make mathematicians respect the tool.
 
 Required product capabilities:
 
-- named math benchmark levels: high-school algebra, undergraduate algebra, discrete math, SMT encodings, Lean fixtures, Sage fixtures
+- named math benchmark levels: native exact arithmetic/refutation/unit/boundary levels now exist; next add high-school algebra, undergraduate algebra, discrete math, SMT encodings, Lean fixtures, and Sage fixtures
 - larger false-claim corpus where frontier models commonly overclaim
 - Lean/mathlib workspace templates with explicit holes, theorem statements, dependencies, and repair targets
 - SageMath adapter records for constrained number theory, algebra, combinatorics, exact linear algebra, and graph theory
@@ -277,7 +277,7 @@ Most AI tools optimize for fluent answers. Truth Harness should optimize for cla
 
 ## Near-Term Recommended Work
 
-1. Expand the math credibility ladder into named levels and add harder exact/Sage/Lean fixtures.
+1. Add harder exact/Sage/Lean fixtures on top of the named math credibility ladder levels.
 2. Build a small Lean/mathlib template workflow with hole tracking and proof repair packets.
 3. Add constrained SageMath fixtures beyond one symbolic identity.
 4. Stress test one-hour agent loops using run-next, validation plans, and workspace revisions.

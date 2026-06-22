@@ -14,6 +14,7 @@ export interface BenchmarkRunTaskLike {
   expectTrust: TrustLabel;
   expectSummaryIncludes?: string;
   expectEvidenceKind?: Receipt["evidenceProfile"]["kind"];
+  level?: string;
   category?: string;
   aiFailureMode?: string;
 }
@@ -40,6 +41,7 @@ export interface BenchmarkRunLike {
 export interface BenchmarkRunCaseRecord {
   taskId: string;
   prompt: string;
+  level?: string;
   category?: string;
   aiFailureMode?: string;
   expectedTrust: TrustLabel;
@@ -57,6 +59,14 @@ export interface BenchmarkRunCaseRecord {
   receiptReplayable: boolean;
   passed: boolean;
   failures: string[];
+}
+
+export interface BenchmarkRunLevelRecord {
+  level: string;
+  total: number;
+  passed: number;
+  failed: number;
+  trustAccuracy: number;
 }
 
 export interface BenchmarkRunRecord {
@@ -86,6 +96,7 @@ export interface BenchmarkRunRecord {
     failed: number;
     trustAccuracy: number;
   };
+  levels?: BenchmarkRunLevelRecord[];
   cases: BenchmarkRunCaseRecord[];
   replay: {
     command?: string;
@@ -276,6 +287,7 @@ export async function createBenchmarkRunRecord(input: CreateBenchmarkRunRecordIn
     failed: input.run.failed,
     trustAccuracy: input.run.trustAccuracy
   };
+  const levels = summarizeBenchmarkCaseLevels(cases);
   const nextChecks = normalizeStringList(input.nextChecks ?? defaultNextChecks({ suitePath, command, totals }));
   const allReceiptsReplayable = cases.every((result) => result.receiptReplayable);
   const recordWithoutId = {
@@ -297,6 +309,7 @@ export async function createBenchmarkRunRecord(input: CreateBenchmarkRunRecordIn
     startedAt: requireText(input.run.startedAt, "Benchmark start time is required."),
     completedAt: requireText(input.run.completedAt, "Benchmark completion time is required."),
     totals,
+    levels,
     cases,
     replay: {
       command,
@@ -628,6 +641,15 @@ export function renderBenchmarkRunMarkdown(record: BenchmarkRunRecord): string {
     `Trust accuracy: ${(record.totals.trustAccuracy * 100).toFixed(1)}%`
   ];
 
+  if (record.levels && record.levels.length > 0) {
+    lines.push("", "## Levels", "");
+    for (const level of record.levels) {
+      lines.push(
+        `- \`${level.level}\`: ${level.passed}/${level.total} passed (${(level.trustAccuracy * 100).toFixed(1)}%)`
+      );
+    }
+  }
+
   if (record.suite.description) {
     lines.push("", record.suite.description);
   }
@@ -644,6 +666,7 @@ export function renderBenchmarkRunMarkdown(record: BenchmarkRunRecord): string {
   for (const result of record.cases) {
     const status = result.passed ? "PASS" : "FAIL";
     const context = [
+      result.level ? `level=${result.level}` : undefined,
       result.category ? `category=${result.category}` : undefined,
       result.aiFailureMode ? `failure-mode=${result.aiFailureMode}` : undefined,
       result.expectedEvidenceKind ? `expected-evidence=${result.expectedEvidenceKind}` : undefined,
@@ -695,6 +718,7 @@ function toCaseRecord(result: BenchmarkRunTaskResultLike): BenchmarkRunCaseRecor
   return {
     taskId: requireText(result.task.id, "Benchmark task id is required."),
     prompt: requireText(result.task.prompt, "Benchmark task prompt is required."),
+    level: normalizeOptionalText(result.task.level),
     category: normalizeOptionalText(result.task.category),
     aiFailureMode: normalizeOptionalText(result.task.aiFailureMode),
     expectedTrust: result.task.expectTrust,
@@ -713,6 +737,61 @@ function toCaseRecord(result: BenchmarkRunTaskResultLike): BenchmarkRunCaseRecor
     passed: result.passed,
     failures: normalizeStringList(result.failures)
   };
+}
+
+function summarizeBenchmarkCaseLevels(cases: BenchmarkRunCaseRecord[]): BenchmarkRunLevelRecord[] {
+  const order: string[] = [];
+  const summaries = new Map<string, { total: number; passed: number }>();
+
+  for (const entry of cases) {
+    const level = entry.level ?? entry.category ?? "uncategorized";
+    const current = summaries.get(level);
+    if (!current) {
+      order.push(level);
+      summaries.set(level, { total: 1, passed: entry.passed ? 1 : 0 });
+      continue;
+    }
+
+    current.total += 1;
+    if (entry.passed) {
+      current.passed += 1;
+    }
+  }
+
+  return order.sort(compareBenchmarkLevelLabels).map((level) => {
+    const summary = summaries.get(level);
+    const total = summary?.total ?? 0;
+    const passed = summary?.passed ?? 0;
+
+    return {
+      level,
+      total,
+      passed,
+      failed: total - passed,
+      trustAccuracy: total === 0 ? 1 : passed / total
+    };
+  });
+}
+
+function compareBenchmarkLevelLabels(left: string, right: string): number {
+  const leftOrdinal = parseBenchmarkLevelOrdinal(left);
+  const rightOrdinal = parseBenchmarkLevelOrdinal(right);
+  if (leftOrdinal !== undefined && rightOrdinal !== undefined && leftOrdinal !== rightOrdinal) {
+    return leftOrdinal - rightOrdinal;
+  }
+  if (leftOrdinal !== undefined && rightOrdinal === undefined) {
+    return -1;
+  }
+  if (leftOrdinal === undefined && rightOrdinal !== undefined) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function parseBenchmarkLevelOrdinal(value: string): number | undefined {
+  const match = /^level-(\d+)/u.exec(value);
+  return match ? Number.parseInt(match[1], 10) : undefined;
 }
 
 function formatBackendId(backend: Receipt["evidenceProfile"]["backends"][number]): string {

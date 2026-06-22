@@ -8,6 +8,7 @@ export interface BenchmarkTask {
   expectTrust: TrustLabel;
   expectSummaryIncludes?: string;
   expectEvidenceKind?: BenchmarkEvidenceKind;
+  level?: string;
   category?: string;
   aiFailureMode?: string;
 }
@@ -26,6 +27,14 @@ export interface BenchmarkTaskResult {
   failures: string[];
 }
 
+export interface BenchmarkLevelSummary {
+  level: string;
+  total: number;
+  passed: number;
+  failed: number;
+  trustAccuracy: number;
+}
+
 export interface BenchmarkRun {
   suiteId: string;
   title: string;
@@ -35,6 +44,7 @@ export interface BenchmarkRun {
   passed: number;
   failed: number;
   trustAccuracy: number;
+  levelSummaries: BenchmarkLevelSummary[];
   results: BenchmarkTaskResult[];
 }
 
@@ -75,6 +85,7 @@ export function runBenchmarkSuite(suite: BenchmarkSuite): BenchmarkRun {
     passed,
     failed: results.length - passed,
     trustAccuracy: results.length === 0 ? 1 : passed / results.length,
+    levelSummaries: summarizeLevels(results),
     results
   };
 }
@@ -127,9 +138,65 @@ function parseBenchmarkTask(raw: unknown, index: number): BenchmarkTask {
     expectTrust: task.expectTrust as TrustLabel,
     expectSummaryIncludes: task.expectSummaryIncludes,
     expectEvidenceKind: parseOptionalString(task.expectEvidenceKind, `Task ${index} expectEvidenceKind`) as BenchmarkEvidenceKind | undefined,
+    level: parseOptionalString(task.level, `Task ${index} level`),
     category: parseOptionalString(task.category, `Task ${index} category`),
     aiFailureMode: parseOptionalString(task.aiFailureMode, `Task ${index} aiFailureMode`)
   };
+}
+
+function summarizeLevels(results: BenchmarkTaskResult[]): BenchmarkLevelSummary[] {
+  const order: string[] = [];
+  const summaries = new Map<string, { total: number; passed: number }>();
+
+  for (const result of results) {
+    const level = result.task.level ?? result.task.category ?? "uncategorized";
+    const current = summaries.get(level);
+    if (!current) {
+      order.push(level);
+      summaries.set(level, { total: 1, passed: result.passed ? 1 : 0 });
+      continue;
+    }
+
+    current.total += 1;
+    if (result.passed) {
+      current.passed += 1;
+    }
+  }
+
+  return order.sort(compareLevelLabels).map((level) => {
+    const summary = summaries.get(level);
+    const total = summary?.total ?? 0;
+    const passed = summary?.passed ?? 0;
+
+    return {
+      level,
+      total,
+      passed,
+      failed: total - passed,
+      trustAccuracy: total === 0 ? 1 : passed / total
+    };
+  });
+}
+
+function compareLevelLabels(left: string, right: string): number {
+  const leftOrdinal = parseLevelOrdinal(left);
+  const rightOrdinal = parseLevelOrdinal(right);
+  if (leftOrdinal !== undefined && rightOrdinal !== undefined && leftOrdinal !== rightOrdinal) {
+    return leftOrdinal - rightOrdinal;
+  }
+  if (leftOrdinal !== undefined && rightOrdinal === undefined) {
+    return -1;
+  }
+  if (leftOrdinal === undefined && rightOrdinal !== undefined) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function parseLevelOrdinal(value: string): number | undefined {
+  const match = /^level-(\d+)/u.exec(value);
+  return match ? Number.parseInt(match[1], 10) : undefined;
 }
 
 function parseOptionalString(value: unknown, field: string): string | undefined {

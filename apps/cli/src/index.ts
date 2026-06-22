@@ -7001,11 +7001,19 @@ function printBenchmarkRun(run: BenchmarkRun, outPath?: string, workspaceWrite?:
   console.log(`${run.title} (${run.suiteId})`);
   console.log(`Passed: ${run.passed}/${run.total}`);
   console.log(`Trust accuracy: ${(run.trustAccuracy * 100).toFixed(1)}%`);
+  if (run.levelSummaries.length > 0) {
+    console.log("");
+    console.log("Levels:");
+    for (const level of run.levelSummaries) {
+      console.log(`  ${level.level}: ${level.passed}/${level.total} (${(level.trustAccuracy * 100).toFixed(1)}%)`);
+    }
+  }
   console.log("");
 
   for (const result of run.results) {
     const status = result.passed ? "PASS" : "FAIL";
     const context = [
+      result.task.level,
       result.task.category,
       result.task.expectEvidenceKind ? `expected ${result.task.expectEvidenceKind}` : undefined,
       `actual ${result.receipt.evidenceProfile.kind}`

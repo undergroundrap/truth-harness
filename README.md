@@ -106,6 +106,8 @@ See [SECURITY.md](SECURITY.md) and [docs/DOCKER.md](docs/DOCKER.md) for the safe
 
 Use `npm run docker:demo` for launch recording. It runs the 16-case demo with a stricter gate that fails unless the symbolic CAS cases earn real `cross-checked` labels and the SMT case earns `smt-checked` from the Docker-provisioned engine path. The plain `npm run cli -- demo` remains useful on machines where optional engines are missing; it will honestly show those cases as `unverified` instead of faking readiness.
 
+Use `npm run demo:math-ladder` or `npm run docker:math-ladder` for the native-safe professor floor. The math credibility ladder reports named levels for exact arithmetic, universal refutation, physics units, bounded numerics, and honest checker boundaries, and saved benchmark-run records preserve those level summaries for reviewer packets and agent handoffs.
+
 ## Native Quickstart
 
 ```bash

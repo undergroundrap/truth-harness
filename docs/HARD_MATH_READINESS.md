@@ -60,6 +60,7 @@ packages/benchmarks/suites/math-credibility-ladder.json
 The ladder checks that Truth Harness can:
 
 - pass a 30-case native-safe hard-math floor
+- report named capability levels so humans and agents can see which layer passed instead of relying on one aggregate score
 - verify exact arithmetic equalities, including powers and signed rational arithmetic
 - refute false exact arithmetic equalities with exact left/right traces
 - check common-denominator lemmas, including signed rewrites, without calling them formal proofs
@@ -90,9 +91,21 @@ These commands write `truth-harness.hard-math-closure.v0` reports under `.truth-
 6. **Research harness loops:** agents resume from validation-plan gates and attack the highest-value blocker instead of inventing generic progress.
 7. **Human review:** professor/reviewer bundles cite receipts, proof records, SMT/CAS evidence, closure reports, limitations, and replay commands.
 
+## Current Named Levels
+
+Saved benchmark-run records now preserve these levels in JSON and Markdown:
+
+- `level-1-exact-arithmetic`: exact rational arithmetic, power precedence, signed fractions, and common-denominator rewrites.
+- `level-2-universal-refutation`: narrow parity certificates and counterexample search without calling them formal proofs.
+- `level-3-physics-units`: dimensional-analysis checks and unit-mismatch refutations.
+- `level-4-bounded-numerics`: conservative interval bounds and singularity boundaries.
+- `level-5-honest-boundaries`: unsupported theorem, calculus, number-theory, and frontier prompts that must stay unverified.
+
+These levels are not a public math-achievement ladder yet. They are the current native-safe regression floor that future Lean, SageMath, SMT, and proof-search levels should extend.
+
 ## Next Serious Math Work
 
-- Expand the ladder into named levels: high-school algebra, olympiad-style refutations, undergraduate algebra/analysis, SMT encodings, Lean fixtures, and SageMath checks.
+- Extend the named ladder with high-school algebra, olympiad-style refutations, undergraduate algebra/analysis, SMT encodings, Lean fixtures, and SageMath checks.
 - Add a Lean/mathlib template that turns an informal theorem statement into a formalization workspace with explicit unresolved holes.
 - Add SageMath fixtures that produce constrained records for algebra, number theory, combinatorics, and exact linear algebra without exposing arbitrary Sage execution.
 - Add false-claim corpora where AI models are likely to overclaim, then require Truth Harness to refute, verify, or honestly decline.

@@ -71,12 +71,25 @@ describe("benchmark run records", () => {
     expect(result.record.cases[0]?.receiptRunId).toBe(receipt.runId);
     expect(result.record.cases[0]?.receiptHash).toMatch(/^[a-f0-9]{64}$/);
     expect(result.record.cases[0]).toMatchObject({
+      level: "level-1-exact-arithmetic",
       category: "exact-computation",
       aiFailureMode: "wrong arithmetic",
       expectedEvidenceKind: "exact-arithmetic",
       evidenceKind: "exact-arithmetic"
     });
+    expect(result.record.levels).toEqual([
+      {
+        level: "level-1-exact-arithmetic",
+        total: 1,
+        passed: 1,
+        failed: 0,
+        trustAccuracy: 1
+      }
+    ]);
     expect(result.markdown).toContain("## Replay");
+    expect(result.markdown).toContain("## Levels");
+    expect(result.markdown).toContain("level-1-exact-arithmetic");
+    expect(result.markdown).toContain("level=level-1-exact-arithmetic");
     expect(result.markdown).toContain("category=exact-computation");
     expect(result.markdown).toContain("expected-evidence=exact-arithmetic");
     expect(parseBenchmarkRunRecordJson(JSON.stringify(result.record), "roundtrip").benchmarkRunId).toBe(
@@ -264,6 +277,7 @@ function benchmarkRun(
           prompt: receipt.problem,
           expectTrust: expectedTrust,
           expectEvidenceKind: receipt.evidenceProfile.kind,
+          level: "level-1-exact-arithmetic",
           category: "exact-computation",
           aiFailureMode: "wrong arithmetic"
         },

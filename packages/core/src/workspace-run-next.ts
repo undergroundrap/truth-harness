@@ -3225,6 +3225,7 @@ function parseRunNextBenchmarkTask(raw: unknown, index: number): BenchmarkRunTas
     expectEvidenceKind: optionalString(raw.expectEvidenceKind, `Benchmark task ${index} expectEvidenceKind`) as
       | Receipt["evidenceProfile"]["kind"]
       | undefined,
+    level: optionalString(raw.level, `Benchmark task ${index} level`),
     category: optionalString(raw.category, `Benchmark task ${index} category`),
     aiFailureMode: optionalString(raw.aiFailureMode, `Benchmark task ${index} aiFailureMode`)
   };
