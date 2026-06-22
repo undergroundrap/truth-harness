@@ -787,9 +787,12 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function workspaceRunNextProofRepairRows(item)");
     expect(source).toContain("function workspaceRunNextProofRepairCardHtml(item)");
     expect(source).toContain("function workspaceRunNextProofRepairSummaryText(value)");
+    expect(source).toContain("function workspaceRunNextProofAttemptHistorySummaryText(value)");
     expect(source).toContain("workspaceRunNextProofRepairCardHtml(plan.item)");
     expect(source).toContain("value?.proofRepairTargetSummary");
+    expect(source).toContain("value?.proofAttemptHistorySummary");
     expect(source).toContain("<div><dt>Repair</dt><dd>${escapeHtml(repairSummary)}</dd></div>");
+    expect(source).toContain("<div><dt>Proof trail</dt><dd>${escapeHtml(proofAttemptSummary)}</dd></div>");
     expect(source).toContain('["Proof repair target", workspaceReviewProofRepairTargetText(item)]');
     expect(source).toContain('["Proof repair command", workspaceReviewProofRepairCommandText(item)]');
     expect(source).toContain("function renderWorkspaceRunNextArtifactPreview(plan)");

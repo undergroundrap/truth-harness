@@ -226,6 +226,16 @@ export interface WorkspaceRunNextProofRepairTargetSummary {
   boundary: string;
 }
 
+export interface WorkspaceRunNextProofAttemptHistorySummary {
+  total: number;
+  latestCheckId: string;
+  latestStatus: NonNullable<WorkspaceReviewItem["proofAttempt"]>["status"];
+  latestSourcePath: string;
+  latestSourceStatus?: NonNullable<WorkspaceReviewItem["proofAttempt"]>["sourceStatus"];
+  latestDiagnosticSnippet?: string;
+  priorCheckIds: string[];
+}
+
 export interface WorkspaceRunNextSummary {
   schemaVersion: typeof WORKSPACE_RUN_NEXT_SCHEMA_VERSION;
   planId: string;
@@ -241,6 +251,7 @@ export interface WorkspaceRunNextSummary {
   itemKind?: WorkspaceReviewItem["kind"];
   itemPriority?: WorkspaceReviewItem["priority"];
   proofRepairTargetSummary?: WorkspaceRunNextProofRepairTargetSummary;
+  proofAttemptHistorySummary?: WorkspaceRunNextProofAttemptHistorySummary;
   executionKind: string;
   executionStatus: WorkspaceRunNextStatus;
   rationaleTarget?: string;
@@ -1388,6 +1399,7 @@ function summarizeWorkspaceRunNextPlan(
     itemKind: plan.item?.kind,
     itemPriority: plan.item?.priority,
     proofRepairTargetSummary: summarizeWorkspaceRunNextProofRepairTarget(plan.item?.proofRepairTarget),
+    proofAttemptHistorySummary: summarizeWorkspaceRunNextProofAttemptHistory(plan.item?.proofAttemptHistory),
     executionKind: plan.execution.kind,
     executionStatus: plan.execution.status,
     rationaleTarget: rationale.target,
@@ -1437,6 +1449,30 @@ function summarizeWorkspaceRunNextProofRepairTarget(
     ...(target.afterEditCommands[0] ? { afterEditCommand: target.afterEditCommands[0] } : {}),
     evidenceRequired: [...target.evidenceRequired],
     boundary: target.boundary
+  };
+}
+
+function summarizeWorkspaceRunNextProofAttemptHistory(
+  history: WorkspaceReviewItem["proofAttemptHistory"] | undefined
+): WorkspaceRunNextProofAttemptHistorySummary | undefined {
+  if (!history || history.length === 0) {
+    return undefined;
+  }
+
+  const attempts = history.slice(0, 5);
+  const latest = attempts[0];
+  if (!latest) {
+    return undefined;
+  }
+
+  return {
+    total: attempts.length,
+    latestCheckId: latest.checkId,
+    latestStatus: latest.status,
+    latestSourcePath: latest.sourcePath,
+    ...(latest.sourceStatus ? { latestSourceStatus: latest.sourceStatus } : {}),
+    ...(latest.diagnosticSnippet ? { latestDiagnosticSnippet: latest.diagnosticSnippet } : {}),
+    priorCheckIds: attempts.slice(1).map((attempt) => attempt.checkId)
   };
 }
 

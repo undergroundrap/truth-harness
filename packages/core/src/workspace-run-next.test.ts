@@ -1817,6 +1817,14 @@ describe("workspace run-next", () => {
     expect(summaries).toContainEqual(
       expect.objectContaining({
         planId: write.plan.planId,
+        proofAttemptHistorySummary: {
+          total: 2,
+          latestCheckId: proofAttempt.checkId,
+          latestStatus: proofAttempt.status,
+          latestSourcePath: proofAttempt.sourcePath,
+          latestDiagnosticSnippet: proofAttempt.diagnosticSnippet,
+          priorCheckIds: ["proof_fedcba9876543210"]
+        },
         proofRepairTargetSummary: {
           repairTargetId: proofRepairTarget.repairTargetId,
           sourcePath: proofRepairTarget.sourcePath,

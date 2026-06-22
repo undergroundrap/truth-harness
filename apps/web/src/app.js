@@ -8513,6 +8513,7 @@ function renderWorkspaceRunNextSummary(summary) {
   const snapshot = summary.sourceSnapshotStatus ?? (summary.sourceSnapshotId ? "not checked" : "not recorded");
   const itemTitle = summary.itemTitle ?? "No open work item.";
   const repairSummary = workspaceRunNextProofRepairSummaryText(summary);
+  const proofAttemptSummary = workspaceRunNextProofAttemptHistorySummaryText(summary);
   const packetPathHtml = workspaceArtifactRefIsPreviewable(summary.path)
     ? artifactRefControlHtml(summary.path, {
         surface: "workspace-run-next-history",
@@ -8544,6 +8545,7 @@ function renderWorkspaceRunNextSummary(summary) {
         <div><dt>Snapshot</dt><dd>${escapeHtml(snapshot)}</dd></div>
         <div><dt>Source</dt><dd>${escapeHtml(summary.rationaleSource ?? summary.itemKind ?? "workspace-review")}</dd></div>
         ${repairSummary ? `<div><dt>Repair</dt><dd>${escapeHtml(repairSummary)}</dd></div>` : ""}
+        ${proofAttemptSummary ? `<div><dt>Proof trail</dt><dd>${escapeHtml(proofAttemptSummary)}</dd></div>` : ""}
         <div><dt>Packet</dt><dd>${packetPathHtml}</dd></div>
       </dl>
       ${workspaceRunNextSafetyHtml(summary, { surface: "workspace-run-next-history", compact: true })}
@@ -8568,6 +8570,29 @@ function workspaceRunNextProofRepairSummaryText(value) {
   const declaration = target.declarationName ?? target.declarationId;
   const command = target.afterEditCommand ?? target.afterEditCommands?.[0];
   return [target.repairTargetId, location, declaration, command].filter(Boolean).join(" / ");
+}
+
+function workspaceRunNextProofAttemptHistorySummaryText(value) {
+  const summary = value?.proofAttemptHistorySummary;
+  if (summary) {
+    const latest = [summary.latestCheckId, summary.latestStatus, summary.latestSourcePath, summary.latestSourceStatus]
+      .filter(Boolean)
+      .join(" / ");
+    const prior = Array.isArray(summary.priorCheckIds) && summary.priorCheckIds.length > 0
+      ? ` prior ${summary.priorCheckIds.join(", ")}`
+      : "";
+    return `${summary.total} attempt${summary.total === 1 ? "" : "s"}; latest ${latest}${prior}`;
+  }
+
+  const attempts = Array.isArray(value?.item?.proofAttemptHistory) ? value.item.proofAttemptHistory : [];
+  if (attempts.length === 0) {
+    return "";
+  }
+
+  const latest = attempts[0];
+  return `${attempts.length} attempt${attempts.length === 1 ? "" : "s"}; latest ${
+    [latest.checkId, latest.status, latest.sourcePath, latest.sourceStatus].filter(Boolean).join(" / ")
+  }`;
 }
 
 function renderWorkspaceRunNextInspection(inspection) {
