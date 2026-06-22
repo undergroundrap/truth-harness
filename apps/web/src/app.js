@@ -215,6 +215,7 @@ let workspaceReview = {
 };
 let workspaceRunNextPlan;
 let workspaceRunNextError;
+let professorChallengeSeed;
 let workspaceRunNextSummaries = [];
 let workspaceRunNextSummariesError;
 let workspaceRunNextSummariesVerified = false;
@@ -493,6 +494,7 @@ const workspaceRunNextTitle = document.querySelector("#workspace-run-next-title"
 const workspaceRunNextSummary = document.querySelector("#workspace-run-next-summary");
 const workspaceRunNextCommand = document.querySelector("#workspace-run-next-command");
 const workspaceRunNextDetails = document.querySelector("#workspace-run-next-details");
+const workspaceProfessorChallenge = document.querySelector("#workspace-professor-challenge");
 const workspaceRunNextEngine = document.querySelector("#workspace-run-next-engine");
 const workspaceRunNextSafety = document.querySelector("#workspace-run-next-safety");
 const workspaceRunNextArtifactPreview = document.querySelector("#workspace-run-next-artifact-preview");
@@ -6191,6 +6193,9 @@ async function seedHardMathWorkspaceFromUi({
       workspaceRunNextPlan = payload.seed.runNext.plan;
       workspaceRunNextError = undefined;
     }
+    if (payload.seed?.preset === "professor-challenge") {
+      professorChallengeSeed = payload.seed;
+    }
     await refreshResearchSessions({ announce: false });
     await refreshWorkspaceReview({ announce: false });
     await refreshWorkspaceRunNext({ announce: false });
@@ -7822,6 +7827,7 @@ function renderWorkspaceRunNext() {
       ["Boundary", "Planner failed before any local action could be selected."],
       ["Fallback", "Use CLI or MCP run-next after checking the local API."]
     ]);
+    renderProfessorChallengeSummary();
     renderWorkspaceRunNextEnginePlan();
     renderWorkspaceRunNextSafety();
     renderWorkspaceRunNextArtifactPreview();
@@ -7846,6 +7852,7 @@ function renderWorkspaceRunNext() {
       ["Boundary", "Browser planning is dry-run only."],
       ["Execution", "CLI/MCP gates are required before local work runs."]
     ]);
+    renderProfessorChallengeSummary();
     renderWorkspaceRunNextEnginePlan();
     renderWorkspaceRunNextSafety();
     renderWorkspaceRunNextArtifactPreview();
@@ -7869,6 +7876,7 @@ function renderWorkspaceRunNext() {
   workspaceRunNextSummary.textContent = workspaceRunNextPlan.execution?.summary ?? "Browser-visible planning only; use CLI/MCP gates for bounded local execution.";
   workspaceRunNextCommand.textContent = command;
   setWorkspaceRunNextDetails(workspaceRunNextDetailsRows(workspaceRunNextPlan, command));
+  renderProfessorChallengeSummary();
   renderWorkspaceRunNextEnginePlan(workspaceRunNextPlan);
   renderWorkspaceRunNextSafety(workspaceRunNextPlan);
   renderWorkspaceRunNextArtifactPreview(workspaceRunNextPlan);
@@ -7884,6 +7892,60 @@ function renderWorkspaceRunNext() {
         ? "Save fresh handoff"
         : "Save handoff";
   }
+}
+
+function renderProfessorChallengeSummary() {
+  if (!workspaceProfessorChallenge) {
+    return;
+  }
+
+  if (!professorChallengeSeed) {
+    workspaceProfessorChallenge.hidden = true;
+    workspaceProfessorChallenge.innerHTML = "";
+    return;
+  }
+
+  const cases = Array.isArray(professorChallengeSeed.cases) ? professorChallengeSeed.cases : [];
+  const nextPlan = professorChallengeSeed.runNext?.plan ?? workspaceRunNextPlan;
+  const nextItem = nextPlan?.item;
+  const nextCommand = nextItem?.command ?? nextPlan?.execution?.command ?? "truth-harness workspace run-next . --json";
+  const nextTitle = nextItem?.title ?? "Run-next will select the highest-value open validation gate.";
+  const created = professorChallengeSeed.createdAt ? new Date(professorChallengeSeed.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "local session";
+  const caseCards = cases
+    .map((seedCase, index) => {
+      const gateCount = typeof seedCase.openBlockingGates === "number" ? `${seedCase.openBlockingGates} open` : "open";
+      return `<article class="workspace-professor-challenge-case">
+        <div class="workspace-professor-challenge-case-head">
+          <span>${index + 1}</span>
+          <strong>${escapeHtml(seedCase.title ?? seedCase.caseId ?? "Challenge case")}</strong>
+        </div>
+        <small>${escapeHtml(seedCase.caseId ?? "case")}</small>
+        <dl class="workspace-run-next-mini-details">
+          <div><dt>Plan</dt><dd>${escapeHtml(seedCase.validationPlanId ?? "not written")}</dd></div>
+          <div><dt>Readiness</dt><dd>${escapeHtml(seedCase.validationReadiness ?? "open")}</dd></div>
+          <div><dt>Gates</dt><dd>${escapeHtml(gateCount)}</dd></div>
+        </dl>
+      </article>`;
+    })
+    .join("");
+
+  workspaceProfessorChallenge.hidden = false;
+  workspaceProfessorChallenge.innerHTML = `<section aria-label="Last professor challenge seed">
+    <div class="workspace-professor-challenge-head">
+      <div>
+        <span class="mini-label">professor challenge</span>
+        <strong>${escapeHtml(professorChallengeSeed.seedId ?? "Seeded reviewer workout")}</strong>
+      </div>
+      <span class="status-pill waiting">${escapeHtml(`${cases.length} cases`)}</span>
+    </div>
+    <p>Seeded ${escapeHtml(created)} as a local reviewer workout for refutation, exact arithmetic, CAS, SMT, and Lean-boundary gates. This panel is a queue, not proof.</p>
+    <div class="workspace-professor-challenge-grid">${caseCards}</div>
+    <div class="workspace-professor-challenge-next">
+      <span class="mini-label">next gate</span>
+      <strong>${escapeHtml(nextTitle)}</strong>
+      <code>${escapeHtml(nextCommand)}</code>
+    </div>
+  </section>`;
 }
 
 function renderWorkspacePilotLoop() {

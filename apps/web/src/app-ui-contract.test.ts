@@ -654,7 +654,7 @@ describe("web UI action contracts", () => {
     const graphEdgeCodeStyles = styles.match(/\.graph-edge-list code \{[\s\S]*?\r?\n\}/u)?.[0];
     const runbookPacketStyles = styles.match(/#runbook-packet \{[\s\S]*?\r?\n\}/u)?.[0];
 
-    expect(html).toContain('src="./src/app.js?v=2026-06-19-runtime-identity"');
+    expect(html).toContain('src="./src/app.js?v=2026-06-22-professor-challenge-summary"');
     expect(html).toContain('href="./src/styles.css?v=2026-06-19-layout-audit-pass"');
     expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
     expect(html).toContain('aria-hidden="true"');
@@ -730,6 +730,7 @@ describe("web UI action contracts", () => {
     expect(html).toContain('id="workspace-run-next-card"');
     expect(html).toContain('id="workspace-run-next-command"');
     expect(html).toContain('id="workspace-run-next-details"');
+    expect(html).toContain('id="workspace-professor-challenge"');
     expect(html).toContain('id="workspace-run-next-engine"');
     expect(html).toContain('id="workspace-run-next-safety"');
     expect(html).toContain('id="workspace-run-next-artifact-preview"');
@@ -762,8 +763,11 @@ describe("web UI action contracts", () => {
     expect(source).toContain("verify-run-next-handoff");
     expect(source).toContain("function startResearchHarnessFromUi()");
     expect(source).toContain("const seedProfessorChallengeButton");
+    expect(source).toContain("let professorChallengeSeed");
+    expect(source).toContain("const workspaceProfessorChallenge");
     expect(source).toContain("function seedHardMathWorkspaceFromUi({");
     expect(source).toContain('preset: "professor-challenge"');
+    expect(source).toContain('payload.seed?.preset === "professor-challenge"');
     expect(source).toContain("let workspaceRunNextSaving = false;");
     expect(source).toContain("function saveWorkspaceRunNextHandoffFromUi()");
     expect(source).toContain("Saved revision-backed handoff");
@@ -795,6 +799,8 @@ describe("web UI action contracts", () => {
     expect(source).toContain("writeRunNextPlan: true");
     expect(source).toContain("function refreshWorkspaceRunNext({ announce = true } = {})");
     expect(source).toContain("function renderWorkspaceRunNext()");
+    expect(source).toContain("function renderProfessorChallengeSummary()");
+    expect(source).toContain("Seeded ${escapeHtml(created)} as a local reviewer workout");
     expect(source).toContain("function renderWorkspaceRunNextEnginePlan(plan)");
     expect(source).toContain("function workspaceRunNextEnginePlanHtml(enginePlan)");
     expect(source).toContain("function workspaceRunNextEngineFirstStep(enginePlan)");
@@ -885,6 +891,9 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".workspace-run-next-engine-card");
     expect(styles).toContain(".workspace-run-next-engine-step");
     expect(styles).toContain(".workspace-run-next-details");
+    expect(styles).toContain(".workspace-professor-challenge");
+    expect(styles).toContain(".workspace-professor-challenge-grid");
+    expect(styles).toContain(".workspace-professor-challenge-next");
     expect(styles).toContain(".workspace-run-next-proof-repair");
     expect(styles).toContain(".workspace-run-next-proof-repair-head");
     expect(styles).toContain(".workspace-run-next-proof-diagnostic");

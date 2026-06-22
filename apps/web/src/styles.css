@@ -4073,6 +4073,120 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   overflow-wrap: anywhere;
 }
 
+.workspace-professor-challenge[hidden] {
+  display: none;
+}
+
+.workspace-professor-challenge {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid rgba(231, 197, 119, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(231, 197, 119, 0.055), rgba(12, 12, 12, 0.98)),
+    #0c0c0c;
+  padding: 12px;
+}
+
+.workspace-professor-challenge > section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workspace-professor-challenge p {
+  margin: 0;
+  color: #d1c8ba;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.workspace-professor-challenge-head,
+.workspace-professor-challenge-case-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.workspace-professor-challenge-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.workspace-professor-challenge-head strong,
+.workspace-professor-challenge-case strong {
+  display: block;
+  min-width: 0;
+  color: #f4ecdb;
+  font-size: 13px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.workspace-professor-challenge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.workspace-professor-challenge-case {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0d0c0a;
+  padding: 9px;
+}
+
+.workspace-professor-challenge-case-head span {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(231, 197, 119, 0.14);
+  color: #e8d69d;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.workspace-professor-challenge-case small {
+  color: #a9a195;
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.workspace-professor-challenge-next {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid rgba(122, 214, 170, 0.22);
+  border-radius: 8px;
+  background: #0b0f0d;
+  padding: 9px;
+}
+
+.workspace-professor-challenge-next strong {
+  color: #f4ecdb;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.workspace-professor-challenge-next code {
+  margin-top: 2px;
+}
+
 .workspace-run-next-engine[hidden] {
   display: none;
 }
