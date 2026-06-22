@@ -38,6 +38,13 @@ export type EngineVerificationCaseId =
   | "sage-symbolic-cross-check";
 export type EngineVerificationCaseStatus = "passed" | "failed" | "missing" | "not-required";
 export type EngineVerificationStatus = "passed" | "partial" | "failed";
+export type EngineVerificationLevelId =
+  | "engine-level-1-core-cas-smt"
+  | "engine-level-2-smt-diversity"
+  | "engine-level-3-formal-proof-fixture"
+  | "engine-level-4-sage-breadth"
+  | "engine-level-5-strict-all-engines";
+export type EngineVerificationLevelStatus = "passed" | "blocked";
 
 export type EngineVerificationCommandRunner =
   & CasBackendCommandRunner
@@ -101,6 +108,17 @@ export interface EngineVerificationCase {
   warnings: string[];
 }
 
+export interface EngineVerificationLevel {
+  levelId: EngineVerificationLevelId;
+  title: string;
+  status: EngineVerificationLevelStatus;
+  caseIds: EngineVerificationCaseId[];
+  passedCases: number;
+  totalCases: number;
+  evidenceMinted: number;
+  summary: string;
+}
+
 export interface EngineVerificationReport {
   schemaVersion: "truth-harness.engine-verification.v0";
   createdAt: string;
@@ -112,6 +130,7 @@ export interface EngineVerificationReport {
   concretePassed: number;
   concreteTotal: number;
   evidenceMinted: number;
+  levels: EngineVerificationLevel[];
   cases: EngineVerificationCase[];
   docker: {
     coreCommand: string;
@@ -190,6 +209,49 @@ const DEFAULT_SYMBOLIC_PROMPT: SymbolicPrompt = {
 const DEFAULT_SYMBOLIC_RESULT = "1";
 const DEFAULT_SMT_SOURCE = "docs/examples/constraints.smt2";
 const DEFAULT_LEAN_SOURCE = "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean";
+const ENGINE_VERIFICATION_LEVELS: Array<{
+  levelId: EngineVerificationLevelId;
+  title: string;
+  caseIds: EngineVerificationCaseId[];
+  passSummary: string;
+}> = [
+  {
+    levelId: "engine-level-1-core-cas-smt",
+    title: "Core CAS and SMT evidence",
+    caseIds: ["maxima-symbolic-cross-check", "z3-smt-check"],
+    passSummary: "Maxima and Z3 both minted concrete scoped evidence for the pinned fixtures."
+  },
+  {
+    levelId: "engine-level-2-smt-diversity",
+    title: "Independent SMT diversity",
+    caseIds: ["maxima-symbolic-cross-check", "z3-smt-check", "cvc5-smt-check"],
+    passSummary: "Core CAS evidence plus independent Z3 and cvc5 SMT evidence are present."
+  },
+  {
+    levelId: "engine-level-3-formal-proof-fixture",
+    title: "Formal proof fixture",
+    caseIds: ["maxima-symbolic-cross-check", "z3-smt-check", "lean-proof-fixture"],
+    passSummary: "Core CAS/SMT evidence plus a Lean-accepted proof fixture are present."
+  },
+  {
+    levelId: "engine-level-4-sage-breadth",
+    title: "SageMath breadth gate",
+    caseIds: ["maxima-symbolic-cross-check", "z3-smt-check", "sage-symbolic-cross-check"],
+    passSummary: "Core CAS/SMT evidence plus constrained SageMath CAS evidence are present."
+  },
+  {
+    levelId: "engine-level-5-strict-all-engines",
+    title: "Strict all-engine reviewer gate",
+    caseIds: [
+      "maxima-symbolic-cross-check",
+      "z3-smt-check",
+      "cvc5-smt-check",
+      "lean-proof-fixture",
+      "sage-symbolic-cross-check"
+    ],
+    passSummary: "Maxima, Z3, cvc5, Lean, and SageMath each minted concrete scoped evidence."
+  }
+];
 
 export async function verifyEngineEvidence(input: EngineVerificationInput = {}): Promise<EngineVerificationReport> {
   const rootPath = resolve(input.rootPath ?? ".");
@@ -203,6 +265,7 @@ export async function verifyEngineEvidence(input: EngineVerificationInput = {}):
   cases.push(await cvc5Case(input, rootPath, timeoutMs, Boolean(requirements.cvc5)));
   cases.push(await leanCase(input, rootPath, timeoutMs, Boolean(requirements.lean)));
   cases.push(sageCase(input, timeoutMs, Boolean(requirements.sage)));
+  const levels = summarizeEngineVerificationLevels(cases);
 
   const requiredCases = cases.filter((entry) => entry.required);
   const concreteCases = cases.filter((entry) => {
@@ -232,6 +295,7 @@ export async function verifyEngineEvidence(input: EngineVerificationInput = {}):
     concretePassed,
     concreteTotal: concreteCases.length,
     evidenceMinted,
+    levels,
     cases,
     docker: {
       coreCommand: "npm run docker:engines",
@@ -272,12 +336,13 @@ export async function createEngineVerificationRunRecord(
     }))
   }).slice(0, 16)}`;
   const summary = `Engine verification ${report.status}: ${report.concretePassed}/${report.concreteTotal} concrete gates, ${report.requiredPassed}/${report.requiredTotal} required gates, ${report.evidenceMinted} evidence records earned.`;
+  const strongestLevel = strongestEngineVerificationLevel(report.levels);
 
   return {
     schemaVersion: "truth-harness.engine-run.v0",
     runId,
     title: "Engine Evidence Verification Run",
-    summary,
+    summary: strongestLevel ? `${summary} Strongest engine ladder level: ${strongestLevel.levelId}.` : summary,
     createdAt: report.createdAt,
     status: report.status,
     localOnly: true,
@@ -409,6 +474,9 @@ export function parseEngineVerificationRunJson(
     expectConst(report, "networkAccess", "none", "$.report.networkAccess", issues);
     expectOneOf(report, "status", ["passed", "partial", "failed"], "$.report.status", issues);
     expectArray(report, "cases", "$.report.cases", issues);
+    if ("levels" in report) {
+      expectArray(report, "levels", "$.report.levels", issues);
+    }
   }
 
   if (issues.length > 0) {
@@ -419,6 +487,7 @@ export function parseEngineVerificationRunJson(
 }
 
 export function renderEngineVerificationRunMarkdown(record: EngineVerificationRunRecord): string {
+  const levels = record.report.levels ?? summarizeEngineVerificationLevels(record.report.cases);
   const lines = [
     `# ${record.title}`,
     "",
@@ -434,6 +503,14 @@ export function renderEngineVerificationRunMarkdown(record: EngineVerificationRu
     "## Replay",
     "",
     `\`${record.replay}\``,
+    "",
+    "## Engine Readiness Levels",
+    "",
+    "| Level | Status | Gates | Summary |",
+    "| --- | --- | --- | --- |",
+    ...levels.map((level) =>
+      `| ${markdownCell(level.title)} | ${level.status} | ${level.passedCases}/${level.totalCases} | ${markdownCell(level.summary)} |`
+    ),
     "",
     "## Evidence Ladder",
     "",
@@ -503,6 +580,43 @@ export function renderEngineVerificationRunMarkdown(record: EngineVerificationRu
   }
 
   return `${lines.join("\n")}\n`;
+}
+
+export function summarizeEngineVerificationLevels(cases: EngineVerificationCase[]): EngineVerificationLevel[] {
+  const caseMap = new Map(cases.map((entry) => [entry.id, entry]));
+
+  return ENGINE_VERIFICATION_LEVELS.map((definition) => {
+    const levelCases = definition.caseIds.map((caseId) => caseMap.get(caseId));
+    const passedCases = levelCases.filter((entry) => isEngineCaseEvidencePassed(entry)).length;
+    const evidenceMinted = levelCases.filter((entry) => entry?.evidenceMinted).length;
+    const totalCases = definition.caseIds.length;
+    const status: EngineVerificationLevelStatus = passedCases === totalCases ? "passed" : "blocked";
+    const missing = definition.caseIds
+      .filter((caseId, index) => !isEngineCaseEvidencePassed(levelCases[index]))
+      .map((caseId) => caseMap.get(caseId)?.displayName ?? caseId);
+
+    return {
+      levelId: definition.levelId,
+      title: definition.title,
+      status,
+      caseIds: definition.caseIds,
+      passedCases,
+      totalCases,
+      evidenceMinted,
+      summary:
+        status === "passed"
+          ? definition.passSummary
+          : `Needs concrete evidence for: ${missing.join(", ")}.`
+    };
+  });
+}
+
+function strongestEngineVerificationLevel(levels: EngineVerificationLevel[]): EngineVerificationLevel | undefined {
+  return [...levels].reverse().find((level) => level.status === "passed");
+}
+
+function isEngineCaseEvidencePassed(entry: EngineVerificationCase | undefined): boolean {
+  return Boolean(entry && entry.status === "passed" && entry.evidenceMinted);
 }
 
 export function engineVerificationCaseEvidenceTier(item: EngineVerificationCase): string {
@@ -903,6 +1017,11 @@ function engineRunTags(report: EngineVerificationReport): string[] {
     }
     if (item.required) {
       tags.add("required-gate");
+    }
+  }
+  for (const level of report.levels) {
+    if (level.status === "passed") {
+      tags.add(level.levelId);
     }
   }
   return [...tags].sort();

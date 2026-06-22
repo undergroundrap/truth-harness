@@ -74,6 +74,7 @@ Required gates:
 - Docker core engines pass: Maxima, Z3, cvc5.
 - Strict all-engine path passes: Maxima, Z3, cvc5, Lean, Sage.
 - Math credibility ladder stays green, with named capability levels in saved records.
+- Engine verification ladder reports the strongest concrete external-engine level earned by Maxima, Z3, cvc5, Lean, and SageMath evidence.
 - Exact, symbolic, and SMT closure reports stay green.
 - Release audit can explain exactly why the project is or is not ready.
 - Code-run and MCP stay fail-closed unless policy explicitly allows them.
@@ -88,6 +89,7 @@ Goal: make mathematicians respect the tool.
 Required product capabilities:
 
 - named math benchmark levels: native exact arithmetic/refutation/unit/boundary levels now exist; next add high-school algebra, undergraduate algebra, discrete math, SMT encodings, Lean fixtures, and Sage fixtures
+- engine-backed math levels: Maxima/Z3 core evidence, cvc5 diversity, Lean proof fixture, Sage breadth, and strict all-engine evidence are explicit reviewer stages
 - larger false-claim corpus where frontier models commonly overclaim
 - Lean/mathlib workspace templates with explicit holes, theorem statements, dependencies, and repair targets
 - SageMath adapter records for constrained number theory, algebra, combinatorics, exact linear algebra, and graph theory

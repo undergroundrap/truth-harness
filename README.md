@@ -108,6 +108,8 @@ Use `npm run docker:demo` for launch recording. It runs the 16-case demo with a 
 
 Use `npm run demo:math-ladder` or `npm run docker:math-ladder` for the native-safe professor floor. The math credibility ladder reports named levels for exact arithmetic, universal refutation, physics units, bounded numerics, and honest checker boundaries, and saved benchmark-run records preserve those level summaries for reviewer packets and agent handoffs.
 
+Use `truth-harness engines verify` or `npm run docker:all-engines` for the next engine-backed ladder. Engine verification reports levels for core Maxima/Z3 evidence, cvc5 solver diversity, Lean proof fixtures, SageMath breadth, and the strict all-engine reviewer gate. These levels pass only when concrete scoped evidence is minted; executable readiness probes do not count.
+
 ## Native Quickstart
 
 ```bash

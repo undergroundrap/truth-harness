@@ -107,6 +107,69 @@
           "type": "integer",
           "minimum": 0
         },
+        "levels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "levelId",
+              "title",
+              "status",
+              "caseIds",
+              "passedCases",
+              "totalCases",
+              "evidenceMinted",
+              "summary"
+            ],
+            "properties": {
+              "levelId": {
+                "enum": [
+                  "engine-level-1-core-cas-smt",
+                  "engine-level-2-smt-diversity",
+                  "engine-level-3-formal-proof-fixture",
+                  "engine-level-4-sage-breadth",
+                  "engine-level-5-strict-all-engines"
+                ]
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "enum": ["passed", "blocked"]
+              },
+              "caseIds": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "maxima-symbolic-cross-check",
+                    "z3-smt-check",
+                    "cvc5-smt-check",
+                    "lean-proof-fixture",
+                    "sage-symbolic-cross-check"
+                  ]
+                }
+              },
+              "passedCases": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "totalCases": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "evidenceMinted": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
         "cases": {
           "type": "array",
           "items": {

@@ -66,6 +66,13 @@ describe("engine evidence verification", () => {
     expect(report.evidenceMinted).toBe(3);
     expect(report.trustBoundary.statusProbeIsNotEvidence).toBe(true);
     expect(report.trustBoundary.sageRequiredGateRunsConstrainedCas).toBe(true);
+    expect(report.levels.map((level) => [level.levelId, level.status, level.passedCases, level.totalCases])).toEqual([
+      ["engine-level-1-core-cas-smt", "passed", 2, 2],
+      ["engine-level-2-smt-diversity", "blocked", 2, 3],
+      ["engine-level-3-formal-proof-fixture", "passed", 3, 3],
+      ["engine-level-4-sage-breadth", "blocked", 2, 3],
+      ["engine-level-5-strict-all-engines", "blocked", 3, 5]
+    ]);
 
     expect(report.cases).toContainEqual(
       expect.objectContaining({
@@ -133,6 +140,11 @@ describe("engine evidence verification", () => {
     expect(report.requiredPassed).toBe(1);
     expect(report.requiredTotal).toBe(1);
     expect(report.evidenceMinted).toBe(1);
+    expect(report.levels.find((level) => level.levelId === "engine-level-4-sage-breadth")).toMatchObject({
+      status: "blocked",
+      passedCases: 1,
+      totalCases: 3
+    });
     expect(report.cases).toContainEqual(
       expect.objectContaining({
         id: "sage-symbolic-cross-check",
@@ -194,6 +206,73 @@ describe("engine evidence verification", () => {
         evidence: expect.objectContaining({ backendId: "cvc5", backendVersion: "cvc5 version 1.1.2", trust: "smt-checked" })
       })
     );
+  });
+
+  it("summarizes the strict all-engine reviewer level only when every concrete gate earns evidence", async () => {
+    const runner: EngineVerificationCommandRunner = (command, args) => {
+      if (command === "maxima-test" && args[0] === "--version") {
+        return { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" };
+      }
+      if (command === "maxima-test") {
+        return { status: 0, stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n", stderr: "" };
+      }
+      if (command === "z3-test" && args[0] === "-version") {
+        return { status: 0, stdout: "Z3 version 4.13.0\n", stderr: "" };
+      }
+      if (command === "z3-test") {
+        return { status: 0, stdout: "sat\n(model\n  (define-fun x () Int\n    1)\n)\n", stderr: "" };
+      }
+      if (command === "cvc5-test" && args[0] === "--version") {
+        return { status: 0, stdout: "This is cvc5 version 1.1.2 compiled with GCC.", stderr: "" };
+      }
+      if (command === "cvc5-test") {
+        return { status: 0, stdout: "sat\n", stderr: "" };
+      }
+      if (command === "lean-test" && args[0] === "--version") {
+        return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+      }
+      if (command === "lean-test") {
+        return { status: 0, stdout: "", stderr: "" };
+      }
+      if (command === "sage-test" && args[0] === "--version") {
+        return { status: 0, stdout: "SageMath version 10.6, Release Date: 2025-03-31\n", stderr: "" };
+      }
+      if (command === "sage-test") {
+        return { status: 0, stdout: "TRUTH_HARNESS_SAGE_STATUS:passed:0\n", stderr: "" };
+      }
+
+      return {
+        status: null,
+        stdout: "",
+        stderr: "",
+        error: { name: "Error", message: `missing ${command} ${args.join(" ")}` }
+      };
+    };
+
+    const report = await verifyEngineEvidence({
+      now: new Date("2026-06-15T00:00:00.000Z"),
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      cvc5Command: "cvc5-test",
+      leanCommand: "lean-test",
+      sageCommand: "sage-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      requirements: { maxima: true, z3: true, cvc5: true, lean: true, sage: true },
+      runner
+    });
+
+    expect(report.status).toBe("passed");
+    expect(report.requiredPassed).toBe(5);
+    expect(report.evidenceMinted).toBe(5);
+    expect(report.levels.find((level) => level.levelId === "engine-level-5-strict-all-engines")).toMatchObject({
+      status: "passed",
+      passedCases: 5,
+      totalCases: 5,
+      evidenceMinted: 5
+    });
   });
 
   it("fails closed when required concrete engines cannot earn evidence", async () => {
@@ -279,9 +358,16 @@ describe("engine evidence verification", () => {
     expect(parsed.runId).toBe(result.record.runId);
     expect(parsed.status).toBe("passed");
     expect(parsed.report.evidenceMinted).toBe(3);
+    expect(parsed.report.levels.find((level) => level.levelId === "engine-level-3-formal-proof-fixture")).toMatchObject({
+      status: "passed",
+      passedCases: 3,
+      totalCases: 3
+    });
     expect(parsed.replay).toBe("truth-harness engines verify --write --require-all-concrete");
     expect(parsed.artifacts.json).toContain(".truth-harness/engine-runs/");
     expect(result.markdown).toContain("## Evidence Ladder");
+    expect(result.markdown).toContain("## Engine Readiness Levels");
+    expect(result.markdown).toContain("| Formal proof fixture | passed | 3/3 | Core CAS/SMT evidence plus a Lean-accepted proof fixture are present. |");
     expect(result.markdown).toContain("| Maxima symbolic cross-check | required | earned evidence | Concrete `cross-checked` evidence earned");
     expect(result.markdown).toContain("| cvc5 SMT-LIB check | optional | missing evidence | Optional evidence is missing;");
     expect(result.markdown).toContain("- Reviewer meaning: Concrete `proved` evidence earned");
@@ -293,7 +379,8 @@ describe("engine evidence verification", () => {
       runId: result.record.runId,
       status: "passed",
       concretePassed: 3,
-      evidenceMinted: 3
+      evidenceMinted: 3,
+      tags: expect.arrayContaining(["engine-level-1-core-cas-smt", "engine-level-3-formal-proof-fixture"])
     });
   });
 

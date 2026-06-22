@@ -6099,6 +6099,15 @@ function printEngineVerificationReport(
   }
 
   console.log("");
+  console.log("Engine readiness levels:");
+  for (const level of report.levels) {
+    const marker = level.status === "passed" ? "PASS" : "OPEN";
+    console.log(`  [${marker}] ${level.levelId}: ${level.title}`);
+    console.log(`    Gates: ${level.passedCases}/${level.totalCases}; evidence minted: ${level.evidenceMinted}`);
+    console.log(`    ${level.summary}`);
+  }
+
+  console.log("");
   console.log("Engine gates:");
   for (const item of report.cases) {
     const marker = item.status === "passed" ? "PASS" : item.status === "missing" ? "MISS" : item.status === "not-required" ? "SKIP" : "FAIL";
@@ -6127,7 +6136,7 @@ function printEngineVerificationReport(
   console.log("Trust boundary:");
   console.log("  Status probes do not mint evidence.");
   console.log("  Concrete Maxima, Z3, cvc5, and Lean runs can mint only their scoped labels.");
-  console.log("  Sage direct CAS checks are constrained; engine readiness keeps Sage optional until a pinned fixture exists.");
+  console.log("  Sage direct CAS checks are constrained and mint evidence only when Sage or all-engine gates request them.");
   console.log("  Every claim still needs a replayable receipt, proof, SMT, CAS, or source artifact.");
 
   if (report.warnings.length > 0) {

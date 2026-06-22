@@ -103,6 +103,30 @@ Saved benchmark-run records now preserve these levels in JSON and Markdown:
 
 These levels are not a public math-achievement ladder yet. They are the current native-safe regression floor that future Lean, SageMath, SMT, and proof-search levels should extend.
 
+## Engine-Backed Levels
+
+`truth-harness engines verify` now reports a second ladder for concrete external-engine evidence:
+
+- `engine-level-1-core-cas-smt`: Maxima earns a constrained symbolic `cross-checked` result and Z3 earns a concrete `smt-checked` result.
+- `engine-level-2-smt-diversity`: cvc5 independently earns a concrete `smt-checked` result in addition to the core CAS/SMT gate.
+- `engine-level-3-formal-proof-fixture`: Lean accepts the pinned proof fixture in addition to the core CAS/SMT gate.
+- `engine-level-4-sage-breadth`: SageMath earns a constrained symbolic `cross-checked` result in addition to the core CAS/SMT gate.
+- `engine-level-5-strict-all-engines`: Maxima, Z3, cvc5, Lean, and SageMath all mint concrete scoped evidence.
+
+These levels are stricter than readiness probes. A level passes only when the relevant case records mint evidence; merely finding an executable is not enough.
+
+Run the practical Docker core gate:
+
+```bash
+npm run docker:engines
+```
+
+Run the heavier strict all-engine gate when Docker storage/time is acceptable:
+
+```bash
+npm run docker:all-engines
+```
+
 ## Next Serious Math Work
 
 - Extend the named ladder with high-school algebra, olympiad-style refutations, undergraduate algebra/analysis, SMT encodings, Lean fixtures, and SageMath checks.
