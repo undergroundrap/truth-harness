@@ -7972,7 +7972,7 @@ function renderProfessorChallengeSummary() {
   }
 
   const cases = Array.isArray(professorChallengeSeed.cases) ? professorChallengeSeed.cases : [];
-  const nextPlan = professorChallengeSeed.runNext?.plan ?? workspaceRunNextPlan;
+  const nextPlan = workspaceRunNextPlan ?? professorChallengeSeed.runNext?.plan;
   const nextItem = nextPlan?.item;
   const nextCommand = nextItem?.command ?? nextPlan?.execution?.command ?? "truth-harness workspace run-next . --json";
   const nextTitle = nextItem?.title ?? "Run-next will select the highest-value open validation gate.";
@@ -8005,6 +8005,7 @@ function renderProfessorChallengeSummary() {
       <span class="status-pill waiting">${escapeHtml(`${cases.length} cases`)}</span>
     </div>
     <p>Seeded ${escapeHtml(created)} as a local reviewer workout for refutation, exact arithmetic, CAS, SMT, and Lean-boundary gates. This panel is a queue, not proof.</p>
+    ${professorChallengeFirstGateHtml(nextPlan)}
     <div class="workspace-professor-challenge-grid">${caseCards}</div>
     <div class="workspace-professor-challenge-next">
       <span class="mini-label">next gate</span>
@@ -8018,6 +8019,45 @@ function renderProfessorChallengeSummary() {
       <button class="text-button compact-button" data-professor-action="copy-seed-command" data-command="${escapeHtml(seedCommand)}" type="button">Copy restore CLI</button>
       <button class="text-button compact-button" data-professor-action="copy-next-command" data-command="${escapeHtml(nextCommand)}" type="button">Copy next CLI</button>
     </div>
+  </section>`;
+}
+
+function professorChallengeFirstGateHtml(plan) {
+  const item = plan?.item;
+  const command = item?.command ?? plan?.execution?.command ?? "truth-harness workspace run-next . --json";
+  const status = plan?.status ?? plan?.execution?.status ?? "planned";
+  const target = plan?.rationale?.target ?? item?.title ?? "No open verifier gate selected yet.";
+  const source = plan?.rationale?.source ?? [item?.kind, item?.priority].filter(Boolean).join(" / ");
+  const sourceText = source || "workspace-review";
+  const evidence = plan?.rationale?.candidateEvidenceRef ?? plan?.execution?.evidenceRef ?? evidenceRefFromCommand(command) ?? "Verifier evidence will be recorded when the selected local route runs.";
+  const gate = item?.validationGateId
+    ? `${item.validationGateKind ?? "validation"} gate ${item.validationGateId}`
+    : item?.obligationId
+      ? `${item.obligationKind ?? "route"} obligation ${item.obligationId}`
+      : item?.routeId ?? item?.claimId ?? "workspace queue";
+  const boundary = plan?.rationale?.executionBoundary ?? (plan?.dryRun
+    ? "Browser shows the dry-run plan only; CLI/MCP must opt into local execution."
+    : "Bounded local planner selected this action.");
+  const stop = plan?.rationale?.firstStopCondition ?? plan?.stopConditions?.[0] ?? "Stop if evidence is unavailable, malformed, or weaker than the required gate.";
+  const summary = plan?.execution?.summary ?? item?.summary ?? "Use this as the first reviewer-visible proof blocker before inventing new work.";
+
+  return `<section class="workspace-professor-challenge-first-gate" aria-label="Professor challenge first gate">
+    <div class="workspace-professor-challenge-head">
+      <div>
+        <span class="mini-label">first gate to close</span>
+        <strong>${escapeHtml(target)}</strong>
+      </div>
+      <span class="status-pill ${workspaceRunNextTrust(status)}">${escapeHtml(workspaceRunNextStatusLabel(status))}</span>
+    </div>
+    <p>${escapeHtml(summary)}</p>
+    <dl class="workspace-run-next-mini-details">
+      <div><dt>Gate</dt><dd>${escapeHtml(gate)}</dd></div>
+      <div><dt>Source</dt><dd>${escapeHtml(sourceText)}</dd></div>
+      <div><dt>Evidence</dt><dd>${artifactAwareValueHtml(evidence, "workspace-run-next")}</dd></div>
+      <div><dt>Boundary</dt><dd>${escapeHtml(boundary)}</dd></div>
+      <div><dt>Stop</dt><dd>${escapeHtml(stop)}</dd></div>
+    </dl>
+    <code>${escapeHtml(command)}</code>
   </section>`;
 }
 
