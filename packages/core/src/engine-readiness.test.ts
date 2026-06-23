@@ -24,6 +24,13 @@ describe("engine readiness", () => {
         missingClaimClasses: ["independent-cas-cross-check", "smt-constraint-check", "accepted-proof-checking"]
       })
     );
+    expect(report.gates).toContainEqual(
+      expect.objectContaining({
+        id: "strict-professor-review",
+        status: "blocked",
+        missingClaimClasses: ["dual-cas-reviewer-cross-check", "dual-smt-reviewer-check", "accepted-proof-checking"]
+      })
+    );
     expect(report.claimClasses).toContainEqual(
       expect.objectContaining({
         id: "accepted-proof-checking",
@@ -60,7 +67,50 @@ describe("engine readiness", () => {
         status: "ready"
       })
     );
+    expect(report.gates).toContainEqual(
+      expect.objectContaining({
+        id: "strict-professor-review",
+        status: "blocked",
+        missingClaimClasses: ["dual-cas-reviewer-cross-check", "dual-smt-reviewer-check"]
+      })
+    );
     expect(report.summary.readyTrustLabels).toEqual(expect.arrayContaining(["cross-checked", "smt-checked", "proved"]));
+  });
+
+  it("separates strict all-engine reviewer readiness from the practical professor gate", () => {
+    const report = createEngineReadinessReportFromManifest({
+      ...minimalManifest(),
+      readyCount: 16,
+      status: "ready",
+      capabilities: minimalManifest().capabilities.map((capability) => {
+        if (
+          [
+            "maxima-cas",
+            "sage-cas",
+            "z3-smt-solver",
+            "cvc5-smt-solver",
+            "lean-proof-checker",
+            "code-run-sandbox"
+          ].includes(capability.id)
+        ) {
+          return {
+            ...capability,
+            status: "available" as const,
+            canMintTrust: capability.id !== "code-run-sandbox"
+          };
+        }
+        return capability;
+      })
+    });
+
+    expect(report.status).toBe("professor-ready");
+    expect(report.gates).toContainEqual(
+      expect.objectContaining({
+        id: "strict-professor-review",
+        status: "ready",
+        missingClaimClasses: []
+      })
+    );
   });
 
   it("can use a saved passing Docker sandbox run for agent-autonomy readiness without changing host manifest status", () => {

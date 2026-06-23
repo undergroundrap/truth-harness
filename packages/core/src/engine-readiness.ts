@@ -174,6 +174,20 @@ const CLAIM_CLASS_DEFINITIONS: ClaimClassDefinition[] = [
     limitations: ["Agreement between CAS engines is strong evidence, not formal proof."]
   },
   {
+    id: "dual-cas-reviewer-cross-check",
+    displayName: "Dual CAS reviewer cross-check",
+    lane: "math",
+    targetTrust: "cross-checked",
+    supportKind: "external-adapter",
+    requiredCapabilityIds: ["maxima-cas", "sage-cas"],
+    match: "all",
+    evidenceRule:
+      "A strict reviewer CAS gate requires both Maxima and SageMath to be available so scoped symbolic claims can be checked by independent engines.",
+    reviewerMeaning: "This is the stronger public-review posture for symbolic algebra: two independent CAS adapters, not just one.",
+    recommendedCommand: "truth-harness engines verify --write --require-maxima --require-sage",
+    limitations: ["Dual CAS agreement is still not a formal proof; Lean or another proof checker is required for `proved`."]
+  },
+  {
     id: "smt-constraint-check",
     displayName: "SMT constraint check",
     lane: "math",
@@ -185,6 +199,20 @@ const CLAIM_CLASS_DEFINITIONS: ClaimClassDefinition[] = [
     reviewerMeaning: "Useful for bounded logic, constraints, and countermodel-style checks.",
     recommendedCommand: "truth-harness engines verify --write --require-z3",
     limitations: ["The solver result covers the encoded constraints, not the informal problem statement."]
+  },
+  {
+    id: "dual-smt-reviewer-check",
+    displayName: "Dual SMT reviewer check",
+    lane: "math",
+    targetTrust: "smt-checked",
+    supportKind: "external-adapter",
+    requiredCapabilityIds: ["z3-smt-solver", "cvc5-smt-solver"],
+    match: "all",
+    evidenceRule:
+      "A strict reviewer SMT gate requires both Z3 and cvc5 to be available so encoded bounded claims can be checked by independent solver families.",
+    reviewerMeaning: "This is the stronger public-review posture for bounded logic and constraint claims.",
+    recommendedCommand: "truth-harness engines verify --write --require-z3 --require-cvc5",
+    limitations: ["Solver agreement covers the SMT-LIB encoding only; it does not validate an informal translation by itself."]
   },
   {
     id: "accepted-proof-checking",
@@ -287,6 +315,14 @@ const GATE_DEFINITIONS = [
     requiredClaimClasses: ["independent-cas-cross-check", "smt-constraint-check", "accepted-proof-checking"],
     readySummary: "Independent CAS, SMT, and proof-checker paths are available for reviewer-facing math work.",
     blockedSummary: "Reviewer-facing math is blocked until independent CAS, SMT, and Lean proof gates are available or run through Docker."
+  },
+  {
+    id: "strict-professor-review",
+    title: "Strict professor review",
+    requiredClaimClasses: ["dual-cas-reviewer-cross-check", "dual-smt-reviewer-check", "accepted-proof-checking"],
+    readySummary: "Maxima, SageMath, Z3, cvc5, and Lean are all available for strict all-engine reviewer packets.",
+    blockedSummary:
+      "Strict reviewer-facing math is blocked until Maxima, SageMath, Z3, cvc5, and Lean are available or refreshed through the all-engine Docker route."
   },
   {
     id: "agent-autonomy",
@@ -523,6 +559,11 @@ function recommendedActionsFor(
 
   if (professorGate?.status !== "ready") {
     actions.push("Run `npm run docker:engines` or configure Maxima/Z3/cvc5/Lean locally before professor-facing math claims.");
+  }
+  if (gates.find((gate) => gate.id === "strict-professor-review")?.status !== "ready") {
+    actions.push(
+      "Run `npm run docker:professor:all` or `truth-harness engines verify --write --require-all-engines` before claiming strict all-engine reviewer readiness."
+    );
   }
   if (agentGate?.status !== "ready") {
     actions.push("Keep agent-triggered code execution gated until `truth-harness code sandbox-status --json` can attest the sandbox boundary.");
