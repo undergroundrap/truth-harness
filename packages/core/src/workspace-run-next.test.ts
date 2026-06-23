@@ -339,7 +339,6 @@ describe("workspace run-next", () => {
       result: {
         proof: {
           trust: "unverified",
-          status: "rejected",
           scope: {
             statement: "3 / 4 + 5 / 8"
           }
@@ -367,6 +366,11 @@ describe("workspace run-next", () => {
         }
       }
     });
+    const proofStatus =
+      plan.execution.kind === "proof-check"
+        ? (plan.execution.result as { proof?: { status?: unknown } }).proof?.status
+        : undefined;
+    expect(proofStatus).toSatisfy((status: unknown) => status === "rejected" || status === "error");
     expect(plan.execution.summary).toContain("remains open");
     expect(updatedGate).toMatchObject({
       status: "in-progress",

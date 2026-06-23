@@ -10,6 +10,7 @@ import { writeCredibilityBundle, writeCredibilityBundleVerification } from "./cr
 import { createReceipt } from "./receipt.js";
 import { writeEngineVerificationRun, type EngineVerificationCommandRunner } from "./engine-verification.js";
 import { writeHardMathClosureReport } from "./hard-math-closure-report.js";
+import { writeHardMathSeedWorkspace } from "./hard-math-seed.js";
 import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchSession } from "./research-session.js";
 import { detectCodeRunSandboxStatus, writeCodeRunSandboxRun } from "./sandbox.js";
@@ -737,6 +738,30 @@ describe("release audit", () => {
     );
     expect(markdown).toContain("Saved engine ladder: engine-level-3-formal-proof-fixture");
     expect(markdown).toContain("Saved no-network Docker engine evidence covers the required gates");
+  });
+
+  it("orders release-audit reviewer next actions toward locally executable verifier work", async () => {
+    const root = await tempRoot();
+    await writeHardMathSeedWorkspace({
+      rootPath: root,
+      now: "2026-06-22T00:00:00.000Z",
+      caseIds: ["lean-trivial-proof-boundary", "bounded-integer-smt"],
+      writeRunNextPlan: false
+    });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-22T00:00:05.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-22T00:00:06.000Z",
+      runner: passingEngineRunner
+    });
+
+    const verifyIndex = audit.nextActions.findIndex((action) => /^truth-harness verify\b/u.test(action));
+    const proofIndex = audit.nextActions.findIndex((action) => /^truth-harness proof check\b/u.test(action));
+    expect(audit.status).toBe("blocked");
+    expect(verifyIndex).toBeGreaterThan(-1);
+    expect(proofIndex).toBeGreaterThan(-1);
+    expect(verifyIndex).toBeLessThan(proofIndex);
   });
 
   it("uses saved Docker sandbox evidence when the host sandbox is unmeasured", async () => {

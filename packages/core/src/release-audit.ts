@@ -1,5 +1,6 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { orderCredibilityActionsForRunNext } from "./credibility-action-order.js";
 import type { CredibilityBundleVerification } from "./credibility-bundle.js";
 import { createCredibilityPack, type CredibilityPack, type CreateCredibilityPackInput } from "./credibility-pack.js";
 import type { EngineVerificationCommandRunner, EngineVerificationRequirements } from "./engine-verification.js";
@@ -1366,6 +1367,7 @@ function researchSessionContinuityCheck(pack: CredibilityPack): ReleaseAuditChec
 }
 
 function reviewQueueCheck(pack: CredibilityPack): ReleaseAuditCheck {
+  const orderedActions = orderCredibilityActionsForRunNext(pack.reviewerActionPlan.actions);
   if (pack.summary.criticalReviewItems > 0) {
     return failCheck({
       id: "review-queue",
@@ -1373,7 +1375,7 @@ function reviewQueueCheck(pack: CredibilityPack): ReleaseAuditCheck {
       blocking: true,
       summary: `${pack.summary.criticalReviewItems} critical reviewer item(s) remain open.`,
       command: "truth-harness workspace credibility-actions .",
-      details: pack.reviewerActionPlan.actions.slice(0, 6).map((action) => `${action.priority}: ${action.title}`)
+      details: orderedActions.slice(0, 6).map((action) => `${action.priority}: ${action.title}`)
     });
   }
   const mediumReviewItems = pack.workspaceReview.summary.mediumItems;
@@ -1656,10 +1658,12 @@ function nextActions(checks: ReleaseAuditCheck[], pack: CredibilityPack | undefi
     .filter((check) => check.status === "fail" && check.command)
     .map((check) => check.command as string);
   const dockerEngineCommands = pack ? engineEvidenceDockerCommands(pack) : [];
-  const reviewerCommands = pack?.reviewerActionPlan.actions
-    .filter((action) => action.priority !== "low")
-    .slice(0, 5)
-    .map((action) => action.command) ?? [];
+  const reviewerCommands = pack
+    ? orderCredibilityActionsForRunNext(pack.reviewerActionPlan.actions)
+        .filter((action) => action.priority !== "low")
+        .slice(0, 5)
+        .map((action) => action.command)
+    : [];
   return [...new Set([...actionCommands, ...dockerEngineCommands, ...reviewerCommands])].slice(0, 8);
 }
 
