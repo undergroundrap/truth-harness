@@ -72,7 +72,7 @@ describe("hard-math seed workspace", () => {
       dryRun: true,
       item: {
         kind: "validation-gate",
-        command: expect.stringContaining("truth-harness verify")
+        command: expect.stringMatching(/^truth-harness (?:verify|smt check|cas check|proof check)\b/u)
       }
     });
 
@@ -248,7 +248,7 @@ describe("hard-math seed workspace", () => {
     expect(validation.passed).toBe(true);
   });
 
-  it("closes the symbolic CAS fixture through a scoped verifier route", async () => {
+  it("keeps the symbolic CAS fixture open when direct CAS evidence lacks the independent backend", async () => {
     const root = await tempRoot();
 
     const seed = await writeHardMathSeedWorkspace({
@@ -270,14 +270,14 @@ describe("hard-math seed workspace", () => {
     });
 
     expect(result.loop.summary.executedSteps).toBeGreaterThanOrEqual(1);
-    expect(result.loop.summary.evidenceRefs).toContainEqual(expect.stringContaining("route:.truth-harness/routes/"));
+    expect(result.loop.summary.evidenceRefs).toContainEqual(expect.stringContaining("cas:.truth-harness/cas/"));
 
     const plans = await listValidationPlans(root);
     const plan = plans.find((candidate) => candidate.planId === seed.cases[0]?.validationPlanId);
     const gate = plan?.gates.find((candidate) => candidate.kind === "proof");
-    expect(gate?.status).toBe("satisfied");
-    expect(gate?.evidenceRefs[0]).toMatchObject({ kind: "route" });
-    expect(["exact-computed", "cross-checked"]).toContain(gate?.evidenceRefs[0]?.trust);
+    expect(gate?.status).toBe("in-progress");
+    expect(gate?.evidenceRefs[0]).toMatchObject({ kind: "cas", trust: "unverified" });
+    expect(gate?.nextChecks.join(" ")).toContain("CAS evidence is not cross-checked");
   });
 });
 

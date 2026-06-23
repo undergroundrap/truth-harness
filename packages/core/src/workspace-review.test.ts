@@ -155,6 +155,63 @@ describe("workspace review", () => {
     );
   });
 
+  it("uses concrete verifier commands for machine-checkable validation gates", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-18T00:00:00.000Z"
+    });
+    const cases = [
+      {
+        claim: "SMT query bounded_integer_sat",
+        command: "truth-harness smt check docs/examples/constraints.smt2 --query bounded_integer_sat --write"
+      },
+      {
+        claim: "symbolic simplify sin(x)^2 + cos(x)^2",
+        command: 'truth-harness cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write'
+      },
+      {
+        claim: "The Lean fixture theorem `smoke : True` is accepted by the configured proof checker.",
+        command:
+          'truth-harness proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean --declaration smoke --statement "The Lean fixture theorem `smoke : True` is accepted by the configured proof checker." --write'
+      }
+    ];
+    const planIds: string[] = [];
+
+    for (const [index, seed] of cases.entries()) {
+      const harness = await writeResearchHarness({
+        rootPath: root,
+        title: `Verifier seed ${index + 1}`,
+        objective: seed.claim,
+        domains: ["math"],
+        claims: [seed.claim],
+        createValidationPlan: true,
+        validationClaim: seed.claim,
+        now: `2026-06-18T00:0${index + 1}:00.000Z`
+      });
+      if (!harness.validationPlan) {
+        throw new Error("Expected a linked validation plan.");
+      }
+      planIds.push(harness.validationPlan.plan.planId);
+    }
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-18T00:05:00.000Z"
+    });
+
+    for (const [index, planId] of planIds.entries()) {
+      expect(review.items).toContainEqual(
+        expect.objectContaining({
+          kind: "validation-gate",
+          validationPlanId: planId,
+          validationGateKind: "proof",
+          command: cases[index]?.command
+        })
+      );
+    }
+    expect(review.items.filter((item) => item.command.includes("truth-harness verify")).length).toBe(0);
+  });
+
   it("renders concrete validation attach commands for candidate session evidence", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {

@@ -151,6 +151,43 @@ describe("workspace run-next", () => {
     );
   });
 
+  it("routes machine-checkable validation gates to concrete verifier actions", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "SMT query bounded_integer_sat",
+      domains: ["math"],
+      claims: ["SMT query bounded_integer_sat"],
+      createValidationPlan: true,
+      validationClaim: "SMT query bounded_integer_sat",
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-18T00:02:00.000Z"
+    });
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-18T00:03:00.000Z"
+    });
+
+    expect(plan.item).toMatchObject({
+      kind: "validation-gate",
+      sessionId: harness.session.sessionId,
+      validationPlanId: harness.validationPlan?.plan.planId,
+      validationGateKind: "proof",
+      command: "truth-harness smt check docs/examples/constraints.smt2 --query bounded_integer_sat --write"
+    });
+    expect(plan.execution).toMatchObject({
+      kind: "dry-run"
+    });
+    expect(plan.execution.summary).toContain("Dry-run only");
+    expect(plan.item?.command).not.toContain("truth-harness verify");
+  });
+
   it("closes a linked validation proof gate when run-next writes satisfying route evidence", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });

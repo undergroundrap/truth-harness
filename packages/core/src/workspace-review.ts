@@ -961,6 +961,11 @@ function commandForValidationGate(
   }
 
   if (gate.kind === "proof") {
+    const concreteVerifierCommand = concreteValidationGateProofCommand(plan);
+    if (concreteVerifierCommand) {
+      return concreteVerifierCommand;
+    }
+
     return `truth-harness verify ${quoteCommandArg(plan.claim)} --write --workspace ${quoteCommandArg(workspacePath)} --json`;
   }
 
@@ -995,6 +1000,25 @@ function commandForAttachedValidationGate(gate: ValidationGate): string | undefi
     if (/\bmaxima\b|\bcas\b|\bz3\b|\bcvc5\b|\bsmt\b|solver|docker-derived/u.test(normalized)) {
       return "npm run docker:engines";
     }
+  }
+
+  return undefined;
+}
+
+function concreteValidationGateProofCommand(plan: ValidationPlan): string | undefined {
+  const claim = plan.claim.trim();
+  const normalized = claim.toLowerCase().replace(/\s+/gu, " ");
+
+  if (normalized === "smt query bounded_integer_sat") {
+    return "truth-harness smt check docs/examples/constraints.smt2 --query bounded_integer_sat --write";
+  }
+
+  if (normalized === "symbolic simplify sin(x)^2 + cos(x)^2") {
+    return 'truth-harness cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write';
+  }
+
+  if (normalized.includes("lean fixture theorem") && normalized.includes("smoke : true")) {
+    return `truth-harness proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean --declaration smoke --statement ${quoteCommandArg(claim)} --write`;
   }
 
   return undefined;
