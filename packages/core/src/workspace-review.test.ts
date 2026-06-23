@@ -8,6 +8,7 @@ import { initLocalWorkspace } from "./local-workspace.js";
 import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
 import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchHarness, writeResearchSession } from "./research-session.js";
+import { writeSmtCheckRecord, type SmtBackendCommandRunner } from "./smt-backend.js";
 import { attachValidationGateEvidence } from "./validation-plan.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createWorkspaceReview, listWorkspaceReviews, readWorkspaceReview, writeWorkspaceReview } from "./workspace-review.js";
@@ -285,6 +286,137 @@ describe("workspace review", () => {
       kind: "proof",
       ref: ".truth-harness/proofs/unverified-attempt.json",
       trust: "unverified"
+    });
+  });
+
+  it("renders concrete validation attach commands for saved proof-check evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-18T00:00:00.000Z"
+    });
+    const claim = "The Lean fixture theorem `smoke : True` is accepted by the configured proof checker.";
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      title: "Saved Lean proof evidence",
+      objective: claim,
+      domains: ["math"],
+      claims: [claim],
+      createValidationPlan: true,
+      validationClaim: claim,
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const plan = harness.validationPlan?.plan;
+    const proofGate = plan?.gates.find((gate) => gate.kind === "proof");
+    if (!plan || !proofGate) {
+      throw new Error("Expected a linked proof validation gate.");
+    }
+    await mkdir(join(root, "docs", "examples", "lean-fixture", "TruthHarnessFixture"), { recursive: true });
+    await writeFile(
+      join(root, "docs", "examples", "lean-fixture", "TruthHarnessFixture", "Trivial.lean"),
+      "theorem smoke : True := by trivial\n",
+      "utf8"
+    );
+    const proofRunner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+      }
+
+      return { status: 0, stdout: "", stderr: "" };
+    };
+    const proof = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean",
+      declarationName: "smoke",
+      scope: { statement: claim },
+      runner: proofRunner,
+      now: new Date("2026-06-18T00:02:00.000Z")
+    });
+    const proofRef = relative(root, proof.jsonPath).replace(/\\/gu, "/");
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-18T00:03:00.000Z"
+    });
+    const item = review.items.find(
+      (candidate) => candidate.kind === "validation-gate" && candidate.validationGateId === proofGate.gateId
+    );
+
+    expect(item).toMatchObject({
+      kind: "validation-gate",
+      sessionId: harness.session.sessionId,
+      validationPlanId: plan.planId,
+      validationGateId: proofGate.gateId,
+      command: `truth-harness validation attach ${plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`
+    });
+    expect(item?.candidateEvidenceRefs?.[0]).toMatchObject({
+      kind: "proof",
+      ref: proofRef,
+      trust: "proved"
+    });
+  });
+
+  it("renders concrete validation attach commands for saved SMT evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-18T00:00:00.000Z"
+    });
+    const claim = "SMT query bounded_integer_sat";
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      title: "Saved SMT evidence",
+      objective: claim,
+      domains: ["math"],
+      claims: [claim],
+      createValidationPlan: true,
+      validationClaim: claim,
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const plan = harness.validationPlan?.plan;
+    const proofGate = plan?.gates.find((gate) => gate.kind === "proof");
+    if (!plan || !proofGate) {
+      throw new Error("Expected a linked proof validation gate.");
+    }
+    await mkdir(join(root, "docs", "examples"), { recursive: true });
+    await writeFile(
+      join(root, "docs", "examples", "constraints.smt2"),
+      "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(assert (< x 3))\n(check-sat)\n",
+      "utf8"
+    );
+    const smtRunner: SmtBackendCommandRunner = (_command, args) => {
+      if (args[0] === "-version") {
+        return { status: 0, stdout: "Z3 version 4.13.0\n", stderr: "" };
+      }
+
+      return { status: 0, stdout: "sat\n", stderr: "" };
+    };
+    const smt = await writeSmtCheckRecord({
+      rootPath: root,
+      sourcePath: "docs/examples/constraints.smt2",
+      queryName: "bounded_integer_sat",
+      runner: smtRunner,
+      now: new Date("2026-06-18T00:02:00.000Z")
+    });
+    const smtRef = relative(root, smt.jsonPath).replace(/\\/gu, "/");
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-18T00:03:00.000Z"
+    });
+    const item = review.items.find(
+      (candidate) => candidate.kind === "validation-gate" && candidate.validationGateId === proofGate.gateId
+    );
+
+    expect(item).toMatchObject({
+      kind: "validation-gate",
+      sessionId: harness.session.sessionId,
+      validationPlanId: plan.planId,
+      validationGateId: proofGate.gateId,
+      command: `truth-harness validation attach ${plan.planId} ${proofGate.gateId} --evidence smt:${smtRef} --json`
+    });
+    expect(item?.candidateEvidenceRefs?.[0]).toMatchObject({
+      kind: "smt",
+      ref: smtRef,
+      trust: "smt-checked"
     });
   });
 

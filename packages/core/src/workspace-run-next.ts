@@ -2671,7 +2671,11 @@ async function executeWorkspaceRunNextItem(
           command: item.command,
           summary: `Local ${selectedBackend} SMT backend is not available for run-next (${
             backendStatus?.error ?? backendStatus?.status ?? "unknown"
-          }). Use the Docker evidence path instead: ${dockerSmtCheckCommand(sourcePath, selectedBackend)}`
+          }). Use the Docker evidence path instead: ${dockerSmtCheckCommand({
+            sourcePath,
+            backend: selectedBackend,
+            queryName: typeof options.query === "string" ? options.query : undefined
+          })}`
         };
       }
       const result = await writeSmtCheckRecord({
@@ -2858,9 +2862,10 @@ async function blockUnchangedRejectedProofAttempt(
   };
 }
 
-function dockerSmtCheckCommand(sourcePath: string, backend: SmtBackendId): string {
-  const backendArgs = backend === "z3" ? "" : ` --backend ${quoteCommandArg(backend)}`;
-  return `npm run docker:cli -- smt check ${quoteCommandArg(sourcePath)} --${backendArgs} --write`;
+function dockerSmtCheckCommand(input: { sourcePath: string; backend: SmtBackendId; queryName?: string }): string {
+  const backendArgs = input.backend === "z3" ? "" : ` --backend ${quoteCommandArg(input.backend)}`;
+  const queryArgs = input.queryName ? ` --query ${quoteCommandArg(input.queryName)}` : "";
+  return `npm run docker:cli -- smt check ${quoteCommandArg(input.sourcePath)} --${backendArgs}${queryArgs} --write`;
 }
 
 function dockerProofCheckCommand(input: {

@@ -30,6 +30,7 @@ import {
   type ResearchSessionTask
 } from "./research-session.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
+import { listSmtChecks, type SmtCheckSummary } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { listValidationPlans, type ValidationEvidenceRef, type ValidationGate, type ValidationPlan } from "./validation-plan.js";
@@ -247,6 +248,7 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const reportDrafts = await listReportDrafts({ rootPath: status.root, limit: input.maxReports ?? 50 });
   const validationPlans = await listValidationPlans(status.root);
   const proofChecks = await enrichProofChecksWithSourceStatus(status.root, await listLeanProofChecks(status.root));
+  const smtChecks = await listSmtChecks(status.root);
   const leanInspection = await inspectLeanProject({
     rootPath: status.root,
     projectPath: ".",
@@ -265,7 +267,9 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   )).flat();
   const candidateItems = sortReviewItems([
     ...proofSafetyItems,
-    ...sessions.flatMap((session) => linkedValidationGateItems(status.root, session, validationPlans, readyRoutesByStatementKey)),
+    ...sessions.flatMap((session) =>
+      linkedValidationGateItems(status.root, session, validationPlans, readyRoutesByStatementKey, proofChecks, smtChecks)
+    ),
     ...activeRoutes.flatMap((route) =>
       routeReviewItems(status.root, route, claimsByRouteRef, claimsByStatementKey, leanInspection, proofChecks)
     ),
@@ -652,11 +656,15 @@ function linkedValidationGateItems(
   workspacePath: string,
   session: ResearchSession,
   validationPlans: ValidationPlan[],
-  readyRoutesByStatementKey: Map<string, VerifierRoute>
+  readyRoutesByStatementKey: Map<string, VerifierRoute>,
+  proofChecks: ReviewLeanProofCheckSummary[],
+  smtChecks: SmtCheckSummary[]
 ): WorkspaceReviewItem[] {
   const plans = linkedValidationPlansForSession(session, validationPlans);
   return plans.flatMap((plan) =>
-    openValidationGates(plan).map((gate) => validationGateItem(workspacePath, session, plan, gate, readyRoutesByStatementKey))
+    openValidationGates(plan).map((gate) =>
+      validationGateItem(workspacePath, session, plan, gate, readyRoutesByStatementKey, proofChecks, smtChecks)
+    )
   );
 }
 
@@ -693,9 +701,18 @@ function validationGateItem(
   session: ResearchSession,
   plan: ValidationPlan,
   gate: ValidationGate,
-  readyRoutesByStatementKey: Map<string, VerifierRoute>
+  readyRoutesByStatementKey: Map<string, VerifierRoute>,
+  proofChecks: ReviewLeanProofCheckSummary[],
+  smtChecks: SmtCheckSummary[]
 ): WorkspaceReviewItem {
-  const candidateEvidenceRefs = candidateEvidenceRefsForValidationGate(session, plan, gate, readyRoutesByStatementKey);
+  const candidateEvidenceRefs = candidateEvidenceRefsForValidationGate(
+    session,
+    plan,
+    gate,
+    readyRoutesByStatementKey,
+    proofChecks,
+    smtChecks
+  );
 
   return {
     itemId: itemIdFor({
@@ -728,7 +745,9 @@ function candidateEvidenceRefsForValidationGate(
   session: ResearchSession,
   plan: ValidationPlan,
   gate: ValidationGate,
-  readyRoutesByStatementKey: Map<string, VerifierRoute>
+  readyRoutesByStatementKey: Map<string, VerifierRoute>,
+  proofChecks: ReviewLeanProofCheckSummary[],
+  smtChecks: SmtCheckSummary[]
 ): ValidationEvidenceRef[] {
   const attached = new Set(gate.evidenceRefs.map((ref) => validationEvidenceKey(ref)));
   const candidates: ValidationEvidenceRef[] = [];
@@ -768,8 +787,77 @@ function candidateEvidenceRefsForValidationGate(
       summary: `Ready verifier route ${route.routeId} matches validation claim ${JSON.stringify(plan.claim)}.`
     });
   }
+  for (const proof of proofChecks) {
+    if (!isProofCheckCandidateForValidationPlan(proof, plan, gate)) {
+      continue;
+    }
+    collectCandidate({
+      kind: "proof",
+      ref: proof.path,
+      trust: proof.trust,
+      summary: `Accepted Lean proof check ${proof.checkId} matches validation claim ${JSON.stringify(plan.claim)}.`
+    });
+  }
+  for (const smt of smtChecks) {
+    if (!isSmtCheckCandidateForValidationPlan(smt, plan, gate)) {
+      continue;
+    }
+    collectCandidate({
+      kind: "smt",
+      ref: smt.path,
+      trust: smt.trust,
+      summary: `SMT check ${smt.checkId} matches validation claim ${JSON.stringify(plan.claim)}.`
+    });
+  }
 
   return rankValidationEvidenceCandidates(candidates, gate);
+}
+
+function isProofCheckCandidateForValidationPlan(
+  proof: ReviewLeanProofCheckSummary,
+  plan: ValidationPlan,
+  gate: ValidationGate
+): boolean {
+  if (gate.kind !== "proof" || proof.status !== "accepted" || proof.trust !== "proved" || !proof.proofCheckerBacked) {
+    return false;
+  }
+  if (proof.scope?.statement && equivalentRouteProblems(proof.scope.statement, plan.claim)) {
+    return true;
+  }
+  const concreteCommand = concreteValidationGateProofCommand(plan);
+  if (!concreteCommand || !concreteCommand.startsWith("truth-harness proof check ")) {
+    return false;
+  }
+  const expectedPath = commandArgumentAfterPrefix(concreteCommand, "truth-harness proof check");
+  if (!expectedPath || toPortablePath(proof.sourcePath) !== toPortablePath(expectedPath)) {
+    return false;
+  }
+  const expectedDeclaration = commandOptionValue(concreteCommand, "--declaration");
+  return !expectedDeclaration || proof.declarationName === expectedDeclaration;
+}
+
+function isSmtCheckCandidateForValidationPlan(
+  smt: SmtCheckSummary,
+  plan: ValidationPlan,
+  gate: ValidationGate
+): boolean {
+  if (gate.kind !== "proof" || smt.trust !== "smt-checked") {
+    return false;
+  }
+  const scopedClaim = smt.queryName ? `SMT query ${smt.queryName}` : undefined;
+  if (scopedClaim && equivalentRouteProblems(scopedClaim, plan.claim)) {
+    return true;
+  }
+  const concreteCommand = concreteValidationGateProofCommand(plan);
+  if (!concreteCommand || !concreteCommand.startsWith("truth-harness smt check ")) {
+    return false;
+  }
+  const expectedPath = commandArgumentAfterPrefix(concreteCommand, "truth-harness smt check");
+  if (!expectedPath || toPortablePath(smt.sourcePath) !== toPortablePath(expectedPath)) {
+    return false;
+  }
+  const expectedQuery = commandOptionValue(concreteCommand, "--query");
+  return !expectedQuery || smt.queryName === expectedQuery;
 }
 
 function rankValidationEvidenceCandidates(
@@ -1563,6 +1651,23 @@ function proofCommandNeedsConcreteSource(command: string | undefined): boolean {
 
 function hasCliFlag(command: string, flag: string): boolean {
   return new RegExp(`(?:^|\\s)${escapeRegExp(flag)}(?:\\s|=|$)`, "u").test(command);
+}
+
+function commandArgumentAfterPrefix(command: string, prefix: string): string | undefined {
+  if (!command.startsWith(prefix)) {
+    return undefined;
+  }
+  return firstShellishToken(command.slice(prefix.length).trim());
+}
+
+function commandOptionValue(command: string, option: string): string | undefined {
+  const match = new RegExp(`(?:^|\\s)${escapeRegExp(option)}\\s+("([^"]+)"|'([^']+)'|(\\S+))`, "u").exec(command);
+  return match?.[2] ?? match?.[3] ?? match?.[4];
+}
+
+function firstShellishToken(value: string): string | undefined {
+  const match = /^(?:"([^"]+)"|'([^']+)'|(\S+))/u.exec(value.trim());
+  return match?.[1] ?? match?.[2] ?? match?.[3];
 }
 
 function escapeRegExp(value: string): string {

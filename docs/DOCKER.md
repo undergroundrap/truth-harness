@@ -63,7 +63,7 @@ docker compose build lean-proof
 docker compose run --rm lean-proof
 ```
 
-The `lean-proof` target installs Lean through elan during image build, pins the default toolchain to `leanprover/lean4:v4.12.0`, and runs `npm run proof:lean-suite`. That suite checks the static Lean fixture and the proof-repair fixture that records a rejected scoped attempt, asks run-next for the repair handoff, writes the repaired source, and closes the exact route obligation only when Lean accepts the proof-check record. The compose service then checks the suite again with `network_mode: "none"` and fails if the repair obligation stays open. This is intentionally separate from the default dev image so proof-lane dependencies do not become silent bloat.
+The `lean-proof` target installs Lean through elan during image build, pins the default toolchain to `leanprover/lean4:v4.12.0`, and runs `npm run proof:lean-suite`. That suite checks the static Lean fixture and the proof-repair fixture that records a rejected scoped attempt, asks run-next for the repair handoff, writes the repaired source, and closes the exact route obligation only when Lean accepts the proof-check record. The compose service then checks the suite again with `network_mode: "none"` and fails if the repair obligation stays open. The service bind-mounts only the root `.truth-harness` evidence ledger so Docker proof checks can leave durable proof-check JSON for local review without giving the Lean container a writable full-repo mount. This is intentionally separate from the default dev image so proof-lane dependencies do not become silent bloat.
 
 For just the repair loop:
 
