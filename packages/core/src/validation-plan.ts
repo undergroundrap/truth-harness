@@ -1368,6 +1368,15 @@ function validationClaimScopeFromText(
     };
   }
 
+  if (simpleExactArithmeticScopeMatches(expected, actualNormalized)) {
+    return {
+      status: "matched",
+      expected,
+      actual: actualNormalized,
+      reason: `${source} matches validation plan ${plan.planId} after exact arithmetic boundary normalization.`
+    };
+  }
+
   return {
     status: "mismatch",
     expected,
@@ -1379,6 +1388,28 @@ function validationClaimScopeFromText(
 
 function normalizeValidationClaimText(value: string): string {
   return value.trim().replace(/\s+/g, " ");
+}
+
+function simpleExactArithmeticScopeMatches(expected: string, actual: string): boolean {
+  const expectedParts = exactArithmeticBoundaryParts(expected);
+  const actualParts = exactArithmeticBoundaryParts(actual);
+  if (!expectedParts || !actualParts) {
+    return false;
+  }
+
+  return expectedParts.some((expectedPart) => actualParts.includes(expectedPart));
+}
+
+function exactArithmeticBoundaryParts(value: string): string[] | undefined {
+  const compact = value
+    .replace(/\\frac\{(-?\d+)\}\{(-?\d+)\}/gu, "$1/$2")
+    .replace(/\s+/gu, "");
+  const parts = compact.split("=").filter((part) => part.length > 0);
+  if (parts.length === 0 || !parts.every((part) => /^[0-9+\-*/^().]+$/u.test(part))) {
+    return undefined;
+  }
+
+  return parts;
 }
 
 async function readValidationEvidenceArtifactJson(root: string, ref: string): Promise<{ raw: string } | undefined> {

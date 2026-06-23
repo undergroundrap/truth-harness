@@ -143,6 +143,49 @@ describe("validation plans", () => {
     expect(attached.plan.readiness.satisfiedGateCount).toBeGreaterThan(written.plan.readiness.satisfiedGateCount);
     expect(attached.markdown).toContain("route:");
 
+    const latexPlan = await writeValidationPlan({
+      rootPath: root,
+      claim: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      now: "2026-06-18T00:02:10.000Z"
+    });
+    const latexGate = latexPlan.plan.gates.find((gate) => gate.kind === "proof");
+    if (!latexGate) {
+      throw new Error("Expected a LaTeX boundary proof gate.");
+    }
+    const latexRoute = await writeVerifierRoute({
+      rootPath: root,
+      problem: "3 / 4 + 5 / 8",
+      now: new Date("2026-06-18T00:02:20.000Z")
+    });
+    await writeFile(
+      latexRoute.jsonPath,
+      `${JSON.stringify(
+        {
+          ...latexRoute.route,
+          problem: "\\frac{3}{4}+\\frac{5}{8} = \\frac{11}{8}",
+          normalizedProblem: "\\frac{3}{4}+\\frac{5}{8} = \\frac{11}{8}"
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+    const latexAttachment = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: latexPlan.plan.planId,
+      gateId: latexGate.gateId,
+      evidenceRef: {
+        kind: "route",
+        ref: latexRoute.route.routeId
+      },
+      now: "2026-06-18T00:02:30.000Z"
+    });
+
+    expect(latexAttachment.satisfied).toBe(true);
+    expect(latexAttachment.evidence.claimScope).toMatchObject({ status: "matched" });
+    expect(latexAttachment.evidence.claimScope?.reason).toContain("exact arithmetic boundary normalization");
+
     const weakPlan = await writeValidationPlan({
       rootPath: root,
       claim: "Explain the unresolved deterministic robotics invariant.",
