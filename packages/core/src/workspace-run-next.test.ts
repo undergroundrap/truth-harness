@@ -945,6 +945,54 @@ describe("workspace run-next", () => {
     });
   });
 
+  it("executes claim-add actions that record refuted verifier-route evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-23T00:00:00.000Z" });
+    const claim = "For every integer n, n^2 + n + 1 is even.";
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: claim,
+      now: new Date("2026-06-23T00:01:00.000Z")
+    });
+    const review = minimalReview({
+      rootPath: root,
+      command: `truth-harness claim add ${JSON.stringify(claim)} --workspace ${root} --domain math --evidence route:${route.route.routeId}@refuted --trust refuted --json`,
+      routeId: route.route.routeId,
+      domain: "math"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-23T00:02:00.000Z"
+    });
+
+    expect(route.route.status).toBe("refuted");
+    expect(plan.status).toBe("executed");
+    expect(plan.execution).toMatchObject({
+      kind: "claim-add",
+      evidenceRef: expect.stringMatching(/^claim:claim_[a-f0-9]{16}$/u),
+      result: {
+        claim: {
+          statement: claim,
+          domain: "math",
+          trust: "refuted",
+          evidenceRefs: [
+            expect.objectContaining({
+              kind: "route",
+              ref: route.route.routeId,
+              trust: "refuted"
+            })
+          ],
+          finalization: {
+            readyForNarrowClaim: false
+          }
+        }
+      }
+    });
+  });
+
   it("blocks claim-add review actions that supersede a different claim", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });

@@ -668,6 +668,86 @@ describe("workspace review", () => {
     expect(review.autonomy.nextCommand).toBe(validationItem?.command);
   });
 
+  it("records refuted validation gates as claim-ledger refutations instead of re-running them", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-23T00:00:00.000Z"
+    });
+    const claim = "For every integer n, n^2 + n + 1 is even.";
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: claim,
+      domains: ["math"],
+      claims: [claim],
+      now: "2026-06-23T00:01:00.000Z"
+    });
+    const plan = harness.validationPlan?.plan;
+    const proofGate = plan?.gates.find((gate) => gate.kind === "proof");
+    if (!plan || !proofGate) {
+      throw new Error("Expected a linked proof validation gate.");
+    }
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: claim,
+      now: new Date("2026-06-23T00:02:00.000Z")
+    });
+    await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: plan.planId,
+      gateId: proofGate.gateId,
+      evidenceRef: { kind: "route", ref: route.route.routeId },
+      now: "2026-06-23T00:03:00.000Z"
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 0,
+      now: "2026-06-23T00:04:00.000Z"
+    });
+    const validationItem = review.items.find(
+      (candidate) => candidate.kind === "validation-gate" && candidate.validationGateId === proofGate.gateId
+    );
+
+    expect(route.route.status).toBe("refuted");
+    expect(validationItem).toMatchObject({
+      kind: "validation-gate",
+      priority: "critical",
+      command: expect.stringContaining("truth-harness claim add")
+    });
+    expect(validationItem?.command).toContain(JSON.stringify(claim));
+    expect(validationItem?.command).toContain(`--evidence "route:${route.route.routeId}@refuted"`);
+    expect(validationItem?.command).toContain("--trust refuted");
+    expect(validationItem?.command).not.toContain("truth-harness verify");
+
+    await writeClaimLedgerRecord({
+      rootPath: root,
+      title: plan.title,
+      statement: claim,
+      domain: "math",
+      trust: "refuted",
+      evidenceRefs: [{ kind: "route", ref: route.route.routeId, trust: "refuted" }],
+      now: "2026-06-23T00:05:00.000Z"
+    });
+    const refreshedReview = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 0,
+      now: "2026-06-23T00:06:00.000Z"
+    });
+
+    expect(refreshedReview.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "validation-gate",
+        validationGateId: proofGate.gateId
+      })
+    );
+    expect(refreshedReview.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "claim-blocker",
+        trust: "refuted"
+      })
+    );
+  });
+
   it("orders route obligations and blocked claims into a local work queue", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {

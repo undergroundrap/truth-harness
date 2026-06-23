@@ -2,7 +2,13 @@ import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
-import { createClaimReviewPacket, listClaimRecords, type ClaimLedgerDomain, type ClaimLedgerRecord } from "./claim-ledger.js";
+import {
+  createClaimReviewPacket,
+  isClaimLedgerDomain,
+  listClaimRecords,
+  type ClaimLedgerDomain,
+  type ClaimLedgerRecord
+} from "./claim-ledger.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import {
   inspectLeanProject,
@@ -271,7 +277,16 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const candidateItems = sortReviewItems([
     ...proofSafetyItems,
     ...sessions.flatMap((session) =>
-      linkedValidationGateItems(status.root, session, validationPlans, readyRoutesByStatementKey, proofChecks, smtChecks, snapshots)
+      linkedValidationGateItems(
+        status.root,
+        session,
+        validationPlans,
+        readyRoutesByStatementKey,
+        proofChecks,
+        smtChecks,
+        snapshots,
+        claimsByStatementKey
+      )
     ),
     ...activeRoutes.flatMap((route) =>
       routeReviewItems(status.root, route, claimsByRouteRef, claimsByStatementKey, leanInspection, proofChecks)
@@ -662,11 +677,12 @@ function linkedValidationGateItems(
   readyRoutesByStatementKey: Map<string, VerifierRoute>,
   proofChecks: ReviewLeanProofCheckSummary[],
   smtChecks: SmtCheckSummary[],
-  snapshots: WorkspaceSnapshotSummary[]
+  snapshots: WorkspaceSnapshotSummary[],
+  claimsByStatementKey: Map<string, ClaimLedgerRecord[]>
 ): WorkspaceReviewItem[] {
   const plans = linkedValidationPlansForSession(session, validationPlans);
   return plans.flatMap((plan) =>
-    openValidationGates(plan).map((gate) =>
+    openValidationGates(plan, claimsByStatementKey).map((gate) =>
       validationGateItem(workspacePath, session, plan, gate, readyRoutesByStatementKey, proofChecks, smtChecks, snapshots)
     )
   );
@@ -696,8 +712,21 @@ function linkedValidationPlansForSession(session: ResearchSession, validationPla
   });
 }
 
-function openValidationGates(plan: ValidationPlan): ValidationGate[] {
-  return plan.gates.filter((gate) => gate.status !== "satisfied" && gate.status !== "not-applicable");
+function openValidationGates(
+  plan: ValidationPlan,
+  claimsByStatementKey: Map<string, ClaimLedgerRecord[]>
+): ValidationGate[] {
+  return plan.gates.filter((gate) => {
+    if (gate.status === "satisfied" || gate.status === "not-applicable") {
+      return false;
+    }
+
+    if (gate.status === "blocked" && hasEquivalentClaimWithTrust(plan.claim, claimsByStatementKey, "refuted")) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 function validationGateItem(
@@ -1067,6 +1096,11 @@ function commandForValidationGate(
   gate: ValidationGate,
   candidateEvidenceRefs: ValidationEvidenceRef[] = []
 ): string {
+  const refutationCommand = commandForBlockedValidationGateRefutation(workspacePath, plan, gate);
+  if (refutationCommand) {
+    return refutationCommand;
+  }
+
   const candidate = candidateEvidenceRefs[0];
   if (candidate) {
     return validationGateAttachCommandForEvidence(plan.planId, gate.gateId, candidate);
@@ -1099,6 +1133,68 @@ function commandForValidationGate(
   }
 
   return `truth-harness research show ${quoteCommandArg(session.sessionId)} --workspace ${quoteCommandArg(workspacePath)} --json`;
+}
+
+function commandForBlockedValidationGateRefutation(
+  workspacePath: string,
+  plan: ValidationPlan,
+  gate: ValidationGate
+): string | undefined {
+  if (gate.kind !== "proof" || gate.status !== "blocked") {
+    return undefined;
+  }
+
+  const refutation = gate.evidenceRefs.find(
+    (ref) => ref.trust === "refuted" && (ref.kind === "route" || ref.kind === "receipt")
+  );
+  if (!refutation) {
+    return undefined;
+  }
+
+  const evidenceArg = formatClaimEvidenceArg(refutation);
+  const domain = claimDomainForValidationPlan(plan);
+  return [
+    "truth-harness claim add",
+    quoteCommandArg(plan.claim),
+    "--workspace",
+    quoteCommandArg(workspacePath),
+    "--title",
+    quoteCommandArg(plan.title),
+    "--domain",
+    quoteCommandArg(domain),
+    "--evidence",
+    quoteCommandArg(evidenceArg),
+    "--trust refuted",
+    "--json"
+  ].join(" ");
+}
+
+function claimDomainForValidationPlan(plan: ValidationPlan): ClaimLedgerDomain {
+  const domain = plan.domains[0];
+  if (domain && isClaimLedgerDomain(domain)) {
+    return domain;
+  }
+
+  switch (domain) {
+    case "source":
+    case "literature":
+      return "sources";
+    case "software":
+    case "engineering":
+      return "code";
+    case "biomedical":
+    case "clinical":
+      return "biology";
+    case "experiment":
+    case "simulation":
+      return "data";
+    default:
+      return "general";
+  }
+}
+
+function formatClaimEvidenceArg(ref: ValidationEvidenceRef): string {
+  return `${ref.kind}:${ref.ref}${ref.trust ? `@${ref.trust}` : ""}`;
 }
 
 function commandForAttachedValidationGate(gate: ValidationGate): string | undefined {
@@ -1724,7 +1820,12 @@ async function claimReviewItems(
   supersededClaimIds: Set<string>,
   readyRoutesByStatementKey: Map<string, VerifierRoute>
 ): Promise<WorkspaceReviewItem[]> {
-  if (claim.finalization.readyForNarrowClaim || claim.status !== "active" || supersededClaimIds.has(claim.claimId)) {
+  if (
+    claim.finalization.readyForNarrowClaim ||
+    claim.status !== "active" ||
+    claim.trust === "refuted" ||
+    supersededClaimIds.has(claim.claimId)
+  ) {
     return [];
   }
 
@@ -2009,6 +2110,16 @@ function firstEquivalentClaim(routeProblem: string, claimsByStatementKey: Map<st
   }
 
   return undefined;
+}
+
+function hasEquivalentClaimWithTrust(
+  statement: string,
+  claimsByStatementKey: Map<string, ClaimLedgerRecord[]>,
+  trust: TrustLabel
+): boolean {
+  return reviewStatementKeys(statement).some((key) =>
+    (claimsByStatementKey.get(key) ?? []).some((claim) => claim.trust === trust)
+  );
 }
 
 function reviewStatementKeys(value: string): string[] {
