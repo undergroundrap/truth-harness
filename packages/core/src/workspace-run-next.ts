@@ -2827,7 +2827,7 @@ function manualContainerGateBoundary(command: string): WorkspaceRunNextPlan["exe
 }
 
 function containsPlaceholderToken(value: string): boolean {
-  return value.includes("<") || value.includes(">");
+  return /<[^<>\s][^<>]*>/u.test(value);
 }
 
 function blockedPlaceholderCommand(command: string, kind: string): WorkspaceRunNextPlan["execution"] {

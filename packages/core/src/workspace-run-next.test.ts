@@ -907,6 +907,44 @@ describe("workspace run-next", () => {
     expect(refreshedReview.items.some((item) => item.claimId === claim.claim.claimId)).toBe(false);
   });
 
+  it("executes claim-add actions for mathematical inequalities without treating them as placeholders", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-23T00:00:00.000Z" });
+    const claim = "The integer constraints x > 0 and x < 3 have exactly the solutions x = 1 and x = 2.";
+    const route = await writeVerifierRoute({
+      rootPath: root,
+      problem: claim,
+      now: new Date("2026-06-23T00:01:00.000Z")
+    });
+    const review = minimalReview({
+      rootPath: root,
+      command: `truth-harness claim add ${JSON.stringify(claim)} --workspace ${root} --domain math --evidence route:${route.route.routeId} --trust exact-computed --json`,
+      routeId: route.route.routeId,
+      domain: "math"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-23T00:02:00.000Z"
+    });
+
+    expect(plan.status).toBe("executed");
+    expect(plan.execution).toMatchObject({
+      kind: "claim-add",
+      evidenceRef: expect.stringMatching(/^claim:claim_[a-f0-9]{16}$/u),
+      result: {
+        claim: {
+          statement: claim,
+          domain: "math",
+          trust: "exact-computed",
+          evidenceRefs: [expect.objectContaining({ kind: "route", ref: route.route.routeId })]
+        }
+      }
+    });
+  });
+
   it("blocks claim-add review actions that supersede a different claim", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
@@ -2271,7 +2309,7 @@ describe("workspace run-next", () => {
 function minimalReview(input: {
   rootPath: string;
   command: string;
-  claimId: string;
+  claimId?: string;
   kind?: WorkspaceReview["items"][number]["kind"];
   reportId?: string;
   validationPlanId?: string;
@@ -2332,7 +2370,7 @@ function minimalReview(input: {
       blockedActions: ["Do not use network access."],
       stopConditions: ["Stop when the verifier boundary is reached."],
       requiredArtifacts: [],
-      humanReviewRequiredFor: [`claim-blocker:${input.claimId}`],
+      humanReviewRequiredFor: input.claimId ? [`claim-blocker:${input.claimId}`] : [],
       agentPacket: "# Test autonomy contract"
     },
     items: [
@@ -2359,8 +2397,8 @@ function minimalReview(input: {
         domain: input.domain ?? "finance",
         trust: "unverified",
         source: {
-          label: "claim ledger",
-          ref: input.claimId
+          label: input.claimId ? "claim ledger" : "verifier route",
+          ref: input.claimId ?? input.routeId ?? "work_run_next_test"
         }
       }
     ],

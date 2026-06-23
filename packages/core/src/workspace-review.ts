@@ -1072,15 +1072,15 @@ function commandForValidationGate(
     return validationGateAttachCommandForEvidence(plan.planId, gate.gateId, candidate);
   }
 
-  const escalationCommand = commandForAttachedValidationGate(gate);
-  if (escalationCommand) {
-    return escalationCommand;
-  }
-
   if (gate.kind === "proof") {
-    const concreteVerifierCommand = concreteValidationGateProofCommand(plan);
+    const concreteVerifierCommand = concreteValidationGateProofCommand(plan, workspacePath);
     if (concreteVerifierCommand) {
       return concreteVerifierCommand;
+    }
+
+    const escalationCommand = commandForAttachedValidationGate(gate);
+    if (escalationCommand) {
+      return escalationCommand;
     }
 
     return `truth-harness verify ${quoteCommandArg(plan.claim)} --write --workspace ${quoteCommandArg(workspacePath)} --json`;
@@ -1122,9 +1122,14 @@ function commandForAttachedValidationGate(gate: ValidationGate): string | undefi
   return undefined;
 }
 
-function concreteValidationGateProofCommand(plan: ValidationPlan): string | undefined {
+function concreteValidationGateProofCommand(plan: ValidationPlan, workspacePath?: string): string | undefined {
   const claim = plan.claim.trim();
   const normalized = claim.toLowerCase().replace(/\s+/gu, " ");
+
+  if (isBoundedIntegerSolutionSetClaim(normalized)) {
+    const workspaceArgs = workspacePath ? ` --workspace ${quoteCommandArg(workspacePath)}` : "";
+    return `truth-harness verify ${quoteCommandArg(claim)} --write${workspaceArgs} --json`;
+  }
 
   if (normalized === "smt query bounded_integer_sat") {
     return "truth-harness smt check docs/examples/constraints.smt2 --query bounded_integer_sat --write";
@@ -1139,6 +1144,12 @@ function concreteValidationGateProofCommand(plan: ValidationPlan): string | unde
   }
 
   return undefined;
+}
+
+function isBoundedIntegerSolutionSetClaim(normalizedClaim: string): boolean {
+  return /^(?:the\s+)?integer constraints [a-z]\s*(?:<=|>=|<|>|=)\s*-?\d+\s+and\s+[a-z]\s*(?:<=|>=|<|>|=)\s*-?\d+\s+have exactly (?:the )?solutions? [a-z]\s*=\s*-?\d+(?:\s*(?:,|and)\s*[a-z]\s*=\s*-?\d+)*\.?$/iu.test(
+    normalizedClaim
+  );
 }
 
 function routeReviewItems(

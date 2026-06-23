@@ -90,6 +90,40 @@ describe("createReceipt", () => {
     expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
   });
 
+  it("checks bounded one-variable integer solution-set claims with exact enumeration", () => {
+    const receipt = createReceipt("The integer constraints x > 0 and x < 3 have exactly the solutions x = 1 and x = 2.");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("x=1, x=2");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-bounded-integer-enumerator");
+    expect(receipt.evidenceProfile.outputs).toEqual(expect.arrayContaining(["solutions=x=1, x=2", "checks=passed"]));
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("one-variable integer");
+    expect(receipt.graph.nodes.some((node) => node.kind === "computation" && node.trust === "exact-computed")).toBe(true);
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "bounded-integer-solution-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      verdict?: string;
+      searchRange?: { lower?: string; upper?: string };
+      computedSolutions?: string[];
+    };
+    expect(payload.verdict).toBe("accepted");
+    expect(payload.searchRange).toEqual({ lower: "1", upper: "2" });
+    expect(payload.computedSolutions).toEqual(["1", "2"]);
+  });
+
+  it("refutes wrong bounded one-variable integer solution-set claims", () => {
+    const receipt = createReceipt("The integer constraints x > 0 and x < 3 have exactly the solution x = 1.");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("computed x=1, x=2");
+    expect(receipt.summary).toContain("stated x=1");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["computed=x=1, x=2", "stated=x=1", "missing=x=2", "extra=none"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+  });
+
   it("marks MVP receipts as local-only with no external disclosure", () => {
     const receipt = createReceipt("compute 2 + 2");
 

@@ -41,6 +41,25 @@ interface ExactArithmeticEqualityClaim {
   rightSource: string;
 }
 
+type IntegerComparisonOperator = ">" | ">=" | "<" | "<=" | "=";
+
+interface IntegerInequality {
+  variable: string;
+  operator: IntegerComparisonOperator;
+  value: bigint;
+}
+
+interface BoundedIntegerSolutionClaim {
+  source: string;
+  variable: string;
+  constraints: IntegerInequality[];
+  statedSolutions: bigint[];
+  searchRange: {
+    lower: bigint;
+    upper: bigint;
+  };
+}
+
 export interface CreateReceiptOptions {
   maximaCommand?: string;
   casRunner?: CasBackendCommandRunner;
@@ -163,6 +182,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const boundedIntegerSolution = parseBoundedIntegerSolutionClaim(normalizedProblem);
+  if (boundedIntegerSolution) {
+    return completeBoundedIntegerSolutionReceipt({
+      problem,
+      normalizedProblem,
+      claim: boundedIntegerSolution,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const arithmeticSource = parseArithmeticPrompt(normalizedProblem);
   if (arithmeticSource) {
     return completeArithmeticReceipt({
@@ -187,7 +221,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -1347,6 +1381,161 @@ function completeExactArithmeticEqualityReceipt(args: {
   });
 }
 
+function completeBoundedIntegerSolutionReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: BoundedIntegerSolutionClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const computedSolutions = enumerateBoundedIntegerSolutions(args.claim);
+  const statedSolutions = uniqueSortedBigints(args.claim.statedSolutions);
+  const missingSolutions = computedSolutions.filter((solution) => !statedSolutions.includes(solution));
+  const extraSolutions = statedSolutions.filter((solution) => !computedSolutions.includes(solution));
+  const valid = missingSolutions.length === 0 && extraSolutions.length === 0;
+  const trust: TrustLabel = valid ? "exact-computed" : "refuted";
+  const renderedVariableSolutions = (solutions: bigint[]): string =>
+    solutions.length > 0 ? solutions.map((solution) => `${args.claim.variable}=${solution.toString()}`).join(", ") : "none";
+  const checks = [
+    {
+      id: "bounded-domain",
+      ok: true,
+      expected: "finite explicit integer bounds",
+      observed: `${args.claim.variable} in [${args.claim.searchRange.lower.toString()}, ${args.claim.searchRange.upper.toString()}]`
+    },
+    {
+      id: "solution-set",
+      ok: valid,
+      expected: renderedVariableSolutions(computedSolutions),
+      observed: renderedVariableSolutions(statedSolutions)
+    }
+  ];
+  const certificate = {
+    schemaVersion: "truth-harness.bounded-integer-solution.v0",
+    adapter: "local-bounded-integer-enumerator",
+    source: args.claim.source,
+    domain: "integers",
+    variable: args.claim.variable,
+    constraints: args.claim.constraints.map((constraint) => ({
+      variable: constraint.variable,
+      operator: constraint.operator,
+      value: constraint.value.toString()
+    })),
+    searchRange: {
+      lower: args.claim.searchRange.lower.toString(),
+      upper: args.claim.searchRange.upper.toString()
+    },
+    statedSolutions: statedSolutions.map((solution) => solution.toString()),
+    computedSolutions: computedSolutions.map((solution) => solution.toString()),
+    missingSolutions: missingSolutions.map((solution) => solution.toString()),
+    extraSolutions: extraSolutions.map((solution) => solution.toString()),
+    checks,
+    trace: computedSolutions.map((solution) => `${args.claim.variable}=${solution.toString()} satisfies every constraint.`),
+    verdict: valid ? "accepted" : "refuted"
+  };
+  const artifact = addArtifact(args.artifacts, {
+    kind: "bounded-integer-solution-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      domain: "integers",
+      variable: args.claim.variable,
+      constraints: certificate.constraints,
+      statedSolutions: certificate.statedSolutions
+    },
+    trust,
+    summary: valid
+      ? "Bounded one-variable integer solution-set claim matched exact enumeration."
+      : "Bounded one-variable integer solution-set claim disagreed with exact enumeration.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: "claims" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-bounded-integer-enumerator",
+      domain: "integers",
+      variable: args.claim.variable,
+      searchRange: certificate.searchRange,
+      exactArithmetic: true
+    },
+    trust,
+    summary: `Enumerated ${args.claim.variable} in [${args.claim.searchRange.lower.toString()}, ${args.claim.searchRange.upper.toString()}] with exact integer comparisons.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "checked-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: valid ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: valid
+      ? `Computed exact integer solutions: ${renderedVariableSolutions(computedSolutions)}.`
+      : `Computed ${renderedVariableSolutions(computedSolutions)}; stated ${renderedVariableSolutions(statedSolutions)}.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: valid ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: valid ? "info" : "warning",
+    message: valid
+      ? "The bounded integer solution-set claim was checked by exact finite enumeration. This earns exact-computed, not proved."
+      : "The bounded integer solution-set claim is refuted by exact finite enumeration of the stated integer domain."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: valid
+      ? `Exact bounded integer result: the solutions are ${renderedVariableSolutions(computedSolutions)}.`
+      : `Refuted bounded integer solution claim: computed ${renderedVariableSolutions(computedSolutions)}, stated ${renderedVariableSolutions(statedSolutions)}.`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-bounded-integer-enumerator",
+          role: "checker",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [
+        args.claim.source,
+        `${args.claim.variable} in [${args.claim.searchRange.lower.toString()}, ${args.claim.searchRange.upper.toString()}]`
+      ],
+      outputs: valid
+        ? [`solutions=${renderedVariableSolutions(computedSolutions)}`, "checks=passed"]
+        : [
+            `computed=${renderedVariableSolutions(computedSolutions)}`,
+            `stated=${renderedVariableSolutions(statedSolutions)}`,
+            `missing=${renderedVariableSolutions(missingSolutions)}`,
+            `extra=${renderedVariableSolutions(extraSolutions)}`
+          ],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only checks explicitly bounded, one-variable integer inequality solution-set claims.",
+        "Exact finite enumeration is deterministic computation, not an accepted proof-checker-backed theorem."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
+
 function completeArithmeticReceipt(args: {
   problem: string;
   normalizedProblem: string;
@@ -1533,6 +1722,166 @@ function parseUniversalParityClaim(problem: string): UniversalParityClaim | unde
     expressionSource: match[1].trim(),
     parity: match[2].toLowerCase() as "even" | "odd"
   };
+}
+
+function parseBoundedIntegerSolutionClaim(problem: string): BoundedIntegerSolutionClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/^(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/\.$/u, "");
+  const match = /^(?:the\s+)?integer constraints (?<constraints>.+?) have exactly (?:the )?solutions? (?<solutions>.+)$/iu.exec(candidate);
+  const constraintText = match?.groups?.constraints?.trim();
+  const solutionText = match?.groups?.solutions?.trim();
+  if (!constraintText || !solutionText) {
+    return undefined;
+  }
+
+  const constraints = parseIntegerInequalities(constraintText);
+  if (!constraints || constraints.length === 0) {
+    return undefined;
+  }
+
+  const variable = constraints[0]?.variable;
+  if (!variable || constraints.some((constraint) => constraint.variable !== variable)) {
+    return undefined;
+  }
+
+  const statedSolutions = parseIntegerSolutionList(solutionText, variable);
+  if (!statedSolutions || statedSolutions.length === 0) {
+    return undefined;
+  }
+
+  const searchRange = boundedIntegerSearchRange(constraints);
+  if (!searchRange) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    variable,
+    constraints,
+    statedSolutions,
+    searchRange
+  };
+}
+
+function parseIntegerInequalities(source: string): IntegerInequality[] | undefined {
+  const parts = source
+    .split(/\s+(?:and)\s+|,/iu)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const constraints: IntegerInequality[] = [];
+
+  for (const part of parts) {
+    const match = /^([a-z])\s*(<=|>=|<|>|=)\s*(-?\d+)$/iu.exec(part);
+    if (!match) {
+      return undefined;
+    }
+    constraints.push({
+      variable: match[1].toLowerCase(),
+      operator: match[2] as IntegerComparisonOperator,
+      value: BigInt(match[3])
+    });
+  }
+
+  return constraints;
+}
+
+function parseIntegerSolutionList(source: string, variable: string): bigint[] | undefined {
+  const parts = source
+    .replace(/\.$/u, "")
+    .split(/\s*(?:,|and)\s*/iu)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const solutions: bigint[] = [];
+
+  for (const part of parts) {
+    const match = /^([a-z])\s*=\s*(-?\d+)$/iu.exec(part);
+    if (!match || match[1].toLowerCase() !== variable) {
+      return undefined;
+    }
+    solutions.push(BigInt(match[2]));
+  }
+
+  return solutions;
+}
+
+function boundedIntegerSearchRange(
+  constraints: IntegerInequality[]
+): BoundedIntegerSolutionClaim["searchRange"] | undefined {
+  let lower: bigint | undefined;
+  let upper: bigint | undefined;
+
+  for (const constraint of constraints) {
+    if (constraint.operator === ">") {
+      lower = maxBigint(lower, constraint.value + 1n);
+      continue;
+    }
+    if (constraint.operator === ">=") {
+      lower = maxBigint(lower, constraint.value);
+      continue;
+    }
+    if (constraint.operator === "<") {
+      upper = minBigint(upper, constraint.value - 1n);
+      continue;
+    }
+    if (constraint.operator === "<=") {
+      upper = minBigint(upper, constraint.value);
+      continue;
+    }
+    lower = maxBigint(lower, constraint.value);
+    upper = minBigint(upper, constraint.value);
+  }
+
+  if (lower === undefined || upper === undefined) {
+    return undefined;
+  }
+
+  if (upper - lower > 10000n) {
+    return undefined;
+  }
+
+  return { lower, upper };
+}
+
+function enumerateBoundedIntegerSolutions(claim: BoundedIntegerSolutionClaim): bigint[] {
+  const solutions: bigint[] = [];
+  for (let value = claim.searchRange.lower; value <= claim.searchRange.upper; value += 1n) {
+    if (claim.constraints.every((constraint) => integerConstraintSatisfied(value, constraint))) {
+      solutions.push(value);
+    }
+  }
+  return solutions;
+}
+
+function integerConstraintSatisfied(value: bigint, constraint: IntegerInequality): boolean {
+  switch (constraint.operator) {
+    case ">":
+      return value > constraint.value;
+    case ">=":
+      return value >= constraint.value;
+    case "<":
+      return value < constraint.value;
+    case "<=":
+      return value <= constraint.value;
+    case "=":
+      return value === constraint.value;
+  }
+}
+
+function uniqueSortedBigints(values: bigint[]): bigint[] {
+  return Array.from(new Set(values.map((value) => value.toString())))
+    .map((value) => BigInt(value))
+    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+}
+
+function maxBigint(current: bigint | undefined, candidate: bigint): bigint {
+  return current === undefined || candidate > current ? candidate : current;
+}
+
+function minBigint(current: bigint | undefined, candidate: bigint): bigint {
+  return current === undefined || candidate < current ? candidate : current;
 }
 
 function parseArithmeticPrompt(problem: string): string | undefined {
