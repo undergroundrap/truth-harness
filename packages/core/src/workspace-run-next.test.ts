@@ -1459,6 +1459,69 @@ describe("workspace run-next", () => {
     });
   });
 
+  it("preserves validation gate targets when executing adapted credibility actions", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-23T00:00:00.000Z" });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      title: "False parity trap",
+      objective: "Refute a fluent but false universal parity claim with local route evidence.",
+      domains: ["math"],
+      claims: ["For every integer n, n^2 + n + 1 is even."],
+      createValidationPlan: true,
+      validationTitle: "False parity validation gates",
+      validationClaim: "For every integer n, n^2 + n + 1 is even.",
+      now: "2026-06-23T00:01:00.000Z"
+    });
+    const validationPlan = harness.validationPlan?.plan;
+    const proofGate = validationPlan?.gates.find((gate) => gate.kind === "proof");
+    if (!validationPlan || !proofGate) {
+      throw new Error("Expected a linked validation proof gate.");
+    }
+    const pack = await createCredibilityPack({
+      rootPath: root,
+      now: "2026-06-23T00:02:00.000Z",
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxReports: 0,
+      timeoutMs: 50
+    });
+    const review = createWorkspaceReviewFromCredibilityPack({ rootPath: root, pack });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-23T00:03:00.000Z"
+    });
+    const plans = await listValidationPlans(root);
+    const updatedPlan = plans.find((candidate) => candidate.planId === validationPlan.planId);
+    const updatedGate = updatedPlan?.gates.find((gate) => gate.gateId === proofGate.gateId);
+
+    expect(plan.item).toMatchObject({
+      kind: "validation-gate",
+      sessionId: harness.session.sessionId,
+      validationPlanId: validationPlan.planId,
+      validationGateId: proofGate.gateId,
+      validationGateKind: "proof",
+      command: expect.stringContaining("truth-harness verify")
+    });
+    expect(plan.execution).toMatchObject({
+      status: "executed",
+      kind: "verifier-route",
+      attached: true,
+      result: {
+        validationGate: {
+          planId: validationPlan.planId,
+          gateId: proofGate.gateId
+        }
+      }
+    });
+    expect(updatedGate).toMatchObject({
+      evidenceRefs: [expect.objectContaining({ kind: "route" })]
+    });
+  });
+
   it("does not select passive-only review blockers as run-next targets", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });

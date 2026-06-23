@@ -577,23 +577,53 @@ export function createWorkspaceReviewFromCredibilityPack(input: {
       humanReviewRequiredFor: actions.map((action) => action.actionId),
       agentPacket: renderCredibilityActionAgentPacket(input.pack)
     },
-    items: actions.map((action) => ({
-      itemId: action.actionId,
-      kind: "credibility-action",
-      priority: action.priority,
-      title: action.title,
-      summary: action.detail,
-      command: action.command,
-      acceptanceCriteria: action.closes.map((target) => `Close ${target}.`),
-      agentPacket: `${action.title}\n\n${action.detail}\n\nCommand: ${action.command}`,
-      source: {
-        label: `credibility ${action.category}`,
-        ref: `${input.pack.packId}:${action.source.kind}:${action.source.ref}`
-      }
-    })),
+    items: actions.map((action) => {
+      const validationTarget = credibilityActionValidationTarget(action);
+      return {
+        itemId: action.actionId,
+        kind: validationTarget ? "validation-gate" : "credibility-action",
+        priority: action.priority,
+        title: action.title,
+        summary: action.detail,
+        command: action.command,
+        ...validationTarget,
+        acceptanceCriteria: action.closes.map((target) => `Close ${target}.`),
+        agentPacket: `${action.title}\n\n${action.detail}\n\nCommand: ${action.command}`,
+        source: {
+          label: `credibility ${action.category}`,
+          ref: `${input.pack.packId}:${action.source.kind}:${action.source.ref}`
+        }
+      };
+    }),
     warnings: input.pack.warnings,
     markdown: renderCredibilityActionAgentPacket(input.pack)
   };
+}
+
+function credibilityActionValidationTarget(action: CredibilityPack["reviewerActionPlan"]["actions"][number]): Pick<
+  WorkspaceReviewItem,
+  "sessionId" | "validationPlanId" | "validationGateId" | "validationGateKind"
+> | undefined {
+  if (action.source.kind !== "validation-gate") {
+    return undefined;
+  }
+  const [sessionId, validationPlanId, validationGateId] = action.source.ref.split(":");
+  if (!sessionId || !validationPlanId || !validationGateId) {
+    return undefined;
+  }
+  return {
+    sessionId,
+    validationPlanId,
+    validationGateId,
+    validationGateKind: validationGateKindFromCredibilityAction(action)
+  };
+}
+
+function validationGateKindFromCredibilityAction(
+  action: CredibilityPack["reviewerActionPlan"]["actions"][number]
+): string | undefined {
+  const match = /^Validation gate:\s*(?<kind>[A-Za-z0-9_-]+)/u.exec(action.title);
+  return match?.groups?.kind;
 }
 
 export async function writeWorkspaceRunNextPlan(input: {
