@@ -1004,6 +1004,10 @@ describe("workspace run-next", () => {
     });
     expect(plan.execution.summary).toContain("Dry-run preflight");
     expect(plan.execution.summary).toContain("approving the container boundary");
+    expect(plan.rationale).toMatchObject({
+      executionBoundary: expect.stringContaining("Manual container gate")
+    });
+    expect(plan.rationale?.executionBoundary).toContain("will not execute npm, Docker, or shell strings");
   });
 
   it("blocks unavailable Lean proof backends before writing backend-unavailable retry noise", async () => {

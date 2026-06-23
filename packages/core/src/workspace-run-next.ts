@@ -1168,12 +1168,20 @@ function workspaceRunNextRationaleFor(plan: WorkspaceRunNextPlan): WorkspaceRunN
     target: workspaceRunNextTarget(item),
     source: item ? `${item.kind} / ${item.priority}` : "workspace-review",
     ...(candidateEvidenceRef ? { candidateEvidenceRef } : {}),
-    executionBoundary: plan.dryRun
-      ? "Dry-run only; execute through CLI/MCP with explicit local execution approval."
-      : "Executed through the bounded in-process run-next planner.",
+    executionBoundary: workspaceRunNextExecutionBoundary(plan),
     ...(plan.stopConditions[0] ? { firstStopCondition: plan.stopConditions[0] } : {}),
     ...(plan.warnings[0] ? { firstWarning: plan.warnings[0] } : {})
   };
+}
+
+function workspaceRunNextExecutionBoundary(plan: WorkspaceRunNextPlan): string {
+  if (plan.execution.kind === "manual-container-gate") {
+    return "Manual container gate; run-next will not execute npm, Docker, or shell strings. Run the command only through an approved container workflow.";
+  }
+  if (plan.dryRun) {
+    return "Dry-run only; execute through CLI/MCP with explicit local execution approval.";
+  }
+  return "Executed through the bounded in-process run-next planner.";
 }
 
 function workspaceRunNextTarget(item: WorkspaceRunNextPlan["item"] | undefined): string {
