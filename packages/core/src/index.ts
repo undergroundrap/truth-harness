@@ -263,6 +263,7 @@ export {
   PROFESSOR_CHALLENGE_CASE_IDS,
   listHardMathSeedWorkspaces,
   readLatestHardMathSeedWorkspace,
+  renderHardMathSeedHandoffMarkdown,
   writeHardMathSeedWorkspace
 } from "./hard-math-seed.js";
 export {

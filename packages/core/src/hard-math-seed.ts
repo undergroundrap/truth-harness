@@ -427,6 +427,103 @@ function renderHardMathSeedMarkdown(seed: HardMathSeedResult): string {
   return `${lines.join("\n")}\n`;
 }
 
+export function renderHardMathSeedHandoffMarkdown(seed: HardMathSeedResult): string {
+  const runNextWrite = seed.runNext && "jsonPath" in seed.runNext ? seed.runNext : undefined;
+  const runNextPlan = seed.runNext?.plan;
+  const firstGate = runNextPlan?.rationale?.target ?? runNextPlan?.item?.title ?? "No open verifier gate selected yet.";
+  const itemSource = [runNextPlan?.item?.kind, runNextPlan?.item?.priority].filter(Boolean).join(" / ");
+  const source = (runNextPlan?.rationale?.source ?? itemSource) || "workspace-review";
+  const evidenceNeeded =
+    runNextPlan?.rationale?.candidateEvidenceRef ??
+    runNextPlan?.execution?.evidenceRef ??
+    "No evidence artifact attached yet.";
+  const stopRule =
+    runNextPlan?.rationale?.firstStopCondition ??
+    runNextPlan?.stopConditions?.[0] ??
+    "Stop if the required verifier is unavailable, disagrees, or returns malformed evidence.";
+  const nextCommand = runNextPlan?.item?.command ?? runNextPlan?.execution?.command ?? `truth-harness workspace run-next ${quoteCommandArg(seed.workspacePath)} --json`;
+  const restoreCommand = `truth-harness workspace hard-math-seeds ${quoteCommandArg(seed.workspacePath)} --preset ${seed.preset} --latest --handoff`;
+  const title = seed.preset === "professor-challenge"
+    ? "Truth Harness Professor Challenge Handoff"
+    : "Truth Harness Hard-Math Seed Handoff";
+  const lines = [
+    `# ${title}`,
+    "",
+    `Seed: ${seed.seedId}`,
+    `Preset: ${seed.preset}`,
+    `Created: ${seed.createdAt}`,
+    `Workspace: ${seed.workspacePath}`,
+    "Local only: yes",
+    "Network access: none",
+    "",
+    "This is a local handoff packet, not proof. It tells the next human or agent which verifier gate to close first and which local artifacts must stay citable.",
+    "",
+    "## First Gate",
+    "",
+    `- Target: ${firstGate}`,
+    `- Source: ${source}`,
+    `- Evidence needed: ${evidenceNeeded}`,
+    `- Stop rule: ${stopRule}`,
+    "- Command:",
+    "```bash",
+    nextCommand,
+    "```",
+    "",
+    "## Local Artifacts",
+    "",
+    `- Seed JSON: ${seed.paths.json}`,
+    `- Seed Markdown: ${seed.paths.markdown}`,
+    `- Run-next JSON: ${runNextWrite?.jsonPath ?? "not written"}`,
+    `- Run-next Markdown: ${runNextWrite?.markdownPath ?? "not written"}`,
+    "",
+    "## Seeded Cases",
+    ""
+  ];
+
+  for (const seedCase of seed.cases) {
+    const gateText = typeof seedCase.openBlockingGates === "number"
+      ? `${seedCase.openBlockingGates} open blocking gate${seedCase.openBlockingGates === 1 ? "" : "s"}`
+      : "open gate count unknown";
+    lines.push(
+      `- ${seedCase.title}`,
+      `  - Case: ${seedCase.caseId}`,
+      `  - Session: ${seedCase.sessionId}`,
+      `  - Validation plan: ${seedCase.validationPlanId ?? "not written"}`,
+      `  - Readiness: ${seedCase.validationReadiness ?? "unknown"}; ${gateText}`
+    );
+  }
+
+  lines.push(
+    "",
+    "## Commands",
+    "",
+    "Restore this handoff:",
+    "",
+    "```bash",
+    restoreCommand,
+    "```",
+    "",
+    "Run the next verifier action:",
+    "",
+    "```bash",
+    nextCommand,
+    "```",
+    "",
+    "## Boundary",
+    "",
+    "- Do not label any seeded claim proved from this packet.",
+    "- Close gates only with scoped verifier evidence: exact route receipts, independent CAS/SMT records, or accepted Lean proof-check records.",
+    "- If the workspace drifted, rerun `truth-harness workspace run-next <workspace> --json` before handing work to an autonomous agent."
+  );
+
+  if (seed.warnings.length > 0) {
+    lines.push("", "## Warnings", "");
+    seed.warnings.forEach((warning) => lines.push(`- ${warning}`));
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 async function readHardMathSeedFromPath(path: string): Promise<HardMathSeedResult | undefined> {
   let parsed: unknown;
   try {
@@ -457,4 +554,8 @@ function isHardMathSeedResult(value: unknown): value is HardMathSeedResult {
 
 function toPortablePath(path: string): string {
   return path.replace(/\\/g, "/");
+}
+
+function quoteCommandArg(value: string): string {
+  return /^[A-Za-z0-9_./:=@+-]+$/u.test(value) ? value : `"${value.replace(/"/gu, "\\\"")}"`;
 }

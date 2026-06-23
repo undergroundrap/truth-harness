@@ -89,6 +89,7 @@ Use the professor challenge when a human reviewer or autonomous agent needs a co
 truth-harness workspace seed-professor-challenge .
 truth-harness workspace seed-hard-math . --preset professor-challenge
 truth-harness workspace hard-math-seeds . --preset professor-challenge --latest
+truth-harness workspace hard-math-seeds . --preset professor-challenge --latest --handoff
 ```
 
 The preset writes five local research sessions and linked validation plans:
@@ -99,7 +100,7 @@ The preset writes five local research sessions and linked validation plans:
 - a bounded integer constraint that needs SMT evidence
 - a Lean fixture boundary that reinforces that `proved` requires an accepted proof checker
 
-This preset is not a benchmark score and does not prove that Truth Harness can solve frontier math. It is a reusable professor/reviewer rehearsal: agents should reopen the latest persisted seed packet before reseeding, then run `workspace run-next` on the seeded workspace and close the highest-value open gate with concrete local evidence before making stronger claims.
+This preset is not a benchmark score and does not prove that Truth Harness can solve frontier math. It is a reusable professor/reviewer rehearsal: agents should reopen the latest persisted seed packet before reseeding, print the `--handoff` packet or call MCP `truth_harness_workspace_hard_math_seed_list` with `handoff: true` when handing work to another agent or reviewer, then run `workspace run-next` on the seeded workspace and close the highest-value open gate with concrete local evidence before making stronger claims.
 
 ## Readiness Stages
 

@@ -1237,6 +1237,15 @@ describe("benchmark CLI", () => {
       seed?: { seedId: string; preset: string; paths: { json: string } };
     };
     const listedHuman = await runCli(["workspace", "hard-math-seeds", root, "--preset", "professor-challenge", "--latest"]);
+    const handoff = await runCli(["workspace", "hard-math-seeds", root, "--preset", "professor-challenge", "--handoff"]);
+    const handoffJson = JSON.parse(
+      (await runCli(["workspace", "hard-math-seeds", root, "--preset", "professor-challenge", "--handoff", "--json"])).stdout
+    ) as {
+      total: number;
+      latest: boolean;
+      handoff: boolean;
+      handoffMarkdown: string;
+    };
 
     expect(result.exitCode).toBe(0);
     expect(json).toMatchObject({
@@ -1258,6 +1267,18 @@ describe("benchmark CLI", () => {
     });
     expect(listedHuman.stdout).toContain("Truth Harness hard-math seeds: 1 latest");
     expect(listedHuman.stdout).toContain(json.seedId);
+    expect(handoff.exitCode).toBe(0);
+    expect(handoff.stdout).toContain("Truth Harness Professor Challenge Handoff");
+    expect(handoff.stdout).toContain("## First Gate");
+    expect(handoff.stdout).toContain("## Local Artifacts");
+    expect(handoff.stdout).toContain(json.paths.json);
+    expect(handoff.stdout).toContain("Do not label any seeded claim proved from this packet.");
+    expect(handoffJson).toMatchObject({
+      total: 1,
+      latest: true,
+      handoff: true,
+      handoffMarkdown: expect.stringContaining("Truth Harness Professor Challenge Handoff")
+    });
     expect(json.cases.map((seedCase) => seedCase.caseId)).toEqual([
       "exact-fraction-lemma",
       "false-parity-trap",

@@ -1484,7 +1484,8 @@ describe("MCP tool handlers", () => {
     });
     const latestChallenge = await handleTruthHarnessWorkspaceHardMathSeedList({
       preset: "professor-challenge",
-      latest: true
+      latest: true,
+      handoff: true
     });
     expect(challenge).toMatchObject({
       schemaVersion: "truth-harness.hard-math-seed.v0",
@@ -1494,6 +1495,8 @@ describe("MCP tool handlers", () => {
       total: 1,
       preset: "professor-challenge",
       latest: true,
+      handoff: true,
+      handoffMarkdown: expect.stringContaining("Truth Harness Professor Challenge Handoff"),
       seed: {
         seedId: challenge.seedId,
         paths: {
@@ -1506,6 +1509,8 @@ describe("MCP tool handlers", () => {
         })
       ]
     });
+    expect(latestChallenge.handoffMarkdown).toContain("## First Gate");
+    expect(latestChallenge.handoffMarkdown).toContain(challenge.paths.json);
     expect(challenge.cases.map((seedCase) => seedCase.caseId)).toEqual([
       "exact-fraction-lemma",
       "false-parity-trap",

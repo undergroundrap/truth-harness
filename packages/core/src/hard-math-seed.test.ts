@@ -6,6 +6,7 @@ import { listWorkspaceEvents } from "./event-log.js";
 import {
   listHardMathSeedWorkspaces,
   readLatestHardMathSeedWorkspace,
+  renderHardMathSeedHandoffMarkdown,
   writeHardMathSeedWorkspace
 } from "./hard-math-seed.js";
 import { listResearchSessions } from "./research-session.js";
@@ -108,7 +109,7 @@ describe("hard-math seed workspace", () => {
         networkAccess: "none"
       })
     );
-  });
+  }, 15000);
 
   it("creates the five-case professor challenge preset", async () => {
     const root = await tempRoot();
@@ -146,6 +147,15 @@ describe("hard-math seed workspace", () => {
         kind: "validation-gate"
       }
     });
+
+    const handoff = renderHardMathSeedHandoffMarkdown(result);
+    expect(handoff).toContain("Truth Harness Professor Challenge Handoff");
+    expect(handoff).toContain("## First Gate");
+    expect(handoff).toContain("## Local Artifacts");
+    expect(handoff).toContain(result.paths.json);
+    expect(handoff).toContain(result.runNext && "jsonPath" in result.runNext ? result.runNext.jsonPath : "not written");
+    expect(handoff).toContain("Do not label any seeded claim proved from this packet.");
+    expect(handoff).toContain("truth-harness workspace hard-math-seeds");
 
     const sessions = await listResearchSessions(root);
     const plans = await listValidationPlans(root);

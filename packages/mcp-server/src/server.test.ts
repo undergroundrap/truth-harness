@@ -846,6 +846,20 @@ describe("Truth Harness MCP server", () => {
       expect(hardMathSeedText).toContain("\"schemaVersion\": \"truth-harness.workspace-run-next.v0\"");
       expect(hardMathSeedText).toContain("truth-harness verify");
 
+      const hardMathSeedHandoffResult = await client.callTool({
+        name: "truth_harness_workspace_hard_math_seed_list",
+        arguments: {
+          latest: true,
+          handoff: true
+        }
+      });
+      const hardMathSeedHandoffText = firstText(hardMathSeedHandoffResult.content);
+      expect(hardMathSeedHandoffResult.isError).not.toBe(true);
+      expect(hardMathSeedHandoffText).toContain("\"handoff\": true");
+      expect(hardMathSeedHandoffText).toContain("Truth Harness Hard-Math Seed Handoff");
+      expect(hardMathSeedHandoffText).toContain("## First Gate");
+      expect(hardMathSeedHandoffText).toContain("truth-harness verify");
+
       const workspaceGraphResult = await client.callTool({
         name: "truth_harness_workspace_graph",
         arguments: {}

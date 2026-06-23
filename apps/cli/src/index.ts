@@ -118,6 +118,7 @@ import {
   readWorkspaceReview,
   readWorkspaceRevision,
   readVerifierRoute,
+  renderHardMathSeedHandoffMarkdown,
   renderReceipt,
   renderGraphvizVisualArtifact,
   renderPlotlyVisualArtifact,
@@ -3846,9 +3847,35 @@ workspace
   .argument("[path]", "Project root path", ".")
   .option("--preset <preset>", "Filter by seed preset: all or professor-challenge")
   .option("--latest", "Show only the newest matching seed packet")
+  .option("--handoff", "Print a Markdown handoff packet for the newest matching seed")
   .option("--json", "Print the full hard-math seed list JSON")
-  .action(async (path: string, options: { preset?: string; latest?: boolean; json?: boolean }) => {
+  .action(async (path: string, options: { preset?: string; latest?: boolean; handoff?: boolean; json?: boolean }) => {
     const preset = options.preset ? parseHardMathSeedPreset(options.preset) : undefined;
+    if (options.handoff) {
+      const seed = await readLatestHardMathSeedWorkspace(path, { preset });
+      const handoffMarkdown = seed ? renderHardMathSeedHandoffMarkdown(seed) : undefined;
+      if (options.json) {
+        printJson({
+          total: seed ? 1 : 0,
+          latest: true,
+          handoff: true,
+          ...(preset ? { preset } : {}),
+          seed,
+          handoffMarkdown
+        });
+        return;
+      }
+
+      if (!seed || !handoffMarkdown) {
+        console.log("Truth Harness hard-math seed handoff");
+        console.log("No matching hard-math seed packet was found.");
+        return;
+      }
+
+      console.log(handoffMarkdown.trimEnd());
+      return;
+    }
+
     if (options.latest) {
       const seed = await readLatestHardMathSeedWorkspace(path, { preset });
       if (options.json) {

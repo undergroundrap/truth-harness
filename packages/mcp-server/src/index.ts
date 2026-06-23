@@ -1559,15 +1559,19 @@ export function createTruthHarnessMcpServer(): McpServer {
           .enum(["all", "professor-challenge"])
           .optional()
           .describe("Optional seed preset filter."),
-        latest: z.boolean().optional().describe("When true, return only the newest matching seed packet.")
+        latest: z.boolean().optional().describe("When true, return only the newest matching seed packet."),
+        handoff: z
+          .boolean()
+          .optional()
+          .describe("When true, return the newest matching seed plus a Markdown reviewer/agent handoff packet.")
       },
       annotations: {
         readOnlyHint: true,
         openWorldHint: false
       }
     },
-    async ({ workspacePath, preset, latest }) =>
-      toolJson(await handleTruthHarnessWorkspaceHardMathSeedList({ workspacePath, preset, latest }))
+    async ({ workspacePath, preset, latest, handoff }) =>
+      toolJson(await handleTruthHarnessWorkspaceHardMathSeedList({ workspacePath, preset, latest, handoff }))
   );
 
   server.registerTool(

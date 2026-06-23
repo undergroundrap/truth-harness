@@ -90,6 +90,7 @@ import {
   readWorkspaceReview,
   readVerifierRoute,
   renderEvidenceAuditMarkdown,
+  renderHardMathSeedHandoffMarkdown,
   renderGraphvizVisualArtifact,
   renderPlotlyVisualArtifact,
   sealVaultFile,
@@ -689,6 +690,7 @@ export interface TruthHarnessWorkspaceHardMathSeedListInput {
   workspacePath?: string;
   preset?: HardMathSeedPreset;
   latest?: boolean;
+  handoff?: boolean;
 }
 
 export interface TruthHarnessWorkspaceRunNextInput {
@@ -1962,16 +1964,20 @@ export async function handleTruthHarnessWorkspaceHardMathSeedList(input: TruthHa
   total: number;
   preset?: HardMathSeedPreset;
   latest: boolean;
+  handoff?: true;
+  handoffMarkdown?: string;
   seed?: HardMathSeedResult;
   seeds: HardMathSeedResult[];
 }> {
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
-  if (input.latest) {
+  if (input.latest || input.handoff) {
     const seed = await readLatestHardMathSeedWorkspace(rootPath, { preset: input.preset });
     return {
       total: seed ? 1 : 0,
       ...(input.preset ? { preset: input.preset } : {}),
       latest: true,
+      ...(input.handoff ? { handoff: true as const } : {}),
+      ...(input.handoff && seed ? { handoffMarkdown: renderHardMathSeedHandoffMarkdown(seed) } : {}),
       ...(seed ? { seed, seeds: [seed] } : { seeds: [] })
     };
   }
