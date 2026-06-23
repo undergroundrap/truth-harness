@@ -615,6 +615,59 @@ describe("workspace review", () => {
     expect(review.autonomy.nextCommand).toBe(validationItem?.command);
   });
 
+  it("prefers the concrete parity verifier over stale proof escalation", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-23T00:00:00.000Z"
+    });
+    const claim = "For every integer n, n^2 + n is even.";
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: claim,
+      domains: ["math"],
+      claims: [claim],
+      now: "2026-06-23T00:01:00.000Z"
+    });
+    const plan = harness.validationPlan?.plan;
+    const proofGate = plan?.gates.find((gate) => gate.kind === "proof");
+    if (!plan || !proofGate || !harness.validationPlan) {
+      throw new Error("Expected a linked proof validation gate.");
+    }
+
+    const storedPlan = JSON.parse(await readFile(harness.validationPlan.jsonPath, "utf8")) as {
+      gates: Array<Record<string, unknown>>;
+    };
+    storedPlan.gates = storedPlan.gates.map((gate) =>
+      gate.gateId === proofGate.gateId
+        ? {
+            ...gate,
+            status: "in-progress",
+            evidenceRefs: [{ kind: "route", ref: "route_stale_unverified", trust: "unverified" }],
+            nextChecks: ["Run Lean proof checker in Docker before strengthening this claim."]
+          }
+        : gate
+    );
+    await writeFile(harness.validationPlan.jsonPath, JSON.stringify(storedPlan, null, 2), "utf8");
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 0,
+      maxClaims: 0,
+      now: "2026-06-23T00:02:00.000Z"
+    });
+    const validationItem = review.items.find(
+      (candidate) => candidate.kind === "validation-gate" && candidate.validationGateId === proofGate.gateId
+    );
+
+    expect(validationItem).toMatchObject({
+      kind: "validation-gate",
+      command: `truth-harness verify ${JSON.stringify(claim)} --write --workspace ${root} --json`
+    });
+    expect(validationItem?.command).not.toBe("docker compose run --rm lean-proof");
+    expect(validationItem?.command).not.toContain("npm run docker");
+    expect(review.autonomy.nextCommand).toBe(validationItem?.command);
+  });
+
   it("orders route obligations and blocked claims into a local work queue", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {

@@ -1126,7 +1126,7 @@ function concreteValidationGateProofCommand(plan: ValidationPlan, workspacePath?
   const claim = plan.claim.trim();
   const normalized = claim.toLowerCase().replace(/\s+/gu, " ");
 
-  if (isBoundedIntegerSolutionSetClaim(normalized)) {
+  if (isBoundedIntegerSolutionSetClaim(normalized) || isUniversalParityClaim(normalized)) {
     const workspaceArgs = workspacePath ? ` --workspace ${quoteCommandArg(workspacePath)}` : "";
     return `truth-harness verify ${quoteCommandArg(claim)} --write${workspaceArgs} --json`;
   }
@@ -1150,6 +1150,10 @@ function isBoundedIntegerSolutionSetClaim(normalizedClaim: string): boolean {
   return /^(?:the\s+)?integer constraints [a-z]\s*(?:<=|>=|<|>|=)\s*-?\d+\s+and\s+[a-z]\s*(?:<=|>=|<|>|=)\s*-?\d+\s+have exactly (?:the )?solutions? [a-z]\s*=\s*-?\d+(?:\s*(?:,|and)\s*[a-z]\s*=\s*-?\d+)*\.?$/iu.test(
     normalizedClaim
   );
+}
+
+function isUniversalParityClaim(normalizedClaim: string): boolean {
+  return /^for (?:all|every) integers? n,?\s+.+\s+is\s+(?:even|odd)\.?$/iu.test(normalizedClaim);
 }
 
 function routeReviewItems(

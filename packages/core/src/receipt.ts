@@ -1713,7 +1713,7 @@ function addArtifact(artifacts: Artifact[], input: Omit<Artifact, "id">): Artifa
 }
 
 function parseUniversalParityClaim(problem: string): UniversalParityClaim | undefined {
-  const match = /^for all (?:integer|integers) n,?\s+(.+?)\s+is\s+(even|odd)\.?$/i.exec(problem);
+  const match = /^for (?:all integers?|every integer) n,?\s+(.+?)\s+is\s+(even|odd)\.?$/i.exec(problem);
   if (!match) {
     return undefined;
   }

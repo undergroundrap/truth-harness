@@ -161,6 +161,16 @@ describe("createReceipt", () => {
     expect(receipt.findings[0]?.message).toContain("reserve `proved`");
   });
 
+  it("checks every-integer parity wording with the same modular certificate", () => {
+    const receipt = createReceipt("For every integer n, n^2 + n is even.");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("Exact modular parity check");
+    expect(receipt.evidenceProfile.kind).toBe("universal-parity");
+    expect(receipt.evidenceProfile.proofCheckerBacked).toBe(false);
+    expect(receipt.artifacts.some((artifact) => artifact.kind === "modular-parity-check-certificate")).toBe(true);
+  });
+
   it("does not pretend unsupported finite search is a proof", () => {
     const receipt = createReceipt("for all integers n, 2*(n/1) is even");
 
