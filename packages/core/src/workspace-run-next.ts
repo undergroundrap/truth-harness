@@ -19,7 +19,11 @@ import {
   type ClaimLedgerStatus
 } from "./claim-ledger.js";
 import type { CredibilityPack } from "./credibility-pack.js";
-import { writeSymbolicCasCheckRecord } from "./cas-backend.js";
+import {
+  getCasBackendStatus,
+  writeSymbolicCasCheckRecord,
+  type SymbolicCasBackendId
+} from "./cas-backend.js";
 import { createEnginePlan, type CreateEnginePlanOptions, type EnginePlan } from "./engine-plan.js";
 import { writeEngineVerificationRun, type EngineVerificationRequirements } from "./engine-verification.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
@@ -2579,15 +2583,42 @@ async function executeWorkspaceRunNextItem(
           summary: "CAS check execution requires --operation, --expression, and --result."
         };
       }
+      const backend = parseSymbolicCasBackendOption(options.backend) ?? "maxima";
+      const maximaCommand = typeof options["maxima-command"] === "string" ? options["maxima-command"] : undefined;
+      const sageCommand = typeof options["sage-command"] === "string" ? options["sage-command"] : undefined;
+      const variable = typeof options.variable === "string" ? options.variable : "x";
+      const backendStatus = getCasBackendStatus({
+        maximaCommand,
+        sageCommand,
+        timeoutMs
+      }).backends.find((candidate) => candidate.backendId === backend);
+      if (!backendStatus?.canCheckSymbolic) {
+        return {
+          status: "blocked",
+          kind: "cas-check",
+          command: item.command,
+          summary: `Local ${backendStatus?.displayName ?? `${backend} CAS`} backend is not available for run-next (${
+            backendStatus?.error ?? backendStatus?.status ?? "unknown"
+          }). Use the Docker evidence path instead: ${dockerCasCheckCommand({
+            operation,
+            expression,
+            result: resultText,
+            variable,
+            backend
+          })}`
+        };
+      }
       const result = await writeSymbolicCasCheckRecord({
         rootPath: workspace,
         prompt: {
           operation: parseSympyOperation(operation),
           expression,
-          variable: typeof options.variable === "string" ? options.variable : "x"
+          variable
         },
         result: resultText,
-        maximaCommand: typeof options["maxima-command"] === "string" ? options["maxima-command"] : undefined,
+        backend,
+        maximaCommand,
+        sageCommand,
         timeoutMs
       });
       const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
@@ -2700,6 +2731,31 @@ async function blockUnchangedRejectedProofAttempt(
 function dockerSmtCheckCommand(sourcePath: string, backend: SmtBackendId): string {
   const backendArgs = backend === "z3" ? "" : ` --backend ${quoteCommandArg(backend)}`;
   return `npm run docker:cli -- smt check ${quoteCommandArg(sourcePath)} --${backendArgs} --write`;
+}
+
+function dockerCasCheckCommand(input: {
+  operation: string;
+  expression: string;
+  result: string;
+  variable: string;
+  backend: SymbolicCasBackendId;
+}): string {
+  const backendArgs = input.backend === "maxima" ? "" : ` --backend ${quoteCommandArg(input.backend)}`;
+  const variableArgs = input.variable === "x" ? "" : ` --variable ${quoteCommandArg(input.variable)}`;
+  const casArgs = [
+    "cas check --",
+    `--operation ${quoteCommandArg(input.operation)}`,
+    `--expression ${quoteCommandArg(input.expression)}`,
+    `--result ${quoteCommandArg(input.result)}`,
+    `${variableArgs}${backendArgs}`,
+    "--write"
+  ].filter((part) => part.length > 0).join(" ");
+
+  if (input.backend === "sage") {
+    return `docker compose run --rm all-engines npm run cli -- ${casArgs}`;
+  }
+
+  return `npm run docker:cli -- ${casArgs}`;
 }
 
 async function maybeAttachRouteEvidence(
@@ -3039,6 +3095,18 @@ function parseSmtBackendOption(value: string | true | undefined): SmtBackendId |
   }
 
   throw new Error(`Unsupported SMT backend ${JSON.stringify(value)}. Use z3 or cvc5.`);
+}
+
+function parseSymbolicCasBackendOption(value: string | true | undefined): SymbolicCasBackendId | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === "maxima" || value === "sage") {
+    return value;
+  }
+
+  throw new Error(`Unsupported CAS backend ${JSON.stringify(value)}. Use maxima or sage.`);
 }
 
 function parseRunNextClaimLedgerDomain(value: string | undefined): ClaimLedgerDomain | undefined {

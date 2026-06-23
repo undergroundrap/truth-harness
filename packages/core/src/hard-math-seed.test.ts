@@ -248,7 +248,7 @@ describe("hard-math seed workspace", () => {
     expect(validation.passed).toBe(true);
   });
 
-  it("keeps the symbolic CAS fixture open when direct CAS evidence lacks the independent backend", async () => {
+  it("blocks the symbolic CAS fixture before writing evidence when the independent backend is missing", async () => {
     const root = await tempRoot();
 
     const seed = await writeHardMathSeedWorkspace({
@@ -269,15 +269,21 @@ describe("hard-math seed workspace", () => {
       z3Command: "truth-harness-missing-z3-command"
     });
 
-    expect(result.loop.summary.executedSteps).toBeGreaterThanOrEqual(1);
-    expect(result.loop.summary.evidenceRefs).toContainEqual(expect.stringContaining("cas:.truth-harness/cas/"));
+    expect(result.loop.summary.executedSteps).toBe(0);
+    expect(result.loop.summary.blockedSteps).toBeGreaterThanOrEqual(1);
+    expect(result.loop.summary.evidenceRefs).toEqual([]);
+    expect(result.loop.steps[0]?.execution).toMatchObject({
+      status: "blocked",
+      kind: "cas-check"
+    });
+    expect(result.loop.steps[0]?.execution.summary).toContain("Local Maxima CAS backend is not available");
 
     const plans = await listValidationPlans(root);
     const plan = plans.find((candidate) => candidate.planId === seed.cases[0]?.validationPlanId);
     const gate = plan?.gates.find((candidate) => candidate.kind === "proof");
-    expect(gate?.status).toBe("in-progress");
-    expect(gate?.evidenceRefs[0]).toMatchObject({ kind: "cas", trust: "unverified" });
-    expect(gate?.nextChecks.join(" ")).toContain("CAS evidence is not cross-checked");
+    expect(gate?.status).toBe("missing");
+    expect(gate?.evidenceRefs).toEqual([]);
+    expect(gate?.nextChecks.join(" ")).toContain("Attach a trusted receipt");
   });
 });
 

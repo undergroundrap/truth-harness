@@ -1004,6 +1004,38 @@ describe("workspace run-next", () => {
     expect(smtFiles).toEqual([]);
   });
 
+  it("blocks unavailable CAS backends before writing unverified retry noise", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    const review = minimalReview({
+      rootPath: root,
+      command:
+        'truth-harness cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write --maxima-command truth-harness-missing-maxima-command',
+      claimId: "claim_fake",
+      kind: "route-obligation",
+      routeId: "route_cas_unavailable_test",
+      obligationId: "obl_cas_unavailable_test",
+      obligationKind: "independent-check"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+    const casFiles = await readdir(join(root, ".truth-harness", "cas")).catch(() => []);
+
+    expect(plan.status).toBe("blocked");
+    expect(plan.execution.kind).toBe("cas-check");
+    expect(plan.execution.summary).toContain("Local Maxima CAS backend is not available");
+    expect(plan.execution.summary).toContain(
+      'npm run docker:cli -- cas check -- --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write'
+    );
+    expect(plan.execution.evidenceRef).toBeUndefined();
+    expect(casFiles).toEqual([]);
+  });
+
   it("reads saved report drafts through run-next without honoring command workspace overrides", async () => {
     const root = await tempRoot();
     const outsideRoot = await tempRoot();
