@@ -4,6 +4,8 @@ import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import {
+  parseBenchmarkRunRecordJson,
+  writeBenchmarkComparisonRecord,
   writeBenchmarkRunRecord,
   type BenchmarkRunLike,
   type BenchmarkRunTaskLike,
@@ -2463,6 +2465,64 @@ async function executeWorkspaceRunNextItem(
         summary: summaries.join(" "),
         result: attached
           ? { benchmark: result.record, attachment: { validationGate: validationGate.result, checkpoint: checkpoint.result?.checkpoint } }
+          : result.record
+      };
+    }
+
+    if (group === "bench" && action === "compare") {
+      const [baselinePath, currentPath] = positionalArgsBeforeFirstOption(rest);
+      if (
+        !baselinePath ||
+        !currentPath ||
+        baselinePath.includes("<") ||
+        baselinePath.includes(">") ||
+        currentPath.includes("<") ||
+        currentPath.includes(">")
+      ) {
+        return blockedPlaceholderCommand(item.command, "benchmark-compare");
+      }
+      if (options.write !== true) {
+        return {
+          status: "blocked",
+          kind: "benchmark-compare",
+          command: item.command,
+          summary: "Benchmark comparison run-next actions must include --write so the result becomes durable workspace evidence."
+        };
+      }
+
+      const resolvedBaselinePath = resolveUnderRoot(workspace, baselinePath);
+      const resolvedCurrentPath = resolveUnderRoot(workspace, currentPath);
+      const baseline = parseBenchmarkRunRecordJson(await readFile(resolvedBaselinePath, "utf8"), baselinePath);
+      const current = parseBenchmarkRunRecordJson(await readFile(resolvedCurrentPath, "utf8"), currentPath);
+      const result = await writeBenchmarkComparisonRecord({
+        rootPath: workspace,
+        baseline,
+        current,
+        baselineRef: toPortablePath(relative(workspace, resolvedBaselinePath)),
+        currentRef: toPortablePath(relative(workspace, resolvedCurrentPath))
+      });
+      const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
+      const validationEvidenceRef: ValidationEvidenceRef = {
+        kind: "benchmark",
+        ref: evidenceRef,
+        summary: `Benchmark comparison ${result.record.comparisonId}: ${result.record.verdict}.`
+      };
+      const checkpoint = await maybeCheckpointResearchSessionEvidence(workspace, item, validationEvidenceRef, {
+        route: { attached: false, summary: "No route obligation target was present for benchmark comparison evidence." },
+        validationGate: { attached: false, summary: "Benchmark comparison evidence is checkpointed for review; validation gates currently require benchmark-run evidence." }
+      });
+      return {
+        status: "executed",
+        kind: "benchmark-compare",
+        command: item.command,
+        evidenceRef: `benchmark:${evidenceRef}`,
+        attached: checkpoint.attached,
+        summary: [
+          `Wrote benchmark comparison ${result.record.comparisonId} with verdict ${result.record.verdict}.`,
+          checkpoint.attached ? checkpoint.summary : undefined
+        ].filter((value): value is string => Boolean(value)).join(" "),
+        result: checkpoint.attached
+          ? { comparison: result.record, attachment: { checkpoint: checkpoint.result?.checkpoint } }
           : result.record
       };
     }

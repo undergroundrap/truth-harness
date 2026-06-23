@@ -3,12 +3,18 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import {
+  listBenchmarkComparisonRecords,
+  writeBenchmarkRunRecord,
+  type BenchmarkRunLike
+} from "./benchmark-run.js";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { createCredibilityPack } from "./credibility-pack.js";
 import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
 import { writeReportDraft } from "./report-draft.js";
+import { createReceipt } from "./receipt.js";
 import { addResearchSessionCheckpoint, readResearchSession, writeResearchHarness } from "./research-session.js";
 import { listValidationPlans } from "./validation-plan.js";
 import { listWorkspaceSnapshots } from "./workspace-snapshot.js";
@@ -1273,6 +1279,80 @@ describe("workspace run-next", () => {
     );
   });
 
+  it("executes benchmark comparisons and checkpoints the comparison evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "Compare verifier benchmark evidence before claiming progress.",
+      domains: ["code"],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const receipt = createReceipt("compute 2 + 2");
+    const baseline = await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(receipt),
+      suitePath: "packages/benchmarks/suites/tiny.json",
+      command: "truth-harness bench run packages/benchmarks/suites/tiny.json --write",
+      now: "2026-06-18T00:02:00.000Z"
+    });
+    const current = await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(receipt, {
+        expectTrust: "refuted",
+        passed: false,
+        failures: ["Expected trust refuted, received exact-computed"]
+      }),
+      suitePath: "packages/benchmarks/suites/tiny.json",
+      command: "truth-harness bench run packages/benchmarks/suites/tiny.json --write",
+      now: "2026-06-18T00:03:00.000Z"
+    });
+    const review = minimalReview({
+      rootPath: root,
+      command: `truth-harness bench compare ${relative(root, baseline.jsonPath)} ${relative(root, current.jsonPath)} --write --fail-on-regression`,
+      claimId: "claim_benchmark_comparison",
+      kind: "session-next-check",
+      sessionId: harness.session.sessionId,
+      domain: "code"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-18T00:04:00.000Z"
+    });
+    const comparisons = await listBenchmarkComparisonRecords(root);
+    const updatedSession = await readResearchSession(root, harness.session.sessionId);
+
+    expect(plan.status).toBe("executed");
+    expect(plan.execution).toMatchObject({
+      kind: "benchmark-compare",
+      attached: true,
+      evidenceRef: expect.stringContaining("benchmark:.truth-harness/benchmarks/"),
+      result: {
+        comparison: {
+          schemaVersion: "truth-harness.benchmark-comparison.v0",
+          verdict: "regressed",
+          summary: expect.objectContaining({ regressions: 1 })
+        },
+        attachment: {
+          checkpoint: { evidenceRefs: [expect.objectContaining({ kind: "benchmark" })] }
+        }
+      }
+    });
+    expect(plan.execution.summary).toContain("Wrote benchmark comparison");
+    expect(plan.execution.summary).toContain("Checkpointed research session");
+    expect(comparisons).toHaveLength(1);
+    expect(updatedSession.evidenceRefs).toContainEqual(expect.objectContaining({ kind: "benchmark" }));
+    expect(updatedSession.checkpoints).toContainEqual(
+      expect.objectContaining({
+        evidenceRefs: [expect.objectContaining({ kind: "benchmark" })],
+        decisions: [expect.stringContaining("Recorded benchmark:.truth-harness/benchmarks/")]
+      })
+    );
+  });
+
   it("adapts credibility action queues into run-next plans", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
@@ -2162,4 +2242,43 @@ async function writeBenchmarkSuite(root: string): Promise<void> {
     ),
     "utf8"
   );
+}
+
+function benchmarkRun(
+  receipt: ReturnType<typeof createReceipt>,
+  options: {
+    expectTrust?: BenchmarkRunLike["results"][number]["task"]["expectTrust"];
+    passed?: boolean;
+    failures?: string[];
+  } = {}
+): BenchmarkRunLike {
+  const expectedTrust = options.expectTrust ?? receipt.trust;
+  const passed = options.passed ?? true;
+
+  return {
+    suiteId: "tiny-suite",
+    title: "Tiny Suite",
+    startedAt: "2026-06-18T00:30:00.000Z",
+    completedAt: "2026-06-18T00:30:01.000Z",
+    total: 1,
+    passed: passed ? 1 : 0,
+    failed: passed ? 0 : 1,
+    trustAccuracy: passed ? 1 : 0,
+    results: [
+      {
+        task: {
+          id: "tiny-case",
+          prompt: receipt.problem,
+          expectTrust: expectedTrust,
+          expectEvidenceKind: receipt.evidenceProfile.kind,
+          level: "level-1-exact-arithmetic",
+          category: "exact-computation",
+          aiFailureMode: "wrong arithmetic"
+        },
+        receipt,
+        passed,
+        failures: options.failures ?? []
+      }
+    ]
+  };
 }
