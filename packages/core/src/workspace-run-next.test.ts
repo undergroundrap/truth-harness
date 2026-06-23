@@ -9,7 +9,7 @@ import {
   type BenchmarkRunLike
 } from "./benchmark-run.js";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
-import { createCredibilityPack } from "./credibility-pack.js";
+import { createCredibilityPack, type CredibilityPack } from "./credibility-pack.js";
 import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
@@ -1388,6 +1388,71 @@ describe("workspace run-next", () => {
     });
     expect(plan.execution.kind).toBe("dry-run");
     expect(plan.warnings.join(" ")).toContain("never executes shell strings");
+  });
+
+  it("prefers locally executable credibility actions over host-blocked proof actions at the same priority", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-23T00:00:00.000Z" });
+    const basePack = await createCredibilityPack({
+      rootPath: root,
+      now: "2026-06-23T00:01:00.000Z",
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      timeoutMs: 50
+    });
+    const proofAction: CredibilityPack["reviewerActionPlan"]["actions"][number] = {
+      actionId: "cred_action_proof",
+      category: "workspace-review",
+      priority: "critical",
+      title: "Validation gate: proof",
+      detail: "Lean proof action requires a host proof checker.",
+      command:
+        'truth-harness proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean --declaration smoke --statement "The Lean fixture theorem `smoke : True` is accepted by the configured proof checker." --write',
+      closes: ["validation-gate"],
+      source: {
+        kind: "validation-gate",
+        ref: "session:plan:proof-gate"
+      }
+    };
+    const nativeVerifyAction: CredibilityPack["reviewerActionPlan"]["actions"][number] = {
+      actionId: "cred_action_native_verify",
+      category: "workspace-review",
+      priority: "critical",
+      title: "Validation gate: proof",
+      detail: "Native verifier action can write a local route without a missing external engine.",
+      command: `truth-harness verify "For every integer n, n^2 + n + 1 is even." --write --workspace ${root} --json`,
+      closes: ["validation-gate"],
+      source: {
+        kind: "validation-gate",
+        ref: "session:plan:native-gate"
+      }
+    };
+    const pack: CredibilityPack = {
+      ...basePack,
+      reviewerActionPlan: {
+        ...basePack.reviewerActionPlan,
+        totalActions: 2,
+        criticalActions: 2,
+        highActions: 0,
+        actions: [proofAction, nativeVerifyAction]
+      }
+    };
+
+    const review = createWorkspaceReviewFromCredibilityPack({ rootPath: root, pack });
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-23T00:02:00.000Z"
+    });
+
+    expect(review.autonomy.nextItemId).toBe("cred_action_native_verify");
+    expect(review.items.map((item) => item.itemId)).toEqual(["cred_action_native_verify", "cred_action_proof"]);
+    expect(plan.item).toMatchObject({
+      itemId: "cred_action_native_verify",
+      command: expect.stringContaining("truth-harness verify")
+    });
   });
 
   it("does not select passive-only review blockers as run-next targets", async () => {
