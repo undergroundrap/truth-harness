@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { writeBenchmarkComparisonRecord, writeBenchmarkRunRecord, type BenchmarkRunLike } from "./benchmark-run.js";
 import { createSimulationLogEntry } from "./simulation-log.js";
 import { writeSymbolicCasCheckRecord, type CasBackendCommandRunner } from "./cas-backend.js";
 import { writeExpertReview } from "./expert-review.js";
@@ -13,6 +14,7 @@ import {
   writeValidationPlan
 } from "./validation-plan.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { createReceipt } from "./receipt.js";
 import { solveSmtProblem } from "./smt-problem.js";
 import type { SmtBackendCommandRunner } from "./smt-backend.js";
 import { writeVerifierRoute } from "./verifier-route.js";
@@ -458,6 +460,109 @@ describe("validation plans", () => {
     expect(scopedAttachment.evidence.claimScope).toMatchObject({ status: "matched" });
   });
 
+  it("uses benchmark comparisons as conservative benchmark-gate evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const receipt = createReceipt("compute 2 + 2");
+    const baseline = await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(receipt),
+      suitePath: "packages/benchmarks/suites/tiny.json",
+      command: "truth-harness bench run packages/benchmarks/suites/tiny.json --write",
+      now: "2026-06-18T03:00:00.000Z"
+    });
+    const unchangedCurrent = await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(receipt),
+      suitePath: "packages/benchmarks/suites/tiny.json",
+      command: "truth-harness bench run packages/benchmarks/suites/tiny.json --write",
+      now: "2026-06-18T03:01:00.000Z"
+    });
+    const regressedCurrent = await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(receipt, {
+        expectTrust: "refuted",
+        passed: false,
+        failures: ["Expected trust refuted, received exact-computed"]
+      }),
+      suitePath: "packages/benchmarks/suites/tiny.json",
+      command: "truth-harness bench run packages/benchmarks/suites/tiny.json --write",
+      now: "2026-06-18T03:02:00.000Z"
+    });
+    const unchangedComparison = await writeBenchmarkComparisonRecord({
+      rootPath: root,
+      baseline: baseline.record,
+      current: unchangedCurrent.record,
+      baselineRef: toWorkspaceRef(root, baseline.jsonPath),
+      currentRef: toWorkspaceRef(root, unchangedCurrent.jsonPath),
+      now: "2026-06-18T03:03:00.000Z"
+    });
+    const regressedComparison = await writeBenchmarkComparisonRecord({
+      rootPath: root,
+      baseline: baseline.record,
+      current: regressedCurrent.record,
+      baselineRef: toWorkspaceRef(root, baseline.jsonPath),
+      currentRef: toWorkspaceRef(root, regressedCurrent.jsonPath),
+      now: "2026-06-18T03:04:00.000Z"
+    });
+
+    const plan = await writeValidationPlan({
+      rootPath: root,
+      claim: "The verifier did not regress on the tiny benchmark suite.",
+      domains: ["software"],
+      now: "2026-06-18T03:05:00.000Z"
+    });
+    const benchmarkGate = plan.plan.gates.find((gate) => gate.kind === "benchmark");
+    if (!benchmarkGate) {
+      throw new Error("Expected a benchmark gate.");
+    }
+    const satisfied = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: plan.plan.planId,
+      gateId: benchmarkGate.gateId,
+      evidenceRef: { kind: "benchmark", ref: toWorkspaceRef(root, unchangedComparison.jsonPath) },
+      now: "2026-06-18T03:06:00.000Z"
+    });
+
+    expect(unchangedComparison.record.verdict).toBe("unchanged");
+    expect(satisfied.satisfied).toBe(true);
+    expect(satisfied.evidence).toMatchObject({
+      schemaVersion: "truth-harness.benchmark-comparison.v0",
+      status: "passed",
+      artifactId: unchangedComparison.record.comparisonId
+    });
+    expect(satisfied.gate.status).toBe("satisfied");
+    expect(satisfied.gate.nextChecks).toContain("inspect every non-unchanged case before publishing benchmark claims");
+
+    const regressedPlan = await writeValidationPlan({
+      rootPath: root,
+      claim: "The verifier did not regress on the tiny benchmark suite.",
+      domains: ["software"],
+      now: "2026-06-18T03:07:00.000Z"
+    });
+    const regressedGate = regressedPlan.plan.gates.find((gate) => gate.kind === "benchmark");
+    if (!regressedGate) {
+      throw new Error("Expected a regressed benchmark gate.");
+    }
+    const blocked = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: regressedPlan.plan.planId,
+      gateId: regressedGate.gateId,
+      evidenceRef: { kind: "benchmark", ref: toWorkspaceRef(root, regressedComparison.jsonPath) },
+      now: "2026-06-18T03:08:00.000Z"
+    });
+
+    expect(regressedComparison.record.verdict).toBe("regressed");
+    expect(blocked.satisfied).toBe(false);
+    expect(blocked.evidence).toMatchObject({
+      schemaVersion: "truth-harness.benchmark-comparison.v0",
+      status: "failed",
+      artifactId: regressedComparison.record.comparisonId
+    });
+    expect(blocked.gate.status).toBe("in-progress");
+    expect(blocked.gate.nextChecks).toContain("triage regressions and new failures before claiming progress");
+  });
+
   it("requires prior art, claim charts, reduction-to-practice, and patent legal review for invention claims", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);
@@ -501,6 +606,45 @@ function requiredProofGate(plan: { gates: Array<{ kind: string; gateId: string }
 
 function toWorkspaceRef(root: string, absolutePath: string): string {
   return absolutePath.slice(root.length + 1).replace(/\\/g, "/");
+}
+
+function benchmarkRun(
+  receipt: ReturnType<typeof createReceipt>,
+  options: {
+    expectTrust?: BenchmarkRunLike["results"][number]["task"]["expectTrust"];
+    passed?: boolean;
+    failures?: string[];
+  } = {}
+): BenchmarkRunLike {
+  const expectedTrust = options.expectTrust ?? receipt.trust;
+  const passed = options.passed ?? true;
+
+  return {
+    suiteId: "tiny-suite",
+    title: "Tiny Suite",
+    startedAt: "2026-06-18T00:30:00.000Z",
+    completedAt: "2026-06-18T00:30:01.000Z",
+    total: 1,
+    passed: passed ? 1 : 0,
+    failed: passed ? 0 : 1,
+    trustAccuracy: passed ? 1 : 0,
+    results: [
+      {
+        task: {
+          id: "tiny-case",
+          prompt: receipt.problem,
+          expectTrust: expectedTrust,
+          expectEvidenceKind: receipt.evidenceProfile.kind,
+          level: "level-1-exact-arithmetic",
+          category: "exact-computation",
+          aiFailureMode: "wrong arithmetic"
+        },
+        receipt,
+        passed,
+        failures: options.failures ?? []
+      }
+    ]
+  };
 }
 
 const z3SatRunner: SmtBackendCommandRunner = (_command, args) => {

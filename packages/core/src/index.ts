@@ -25,6 +25,7 @@ export {
   listBenchmarkArtifacts,
   listBenchmarkComparisonRecords,
   listBenchmarkRunRecords,
+  parseBenchmarkComparisonRecordJson,
   parseBenchmarkRunRecordJson,
   renderBenchmarkComparisonMarkdown,
   renderBenchmarkRunMarkdown,

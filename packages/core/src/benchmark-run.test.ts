@@ -10,6 +10,7 @@ import {
   listBenchmarkArtifacts,
   listBenchmarkComparisonRecords,
   listBenchmarkRunRecords,
+  parseBenchmarkComparisonRecordJson,
   parseBenchmarkRunRecordJson,
   writeBenchmarkComparisonRecord,
   writeBenchmarkRunRecord
@@ -152,6 +153,9 @@ describe("benchmark run records", () => {
     expect(preview.verdict).toBe("regressed");
     expect(written.record.schemaVersion).toBe("truth-harness.benchmark-comparison.v0");
     expect(written.record.verdict).toBe("regressed");
+    expect(parseBenchmarkComparisonRecordJson(JSON.stringify(written.record), "roundtrip").comparisonId).toBe(
+      written.record.comparisonId
+    );
     expect(benchmarkComparisonFailsGate(written.record)).toBe(true);
     expect(written.record.summary.regressions).toBe(1);
     expect(written.record.summary.failedDelta).toBe(1);

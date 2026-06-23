@@ -401,6 +401,40 @@ export function parseBenchmarkRunRecordJson(raw: string, source = "benchmark run
   return parsed as unknown as BenchmarkRunRecord;
 }
 
+export function parseBenchmarkComparisonRecordJson(
+  raw: string,
+  source = "benchmark comparison record"
+): BenchmarkComparisonRecord {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch (error) {
+    const nodeError = error as Error;
+    throw new Error(`${source} is not valid JSON: ${nodeError.message}`);
+  }
+
+  if (!isRecord(parsed)) {
+    throw new Error(`${source} must be a JSON object.`);
+  }
+
+  if (parsed.schemaVersion !== "truth-harness.benchmark-comparison.v0") {
+    throw new Error(`${source} must have schemaVersion "truth-harness.benchmark-comparison.v0".`);
+  }
+
+  if (
+    typeof parsed.comparisonId !== "string" ||
+    !isRecord(parsed.baseline) ||
+    !isRecord(parsed.current) ||
+    typeof parsed.verdict !== "string" ||
+    !isRecord(parsed.summary) ||
+    !Array.isArray(parsed.cases)
+  ) {
+    throw new Error(`${source} is missing required benchmark comparison fields.`);
+  }
+
+  return parsed as unknown as BenchmarkComparisonRecord;
+}
+
 export function createBenchmarkComparisonRecord(input: CreateBenchmarkComparisonRecordInput): BenchmarkComparisonRecord {
   const createdAt = input.now ?? new Date().toISOString();
   const baseline = summarizeRun(input.baseline, input.baselineRef);

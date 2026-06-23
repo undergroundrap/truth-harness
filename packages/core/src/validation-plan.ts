@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
-import { parseBenchmarkRunRecordJson } from "./benchmark-run.js";
+import { parseBenchmarkComparisonRecordJson, parseBenchmarkRunRecordJson } from "./benchmark-run.js";
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { createEvidenceAudit, type EvidenceAudit, type EvidenceAuditClaimType } from "./evidence-audit.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
@@ -1177,6 +1177,24 @@ async function resolveValidationGateEvidence(
     }
 
     if (evidenceRef.kind === "benchmark") {
+      const parsed = parseJsonWithOptionalBom(artifact.raw) as { schemaVersion?: unknown };
+      if (parsed.schemaVersion === "truth-harness.benchmark-comparison.v0") {
+        const record = parseBenchmarkComparisonRecordJson(artifact.raw, evidenceRef.ref);
+        const passed = record.verdict === "improved" || record.verdict === "unchanged";
+        const failed = record.verdict === "regressed" || record.verdict === "incomparable";
+        return {
+          ...evidenceRef,
+          summary: evidenceRef.summary ?? `Benchmark comparison ${record.comparisonId}: ${record.verdict}.`,
+          schemaVersion: record.schemaVersion,
+          artifactId: record.comparisonId,
+          status: passed ? "passed" : failed ? "failed" : "review-required",
+          nextChecks: passed
+            ? record.boundary.requiredNextChecks
+            : record.boundary.requiredNextChecks.length > 0
+              ? record.boundary.requiredNextChecks
+              : ["Review benchmark comparison before closing this gate."]
+        };
+      }
       const record = parseBenchmarkRunRecordJson(artifact.raw, evidenceRef.ref);
       return {
         ...evidenceRef,
@@ -1259,6 +1277,14 @@ function assessValidationGateEvidence(
   }
 
   if (gate.kind === "benchmark" && evidence.kind === "benchmark") {
+    if (evidence.schemaVersion === "truth-harness.benchmark-comparison.v0" && evidence.status === "review-required") {
+      return {
+        status: gate.status === "missing" ? "in-progress" : gate.status,
+        nextChecks: evidence.nextChecks,
+        message: `Validation benchmark gate ${gate.gateId} received benchmark comparison evidence, but changed cases require review before closure.`
+      };
+    }
+
     if (evidence.status !== "passed") {
       return {
         status: gate.status === "missing" ? "in-progress" : gate.status,
@@ -1269,7 +1295,7 @@ function assessValidationGateEvidence(
 
     return {
       status: "satisfied",
-      nextChecks: [],
+      nextChecks: evidence.nextChecks,
       message: `Validation benchmark gate ${gate.gateId} satisfied by benchmark evidence.`
     };
   }
