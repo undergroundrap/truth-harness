@@ -12,6 +12,7 @@ import { writeSmtCheckRecord, type SmtBackendCommandRunner } from "./smt-backend
 import { attachValidationGateEvidence } from "./validation-plan.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createWorkspaceReview, listWorkspaceReviews, readWorkspaceReview, writeWorkspaceReview } from "./workspace-review.js";
+import { writeWorkspaceSnapshot } from "./workspace-snapshot.js";
 import { writeVerifierRoute } from "./verifier-route.js";
 
 const roots: string[] = [];
@@ -1741,6 +1742,55 @@ describe("workspace review", () => {
         title: expect.stringContaining("Close the blocking validation gates")
       })
     );
+  });
+
+  it("reuses fresh workspace snapshots as validation-gate evidence instead of duplicating snapshots", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      title: "Snapshot reuse harness",
+      objective: "Preserve workspace evidence without repeated snapshots.",
+      domains: ["math"],
+      now: "2026-06-13T00:01:00.000Z"
+    });
+    const plan = harness.validationPlan?.plan;
+    const snapshotGate = plan?.gates.find((gate) => gate.kind === "workspace-snapshot");
+    if (!plan || !snapshotGate) {
+      throw new Error("Expected a linked workspace-snapshot gate.");
+    }
+    const snapshot = await writeWorkspaceSnapshot({
+      rootPath: root,
+      now: "2026-06-13T00:02:00.000Z"
+    });
+    const snapshotRef = relative(root, snapshot.path).replace(/\\/gu, "/");
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 1,
+      now: "2026-06-13T00:03:00.000Z"
+    });
+    const snapshotItem = review.items.find(
+      (item) => item.kind === "validation-gate" && item.validationGateId === snapshotGate.gateId
+    );
+
+    expect(snapshotItem).toMatchObject({
+      kind: "validation-gate",
+      validationPlanId: plan.planId,
+      validationGateId: snapshotGate.gateId,
+      command: `truth-harness validation attach ${plan.planId} ${snapshotGate.gateId} --evidence snapshot:${snapshotRef} --json`,
+      candidateEvidenceRefs: [
+        expect.objectContaining({
+          kind: "snapshot",
+          ref: snapshotRef
+        })
+      ]
+    });
+    expect(snapshotItem?.command).not.toContain("workspace snapshot");
   });
 
   it("uses the latest research checkpoint as the active next-check frontier", async () => {

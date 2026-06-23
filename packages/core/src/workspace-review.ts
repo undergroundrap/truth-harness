@@ -36,6 +36,7 @@ import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { listValidationPlans, type ValidationEvidenceRef, type ValidationGate, type ValidationPlan } from "./validation-plan.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
+import { listWorkspaceSnapshots, type WorkspaceSnapshotSummary } from "./workspace-snapshot.js";
 
 export type WorkspaceReviewItemKind =
   | "validation-gate"
@@ -250,6 +251,7 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const validationPlans = await listValidationPlans(status.root);
   const proofChecks = await enrichProofChecksWithSourceStatus(status.root, await listLeanProofChecks(status.root));
   const smtChecks = await listSmtChecks(status.root);
+  const snapshots = await listWorkspaceSnapshots(status.root);
   const leanInspection = await inspectLeanProject({
     rootPath: status.root,
     projectPath: ".",
@@ -269,7 +271,7 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const candidateItems = sortReviewItems([
     ...proofSafetyItems,
     ...sessions.flatMap((session) =>
-      linkedValidationGateItems(status.root, session, validationPlans, readyRoutesByStatementKey, proofChecks, smtChecks)
+      linkedValidationGateItems(status.root, session, validationPlans, readyRoutesByStatementKey, proofChecks, smtChecks, snapshots)
     ),
     ...activeRoutes.flatMap((route) =>
       routeReviewItems(status.root, route, claimsByRouteRef, claimsByStatementKey, leanInspection, proofChecks)
@@ -659,12 +661,13 @@ function linkedValidationGateItems(
   validationPlans: ValidationPlan[],
   readyRoutesByStatementKey: Map<string, VerifierRoute>,
   proofChecks: ReviewLeanProofCheckSummary[],
-  smtChecks: SmtCheckSummary[]
+  smtChecks: SmtCheckSummary[],
+  snapshots: WorkspaceSnapshotSummary[]
 ): WorkspaceReviewItem[] {
   const plans = linkedValidationPlansForSession(session, validationPlans);
   return plans.flatMap((plan) =>
     openValidationGates(plan).map((gate) =>
-      validationGateItem(workspacePath, session, plan, gate, readyRoutesByStatementKey, proofChecks, smtChecks)
+      validationGateItem(workspacePath, session, plan, gate, readyRoutesByStatementKey, proofChecks, smtChecks, snapshots)
     )
   );
 }
@@ -704,7 +707,8 @@ function validationGateItem(
   gate: ValidationGate,
   readyRoutesByStatementKey: Map<string, VerifierRoute>,
   proofChecks: ReviewLeanProofCheckSummary[],
-  smtChecks: SmtCheckSummary[]
+  smtChecks: SmtCheckSummary[],
+  snapshots: WorkspaceSnapshotSummary[]
 ): WorkspaceReviewItem {
   const candidateEvidenceRefs = candidateEvidenceRefsForValidationGate(
     session,
@@ -712,7 +716,8 @@ function validationGateItem(
     gate,
     readyRoutesByStatementKey,
     proofChecks,
-    smtChecks
+    smtChecks,
+    snapshots
   );
 
   return {
@@ -748,7 +753,8 @@ function candidateEvidenceRefsForValidationGate(
   gate: ValidationGate,
   readyRoutesByStatementKey: Map<string, VerifierRoute>,
   proofChecks: ReviewLeanProofCheckSummary[],
-  smtChecks: SmtCheckSummary[]
+  smtChecks: SmtCheckSummary[],
+  snapshots: WorkspaceSnapshotSummary[]
 ): ValidationEvidenceRef[] {
   const attached = new Set(gate.evidenceRefs.map((ref) => validationEvidenceKey(ref)));
   const candidates: ValidationEvidenceRef[] = [];
@@ -810,8 +816,30 @@ function candidateEvidenceRefsForValidationGate(
       summary: `SMT check ${smt.checkId} matches validation claim ${JSON.stringify(plan.claim)}.`
     });
   }
+  for (const snapshot of snapshots) {
+    if (!isSnapshotCandidateForValidationPlan(snapshot, plan, gate)) {
+      continue;
+    }
+    collectCandidate({
+      kind: "snapshot",
+      ref: snapshot.path,
+      summary: `Workspace snapshot ${snapshot.snapshotId} captured ${snapshot.totalFiles} local artifact(s) after validation plan ${plan.planId} was updated.`
+    });
+  }
 
   return rankValidationEvidenceCandidates(candidates, gate);
+}
+
+function isSnapshotCandidateForValidationPlan(
+  snapshot: WorkspaceSnapshotSummary,
+  plan: ValidationPlan,
+  gate: ValidationGate
+): boolean {
+  if (gate.kind !== "workspace-snapshot" || snapshot.projectId !== plan.projectId) {
+    return false;
+  }
+
+  return snapshot.createdAt >= plan.updatedAt;
 }
 
 function isProofCheckCandidateForValidationPlan(
