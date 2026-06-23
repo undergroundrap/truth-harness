@@ -6236,8 +6236,18 @@ async function refreshLatestProfessorChallengeSeed({ announce = true } = {}) {
           payload.seed.createdAt
         );
       }
+      return payload.seed;
+    }
+    if (announce) {
+      addActivity(
+        "local-api",
+        "No professor challenge seed",
+        "No persisted professor challenge seed is available yet. Start the challenge to create local validation sessions and a run-next handoff.",
+        "waiting"
+      );
     }
     render();
+    return undefined;
   } catch (error) {
     if (announce) {
       addActivity(
@@ -6247,6 +6257,7 @@ async function refreshLatestProfessorChallengeSeed({ announce = true } = {}) {
         "waiting"
       );
     }
+    return undefined;
   }
 }
 
@@ -7933,9 +7944,30 @@ function renderProfessorChallengeSummary() {
     return;
   }
 
+  const seedCommand = "truth-harness workspace hard-math-seeds . --preset professor-challenge --latest --json";
+
   if (!professorChallengeSeed) {
-    workspaceProfessorChallenge.hidden = true;
-    workspaceProfessorChallenge.innerHTML = "";
+    workspaceProfessorChallenge.hidden = false;
+    workspaceProfessorChallenge.innerHTML = `<section class="workspace-professor-challenge-empty" aria-label="Professor challenge start state">
+      <div class="workspace-professor-challenge-head">
+        <div>
+          <span class="mini-label">professor challenge</span>
+          <strong>No reviewer workout loaded yet.</strong>
+        </div>
+        <span class="status-pill waiting">not started</span>
+      </div>
+      <p>Start the five-case local math challenge, restore the latest saved seed, or copy the restore command for an agent. The browser still only plans and writes local evidence through approved Truth Harness routes.</p>
+      <div class="workspace-professor-challenge-next">
+        <span class="mini-label">restore command</span>
+        <strong>Reopen the latest professor challenge seed before asking an agent to continue.</strong>
+        <code>${escapeHtml(seedCommand)}</code>
+      </div>
+      <div class="workspace-professor-challenge-actions" aria-label="Professor challenge start actions">
+        <button class="text-button compact-button strong-action" data-professor-action="seed-challenge" type="button">Start challenge</button>
+        <button class="text-button compact-button" data-professor-action="restore-latest" type="button">Restore latest</button>
+        <button class="text-button compact-button" data-professor-action="copy-seed-command" data-command="${escapeHtml(seedCommand)}" type="button">Copy restore CLI</button>
+      </div>
+    </section>`;
     return;
   }
 
@@ -7944,7 +7976,6 @@ function renderProfessorChallengeSummary() {
   const nextItem = nextPlan?.item;
   const nextCommand = nextItem?.command ?? nextPlan?.execution?.command ?? "truth-harness workspace run-next . --json";
   const nextTitle = nextItem?.title ?? "Run-next will select the highest-value open validation gate.";
-  const seedCommand = "truth-harness workspace hard-math-seeds . --preset professor-challenge --latest --json";
   const created = professorChallengeSeed.createdAt ? new Date(professorChallengeSeed.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "local session";
   const caseCards = cases
     .map((seedCase, index) => {
@@ -8005,6 +8036,33 @@ async function handleProfessorChallengeAction(action, button) {
   }
 
   try {
+    if (action === "seed-challenge") {
+      await seedHardMathWorkspaceFromUi({
+        preset: "professor-challenge",
+        button,
+        idleLabel: "Start challenge",
+        pendingLabel: "Starting",
+        activityTitle: "Starting professor challenge",
+        failureTitle: "Professor challenge failed"
+      });
+      return;
+    }
+
+    if (action === "restore-latest") {
+      const restoredSeed = await refreshLatestProfessorChallengeSeed({ announce: true });
+      if (restoredSeed) {
+        await refreshWorkspaceRunNext({ announce: false });
+        await refreshWorkspacePilotLoop({ announce: false });
+        addActivity(
+          "web-ui",
+          "Professor challenge restored",
+          "Latest persisted professor challenge seed restored into the Run tab.",
+          "passed"
+        );
+      }
+      return;
+    }
+
     if (action === "refresh-run-next") {
       await refreshLatestProfessorChallengeSeed({ announce: false });
       await refreshWorkspaceRunNext({ announce: true });

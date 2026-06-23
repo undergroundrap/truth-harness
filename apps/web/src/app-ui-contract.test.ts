@@ -654,8 +654,8 @@ describe("web UI action contracts", () => {
     const graphEdgeCodeStyles = styles.match(/\.graph-edge-list code \{[\s\S]*?\r?\n\}/u)?.[0];
     const runbookPacketStyles = styles.match(/#runbook-packet \{[\s\S]*?\r?\n\}/u)?.[0];
 
-    expect(html).toContain('src="./src/app.js?v=2026-06-22-professor-resume-actions"');
-    expect(html).toContain('href="./src/styles.css?v=2026-06-22-professor-resume-actions"');
+    expect(html).toContain('src="./src/app.js?v=2026-06-22-professor-empty-state"');
+    expect(html).toContain('href="./src/styles.css?v=2026-06-22-professor-empty-state"');
     expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
     expect(html).toContain('aria-hidden="true"');
     expect(source).toContain('const UI_AUDIT_SURFACES = ["trace", "plot", "runbook", "checks", "graph", "protocol", "notes", "replay", "report"];');
@@ -802,8 +802,13 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function refreshWorkspaceRunNext({ announce = true } = {})");
     expect(source).toContain("function renderWorkspaceRunNext()");
     expect(source).toContain("function renderProfessorChallengeSummary()");
+    expect(source).toContain("workspace-professor-challenge-empty");
+    expect(source).toContain("No reviewer workout loaded yet.");
+    expect(source).toContain("No professor challenge seed");
     expect(source).toContain("Seeded ${escapeHtml(created)} as a local reviewer workout");
     expect(source).toContain("function handleProfessorChallengeAction(action, button)");
+    expect(source).toContain('data-professor-action="seed-challenge"');
+    expect(source).toContain('data-professor-action="restore-latest"');
     expect(source).toContain('data-professor-action="refresh-run-next"');
     expect(source).toContain('data-professor-action="preview-loop"');
     expect(source).toContain('data-professor-action="save-handoff"');
@@ -902,6 +907,7 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".workspace-run-next-engine-step");
     expect(styles).toContain(".workspace-run-next-details");
     expect(styles).toContain(".workspace-professor-challenge");
+    expect(styles).toContain(".workspace-professor-challenge-empty");
     expect(styles).toContain(".workspace-professor-challenge-grid");
     expect(styles).toContain(".workspace-professor-challenge-next");
     expect(styles).toContain(".workspace-professor-challenge-actions");
