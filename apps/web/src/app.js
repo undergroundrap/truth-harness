@@ -8006,6 +8006,7 @@ function renderProfessorChallengeSummary() {
     </div>
     <p>Seeded ${escapeHtml(created)} as a local reviewer workout for refutation, exact arithmetic, CAS, SMT, and Lean-boundary gates. This panel is a queue, not proof.</p>
     ${professorChallengeFirstGateHtml(nextPlan)}
+    ${professorChallengeArtifactRefsHtml(professorChallengeSeed)}
     <div class="workspace-professor-challenge-grid">${caseCards}</div>
     <div class="workspace-professor-challenge-next">
       <span class="mini-label">next gate</span>
@@ -8020,6 +8021,48 @@ function renderProfessorChallengeSummary() {
       <button class="text-button compact-button" data-professor-action="copy-next-command" data-command="${escapeHtml(nextCommand)}" type="button">Copy next CLI</button>
     </div>
   </section>`;
+}
+
+function professorChallengeArtifactRefsHtml(seed) {
+  const refs = professorChallengeArtifactRefs(seed);
+  if (refs.length === 0) {
+    return "";
+  }
+
+  return `<section class="workspace-professor-challenge-artifacts" aria-label="Professor challenge local artifacts">
+    <div class="workspace-professor-challenge-head">
+      <div>
+        <span class="mini-label">local evidence packet</span>
+        <strong>Seed and run-next artifacts are saved locally.</strong>
+      </div>
+      <span class="status-pill passed">${escapeHtml(`${refs.length} refs`)}</span>
+    </div>
+    <p>These are the durable files an agent or reviewer can reopen, cite, and verify before continuing the challenge.</p>
+    ${workspaceRunNextArtifactRefsHtml(refs, "workspace-run-next", { limit: 4, compact: true })}
+  </section>`;
+}
+
+function professorChallengeArtifactRefs(seed) {
+  const refs = [];
+  const pushRef = (path, role, source) => {
+    const normalizedPath = normalizedWorkspaceArtifactRef(path);
+    if (!workspaceArtifactRefIsPreviewable(normalizedPath)) {
+      return;
+    }
+    refs.push({
+      path: normalizedPath,
+      role,
+      source,
+      citation: `${role}: ${normalizedPath}`
+    });
+  };
+
+  pushRef(seed?.paths?.json, "seed-json", "professorChallengeSeed.paths.json");
+  pushRef(seed?.paths?.markdown, "seed-markdown", "professorChallengeSeed.paths.markdown");
+  pushRef(seed?.runNext?.jsonPath, "run-next-json", "professorChallengeSeed.runNext.jsonPath");
+  pushRef(seed?.runNext?.markdownPath, "run-next-markdown", "professorChallengeSeed.runNext.markdownPath");
+
+  return uniqueWorkspaceArtifactRefObjects(refs);
 }
 
 function professorChallengeFirstGateHtml(plan) {

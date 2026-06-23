@@ -654,8 +654,8 @@ describe("web UI action contracts", () => {
     const graphEdgeCodeStyles = styles.match(/\.graph-edge-list code \{[\s\S]*?\r?\n\}/u)?.[0];
     const runbookPacketStyles = styles.match(/#runbook-packet \{[\s\S]*?\r?\n\}/u)?.[0];
 
-    expect(html).toContain('src="./src/app.js?v=2026-06-22-professor-first-gate"');
-    expect(html).toContain('href="./src/styles.css?v=2026-06-22-professor-first-gate"');
+    expect(html).toContain('src="./src/app.js?v=2026-06-22-professor-artifact-refs"');
+    expect(html).toContain('href="./src/styles.css?v=2026-06-22-professor-artifact-refs"');
     expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
     expect(html).toContain('aria-hidden="true"');
     expect(source).toContain('const UI_AUDIT_SURFACES = ["trace", "plot", "runbook", "checks", "graph", "protocol", "notes", "replay", "report"];');
@@ -811,6 +811,12 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function professorChallengeFirstGateHtml(plan)");
     expect(source).toContain("first gate to close");
     expect(source).toContain("No open verifier gate selected yet.");
+    expect(source).toContain("professorChallengeArtifactRefsHtml(professorChallengeSeed)");
+    expect(source).toContain("function professorChallengeArtifactRefsHtml(seed)");
+    expect(source).toContain("function professorChallengeArtifactRefs(seed)");
+    expect(source).toContain("local evidence packet");
+    expect(source).toContain("seed-json");
+    expect(source).toContain("run-next-json");
     expect(source).toContain("function handleProfessorChallengeAction(action, button)");
     expect(source).toContain('data-professor-action="seed-challenge"');
     expect(source).toContain('data-professor-action="restore-latest"');
@@ -914,6 +920,7 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".workspace-professor-challenge");
     expect(styles).toContain(".workspace-professor-challenge-empty");
     expect(styles).toContain(".workspace-professor-challenge-first-gate");
+    expect(styles).toContain(".workspace-professor-challenge-artifacts");
     expect(styles).toContain(".workspace-professor-challenge-grid");
     expect(styles).toContain(".workspace-professor-challenge-next");
     expect(styles).toContain(".workspace-professor-challenge-actions");
