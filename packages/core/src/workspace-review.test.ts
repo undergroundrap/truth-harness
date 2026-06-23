@@ -1694,6 +1694,55 @@ describe("workspace review", () => {
     expect(skipped.summary.totalItems).toBe(0);
   });
 
+  it("lets linked validation gates lead instead of default research harness scaffolding", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, {
+      now: "2026-06-13T00:00:00.000Z"
+    });
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      title: "Reusable fraction lemma",
+      objective: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      tasks: ["Investigate whether a denominator lemma can be reused across fraction receipts."],
+      now: "2026-06-13T00:01:00.000Z"
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 1,
+      now: "2026-06-13T00:02:00.000Z"
+    });
+    const validationGate = review.items.find((item) => item.kind === "validation-gate");
+    const customTask = review.items.find(
+      (item) => item.kind === "session-task" && item.title.includes("denominator lemma")
+    );
+
+    expect(validationGate).toBeDefined();
+    expect(customTask).toMatchObject({
+      kind: "session-task",
+      sessionId: harness.session.sessionId,
+      priority: "low"
+    });
+    expect(review.items.findIndex((item) => item.itemId === validationGate?.itemId)).toBeLessThan(
+      review.items.findIndex((item) => item.itemId === customTask?.itemId)
+    );
+    expect(review.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "session-task",
+        title: expect.stringContaining("Narrow the objective into falsifiable claims")
+      })
+    );
+    expect(review.items).not.toContainEqual(
+      expect.objectContaining({
+        kind: "session-next-check",
+        title: expect.stringContaining("Close the blocking validation gates")
+      })
+    );
+  });
+
   it("uses the latest research checkpoint as the active next-check frontier", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {

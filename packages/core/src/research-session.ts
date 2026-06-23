@@ -333,6 +333,19 @@ export function createResearchHarnessTasks(input: {
   return mergeStrings([], tasks);
 }
 
+export function isResearchHarnessDefaultTaskTitle(title: string, domains?: ResearchSessionDomain[]): boolean {
+  const normalizedTitle = title.trim();
+  if (!normalizedTitle) {
+    return false;
+  }
+
+  const defaultTitles = [
+    ...coreResearchHarnessTasks(),
+    ...normalizeDomains(domains, "").flatMap((domain) => researchHarnessDomainTasks(domain))
+  ];
+  return defaultTitles.includes(normalizedTitle);
+}
+
 export async function addResearchSessionCheckpoint(
   input: ResearchSessionCheckpointInput
 ): Promise<ResearchSessionCheckpointWriteResult> {

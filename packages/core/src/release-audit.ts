@@ -1353,6 +1353,23 @@ function researchSessionContinuityCheck(pack: CredibilityPack): ReleaseAuditChec
     });
   }
 
+  if (
+    pack.workspaceReview.summary.criticalItems === 0 &&
+    pack.workspaceReview.summary.highItems === 0 &&
+    pack.workspaceReview.summary.mediumItems === 0
+  ) {
+    return passCheck({
+      id: "research-session-continuity",
+      title: "Optional research session continuity",
+      summary: `${continuationItems} low-priority research-session reminder item(s) remain visible across ${sessions} session(s).`,
+      command: "truth-harness workspace review . --max-routes 0 --max-claims 0 --max-reports 0",
+      details: [
+        "Research sessions remain resumable, but current continuation items are low-priority reminders behind concrete validation gates and reviewer evidence.",
+        ...sessionItems.map((item) => `${item.priority}: ${item.title} (${item.source.ref})`)
+      ]
+    });
+  }
+
   return warnCheck({
     id: "research-session-continuity",
     title: "Research session continuity",

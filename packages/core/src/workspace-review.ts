@@ -23,6 +23,7 @@ import {
   type VerifierRoute
 } from "./verifier-route.js";
 import {
+  isResearchHarnessDefaultTaskTitle,
   listResearchSessions,
   type ResearchSession,
   type ResearchSessionCheckpoint,
@@ -275,7 +276,7 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
     ),
     ...claimItems,
     ...reportDrafts.flatMap((report) => reportDraftReviewItems(status.root, report)),
-    ...sessions.flatMap((session) => sessionReviewItems(status.root, session))
+    ...sessions.flatMap((session) => sessionReviewItems(status.root, session, validationPlans))
   ]);
   const passiveRouteInspectionItems = candidateItems.filter(isPassiveRouteInspectionItem);
   const passiveRouteInspectionWarning = passiveRouteInspectionItems.length > 0
@@ -1753,16 +1754,57 @@ function firstEquivalentReadyRoute(
   return undefined;
 }
 
-function sessionReviewItems(workspacePath: string, session: ResearchSession): WorkspaceReviewItem[] {
+function sessionReviewItems(
+  workspacePath: string,
+  session: ResearchSession,
+  validationPlans: ValidationPlan[]
+): WorkspaceReviewItem[] {
   const command = researchSessionCommand(workspacePath, session.sessionId);
+  const linkedPlans = linkedValidationPlansForSession(session, validationPlans);
+  const hasLinkedValidationPlan = linkedPlans.length > 0;
   const taskItems = session.tasks
     .filter((task) => task.status !== "done")
-    .map((task) => sessionTaskItem(command, session, task));
-  const nextCheckItems = recentSessionNextChecks(session).map(({ checkpoint, check }) =>
-    sessionNextCheckItem(command, session, checkpoint, check)
-  );
+    .filter((task) => shouldEmitSessionTask(session, task, hasLinkedValidationPlan))
+    .map((task) => sessionTaskItem(command, session, task, hasLinkedValidationPlan));
+  const nextCheckItems = recentSessionNextChecks(session)
+    .filter(({ check }) => shouldEmitSessionNextCheck(check, linkedPlans))
+    .map(({ checkpoint, check }) => sessionNextCheckItem(command, session, checkpoint, check, hasLinkedValidationPlan));
 
   return [...taskItems, ...nextCheckItems];
+}
+
+function shouldEmitSessionTask(
+  session: ResearchSession,
+  task: ResearchSessionTask,
+  hasLinkedValidationPlan: boolean
+): boolean {
+  if (!hasLinkedValidationPlan) {
+    return true;
+  }
+  if (task.status === "blocked" || task.status === "doing" || task.evidenceRefs.length > 0 || task.nextChecks.length > 0) {
+    return true;
+  }
+
+  return !isResearchHarnessDefaultTaskTitle(task.title, session.domains);
+}
+
+function shouldEmitSessionNextCheck(check: string, linkedPlans: ValidationPlan[]): boolean {
+  if (linkedPlans.length === 0) {
+    return true;
+  }
+
+  return !isLinkedValidationPlanNextCheck(check);
+}
+
+function isLinkedValidationPlanNextCheck(check: string): boolean {
+  const normalized = check.toLowerCase();
+  return (
+    /\bvalidation[- ]plan\b/u.test(normalized) ||
+    /\bvalidation gates?\b/u.test(normalized) ||
+    /\bblocking gates?\b/u.test(normalized) ||
+    /\bgate_[a-f0-9]+\b/u.test(normalized) ||
+    /\blinked validation\b/u.test(normalized)
+  );
 }
 
 function reportDraftReviewItems(workspacePath: string, summary: ReportDraftSummary): WorkspaceReviewItem[] {
@@ -1800,7 +1842,12 @@ function reportDraftReviewItem(workspacePath: string, summary: ReportDraftSummar
   };
 }
 
-function sessionTaskItem(command: string, session: ResearchSession, task: ResearchSessionTask): WorkspaceReviewItem {
+function sessionTaskItem(
+  command: string,
+  session: ResearchSession,
+  task: ResearchSessionTask,
+  hasLinkedValidationPlan: boolean
+): WorkspaceReviewItem {
   return {
     itemId: itemIdFor({
       kind: "session-task",
@@ -1809,7 +1856,7 @@ function sessionTaskItem(command: string, session: ResearchSession, task: Resear
       updatedAt: session.updatedAt
     }),
     kind: "session-task",
-    priority: priorityForSessionTask(task),
+    priority: priorityForSessionTask(task, hasLinkedValidationPlan),
     title: `Research task: ${task.title}`,
     summary: `${session.title} - ${task.status}`,
     command,
@@ -1828,7 +1875,8 @@ function sessionNextCheckItem(
   command: string,
   session: ResearchSession,
   checkpoint: ResearchSessionCheckpoint,
-  check: string
+  check: string,
+  hasLinkedValidationPlan: boolean
 ): WorkspaceReviewItem {
   return {
     itemId: itemIdFor({
@@ -1838,7 +1886,7 @@ function sessionNextCheckItem(
       check
     }),
     kind: "session-next-check",
-    priority: "medium",
+    priority: hasLinkedValidationPlan ? "low" : "medium",
     title: `Session next check: ${check}`,
     summary: `${session.title} checkpoint ${checkpoint.checkpointId}`,
     command,
@@ -2223,9 +2271,13 @@ function priorityForValidationGate(gate: ValidationGate): WorkspaceReviewPriorit
   return "low";
 }
 
-function priorityForSessionTask(task: ResearchSessionTask): WorkspaceReviewPriority {
+function priorityForSessionTask(task: ResearchSessionTask, hasLinkedValidationPlan = false): WorkspaceReviewPriority {
   if (task.status === "blocked" || task.status === "doing") {
     return "high";
+  }
+
+  if (hasLinkedValidationPlan) {
+    return "low";
   }
 
   return "medium";
