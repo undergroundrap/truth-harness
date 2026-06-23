@@ -979,6 +979,33 @@ describe("workspace run-next", () => {
     expect(plan.execution.summary).toContain("does not execute npm, Docker, or shell commands");
   });
 
+  it("marks Docker reviewer gates as manual boundaries during dry run", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    const review = minimalReview({
+      rootPath: root,
+      command: "docker compose run --rm lean-proof",
+      claimId: "claim_fake"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+
+    expect(plan.status).toBe("blocked");
+    expect(plan.dryRun).toBe(true);
+    expect(plan.execution).toMatchObject({
+      status: "blocked",
+      kind: "manual-container-gate",
+      command: "docker compose run --rm lean-proof"
+    });
+    expect(plan.execution.summary).toContain("Dry-run preflight");
+    expect(plan.execution.summary).toContain("approving the container boundary");
+  });
+
   it("blocks unavailable Lean proof backends before writing backend-unavailable retry noise", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });

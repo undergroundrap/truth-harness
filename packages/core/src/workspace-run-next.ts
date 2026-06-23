@@ -404,7 +404,7 @@ export async function createWorkspaceRunNextPlan(input: {
     localOnly: true,
     networkAccess: "none",
     dryRun: !input.executeLocal,
-    status: "planned",
+    status: dryRunExecution.status === "blocked" ? "blocked" : "planned",
     mode: input.review.autonomy.mode,
     reviewId: input.review.reviewId,
     item: nextItem ? workspaceRunNextItemSummary(nextItem) : undefined,
@@ -472,6 +472,14 @@ function workspaceRunNextDryRunExecution(
   const proofRepair = workspaceRunNextProofRepairDryRunExecution(item);
   if (proofRepair) {
     return proofRepair;
+  }
+
+  const manualBoundary = manualContainerGateBoundary(item.command);
+  if (manualBoundary) {
+    return {
+      ...manualBoundary,
+      summary: `Dry-run preflight: ${manualBoundary.summary}`
+    };
   }
 
   return {
