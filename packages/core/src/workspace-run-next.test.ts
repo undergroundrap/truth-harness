@@ -1195,6 +1195,84 @@ describe("workspace run-next", () => {
     expect(pack.markdown).toContain("Receipt replay examples:");
   });
 
+  it("attaches passing benchmark runs to linked validation gates and checkpoints the session", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    await writeBenchmarkSuite(root);
+    const harness = await writeResearchHarness({
+      rootPath: root,
+      objective: "Verify a software performance claim with a replayable benchmark.",
+      domains: ["code"],
+      now: "2026-06-18T00:01:00.000Z"
+    });
+    const validationPlan = harness.validationPlan?.plan;
+    const benchmarkGate = validationPlan?.gates.find((gate) => gate.kind === "benchmark");
+    if (!benchmarkGate) {
+      throw new Error("Expected a benchmark gate in software validation plan.");
+    }
+    const review = minimalReview({
+      rootPath: root,
+      command: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
+      claimId: "claim_benchmark_test",
+      kind: "validation-gate",
+      validationPlanId: validationPlan?.planId,
+      validationGateId: benchmarkGate.gateId,
+      validationGateKind: benchmarkGate.kind,
+      sessionId: harness.session.sessionId,
+      domain: "code"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-18T00:02:00.000Z"
+    });
+    const plans = await listValidationPlans(root);
+    const updatedPlan = plans.find((candidate) => candidate.planId === validationPlan?.planId);
+    const updatedGate = updatedPlan?.gates.find((gate) => gate.gateId === benchmarkGate.gateId);
+    const updatedSession = await readResearchSession(root, harness.session.sessionId);
+
+    expect(plan.status).toBe("executed");
+    expect(plan.execution).toMatchObject({
+      kind: "benchmark-run",
+      attached: true,
+      evidenceRef: expect.stringContaining("benchmark:.truth-harness/benchmarks/"),
+      result: {
+        benchmark: {
+          schemaVersion: "truth-harness.benchmark-run.v0",
+          totals: { total: 1, passed: 1, failed: 0 }
+        },
+        attachment: {
+          validationGate: {
+            satisfied: true,
+            gate: {
+              gateId: benchmarkGate.gateId,
+              status: "satisfied"
+            }
+          },
+          checkpoint: {
+            evidenceRefs: [expect.objectContaining({ kind: "benchmark" })]
+          }
+        }
+      }
+    });
+    expect(plan.execution.summary).toContain("Validation benchmark gate");
+    expect(plan.execution.summary).toContain("Checkpointed research session");
+    expect(updatedGate).toMatchObject({
+      status: "satisfied",
+      evidenceRefs: [expect.objectContaining({ kind: "benchmark" })],
+      nextChecks: []
+    });
+    expect(updatedSession.evidenceRefs).toContainEqual(expect.objectContaining({ kind: "benchmark" }));
+    expect(updatedSession.checkpoints).toContainEqual(
+      expect.objectContaining({
+        evidenceRefs: [expect.objectContaining({ kind: "benchmark" })],
+        decisions: [expect.stringContaining("satisfied by benchmark evidence")]
+      })
+    );
+  });
+
   it("adapts credibility action queues into run-next plans", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });

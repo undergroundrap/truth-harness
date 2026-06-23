@@ -2438,14 +2438,32 @@ async function executeWorkspaceRunNextItem(
       const failedText = result.record.totals.failed === 0
         ? "no failing cases"
         : `${result.record.totals.failed} failing case(s)`;
+      const validationEvidenceRef: ValidationEvidenceRef = {
+        kind: "benchmark",
+        ref: evidenceRef,
+        summary: `Benchmark run ${result.record.benchmarkRunId} for ${suite.id}: ${result.record.totals.passed}/${result.record.totals.total} cases passed.`
+      };
+      const validationGate = await maybeAttachValidationGateEvidence(workspace, item, validationEvidenceRef);
+      const checkpoint = await maybeCheckpointResearchSessionEvidence(workspace, item, validationEvidenceRef, {
+        route: { attached: false, summary: "No route obligation target was present for benchmark evidence." },
+        validationGate
+      });
+      const attached = validationGate.attached || checkpoint.attached;
+      const summaries = [
+        `Wrote benchmark run ${result.record.benchmarkRunId} for ${suite.id} with ${failedText}.`,
+        validationGate.attached ? validationGate.summary : undefined,
+        checkpoint.attached ? checkpoint.summary : undefined
+      ].filter((value): value is string => Boolean(value));
       return {
         status: "executed",
         kind: "benchmark-run",
         command: item.command,
         evidenceRef: `benchmark:${evidenceRef}`,
-        attached: false,
-        summary: `Wrote benchmark run ${result.record.benchmarkRunId} for ${suite.id} with ${failedText}.`,
-        result: result.record
+        attached,
+        summary: summaries.join(" "),
+        result: attached
+          ? { benchmark: result.record, attachment: { validationGate: validationGate.result, checkpoint: checkpoint.result?.checkpoint } }
+          : result.record
       };
     }
 
