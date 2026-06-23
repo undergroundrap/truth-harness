@@ -29,7 +29,7 @@ import { writeEngineVerificationRun, type EngineVerificationRequirements } from 
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { inspectLeanProject } from "./lean-project.js";
-import { writeLeanProofCheckRecord } from "./proof-backend.js";
+import { getProofBackendStatus, writeLeanProofCheckRecord } from "./proof-backend.js";
 import { readReportDraft } from "./report-draft.js";
 import { createReceipt } from "./receipt.js";
 import {
@@ -2458,12 +2458,33 @@ async function executeWorkspaceRunNextItem(
       if (unchangedAttempt) {
         return unchangedAttempt;
       }
+      const declarationName = typeof options.declaration === "string" ? options.declaration : undefined;
+      const scope = proofCheckScopeFromOptions(options);
+      const leanCommand = typeof options["lean-command"] === "string" ? options["lean-command"] : undefined;
+      const backendStatus = getProofBackendStatus({
+        leanCommand,
+        timeoutMs
+      }).backends.find((candidate) => candidate.backendId === "lean");
+      if (!backendStatus?.canCheckProofs) {
+        return {
+          status: "blocked",
+          kind: "proof-check",
+          command: item.command,
+          summary: `Local Lean proof checker backend is not available for run-next (${
+            backendStatus?.error ?? backendStatus?.status ?? "unknown"
+          }). Use the Docker proof path instead: ${dockerProofCheckCommand({
+            sourcePath,
+            declarationName,
+            scope
+          })}`
+        };
+      }
       const result = await writeLeanProofCheckRecord({
         rootPath: workspace,
         sourcePath,
-        declarationName: typeof options.declaration === "string" ? options.declaration : undefined,
-        scope: proofCheckScopeFromOptions(options),
-        leanCommand: typeof options["lean-command"] === "string" ? options["lean-command"] : undefined,
+        declarationName,
+        scope,
+        leanCommand,
         timeoutMs
       });
       const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
@@ -2731,6 +2752,25 @@ async function blockUnchangedRejectedProofAttempt(
 function dockerSmtCheckCommand(sourcePath: string, backend: SmtBackendId): string {
   const backendArgs = backend === "z3" ? "" : ` --backend ${quoteCommandArg(backend)}`;
   return `npm run docker:cli -- smt check ${quoteCommandArg(sourcePath)} --${backendArgs} --write`;
+}
+
+function dockerProofCheckCommand(input: {
+  sourcePath: string;
+  declarationName?: string;
+  scope?: { routeId?: string; obligationId?: string; statementHash?: string; statement?: string };
+}): string {
+  const args = [
+    "docker compose run --build --rm lean-proof node apps/cli/dist/index.js proof check",
+    quoteCommandArg(input.sourcePath),
+    input.declarationName ? `--declaration ${quoteCommandArg(input.declarationName)}` : "",
+    input.scope?.routeId ? `--route ${quoteCommandArg(input.scope.routeId)}` : "",
+    input.scope?.obligationId ? `--obligation ${quoteCommandArg(input.scope.obligationId)}` : "",
+    input.scope?.statement ? `--statement ${quoteCommandArg(input.scope.statement)}` : "",
+    input.scope?.statementHash ? `--statement-hash ${quoteCommandArg(input.scope.statementHash)}` : "",
+    "--write"
+  ].filter((part) => part.length > 0);
+
+  return args.join(" ");
 }
 
 function dockerCasCheckCommand(input: {

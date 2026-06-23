@@ -301,11 +301,11 @@ describe("workspace run-next", () => {
       throw new Error("Expected a proof gate in math validation plan.");
     }
     await mkdir(join(root, "proofs"), { recursive: true });
-    await writeFile(join(root, "proofs", "scoped.lean"), "theorem scoped_fixture : True := by trivial\n", "utf8");
+    await writeFile(join(root, "proofs", "scoped.lean"), "process.exit(1);\n", "utf8");
     const review = minimalReview({
       rootPath: root,
       command:
-        'truth-harness proof check proofs/scoped.lean --write --statement "3 / 4 + 5 / 8" --lean-command truth-harness-missing-lean --timeout-ms 50',
+        'truth-harness proof check proofs/scoped.lean --write --statement "3 / 4 + 5 / 8" --lean-command node --timeout-ms 200',
       claimId: "claim_validation_test",
       kind: "validation-gate",
       validationPlanId: validationPlan?.planId,
@@ -333,7 +333,7 @@ describe("workspace run-next", () => {
       result: {
         proof: {
           trust: "unverified",
-          status: "backend-unavailable",
+          status: "rejected",
           scope: {
             statement: "3 / 4 + 5 / 8"
           }
@@ -967,6 +967,40 @@ describe("workspace run-next", () => {
     expect(plan.status).toBe("blocked");
     expect(plan.execution.kind).toBe("manual-container-gate");
     expect(plan.execution.summary).toContain("does not execute npm, Docker, or shell commands");
+  });
+
+  it("blocks unavailable Lean proof backends before writing backend-unavailable retry noise", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    await mkdir(join(root, "Proofs"), { recursive: true });
+    await writeFile(join(root, "Proofs", "Smoke.lean"), "theorem smoke : True := by trivial\n", "utf8");
+    const review = minimalReview({
+      rootPath: root,
+      command:
+        'truth-harness proof check Proofs/Smoke.lean --write --lean-command truth-harness-missing-lean-command --declaration smoke --route route_proof_unavailable_test --obligation obl_proof_unavailable_test --statement "theorem smoke : True" --statement-hash hash_smoke',
+      claimId: "claim_fake",
+      kind: "route-obligation",
+      routeId: "route_proof_unavailable_test",
+      obligationId: "obl_proof_unavailable_test",
+      obligationKind: "formal-proof"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+    const proofFiles = await readdir(join(root, ".truth-harness", "proofs")).catch(() => []);
+
+    expect(plan.status).toBe("blocked");
+    expect(plan.execution.kind).toBe("proof-check");
+    expect(plan.execution.summary).toContain("Local Lean proof checker backend is not available");
+    expect(plan.execution.summary).toContain(
+      'docker compose run --build --rm lean-proof node apps/cli/dist/index.js proof check Proofs/Smoke.lean --declaration smoke --route route_proof_unavailable_test --obligation obl_proof_unavailable_test --statement "theorem smoke : True" --statement-hash hash_smoke --write'
+    );
+    expect(plan.execution.evidenceRef).toBeUndefined();
+    expect(proofFiles).toEqual([]);
   });
 
   it("blocks unavailable SMT backends before writing unverified retry noise", async () => {
