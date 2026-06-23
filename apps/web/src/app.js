@@ -7975,7 +7975,6 @@ function renderProfessorChallengeSummary() {
   const nextPlan = workspaceRunNextPlan ?? professorChallengeSeed.runNext?.plan;
   const nextItem = nextPlan?.item;
   const nextCommand = nextItem?.command ?? nextPlan?.execution?.command ?? "truth-harness workspace run-next . --json";
-  const nextTitle = nextItem?.title ?? "Run-next will select the highest-value open validation gate.";
   const created = professorChallengeSeed.createdAt ? new Date(professorChallengeSeed.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "local session";
   const caseCards = cases
     .map((seedCase, index) => {
@@ -8006,38 +8005,53 @@ function renderProfessorChallengeSummary() {
     </div>
     <p>Seeded ${escapeHtml(created)} as a local reviewer workout for refutation, exact arithmetic, CAS, SMT, and Lean-boundary gates. This panel is a queue, not proof.</p>
     ${professorChallengeFirstGateHtml(nextPlan)}
-    ${professorChallengeArtifactRefsHtml(professorChallengeSeed)}
+    ${professorChallengeReviewerHandoffHtml(professorChallengeSeed, nextPlan, { seedCommand, nextCommand })}
     <div class="workspace-professor-challenge-grid">${caseCards}</div>
-    <div class="workspace-professor-challenge-next">
-      <span class="mini-label">next gate</span>
-      <strong>${escapeHtml(nextTitle)}</strong>
-      <code>${escapeHtml(nextCommand)}</code>
-    </div>
     <div class="workspace-professor-challenge-actions" aria-label="Professor challenge resume actions">
       <button class="text-button compact-button strong-action" data-professor-action="refresh-run-next" type="button">Refresh gates</button>
       <button class="text-button compact-button" data-professor-action="preview-loop" type="button">Preview loop</button>
       <button class="text-button compact-button" data-professor-action="save-handoff" type="button">Save handoff</button>
+      <button class="text-button compact-button" data-professor-action="copy-handoff-packet" type="button">Copy packet</button>
       <button class="text-button compact-button" data-professor-action="copy-seed-command" data-command="${escapeHtml(seedCommand)}" type="button">Copy restore CLI</button>
       <button class="text-button compact-button" data-professor-action="copy-next-command" data-command="${escapeHtml(nextCommand)}" type="button">Copy next CLI</button>
     </div>
   </section>`;
 }
 
-function professorChallengeArtifactRefsHtml(seed) {
+function professorChallengeReviewerHandoffHtml(seed, plan, { seedCommand, nextCommand } = {}) {
   const refs = professorChallengeArtifactRefs(seed);
-  if (refs.length === 0) {
-    return "";
-  }
-
-  return `<section class="workspace-professor-challenge-artifacts" aria-label="Professor challenge local artifacts">
+  const item = plan?.item;
+  const firstGate = plan?.rationale?.target ?? item?.title ?? "No open verifier gate selected yet.";
+  const evidence = plan?.rationale?.candidateEvidenceRef ?? plan?.execution?.evidenceRef ?? evidenceRefFromCommand(nextCommand) ?? "No evidence artifact attached yet.";
+  const stop = plan?.rationale?.firstStopCondition ?? plan?.stopConditions?.[0] ?? "Stop if the required verifier is unavailable, disagrees, or returns malformed evidence.";
+  const seedPath = normalizedWorkspaceArtifactRef(seed?.paths?.json) || "not saved yet";
+  const runNextPath = normalizedWorkspaceArtifactRef(seed?.runNext?.jsonPath) || "not saved yet";
+  return `<section class="workspace-professor-challenge-handoff" aria-label="Professor challenge reviewer handoff">
     <div class="workspace-professor-challenge-head">
       <div>
-        <span class="mini-label">local evidence packet</span>
-        <strong>Seed and run-next artifacts are saved locally.</strong>
+        <span class="mini-label">reviewer handoff packet</span>
+        <strong>Everything needed to resume the challenge is local and citable.</strong>
       </div>
       <span class="status-pill passed">${escapeHtml(`${refs.length} refs`)}</span>
     </div>
-    <p>These are the durable files an agent or reviewer can reopen, cite, and verify before continuing the challenge.</p>
+    <p>Use this packet when handing the workspace to Claude, Codex, or a human reviewer: reopen the seed, inspect the run-next packet, close the first verifier gate, then record stronger evidence.</p>
+    <dl class="workspace-run-next-mini-details workspace-professor-challenge-handoff-grid">
+      <div><dt>Seed</dt><dd>${escapeHtml(seedPath)}</dd></div>
+      <div><dt>Run-next</dt><dd>${escapeHtml(runNextPath)}</dd></div>
+      <div><dt>First gate</dt><dd>${escapeHtml(firstGate)}</dd></div>
+      <div><dt>Evidence needed</dt><dd>${artifactAwareValueHtml(evidence, "workspace-run-next")}</dd></div>
+      <div><dt>Stop rule</dt><dd>${escapeHtml(stop)}</dd></div>
+    </dl>
+    <div class="workspace-professor-challenge-command-stack">
+      <article class="workspace-professor-challenge-command-card">
+        <span class="mini-label">restore seed</span>
+        <code>${escapeHtml(seedCommand ?? "truth-harness workspace hard-math-seeds . --preset professor-challenge --latest --json")}</code>
+      </article>
+      <article class="workspace-professor-challenge-command-card">
+        <span class="mini-label">next verifier action</span>
+        <code>${escapeHtml(nextCommand ?? "truth-harness workspace run-next . --json")}</code>
+      </article>
+    </div>
     ${workspaceRunNextArtifactRefsHtml(refs, "workspace-run-next", { limit: 4, compact: true })}
   </section>`;
 }
@@ -8063,6 +8077,43 @@ function professorChallengeArtifactRefs(seed) {
   pushRef(seed?.runNext?.markdownPath, "run-next-markdown", "professorChallengeSeed.runNext.markdownPath");
 
   return uniqueWorkspaceArtifactRefObjects(refs);
+}
+
+function professorChallengeReviewerHandoffText(seed, plan, { seedCommand, nextCommand } = {}) {
+  const refs = professorChallengeArtifactRefs(seed);
+  const item = plan?.item;
+  const firstGate = plan?.rationale?.target ?? item?.title ?? "No open verifier gate selected yet.";
+  const evidence = plan?.rationale?.candidateEvidenceRef ?? plan?.execution?.evidenceRef ?? evidenceRefFromCommand(nextCommand) ?? "No evidence artifact attached yet.";
+  const stop = plan?.rationale?.firstStopCondition ?? plan?.stopConditions?.[0] ?? "Stop if the required verifier is unavailable, disagrees, or returns malformed evidence.";
+  const seedId = seed?.seedId ?? "professor-challenge";
+  const seedPath = normalizedWorkspaceArtifactRef(seed?.paths?.json) || "not saved yet";
+  const runNextPath = normalizedWorkspaceArtifactRef(seed?.runNext?.jsonPath) || "not saved yet";
+  const artifactLines = refs.length > 0
+    ? refs.map((ref) => `- ${ref.role}: ${ref.path}${ref.sha256 ? ` (sha256 ${ref.sha256})` : ""}`)
+    : ["- no saved local artifact refs in this browser state"];
+
+  return [
+    "# Truth Harness Professor Challenge Handoff",
+    "",
+    `Seed: ${seedId}`,
+    `Seed file: ${seedPath}`,
+    `Run-next file: ${runNextPath}`,
+    "",
+    "## First Gate",
+    firstGate,
+    "",
+    `Evidence needed: ${String(evidence)}`,
+    `Stop rule: ${stop}`,
+    "",
+    "## Commands",
+    `Restore seed: ${seedCommand ?? "truth-harness workspace hard-math-seeds . --preset professor-challenge --latest --json"}`,
+    `Next verifier action: ${nextCommand ?? "truth-harness workspace run-next . --json"}`,
+    "",
+    "## Local Artifacts",
+    ...artifactLines,
+    "",
+    "Boundary: this packet is a local handoff. It does not prove the claim; it tells the next agent or reviewer what evidence must be produced before trust can upgrade."
+  ].join("\n");
 }
 
 function professorChallengeFirstGateHtml(plan) {
@@ -8111,6 +8162,11 @@ async function handleProfessorChallengeAction(action, button) {
 
   if (action === "copy-seed-command" || action === "copy-next-command") {
     await copyWorkspaceRunNextHandoffCommand(button?.dataset.command, button);
+    return;
+  }
+
+  if (action === "copy-handoff-packet") {
+    await copyProfessorChallengeHandoffPacket(button);
     return;
   }
 
@@ -8180,6 +8236,27 @@ async function handleProfessorChallengeAction(action, button) {
       button.disabled = false;
     }
   }
+}
+
+async function copyProfessorChallengeHandoffPacket(button) {
+  if (!professorChallengeSeed) {
+    return;
+  }
+  const seedCommand = "truth-harness workspace hard-math-seeds . --preset professor-challenge --latest --json";
+  const nextPlan = workspaceRunNextPlan ?? professorChallengeSeed.runNext?.plan;
+  const nextCommand = nextPlan?.item?.command ?? nextPlan?.execution?.command ?? "truth-harness workspace run-next . --json";
+  const packet = professorChallengeReviewerHandoffText(professorChallengeSeed, nextPlan, { seedCommand, nextCommand });
+
+  await copyOrDownloadText({
+    text: `${packet}\n`,
+    filename: `truth-harness-professor-handoff-${safeFilenameTimestamp()}.md`,
+    type: "text/markdown",
+    button,
+    copiedTitle: "Copied professor handoff",
+    copiedDetail: "Professor challenge seed, next gate, evidence need, commands, and artifact refs copied for agent handoff.",
+    fallbackTitle: "Downloaded professor handoff",
+    fallbackDetail: "the professor challenge handoff packet was saved as Markdown instead."
+  });
 }
 
 function renderWorkspacePilotLoop() {

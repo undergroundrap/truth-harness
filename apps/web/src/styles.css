@@ -4120,7 +4120,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   white-space: nowrap;
 }
 
-.workspace-professor-challenge-artifacts {
+.workspace-professor-challenge-handoff {
   display: grid;
   gap: 9px;
   min-width: 0;
@@ -4128,6 +4128,35 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   border-radius: 8px;
   background: #0d0c0a;
   padding: 11px;
+}
+
+.workspace-professor-challenge-handoff-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+}
+
+.workspace-professor-challenge-command-stack {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.workspace-professor-challenge-command-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0a0a0a;
+  padding: 9px;
+}
+
+.workspace-professor-challenge-command-card code {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .workspace-professor-challenge p {
