@@ -172,6 +172,10 @@ describe("workspace review", () => {
         command: 'truth-harness cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write'
       },
       {
+        claim: "For real x, sin(x)^2 + cos(x)^2 = 1.",
+        command: `truth-harness verify "For real x, sin(x)^2 + cos(x)^2 = 1." --write --workspace ${root} --json`
+      },
+      {
         claim: "The Lean fixture theorem `smoke : True` is accepted by the configured proof checker.",
         command:
           'truth-harness proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean --declaration smoke --statement "The Lean fixture theorem `smoke : True` is accepted by the configured proof checker." --write'
@@ -211,7 +215,9 @@ describe("workspace review", () => {
         })
       );
     }
-    expect(review.items.filter((item) => item.command.includes("truth-harness verify")).length).toBe(0);
+    expect(review.items.filter((item) => item.command.includes("truth-harness verify")).map((item) => item.command)).toEqual([
+      cases[2]?.command
+    ]);
   });
 
   it("renders concrete validation attach commands for candidate session evidence", async () => {

@@ -1222,7 +1222,7 @@ function concreteValidationGateProofCommand(plan: ValidationPlan, workspacePath?
   const claim = plan.claim.trim();
   const normalized = claim.toLowerCase().replace(/\s+/gu, " ");
 
-  if (isBoundedIntegerSolutionSetClaim(normalized) || isUniversalParityClaim(normalized)) {
+  if (isBoundedIntegerSolutionSetClaim(normalized) || isUniversalParityClaim(normalized) || isTrigPythagoreanIdentityClaim(normalized)) {
     const workspaceArgs = workspacePath ? ` --workspace ${quoteCommandArg(workspacePath)}` : "";
     return `truth-harness verify ${quoteCommandArg(claim)} --write${workspaceArgs} --json`;
   }
@@ -1250,6 +1250,16 @@ function isBoundedIntegerSolutionSetClaim(normalizedClaim: string): boolean {
 
 function isUniversalParityClaim(normalizedClaim: string): boolean {
   return /^for (?:all|every) integers? n,?\s+.+\s+is\s+(?:even|odd)\.?$/iu.test(normalizedClaim);
+}
+
+function isTrigPythagoreanIdentityClaim(normalizedClaim: string): boolean {
+  const canonical = normalizedClaim
+    .replace(/\bsin\s*\^\s*2\s*\(\s*x\s*\)/giu, "sin(x)^2")
+    .replace(/\bcos\s*\^\s*2\s*\(\s*x\s*\)/giu, "cos(x)^2")
+    .replace(/\s+/gu, "")
+    .replace(/\.$/u, "");
+
+  return /^(?:forrealx,?|forallrealx,?|foreveryrealx,?)sin\(x\)\^2\+cos\(x\)\^2=1$/iu.test(canonical);
 }
 
 function routeReviewItems(

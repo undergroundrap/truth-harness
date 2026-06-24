@@ -121,7 +121,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
-  const symbolicPrompt = parseSymbolicPrompt(normalizedProblem);
+  const symbolicPrompt = parseSymbolicPrompt(normalizedProblem) ?? parseSymbolicIdentityClaim(normalizedProblem);
   if (symbolicPrompt) {
     return completeSymbolicReceipt({
       problem,
@@ -1721,6 +1721,29 @@ function parseUniversalParityClaim(problem: string): UniversalParityClaim | unde
   return {
     expressionSource: match[1].trim(),
     parity: match[2].toLowerCase() as "even" | "odd"
+  };
+}
+
+function parseSymbolicIdentityClaim(problem: string): SymbolicPrompt | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/^(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/\.$/u, "");
+  const canonical = candidate
+    .toLowerCase()
+    .replace(/\bsin\s*\^\s*2\s*\(\s*x\s*\)/gu, "sin(x)^2")
+    .replace(/\bcos\s*\^\s*2\s*\(\s*x\s*\)/gu, "cos(x)^2")
+    .replace(/\s+/gu, "");
+
+  if (!/^(?:forrealx,?|forallrealx,?|foreveryrealx,?)sin\(x\)\^2\+cos\(x\)\^2=1$/u.test(canonical)) {
+    return undefined;
+  }
+
+  return {
+    operation: "simplify",
+    expression: "sin(x)^2 + cos(x)^2",
+    variable: "x"
   };
 }
 

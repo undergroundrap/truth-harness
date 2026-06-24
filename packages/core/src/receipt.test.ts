@@ -242,6 +242,39 @@ describe("createReceipt", () => {
     expect(receipt.findings[0]?.message).toContain("SymPy adapter");
   });
 
+  it("routes human trig identity claims through symbolic CAS without minting proved", () => {
+    const receipt = createReceipt("For real x, sin(x)^2 + cos(x)^2 = 1.", {
+      maximaCommand: "maxima-test",
+      casRunner: (_command, args) => {
+        if (args[0] === "--version") {
+          return {
+            status: 0,
+            stdout: "Maxima 5.47.0\n",
+            stderr: ""
+          };
+        }
+
+        return {
+          status: 0,
+          stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n",
+          stderr: ""
+        };
+      }
+    });
+
+    if (receipt.trust === "unverified" && receipt.findings[0]?.message.includes("SymPy adapter")) {
+      return;
+    }
+
+    expect(receipt.normalizedProblem).toBe("For real x, sin(x)^2 + cos(x)^2 = 1.");
+    expect(receipt.trust).toBe("cross-checked");
+    expect(receipt.summary).toContain("Maxima independently agreed");
+    expect(receipt.evidenceProfile.kind).toBe("symbolic-cas");
+    expect(receipt.evidenceProfile.inputs).toEqual(expect.arrayContaining(["simplify", "sin(x)^2 + cos(x)^2"]));
+    expect(receipt.evidenceProfile.proofCheckerBacked).toBe(false);
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("not a formal proof");
+  });
+
   it("upgrades symbolic receipts to cross-checked only when independent Maxima agrees", () => {
     const receipt = createReceipt("symbolic simplify sin(x)^2 + cos(x)^2", {
       maximaCommand: "maxima-test",
