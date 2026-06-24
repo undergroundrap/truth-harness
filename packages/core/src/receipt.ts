@@ -6,7 +6,7 @@ import { Rational } from "./rational.js";
 import { createArithmeticTrace } from "./arithmetic-trace.js";
 import { checkSymbolicWithMaximaSync, type CasBackendCommandRunner } from "./cas-backend.js";
 import { stableHash } from "./stable-hash.js";
-import { compileSymbolicClaim } from "./symbolic-claim.js";
+import { compileSymbolicClaim, type CompiledSymbolicClaim } from "./symbolic-claim.js";
 import { summarizeSympyCheckStatus } from "./sympy-check.js";
 import { parseSymbolicPrompt, runSympySync, type SymbolicPrompt } from "./sympy.js";
 import type {
@@ -122,12 +122,14 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
-  const symbolicPrompt = parseSymbolicPrompt(normalizedProblem) ?? compileSymbolicClaim(normalizedProblem)?.prompt;
+  const compiledSymbolicClaim = compileSymbolicClaim(normalizedProblem);
+  const symbolicPrompt = parseSymbolicPrompt(normalizedProblem) ?? compiledSymbolicClaim?.prompt;
   if (symbolicPrompt) {
     return completeSymbolicReceipt({
       problem,
       normalizedProblem,
       symbolicPrompt,
+      compiledSymbolicClaim,
       options,
       createdAt,
       nodes,
@@ -393,6 +395,7 @@ function completeSymbolicReceipt(args: {
   problem: string;
   normalizedProblem: string;
   symbolicPrompt: SymbolicPrompt;
+  compiledSymbolicClaim?: CompiledSymbolicClaim;
   options: CreateReceiptOptions;
   createdAt: string;
   nodes: GraphNode[];
@@ -469,11 +472,21 @@ function completeSymbolicReceipt(args: {
     mimeType: "application/json",
     content: JSON.stringify(independentCasCheck, null, 2)
   });
-  const symbolicTrust: TrustLabel = checkStatus === "failed" || independentCasCheck.status === "failed"
-    ? "unverified"
-    : independentCasCheck.status === "passed"
-      ? "cross-checked"
-      : "exact-computed";
+  const expectedResultStatus = args.compiledSymbolicClaim
+    ? symbolicResultMatchesExpected(result.result, args.compiledSymbolicClaim.expectedResult)
+      ? "passed"
+      : "failed"
+    : "not-applicable";
+  const expectedResultMismatched = expectedResultStatus === "failed";
+  const expectedResultRefutes =
+    expectedResultMismatched && checkStatus !== "failed" && independentCasCheck.status !== "failed";
+  const symbolicTrust: TrustLabel = expectedResultRefutes
+    ? "refuted"
+    : checkStatus === "failed" || independentCasCheck.status === "failed"
+      ? "unverified"
+      : independentCasCheck.status === "passed"
+        ? "cross-checked"
+        : "exact-computed";
   const artifactPayload = {
     adapter: "local-sympy-subprocess",
     operation: result.operation,
@@ -484,6 +497,8 @@ function completeSymbolicReceipt(args: {
     latex: result.latex,
     checks,
     checkStatus,
+    compiledSymbolicClaim: args.compiledSymbolicClaim,
+    expectedResultStatus,
     independentCasCheckRef: independentCasArtifact.id,
     independentCasStatus: independentCasCheck.status,
     sympyVersion: result.sympyVersion,
@@ -502,10 +517,13 @@ function completeSymbolicReceipt(args: {
       operation: result.operation,
       pythonCommand: result.pythonCommand,
       sympyVersion: result.sympyVersion,
-      checkStatus
+      checkStatus,
+      expectedResultStatus
     },
     trust: symbolicTrust,
-    summary: `Ran SymPy ${result.operation} in a bounded local subprocess with ${checks.length} local sanity check(s).`,
+    summary: expectedResultRefutes && args.compiledSymbolicClaim
+      ? `Ran SymPy ${result.operation}; expected ${args.compiledSymbolicClaim.expectedResult} but got ${result.result}.`
+      : `Ran SymPy ${result.operation} in a bounded local subprocess with ${checks.length} local sanity check(s).`,
     artifactRefs: [artifact.id]
   });
   args.edges.push({ from: args.normalizedNode.id, to: toolNode.id, label: "checked-by" });
@@ -514,7 +532,9 @@ function completeSymbolicReceipt(args: {
     kind: "computation",
     payload: artifactPayload,
     trust: symbolicTrust,
-    summary: `Symbolic ${result.operation} result is ${result.result}.`,
+    summary: expectedResultRefutes && args.compiledSymbolicClaim
+      ? `Symbolic ${result.operation} refuted the compiled claim: expected ${args.compiledSymbolicClaim.expectedResult}, got ${result.result}.`
+      : `Symbolic ${result.operation} result is ${result.result}.`,
     artifactRefs: [artifact.id, independentCasArtifact.id]
   });
   args.edges.push({ from: toolNode.id, to: computationNode.id, label: "produced" });
@@ -529,9 +549,17 @@ function completeSymbolicReceipt(args: {
   args.edges.push({ from: computationNode.id, to: independentCasNode.id, label: "independently-checked-by" });
 
   args.findings.push({
-    level: checkStatus === "failed" ? "warning" : "info",
-    message: `Symbolic CAS output is exact computation, not a formal proof of arbitrary surrounding claims. Local sanity checks: ${checkStatus}.`
+    level: checkStatus === "failed" || expectedResultMismatched ? "warning" : "info",
+    message: expectedResultRefutes && args.compiledSymbolicClaim
+      ? `Compiled symbolic claim expected ${args.compiledSymbolicClaim.expectedResult}, but the CAS result was ${result.result}; the claim is refuted inside this compiler boundary.`
+      : `Symbolic CAS output is exact computation, not a formal proof of arbitrary surrounding claims. Local sanity checks: ${checkStatus}.`
   });
+  if (args.compiledSymbolicClaim) {
+    args.findings.push({
+      level: "info",
+      message: `Compiled symbolic claim boundary: ${args.compiledSymbolicClaim.boundarySummary} Expected result check: ${expectedResultStatus}.`
+    });
+  }
   args.findings.push({
     level: "info",
     message: "SymPy sanity checks are same-engine checks using symbolic residuals and deterministic numeric samples; use a second CAS, SMT, or proof checker before stronger claims."
@@ -543,11 +571,13 @@ function completeSymbolicReceipt(args: {
     normalizedProblem: args.normalizedProblem,
     createdAt: args.createdAt,
     trust: symbolicTrust,
-    summary: checkStatus === "failed" || independentCasCheck.status === "failed"
-      ? `SymPy ${result.operation} produced ${result.result}, but a symbolic check failed.`
-      : independentCasCheck.status === "passed"
-        ? `SymPy ${result.operation} result: ${result.result}; Maxima independently agreed.`
-        : `SymPy ${result.operation} result: ${result.result}; local sanity checks ${checkStatus}.`,
+    summary: expectedResultRefutes && args.compiledSymbolicClaim
+      ? `Compiled symbolic claim expected ${args.compiledSymbolicClaim.expectedResult}, but SymPy ${result.operation} produced ${result.result}; claim refuted inside the symbolic compiler boundary.`
+      : checkStatus === "failed" || independentCasCheck.status === "failed"
+        ? `SymPy ${result.operation} produced ${result.result}, but a symbolic check failed.`
+        : independentCasCheck.status === "passed"
+          ? `SymPy ${result.operation} result: ${result.result}; Maxima independently agreed.`
+          : `SymPy ${result.operation} result: ${result.result}; local sanity checks ${checkStatus}.`,
     evidenceProfile: {
       kind: "symbolic-cas",
       backends: [
@@ -573,6 +603,13 @@ function completeSymbolicReceipt(args: {
       outputs: [
         result.result,
         `sanityChecks=${checkStatus}`,
+        ...(args.compiledSymbolicClaim
+          ? [
+              `compiledClaim=${args.compiledSymbolicClaim.claimKind}`,
+              `expectedResult=${args.compiledSymbolicClaim.expectedResult}`,
+              `expectedResultCheck=${expectedResultStatus}`
+            ]
+          : []),
         `independentCas=maxima:${independentCasCheck.status}`,
         ...checks.map((check) => `${check.id}:${check.status}`)
       ],
@@ -581,6 +618,9 @@ function completeSymbolicReceipt(args: {
       limitations: [
         "CAS output is exact computation, not a formal proof of arbitrary surrounding claims.",
         "SymPy sanity checks are same-engine symbolic and numeric checks, not an independent CAS or proof-checker result.",
+        ...(args.compiledSymbolicClaim
+          ? [`Compiled claim boundary: ${args.compiledSymbolicClaim.boundarySummary}`]
+          : []),
         independentCasLimitation(independentCasCheck.status)
       ]
     },
@@ -589,6 +629,14 @@ function completeSymbolicReceipt(args: {
     artifacts: args.artifacts,
     findings: args.findings
   });
+}
+
+function symbolicResultMatchesExpected(result: string, expectedResult: string): boolean {
+  return normalizeSymbolicResult(result) === normalizeSymbolicResult(expectedResult);
+}
+
+function normalizeSymbolicResult(value: string): string {
+  return value.replace(/\s+/gu, "").replace(/^\+/u, "");
 }
 
 function independentCasSummary(status: string): string {

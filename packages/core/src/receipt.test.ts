@@ -275,6 +275,45 @@ describe("createReceipt", () => {
     expect(receipt.evidenceProfile.limitations.join(" ")).toContain("not a formal proof");
   });
 
+  it("verifies compiled polynomial identities by checking the residual is zero", () => {
+    const receipt = createReceipt("For all real x, (x + 1)^2 = x^2 + 2*x + 1", {
+      maximaCommand: "truth-harness-missing-maxima-command"
+    });
+
+    if (receipt.trust === "unverified" && receipt.findings[0]?.message.includes("SymPy adapter")) {
+      return;
+    }
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("local sanity checks passed");
+    expect(receipt.evidenceProfile.kind).toBe("symbolic-cas");
+    expect(receipt.evidenceProfile.inputs).toEqual(
+      expect.arrayContaining(["simplify", "((x + 1)^2) - (x^2 + 2*x + 1)", "variable=x"])
+    );
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["0", "compiledClaim=polynomial-identity", "expectedResult=0", "expectedResultCheck=passed"])
+    );
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("residual must simplify to 0");
+  });
+
+  it("refutes compiled polynomial identities when the residual is nonzero", () => {
+    const receipt = createReceipt("For all real x, (x + 1)^2 = x^2 + 2*x + 2", {
+      maximaCommand: "truth-harness-missing-maxima-command"
+    });
+
+    if (receipt.trust === "unverified" && receipt.findings[0]?.message.includes("SymPy adapter")) {
+      return;
+    }
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("expected 0");
+    expect(receipt.summary).toContain("claim refuted");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["-1", "compiledClaim=polynomial-identity", "expectedResult=0", "expectedResultCheck=failed"])
+    );
+    expect(receipt.findings.map((finding) => finding.message).join(" ")).toContain("refuted inside this compiler boundary");
+  });
+
   it("upgrades symbolic receipts to cross-checked only when independent Maxima agrees", () => {
     const receipt = createReceipt("symbolic simplify sin(x)^2 + cos(x)^2", {
       maximaCommand: "maxima-test",

@@ -176,6 +176,10 @@ describe("workspace review", () => {
         command: `truth-harness verify "For real x, sin(x)^2 + cos(x)^2 = 1." --write --workspace ${root} --json`
       },
       {
+        claim: "For all real x, (x + 1)^2 = x^2 + 2*x + 1",
+        command: `truth-harness verify "For all real x, (x + 1)^2 = x^2 + 2*x + 1" --write --workspace ${root} --json`
+      },
+      {
         claim: "The Lean fixture theorem `smoke : True` is accepted by the configured proof checker.",
         command:
           'truth-harness proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean --declaration smoke --statement "The Lean fixture theorem `smoke : True` is accepted by the configured proof checker." --write'
@@ -202,7 +206,7 @@ describe("workspace review", () => {
 
     const review = await createWorkspaceReview({
       rootPath: root,
-      now: "2026-06-18T00:05:00.000Z"
+      now: "2026-06-18T00:06:00.000Z"
     });
 
     for (const [index, planId] of planIds.entries()) {
@@ -216,6 +220,7 @@ describe("workspace review", () => {
       );
     }
     expect(review.items.filter((item) => item.command.includes("truth-harness verify")).map((item) => item.command)).toEqual([
+      cases[3]?.command,
       cases[2]?.command
     ]);
   });
