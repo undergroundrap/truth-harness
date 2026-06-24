@@ -438,6 +438,7 @@ export {
   writeSmtProblemSource
 } from "./smt-problem.js";
 export { parseSymbolicPrompt, runSympy, runSympySync } from "./sympy.js";
+export { compileSymbolicClaim, isCompiledSymbolicClaim } from "./symbolic-claim.js";
 export { summarizeSympyCheckStatus } from "./sympy-check.js";
 export { createReceipt } from "./receipt.js";
 export { createSourceCitationReceipt } from "./source-receipt.js";

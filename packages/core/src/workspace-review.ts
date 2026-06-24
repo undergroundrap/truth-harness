@@ -39,6 +39,7 @@ import {
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { listSmtChecks, type SmtCheckSummary } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
+import { isCompiledSymbolicClaim } from "./symbolic-claim.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
 import { listValidationPlans, type ValidationEvidenceRef, type ValidationGate, type ValidationPlan } from "./validation-plan.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
@@ -1222,7 +1223,7 @@ function concreteValidationGateProofCommand(plan: ValidationPlan, workspacePath?
   const claim = plan.claim.trim();
   const normalized = claim.toLowerCase().replace(/\s+/gu, " ");
 
-  if (isBoundedIntegerSolutionSetClaim(normalized) || isUniversalParityClaim(normalized) || isTrigPythagoreanIdentityClaim(normalized)) {
+  if (isBoundedIntegerSolutionSetClaim(normalized) || isUniversalParityClaim(normalized) || isCompiledSymbolicClaim(claim)) {
     const workspaceArgs = workspacePath ? ` --workspace ${quoteCommandArg(workspacePath)}` : "";
     return `truth-harness verify ${quoteCommandArg(claim)} --write${workspaceArgs} --json`;
   }
@@ -1250,16 +1251,6 @@ function isBoundedIntegerSolutionSetClaim(normalizedClaim: string): boolean {
 
 function isUniversalParityClaim(normalizedClaim: string): boolean {
   return /^for (?:all|every) integers? n,?\s+.+\s+is\s+(?:even|odd)\.?$/iu.test(normalizedClaim);
-}
-
-function isTrigPythagoreanIdentityClaim(normalizedClaim: string): boolean {
-  const canonical = normalizedClaim
-    .replace(/\bsin\s*\^\s*2\s*\(\s*x\s*\)/giu, "sin(x)^2")
-    .replace(/\bcos\s*\^\s*2\s*\(\s*x\s*\)/giu, "cos(x)^2")
-    .replace(/\s+/gu, "")
-    .replace(/\.$/u, "");
-
-  return /^(?:forrealx,?|forallrealx,?|foreveryrealx,?)sin\(x\)\^2\+cos\(x\)\^2=1$/iu.test(canonical);
 }
 
 function routeReviewItems(
