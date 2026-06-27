@@ -291,9 +291,9 @@ describe("createReceipt", () => {
       expect.arrayContaining(["simplify", "((x + 1)^2) - (x^2 + 2*x + 1)", "variable=x"])
     );
     expect(receipt.evidenceProfile.outputs).toEqual(
-      expect.arrayContaining(["0", "compiledClaim=polynomial-identity", "expectedResult=0", "expectedResultCheck=passed"])
+      expect.arrayContaining(["0", "compilerContract=symbolic.polynomial-identity-residual.v1", "compiledClaim=polynomial-identity", "expectedResult=0", "expectedResultCheck=passed"])
     );
-    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("residual must simplify to 0");
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("residual (left) - (right) must simplify exactly to 0");
   });
 
   it("refutes compiled polynomial identities when the residual is nonzero", () => {
@@ -309,7 +309,7 @@ describe("createReceipt", () => {
     expect(receipt.summary).toContain("expected 0");
     expect(receipt.summary).toContain("claim refuted");
     expect(receipt.evidenceProfile.outputs).toEqual(
-      expect.arrayContaining(["-1", "compiledClaim=polynomial-identity", "expectedResult=0", "expectedResultCheck=failed"])
+      expect.arrayContaining(["-1", "compilerContract=symbolic.polynomial-identity-residual.v1", "compiledClaim=polynomial-identity", "expectedResult=0", "expectedResultCheck=failed"])
     );
     expect(receipt.findings.map((finding) => finding.message).join(" ")).toContain("refuted inside this compiler boundary");
   });

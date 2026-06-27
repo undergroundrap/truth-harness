@@ -1,9 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { compileSymbolicClaim, isCompiledSymbolicClaim } from "./symbolic-claim.js";
+import { compileSymbolicClaim, isCompiledSymbolicClaim, listSymbolicClaimCompilerContracts } from "./symbolic-claim.js";
 
 describe("symbolic claim compiler", () => {
+  it("exposes stable compiler contracts for agents and docs", () => {
+    const contracts = listSymbolicClaimCompilerContracts();
+
+    expect(contracts.map((contract) => contract.contractId)).toEqual([
+      "symbolic.trig-pythagorean.v1",
+      "symbolic.polynomial-identity-residual.v1"
+    ]);
+    expect(new Set(contracts.map((contract) => contract.contractId)).size).toBe(contracts.length);
+    expect(contracts.every((contract) => contract.runNextAction === "truth-harness verify <claim> --write --json")).toBe(true);
+    expect(contracts.every((contract) => contract.refusalBoundary.length > 0)).toBe(true);
+  });
+
   it("compiles human trig identity claims into a bounded symbolic prompt", () => {
-    expect(compileSymbolicClaim("For real x, sin(x)^2 + cos(x)^2 = 1.")).toEqual({
+    expect(compileSymbolicClaim("For real x, sin(x)^2 + cos(x)^2 = 1.")).toMatchObject({
+      contractId: "symbolic.trig-pythagorean.v1",
+      contractLabel: "Pythagorean trigonometric identity",
       claimKind: "trig-pythagorean-identity",
       prompt: {
         operation: "simplify",
@@ -11,7 +25,8 @@ describe("symbolic claim compiler", () => {
         variable: "x"
       },
       expectedResult: "1",
-      boundarySummary: "Pythagorean trigonometric identity over a real variable."
+      expectedResultMeaning: "The supported left-hand side simplifies exactly to 1.",
+      boundarySummary: "For real x, sin(x)^2 + cos(x)^2 = 1; The supported left-hand side simplifies exactly to 1."
     });
   });
 
@@ -24,7 +39,9 @@ describe("symbolic claim compiler", () => {
   });
 
   it("compiles safe one-variable polynomial identities into residual checks", () => {
-    expect(compileSymbolicClaim("For all real x, (x + 1)^2 = x^2 + 2*x + 1")).toEqual({
+    expect(compileSymbolicClaim("For all real x, (x + 1)^2 = x^2 + 2*x + 1")).toMatchObject({
+      contractId: "symbolic.polynomial-identity-residual.v1",
+      contractLabel: "One-variable polynomial identity residual",
       claimKind: "polynomial-identity",
       prompt: {
         operation: "simplify",
@@ -32,7 +49,8 @@ describe("symbolic claim compiler", () => {
         variable: "x"
       },
       expectedResult: "0",
-      boundarySummary: "One-variable polynomial identity over a real variable; the residual must simplify to 0."
+      expectedResultMeaning: "The residual (left) - (right) must simplify exactly to 0.",
+      boundarySummary: "For all real x, <polynomial in x> = <polynomial in x>; The residual (left) - (right) must simplify exactly to 0."
     });
     expect(isCompiledSymbolicClaim("For every real x, x^2 + 2*x + 1 = (x + 1)^2")).toBe(true);
   });

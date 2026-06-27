@@ -518,6 +518,7 @@ function completeSymbolicReceipt(args: {
       pythonCommand: result.pythonCommand,
       sympyVersion: result.sympyVersion,
       checkStatus,
+      compilerContractId: args.compiledSymbolicClaim?.contractId,
       expectedResultStatus
     },
     trust: symbolicTrust,
@@ -557,7 +558,7 @@ function completeSymbolicReceipt(args: {
   if (args.compiledSymbolicClaim) {
     args.findings.push({
       level: "info",
-      message: `Compiled symbolic claim boundary: ${args.compiledSymbolicClaim.boundarySummary} Expected result check: ${expectedResultStatus}.`
+      message: `Compiled symbolic claim contract ${args.compiledSymbolicClaim.contractId}: ${args.compiledSymbolicClaim.boundarySummary} Expected result check: ${expectedResultStatus}.`
     });
   }
   args.findings.push({
@@ -605,6 +606,7 @@ function completeSymbolicReceipt(args: {
         `sanityChecks=${checkStatus}`,
         ...(args.compiledSymbolicClaim
           ? [
+              `compilerContract=${args.compiledSymbolicClaim.contractId}`,
               `compiledClaim=${args.compiledSymbolicClaim.claimKind}`,
               `expectedResult=${args.compiledSymbolicClaim.expectedResult}`,
               `expectedResultCheck=${expectedResultStatus}`
@@ -619,7 +621,7 @@ function completeSymbolicReceipt(args: {
         "CAS output is exact computation, not a formal proof of arbitrary surrounding claims.",
         "SymPy sanity checks are same-engine symbolic and numeric checks, not an independent CAS or proof-checker result.",
         ...(args.compiledSymbolicClaim
-          ? [`Compiled claim boundary: ${args.compiledSymbolicClaim.boundarySummary}`]
+          ? [`Compiled claim contract ${args.compiledSymbolicClaim.contractId}: ${args.compiledSymbolicClaim.boundarySummary}`]
           : []),
         independentCasLimitation(independentCasCheck.status)
       ]

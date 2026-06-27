@@ -64,6 +64,13 @@ Symbolic CAS receipts use SymPy as the primary local symbolic adapter. When Maxi
 
 Human-written symbolic identity claims are only auto-compiled when they fit a narrow explicit compiler boundary. For one-variable polynomial identities such as `For all real x, (x + 1)^2 = x^2 + 2*x + 1`, Truth Harness asks SymPy to simplify the residual `(left) - (right)` and records `expectedResult=0`. A zero residual can earn `exact-computed` or, with an independent CAS agreement, `cross-checked`; a nonzero residual emits `refuted`. Identities with division, domain exclusions, unsupported functions, or broader theorem content remain outside this compiler and should stay `unverified` until a stronger verifier route is attached.
 
+Current symbolic claim compiler contracts:
+
+| Contract id | Supported shape | Verifier | Expected result | Refusal boundary |
+| --- | --- | --- | --- | --- |
+| `symbolic.trig-pythagorean.v1` | `For real x, sin(x)^2 + cos(x)^2 = 1` | SymPy `simplify` on the supported left side | `1` | Only this exact single-variable trig identity shape is compiled; broader trig/theorem claims stay `unverified`. |
+| `symbolic.polynomial-identity-residual.v1` | `For all real x, <polynomial in x> = <polynomial in x>` | SymPy `simplify` on `(left) - (right)` | `0` | No division, domain exclusions, functions, multiple variables, or quantifier changes. |
+
 `truth-harness cas backends` and the MCP `truth_harness_cas_backends` tool probe both Maxima and SageMath. A backend probe records availability only; it does not check a claim and cannot mint `exact-computed`, `cross-checked`, or `proved`. SageMath support is intentionally constrained: Truth Harness does not execute arbitrary user-authored Sage code, and Sage output remains CAS evidence, not proof-checker-backed proof. The default professor credibility gate stays lighter with Maxima, Z3, and cvc5; reviewers who want the heavier Sage gate can run `truth-harness engines verify --require-sage` or the no-network `sage-math` Docker service.
 
 Receipt JSON is runtime-validated before replay, rendering, evidence audits, and discovery packages use it. Invalid or legacy receipt files must be treated as unresolved evidence, not downgraded-but-trusted claims.
