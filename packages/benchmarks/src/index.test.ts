@@ -125,4 +125,37 @@ describe("benchmark runner", () => {
     ]);
     expect(run.levelSummaries.every((summary) => summary.passed === summary.total)).toBe(true);
   });
+  it("keeps the professor math challenge passing as a native-safe reviewer exam", () => {
+    const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/professor-math-challenge.json");
+    const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);
+
+    const run = runBenchmarkSuite(suite);
+    const evidenceKinds = new Set(run.results.map((result) => result.receipt.evidenceProfile.kind));
+    const trusts = new Set(run.results.map((result) => result.receipt.trust));
+
+    expect(run.total).toBeGreaterThanOrEqual(24);
+    expect(run.failed).toBe(0);
+    expect(run.trustAccuracy).toBe(1);
+    expect([...trusts].sort()).toEqual([
+      "bounded-numeric",
+      "dimension-checked",
+      "exact-computed",
+      "refuted",
+      "unverified"
+    ]);
+    expect([...evidenceKinds].sort()).toEqual([
+      "dimension-analysis",
+      "exact-arithmetic",
+      "interval-bound",
+      "universal-parity",
+      "unsupported"
+    ]);
+    expect(run.levelSummaries.map((summary) => summary.level)).toEqual([
+      "level-6-professor-exact-algebra",
+      "level-7-professor-finite-discrete",
+      "level-8-professor-units-bounds",
+      "level-9-professor-honest-boundaries"
+    ]);
+    expect(run.levelSummaries.every((summary) => summary.passed === summary.total)).toBe(true);
+  });
 });

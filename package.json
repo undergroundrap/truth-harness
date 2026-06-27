@@ -73,6 +73,8 @@
     "demo:ai-failures": "node apps/cli/dist/index.js bench run packages/benchmarks/suites/ai-failure-seed.json",
     "demo:check": "node apps/cli/dist/index.js check docs/examples/strict-claims.md",
     "demo:physics": "node apps/cli/dist/index.js bench run packages/benchmarks/suites/physics-seed.json",
+    "demo:professor-math": "node apps/cli/dist/index.js bench run packages/benchmarks/suites/professor-math-challenge.json --fail-on-failures",
+    "docker:professor-math": "docker compose run --rm truth-harness node apps/cli/dist/index.js bench run packages/benchmarks/suites/professor-math-challenge.json --fail-on-failures",
     "demo:parity": "node apps/cli/dist/index.js ask \"for all integers n, n^2+n is even\"",
     "demo:prove": "npm run demo:parity",
     "demo:numeric": "node apps/cli/dist/index.js bench run packages/benchmarks/suites/numeric-seed.json",

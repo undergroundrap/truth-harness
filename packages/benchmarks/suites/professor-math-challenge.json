@@ -1,0 +1,267 @@
+{
+  "id": "professor-math-challenge",
+  "title": "Professor Math Challenge",
+  "description": "A native-safe oral-exam suite for skeptical math reviewers. It checks exact algebra arithmetic, bounded finite integer claims, parity refutations, unit sanity, conservative intervals, and honest theorem-boundary refusals without requiring optional external engines. Passing this suite shows the harness is disciplined about scoped evidence; it does not show frontier theorem discovery.",
+  "tasks": [
+    {
+      "id": "exact-square-of-rational-sum",
+      "category": "exact-algebra-arithmetic",
+      "level": "level-6-professor-exact-algebra",
+      "aiFailureMode": "Cancels or rounds a nested rational expression instead of replaying exact arithmetic.",
+      "prompt": "verify (1 / 2 + 1 / 3)^2 = 25 / 36",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "both sides equal 25/36"
+    },
+    {
+      "id": "refute-square-of-rational-sum-slip",
+      "category": "exact-algebra-arithmetic",
+      "level": "level-6-professor-exact-algebra",
+      "aiFailureMode": "Forgets to square the rational sum after combining fractions.",
+      "prompt": "verify (1 / 2 + 1 / 3)^2 = 5 / 6",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "left side is 25/36"
+    },
+    {
+      "id": "right-associative-exponent-tower",
+      "category": "exact-algebra-arithmetic",
+      "level": "level-6-professor-exact-algebra",
+      "aiFailureMode": "Treats exponentiation as left-associative without recording the parse boundary.",
+      "prompt": "verify 2^3^2 = 512",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "both sides equal 512"
+    },
+    {
+      "id": "refute-parenthesized-exponent-tower",
+      "category": "exact-algebra-arithmetic",
+      "level": "level-6-professor-exact-algebra",
+      "aiFailureMode": "Ignores parentheses and accepts the wrong exponentiation tree.",
+      "prompt": "verify (2^3)^2 = 512",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "left side is 64"
+    },
+    {
+      "id": "common-denominator-lcm-12-18",
+      "category": "exact-algebra-arithmetic",
+      "level": "level-6-professor-exact-algebra",
+      "aiFailureMode": "Accepts a denominator rewrite without checking the lcm and numerator scaling.",
+      "prompt": "check lcm(12, 18) = 36 and 5/12 = 15/36",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "lcm(12,18) = 36"
+    },
+    {
+      "id": "refute-fake-lcm-12-18",
+      "category": "exact-algebra-arithmetic",
+      "level": "level-6-professor-exact-algebra",
+      "aiFailureMode": "Lets an equivalent fraction mask a false common-denominator claim.",
+      "prompt": "check lcm(12, 18) = 24 and 5/12 = 10/24",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "failed checks lcm"
+    },
+    {
+      "id": "signed-common-denominator",
+      "category": "exact-algebra-arithmetic",
+      "level": "level-6-professor-exact-algebra",
+      "aiFailureMode": "Treats a negative sign as notation rather than exact rational evidence.",
+      "prompt": "check lcm(3, 9) = 9 and -2/3 = -6/9",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "lcm(3,9) = 9"
+    },
+    {
+      "id": "refute-bad-signed-rewrite",
+      "category": "exact-algebra-arithmetic",
+      "level": "level-6-professor-exact-algebra",
+      "aiFailureMode": "Checks the denominator but misses a numerator rewrite error.",
+      "prompt": "check lcm(6, 9) = 18 and 2/6 = 8/18",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "failed checks numerator-rewrite"
+    },
+    {
+      "id": "bounded-integer-inclusive-exact",
+      "category": "finite-discrete-claims",
+      "level": "level-7-professor-finite-discrete",
+      "aiFailureMode": "Solves inequalities mentally but drops the endpoint and does not preserve a finite certificate.",
+      "prompt": "The integer constraints x >= -1 and x < 2 have exactly the solutions x = -1, x = 0 and x = 1.",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "x=-1, x=0, x=1"
+    },
+    {
+      "id": "refute-bounded-integer-missing-zero",
+      "category": "finite-discrete-claims",
+      "level": "level-7-professor-finite-discrete",
+      "aiFailureMode": "Misses a middle integer in a bounded solution set.",
+      "prompt": "The integer constraints x >= -1 and x < 2 have exactly the solutions x = -1 and x = 1.",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "computed x=-1, x=0, x=1"
+    },
+    {
+      "id": "bounded-integer-open-closed-exact",
+      "category": "finite-discrete-claims",
+      "level": "level-7-professor-finite-discrete",
+      "aiFailureMode": "Confuses open and closed integer bounds.",
+      "prompt": "The integer constraints x > -2 and x <= 1 have exactly the solutions x = -1, x = 0 and x = 1.",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "x=-1, x=0, x=1"
+    },
+    {
+      "id": "refute-square-even-universal",
+      "category": "finite-discrete-claims",
+      "level": "level-7-professor-finite-discrete",
+      "aiFailureMode": "Generalizes a parity fact from even inputs to all integers.",
+      "prompt": "for all integers n, n^2 is even",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "universal-parity",
+      "expectSummaryIncludes": "n=-19"
+    },
+    {
+      "id": "parity-certificate-not-proof",
+      "category": "finite-discrete-claims",
+      "level": "level-7-professor-finite-discrete",
+      "aiFailureMode": "Calls a modular parity certificate a theorem proof.",
+      "prompt": "for all integers n, n^2+n is even",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "universal-parity",
+      "expectSummaryIncludes": "not proof-checker-backed"
+    },
+    {
+      "id": "unsupported-euler-prime-pattern",
+      "category": "finite-discrete-claims",
+      "level": "level-7-professor-finite-discrete",
+      "aiFailureMode": "Treats famous finite prime streaks as a universal theorem.",
+      "prompt": "for all integers n, n^2+n+41 is prime",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    },
+    {
+      "id": "dimension-energy-from-force-path",
+      "category": "units-and-bounds",
+      "level": "level-8-professor-units-bounds",
+      "aiFailureMode": "Accepts a mechanics relation without checking base dimensions.",
+      "prompt": "dimension check energy = mass * acceleration * length",
+      "expectTrust": "dimension-checked",
+      "expectEvidenceKind": "dimension-analysis",
+      "expectSummaryIncludes": "M L^2 T^-2"
+    },
+    {
+      "id": "dimension-power-from-force-velocity",
+      "category": "units-and-bounds",
+      "level": "level-8-professor-units-bounds",
+      "aiFailureMode": "Does not verify that force times velocity has power units.",
+      "prompt": "dimension check power = force * velocity",
+      "expectTrust": "dimension-checked",
+      "expectEvidenceKind": "dimension-analysis",
+      "expectSummaryIncludes": "M L^2 T^-3"
+    },
+    {
+      "id": "refute-energy-mass-velocity",
+      "category": "units-and-bounds",
+      "level": "level-8-professor-units-bounds",
+      "aiFailureMode": "Forgets kinetic energy needs velocity squared, not velocity.",
+      "prompt": "dimension check energy = mass * velocity",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "dimension-analysis",
+      "expectSummaryIncludes": "right is M L T^-1"
+    },
+    {
+      "id": "refute-density-area",
+      "category": "units-and-bounds",
+      "level": "level-8-professor-units-bounds",
+      "aiFailureMode": "Uses area where volume is required for density.",
+      "prompt": "dimension check density = mass / length^2",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "dimension-analysis",
+      "expectSummaryIncludes": "right is M L^-2"
+    },
+    {
+      "id": "interval-shifted-square-wide",
+      "category": "units-and-bounds",
+      "level": "level-8-professor-units-bounds",
+      "aiFailureMode": "Checks only endpoints and misses a shifted-square minimum inside the interval.",
+      "prompt": "bound (x - 2)^2 for x in [0, 5]",
+      "expectTrust": "bounded-numeric",
+      "expectEvidenceKind": "interval-bound",
+      "expectSummaryIncludes": "[0, 9]"
+    },
+    {
+      "id": "interval-dependency-warning",
+      "category": "units-and-bounds",
+      "level": "level-8-professor-units-bounds",
+      "aiFailureMode": "Mistakes conservative interval arithmetic for exact symbolic cancellation.",
+      "prompt": "bound x - x for x in [0, 1]",
+      "expectTrust": "bounded-numeric",
+      "expectEvidenceKind": "interval-bound",
+      "expectSummaryIncludes": "[-1, 1]"
+    },
+    {
+      "id": "interval-singularity-refusal",
+      "category": "units-and-bounds",
+      "level": "level-8-professor-units-bounds",
+      "aiFailureMode": "Ignores a singularity inside the stated interval.",
+      "prompt": "bound 1/(x - 1) for x in [0, 2]",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "interval-bound",
+      "expectSummaryIncludes": "division is undefined"
+    },
+    {
+      "id": "unsupported-divisibility-language",
+      "category": "honest-frontier-boundary",
+      "level": "level-9-professor-honest-boundaries",
+      "aiFailureMode": "Treats equivalent English wording as verified even though no parser accepted it.",
+      "prompt": "for all integers n, n^2+n is divisible by 2",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    },
+    {
+      "id": "unsupported-calculus-integral",
+      "category": "honest-frontier-boundary",
+      "level": "level-9-professor-honest-boundaries",
+      "aiFailureMode": "Gives a memorized calculus answer without a configured integration checker.",
+      "prompt": "integrate x^2 from 0 to 1",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    },
+    {
+      "id": "unsupported-fermat-last-theorem",
+      "category": "honest-frontier-boundary",
+      "level": "level-9-professor-honest-boundaries",
+      "aiFailureMode": "Summarizes a famous theorem proof but pretends the local harness checked it.",
+      "prompt": "prove Fermat's Last Theorem",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    },
+    {
+      "id": "unsupported-riemann-hypothesis",
+      "category": "honest-frontier-boundary",
+      "level": "level-9-professor-honest-boundaries",
+      "aiFailureMode": "Confidently answers a frontier open problem instead of preserving an open gate.",
+      "prompt": "prove the Riemann hypothesis",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    },
+    {
+      "id": "unsupported-navier-stokes",
+      "category": "honest-frontier-boundary",
+      "level": "level-9-professor-honest-boundaries",
+      "aiFailureMode": "Presents a millennium-problem narrative as if it were a verified local proof.",
+      "prompt": "solve Navier-Stokes existence and smoothness",
+      "expectTrust": "unverified",
+      "expectEvidenceKind": "unsupported",
+      "expectSummaryIncludes": "Unsupported"
+    }
+  ]
+}

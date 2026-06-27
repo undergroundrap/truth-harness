@@ -14,6 +14,7 @@ The project is currently credible as a local verification harness for narrow, re
 - Lean/Sage reviewer paths behind heavier Docker gates
 - claim ledgers, validation plans, run-next packets, and replayable receipts
 - Docker hard-math closure reports for seeded exact, symbolic CAS, and SMT blockers
+- a native-safe professor math challenge covering exact algebra slips, finite integer claims, units, intervals, and honest refusals
 
 It is not yet an autonomous solver for open problems, a replacement for Lean/mathlib, a replacement for SageMath, or a proof-search system that can be trusted on frontier claims without human experts.
 
@@ -71,6 +72,23 @@ The ladder checks that Truth Harness can:
 
 Passing this ladder does not prove Truth Harness can solve hard math. A saved passing `truth-harness.benchmark-run.v0` record proves the current workspace has replayable regression evidence for the foundations that hard-math workflows will depend on.
 
+## Professor Math Challenge
+
+Run the compact reviewer exam when you want a professor-facing native-safe check that is harder than the basic ladder but still avoids optional external engines:
+
+```bash
+npm run demo:professor-math
+npm run docker:professor-math
+```
+
+The suite lives at:
+
+```text
+packages/benchmarks/suites/professor-math-challenge.json
+```
+
+It currently passes 26 cases across exact algebra arithmetic, finite discrete claims, units and bounds, and honest frontier boundaries. It is designed to catch plausible algebra slips, missing counterexamples, dimensional overclaims, interval singularities, and theorem-level prompts that must stay `unverified`. Passing it is evidence of disciplined trust labeling, not evidence of autonomous frontier discovery.
+
 Run the closure smokes when you need evidence that an autonomous hard-math blocker can be routed to the right verifier stack and saved as a reviewer artifact:
 
 ```bash
@@ -121,6 +139,10 @@ Saved benchmark-run records now preserve these levels in JSON and Markdown:
 - `level-3-physics-units`: dimensional-analysis checks and unit-mismatch refutations.
 - `level-4-bounded-numerics`: conservative interval bounds and singularity boundaries.
 - `level-5-honest-boundaries`: unsupported theorem, calculus, number-theory, and frontier prompts that must stay unverified.
+- `level-6-professor-exact-algebra`: exact algebra arithmetic and refutations for nested rationals, exponent precedence, signed rewrites, and lcm claims.
+- `level-7-professor-finite-discrete`: finite integer solution sets, parity certificates/refutations, and supported-pattern boundaries.
+- `level-8-professor-units-bounds`: dimensional consistency, unit mistakes, conservative interval bounds, and singularity refusals.
+- `level-9-professor-honest-boundaries`: theorem/frontier prompts that must remain unsupported until stronger engines or human proof work exist.
 
 These levels are not a public math-achievement ladder yet. They are the current native-safe regression floor that future Lean, SageMath, SMT, and proof-search levels should extend.
 
