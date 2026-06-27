@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+﻿import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -38,6 +38,7 @@ describe("release audit", () => {
       now: "2026-06-17T00:00:00.500Z"
     });
     const mathLadderBenchmark = await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
+    const professorChallengeBenchmark = await writeProfessorMathChallengeRun(root, "2026-06-17T00:00:00.700Z");
     await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
 
     const audit = await createReleaseAudit({
@@ -92,6 +93,7 @@ describe("release audit", () => {
       concreteEngineGates: "5/5",
       adversarialBenchmark: "passed",
       mathCredibilityLadder: "passed",
+      professorMathChallenge: "passed",
       reportDrafts: 0,
       reportDraftsNeedingAttention: 0,
       researchSessions: 0,
@@ -114,6 +116,9 @@ describe("release audit", () => {
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "math-credibility-ladder", status: "pass", blocking: false })
+    );
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({ id: "professor-math-challenge", status: "pass", blocking: false })
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "report-drafts", status: "pass", blocking: false })
@@ -143,6 +148,16 @@ describe("release audit", () => {
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
+        id: "professor-math-challenge",
+        details: expect.arrayContaining([
+          `Artifact: ${professorChallengeBenchmark.jsonPath.replace(/\\/gu, "/").replace(`${root.replace(/\\/gu, "/")}/`, "")}.`,
+          `Benchmark run id: ${professorChallengeBenchmark.record.benchmarkRunId}.`,
+          "Replay command: truth-harness bench run packages/benchmarks/suites/professor-math-challenge.json --write --fail-on-failures."
+        ])
+      })
+    );
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
         id: "web-ui-smoke",
         status: "warn",
         blocking: false,
@@ -155,6 +170,7 @@ describe("release audit", () => {
     expect(markdown).toContain("Required engine gates: 5/5");
     expect(markdown).toContain("Adversarial benchmark: passed");
     expect(markdown).toContain("Math credibility ladder: passed");
+    expect(markdown).toContain("Professor math challenge: passed");
     expect(markdown).toContain("Report drafts: 0 saved, 0 needing attention");
     expect(markdown).toContain("Research sessions: 0 inspected, 0 continuation item(s)");
   });
@@ -172,6 +188,7 @@ describe("release audit", () => {
       now: "2026-06-17T00:00:00.500Z"
     });
     await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
+    await writeProfessorMathChallengeRun(root, "2026-06-17T00:00:00.600Z");
     const uiReview = await writeWebUiReview({
       rootPath: root,
       now: new Date("2026-06-17T00:00:00.700Z"),
@@ -370,6 +387,7 @@ describe("release audit", () => {
       now: "2026-06-17T00:00:00.500Z"
     });
     await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
+    await writeProfessorMathChallengeRun(root, "2026-06-17T00:00:00.600Z");
     const session = await writeResearchSession({
       rootPath: root,
       title: "Autonomous proof route",
@@ -467,6 +485,7 @@ describe("release audit", () => {
       now: "2026-06-17T00:00:20.000Z"
     });
     await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:21.000Z");
+    await writeProfessorMathChallengeRun(root, "2026-06-17T00:00:21.000Z");
     await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:30.000Z" });
 
     const audit = await createReleaseAudit({
@@ -510,6 +529,7 @@ describe("release audit", () => {
       now: "2026-06-17T00:00:00.500Z"
     });
     await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
+    await writeProfessorMathChallengeRun(root, "2026-06-17T00:00:00.600Z");
     const draft = await writeReportDraft({
       rootPath: root,
       title: "Shareable Reviewer Draft",
@@ -685,6 +705,7 @@ describe("release audit", () => {
       now: "2026-06-17T00:00:00.500Z"
     });
     await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
+    await writeProfessorMathChallengeRun(root, "2026-06-17T00:00:00.600Z");
     await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
 
     const audit = await createReleaseAudit({
@@ -713,6 +734,7 @@ describe("release audit", () => {
       concreteEngineGates: "0/4",
       savedEngineLadderLevel: "engine-level-3-formal-proof-fixture",
       adversarialBenchmark: "passed",
+      professorMathChallenge: "passed",
       blockingFailures: 0
     });
     expect(audit.credibilityPack?.summary.latestProfessorEngineRunStatus).toBe("passed");
@@ -794,6 +816,7 @@ describe("release audit", () => {
       now: "2026-06-17T00:00:00.500Z"
     });
     await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
+    await writeProfessorMathChallengeRun(root, "2026-06-17T00:00:00.600Z");
     await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
 
     const audit = await createReleaseAudit({
@@ -938,6 +961,43 @@ async function writeMathCredibilityLadderRun(root: string, now: string) {
   });
   await writePassingHardMathClosures(root, now);
   return result;
+}
+
+async function writeProfessorMathChallengeRun(root: string, now: string) {
+  const receipt = createReceipt("bound (x - 2)^2 for x in [0, 5]");
+  return await writeBenchmarkRunRecord({
+    rootPath: root,
+    run: {
+      suiteId: "professor-math-challenge",
+      title: "Professor Math Challenge",
+      startedAt: now,
+      completedAt: now,
+      total: 1,
+      passed: 1,
+      failed: 0,
+      trustAccuracy: 1,
+      results: [
+        {
+          task: {
+            id: "bounded-integer-smt",
+            prompt: receipt.problem,
+            expectTrust: "bounded-numeric" as const,
+            expectEvidenceKind: "interval-bound" as const,
+            category: "units-and-bounds",
+            aiFailureMode: "endpoint-only interval check"
+          },
+          receipt,
+          passed: true,
+          failures: []
+        }
+      ]
+    },
+    suiteDescription: "Compact native-safe professor reviewer exam.",
+    suitePath: "packages/benchmarks/suites/professor-math-challenge.json",
+    command: "truth-harness bench run packages/benchmarks/suites/professor-math-challenge.json --write --fail-on-failures",
+    workingDirectory: root,
+    now
+  });
 }
 
 async function tempRoot(): Promise<string> {

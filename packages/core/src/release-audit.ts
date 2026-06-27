@@ -106,6 +106,7 @@ export interface ReleaseAudit {
     savedEngineLadderLevel?: string;
     adversarialBenchmark: string;
     mathCredibilityLadder: string;
+    professorMathChallenge: string;
     hardMathClosure: string;
     reportDrafts: number;
     reportDraftsNeedingAttention: number;
@@ -133,6 +134,7 @@ export interface ReleaseAudit {
     credibilityActions: string;
     adversarialBenchmark: string;
     mathCredibilityLadder: string;
+    professorMathChallenge: string;
     hardMathExactClosure: string;
     hardMathSymbolicClosure: string;
     hardMathSmtClosure: string;
@@ -212,6 +214,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
       concreteEngineGates: "0/0",
       adversarialBenchmark: "missing",
       mathCredibilityLadder: "missing",
+      professorMathChallenge: "missing",
       hardMathClosure: "missing",
       reportDrafts: 0,
       reportDraftsNeedingAttention: 0,
@@ -251,6 +254,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     engineCheck(credibilityPack, hasRequiredEngine(engineRequirements)),
     adversarialBenchmarkCheck(credibilityPack),
     mathCredibilityLadderCheck(credibilityPack),
+    professorMathChallengeCheck(credibilityPack),
     hardMathClosureCheck(credibilityPack),
     reportDraftsCheck(credibilityPack),
     leanProofSafetyCheck(credibilityPack),
@@ -282,6 +286,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     savedEngineLadderLevel: credibilityPack.summary.savedEngineLadderLevel,
     adversarialBenchmark: credibilityPack.summary.latestAdversarialBenchmarkStatus,
     mathCredibilityLadder: credibilityPack.summary.latestMathCredibilityLadderStatus,
+    professorMathChallenge: credibilityPack.summary.latestProfessorMathChallengeStatus,
     hardMathClosure: hardMathClosureSummary(credibilityPack),
     reportDrafts: credibilityPack.summary.savedReportDrafts,
     reportDraftsNeedingAttention: credibilityPack.summary.reportDraftsNeedingAttention,
@@ -317,6 +322,7 @@ export function renderReleaseAuditMarkdown(audit: ReleaseAudit): string {
     `- Saved engine ladder: ${audit.summary.savedEngineLadderLevel ?? "missing"}`,
     `- Adversarial benchmark: ${audit.summary.adversarialBenchmark}`,
     `- Math credibility ladder: ${audit.summary.mathCredibilityLadder}`,
+    `- Professor math challenge: ${audit.summary.professorMathChallenge}`,
     `- Hard-math closure: ${audit.summary.hardMathClosure}`,
     `- Report drafts: ${audit.summary.reportDrafts} saved, ${audit.summary.reportDraftsNeedingAttention} needing attention`,
     `- Lean proof-safety blockers: ${audit.summary.leanProofSafetyItems}`,
@@ -425,6 +431,7 @@ function buildAudit(input: {
   savedEngineLadderLevel?: string;
   adversarialBenchmark: string;
   mathCredibilityLadder: string;
+  professorMathChallenge: string;
   hardMathClosure: string;
   reportDrafts: number;
   reportDraftsNeedingAttention: number;
@@ -475,6 +482,7 @@ function buildAudit(input: {
       savedEngineLadderLevel: input.savedEngineLadderLevel,
       adversarialBenchmark: input.adversarialBenchmark,
       mathCredibilityLadder: input.mathCredibilityLadder,
+      professorMathChallenge: input.professorMathChallenge,
       hardMathClosure: input.hardMathClosure,
       reportDrafts: input.reportDrafts,
       reportDraftsNeedingAttention: input.reportDraftsNeedingAttention,
@@ -522,6 +530,7 @@ function frontierReadinessFor(input: {
     checkPassed(input.checks, "catalog") &&
     checkPassed(input.checks, "adversarial-ai-benchmark") &&
     checkPassed(input.checks, "math-credibility-ladder") &&
+    checkPassed(input.checks, "professor-math-challenge") &&
     checkPassed(input.checks, "lean-proof-safety");
   const engineEvidenceReady = checkPassed(input.checks, "engine-evidence");
   const hardMathClosureReady = checkPassed(input.checks, "hard-math-closure");
@@ -551,7 +560,7 @@ function frontierReadinessFor(input: {
       title: "Credible local verification harness",
       status: localHarnessReady ? "ready" : input.catalogFresh ? "partial" : "blocked",
       summary: localHarnessReady
-        ? "Workspace validation, catalog freshness, adversarial AI-failure checks, and the native math ladder are present."
+        ? "Workspace validation, catalog freshness, adversarial AI-failure checks, the native math ladder, and the professor challenge are present."
         : "The local evidence floor is not complete yet.",
       evidence: [
         `Workspace: ${checkSummary(input.checks, "workspace")}.`,
@@ -559,12 +568,13 @@ function frontierReadinessFor(input: {
         `Catalog: ${checkSummary(input.checks, "catalog")}.`,
         `AI-failure benchmark: ${checkSummary(input.checks, "adversarial-ai-benchmark")}.`,
         `Math ladder: ${checkSummary(input.checks, "math-credibility-ladder")}.`,
+        `Professor challenge: ${checkSummary(input.checks, "professor-math-challenge")}.`,
         `Lean proof safety: ${checkSummary(input.checks, "lean-proof-safety")}.`
       ],
       blockers: localHarnessReady
         ? []
-        : ["Complete the local validation, catalog, adversarial benchmark, native hard-math ladder, and Lean proof-safety evidence."],
-      nextAction: localHarnessReady ? undefined : firstCommand(input.checks, ["lean-proof-safety", "catalog", "adversarial-ai-benchmark", "math-credibility-ladder"])
+        : ["Complete the local validation, catalog, adversarial benchmark, native hard-math ladder, professor challenge, and Lean proof-safety evidence."],
+      nextAction: localHarnessReady ? undefined : firstCommand(input.checks, ["lean-proof-safety", "catalog", "adversarial-ai-benchmark", "math-credibility-ladder", "professor-math-challenge"])
     },
     {
       id: "independent-engine-stack",
@@ -1188,6 +1198,77 @@ function mathCredibilityLadderEvidenceDetails(pack: CredibilityPack): string[] {
   return details;
 }
 
+function professorMathChallengeCheck(pack: CredibilityPack): ReleaseAuditCheck {
+  const status = pack.summary.latestProfessorMathChallengeStatus;
+  const accuracy = pack.summary.latestProfessorMathChallengeAccuracy;
+  const accuracyText = accuracy === undefined ? "unknown accuracy" : `${(accuracy * 100).toFixed(1)}% trust accuracy`;
+  const evidenceDetails = professorMathChallengeEvidenceDetails(pack);
+  if (status === "passed") {
+    return passCheck({
+      id: "professor-math-challenge",
+      title: "Professor math challenge",
+      summary: "Latest professor-math-challenge run passed with " + accuracyText + ".",
+      command: pack.reviewerCommands.runProfessorMathChallenge,
+      details: [
+        ...evidenceDetails,
+        "The professor challenge is a compact native-safe reviewer exam for exact algebra slips, finite integer claims, dimensional checks, interval boundaries, and honest theorem-level refusals."
+      ]
+    });
+  }
+
+  if (status === "failed") {
+    return failCheck({
+      id: "professor-math-challenge",
+      title: "Professor math challenge",
+      blocking: true,
+      summary: "Latest professor-math-challenge run failed with " + accuracyText + ".",
+      command: pack.reviewerCommands.runProfessorMathChallenge,
+      details: [
+        ...evidenceDetails,
+        "Fix or explicitly triage failing professor challenge cases before treating the reviewer exam as professor-ready.",
+        ...pack.reviewerActionPlan.actions
+          .filter((action) => action.category === "benchmark" && action.source.ref.includes("professor-math-challenge"))
+          .slice(0, 3)
+          .map((action) => action.detail)
+      ]
+    });
+  }
+
+  return failCheck({
+    id: "professor-math-challenge",
+    title: "Professor math challenge",
+    blocking: true,
+    summary: "No saved professor-math-challenge benchmark run was found.",
+    command: pack.reviewerCommands.runProfessorMathChallenge,
+    details: [
+      "Run and save the professor challenge before serious review so reviewers can see the compact native-safe oral exam replay locally.",
+      "The challenge is not evidence of frontier discovery; it is regression evidence that the verifier refuses to overclaim across reviewer-style cases."
+    ]
+  });
+}
+
+function professorMathChallengeEvidenceDetails(pack: CredibilityPack): string[] {
+  const run = pack.benchmarkLedger.latestProfessorMathChallengeRun;
+  if (!run) {
+    return [];
+  }
+
+  const details = [
+    "Artifact: " + run.path + ".",
+    "Benchmark run id: " + run.artifactId + ".",
+    "Replay command: " + (run.replayCommand ?? run.command ?? pack.reviewerCommands.runProfessorMathChallenge) + "."
+  ];
+
+  if (run.receiptReplays && run.receiptReplays.length > 0) {
+    details.push("Receipt replay example: " + run.receiptReplays[0] + ".");
+  }
+  if (run.failedCaseIds && run.failedCaseIds.length > 0) {
+    details.push("Failing cases: " + run.failedCaseIds.join(", ") + ".");
+  }
+
+  return details;
+}
+
 function hardMathClosureCheck(pack: CredibilityPack): ReleaseAuditCheck {
   const statuses = [
     pack.summary.hardMathExactClosureStatus,
@@ -1704,6 +1785,7 @@ function releaseAuditCommands(
     credibilityActions: `truth-harness workspace credibility-actions ${quotedRoot}${requirementFlags}`,
     adversarialBenchmark: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
     mathCredibilityLadder: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
+    professorMathChallenge: "truth-harness bench run packages/benchmarks/suites/professor-math-challenge.json --write --fail-on-failures",
     hardMathExactClosure: "npm run docker:hard-math-closure",
     hardMathSymbolicClosure: "npm run docker:symbolic-closure",
     hardMathSmtClosure: "npm run docker:smt-closure",

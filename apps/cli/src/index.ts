@@ -7996,6 +7996,12 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
         : ` (${(pack.summary.latestMathCredibilityLadderAccuracy * 100).toFixed(1)}%)`)
   );
   console.log(
+    `Professor math challenge: ${pack.summary.latestProfessorMathChallengeStatus}` +
+      (pack.summary.latestProfessorMathChallengeAccuracy === undefined
+        ? ""
+        : ` (${(pack.summary.latestProfessorMathChallengeAccuracy * 100).toFixed(1)}%)`)
+  );
+  console.log(
     `Hard-math closure: ${pack.summary.savedHardMathClosureReports} saved ` +
       `(exact ${pack.summary.hardMathExactClosureStatus}, ` +
       `symbolic ${pack.summary.hardMathSymbolicClosureStatus}, ` +
@@ -8014,6 +8020,7 @@ function printCredibilityPack(pack: CredibilityPack, writeResult?: CredibilityPa
   console.log(`  ${pack.reviewerCommands.verifyEngines}`);
   console.log(`  ${pack.reviewerCommands.runAdversarialBenchmark}`);
   console.log(`  ${pack.reviewerCommands.runMathCredibilityLadder}`);
+  console.log(`  ${pack.reviewerCommands.runProfessorMathChallenge}`);
   console.log(`  ${pack.reviewerCommands.runExactHardMathClosure}`);
   console.log(`  ${pack.reviewerCommands.runSymbolicHardMathClosure}`);
   console.log(`  ${pack.reviewerCommands.runSmtHardMathClosure}`);
@@ -8135,6 +8142,9 @@ function printCredibilityBundle(result: CredibilityBundleWriteResult): void {
   console.log(`  ${manifest.reviewerCommands.verifyEngines}`);
   console.log(`  ${manifest.reviewerCommands.runAdversarialBenchmark}`);
   console.log(`  ${manifest.reviewerCommands.runMathCredibilityLadder}`);
+  if (manifest.reviewerCommands.runProfessorMathChallenge) {
+    console.log(`  ${manifest.reviewerCommands.runProfessorMathChallenge}`);
+  }
   console.log(`  ${manifest.reviewerCommands.runExactHardMathClosure}`);
   console.log(`  ${manifest.reviewerCommands.runSymbolicHardMathClosure}`);
   console.log(`  ${manifest.reviewerCommands.runSmtHardMathClosure}`);

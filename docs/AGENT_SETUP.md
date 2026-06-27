@@ -1,4 +1,4 @@
-# Agent Setup
+﻿# Agent Setup
 
 Date: 2026-06-08
 
@@ -178,7 +178,7 @@ When doing multi-step math, proof, physics, simulation, experiment review, sourc
 - The MCP server is local stdio only.
 - Benchmark, receipt, source, and workspace paths are restricted to the workspace root.
 - Write-capable tools only write local workspace artifacts under `.truth-harness/`.
-- `truth_harness_workspace_credibility_actions` computes the same reviewer posture as a credibility pack but returns only the unresolved action queue. It is read-only, local-only, and should be the first MCP call when an agent needs to know which validation, engine, benchmark, or workspace-review blocker to close next. Professor-readiness benchmark actions include both the `ai-failure-seed` adversarial suite and the 30-case `math-credibility-ladder` hard-math readiness floor; run-next can execute either writable benchmark run through core APIs without shell execution.
+- `truth_harness_workspace_credibility_actions` computes the same reviewer posture as a credibility pack but returns only the unresolved action queue. It is read-only, local-only, and should be the first MCP call when an agent needs to know which validation, engine, benchmark, or workspace-review blocker to close next. Professor-readiness benchmark actions include the `ai-failure-seed` adversarial suite, the 30-case `math-credibility-ladder` hard-math readiness floor, and the 26-case `professor-math-challenge` reviewer exam; run-next can execute those writable benchmark runs through core APIs without shell execution.
 - `truth_harness_workspace_credibility_bundle` accepts `requireAllEngines: true` for strict reviewer bundles that require Maxima, Z3, cvc5, Lean, and SageMath fixture evidence. Use it for external review packets, not for every fast local iteration.
 - `truth_harness_verify` with `write: true` stores a local `truth-harness.verifier-route.v0` JSON record plus Markdown report under `.truth-harness/routes/`; `truth_harness_route_list` and `truth_harness_route_show` expose those records for agents, audits, claim ledger refs, validation plans, snapshots, and reports. Set `requireIndependentSmt: true` only when the route should require separate Z3 and cvc5 solver evidence. A route explains verifier selection and missing gates; it is not a proof by itself.
 - `truth_harness_source_ingest` skips `.truth-harness/` so private logs and indexes are not accidentally re-ingested as source material.

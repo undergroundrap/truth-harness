@@ -1,4 +1,4 @@
-import { createReadStream } from "node:fs";
+﻿import { createReadStream } from "node:fs";
 import { lstat, mkdir, open, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
@@ -3622,7 +3622,7 @@ function dockerVerifierGuidance(verification) {
     },
     notes: [
       "The web UI never runs Docker automatically; it only exposes copyable commands.",
-      "npm run docker:professor writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, math credibility ladder evidence, exact/symbolic/SMT hard-math closure evidence, a credibility pack, and a verified portable reviewer bundle inside the no-network compose service.",
+      "npm run docker:professor writes Maxima/Z3/cvc5/Lean engine evidence, adversarial benchmark evidence, math credibility ladder evidence, professor math challenge evidence, exact/symbolic/SMT hard-math closure evidence, a credibility pack, and a verified portable reviewer bundle inside the no-network compose service.",
       "npm run docker:engines runs concrete Maxima/Z3/cvc5 evidence smoke checks inside the no-network compose service.",
       "npm run docker:all-engines is the heavy strict gate for Maxima, Z3, cvc5, Lean, and SageMath when a reviewer explicitly wants every adapter fixture.",
       "npm run docker:professor:all writes the strict all-engine professor packet, closure reports, and portable reviewer bundle from the no-network all-engine service.",

@@ -1,4 +1,4 @@
-# Docker Reviewer Flow
+﻿# Docker Reviewer Flow
 
 Truth Harness uses Docker as the default credibility path for reviewer-facing engine evidence. The goal is to let a professor, auditor, or agent run the same no-network checks without depending on the host machine having Maxima, Z3, cvc5, Lean, or SageMath installed.
 
@@ -24,7 +24,7 @@ npm run docker:cleanup -- all-build-cache --confirm-delete
 
 `npm run engines:readiness:saved` prints the reviewer-facing readiness view. It can cite the latest saved passing `truth-harness.sandbox-run.v0` Docker no-network measurement for the agent-autonomy gate while keeping host probes conservative.
 
-`npm run docker:reviewer` is an alias for `npm run docker:professor`. It builds the pinned Lean reviewer image when needed, then writes no-network engine evidence, gates the Lean proof-repair loop, writes adversarial benchmark evidence, math credibility ladder evidence, exact/symbolic/SMT hard-math closure evidence, a credibility pack, and a verified reviewer bundle.
+`npm run docker:reviewer` is an alias for `npm run docker:professor`. It builds the pinned Lean reviewer image when needed, then writes no-network engine evidence, gates the Lean proof-repair loop, writes adversarial benchmark evidence, math credibility ladder evidence, professor math challenge evidence, exact/symbolic/SMT hard-math closure evidence, a credibility pack, and a verified reviewer bundle.
 
 `npm run docker:reviewer:all` is the stricter auditor lane. It builds the heavier all-engine image, then writes the same no-network reviewer artifacts and closure reports while requiring Maxima, Z3, cvc5, Lean, and SageMath to each earn scoped fixture evidence through `--require-all-engines`. Use this before serious outside review when SageMath should be part of the same portable packet, not merely a separate optional smoke.
 

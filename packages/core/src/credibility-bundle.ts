@@ -93,6 +93,7 @@ export interface CredibilityBundleManifest {
     verifyEngines: string;
     runAdversarialBenchmark: string;
     runMathCredibilityLadder: string;
+    runProfessorMathChallenge: string;
     runExactHardMathClosure: string;
     runSymbolicHardMathClosure: string;
     runSmtHardMathClosure: string;
@@ -264,6 +265,7 @@ export async function writeCredibilityBundle(input: WriteCredibilityBundleInput)
       verifyEngines: pack.reviewerCommands.verifyEngines,
       runAdversarialBenchmark: pack.reviewerCommands.runAdversarialBenchmark,
       runMathCredibilityLadder: pack.reviewerCommands.runMathCredibilityLadder,
+      runProfessorMathChallenge: pack.reviewerCommands.runProfessorMathChallenge,
       runExactHardMathClosure: pack.reviewerCommands.runExactHardMathClosure ?? "npm run docker:hard-math-closure",
       runSymbolicHardMathClosure: pack.reviewerCommands.runSymbolicHardMathClosure ?? "npm run docker:symbolic-closure",
       runSmtHardMathClosure: pack.reviewerCommands.runSmtHardMathClosure ?? "npm run docker:smt-closure",

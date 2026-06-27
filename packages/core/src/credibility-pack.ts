@@ -31,6 +31,7 @@ export interface CredibilityPackCommandSet {
   verifyEngines: string;
   runAdversarialBenchmark: string;
   runMathCredibilityLadder: string;
+  runProfessorMathChallenge: string;
   runExactHardMathClosure: string;
   runSymbolicHardMathClosure: string;
   runSmtHardMathClosure: string;
@@ -84,6 +85,7 @@ export interface CredibilityPackBenchmarkLedger {
   latestRuns: BenchmarkArtifactSummary[];
   latestAdversarialRun?: BenchmarkArtifactSummary;
   latestMathCredibilityLadderRun?: BenchmarkArtifactSummary;
+  latestProfessorMathChallengeRun?: BenchmarkArtifactSummary;
 }
 
 export interface CredibilityPackHardMathClosureLedger {
@@ -140,6 +142,8 @@ export interface CredibilityPack {
     latestAdversarialBenchmarkAccuracy?: number;
     latestMathCredibilityLadderStatus: "missing" | "passed" | "failed";
     latestMathCredibilityLadderAccuracy?: number;
+    latestProfessorMathChallengeStatus: "missing" | "passed" | "failed";
+    latestProfessorMathChallengeAccuracy?: number;
     savedHardMathClosureReports: number;
     hardMathExactClosureStatus: "missing" | "passed" | "failed";
     hardMathSymbolicClosureStatus: "missing" | "passed" | "failed";
@@ -297,6 +301,8 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       latestAdversarialBenchmarkAccuracy: benchmarkLedger.latestAdversarialRun?.trustAccuracy,
       latestMathCredibilityLadderStatus: benchmarkStatus(benchmarkLedger.latestMathCredibilityLadderRun),
       latestMathCredibilityLadderAccuracy: benchmarkLedger.latestMathCredibilityLadderRun?.trustAccuracy,
+      latestProfessorMathChallengeStatus: benchmarkStatus(benchmarkLedger.latestProfessorMathChallengeRun),
+      latestProfessorMathChallengeAccuracy: benchmarkLedger.latestProfessorMathChallengeRun?.trustAccuracy,
       savedHardMathClosureReports: hardMathClosureLedger.savedReports,
       hardMathExactClosureStatus: closureStatus(hardMathClosureLedger.latestExactClosure),
       hardMathSymbolicClosureStatus: closureStatus(hardMathClosureLedger.latestSymbolicClosure),
@@ -415,6 +421,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Saved engine-run ledger: ${pack.summary.savedEngineRuns} saved${formatCredibilityPackSavedEngineRunLedgerLabel(pack)}`,
     `- Adversarial benchmark: ${formatAdversarialBenchmarkSummary(pack.summary.latestAdversarialBenchmarkStatus, pack.summary.latestAdversarialBenchmarkAccuracy)} (${pack.summary.savedBenchmarkRuns} saved benchmark run${pack.summary.savedBenchmarkRuns === 1 ? "" : "s"})`,
     `- Math credibility ladder: ${formatBenchmarkSummary(pack.summary.latestMathCredibilityLadderStatus, pack.summary.latestMathCredibilityLadderAccuracy)}`,
+    `- Professor math challenge: ${formatBenchmarkSummary(pack.summary.latestProfessorMathChallengeStatus, pack.summary.latestProfessorMathChallengeAccuracy)}`,
     `- Hard-math closure: ${formatHardMathClosureSummary(pack)}`,
     `- Saved report drafts: ${formatReportDraftSummary(pack.summary.savedReportDrafts, pack.summary.reportDraftsNeedingAttention)}`,
     `- Embedded artifact snapshot: ${pack.summary.snapshotFiles} files, ${pack.summary.snapshotBytes} bytes`,
@@ -428,6 +435,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Verify engines: \`${pack.reviewerCommands.verifyEngines}\``,
     `- Run adversarial benchmark: \`${pack.reviewerCommands.runAdversarialBenchmark}\``,
     `- Run math credibility ladder: \`${pack.reviewerCommands.runMathCredibilityLadder}\``,
+    `- Run professor math challenge: \`${pack.reviewerCommands.runProfessorMathChallenge}\``,
     `- Run exact hard-math closure: \`${pack.reviewerCommands.runExactHardMathClosure}\``,
     `- Run symbolic hard-math closure: \`${pack.reviewerCommands.runSymbolicHardMathClosure}\``,
     `- Run SMT hard-math closure: \`${pack.reviewerCommands.runSmtHardMathClosure}\``,
@@ -556,6 +564,21 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
   } else {
     lines.push(
       "No saved `math-credibility-ladder` benchmark run was found. Run the ladder before claiming the native-safe hard-math floor is green.",
+      ""
+    );
+  }
+  if (pack.benchmarkLedger.latestProfessorMathChallengeRun) {
+    const run = pack.benchmarkLedger.latestProfessorMathChallengeRun;
+    lines.push(
+      `Latest professor math challenge: \`${run.artifactId}\` (${run.passed}/${run.total}, ${((run.trustAccuracy ?? 0) * 100).toFixed(1)}%)`,
+      `Path: \`${run.path}\``,
+      `Replay: \`${run.replayCommand ?? run.command ?? pack.reviewerCommands.runProfessorMathChallenge}\``,
+      `Receipt replay examples: ${formatBenchmarkReceiptReplays(run.receiptReplays)}`,
+      ""
+    );
+  } else {
+    lines.push(
+      "No saved `professor-math-challenge` benchmark run was found. Run the professor challenge before claiming the reviewer exam is green.",
       ""
     );
   }
@@ -690,7 +713,8 @@ function summarizeBenchmarkLedger(artifacts: BenchmarkArtifactSummary[]): Credib
     savedRuns: runs.length,
     latestRuns: runs.slice(0, 5),
     latestAdversarialRun: runs.find((run) => run.suiteId === "ai-failure-seed"),
-    latestMathCredibilityLadderRun: runs.find((run) => run.suiteId === "math-credibility-ladder")
+    latestMathCredibilityLadderRun: runs.find((run) => run.suiteId === "math-credibility-ladder"),
+    latestProfessorMathChallengeRun: runs.find((run) => run.suiteId === "professor-math-challenge")
   };
 }
 
@@ -909,6 +933,35 @@ function createReviewerActionPlan(input: {
       source: {
         kind: "benchmark-run",
         ref: mathLadder.path
+      }
+    });
+  }
+
+  const professorChallenge = input.benchmarkLedger.latestProfessorMathChallengeRun;
+  if (!professorChallenge) {
+    pushAction({
+      category: "benchmark",
+      priority: "high",
+      title: "Run professor math challenge",
+      detail: "No saved `professor-math-challenge` benchmark run was found. Professor review should include the compact reviewer exam for exact algebra slips, finite integer claims, dimensional checks, interval boundaries, and honest frontier refusals.",
+      command: input.reviewerCommands.runProfessorMathChallenge,
+      closes: ["benchmark:professor-math-challenge", "professor-math-challenge-ledger"],
+      source: {
+        kind: "benchmark-suite",
+        ref: "professor-math-challenge"
+      }
+    });
+  } else if ((professorChallenge.failed ?? 0) > 0) {
+    pushAction({
+      category: "benchmark",
+      priority: "critical",
+      title: "Fix professor math challenge regressions",
+      detail: `Latest \`professor-math-challenge\` run ${professorChallenge.artifactId} has ${professorChallenge.failed ?? 0} failing case(s). Fix or explicitly triage before treating the reviewer exam as professor-ready.`,
+      command: input.reviewerCommands.runProfessorMathChallenge,
+      closes: ["benchmark:professor-math-challenge", `benchmark-run:${professorChallenge.artifactId}`],
+      source: {
+        kind: "benchmark-run",
+        ref: professorChallenge.path
       }
     });
   }
@@ -1146,6 +1199,13 @@ function credibilityWarnings(input: {
       `Latest \`math-credibility-ladder\` hard-math readiness run has ${input.benchmarkLedger.latestMathCredibilityLadderRun.failed ?? 0} failing case(s).`
     );
   }
+  if (!input.benchmarkLedger.latestProfessorMathChallengeRun) {
+    warnings.push("No saved `professor-math-challenge` reviewer exam run found.");
+  } else if ((input.benchmarkLedger.latestProfessorMathChallengeRun.failed ?? 0) > 0) {
+    warnings.push(
+      `Latest \`professor-math-challenge\` reviewer exam run has ${input.benchmarkLedger.latestProfessorMathChallengeRun.failed ?? 0} failing case(s).`
+    );
+  }
   addHardMathClosureWarnings(warnings, input.hardMathClosureLedger);
   if (input.review.summary.criticalItems > 0) {
     warnings.push(`Workspace review has ${input.review.summary.criticalItems} critical open item(s).`);
@@ -1235,6 +1295,7 @@ function createReviewerCommands(input: {
     verifyEngines: `truth-harness engines verify --write${engineSuffix}`,
     runAdversarialBenchmark: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
     runMathCredibilityLadder: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
+    runProfessorMathChallenge: "truth-harness bench run packages/benchmarks/suites/professor-math-challenge.json --write --fail-on-failures",
     runExactHardMathClosure: "npm run docker:hard-math-closure",
     runSymbolicHardMathClosure: "npm run docker:symbolic-closure",
     runSmtHardMathClosure: "npm run docker:smt-closure",

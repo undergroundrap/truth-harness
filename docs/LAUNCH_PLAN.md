@@ -1,4 +1,4 @@
-# Truth Harness Launch Plan
+﻿# Truth Harness Launch Plan
 
 Date: 2026-06-08
 
@@ -94,7 +94,7 @@ The version that a serious AI lab notices is not a slick chat UI. It is a trust 
 7. `truth-harness render` can export receipts as Markdown and HTML. Status: done.
 8. README explains the trust labels in plain language. Status: done.
 9. One GIF or terminal recording shows refutation and honest uncertainty. Status: pending.
-10. At least 25 seed benchmark tasks exist. Status: done. Current seed suites include the 16-case `ai-failure-seed` adversarial suite for fluent-but-wrong AI math behavior plus the 30-case `math-credibility-ladder` native-safe hard-math readiness floor. Professor/release readiness now requires both suites to be saved and passing. The five-case `workspace seed-professor-challenge` preset is the internal pre-demo workout: refutation, exact arithmetic, symbolic CAS, bounded SMT, and Lean-boundary gates must route through run-next before a public recording should claim the workspace is reviewer-ready.
+10. At least 25 seed benchmark tasks exist. Status: done. Current seed suites include the 16-case `ai-failure-seed` adversarial suite for fluent-but-wrong AI math behavior, the 30-case `math-credibility-ladder` native-safe hard-math readiness floor, and the 26-case `professor-math-challenge` reviewer exam. Professor/release readiness now requires all three suites to be saved and passing. The five-case `workspace seed-professor-challenge` preset is the internal pre-demo workout: refutation, exact arithmetic, symbolic CAS, bounded SMT, and Lean-boundary gates must route through run-next before a public recording should claim the workspace is reviewer-ready.
 11. GitHub repo has issues labeled `good first proof`, `adapter`, `benchmark`, and `trust-model`. Status: pending.
 
 ## What To Build Next

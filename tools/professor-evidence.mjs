@@ -65,6 +65,18 @@ const steps = [
     ]
   },
   {
+    label: "write professor math challenge evidence",
+    command: "node",
+    args: [
+      "apps/cli/dist/index.js",
+      "bench",
+      "run",
+      "packages/benchmarks/suites/professor-math-challenge.json",
+      "--write",
+      "--fail-on-failures"
+    ]
+  },
+  {
     label: "write exact hard-math closure evidence",
     command: "node",
     args: [

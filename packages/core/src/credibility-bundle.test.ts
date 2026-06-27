@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+﻿import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -50,6 +50,15 @@ describe("credibility reviewer bundle", () => {
       command: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
       workingDirectory: root,
       now: "2026-06-16T00:00:31.000Z"
+    });
+    await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: professorChallengeRun(createReceipt("bound (x - 2)^2 for x in [0, 5]")),
+      suiteDescription: "Compact native-safe professor reviewer exam.",
+      suitePath: "packages/benchmarks/suites/professor-math-challenge.json",
+      command: "truth-harness bench run packages/benchmarks/suites/professor-math-challenge.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-16T00:00:32.000Z"
     });
     await writePassingHardMathClosures(root);
     const reportDraft = await writeReportDraftFixture(root);
@@ -111,6 +120,7 @@ describe("credibility reviewer bundle", () => {
     expect(result.manifest.reviewerCommands.verifyBundle).toContain("workspace verify-credibility-bundle");
     expect(result.manifest.reviewerCommands.runAdversarialBenchmark).toContain("ai-failure-seed");
     expect(result.manifest.reviewerCommands.runMathCredibilityLadder).toContain("math-credibility-ladder");
+    expect(result.manifest.reviewerCommands.runProfessorMathChallenge).toContain("professor-math-challenge");
     expect(result.manifest.reviewerCommands.runExactHardMathClosure).toBe("npm run docker:hard-math-closure");
     expect(result.manifest.reviewerCommands.runSymbolicHardMathClosure).toBe("npm run docker:symbolic-closure");
     expect(result.manifest.reviewerCommands.runSmtHardMathClosure).toBe("npm run docker:smt-closure");
@@ -474,6 +484,34 @@ function mathLadderRun(receipt: ReturnType<typeof createReceipt>) {
           expectEvidenceKind: "exact-arithmetic" as const,
           category: "native-safe-hard-math-floor",
           aiFailureMode: "trust-label boundary"
+        },
+        receipt,
+        passed: true,
+        failures: []
+      }
+    ]
+  };
+}
+
+function professorChallengeRun(receipt: ReturnType<typeof createReceipt>) {
+  return {
+    suiteId: "professor-math-challenge",
+    title: "Professor Math Challenge",
+    startedAt: "2026-06-16T00:00:24.000Z",
+    completedAt: "2026-06-16T00:00:25.000Z",
+    total: 1,
+    passed: 1,
+    failed: 0,
+    trustAccuracy: 1,
+    results: [
+      {
+        task: {
+          id: "bounded-integer-smt",
+          prompt: receipt.problem,
+          expectTrust: "bounded-numeric" as const,
+          expectEvidenceKind: "interval-bound" as const,
+          category: "units-and-bounds",
+          aiFailureMode: "endpoint-only interval check"
         },
         receipt,
         passed: true,
