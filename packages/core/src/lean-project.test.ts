@@ -214,6 +214,29 @@ describe("Lean project inspection", () => {
         def: 0
       }
     });
+    expect(inspection.theoremCorpus).toMatchObject({
+      path: "docs/examples/lean-theorem-template/theorem-corpus.json",
+      valid: true,
+      schemaVersion: "truth-harness.lean-theorem-corpus.v0",
+      corpusId: "ltc_core_template_v0",
+      families: {
+        total: 4,
+        templateReady: 3,
+        plannedMathlib: 1,
+        needsProof: 0
+      },
+      trustBoundary: {
+        corpusIsNotProof: true,
+        provedRequiresProofCheckRecord: true,
+        mathlibFamiliesRequirePinnedManifest: true
+      }
+    });
+    expect(inspection.theoremCorpus?.families.sample.map((family) => family.familyId)).toEqual([
+      "logic-propositions",
+      "existential-witnesses",
+      "nat-identity-rewrites",
+      "mathlib-algebra-roadmap"
+    ]);
     expect(inspection.proofSafety).toMatchObject({
       blocksProvedTrust: false,
       markers: {

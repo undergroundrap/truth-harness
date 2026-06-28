@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "truth-harness.lean-theorem-corpus.v0",
+  "corpusId": "ltc_core_template_v0",
+  "title": "Core Lean theorem template corpus",
+  "description": "A local-first starter corpus of reusable theorem families for agent handoff. This manifest organizes formal targets; it is not proof evidence by itself.",
+  "projectPath": "docs/examples/lean-theorem-template",
+  "localOnly": true,
+  "networkAccess": "none",
+  "sourceProject": {
+    "toolchain": "leanprover/lean4:v4.12.0",
+    "lakefile": "lakefile.lean",
+    "mathlib": "not-required"
+  },
+  "families": [
+    {
+      "familyId": "logic-propositions",
+      "title": "Propositional proof skeletons",
+      "lane": "core-lean",
+      "status": "template-ready",
+      "trustCeiling": "proved-after-proof-check",
+      "sourcePaths": ["TruthHarnessTemplate/Basics.lean"],
+      "declarationNames": ["identity_implication", "and_commutative"],
+      "evidenceRequired": [
+        "accepted proof-check record for the concrete copied theorem source",
+        "proof-safety scan with no sorry, admit, hole, local axiom, or local constant markers"
+      ],
+      "nextAction": "Use these as scaffolds for implication, conjunction, and small propositional rewrites before escalating to mathlib."
+    },
+    {
+      "familyId": "existential-witnesses",
+      "title": "Existential witness construction",
+      "lane": "core-lean",
+      "status": "template-ready",
+      "trustCeiling": "proved-after-proof-check",
+      "sourcePaths": ["TruthHarnessTemplate/Basics.lean"],
+      "declarationNames": ["exists_self_nat"],
+      "evidenceRequired": [
+        "accepted proof-check record for the concrete copied theorem source",
+        "reviewed mapping from informal witness claim to the formal statement"
+      ],
+      "nextAction": "Use for small witness-bearing claims where the agent must name the witness explicitly."
+    },
+    {
+      "familyId": "nat-identity-rewrites",
+      "title": "Natural-number identity rewrites",
+      "lane": "core-lean",
+      "status": "template-ready",
+      "trustCeiling": "proved-after-proof-check",
+      "sourcePaths": ["TruthHarnessTemplate/Basics.lean"],
+      "declarationNames": ["nat_zero_add_template", "nat_add_zero_template", "equality_substitution_template"],
+      "evidenceRequired": [
+        "accepted proof-check record for the concrete copied theorem source",
+        "route or validation-plan scope when the proof is meant to close a claim gate"
+      ],
+      "nextAction": "Use for tiny Nat/equality rewrites while larger algebra remains a CAS or mathlib escalation."
+    },
+    {
+      "familyId": "mathlib-algebra-roadmap",
+      "title": "Planned mathlib algebra families",
+      "lane": "planned-mathlib",
+      "status": "planned-mathlib",
+      "trustCeiling": "none",
+      "sourcePaths": [],
+      "declarationNames": [],
+      "evidenceRequired": [
+        "pinned lake-manifest.json with mathlib revision",
+        "Docker proof profile that checks at least one algebra theorem family with no runtime network",
+        "reviewed theorem statements mapped to source route or validation gates"
+      ],
+      "nextAction": "Promote one bounded algebra family into a pinned mathlib fixture after the core template stays green."
+    }
+  ],
+  "trustBoundary": {
+    "corpusIsNotProof": true,
+    "provedRequiresProofCheckRecord": true,
+    "mathlibFamiliesRequirePinnedManifest": true,
+    "externalReviewRequiredForFrontierClaims": true
+  },
+  "escalationGates": [
+    {
+      "gateId": "pin-mathlib-manifest",
+      "title": "Pin mathlib dependency revisions",
+      "requiredBefore": "mathlib-backed theorem family",
+      "evidenceRequired": [
+        "reviewed lakefile.lean or lakefile.toml",
+        "reviewed lake-manifest.json",
+        "Docker proof run that succeeds without runtime network"
+      ]
+    },
+    {
+      "gateId": "attach-route-scope",
+      "title": "Attach theorem proofs to exact route or validation gates",
+      "requiredBefore": "claim ledger proved status",
+      "evidenceRequired": [
+        "accepted truth-harness.proof-check.v0 record",
+        "matching route id, obligation id, statement, and statement hash when closing a route"
+      ]
+    }
+  ],
+  "warnings": [
+    "This corpus manifest organizes formal targets only; it never upgrades trust labels.",
+    "Core-Lean theorem families are scaffolds. New claims still need concrete accepted proof-check records.",
+    "Planned mathlib families require a pinned dependency manifest and reviewer run before they can become evidence."
+  ]
+}

@@ -202,7 +202,7 @@ Agents should use this as a regression rehearsal before trusting autonomous proo
 The next proof-lane milestones are:
 
 - a pinned Lean/Lake/mathlib Docker profile,
-- template promotion from core-Lean scaffolds to pinned mathlib-backed theorem families,
+- template promotion from the schema-validated core-Lean theorem corpus to pinned mathlib-backed theorem families,
 - proof project fixtures for regression tests,
 - route obligations that point to specific formal statements,
 - richer proof-attempt history and repair diagnostics across rejected attempts,

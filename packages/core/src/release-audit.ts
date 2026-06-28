@@ -652,10 +652,10 @@ function frontierReadinessFor(input: {
         `Lean repair gate: ${input.commands.dockerLeanRepairGate}.`
       ],
       blockers: [
-        "Promote the core-Lean template into pinned mathlib-backed theorem families, theorem corpora, and external mathematical review before treating this as frontier theorem infrastructure."
+        "Promote the core-Lean theorem corpus into at least one pinned mathlib-backed family with external mathematical review before treating this as frontier theorem infrastructure."
       ],
       nextAction: leanProofRepairGateReady && leanTheoremTemplateReady
-        ? "Add pinned mathlib theorem families and theorem-corpus fixtures."
+        ? "Promote one theorem-corpus family into a pinned mathlib fixture."
         : leanFixtureReady
           ? leanTheoremTemplateReady ? input.commands.dockerLeanRepairGate : input.commands.dockerTheoremTemplate
           : input.commands.dockerProof
@@ -1516,18 +1516,27 @@ async function leanTheoremTemplateCheck(rootPath: string, command: string): Prom
     const hasDeclarations = inspection.declarations.total > 0;
     const scannerClean = !inspection.proofSafety.blocksProvedTrust;
     const completeScan = !inspection.files.leanFiles.truncated;
+    const corpusReady =
+      inspection.theoremCorpus?.valid === true &&
+      inspection.theoremCorpus.families.total > 0 &&
+      inspection.theoremCorpus.families.templateReady > 0;
 
-    if (inspection.readiness === "ready" && pinnedToolchain && hasDeclarations && scannerClean && completeScan) {
+    if (inspection.readiness === "ready" && pinnedToolchain && hasDeclarations && scannerClean && completeScan && corpusReady) {
       return passCheck({
         id: "lean-theorem-template",
         title: "Lean theorem template",
-        summary: `Reusable theorem template is scanner-clean with ${inspection.declarations.total} declaration target(s).`,
+        summary:
+          `Reusable theorem template is scanner-clean with ${inspection.declarations.total} declaration target(s) ` +
+          `and ${inspection.theoremCorpus?.families.total ?? 0} theorem corpus famil${inspection.theoremCorpus?.families.total === 1 ? "y" : "ies"}.`,
         command,
         details: [
           `Project: ${projectPath}.`,
           `Checked source: ${sourcePath}.`,
           `Toolchain: ${inspection.toolchain?.channel ?? "missing"}.`,
           `Lean files scanned: ${inspection.files.leanFiles.sample.length}/${inspection.files.leanFiles.total}.`,
+          `Theorem corpus: ${inspection.theoremCorpus?.path ?? "missing"}.`,
+          `Template-ready families: ${inspection.theoremCorpus?.families.templateReady ?? 0}.`,
+          `Planned mathlib families: ${inspection.theoremCorpus?.families.plannedMathlib ?? 0}.`,
           "This is a readiness gate only. It does not prove future claims until Docker or host Lean accepts a concrete proof-check record."
         ]
       });
@@ -1545,6 +1554,9 @@ async function leanTheoremTemplateCheck(rootPath: string, command: string): Prom
         `Pinned toolchain: ${String(pinnedToolchain)}.`,
         `Declarations: ${inspection.declarations.total}.`,
         `Proof-safety blockers: ${inspection.proofSafety.markers.total}.`,
+        `Theorem corpus valid: ${String(inspection.theoremCorpus?.valid === true)}.`,
+        `Template-ready families: ${inspection.theoremCorpus?.families.templateReady ?? 0}.`,
+        ...(inspection.theoremCorpus?.issues ?? []).slice(0, 5).map((issue) => `Corpus issue ${issue.path}: ${issue.message}.`),
         ...inspection.warnings.slice(0, 5)
       ]
     });
@@ -1563,6 +1575,7 @@ async function leanTheoremTemplateCheck(rootPath: string, command: string): Prom
     });
   }
 }
+
 async function leanProofRepairGateCheck(rootPath: string, command: string): Promise<ReleaseAuditCheck> {
   const fixtureRoot = resolve(rootPath, "docs", "examples", "lean-repair-fixture");
   const fixtureRef = toPortableWorkspacePath(rootPath, fixtureRoot);

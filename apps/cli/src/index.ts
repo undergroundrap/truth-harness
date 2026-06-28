@@ -6666,6 +6666,27 @@ function printLeanProjectInspection(inspection: LeanProjectInspection): void {
     console.log(`Mathlib: likely (${inspection.mathlib.evidence.join(", ")})`);
   }
 
+  if (inspection.theoremCorpus) {
+    console.log("");
+    console.log("Theorem corpus:");
+    console.log(`  ${inspection.theoremCorpus.title ?? inspection.theoremCorpus.corpusId ?? inspection.theoremCorpus.path}`);
+    console.log(`  Path: ${inspection.theoremCorpus.path}`);
+    console.log(`  Schema valid: ${String(inspection.theoremCorpus.valid)}`);
+    console.log(
+      `  Families: ${inspection.theoremCorpus.families.total} total; ` +
+        `${inspection.theoremCorpus.families.templateReady} template-ready; ` +
+        `${inspection.theoremCorpus.families.plannedMathlib} planned mathlib`
+    );
+    for (const family of inspection.theoremCorpus.families.sample.slice(0, 8)) {
+      const declarations = family.declarationNames.length > 0 ? ` (${family.declarationNames.join(", ")})` : "";
+      console.log(`  ${family.familyId}: ${family.title} - ${family.status}${declarations}`);
+    }
+    for (const issue of inspection.theoremCorpus.issues.slice(0, 5)) {
+      console.log(`  Corpus issue: ${issue.path} ${issue.message}`);
+    }
+    console.log("  Boundary: corpus manifests organize targets; proof still requires accepted proof-check records.");
+  }
+
   if (inspection.files.leanFiles.sample.length > 0) {
     console.log("");
     console.log("Lean file sample:");

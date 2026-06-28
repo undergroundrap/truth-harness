@@ -1,8 +1,12 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
+import { validateJsonSchema, type JsonSchemaValidationIssue } from "./json-schema-validation.js";
+import { loadLocalJsonSchema } from "./schema-write-validation.js";
 
 export const LEAN_PROJECT_INSPECTION_SCHEMA_VERSION = "truth-harness.lean-project-inspection.v0";
+export const LEAN_THEOREM_CORPUS_SCHEMA_VERSION = "truth-harness.lean-theorem-corpus.v0";
 
 export type LeanProjectReadiness = "ready" | "partial" | "missing";
 
@@ -35,6 +39,7 @@ export interface LeanProjectInspection {
     channel: string;
     pinned: boolean;
   };
+  theoremCorpus?: LeanProjectTheoremCorpusInspection;
   mathlib: {
     likelyUsesMathlib: boolean;
     evidence: string[];
@@ -81,6 +86,37 @@ export interface LeanProjectDeclarationInventory {
   byKind: Record<LeanProjectDeclarationKind, number>;
   sample: LeanProjectDeclaration[];
   truncated: boolean;
+}
+
+export interface LeanProjectTheoremCorpusInspection {
+  path: string;
+  byteLength: number;
+  sha256: string;
+  valid: boolean;
+  schemaVersion?: string;
+  corpusId?: string;
+  title?: string;
+  families: {
+    total: number;
+    templateReady: number;
+    plannedMathlib: number;
+    needsProof: number;
+    sample: LeanProjectTheoremCorpusFamilySummary[];
+  };
+  issues: JsonSchemaValidationIssue[];
+  trustBoundary: {
+    corpusIsNotProof: true;
+    provedRequiresProofCheckRecord: true;
+    mathlibFamiliesRequirePinnedManifest: true;
+  };
+}
+
+export interface LeanProjectTheoremCorpusFamilySummary {
+  familyId: string;
+  title: string;
+  lane: string;
+  status: string;
+  declarationNames: string[];
 }
 
 export type LeanProjectProofMarkerKind = "sorry" | "admit" | "axiom" | "constant" | "hole";
@@ -149,12 +185,13 @@ export async function inspectLeanProject(input: LeanProjectInspectionInput): Pro
   }
 
   const maxLeanFiles = Math.max(1, Math.floor(input.maxLeanFiles ?? DEFAULT_MAX_LEAN_FILES));
-  const [leanToolchain, lakefileLean, lakefileToml, lakeManifest, leanFiles] = await Promise.all([
+  const [leanToolchain, lakefileLean, lakefileToml, lakeManifest, leanFiles, theoremCorpus] = await Promise.all([
     summarizeFileIfPresent(root, join(projectRoot, "lean-toolchain")),
     summarizeFileIfPresent(root, join(projectRoot, "lakefile.lean")),
     summarizeFileIfPresent(root, join(projectRoot, "lakefile.toml")),
     summarizeFileIfPresent(root, join(projectRoot, "lake-manifest.json")),
-    collectLeanFiles(root, projectRoot, maxLeanFiles)
+    collectLeanFiles(root, projectRoot, maxLeanFiles),
+    inspectLeanTheoremCorpus(root, projectRoot)
   ]);
   const toolchain = leanToolchain ? await readLeanToolchain(projectRoot) : undefined;
   const mathlib = await detectMathlib(projectRoot, {
@@ -186,6 +223,7 @@ export async function inspectLeanProject(input: LeanProjectInspectionInput): Pro
       leanFiles
     },
     ...(toolchain ? { toolchain } : {}),
+    ...(theoremCorpus ? { theoremCorpus } : {}),
     mathlib,
     declarations,
     proofSafety,
@@ -215,6 +253,68 @@ export async function inspectLeanProject(input: LeanProjectInspectionInput): Pro
       proofSafety,
       projectPath
     })
+  };
+}
+
+async function inspectLeanTheoremCorpus(
+  root: string,
+  projectRoot: string
+): Promise<LeanProjectTheoremCorpusInspection | undefined> {
+  const corpusPath = join(projectRoot, "theorem-corpus.json");
+  let corpusStat;
+  try {
+    corpusStat = await stat(corpusPath);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") {
+      return undefined;
+    }
+
+    throw error;
+  }
+
+  if (!corpusStat.isFile()) {
+    return undefined;
+  }
+
+  const raw = await readFile(corpusPath, "utf8");
+  const parsed = parseJsonWithOptionalBom(raw);
+  const schema = await loadLocalJsonSchema("lean-theorem-corpus.schema.json");
+  const issues = validateJsonSchema(parsed, schema);
+  const record = isRecord(parsed) ? parsed : undefined;
+  const families = Array.isArray(record?.families) ? record.families.filter(isRecord) : [];
+
+  return {
+    path: toPortablePath(relative(root, corpusPath)),
+    byteLength: Buffer.byteLength(raw),
+    sha256: sha256Hex(raw),
+    valid: issues.length === 0,
+    schemaVersion: stringValue(record?.schemaVersion),
+    corpusId: stringValue(record?.corpusId),
+    title: stringValue(record?.title),
+    families: {
+      total: families.length,
+      templateReady: families.filter((family) => family.status === "template-ready").length,
+      plannedMathlib: families.filter((family) => family.status === "planned-mathlib").length,
+      needsProof: families.filter((family) => family.status === "needs-proof").length,
+      sample: families.slice(0, 12).map(theoremCorpusFamilySummary)
+    },
+    issues,
+    trustBoundary: {
+      corpusIsNotProof: true,
+      provedRequiresProofCheckRecord: true,
+      mathlibFamiliesRequirePinnedManifest: true
+    }
+  };
+}
+
+function theoremCorpusFamilySummary(family: Record<string, unknown>): LeanProjectTheoremCorpusFamilySummary {
+  return {
+    familyId: stringValue(family.familyId) ?? "unknown-family",
+    title: stringValue(family.title) ?? "Untitled theorem family",
+    lane: stringValue(family.lane) ?? "unknown",
+    status: stringValue(family.status) ?? "unknown",
+    declarationNames: stringArrayValue(family.declarationNames).slice(0, 12)
   };
 }
 
@@ -787,6 +887,22 @@ function resolveUnderRoot(root: string, path: string): string {
   }
 
   return target;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function stringArrayValue(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0).map((entry) => entry.trim());
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function toPortablePath(path: string): string {

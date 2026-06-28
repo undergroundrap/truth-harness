@@ -90,7 +90,7 @@ describe("release audit", () => {
       expect.objectContaining({
         id: "formal-theorem-workflows",
         status: "partial",
-        nextAction: "Add pinned mathlib theorem families and theorem-corpus fixtures.",
+        nextAction: "Promote one theorem-corpus family into a pinned mathlib fixture.",
         evidence: expect.arrayContaining([
           expect.stringContaining("Reusable theorem template: pass"),
           expect.stringContaining("Lean repair rehearsal: pass"),
@@ -146,6 +146,8 @@ describe("release audit", () => {
         summary: expect.stringContaining("Reusable theorem template is scanner-clean"),
         details: expect.arrayContaining([
           expect.stringContaining("Project: docs/examples/lean-theorem-template."),
+          expect.stringContaining("Theorem corpus: docs/examples/lean-theorem-template/theorem-corpus.json."),
+          expect.stringContaining("Template-ready families: 1."),
           expect.stringContaining("This is a readiness gate only")
         ])
       })
@@ -1143,7 +1145,58 @@ async function writeLeanTheoremTemplateFixture(root: string): Promise<void> {
     "-- Copy this starter into a concrete .lean file before checking it.\n",
     "utf8"
   );
+  await writeFile(
+    join(projectRoot, "theorem-corpus.json"),
+    JSON.stringify(
+      {
+        schemaVersion: "truth-harness.lean-theorem-corpus.v0",
+        corpusId: "ltc_release_audit_fixture",
+        title: "Release audit theorem template corpus",
+        description: "Small temp corpus used by release-audit tests.",
+        projectPath: "docs/examples/lean-theorem-template",
+        localOnly: true,
+        networkAccess: "none",
+        sourceProject: {
+          toolchain: "leanprover/lean4:v4.12.0",
+          lakefile: "lakefile.lean",
+          mathlib: "not-required"
+        },
+        families: [
+          {
+            familyId: "logic-propositions",
+            title: "Propositional proof skeletons",
+            lane: "core-lean",
+            status: "template-ready",
+            trustCeiling: "proved-after-proof-check",
+            sourcePaths: ["TruthHarnessTemplate/Basics.lean"],
+            declarationNames: ["identity_implication"],
+            evidenceRequired: ["accepted proof-check record"],
+            nextAction: "Copy into a concrete theorem source and run proof check."
+          }
+        ],
+        trustBoundary: {
+          corpusIsNotProof: true,
+          provedRequiresProofCheckRecord: true,
+          mathlibFamiliesRequirePinnedManifest: true,
+          externalReviewRequiredForFrontierClaims: true
+        },
+        escalationGates: [
+          {
+            gateId: "attach-route-scope",
+            title: "Attach route scope",
+            requiredBefore: "claim ledger proved status",
+            evidenceRequired: ["accepted proof-check record"]
+          }
+        ],
+        warnings: ["Fixture corpus is not proof evidence."]
+      },
+      null,
+      2
+    ) + "\n",
+    "utf8"
+  );
 }
+
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-release-audit-"));
   roots.push(root);
