@@ -98,6 +98,8 @@
     "mcp": "node packages/mcp-server/dist/index.js",
     "proof:lean-fixture": "node apps/cli/dist/index.js proof project docs/examples/lean-fixture --json && node apps/cli/dist/index.js proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean --timeout-ms 30000 --fail-on-unproved --json",
     "proof:theorem-template": "node apps/cli/dist/index.js proof project docs/examples/lean-theorem-template --json && node apps/cli/dist/index.js proof check docs/examples/lean-theorem-template/TruthHarnessTemplate/Basics.lean --timeout-ms 30000 --fail-on-unproved --json",
+    "proof:mathlib-template": "node apps/cli/dist/index.js proof project docs/examples/lean-mathlib-template --json",
+    "proof:mathlib-template:check": "node apps/cli/dist/index.js proof check docs/examples/lean-mathlib-template/TruthHarnessMathlib/Algebra.lean --project docs/examples/lean-mathlib-template --timeout-ms 30000 --fail-on-unproved --json",
     "proof:repair-fixture": "node apps/cli/dist/index.js proof repair-fixture docs/examples/lean-repair-fixture --timeout-ms 30000",
     "proof:repair-fixture:gate": "node apps/cli/dist/index.js proof repair-fixture docs/examples/lean-repair-fixture --timeout-ms 30000 --fail-on-open",
     "proof:lean-suite": "npm run proof:lean-fixture && npm run proof:theorem-template && npm run proof:repair-fixture:gate",

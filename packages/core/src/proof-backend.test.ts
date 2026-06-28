@@ -162,6 +162,58 @@ describe("proof backend status", () => {
     expect(record.limitations.join(" ")).toContain("formal statement checked by Lean");
   });
 
+  it("checks Lean artifacts through a Lake project environment when a project root is supplied", () => {
+    const calls: Array<{ command: string; args: string[]; timeoutMs: number; cwd?: string }> = [];
+    const runner: ProofBackendCommandRunner = (command, args, timeoutMs, options) => {
+      calls.push({ command, args, timeoutMs, cwd: options?.cwd });
+      if (args[0] === "--version") {
+        return {
+          status: 0,
+          stdout: "Lean (version 4.12.0)\n",
+          stderr: ""
+        };
+      }
+
+      return {
+        status: 0,
+        stdout: "",
+        stderr: ""
+      };
+    };
+
+    const record = checkLeanProofArtifact({
+      sourcePath: "C:/workspace/MathlibProofs/Algebra.lean",
+      sourceRef: "MathlibProofs/Algebra.lean",
+      sourceText: "theorem add_comm_fixture (a b : Nat) : a + b = b + a := by exact Nat.add_comm a b\n",
+      declarationName: "add_comm_fixture",
+      projectRoot: "C:/workspace",
+      leanCommand: "lean-test",
+      lakeCommand: "lake-test",
+      now: new Date("2026-06-10T00:00:00.000Z"),
+      runner
+    });
+
+    expect(calls).toEqual([
+      { command: "lean-test", args: ["--version"], timeoutMs: 3000, cwd: undefined },
+      {
+        command: "lake-test",
+        args: ["env", "lean-test", "C:/workspace/MathlibProofs/Algebra.lean"],
+        timeoutMs: 3000,
+        cwd: "C:/workspace"
+      }
+    ]);
+    expect(record.status).toBe("accepted");
+    expect(record.trust).toBe("proved");
+    expect(record.backend).toMatchObject({
+      command: "lake-test",
+      args: ["env", "lean-test", "C:/workspace/MathlibProofs/Algebra.lean"]
+    });
+    expect(record.replay).toBe(
+      "truth-harness proof check MathlibProofs/Algebra.lean --json --project C:/workspace --lean-command lean-test --lake-command lake-test"
+    );
+    expect(record.warnings.join(" ")).toContain("Lake project environment");
+  });
+
   it("keeps rejected Lean proof attempts unverified", () => {
     const runner: ProofBackendCommandRunner = (_command, args) => {
       if (args[0] === "--version") {

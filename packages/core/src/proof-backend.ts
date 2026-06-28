@@ -38,10 +38,15 @@ export interface ProofBackendCommandResult {
   };
 }
 
+export interface ProofBackendCommandOptions {
+  cwd?: string;
+}
+
 export type ProofBackendCommandRunner = (
   command: string,
   args: string[],
-  timeoutMs: number
+  timeoutMs: number,
+  options?: ProofBackendCommandOptions
 ) => ProofBackendCommandResult;
 
 export interface ProofBackendProbe {
@@ -97,6 +102,8 @@ export interface LeanProofCheckInput {
   declarationName?: string;
   scope?: LeanProofCheckScope;
   leanCommand?: string;
+  lakeCommand?: string;
+  projectRoot?: string;
   timeoutMs?: number;
   now?: Date;
   runner?: ProofBackendCommandRunner;
@@ -157,6 +164,8 @@ export interface WriteLeanProofCheckInput {
   declarationName?: string;
   scope?: LeanProofCheckScope;
   leanCommand?: string;
+  lakeCommand?: string;
+  projectPath?: string;
   timeoutMs?: number;
   now?: Date;
   runner?: ProofBackendCommandRunner;
@@ -244,6 +253,12 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const runner = input.runner ?? runCommand;
   const leanCommand = input.leanCommand?.trim() || process.env.TRUTH_HARNESS_LEAN?.trim() || "lean";
+  const proofExecution = leanProofExecution({
+    sourcePath: input.sourcePath,
+    leanCommand,
+    lakeCommand: input.lakeCommand,
+    projectRoot: input.projectRoot
+  });
   const createdAt = (input.now ?? new Date()).toISOString();
   const sourcePath = input.sourcePath;
   const sourceRef = input.sourceRef ?? sourcePath;
@@ -258,7 +273,13 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
     timeoutMs,
     runner
   });
-  const proofArgs = [sourcePath];
+  const proofArgs = proofExecution.args;
+  const projectWarnings = proofExecution.projectRoot
+    ? [
+        `Proof check uses Lake project environment at ${quoteCommandArg(proofExecution.projectRoot)}.`,
+        "Lake resolves local project dependencies; this record still attests only the checked source and recorded command output."
+      ]
+    : [];
   const base = {
     schemaVersion: PROOF_CHECK_SCHEMA_VERSION,
     createdAt,
@@ -268,7 +289,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       adapter: "local-lean-subprocess" as const,
       role: "proof-checker" as const,
       acceptedProofChecker: true as const,
-      command: leanCommand,
+      command: proofExecution.command,
       args: proofArgs,
       ...(backendProbe.version ? { version: backendProbe.version } : {})
     },
@@ -282,7 +303,11 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
     ...(scope ? { scope } : {}),
     localOnly: true as const,
     networkAccess: "none" as const,
-    replay: input.replayCommand ?? `truth-harness proof check ${quoteCommandArg(sourceRef)} --json`
+    replay: input.replayCommand ?? proofCheckReplayCommand(sourceRef, {
+      projectRoot: proofExecution.projectRoot,
+      lakeCommand: input.lakeCommand,
+      leanCommand: input.leanCommand
+    })
   };
 
   if (backendProbe.status !== "available") {
@@ -304,12 +329,13 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       ],
       warnings: [
         ...declarationWarnings,
+        ...projectWarnings,
         "No accepted local proof-checking run completed. Treat the claim as unverified until Lean accepts the concrete proof artifact."
       ]
     });
   }
 
-  const result = runner(leanCommand, proofArgs, timeoutMs);
+  const result = runner(proofExecution.command, proofArgs, timeoutMs, proofExecution.cwd ? { cwd: proofExecution.cwd } : undefined);
   const stdout = singleLine(result.stdout);
   const stderr = singleLine(result.stderr);
   const errorText = result.error ? `${result.error.name ? `${result.error.name}: ` : ""}${result.error.message}` : undefined;
@@ -334,6 +360,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       ],
       warnings: [
         ...declarationWarnings,
+        ...projectWarnings,
         "No accepted local proof-checking run completed. Treat the claim as unverified until Lean accepts the concrete proof artifact."
       ]
     });
@@ -358,6 +385,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       ],
       warnings: [
         ...declarationWarnings,
+        ...projectWarnings,
         "The proof artifact was not accepted by an accepted proof checker. Treat the claim as unverified."
       ]
     });
@@ -382,6 +410,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       ],
       warnings: [
         ...declarationWarnings,
+        ...projectWarnings,
         "Lean success is necessary but not sufficient for Truth Harness `proved`: the checked source must not contain `sorry`, `admit`, Lean metavariable holes, local `axiom`, or local `constant` declarations."
       ]
     });
@@ -405,6 +434,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       ],
       warnings: [
         ...declarationWarnings,
+        ...projectWarnings,
         "Review the Lean statement and imports to confirm they match the intended human claim."
       ]
     });
@@ -427,6 +457,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
     ],
     warnings: [
       ...declarationWarnings,
+      ...projectWarnings,
       "Lean rejected this proof artifact, so Truth Harness must not label the claim `proved`."
     ]
   });
@@ -435,7 +466,9 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
 export async function writeLeanProofCheckRecord(input: WriteLeanProofCheckInput): Promise<LeanProofCheckWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
   const resolvedSourcePath = resolveWorkspacePath(status.root, input.sourcePath);
+  const resolvedProjectRoot = input.projectPath ? resolveWorkspacePath(status.root, input.projectPath) : undefined;
   const sourceRef = toPortablePath(relative(status.root, resolvedSourcePath));
+  const projectRef = resolvedProjectRoot ? toPortablePath(relative(status.root, resolvedProjectRoot)) || "." : undefined;
   const sourceText = await readFile(resolvedSourcePath, "utf8");
   const record = checkLeanProofArtifact({
     sourcePath: resolvedSourcePath,
@@ -444,10 +477,16 @@ export async function writeLeanProofCheckRecord(input: WriteLeanProofCheckInput)
     declarationName: input.declarationName,
     scope: input.scope,
     leanCommand: input.leanCommand,
+    lakeCommand: input.lakeCommand,
+    projectRoot: resolvedProjectRoot,
     timeoutMs: input.timeoutMs,
     now: input.now,
     runner: input.runner,
-    replayCommand: `truth-harness proof check ${quoteCommandArg(sourceRef)} --write --json`
+    replayCommand: proofCheckReplayCommand(sourceRef, {
+      projectRoot: projectRef,
+      lakeCommand: input.lakeCommand,
+      leanCommand: input.leanCommand
+    }) + " --write"
   });
   const proofsDir = resolve(status.root, status.manifest.directories.proofs);
   await assertProofCheckSchema(record);
@@ -856,8 +895,14 @@ function probeLeanBackend(args: {
   };
 }
 
-function runCommand(command: string, args: string[], timeoutMs: number): ProofBackendCommandResult {
+function runCommand(
+  command: string,
+  args: string[],
+  timeoutMs: number,
+  options?: ProofBackendCommandOptions
+): ProofBackendCommandResult {
   const result = spawnSync(command, args, {
+    cwd: options?.cwd,
     encoding: "utf8",
     timeout: timeoutMs,
     windowsHide: true,
@@ -1073,6 +1118,45 @@ function normalizeOptional(value: string | undefined): string | undefined {
 
 function quoteCommandArg(value: string): string {
   return /^[A-Za-z0-9_./\\:-]+$/.test(value) ? value : JSON.stringify(value);
+}
+
+function leanProofExecution(input: {
+  sourcePath: string;
+  leanCommand: string;
+  lakeCommand?: string;
+  projectRoot?: string;
+}): { command: string; args: string[]; cwd?: string; projectRoot?: string } {
+  const projectRoot = normalizeOptional(input.projectRoot);
+  if (!projectRoot) {
+    return {
+      command: input.leanCommand,
+      args: [input.sourcePath]
+    };
+  }
+
+  return {
+    command: input.lakeCommand?.trim() || process.env.TRUTH_HARNESS_LAKE?.trim() || "lake",
+    args: ["env", input.leanCommand, input.sourcePath],
+    cwd: projectRoot,
+    projectRoot
+  };
+}
+
+function proofCheckReplayCommand(
+  sourceRef: string,
+  options: { projectRoot?: string; leanCommand?: string; lakeCommand?: string }
+): string {
+  const args = ["truth-harness", "proof", "check", quoteCommandArg(sourceRef), "--json"];
+  if (options.projectRoot) {
+    args.push("--project", quoteCommandArg(options.projectRoot));
+  }
+  if (options.leanCommand) {
+    args.push("--lean-command", quoteCommandArg(options.leanCommand));
+  }
+  if (options.lakeCommand) {
+    args.push("--lake-command", quoteCommandArg(options.lakeCommand));
+  }
+  return args.join(" ");
 }
 
 function svgBox(

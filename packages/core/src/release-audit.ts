@@ -638,24 +638,25 @@ function frontierReadinessFor(input: {
       status: leanFixtureReady ? "partial" : "blocked",
       summary: leanFixtureReady
         ? leanProofRepairGateReady && leanTheoremTemplateReady
-          ? "Lean fixture evidence, a reusable theorem template, and a saved proof-repair rehearsal exist, but this is not yet a mature proof-search or mathlib-scale workflow."
+          ? "Lean fixture evidence, a reusable theorem template, a mathlib scaffold, and a saved proof-repair rehearsal exist, but this is not yet a mature proof-search or dependency-pinned mathlib workflow."
           : leanProofRepairGateReady
-            ? "Lean fixture evidence and a saved proof-repair rehearsal exist, but this is not yet a mature proof-search or mathlib-scale workflow."
-            : "Lean fixture evidence exists, but this is not yet a mature proof-search or mathlib-scale workflow."
+            ? "Lean fixture evidence and a saved proof-repair rehearsal exist, but this is not yet a mature proof-search or dependency-pinned mathlib workflow."
+            : "Lean fixture evidence exists, but this is not yet a mature proof-search or dependency-pinned mathlib workflow."
         : "No accepted Lean proof fixture is cited in this audit scope.",
       evidence: [
         `Lean/proved fixture evidence: ${leanFixtureReady ? "present" : "missing"}.`,
         `Reusable theorem template: ${checkSummary(input.checks, "lean-theorem-template")}.`,
         `Lean repair rehearsal: ${checkSummary(input.checks, "lean-proof-repair-gate")}.`,
+        "Mathlib scaffold: docs/examples/lean-mathlib-template is inspectable; strict proof evidence still needs a pinned Lake manifest and project-aware proof check.",
         "`proved` remains reserved for accepted proof-checker artifacts.",
         `Lean template gate: ${input.commands.dockerTheoremTemplate}.`,
         `Lean repair gate: ${input.commands.dockerLeanRepairGate}.`
       ],
       blockers: [
-        "Promote the core-Lean theorem corpus into at least one pinned mathlib-backed family with external mathematical review before treating this as frontier theorem infrastructure."
+        "Pin the mathlib scaffold with a reviewed lake-manifest.json and no-runtime-network Docker proof check before treating it as frontier theorem infrastructure."
       ],
       nextAction: leanProofRepairGateReady && leanTheoremTemplateReady
-        ? "Promote one theorem-corpus family into a pinned mathlib fixture."
+        ? "Pin lake-manifest.json for docs/examples/lean-mathlib-template, then run proof:mathlib-template:check in a no-runtime-network Docker proof image."
         : leanFixtureReady
           ? leanTheoremTemplateReady ? input.commands.dockerLeanRepairGate : input.commands.dockerTheoremTemplate
           : input.commands.dockerProof

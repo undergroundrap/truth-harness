@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "truth-harness.lean-theorem-corpus.v0",
+  "corpusId": "ltc_mathlib_template_v0",
+  "title": "Mathlib theorem template corpus",
+  "description": "A local-first mathlib-backed starter corpus. This manifest organizes formal targets and missing dependency gates; it is not proof evidence by itself.",
+  "projectPath": "docs/examples/lean-mathlib-template",
+  "localOnly": true,
+  "networkAccess": "none",
+  "sourceProject": {
+    "toolchain": "leanprover/lean4:v4.12.0",
+    "lakefile": "lakefile.lean",
+    "mathlib": "required"
+  },
+  "families": [
+    {
+      "familyId": "finite-set-cardinality",
+      "title": "Finite-set cardinality smoke proofs",
+      "lane": "mathlib",
+      "status": "template-ready",
+      "trustCeiling": "proved-after-proof-check",
+      "sourcePaths": ["TruthHarnessMathlib/Algebra.lean"],
+      "declarationNames": ["finset_card_singleton_template"],
+      "evidenceRequired": [
+        "reviewed lake-manifest.json pinning mathlib revisions",
+        "accepted proof-check record using truth-harness proof check --project",
+        "no-runtime-network Docker proof run after dependencies are cached"
+      ],
+      "nextAction": "Pin lake-manifest.json in a controlled Docker proof image, then run the project-aware proof check."
+    },
+    {
+      "familyId": "nat-algebra-smoke",
+      "title": "Natural-number algebra smoke proofs",
+      "lane": "mathlib",
+      "status": "template-ready",
+      "trustCeiling": "proved-after-proof-check",
+      "sourcePaths": ["TruthHarnessMathlib/Algebra.lean"],
+      "declarationNames": ["nat_add_comm_mathlib_template"],
+      "evidenceRequired": [
+        "reviewed lake-manifest.json pinning mathlib revisions",
+        "accepted proof-check record using truth-harness proof check --project",
+        "reviewed mapping from informal algebra claim to formal statement"
+      ],
+      "nextAction": "Use this as the smallest algebra family before adding ring, order, or analysis targets."
+    }
+  ],
+  "trustBoundary": {
+    "corpusIsNotProof": true,
+    "provedRequiresProofCheckRecord": true,
+    "mathlibFamiliesRequirePinnedManifest": true,
+    "externalReviewRequiredForFrontierClaims": true
+  },
+  "escalationGates": [
+    {
+      "gateId": "pin-mathlib-manifest",
+      "title": "Pin mathlib dependency revisions",
+      "requiredBefore": "mathlib-backed theorem family proof check",
+      "evidenceRequired": [
+        "reviewed lakefile.lean",
+        "reviewed lake-manifest.json",
+        "no-runtime-network Docker proof run"
+      ]
+    },
+    {
+      "gateId": "project-aware-proof-check",
+      "title": "Check through Lake project environment",
+      "requiredBefore": "claim ledger proved status",
+      "evidenceRequired": [
+        "truth-harness proof check <source> --project docs/examples/lean-mathlib-template --write",
+        "accepted proof-check record with exact source hash"
+      ]
+    }
+  ],
+  "warnings": [
+    "This corpus manifest organizes mathlib targets only; it never upgrades trust labels.",
+    "A missing lake-manifest.json keeps this fixture out of strict reviewer evidence.",
+    "Mathlib-backed proofs must run through Lake project context, not direct lean <file>."
+  ]
+}

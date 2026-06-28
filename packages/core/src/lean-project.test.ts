@@ -262,6 +262,47 @@ describe("Lean project inspection", () => {
     expect(inspection.trustBoundary.inspectionIsNotProof).toBe(true);
   });
 
+  it("inspects the checked-in mathlib theorem scaffold without treating it as proof evidence", async () => {
+    const inspection = await inspectLeanProject({
+      rootPath: ".",
+      projectPath: "docs/examples/lean-mathlib-template"
+    });
+
+    expect(inspection.readiness).toBe("ready");
+    expect(inspection.toolchain).toMatchObject({
+      channel: "leanprover/lean4:v4.12.0",
+      pinned: true
+    });
+    expect(inspection.files.lakeManifest).toBeUndefined();
+    expect(inspection.mathlib).toMatchObject({
+      likelyUsesMathlib: true,
+      evidence: expect.arrayContaining(["lakefile.lean"])
+    });
+    expect(inspection.theoremCorpus).toMatchObject({
+      path: "docs/examples/lean-mathlib-template/theorem-corpus.json",
+      valid: true,
+      corpusId: "ltc_mathlib_template_v0",
+      families: {
+        total: 2,
+        templateReady: 2,
+        plannedMathlib: 0,
+        needsProof: 0
+      },
+      declarationCoverage: {
+        sourceInventoryComplete: true,
+        templateReadyDeclarations: 2,
+        matchedTemplateReadyDeclarations: 2,
+        missingTemplateReadyDeclarations: 0,
+        complete: true
+      }
+    });
+    expect(inspection.declarations.total).toBe(2);
+    expect(inspection.proofSafety.blocksProvedTrust).toBe(false);
+    expect(inspection.warnings.join(" ")).toContain("No lake-manifest.json found");
+    expect(inspection.nextActions.join(" ")).toContain("Generate and review lake-manifest.json");
+    expect(inspection.trustBoundary.inspectionIsNotProof).toBe(true);
+  });
+
   it("flags theorem corpus targets that are not backed by scanned Lean declarations", async () => {
     const root = await tempRoot();
     await mkdir(join(root, "Proofs"), { recursive: true });

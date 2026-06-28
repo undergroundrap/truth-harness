@@ -4573,11 +4573,13 @@ proof
   .option("--write", "Write JSON and Markdown into .truth-harness/proofs")
   .option("--workspace <path>", "Project root path", ".")
   .option("--declaration <name>", "Optional formal declaration name represented by the source")
+  .option("--project <path>", "Optional Lean/Lake project root; checks with lake env lean from this directory")
   .option("--route <route_id>", "Optional verifier route id this proof-check is intended to support")
   .option("--obligation <obl_id>", "Optional verifier route obligation id this proof-check is intended to support")
   .option("--statement-hash <hash>", "Optional hash of the formal/informal statement boundary this proof-check is intended to support")
   .option("--statement <text>", "Optional statement boundary this proof-check is intended to support")
   .option("--lean-command <path>", "Lean executable path or command. Defaults to TRUTH_HARNESS_LEAN or lean.")
+  .option("--lake-command <path>", "Lake executable path or command. Defaults to TRUTH_HARNESS_LAKE or lake when --project is used.")
   .option("--timeout-ms <ms>", "Backend probe and proof-check timeout in milliseconds", parsePositiveInteger, 3000)
   .option("--fail-on-unproved", "Exit non-zero unless Lean accepts the proof artifact")
   .action(
@@ -4589,11 +4591,13 @@ proof
         write?: boolean;
         workspace: string;
         declaration?: string;
+        project?: string;
         route?: string;
         obligation?: string;
         statementHash?: string;
         statement?: string;
         leanCommand?: string;
+        lakeCommand?: string;
         timeoutMs: number;
         failOnUnproved?: boolean;
       }
@@ -4605,6 +4609,8 @@ proof
             declarationName: options.declaration,
             scope: proofCheckScopeFromOptions(options),
             leanCommand: options.leanCommand,
+            lakeCommand: options.lakeCommand,
+            projectPath: options.project,
             timeoutMs: options.timeoutMs
           })
         : undefined;
@@ -4617,8 +4623,10 @@ proof
           declarationName: options.declaration,
           scope: proofCheckScopeFromOptions(options),
           leanCommand: options.leanCommand,
+          lakeCommand: options.lakeCommand,
+          projectRoot: options.project ? resolve(options.workspace, options.project) : undefined,
           timeoutMs: options.timeoutMs,
-          replayCommand: `truth-harness proof check ${quoteCommandArg(sourcePath)} --json`
+          replayCommand: proofCheckCliReplayCommand(sourcePath, options)
         });
 
       if (options.out) {
@@ -10831,6 +10839,23 @@ function benchmarkRunReplayCommand(
     options.failOnFailures ? "--fail-on-failures" : undefined
   ].filter(Boolean);
   return `truth-harness bench run ${quoteCommandArg(suitePath)}${flags.length > 0 ? ` ${flags.join(" ")}` : ""}`;
+}
+
+function proofCheckCliReplayCommand(
+  sourcePath: string,
+  options: { project?: string; leanCommand?: string; lakeCommand?: string }
+): string {
+  const args = ["truth-harness", "proof", "check", quoteCommandArg(sourcePath), "--json"];
+  if (options.project) {
+    args.push("--project", quoteCommandArg(options.project));
+  }
+  if (options.leanCommand) {
+    args.push("--lean-command", quoteCommandArg(options.leanCommand));
+  }
+  if (options.lakeCommand) {
+    args.push("--lake-command", quoteCommandArg(options.lakeCommand));
+  }
+  return args.join(" ");
 }
 
 function quoteCommandArg(value: string): string {

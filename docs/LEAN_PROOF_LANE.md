@@ -134,6 +134,30 @@ Run the local template check when Lean is installed:
 npm run proof:theorem-template
 ```
 
+The repository also includes the first mathlib-backed scaffold at
+`docs/examples/lean-mathlib-template`:
+
+- `lean-toolchain`: `leanprover/lean4:v4.12.0`
+- `lakefile.lean`: declares the `mathlib4` `v4.12.0` dependency
+- `TruthHarnessMathlib/Algebra.lean`: finite-set and Nat algebra theorem targets
+- `theorem-corpus.json`: schema-validated family metadata whose declaration
+  names must resolve to scanned Lean source declarations
+
+This scaffold is intentionally inspect-only until a reviewed `lake-manifest.json`
+and no-runtime-network Docker proof check exist. Use this command to inspect the
+layout and declaration coverage without fetching dependencies:
+
+```bash
+npm run proof:mathlib-template
+```
+
+Once dependencies are pinned and available, the concrete proof check must run
+through Lake so mathlib imports resolve from the project environment:
+
+```bash
+npm run proof:mathlib-template:check
+```
+
 Run only the template in the pinned Docker proof image:
 
 ```bash
@@ -201,7 +225,7 @@ Agents should use this as a regression rehearsal before trusting autonomous proo
 
 The next proof-lane milestones are:
 
-- a pinned Lean/Lake/mathlib Docker profile,
+- a pinned Lean/Lake/mathlib Docker profile that can run `proof:mathlib-template:check` with no runtime network,
 - template promotion from the schema-validated and declaration-covered core-Lean theorem corpus to pinned mathlib-backed theorem families,
 - proof project fixtures for regression tests,
 - route obligations that point to specific formal statements,

@@ -90,7 +90,7 @@ describe("release audit", () => {
       expect.objectContaining({
         id: "formal-theorem-workflows",
         status: "partial",
-        nextAction: "Promote one theorem-corpus family into a pinned mathlib fixture.",
+        nextAction: "Pin lake-manifest.json for docs/examples/lean-mathlib-template, then run proof:mathlib-template:check in a no-runtime-network Docker proof image.",
         evidence: expect.arrayContaining([
           expect.stringContaining("Reusable theorem template: pass"),
           expect.stringContaining("Lean repair rehearsal: pass"),
