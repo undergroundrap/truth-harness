@@ -273,10 +273,14 @@ describe("Lean project inspection", () => {
       channel: "leanprover/lean4:v4.12.0",
       pinned: true
     });
-    expect(inspection.files.lakeManifest).toBeUndefined();
+    expect(inspection.files.lakeManifest).toMatchObject({
+      path: "docs/examples/lean-mathlib-template/lake-manifest.json",
+      sha256: "fcf0b27398e235891664acd249fc5ca051a5d83615c435ca74adb395bfdb2033",
+      sha256Scope: "file"
+    });
     expect(inspection.mathlib).toMatchObject({
       likelyUsesMathlib: true,
-      evidence: expect.arrayContaining(["lakefile.lean"])
+      evidence: expect.arrayContaining(["lakefile.lean", "lake-manifest.json"])
     });
     expect(inspection.theoremCorpus).toMatchObject({
       path: "docs/examples/lean-mathlib-template/theorem-corpus.json",
@@ -298,8 +302,8 @@ describe("Lean project inspection", () => {
     });
     expect(inspection.declarations.total).toBe(2);
     expect(inspection.proofSafety.blocksProvedTrust).toBe(false);
-    expect(inspection.warnings.join(" ")).toContain("No lake-manifest.json found");
-    expect(inspection.nextActions.join(" ")).toContain("Generate and review lake-manifest.json");
+    expect(inspection.warnings.join(" ")).not.toContain("No lake-manifest.json found");
+    expect(inspection.nextActions.join(" ")).toContain("proof check");
     expect(inspection.trustBoundary.inspectionIsNotProof).toBe(true);
   });
 

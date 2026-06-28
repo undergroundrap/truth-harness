@@ -268,6 +268,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     reportDraftsCheck(credibilityPack),
     leanProofSafetyCheck(credibilityPack),
     await leanTheoremTemplateCheck(rootPath, commands.dockerTheoremTemplate),
+    await leanMathlibTemplateCheck(rootPath, commands.dockerMathlibTemplate),
     await leanProofRepairGateCheck(rootPath, commands.dockerLeanRepairGate),
     researchSessionContinuityCheck(credibilityPack),
     savedStrictEngineRunCheck(credibilityPack, input.requireSavedStrictEngineRun === true),
@@ -552,6 +553,9 @@ function frontierReadinessFor(input: {
   const frontierHonestyReady = checkPassed(input.checks, "frontier-honesty-challenge");
   const hardMathClosureReady = checkPassed(input.checks, "hard-math-closure");
   const leanTheoremTemplateReady = checkPassed(input.checks, "lean-theorem-template");
+  const leanMathlibTemplateReady = checkPassed(input.checks, "lean-mathlib-template");
+  const leanMathlibTemplateCheck = input.checks.find((check) => check.id === "lean-mathlib-template");
+  const leanMathlibManifestPinned = leanMathlibTemplateCheck?.details.some((detail) => detail.startsWith("Manifest: present")) === true;
   const leanProofRepairGateReady = checkPassed(input.checks, "lean-proof-repair-gate");
   const strictAllEngineEvidenceReady =
     input.credibilityPack?.summary.savedEngineLadderLevel === "engine-level-5-strict-all-engines" ||
@@ -638,30 +642,40 @@ function frontierReadinessFor(input: {
       title: "Formal theorem workflows",
       status: leanFixtureReady ? "partial" : "blocked",
       summary: leanFixtureReady
-        ? leanProofRepairGateReady && leanTheoremTemplateReady
-          ? "Lean fixture evidence, a reusable theorem template, a mathlib scaffold, and a saved proof-repair rehearsal exist, but this is not yet a mature proof-search or dependency-pinned mathlib workflow."
-          : leanProofRepairGateReady
-            ? "Lean fixture evidence and a saved proof-repair rehearsal exist, but this is not yet a mature proof-search or dependency-pinned mathlib workflow."
-            : "Lean fixture evidence exists, but this is not yet a mature proof-search or dependency-pinned mathlib workflow."
+        ? leanMathlibTemplateReady
+          ? "Lean fixture evidence, a reusable theorem template, a manifest-pinned mathlib scaffold, and a saved proof-repair rehearsal exist, but this is not yet mature proof search."
+          : leanMathlibManifestPinned
+            ? "Lean fixture evidence and a manifest-pinned mathlib scaffold exist, but the scaffold still needs accepted no-runtime-network proof evidence."
+            : leanProofRepairGateReady && leanTheoremTemplateReady
+              ? "Lean fixture evidence, a reusable theorem template, a mathlib scaffold, and a saved proof-repair rehearsal exist, but the mathlib scaffold is not dependency-pinned yet."
+              : leanProofRepairGateReady
+                ? "Lean fixture evidence and a saved proof-repair rehearsal exist, but this is not yet a mature proof-search workflow."
+                : "Lean fixture evidence exists, but this is not yet a mature proof-search workflow."
         : "No accepted Lean proof fixture is cited in this audit scope.",
       evidence: [
         `Lean/proved fixture evidence: ${leanFixtureReady ? "present" : "missing"}.`,
         `Reusable theorem template: ${checkSummary(input.checks, "lean-theorem-template")}.`,
+        `Lean mathlib scaffold: ${checkSummary(input.checks, "lean-mathlib-template")}.`,
         `Lean repair rehearsal: ${checkSummary(input.checks, "lean-proof-repair-gate")}.`,
-        "Mathlib scaffold: docs/examples/lean-mathlib-template is inspectable; strict proof evidence still needs a pinned Lake manifest and project-aware proof check.",
         "`proved` remains reserved for accepted proof-checker artifacts.",
         `Lean template gate: ${input.commands.dockerTheoremTemplate}.`,
         `Lean mathlib gate: ${input.commands.dockerMathlibTemplate}.`,
         `Lean repair gate: ${input.commands.dockerLeanRepairGate}.`
       ],
-      blockers: [
-        "Pin the mathlib scaffold with a reviewed lake-manifest.json and no-runtime-network Docker proof check before treating it as frontier theorem infrastructure."
-      ],
-      nextAction: leanProofRepairGateReady && leanTheoremTemplateReady
-        ? "Pin lake-manifest.json for docs/examples/lean-mathlib-template, then run npm run docker:mathlib-template:write for no-runtime-network proof evidence."
-        : leanFixtureReady
-          ? leanTheoremTemplateReady ? input.commands.dockerLeanRepairGate : input.commands.dockerTheoremTemplate
-          : input.commands.dockerProof
+      blockers: leanMathlibTemplateReady
+        ? ["Curate professor-reviewed mathlib theorem families and proof-search regression budgets before claiming frontier theorem discovery."]
+        : leanMathlibManifestPinned
+          ? ["Run the no-runtime-network Docker mathlib proof gate and review the produced proof-check receipt."]
+          : ["Pin the mathlib scaffold with a reviewed lake-manifest.json before treating it as dependency-reproducible theorem infrastructure."],
+      nextAction: leanFixtureReady
+        ? leanTheoremTemplateReady && leanProofRepairGateReady
+          ? leanMathlibTemplateReady
+            ? "Expand the mathlib scaffold into curated algebra, order, and analysis theorem families with validation plans."
+            : leanMathlibManifestPinned
+              ? input.commands.dockerMathlibTemplate
+              : "Pin lake-manifest.json for docs/examples/lean-mathlib-template, then run npm run docker:mathlib-template:write for no-runtime-network proof evidence."
+          : leanTheoremTemplateReady ? input.commands.dockerLeanRepairGate : input.commands.dockerTheoremTemplate
+        : input.commands.dockerProof
     },
     {
       id: "autonomous-frontier-discovery",
@@ -1580,6 +1594,120 @@ async function leanTheoremTemplateCheck(rootPath: string, command: string): Prom
         `Expected project: ${projectPath}.`,
         `Inspection error: ${error instanceof Error ? error.message : String(error)}.`,
         "Run the Docker theorem-template gate before relying on the reusable formal-proof scaffold."
+      ]
+    });
+  }
+}
+
+async function leanMathlibTemplateCheck(rootPath: string, command: string): Promise<ReleaseAuditCheck> {
+  const projectPath = "docs/examples/lean-mathlib-template";
+  const sourcePath = "docs/examples/lean-mathlib-template/TruthHarnessMathlib/Algebra.lean";
+
+  try {
+    const inspection = await inspectLeanProject({
+      rootPath,
+      projectPath,
+      maxLeanFiles: 10
+    });
+    const pinnedToolchain = inspection.toolchain?.pinned === true;
+    const manifest = inspection.files.lakeManifest;
+    const manifestPinned = manifest !== undefined;
+    const scannerClean = !inspection.proofSafety.blocksProvedTrust;
+    const completeScan = !inspection.files.leanFiles.truncated;
+    const corpusCoverage = inspection.theoremCorpus?.declarationCoverage;
+    const corpusReady =
+      inspection.theoremCorpus?.valid === true &&
+      inspection.theoremCorpus.families.total > 0 &&
+      inspection.theoremCorpus.families.templateReady > 0 &&
+      corpusCoverage?.complete === true &&
+      corpusCoverage.templateReadyDeclarations > 0;
+    const normalizeProofPath = (value: string) => value.replace(/\\/gu, "/").replace(/^\.\//u, "");
+    const proofChecks = await listLeanProofChecks(rootPath).catch((): LeanProofCheckSummary[] => []);
+    const acceptedProof = proofChecks.find((proof) =>
+      proof.status === "accepted" &&
+      proof.trust === "proved" &&
+      proof.proofCheckerBacked === true &&
+      normalizeProofPath(proof.sourcePath) === sourcePath
+    );
+
+    const sharedDetails = [
+      `Project: ${projectPath}.`,
+      `Checked source: ${sourcePath}.`,
+      `Toolchain: ${inspection.toolchain?.channel ?? "missing"}.`,
+      `Manifest: ${manifestPinned ? `present (${manifest.sha256})` : "missing"}.`,
+      `Theorem corpus: ${inspection.theoremCorpus?.path ?? "missing"}.`,
+      `Template-ready families: ${inspection.theoremCorpus?.families.templateReady ?? 0}.`,
+      `Corpus declarations matched: ${corpusCoverage?.matchedTemplateReadyDeclarations ?? 0}/${corpusCoverage?.templateReadyDeclarations ?? 0}.`,
+      "Inspection and corpus metadata do not upgrade trust; only the accepted proof-check receipt can support `proved`."
+    ];
+
+    if (
+      inspection.readiness === "ready" &&
+      pinnedToolchain &&
+      manifestPinned &&
+      scannerClean &&
+      completeScan &&
+      corpusReady &&
+      acceptedProof
+    ) {
+      return passCheck({
+        id: "lean-mathlib-template",
+        title: "Lean mathlib scaffold",
+        summary: `Mathlib scaffold is manifest-pinned and has accepted Lake proof evidence ${acceptedProof.checkId}.`,
+        command,
+        details: [
+          ...sharedDetails,
+          `Accepted proof: ${acceptedProof.checkId}.`,
+          `Proof source SHA-256: ${acceptedProof.sourceSha256}.`,
+          `Proof backend: ${acceptedProof.backendId}${acceptedProof.backendVersion ? ` (${acceptedProof.backendVersion})` : ""}.`,
+          "This proves only the checked scaffold source under the pinned Lake project, not future theorem families."
+        ]
+      });
+    }
+
+    if (inspection.readiness === "ready" && pinnedToolchain && manifestPinned && scannerClean && completeScan && corpusReady) {
+      return warnCheck({
+        id: "lean-mathlib-template",
+        title: "Lean mathlib scaffold",
+        blocking: false,
+        summary: "Mathlib scaffold is manifest-pinned, but no accepted Lake proof receipt was found in this workspace.",
+        command,
+        details: [
+          ...sharedDetails,
+          "Run the no-runtime-network Docker mathlib proof gate to write the accepted proof-check record."
+        ]
+      });
+    }
+
+    return warnCheck({
+      id: "lean-mathlib-template",
+      title: "Lean mathlib scaffold",
+      blocking: false,
+      summary: manifestPinned
+        ? "Mathlib scaffold is present but not reviewer-clean."
+        : "Mathlib scaffold is inspectable, but its Lake dependency manifest is not pinned yet.",
+      command,
+      details: [
+        ...sharedDetails,
+        `Readiness: ${inspection.readiness}.`,
+        `Pinned toolchain: ${String(pinnedToolchain)}.`,
+        `Proof-safety blockers: ${inspection.proofSafety.markers.total}.`,
+        ...(corpusCoverage?.missing ?? []).slice(0, 5).map((missing) => `Missing corpus target ${missing.familyId}:${missing.declarationName}.`),
+        ...(inspection.theoremCorpus?.issues ?? []).slice(0, 5).map((issue) => `Corpus issue ${issue.path}: ${issue.message}.`),
+        ...inspection.warnings.slice(0, 5)
+      ]
+    });
+  } catch (error) {
+    return warnCheck({
+      id: "lean-mathlib-template",
+      title: "Lean mathlib scaffold",
+      blocking: false,
+      summary: "The mathlib theorem scaffold could not be inspected.",
+      command,
+      details: [
+        `Expected project: ${projectPath}.`,
+        `Inspection error: ${error instanceof Error ? error.message : String(error)}.`,
+        "Run the Docker mathlib-template gate before relying on mathlib-backed proof scaffolding."
       ]
     });
   }
