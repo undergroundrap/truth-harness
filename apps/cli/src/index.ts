@@ -7497,6 +7497,7 @@ function printReleaseAudit(audit: ReleaseAudit): void {
   console.log(`  ${audit.commands.dockerProfessorAll}`);
   console.log(`  ${audit.commands.dockerLeanRepairGate}`);
   console.log(`  ${audit.commands.dockerTheoremTemplate}`);
+  console.log(`  ${audit.commands.dockerMathlibTemplate}`);
   console.log(`  ${audit.commands.dockerProof}`);
   console.log(`  ${audit.commands.dockerVerify}`);
 

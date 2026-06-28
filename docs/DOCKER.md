@@ -73,6 +73,14 @@ npm run docker:proof-repair
 
 This command uses the strict repair gate and exits non-zero unless the repaired Lean proof closes the scoped route obligation.
 
+For the heavier mathlib scaffold, do not run an unpinned project. `truth-harness proof check --project` refuses to mint `proved` for Lake projects with external dependencies unless `lake-manifest.json` exists. Once the manifest is reviewed and committed, use the opt-in mathlib image route:
+
+```bash
+npm run docker:mathlib-template:write
+```
+
+The `mathlib-proof` Dockerfile target resolves and caches mathlib during image build, then the compose `mathlib-proof` service runs `proof:mathlib-template:write` with `network_mode: "none"`. The service is image-only in `docker-compose.yml`, so default `docker compose build` does not build the large mathlib target.
+
 The same Lean fixture can be checked through the engine evidence report:
 
 ```bash
@@ -121,7 +129,7 @@ npm run web:doctor
 
 The doctor reports the port owner, `/api/status` runtime identity, served app bundle version, and safe refresh commands. It never stops containers, kills processes, rebuilds images, or runs verifier work. If Docker owns the port and the API is stale, the safe refresh path is `docker compose up --build web`. If you intentionally want to switch back to host web, stop only the compose web service with `docker compose stop web`, then run `npm run web:restart`.
 
-The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima, Z3, and cvc5 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; use `truth-harness proof project <path>` to inspect that local layout without executing Lean, use `truth-harness proof check <file> --project <lean-project>` when Lake dependencies must be resolved through `lake env lean`, run `docker compose run --rm lean-proof` for the pinned core-Lean suite, then build a derived mathlib image once `lake-manifest.json` is reviewed and dependencies are cached.
+The web inspector's Engine Readiness panel reads `/api/status` and should report Maxima, Z3, and cvc5 as available in the standard container image after `docker compose build`. The image uses Debian's ECL-backed `maxima-sage` package instead of the default GCL-backed `maxima` binary because the GCL binary crashes under Docker's default seccomp profile. Lean is not bundled by default because proof work needs a pinned Lean/Mathlib environment; use `truth-harness proof project <path>` to inspect that local layout without executing Lean, use `truth-harness proof check <file> --project <lean-project>` when Lake dependencies must be resolved through `lake env lean`, run `docker compose run --rm lean-proof` for the pinned core-Lean suite, then run `npm run docker:mathlib-template:write` only after `lake-manifest.json` is reviewed and committed.
 
 ## Web UI Safe Verifier Path
 
@@ -135,7 +143,7 @@ npm run docker:all-engines
 npm run docker:verify
 ```
 
-Use `npm run docker:engines` for the quickest no-runtime-network Maxima/Z3/cvc5 evidence smoke from the built image. Use `npm run docker:sandbox:write` when a reviewer wants a durable `.truth-harness/findings` record proving the no-network compose boundary was measured. Use `npm run docker:proof` for the broader day-to-day no-runtime-network engine suite after the dev image exists. Use `npm run docker:all-engines` only when a reviewer explicitly wants the heavy Maxima/Z3/cvc5/Lean/SageMath strict gate. Use `npm run docker:professor:all` when that strict all-engine gate should be embedded into the same generated professor credibility pack and portable reviewer bundle. The all-engine scripts pass Compose `--build` on purpose so the strict result corresponds to the current source tree, although cached layers may still keep repeat runs fast. Use `npm run docker:all-engines:write` when that strict run should become a durable `.truth-harness/engine-runs` artifact for release-audit and credibility-pack citation. Use `npm run docker:verify` before demos or review checkpoints when you want the full image build and verification target. Image builds may download dependencies; verifier runs inside the `engine-smoke`, `truth-harness`, `professor-evidence`, `professor-evidence-all`, or `all-engines` compose services use the no-network runtime boundary described below.
+Use `npm run docker:engines` for the quickest no-runtime-network Maxima/Z3/cvc5 evidence smoke from the built image. Use `npm run docker:sandbox:write` when a reviewer wants a durable `.truth-harness/findings` record proving the no-network compose boundary was measured. Use `npm run docker:proof` for the broader day-to-day no-runtime-network engine suite after the dev image exists. Use `npm run docker:all-engines` only when a reviewer explicitly wants the heavy Maxima/Z3/cvc5/Lean/SageMath strict gate. Use `npm run docker:professor:all` when that strict all-engine gate should be embedded into the same generated professor credibility pack and portable reviewer bundle. The all-engine scripts pass Compose `--build` on purpose so the strict result corresponds to the current source tree, although cached layers may still keep repeat runs fast. Use `npm run docker:all-engines:write` when that strict run should become a durable `.truth-harness/engine-runs` artifact for release-audit and credibility-pack citation. Use `npm run docker:mathlib-template:write` only for the heavier manifest-pinned mathlib proof scaffold after dependency revisions are reviewed. Use `npm run docker:verify` before demos or review checkpoints when you want the full image build and verification target. Image builds may download dependencies; verifier runs inside the `engine-smoke`, `truth-harness`, `professor-evidence`, `professor-evidence-all`, or `all-engines` compose services use the no-network runtime boundary described below.
 
 The UI card is guidance, not evidence. Claims still need concrete receipts: `cross-checked` requires an accepted independent CAS record, `smt-checked` requires a concrete Z3 or cvc5 solver record, and `proved` requires an accepted proof-checker record.
 

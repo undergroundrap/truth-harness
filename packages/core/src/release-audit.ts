@@ -151,6 +151,7 @@ export interface ReleaseAudit {
     dockerAllEngines: string;
     dockerLeanRepairGate: string;
     dockerTheoremTemplate: string;
+    dockerMathlibTemplate: string;
     dockerProof: string;
     dockerVerify: string;
     workspaceStress: string;
@@ -650,13 +651,14 @@ function frontierReadinessFor(input: {
         "Mathlib scaffold: docs/examples/lean-mathlib-template is inspectable; strict proof evidence still needs a pinned Lake manifest and project-aware proof check.",
         "`proved` remains reserved for accepted proof-checker artifacts.",
         `Lean template gate: ${input.commands.dockerTheoremTemplate}.`,
+        `Lean mathlib gate: ${input.commands.dockerMathlibTemplate}.`,
         `Lean repair gate: ${input.commands.dockerLeanRepairGate}.`
       ],
       blockers: [
         "Pin the mathlib scaffold with a reviewed lake-manifest.json and no-runtime-network Docker proof check before treating it as frontier theorem infrastructure."
       ],
       nextAction: leanProofRepairGateReady && leanTheoremTemplateReady
-        ? "Pin lake-manifest.json for docs/examples/lean-mathlib-template, then run proof:mathlib-template:check in a no-runtime-network Docker proof image."
+        ? "Pin lake-manifest.json for docs/examples/lean-mathlib-template, then run npm run docker:mathlib-template:write for no-runtime-network proof evidence."
         : leanFixtureReady
           ? leanTheoremTemplateReady ? input.commands.dockerLeanRepairGate : input.commands.dockerTheoremTemplate
           : input.commands.dockerProof
@@ -2095,6 +2097,7 @@ function releaseAuditCommands(
     dockerAllEngines: "npm run docker:all-engines",
     dockerLeanRepairGate: "npm run docker:proof-repair",
     dockerTheoremTemplate: "npm run docker:theorem-template",
+    dockerMathlibTemplate: "npm run docker:mathlib-template:write",
     dockerProof: "npm run docker:proof",
     dockerVerify: "npm run docker:verify",
     workspaceStress: "truth-harness workspace stress <throwaway-path> --receipts 100 --claims 50 --routes 20 --fail-on-validation",

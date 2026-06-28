@@ -158,6 +158,14 @@ through Lake so mathlib imports resolve from the project environment:
 npm run proof:mathlib-template:check
 ```
 
+The proof backend refuses to mint `proved` for a Lake project that declares external dependencies unless `lake-manifest.json` is present. After that manifest is reviewed and committed, use the opt-in Docker mathlib route for reviewer evidence:
+
+```bash
+npm run docker:mathlib-template:write
+```
+
+That command builds the `mathlib-proof` image target, where network access is allowed only during image build to resolve/cache mathlib. The compose runtime service then runs with `network_mode: "none"` and writes the proof-check artifact into `.truth-harness/proofs/`. The target is intentionally not part of default `docker compose build`; it is a heavy reviewer gate, not a normal dev dependency.
+
 Run only the template in the pinned Docker proof image:
 
 ```bash
@@ -225,7 +233,7 @@ Agents should use this as a regression rehearsal before trusting autonomous proo
 
 The next proof-lane milestones are:
 
-- a pinned Lean/Lake/mathlib Docker profile that can run `proof:mathlib-template:check` with no runtime network,
+- a reviewed `lake-manifest.json` for `docs/examples/lean-mathlib-template` plus passing `npm run docker:mathlib-template:write` evidence,
 - template promotion from the schema-validated and declaration-covered core-Lean theorem corpus to pinned mathlib-backed theorem families,
 - proof project fixtures for regression tests,
 - route obligations that point to specific formal statements,

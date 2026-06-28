@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import {
@@ -280,6 +281,8 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
         "Lake resolves local project dependencies; this record still attests only the checked source and recorded command output."
       ]
     : [];
+  const dependencyBoundary = leanProjectDependencyBoundary(proofExecution.projectRoot);
+  const proofEnvironmentWarnings = [...projectWarnings, ...dependencyBoundary.warnings];
   const base = {
     schemaVersion: PROOF_CHECK_SCHEMA_VERSION,
     createdAt,
@@ -329,12 +332,35 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       ],
       warnings: [
         ...declarationWarnings,
-        ...projectWarnings,
+        ...proofEnvironmentWarnings,
         "No accepted local proof-checking run completed. Treat the claim as unverified until Lean accepts the concrete proof artifact."
       ]
     });
   }
 
+  if (dependencyBoundary.blocksProvedTrust) {
+    return withCheckId({
+      ...base,
+      backend: {
+        ...base.backend,
+        exitCode: backendProbe.exitCode
+      },
+      status: "error",
+      trust: "unverified",
+      proofCheckerBacked: false,
+      stdout: backendProbe.stdout,
+      stderr: backendProbe.stderr,
+      limitations: [
+        ...dependencyBoundary.limitations,
+        "This record cannot support a `proved` trust label until the Lake dependency manifest is pinned and replayed."
+      ],
+      warnings: [
+        ...declarationWarnings,
+        ...proofEnvironmentWarnings,
+        "Truth Harness did not run the Lake proof check because dependency revisions are not pinned."
+      ]
+    });
+  }
   const result = runner(proofExecution.command, proofArgs, timeoutMs, proofExecution.cwd ? { cwd: proofExecution.cwd } : undefined);
   const stdout = singleLine(result.stdout);
   const stderr = singleLine(result.stderr);
@@ -360,7 +386,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       ],
       warnings: [
         ...declarationWarnings,
-        ...projectWarnings,
+        ...proofEnvironmentWarnings,
         "No accepted local proof-checking run completed. Treat the claim as unverified until Lean accepts the concrete proof artifact."
       ]
     });
@@ -385,7 +411,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       ],
       warnings: [
         ...declarationWarnings,
-        ...projectWarnings,
+        ...proofEnvironmentWarnings,
         "The proof artifact was not accepted by an accepted proof checker. Treat the claim as unverified."
       ]
     });
@@ -410,7 +436,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       ],
       warnings: [
         ...declarationWarnings,
-        ...projectWarnings,
+        ...proofEnvironmentWarnings,
         "Lean success is necessary but not sufficient for Truth Harness `proved`: the checked source must not contain `sorry`, `admit`, Lean metavariable holes, local `axiom`, or local `constant` declarations."
       ]
     });
@@ -434,7 +460,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       ],
       warnings: [
         ...declarationWarnings,
-        ...projectWarnings,
+        ...proofEnvironmentWarnings,
         "Review the Lean statement and imports to confirm they match the intended human claim."
       ]
     });
@@ -457,7 +483,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
     ],
     warnings: [
       ...declarationWarnings,
-      ...projectWarnings,
+      ...proofEnvironmentWarnings,
       "Lean rejected this proof artifact, so Truth Harness must not label the claim `proved`."
     ]
   });
@@ -1120,6 +1146,83 @@ function quoteCommandArg(value: string): string {
   return /^[A-Za-z0-9_./\\:-]+$/.test(value) ? value : JSON.stringify(value);
 }
 
+interface LeanProjectDependencyBoundary {
+  blocksProvedTrust: boolean;
+  warnings: string[];
+  limitations: string[];
+}
+
+function leanProjectDependencyBoundary(projectRoot: string | undefined): LeanProjectDependencyBoundary {
+  if (!projectRoot) {
+    return { blocksProvedTrust: false, warnings: [], limitations: [] };
+  }
+
+  const lakefilePath = join(projectRoot, "lakefile.lean");
+  if (!existsSync(lakefilePath)) {
+    return { blocksProvedTrust: false, warnings: [], limitations: [] };
+  }
+
+  let lakefileText = "";
+  try {
+    lakefileText = readFileSync(lakefilePath, "utf8");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      blocksProvedTrust: true,
+      warnings: [`Could not read Lake project file ${quoteCommandArg(lakefilePath)}: ${message}.`],
+      limitations: [
+        "Truth Harness could not inspect the Lake dependency declarations for this project.",
+        "Unreadable Lake project metadata cannot support a `proved` trust label."
+      ]
+    };
+  }
+
+  if (!lakefileDeclaresExternalDependencies(lakefileText)) {
+    return { blocksProvedTrust: false, warnings: [], limitations: [] };
+  }
+
+  const manifestPath = join(projectRoot, "lake-manifest.json");
+  if (existsSync(manifestPath)) {
+    try {
+      JSON.parse(readFileSync(manifestPath, "utf8"));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        blocksProvedTrust: true,
+        warnings: [`Could not parse Lake dependency manifest ${quoteCommandArg(manifestPath)}: ${message}.`],
+        limitations: [
+          "Truth Harness found lake-manifest.json, but it is not readable JSON.",
+          "An unreadable or malformed Lake dependency manifest cannot support a `proved` trust label."
+        ]
+      };
+    }
+
+    return {
+      blocksProvedTrust: false,
+      warnings: [
+        `Lake dependency manifest detected at ${quoteCommandArg(manifestPath)}. Review its pinned revisions with the proof-check record.`
+      ],
+      limitations: []
+    };
+  }
+
+  return {
+    blocksProvedTrust: true,
+    warnings: [
+      `Lake project ${quoteCommandArg(projectRoot)} declares external dependencies but has no lake-manifest.json.`,
+      "Generate and review lake-manifest.json before using this project for `proved` evidence."
+    ],
+    limitations: [
+      "The Lake project declares external dependencies whose exact revisions are not pinned by lake-manifest.json.",
+      "A proof accepted from an unpinned dependency environment is not replayable enough for Truth Harness `proved`."
+    ]
+  };
+}
+
+function lakefileDeclaresExternalDependencies(lakefileText: string): boolean {
+  const stripped = stripLeanCommentsAndStrings(lakefileText);
+  return /^\s*require\s+\S+/mu.test(stripped);
+}
 function leanProofExecution(input: {
   sourcePath: string;
   leanCommand: string;

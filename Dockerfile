@@ -78,6 +78,21 @@ RUN npm run proof:lean-suite && npm run engines:verify:lean
 
 CMD ["npm", "run", "proof:lean-suite"]
 
+FROM lean-proof AS mathlib-proof
+
+RUN if [ ! -f docs/examples/lean-mathlib-template/lake-manifest.json ]; then \
+      echo "docs/examples/lean-mathlib-template/lake-manifest.json is required before building the mathlib-proof target" >&2; \
+      echo "Run Lake dependency resolution in a reviewed networked build step, commit the manifest, then rebuild this target." >&2; \
+      exit 1; \
+    fi \
+  && cd docs/examples/lean-mathlib-template \
+  && lake exe cache get \
+  && lake build
+
+RUN npm run proof:mathlib-template:check
+
+CMD ["npm", "run", "proof:mathlib-template:check"]
+
 FROM sage-math AS all-engines
 
 USER root

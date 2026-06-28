@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -212,6 +212,146 @@ describe("proof backend status", () => {
       "truth-harness proof check MathlibProofs/Algebra.lean --json --project C:/workspace --lean-command lean-test --lake-command lake-test"
     );
     expect(record.warnings.join(" ")).toContain("Lake project environment");
+  });
+
+  it("does not run Lake or mint proved when an external dependency manifest is missing", async () => {
+    const root = await tempRoot();
+    const projectRoot = join(root, "MathlibProject");
+    await mkdir(projectRoot, { recursive: true });
+    await writeFile(
+      join(projectRoot, "lakefile.lean"),
+      [
+        "import Lake",
+        "open Lake DSL",
+        "package mathlib_boundary where",
+        "require mathlib from git \"https://github.com/leanprover-community/mathlib4.git\" @ \"v4.12.0\""
+      ].join("\n"),
+      "utf8"
+    );
+
+    const calls: Array<{ command: string; args: string[]; timeoutMs: number; cwd?: string }> = [];
+    const runner: ProofBackendCommandRunner = (command, args, timeoutMs, options) => {
+      calls.push({ command, args, timeoutMs, cwd: options?.cwd });
+      return {
+        status: 0,
+        stdout: args[0] === "--version" ? "Lean (version 4.12.0)\n" : "",
+        stderr: ""
+      };
+    };
+
+    const record = checkLeanProofArtifact({
+      sourcePath: join(projectRoot, "TruthHarnessMathlib/Algebra.lean"),
+      sourceRef: "TruthHarnessMathlib/Algebra.lean",
+      sourceText: "theorem add_comm_fixture (a b : Nat) : a + b = b + a := by exact Nat.add_comm a b\n",
+      declarationName: "add_comm_fixture",
+      projectRoot,
+      leanCommand: "lean-test",
+      lakeCommand: "lake-test",
+      now: new Date("2026-06-10T00:00:00.000Z"),
+      runner
+    });
+
+    expect(calls).toEqual([{ command: "lean-test", args: ["--version"], timeoutMs: 3000, cwd: undefined }]);
+    expect(record.status).toBe("error");
+    expect(record.trust).toBe("unverified");
+    expect(record.proofCheckerBacked).toBe(false);
+    expect(record.backend.command).toBe("lake-test");
+    expect(record.warnings.join(" ")).toContain("has no lake-manifest.json");
+    expect(record.warnings.join(" ")).toContain("did not run the Lake proof check");
+    expect(record.limitations.join(" ")).toContain("not pinned by lake-manifest.json");
+  });
+
+  it("does not run Lake or mint proved when the dependency manifest is malformed", async () => {
+    const root = await tempRoot();
+    const projectRoot = join(root, "MalformedManifestProject");
+    await mkdir(projectRoot, { recursive: true });
+    await writeFile(
+      join(projectRoot, "lakefile.lean"),
+      [
+        "import Lake",
+        "open Lake DSL",
+        "package malformed_manifest_boundary where",
+        "require mathlib from git \"https://github.com/leanprover-community/mathlib4.git\" @ \"v4.12.0\""
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(join(projectRoot, "lake-manifest.json"), "not json\n", "utf8");
+
+    const calls: Array<{ command: string; args: string[]; timeoutMs: number; cwd?: string }> = [];
+    const runner: ProofBackendCommandRunner = (command, args, timeoutMs, options) => {
+      calls.push({ command, args, timeoutMs, cwd: options?.cwd });
+      return {
+        status: 0,
+        stdout: args[0] === "--version" ? "Lean (version 4.12.0)\n" : "",
+        stderr: ""
+      };
+    };
+
+    const record = checkLeanProofArtifact({
+      sourcePath: join(projectRoot, "TruthHarnessMathlib/Algebra.lean"),
+      sourceRef: "TruthHarnessMathlib/Algebra.lean",
+      sourceText: "theorem add_comm_fixture (a b : Nat) : a + b = b + a := by exact Nat.add_comm a b\n",
+      declarationName: "add_comm_fixture",
+      projectRoot,
+      leanCommand: "lean-test",
+      lakeCommand: "lake-test",
+      now: new Date("2026-06-10T00:00:00.000Z"),
+      runner
+    });
+
+    expect(calls).toEqual([{ command: "lean-test", args: ["--version"], timeoutMs: 3000, cwd: undefined }]);
+    expect(record.status).toBe("error");
+    expect(record.trust).toBe("unverified");
+    expect(record.warnings.join(" ")).toContain("Could not parse Lake dependency manifest");
+    expect(record.limitations.join(" ")).toContain("not readable JSON");
+  });
+
+  it("allows external Lake proof checks when the dependency manifest is present", async () => {
+    const root = await tempRoot();
+    const projectRoot = join(root, "PinnedMathlibProject");
+    const sourcePath = join(projectRoot, "TruthHarnessMathlib/Algebra.lean");
+    await mkdir(join(projectRoot, "TruthHarnessMathlib"), { recursive: true });
+    await writeFile(
+      join(projectRoot, "lakefile.lean"),
+      [
+        "import Lake",
+        "open Lake DSL",
+        "package pinned_mathlib_boundary where",
+        "require mathlib from git \"https://github.com/leanprover-community/mathlib4.git\" @ \"v4.12.0\""
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(join(projectRoot, "lake-manifest.json"), "{\"version\": 7, \"packages\": []}\n", "utf8");
+
+    const calls: Array<{ command: string; args: string[]; timeoutMs: number; cwd?: string }> = [];
+    const runner: ProofBackendCommandRunner = (command, args, timeoutMs, options) => {
+      calls.push({ command, args, timeoutMs, cwd: options?.cwd });
+      return {
+        status: 0,
+        stdout: args[0] === "--version" ? "Lean (version 4.12.0)\n" : "",
+        stderr: ""
+      };
+    };
+
+    const record = checkLeanProofArtifact({
+      sourcePath,
+      sourceRef: "TruthHarnessMathlib/Algebra.lean",
+      sourceText: "theorem add_comm_fixture (a b : Nat) : a + b = b + a := by exact Nat.add_comm a b\n",
+      declarationName: "add_comm_fixture",
+      projectRoot,
+      leanCommand: "lean-test",
+      lakeCommand: "lake-test",
+      now: new Date("2026-06-10T00:00:00.000Z"),
+      runner
+    });
+
+    expect(calls).toEqual([
+      { command: "lean-test", args: ["--version"], timeoutMs: 3000, cwd: undefined },
+      { command: "lake-test", args: ["env", "lean-test", sourcePath], timeoutMs: 3000, cwd: projectRoot }
+    ]);
+    expect(record.status).toBe("accepted");
+    expect(record.trust).toBe("proved");
+    expect(record.warnings.join(" ")).toContain("Lake dependency manifest detected");
   });
 
   it("keeps rejected Lean proof attempts unverified", () => {

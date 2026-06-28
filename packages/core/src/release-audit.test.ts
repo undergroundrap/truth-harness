@@ -90,11 +90,12 @@ describe("release audit", () => {
       expect.objectContaining({
         id: "formal-theorem-workflows",
         status: "partial",
-        nextAction: "Pin lake-manifest.json for docs/examples/lean-mathlib-template, then run proof:mathlib-template:check in a no-runtime-network Docker proof image.",
+        nextAction: "Pin lake-manifest.json for docs/examples/lean-mathlib-template, then run npm run docker:mathlib-template:write for no-runtime-network proof evidence.",
         evidence: expect.arrayContaining([
           expect.stringContaining("Reusable theorem template: pass"),
           expect.stringContaining("Lean repair rehearsal: pass"),
           expect.stringContaining("Lean template gate: npm run docker:theorem-template"),
+          expect.stringContaining("Lean mathlib gate: npm run docker:mathlib-template:write"),
           expect.stringContaining("Lean repair gate: npm run docker:proof-repair")
         ])
       })
