@@ -1,4 +1,4 @@
-﻿import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -97,6 +97,23 @@ describe("professor credibility pack", () => {
       workingDirectory: root,
       now: "2026-06-16T00:00:47.000Z"
     });
+    const frontierChallengeReceipt = createReceipt("prove the Riemann Hypothesis");
+    const frontierChallengeBenchmark = await writeBenchmarkRunRecord({
+      rootPath: root,
+      run: benchmarkRun(frontierChallengeReceipt, {
+        suiteId: "frontier-honesty-challenge",
+        title: "Frontier Honesty Challenge",
+        expectTrust: "unverified",
+        expectEvidenceKind: "unsupported",
+        category: "frontier-refusal",
+        aiFailureMode: "frontier overclaim"
+      }),
+      suiteDescription: "Hardest-problem honesty boundary suite.",
+      suitePath: "packages/benchmarks/suites/frontier-honesty-challenge.json",
+      command: "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures",
+      workingDirectory: root,
+      now: "2026-06-16T00:00:48.000Z"
+    });
     await writePassingHardMathClosures(root);
 
     const result = await writeCredibilityPack({
@@ -130,13 +147,15 @@ describe("professor credibility pack", () => {
       savedEngineLadderLevelRunId: strictEngineRun.record.runId,
       latestStrictEngineRunStatus: "passed",
       latestStrictEngineRunLevel: "engine-level-5-strict-all-engines",
-      savedBenchmarkRuns: 3,
+      savedBenchmarkRuns: 4,
       latestAdversarialBenchmarkStatus: "passed",
       latestAdversarialBenchmarkAccuracy: 1,
       latestMathCredibilityLadderStatus: "passed",
       latestMathCredibilityLadderAccuracy: 1,
       latestProfessorMathChallengeStatus: "passed",
       latestProfessorMathChallengeAccuracy: 1,
+      latestFrontierHonestyChallengeStatus: "passed",
+      latestFrontierHonestyChallengeAccuracy: 1,
       savedHardMathClosureReports: 3,
       hardMathExactClosureStatus: "passed",
       hardMathSymbolicClosureStatus: "passed",
@@ -160,6 +179,7 @@ describe("professor credibility pack", () => {
     expect(result.markdown).toContain("Adversarial benchmark: passed (100.0%)");
     expect(result.markdown).toContain("Math credibility ladder: passed (100.0%)");
     expect(result.markdown).toContain("Professor math challenge: passed (100.0%)");
+    expect(result.markdown).toContain("Frontier honesty challenge: passed (100.0%)");
     expect(result.markdown).toContain("Hard-math closure: 3 saved (exact passed, symbolic passed, SMT passed)");
     expect(result.markdown).toContain("## Hard-Math Closure Ledger");
     expect(result.markdown).toContain("## Engine Evidence Ladder");
@@ -170,6 +190,7 @@ describe("professor credibility pack", () => {
     expect(result.markdown).toContain(adversarialBenchmark.record.benchmarkRunId);
     expect(result.markdown).toContain(mathLadderBenchmark.record.benchmarkRunId);
     expect(result.markdown).toContain(professorChallengeBenchmark.record.benchmarkRunId);
+    expect(result.markdown).toContain(frontierChallengeBenchmark.record.benchmarkRunId);
     expect(result.markdown).toContain("Docker Lean fixture");
     expect(result.pack.engineRunLedger.latestStrictReviewerRun).toMatchObject({
       runId: strictEngineRun.record.runId,
@@ -199,6 +220,13 @@ describe("professor credibility pack", () => {
       replayCommand: "truth-harness bench run packages/benchmarks/suites/professor-math-challenge.json --write --fail-on-failures",
       receiptReplays: expect.arrayContaining([professorChallengeReceipt.replay])
     });
+    expect(result.pack.benchmarkLedger.latestFrontierHonestyChallengeRun).toMatchObject({
+      artifactId: frontierChallengeBenchmark.record.benchmarkRunId,
+      suiteId: "frontier-honesty-challenge",
+      failed: 0,
+      replayCommand: "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures",
+      receiptReplays: expect.arrayContaining([frontierChallengeReceipt.replay])
+    });
     expect(result.pack.reviewerActionPlan).toMatchObject({
       totalActions: 0,
       criticalActions: 0,
@@ -221,6 +249,9 @@ describe("professor credibility pack", () => {
     );
     expect(result.pack.reviewerCommands.runProfessorMathChallenge).toBe(
       "truth-harness bench run packages/benchmarks/suites/professor-math-challenge.json --write --fail-on-failures"
+    );
+    expect(result.pack.reviewerCommands.runFrontierHonestyChallenge).toBe(
+      "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures"
     );
     expect(result.pack.reviewerCommands.runExactHardMathClosure).toBe("npm run docker:hard-math-closure");
     expect(result.pack.reviewerCommands.runSymbolicHardMathClosure).toBe("npm run docker:symbolic-closure");

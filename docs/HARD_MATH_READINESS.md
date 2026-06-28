@@ -15,6 +15,7 @@ The project is currently credible as a local verification harness for narrow, re
 - claim ledgers, validation plans, run-next packets, and replayable receipts
 - Docker hard-math closure reports for seeded exact, symbolic CAS, and SMT blockers
 - a native-safe professor math challenge covering exact algebra slips, finite integer claims, units, intervals, and honest refusals
+- a frontier-honesty challenge that refuses famous open/theorem-scale prompts unless concrete local proof evidence exists
 
 It is not yet an autonomous solver for open problems, a replacement for Lean/mathlib, a replacement for SageMath, or a proof-search system that can be trusted on frontier claims without human experts.
 
@@ -99,6 +100,26 @@ npm run docker:smt-closure
 
 These commands write `truth-harness.hard-math-closure.v0` reports under `.truth-harness/findings/`. They are deliberately narrower than a general solver: exact closure must earn `exact-computed`, symbolic closure must earn `cross-checked`, and SMT closure must earn `smt-checked` for their seeded fixtures. A passing closure report proves the harness closed that scoped validation gate; it does not prove unrelated math claims.
 
+## Frontier Honesty Challenge
+
+Run this suite when you want a reviewer-facing check that Truth Harness refuses to fake solutions to famous hard problems while still handling nearby supported claims:
+
+```bash
+npm run demo:frontier-honesty
+npm run docker:frontier-honesty
+truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures
+```
+
+The suite lives at:
+
+```text
+packages/benchmarks/suites/frontier-honesty-challenge.json
+```
+
+It currently covers famous open or theorem-scale prompts such as Riemann, P vs NP, Collatz, Goldbach, twin primes, Navier-Stokes, Birch and Swinnerton-Dyer, Hodge, Fermat Last Theorem, and infinitude of primes. Those prompts must stay `unverified` until a concrete accepted proof artifact exists. The same suite also includes nearby exact, parity, interval, and dimensional checks so the harness still has to verify and refute claims it actually supports.
+
+Passing this suite does not prove frontier capability. It proves an important precondition for frontier work: the local evidence layer can resist glamorous overclaims.
+
 ## Professor Challenge Preset
 
 Use the professor challenge when a human reviewer or autonomous agent needs a compact hard-math workout before trusting the workspace loop:
@@ -143,6 +164,9 @@ Saved benchmark-run records now preserve these levels in JSON and Markdown:
 - `level-7-professor-finite-discrete`: finite integer solution sets, parity certificates/refutations, and supported-pattern boundaries.
 - `level-8-professor-units-bounds`: dimensional consistency, unit mistakes, conservative interval bounds, and singularity refusals.
 - `level-9-professor-honest-boundaries`: theorem/frontier prompts that must remain unsupported until stronger engines or human proof work exist.
+- `level-10-frontier-refusal`: famous open/millennium-style prompts that must remain unsupported without accepted proof evidence.
+- `level-11-known-theorem-refusal`: known theorem prompts that still require a local proof artifact before the harness can say `proved`.
+- `level-12-nearby-bounded-truth`: nearby supported exact, parity, interval, and dimensional claims that must still earn concrete evidence.
 
 These levels are not a public math-achievement ladder yet. They are the current native-safe regression floor that future Lean, SageMath, SMT, and proof-search levels should extend.
 

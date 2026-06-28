@@ -110,6 +110,8 @@
         "latestMathCredibilityLadderAccuracy": { "type": "number", "minimum": 0, "maximum": 1 },
         "latestProfessorMathChallengeStatus": { "enum": ["missing", "passed", "failed"] },
         "latestProfessorMathChallengeAccuracy": { "type": "number", "minimum": 0, "maximum": 1 },
+        "latestFrontierHonestyChallengeStatus": { "enum": ["missing", "passed", "failed"] },
+        "latestFrontierHonestyChallengeAccuracy": { "type": "number", "minimum": 0, "maximum": 1 },
         "savedHardMathClosureReports": { "type": "integer", "minimum": 0 },
         "hardMathExactClosureStatus": { "enum": ["missing", "passed", "failed"] },
         "hardMathSymbolicClosureStatus": { "enum": ["missing", "passed", "failed"] },

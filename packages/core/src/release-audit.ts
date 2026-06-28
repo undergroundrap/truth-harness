@@ -107,6 +107,7 @@ export interface ReleaseAudit {
     adversarialBenchmark: string;
     mathCredibilityLadder: string;
     professorMathChallenge: string;
+    frontierHonestyChallenge: string;
     hardMathClosure: string;
     reportDrafts: number;
     reportDraftsNeedingAttention: number;
@@ -135,6 +136,7 @@ export interface ReleaseAudit {
     adversarialBenchmark: string;
     mathCredibilityLadder: string;
     professorMathChallenge: string;
+    frontierHonestyChallenge: string;
     hardMathExactClosure: string;
     hardMathSymbolicClosure: string;
     hardMathSmtClosure: string;
@@ -215,6 +217,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
       adversarialBenchmark: "missing",
       mathCredibilityLadder: "missing",
       professorMathChallenge: "missing",
+      frontierHonestyChallenge: "missing",
       hardMathClosure: "missing",
       reportDrafts: 0,
       reportDraftsNeedingAttention: 0,
@@ -255,6 +258,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     adversarialBenchmarkCheck(credibilityPack),
     mathCredibilityLadderCheck(credibilityPack),
     professorMathChallengeCheck(credibilityPack),
+    frontierHonestyChallengeCheck(credibilityPack),
     hardMathClosureCheck(credibilityPack),
     reportDraftsCheck(credibilityPack),
     leanProofSafetyCheck(credibilityPack),
@@ -287,6 +291,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     adversarialBenchmark: credibilityPack.summary.latestAdversarialBenchmarkStatus,
     mathCredibilityLadder: credibilityPack.summary.latestMathCredibilityLadderStatus,
     professorMathChallenge: credibilityPack.summary.latestProfessorMathChallengeStatus,
+    frontierHonestyChallenge: credibilityPack.summary.latestFrontierHonestyChallengeStatus,
     hardMathClosure: hardMathClosureSummary(credibilityPack),
     reportDrafts: credibilityPack.summary.savedReportDrafts,
     reportDraftsNeedingAttention: credibilityPack.summary.reportDraftsNeedingAttention,
@@ -323,6 +328,7 @@ export function renderReleaseAuditMarkdown(audit: ReleaseAudit): string {
     `- Adversarial benchmark: ${audit.summary.adversarialBenchmark}`,
     `- Math credibility ladder: ${audit.summary.mathCredibilityLadder}`,
     `- Professor math challenge: ${audit.summary.professorMathChallenge}`,
+    `- Frontier honesty challenge: ${audit.summary.frontierHonestyChallenge}`,
     `- Hard-math closure: ${audit.summary.hardMathClosure}`,
     `- Report drafts: ${audit.summary.reportDrafts} saved, ${audit.summary.reportDraftsNeedingAttention} needing attention`,
     `- Lean proof-safety blockers: ${audit.summary.leanProofSafetyItems}`,
@@ -432,6 +438,7 @@ function buildAudit(input: {
   adversarialBenchmark: string;
   mathCredibilityLadder: string;
   professorMathChallenge: string;
+  frontierHonestyChallenge: string;
   hardMathClosure: string;
   reportDrafts: number;
   reportDraftsNeedingAttention: number;
@@ -483,6 +490,7 @@ function buildAudit(input: {
       adversarialBenchmark: input.adversarialBenchmark,
       mathCredibilityLadder: input.mathCredibilityLadder,
       professorMathChallenge: input.professorMathChallenge,
+      frontierHonestyChallenge: input.frontierHonestyChallenge,
       hardMathClosure: input.hardMathClosure,
       reportDrafts: input.reportDrafts,
       reportDraftsNeedingAttention: input.reportDraftsNeedingAttention,
@@ -531,8 +539,10 @@ function frontierReadinessFor(input: {
     checkPassed(input.checks, "adversarial-ai-benchmark") &&
     checkPassed(input.checks, "math-credibility-ladder") &&
     checkPassed(input.checks, "professor-math-challenge") &&
+    checkPassed(input.checks, "frontier-honesty-challenge") &&
     checkPassed(input.checks, "lean-proof-safety");
   const engineEvidenceReady = checkPassed(input.checks, "engine-evidence");
+  const frontierHonestyReady = checkPassed(input.checks, "frontier-honesty-challenge");
   const hardMathClosureReady = checkPassed(input.checks, "hard-math-closure");
   const strictAllEngineEvidenceReady =
     input.credibilityPack?.summary.savedEngineLadderLevel === "engine-level-5-strict-all-engines" ||
@@ -548,7 +558,7 @@ function frontierReadinessFor(input: {
     ) === true ||
     input.credibilityPack?.summary.latestStrictEngineRunStatus === "passed" ||
     input.credibilityPack?.summary.latestProfessorEngineRunStatus === "passed";
-  const boundedHardMathReady = input.professorReady && engineEvidenceReady && hardMathClosureReady;
+  const boundedHardMathReady = input.professorReady && engineEvidenceReady && frontierHonestyReady && hardMathClosureReady;
   const status: ReleaseAuditFrontierReadinessStatus = boundedHardMathReady
     ? "bounded-hard-math-harness"
     : localHarnessReady
@@ -1269,6 +1279,76 @@ function professorMathChallengeEvidenceDetails(pack: CredibilityPack): string[] 
   return details;
 }
 
+function frontierHonestyChallengeCheck(pack: CredibilityPack): ReleaseAuditCheck {
+  const status = pack.summary.latestFrontierHonestyChallengeStatus;
+  const accuracy = pack.summary.latestFrontierHonestyChallengeAccuracy;
+  const accuracyText = accuracy === undefined ? "unknown accuracy" : `${(accuracy * 100).toFixed(1)}% trust accuracy`;
+  const evidenceDetails = frontierHonestyChallengeEvidenceDetails(pack);
+  if (status === "passed") {
+    return passCheck({
+      id: "frontier-honesty-challenge",
+      title: "Frontier honesty challenge",
+      summary: "Latest frontier-honesty-challenge run passed with " + accuracyText + ".",
+      command: pack.reviewerCommands.runFrontierHonestyChallenge,
+      details: [
+        ...evidenceDetails,
+        "The frontier honesty challenge requires famous hard-problem prompts to remain unverified unless accepted proof evidence exists, while nearby bounded claims still verify or refute."
+      ]
+    });
+  }
+
+  if (status === "failed") {
+    return failCheck({
+      id: "frontier-honesty-challenge",
+      title: "Frontier honesty challenge",
+      blocking: true,
+      summary: "Latest frontier-honesty-challenge run failed with " + accuracyText + ".",
+      command: pack.reviewerCommands.runFrontierHonestyChallenge,
+      details: [
+        ...evidenceDetails,
+        "Fix frontier-honesty regressions before presenting the harness as an overclaim-safe hard-problem verifier.",
+        ...pack.reviewerActionPlan.actions
+          .filter((action) => action.category === "benchmark" && action.source.ref.includes("frontier-honesty-challenge"))
+          .slice(0, 3)
+          .map((action) => action.detail)
+      ]
+    });
+  }
+
+  return warnCheck({
+    id: "frontier-honesty-challenge",
+    title: "Frontier honesty challenge",
+    blocking: false,
+    summary: "No saved frontier-honesty-challenge benchmark run was found.",
+    command: pack.reviewerCommands.runFrontierHonestyChallenge,
+    details: [
+      "Run and save the frontier honesty challenge before public review so reviewers can see famous hard-problem prompts refuse to overclaim.",
+      "Missing frontier-honesty evidence does not prove unsafe behavior, but it leaves the hardest-problem honesty claim unreviewed."
+    ]
+  });
+}
+
+function frontierHonestyChallengeEvidenceDetails(pack: CredibilityPack): string[] {
+  const run = pack.benchmarkLedger.latestFrontierHonestyChallengeRun;
+  if (!run) {
+    return [];
+  }
+
+  const details = [
+    "Artifact: " + run.path + ".",
+    "Benchmark run id: " + run.artifactId + ".",
+    "Replay command: " + (run.replayCommand ?? run.command ?? pack.reviewerCommands.runFrontierHonestyChallenge) + "."
+  ];
+
+  if (run.receiptReplays && run.receiptReplays.length > 0) {
+    details.push("Receipt replay example: " + run.receiptReplays[0] + ".");
+  }
+  if (run.failedCaseIds && run.failedCaseIds.length > 0) {
+    details.push("Failing cases: " + run.failedCaseIds.join(", ") + ".");
+  }
+
+  return details;
+}
 function hardMathClosureCheck(pack: CredibilityPack): ReleaseAuditCheck {
   const statuses = [
     pack.summary.hardMathExactClosureStatus,
@@ -1786,6 +1866,7 @@ function releaseAuditCommands(
     adversarialBenchmark: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
     mathCredibilityLadder: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
     professorMathChallenge: "truth-harness bench run packages/benchmarks/suites/professor-math-challenge.json --write --fail-on-failures",
+    frontierHonestyChallenge: "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures",
     hardMathExactClosure: "npm run docker:hard-math-closure",
     hardMathSymbolicClosure: "npm run docker:symbolic-closure",
     hardMathSmtClosure: "npm run docker:smt-closure",

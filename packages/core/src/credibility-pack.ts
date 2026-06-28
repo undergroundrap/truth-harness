@@ -32,6 +32,7 @@ export interface CredibilityPackCommandSet {
   runAdversarialBenchmark: string;
   runMathCredibilityLadder: string;
   runProfessorMathChallenge: string;
+  runFrontierHonestyChallenge: string;
   runExactHardMathClosure: string;
   runSymbolicHardMathClosure: string;
   runSmtHardMathClosure: string;
@@ -86,6 +87,7 @@ export interface CredibilityPackBenchmarkLedger {
   latestAdversarialRun?: BenchmarkArtifactSummary;
   latestMathCredibilityLadderRun?: BenchmarkArtifactSummary;
   latestProfessorMathChallengeRun?: BenchmarkArtifactSummary;
+  latestFrontierHonestyChallengeRun?: BenchmarkArtifactSummary;
 }
 
 export interface CredibilityPackHardMathClosureLedger {
@@ -144,6 +146,8 @@ export interface CredibilityPack {
     latestMathCredibilityLadderAccuracy?: number;
     latestProfessorMathChallengeStatus: "missing" | "passed" | "failed";
     latestProfessorMathChallengeAccuracy?: number;
+    latestFrontierHonestyChallengeStatus: "missing" | "passed" | "failed";
+    latestFrontierHonestyChallengeAccuracy?: number;
     savedHardMathClosureReports: number;
     hardMathExactClosureStatus: "missing" | "passed" | "failed";
     hardMathSymbolicClosureStatus: "missing" | "passed" | "failed";
@@ -303,6 +307,8 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       latestMathCredibilityLadderAccuracy: benchmarkLedger.latestMathCredibilityLadderRun?.trustAccuracy,
       latestProfessorMathChallengeStatus: benchmarkStatus(benchmarkLedger.latestProfessorMathChallengeRun),
       latestProfessorMathChallengeAccuracy: benchmarkLedger.latestProfessorMathChallengeRun?.trustAccuracy,
+      latestFrontierHonestyChallengeStatus: benchmarkStatus(benchmarkLedger.latestFrontierHonestyChallengeRun),
+      latestFrontierHonestyChallengeAccuracy: benchmarkLedger.latestFrontierHonestyChallengeRun?.trustAccuracy,
       savedHardMathClosureReports: hardMathClosureLedger.savedReports,
       hardMathExactClosureStatus: closureStatus(hardMathClosureLedger.latestExactClosure),
       hardMathSymbolicClosureStatus: closureStatus(hardMathClosureLedger.latestSymbolicClosure),
@@ -422,6 +428,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Adversarial benchmark: ${formatAdversarialBenchmarkSummary(pack.summary.latestAdversarialBenchmarkStatus, pack.summary.latestAdversarialBenchmarkAccuracy)} (${pack.summary.savedBenchmarkRuns} saved benchmark run${pack.summary.savedBenchmarkRuns === 1 ? "" : "s"})`,
     `- Math credibility ladder: ${formatBenchmarkSummary(pack.summary.latestMathCredibilityLadderStatus, pack.summary.latestMathCredibilityLadderAccuracy)}`,
     `- Professor math challenge: ${formatBenchmarkSummary(pack.summary.latestProfessorMathChallengeStatus, pack.summary.latestProfessorMathChallengeAccuracy)}`,
+    `- Frontier honesty challenge: ${formatBenchmarkSummary(pack.summary.latestFrontierHonestyChallengeStatus, pack.summary.latestFrontierHonestyChallengeAccuracy)}`,
     `- Hard-math closure: ${formatHardMathClosureSummary(pack)}`,
     `- Saved report drafts: ${formatReportDraftSummary(pack.summary.savedReportDrafts, pack.summary.reportDraftsNeedingAttention)}`,
     `- Embedded artifact snapshot: ${pack.summary.snapshotFiles} files, ${pack.summary.snapshotBytes} bytes`,
@@ -436,6 +443,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
     `- Run adversarial benchmark: \`${pack.reviewerCommands.runAdversarialBenchmark}\``,
     `- Run math credibility ladder: \`${pack.reviewerCommands.runMathCredibilityLadder}\``,
     `- Run professor math challenge: \`${pack.reviewerCommands.runProfessorMathChallenge}\``,
+    `- Run frontier honesty challenge: \`${pack.reviewerCommands.runFrontierHonestyChallenge}\``,
     `- Run exact hard-math closure: \`${pack.reviewerCommands.runExactHardMathClosure}\``,
     `- Run symbolic hard-math closure: \`${pack.reviewerCommands.runSymbolicHardMathClosure}\``,
     `- Run SMT hard-math closure: \`${pack.reviewerCommands.runSmtHardMathClosure}\``,
@@ -582,6 +590,16 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
       ""
     );
   }
+  if (pack.benchmarkLedger.latestFrontierHonestyChallengeRun) {
+    const run = pack.benchmarkLedger.latestFrontierHonestyChallengeRun;
+    lines.push(
+      `Latest frontier honesty challenge: \`${run.artifactId}\` (${run.passed}/${run.total}, ${((run.trustAccuracy ?? 0) * 100).toFixed(1)}%)`,
+      `Path: \`${run.path}\``,
+      `Replay: \`${run.replayCommand ?? run.command ?? pack.reviewerCommands.runFrontierHonestyChallenge}\``,
+      `Receipt replay examples: ${formatBenchmarkReceiptReplays(run.receiptReplays)}`,
+      ""
+    );
+  }
   for (const run of pack.benchmarkLedger.latestRuns) {
     lines.push(
       `- \`${run.artifactId}\`: ${run.suiteId}, ${run.passed}/${run.total}, ${((run.trustAccuracy ?? 0) * 100).toFixed(1)}%, \`${run.path}\``
@@ -714,7 +732,8 @@ function summarizeBenchmarkLedger(artifacts: BenchmarkArtifactSummary[]): Credib
     latestRuns: runs.slice(0, 5),
     latestAdversarialRun: runs.find((run) => run.suiteId === "ai-failure-seed"),
     latestMathCredibilityLadderRun: runs.find((run) => run.suiteId === "math-credibility-ladder"),
-    latestProfessorMathChallengeRun: runs.find((run) => run.suiteId === "professor-math-challenge")
+    latestProfessorMathChallengeRun: runs.find((run) => run.suiteId === "professor-math-challenge"),
+    latestFrontierHonestyChallengeRun: runs.find((run) => run.suiteId === "frontier-honesty-challenge")
   };
 }
 
@@ -966,6 +985,22 @@ function createReviewerActionPlan(input: {
     });
   }
 
+  const frontierHonesty = input.benchmarkLedger.latestFrontierHonestyChallengeRun;
+  if (frontierHonesty && (frontierHonesty.failed ?? 0) > 0) {
+    pushAction({
+      category: "benchmark",
+      priority: "critical",
+      title: "Fix frontier honesty challenge regressions",
+      detail: `Latest \`frontier-honesty-challenge\` run ${frontierHonesty.artifactId} has ${frontierHonesty.failed ?? 0} failing case(s). Fix overclaim behavior before using the harness on frontier-style prompts.`,
+      command: input.reviewerCommands.runFrontierHonestyChallenge,
+      closes: ["benchmark:frontier-honesty-challenge", `benchmark-run:${frontierHonesty.artifactId}`],
+      source: {
+        kind: "benchmark-run",
+        ref: frontierHonesty.path
+      }
+    });
+  }
+
   pushHardMathClosureAction({
     report: input.hardMathClosureLedger.latestExactClosure,
     expectedCaseId: "exact-fraction-lemma",
@@ -1206,6 +1241,11 @@ function credibilityWarnings(input: {
       `Latest \`professor-math-challenge\` reviewer exam run has ${input.benchmarkLedger.latestProfessorMathChallengeRun.failed ?? 0} failing case(s).`
     );
   }
+  if ((input.benchmarkLedger.latestFrontierHonestyChallengeRun?.failed ?? 0) > 0) {
+    warnings.push(
+      `Latest \`frontier-honesty-challenge\` run has ${input.benchmarkLedger.latestFrontierHonestyChallengeRun?.failed ?? 0} failing case(s).`
+    );
+  }
   addHardMathClosureWarnings(warnings, input.hardMathClosureLedger);
   if (input.review.summary.criticalItems > 0) {
     warnings.push(`Workspace review has ${input.review.summary.criticalItems} critical open item(s).`);
@@ -1296,6 +1336,7 @@ function createReviewerCommands(input: {
     runAdversarialBenchmark: "truth-harness bench run packages/benchmarks/suites/ai-failure-seed.json --write --fail-on-failures",
     runMathCredibilityLadder: "truth-harness bench run packages/benchmarks/suites/math-credibility-ladder.json --write --fail-on-failures",
     runProfessorMathChallenge: "truth-harness bench run packages/benchmarks/suites/professor-math-challenge.json --write --fail-on-failures",
+    runFrontierHonestyChallenge: "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures",
     runExactHardMathClosure: "npm run docker:hard-math-closure",
     runSymbolicHardMathClosure: "npm run docker:symbolic-closure",
     runSmtHardMathClosure: "npm run docker:smt-closure",
