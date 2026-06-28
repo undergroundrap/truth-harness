@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { type ProofBackendCommandRunner } from "./proof-backend.js";
+import { writeProofRepairFixtureWorkspace } from "./proof-repair-fixture.js";
 import { createReleaseAudit, formatReleaseAuditEngineSummary, renderReleaseAuditMarkdown } from "./release-audit.js";
 import { rebuildWorkspaceCatalog } from "./workspace-catalog.js";
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
@@ -40,6 +42,11 @@ describe("release audit", () => {
     const mathLadderBenchmark = await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
     const professorChallengeBenchmark = await writeProfessorMathChallengeRun(root, "2026-06-17T00:00:00.700Z");
     const frontierChallengeBenchmark = await writeFrontierHonestyChallengeRun(root, "2026-06-17T00:00:00.800Z");
+    await writeProofRepairFixtureWorkspace({
+      rootPath: join(root, "docs", "examples", "lean-repair-fixture"),
+      now: "2026-06-17T00:00:00.900Z",
+      runner: proofRepairRunner()
+    });
     await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-17T00:00:01.000Z" });
 
     const audit = await createReleaseAudit({
@@ -82,8 +89,11 @@ describe("release audit", () => {
       expect.objectContaining({
         id: "formal-theorem-workflows",
         status: "partial",
-        nextAction: "npm run docker:proof-repair",
-        evidence: expect.arrayContaining([expect.stringContaining("Lean repair gate: npm run docker:proof-repair")])
+        nextAction: "Add larger Lean/mathlib templates, proof-hole tracking, and theorem-corpus fixtures.",
+        evidence: expect.arrayContaining([
+          expect.stringContaining("Lean repair rehearsal: pass"),
+          expect.stringContaining("Lean repair gate: npm run docker:proof-repair")
+        ])
       })
     );
     expect(audit.commands.dockerLeanRepairGate).toBe("npm run docker:proof-repair");
@@ -124,6 +134,18 @@ describe("release audit", () => {
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "frontier-honesty-challenge", status: "pass", blocking: false })
+    );
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "lean-proof-repair-gate",
+        status: "pass",
+        blocking: false,
+        summary: expect.stringContaining("Saved repair rehearsal closed"),
+        details: expect.arrayContaining([
+          expect.stringContaining("Fixture workspace: docs/examples/lean-repair-fixture."),
+          expect.stringContaining("Accepted proof-check:")
+        ])
+      })
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "report-drafts", status: "pass", blocking: false })
@@ -187,6 +209,7 @@ describe("release audit", () => {
     expect(markdown).toContain("Math credibility ladder: passed");
     expect(markdown).toContain("Professor math challenge: passed");
     expect(markdown).toContain("Frontier honesty challenge: passed");
+    expect(markdown).toContain("### PASS Lean proof-repair rehearsal");
     expect(markdown).toContain("Report drafts: 0 saved, 0 needing attention");
     expect(markdown).toContain("Research sessions: 0 inspected, 0 continuation item(s)");
   });
@@ -872,6 +895,19 @@ describe("release audit", () => {
   });
 });
 
+function proofRepairRunner(): ProofBackendCommandRunner {
+  let proofRuns = 0;
+  return (_command, args) => {
+    if (args[0] === "--version") {
+      return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+    }
+
+    proofRuns += 1;
+    return proofRuns === 1
+      ? { status: 1, stdout: "", stderr: "application type mismatch\n" }
+      : { status: 0, stdout: "", stderr: "" };
+  };
+}
 const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => {
   if (command === "maxima-test" && args[0] === "--version") {
     return { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" };

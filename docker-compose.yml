@@ -58,6 +58,7 @@ services:
       TRUTH_HARNESS_CVC5: "cvc5"
     volumes:
       - ./.truth-harness:/workspace/.truth-harness
+      - ./docs/examples/lean-repair-fixture:/workspace/docs/examples/lean-repair-fixture
     command: ["npm", "run", "professor:evidence"]
 
   sage-math:
@@ -115,6 +116,7 @@ services:
       TRUTH_HARNESS_SAGE: "sage"
     volumes:
       - ./.truth-harness:/workspace/.truth-harness
+      - ./docs/examples/lean-repair-fixture:/workspace/docs/examples/lean-repair-fixture
     command: ["npm", "run", "professor:evidence", "--", "--all-engines"]
 
   mcp:
@@ -170,6 +172,7 @@ services:
       TRUTH_HARNESS_LEAN: "lean"
     volumes:
       - ./.truth-harness:/workspace/.truth-harness
+      - ./docs/examples/lean-repair-fixture:/workspace/docs/examples/lean-repair-fixture
     command: ["npm", "run", "proof:lean-suite"]
 
 volumes:

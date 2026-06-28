@@ -164,6 +164,8 @@ npm run docker:proof-repair
 
 The Docker command uses `--fail-on-open`; it is meant for reviewer evidence and must not pass unless the scoped route obligation closes.
 
+`npm run audit:release` inspects the saved fixture workspace at `docs/examples/lean-repair-fixture` as `lean-proof-repair-gate`. The check passes only when it finds an accepted scoped Lean proof-check record and the matching verifier-route obligation is satisfied by that proof evidence. If the fixture is missing, stale, or open, the audit keeps it as a warning and reports `npm run docker:proof-repair` as the refresh command.
+
 This creates `docs/examples/lean-repair-fixture` as a local Truth Harness workspace, writes a tiny Lean theorem, records an intentionally rejected scoped proof attempt, asks `workspace run-next` for the repair handoff, rewrites the same Lean source to a valid proof, and then tries to close the exact route obligation with the accepted proof-check record.
 
 The fixture is intentionally narrow:

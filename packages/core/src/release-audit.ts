@@ -5,12 +5,14 @@ import type { CredibilityBundleVerification } from "./credibility-bundle.js";
 import { createCredibilityPack, type CredibilityPack, type CreateCredibilityPackInput } from "./credibility-pack.js";
 import type { EngineVerificationCommandRunner, EngineVerificationRequirements } from "./engine-verification.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { listLeanProofChecks, type LeanProofCheckSummary } from "./proof-backend.js";
 import {
   getCodeRunSandboxStatus,
   listCodeRunSandboxRuns,
   type CodeRunSandboxRunSummary,
   type CodeRunSandboxStatus
 } from "./sandbox.js";
+import { listVerifierRoutes, readVerifierRoute, type VerifierRouteSummary } from "./verifier-route.js";
 import { listWebUiReviews, type WebUiReviewSummary } from "./web-ui-review.js";
 import { getWorkspaceCatalogStatus, type WorkspaceCatalogStatus } from "./workspace-catalog.js";
 
@@ -262,6 +264,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     hardMathClosureCheck(credibilityPack),
     reportDraftsCheck(credibilityPack),
     leanProofSafetyCheck(credibilityPack),
+    await leanProofRepairGateCheck(rootPath, commands.dockerLeanRepairGate),
     researchSessionContinuityCheck(credibilityPack),
     savedStrictEngineRunCheck(credibilityPack, input.requireSavedStrictEngineRun === true),
     reviewerBundleVerificationCheck(reviewerBundleVerification),
@@ -544,6 +547,7 @@ function frontierReadinessFor(input: {
   const engineEvidenceReady = checkPassed(input.checks, "engine-evidence");
   const frontierHonestyReady = checkPassed(input.checks, "frontier-honesty-challenge");
   const hardMathClosureReady = checkPassed(input.checks, "hard-math-closure");
+  const leanProofRepairGateReady = checkPassed(input.checks, "lean-proof-repair-gate");
   const strictAllEngineEvidenceReady =
     input.credibilityPack?.summary.savedEngineLadderLevel === "engine-level-5-strict-all-engines" ||
     input.credibilityPack?.summary.latestStrictEngineRunStatus === "passed" ||
@@ -629,17 +633,20 @@ function frontierReadinessFor(input: {
       title: "Formal theorem workflows",
       status: leanFixtureReady ? "partial" : "blocked",
       summary: leanFixtureReady
-        ? "Lean fixture evidence exists, but this is not yet a mature proof-search or mathlib-scale workflow."
+        ? leanProofRepairGateReady
+          ? "Lean fixture evidence and a saved proof-repair rehearsal exist, but this is not yet a mature proof-search or mathlib-scale workflow."
+          : "Lean fixture evidence exists, but this is not yet a mature proof-search or mathlib-scale workflow."
         : "No accepted Lean proof fixture is cited in this audit scope.",
       evidence: [
         `Lean/proved fixture evidence: ${leanFixtureReady ? "present" : "missing"}.`,
+        `Lean repair rehearsal: ${checkSummary(input.checks, "lean-proof-repair-gate")}.`,
         "`proved` remains reserved for accepted proof-checker artifacts.",
         `Lean repair gate: ${input.commands.dockerLeanRepairGate}.`
       ],
       blockers: [
         "Add larger Lean/mathlib templates, proof-hole tracking, theorem corpora, and external mathematical review before treating this as frontier theorem infrastructure."
       ],
-      nextAction: leanFixtureReady ? input.commands.dockerLeanRepairGate : input.commands.dockerProof
+      nextAction: leanProofRepairGateReady ? "Add larger Lean/mathlib templates, proof-hole tracking, and theorem-corpus fixtures." : leanFixtureReady ? input.commands.dockerLeanRepairGate : input.commands.dockerProof
     },
     {
       id: "autonomous-frontier-discovery",
@@ -1483,6 +1490,123 @@ function leanProofSafetyCheck(pack: CredibilityPack): ReleaseAuditCheck {
   });
 }
 
+async function leanProofRepairGateCheck(rootPath: string, command: string): Promise<ReleaseAuditCheck> {
+  const fixtureRoot = resolve(rootPath, "docs", "examples", "lean-repair-fixture");
+  const fixtureRef = toPortableWorkspacePath(rootPath, fixtureRoot);
+  const status = await getLocalWorkspaceStatus(fixtureRoot);
+
+  if (!status.exists || !status.manifest) {
+    return warnCheck({
+      id: "lean-proof-repair-gate",
+      title: "Lean proof-repair rehearsal",
+      blocking: false,
+      summary: "No saved Lean proof-repair fixture workspace was found.",
+      command,
+      details: [
+        `Expected fixture workspace: ${fixtureRef}.`,
+        "Run the Docker proof-repair gate to create a local failed-proof -> repair-handoff -> accepted-proof rehearsal.",
+        "This is not a theorem-discovery claim; it proves that the agent handoff can close a scoped formal-proof route obligation."
+      ]
+    });
+  }
+
+  let proofChecks: LeanProofCheckSummary[];
+  let routeSummaries: VerifierRouteSummary[];
+  try {
+    proofChecks = await listLeanProofChecks(fixtureRoot);
+    routeSummaries = await listVerifierRoutes(fixtureRoot);
+  } catch (error) {
+    return warnCheck({
+      id: "lean-proof-repair-gate",
+      title: "Lean proof-repair rehearsal",
+      blocking: false,
+      summary: "The saved Lean proof-repair fixture could not be inspected.",
+      command,
+      details: [
+        `Fixture workspace: ${fixtureRef}.`,
+        `Inspection error: ${error instanceof Error ? error.message : String(error)}.`,
+        "Rerun the Docker proof-repair gate and rebuild the catalog before relying on this rehearsal."
+      ]
+    });
+  }
+
+  const acceptedProof = proofChecks.find((proof) =>
+    proof.status === "accepted" &&
+    proof.trust === "proved" &&
+    proof.proofCheckerBacked === true &&
+    Boolean(proof.scope?.routeId) &&
+    Boolean(proof.scope?.obligationId)
+  );
+
+  if (!acceptedProof) {
+    return warnCheck({
+      id: "lean-proof-repair-gate",
+      title: "Lean proof-repair rehearsal",
+      blocking: false,
+      summary: "No accepted scoped Lean proof-repair fixture proof was found.",
+      command,
+      details: [
+        `Fixture workspace: ${fixtureRef}.`,
+        `Proof-check records inspected: ${proofChecks.length}.`,
+        `Routes inspected: ${routeSummaries.length}.`,
+        "A passing rehearsal requires an accepted Lean proof-check record scoped to a route id and obligation id."
+      ]
+    });
+  }
+
+  try {
+    const route = await readVerifierRoute(fixtureRoot, acceptedProof.scope?.routeId ?? "");
+    const obligation = route.proofObligations.find(
+      (candidate) => candidate.obligationId === acceptedProof.scope?.obligationId
+    );
+    const proofAttached = obligation?.satisfiedBy?.some((evidence) =>
+      evidence.kind === "proof" && (evidence.ref === acceptedProof.path || evidence.ref.includes(acceptedProof.checkId))
+    ) ?? false;
+
+    if (obligation?.status === "satisfied" && proofAttached) {
+      return passCheck({
+        id: "lean-proof-repair-gate",
+        title: "Lean proof-repair rehearsal",
+        summary: `Saved repair rehearsal closed ${route.routeId}/${obligation.obligationId} with accepted Lean proof evidence.`,
+        command,
+        details: [
+          `Fixture workspace: ${fixtureRef}.`,
+          `Accepted proof-check: ${acceptedProof.checkId} (${acceptedProof.path}).`,
+          `Route status: ${route.status}; obligation status: ${obligation.status}.`,
+          "The rehearsal preserves the rejected attempt as a repair hint and trusts only the accepted proof-check record."
+        ]
+      });
+    }
+
+    return warnCheck({
+      id: "lean-proof-repair-gate",
+      title: "Lean proof-repair rehearsal",
+      blocking: false,
+      summary: "A scoped accepted Lean proof exists, but the matching route obligation is not closed.",
+      command,
+      details: [
+        `Fixture workspace: ${fixtureRef}.`,
+        `Accepted proof-check: ${acceptedProof.checkId} (${acceptedProof.path}).`,
+        `Route: ${route.routeId}.`,
+        `Obligation status: ${obligation?.status ?? "missing"}.`,
+        "Attach the accepted proof-check record to the route obligation before citing this as a closed repair rehearsal."
+      ]
+    });
+  } catch (error) {
+    return warnCheck({
+      id: "lean-proof-repair-gate",
+      title: "Lean proof-repair rehearsal",
+      blocking: false,
+      summary: "A scoped accepted Lean proof exists, but its route could not be inspected.",
+      command,
+      details: [
+        `Fixture workspace: ${fixtureRef}.`,
+        `Accepted proof-check: ${acceptedProof.checkId} (${acceptedProof.path}).`,
+        `Route inspection error: ${error instanceof Error ? error.message : String(error)}.`
+      ]
+    });
+  }
+}
 function researchSessionContinuityCheck(pack: CredibilityPack): ReleaseAuditCheck {
   const sessions = pack.workspaceReview.summary.sessions;
   const continuationItems = pack.workspaceReview.summary.sessionTasks + pack.workspaceReview.summary.sessionNextChecks;
