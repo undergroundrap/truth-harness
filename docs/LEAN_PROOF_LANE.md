@@ -119,6 +119,27 @@ Run the local script when Lean is installed:
 npm run proof:lean-fixture
 ```
 
+The repository also includes a reusable core-Lean theorem template at `docs/examples/lean-theorem-template`:
+
+- `lean-toolchain`: `leanprover/lean4:v4.12.0`
+- `lakefile.lean`: minimal Lake package metadata for `TruthHarnessTemplate.Basics`
+- `TruthHarnessTemplate/Basics.lean`: accepted theorem shapes for implication, conjunction, existential witnesses, equality symmetry, and basic Nat identities
+- `TruthHarnessTemplate/NewTheorem.lean.template`: a starter file agents can copy when a new formal target is needed
+
+The starter file is deliberately named `.lean.template`, not `.lean`, so project inspection ignores it until an agent or human copies it into concrete source. It is not evidence. It becomes relevant only after a real `.lean` file exists, the proof-safety scan is clean, and an accepted `truth-harness.proof-check.v0` record is written.
+
+Run the local template check when Lean is installed:
+
+```bash
+npm run proof:theorem-template
+```
+
+Run only the template in the pinned Docker proof image:
+
+```bash
+npm run docker:theorem-template
+```
+
 Run the Docker profile when you want the proof lane checked in a reproducible image:
 
 ```bash
@@ -126,7 +147,7 @@ docker compose build lean-proof
 docker compose run --rm lean-proof
 ```
 
-The Docker target installs Lean through elan during image build, then the compose service runs `npm run proof:lean-suite` with no runtime network route. The suite checks the static Lean fixture and the proof-repair fixture, so the pinned profile must prove both that Lean can accept a concrete proof and that Truth Harness can preserve a failed attempt, produce a run-next repair handoff, rerun the repaired proof, and close the exact route obligation only after an accepted proof-check record exists. The suite fails if the repair obligation stays open. This profile is deliberately separate from the default dev image so the proof lane can become strong without making every user carry a large proof environment.
+The Docker target installs Lean through elan during image build, then the compose service runs `npm run proof:lean-suite` with no runtime network route. The suite checks the static Lean fixture, the reusable theorem template, and the proof-repair fixture, so the pinned profile must prove both that Lean can accept a concrete proof and that Truth Harness can preserve a failed attempt, produce a run-next repair handoff, rerun the repaired proof, and close the exact route obligation only after an accepted proof-check record exists. The suite fails if the repair obligation stays open. This profile is deliberately separate from the default dev image so the proof lane can become strong without making every user carry a large proof environment.
 
 ## Agent Use
 
@@ -181,7 +202,7 @@ Agents should use this as a regression rehearsal before trusting autonomous proo
 The next proof-lane milestones are:
 
 - a pinned Lean/Lake/mathlib Docker profile,
-- fixture promotion from the current small Lean project to a mathlib-backed project,
+- template promotion from core-Lean scaffolds to pinned mathlib-backed theorem families,
 - proof project fixtures for regression tests,
 - route obligations that point to specific formal statements,
 - richer proof-attempt history and repair diagnostics across rejected attempts,

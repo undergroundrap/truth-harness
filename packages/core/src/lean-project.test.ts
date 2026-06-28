@@ -186,6 +186,44 @@ describe("Lean project inspection", () => {
     expect(inspection.nextActions[0]).toContain("Resolve blocking Lean marker axiom");
   });
 
+  it("keeps the checked-in theorem template scanner-clean while ignoring starter templates", async () => {
+    const inspection = await inspectLeanProject({
+      rootPath: ".",
+      projectPath: "docs/examples/lean-theorem-template"
+    });
+
+    expect(inspection.readiness).toBe("ready");
+    expect(inspection.toolchain).toMatchObject({
+      channel: "leanprover/lean4:v4.12.0",
+      pinned: true
+    });
+    expect(inspection.files.leanFiles).toMatchObject({
+      total: 1,
+      truncated: false
+    });
+    expect(inspection.files.leanFiles.sample.map((file) => file.path)).toEqual([
+      "docs/examples/lean-theorem-template/TruthHarnessTemplate/Basics.lean"
+    ]);
+    expect(inspection.files.leanFiles.sample.map((file) => file.path).join(" ")).not.toContain("NewTheorem.lean.template");
+    expect(inspection.declarations).toMatchObject({
+      total: 6,
+      byKind: {
+        theorem: 6,
+        lemma: 0,
+        example: 0,
+        def: 0
+      }
+    });
+    expect(inspection.proofSafety).toMatchObject({
+      blocksProvedTrust: false,
+      markers: {
+        total: 0,
+        truncated: false
+      }
+    });
+    expect(inspection.trustBoundary.inspectionIsNotProof).toBe(true);
+  });
+
   it("reports missing readiness for folders without Lean project metadata", async () => {
     const root = await tempRoot();
 

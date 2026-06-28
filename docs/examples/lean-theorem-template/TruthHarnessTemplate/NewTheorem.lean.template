@@ -1,0 +1,19 @@
+/-
+Truth Harness Lean theorem template.
+
+Copy this file to `TruthHarnessTemplate/NewTheorem.lean`, add the new
+module root to `lakefile.lean`, and replace the placeholders with a real
+statement and proof.
+
+Do not cite this template as proof evidence. Truth Harness ignores this
+`.lean.template` file until a concrete `.lean` source exists and an accepted
+`truth-harness proof check ... --write` record is created.
+-/
+
+namespace TruthHarnessTemplate
+
+-- theorem your_theorem_name (p q : Prop) : p -> q -> p /\ q := by
+--   intro hp hq
+--   exact And.intro hp hq
+
+end TruthHarnessTemplate
