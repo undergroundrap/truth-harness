@@ -42,6 +42,7 @@ describe("release audit", () => {
     const mathLadderBenchmark = await writeMathCredibilityLadderRun(root, "2026-06-17T00:00:00.600Z");
     const professorChallengeBenchmark = await writeProfessorMathChallengeRun(root, "2026-06-17T00:00:00.700Z");
     const frontierChallengeBenchmark = await writeFrontierHonestyChallengeRun(root, "2026-06-17T00:00:00.800Z");
+    await writeLeanTheoremTemplateFixture(root);
     await writeProofRepairFixtureWorkspace({
       rootPath: join(root, "docs", "examples", "lean-repair-fixture"),
       now: "2026-06-17T00:00:00.900Z",
@@ -89,9 +90,11 @@ describe("release audit", () => {
       expect.objectContaining({
         id: "formal-theorem-workflows",
         status: "partial",
-        nextAction: "Add larger Lean/mathlib templates, proof-hole tracking, and theorem-corpus fixtures.",
+        nextAction: "Add pinned mathlib theorem families and theorem-corpus fixtures.",
         evidence: expect.arrayContaining([
+          expect.stringContaining("Reusable theorem template: pass"),
           expect.stringContaining("Lean repair rehearsal: pass"),
+          expect.stringContaining("Lean template gate: npm run docker:theorem-template"),
           expect.stringContaining("Lean repair gate: npm run docker:proof-repair")
         ])
       })
@@ -134,6 +137,18 @@ describe("release audit", () => {
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({ id: "frontier-honesty-challenge", status: "pass", blocking: false })
+    );
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "lean-theorem-template",
+        status: "pass",
+        blocking: false,
+        summary: expect.stringContaining("Reusable theorem template is scanner-clean"),
+        details: expect.arrayContaining([
+          expect.stringContaining("Project: docs/examples/lean-theorem-template."),
+          expect.stringContaining("This is a readiness gate only")
+        ])
+      })
     );
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
@@ -209,6 +224,7 @@ describe("release audit", () => {
     expect(markdown).toContain("Math credibility ladder: passed");
     expect(markdown).toContain("Professor math challenge: passed");
     expect(markdown).toContain("Frontier honesty challenge: passed");
+    expect(markdown).toContain("### PASS Lean theorem template");
     expect(markdown).toContain("### PASS Lean proof-repair rehearsal");
     expect(markdown).toContain("Report drafts: 0 saved, 0 needing attention");
     expect(markdown).toContain("Research sessions: 0 inspected, 0 continuation item(s)");
@@ -1089,6 +1105,45 @@ async function writeFrontierHonestyChallengeRun(root: string, now: string) {
   });
 }
 
+async function writeLeanTheoremTemplateFixture(root: string): Promise<void> {
+  const projectRoot = join(root, "docs", "examples", "lean-theorem-template");
+  await mkdir(join(projectRoot, "TruthHarnessTemplate"), { recursive: true });
+  await writeFile(join(projectRoot, "lean-toolchain"), "leanprover/lean4:v4.12.0\n", "utf8");
+  await writeFile(
+    join(projectRoot, "lakefile.lean"),
+    [
+      "import Lake",
+      "open Lake DSL",
+      "",
+      "package truth_harness_theorem_template where",
+      "  version := v!\"0.1.0\"",
+      "",
+      "lean_lib TruthHarnessTemplate where",
+      "  roots := #[`TruthHarnessTemplate.Basics]",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+  await writeFile(
+    join(projectRoot, "TruthHarnessTemplate", "Basics.lean"),
+    [
+      "namespace TruthHarnessTemplate",
+      "",
+      "theorem identity_implication (p : Prop) : p -> p := by",
+      "  intro hp",
+      "  exact hp",
+      "",
+      "end TruthHarnessTemplate",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+  await writeFile(
+    join(projectRoot, "TruthHarnessTemplate", "NewTheorem.lean.template"),
+    "-- Copy this starter into a concrete .lean file before checking it.\n",
+    "utf8"
+  );
+}
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-release-audit-"));
   roots.push(root);

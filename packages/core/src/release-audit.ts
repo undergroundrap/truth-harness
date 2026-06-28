@@ -5,6 +5,7 @@ import type { CredibilityBundleVerification } from "./credibility-bundle.js";
 import { createCredibilityPack, type CredibilityPack, type CreateCredibilityPackInput } from "./credibility-pack.js";
 import type { EngineVerificationCommandRunner, EngineVerificationRequirements } from "./engine-verification.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { inspectLeanProject } from "./lean-project.js";
 import { listLeanProofChecks, type LeanProofCheckSummary } from "./proof-backend.js";
 import {
   getCodeRunSandboxStatus,
@@ -149,6 +150,7 @@ export interface ReleaseAudit {
     dockerSandbox: string;
     dockerAllEngines: string;
     dockerLeanRepairGate: string;
+    dockerTheoremTemplate: string;
     dockerProof: string;
     dockerVerify: string;
     workspaceStress: string;
@@ -264,6 +266,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     hardMathClosureCheck(credibilityPack),
     reportDraftsCheck(credibilityPack),
     leanProofSafetyCheck(credibilityPack),
+    await leanTheoremTemplateCheck(rootPath, commands.dockerTheoremTemplate),
     await leanProofRepairGateCheck(rootPath, commands.dockerLeanRepairGate),
     researchSessionContinuityCheck(credibilityPack),
     savedStrictEngineRunCheck(credibilityPack, input.requireSavedStrictEngineRun === true),
@@ -547,6 +550,7 @@ function frontierReadinessFor(input: {
   const engineEvidenceReady = checkPassed(input.checks, "engine-evidence");
   const frontierHonestyReady = checkPassed(input.checks, "frontier-honesty-challenge");
   const hardMathClosureReady = checkPassed(input.checks, "hard-math-closure");
+  const leanTheoremTemplateReady = checkPassed(input.checks, "lean-theorem-template");
   const leanProofRepairGateReady = checkPassed(input.checks, "lean-proof-repair-gate");
   const strictAllEngineEvidenceReady =
     input.credibilityPack?.summary.savedEngineLadderLevel === "engine-level-5-strict-all-engines" ||
@@ -633,20 +637,28 @@ function frontierReadinessFor(input: {
       title: "Formal theorem workflows",
       status: leanFixtureReady ? "partial" : "blocked",
       summary: leanFixtureReady
-        ? leanProofRepairGateReady
-          ? "Lean fixture evidence and a saved proof-repair rehearsal exist, but this is not yet a mature proof-search or mathlib-scale workflow."
-          : "Lean fixture evidence exists, but this is not yet a mature proof-search or mathlib-scale workflow."
+        ? leanProofRepairGateReady && leanTheoremTemplateReady
+          ? "Lean fixture evidence, a reusable theorem template, and a saved proof-repair rehearsal exist, but this is not yet a mature proof-search or mathlib-scale workflow."
+          : leanProofRepairGateReady
+            ? "Lean fixture evidence and a saved proof-repair rehearsal exist, but this is not yet a mature proof-search or mathlib-scale workflow."
+            : "Lean fixture evidence exists, but this is not yet a mature proof-search or mathlib-scale workflow."
         : "No accepted Lean proof fixture is cited in this audit scope.",
       evidence: [
         `Lean/proved fixture evidence: ${leanFixtureReady ? "present" : "missing"}.`,
+        `Reusable theorem template: ${checkSummary(input.checks, "lean-theorem-template")}.`,
         `Lean repair rehearsal: ${checkSummary(input.checks, "lean-proof-repair-gate")}.`,
         "`proved` remains reserved for accepted proof-checker artifacts.",
+        `Lean template gate: ${input.commands.dockerTheoremTemplate}.`,
         `Lean repair gate: ${input.commands.dockerLeanRepairGate}.`
       ],
       blockers: [
-        "Add larger Lean/mathlib templates, proof-hole tracking, theorem corpora, and external mathematical review before treating this as frontier theorem infrastructure."
+        "Promote the core-Lean template into pinned mathlib-backed theorem families, theorem corpora, and external mathematical review before treating this as frontier theorem infrastructure."
       ],
-      nextAction: leanProofRepairGateReady ? "Add larger Lean/mathlib templates, proof-hole tracking, and theorem-corpus fixtures." : leanFixtureReady ? input.commands.dockerLeanRepairGate : input.commands.dockerProof
+      nextAction: leanProofRepairGateReady && leanTheoremTemplateReady
+        ? "Add pinned mathlib theorem families and theorem-corpus fixtures."
+        : leanFixtureReady
+          ? leanTheoremTemplateReady ? input.commands.dockerLeanRepairGate : input.commands.dockerTheoremTemplate
+          : input.commands.dockerProof
     },
     {
       id: "autonomous-frontier-discovery",
@@ -1490,6 +1502,67 @@ function leanProofSafetyCheck(pack: CredibilityPack): ReleaseAuditCheck {
   });
 }
 
+async function leanTheoremTemplateCheck(rootPath: string, command: string): Promise<ReleaseAuditCheck> {
+  const projectPath = "docs/examples/lean-theorem-template";
+  const sourcePath = "docs/examples/lean-theorem-template/TruthHarnessTemplate/Basics.lean";
+
+  try {
+    const inspection = await inspectLeanProject({
+      rootPath,
+      projectPath,
+      maxLeanFiles: 10
+    });
+    const pinnedToolchain = inspection.toolchain?.pinned === true;
+    const hasDeclarations = inspection.declarations.total > 0;
+    const scannerClean = !inspection.proofSafety.blocksProvedTrust;
+    const completeScan = !inspection.files.leanFiles.truncated;
+
+    if (inspection.readiness === "ready" && pinnedToolchain && hasDeclarations && scannerClean && completeScan) {
+      return passCheck({
+        id: "lean-theorem-template",
+        title: "Lean theorem template",
+        summary: `Reusable theorem template is scanner-clean with ${inspection.declarations.total} declaration target(s).`,
+        command,
+        details: [
+          `Project: ${projectPath}.`,
+          `Checked source: ${sourcePath}.`,
+          `Toolchain: ${inspection.toolchain?.channel ?? "missing"}.`,
+          `Lean files scanned: ${inspection.files.leanFiles.sample.length}/${inspection.files.leanFiles.total}.`,
+          "This is a readiness gate only. It does not prove future claims until Docker or host Lean accepts a concrete proof-check record."
+        ]
+      });
+    }
+
+    return warnCheck({
+      id: "lean-theorem-template",
+      title: "Lean theorem template",
+      blocking: false,
+      summary: "The reusable Lean theorem template is present but not reviewer-clean.",
+      command,
+      details: [
+        `Project: ${projectPath}.`,
+        `Readiness: ${inspection.readiness}.`,
+        `Pinned toolchain: ${String(pinnedToolchain)}.`,
+        `Declarations: ${inspection.declarations.total}.`,
+        `Proof-safety blockers: ${inspection.proofSafety.markers.total}.`,
+        ...inspection.warnings.slice(0, 5)
+      ]
+    });
+  } catch (error) {
+    return warnCheck({
+      id: "lean-theorem-template",
+      title: "Lean theorem template",
+      blocking: false,
+      summary: "The reusable Lean theorem template could not be inspected.",
+      command,
+      details: [
+        `Expected project: ${projectPath}.`,
+        `Inspection error: ${error instanceof Error ? error.message : String(error)}.`,
+        "Run the Docker theorem-template gate before relying on the reusable formal-proof scaffold."
+      ]
+    });
+  }
+}
 async function leanProofRepairGateCheck(rootPath: string, command: string): Promise<ReleaseAuditCheck> {
   const fixtureRoot = resolve(rootPath, "docs", "examples", "lean-repair-fixture");
   const fixtureRef = toPortableWorkspacePath(rootPath, fixtureRoot);
@@ -2001,6 +2074,7 @@ function releaseAuditCommands(
     dockerSandbox: "npm run docker:sandbox:write",
     dockerAllEngines: "npm run docker:all-engines",
     dockerLeanRepairGate: "npm run docker:proof-repair",
+    dockerTheoremTemplate: "npm run docker:theorem-template",
     dockerProof: "npm run docker:proof",
     dockerVerify: "npm run docker:verify",
     workspaceStress: "truth-harness workspace stress <throwaway-path> --receipts 100 --claims 50 --routes 20 --fail-on-validation",
