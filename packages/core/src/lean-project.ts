@@ -103,6 +103,7 @@ export interface LeanProjectTheoremCorpusInspection {
     needsProof: number;
     sample: LeanProjectTheoremCorpusFamilySummary[];
   };
+  declarationCoverage?: LeanProjectTheoremCorpusDeclarationCoverage;
   issues: JsonSchemaValidationIssue[];
   trustBoundary: {
     corpusIsNotProof: true;
@@ -117,6 +118,30 @@ export interface LeanProjectTheoremCorpusFamilySummary {
   lane: string;
   status: string;
   declarationNames: string[];
+}
+
+export interface LeanProjectTheoremCorpusDeclarationCoverage {
+  sourceInventoryComplete: boolean;
+  templateReadyDeclarations: number;
+  matchedTemplateReadyDeclarations: number;
+  missingTemplateReadyDeclarations: number;
+  complete: boolean;
+  matched: LeanProjectTheoremCorpusDeclarationMatch[];
+  missing: LeanProjectTheoremCorpusDeclarationMissing[];
+}
+
+export interface LeanProjectTheoremCorpusDeclarationMatch {
+  familyId: string;
+  declarationName: string;
+  path: string;
+  line: number;
+  kind: LeanProjectDeclarationKind;
+  signatureSha256: string;
+}
+
+export interface LeanProjectTheoremCorpusDeclarationMissing {
+  familyId: string;
+  declarationName: string;
 }
 
 export type LeanProjectProofMarkerKind = "sorry" | "admit" | "axiom" | "constant" | "hole";
@@ -185,13 +210,12 @@ export async function inspectLeanProject(input: LeanProjectInspectionInput): Pro
   }
 
   const maxLeanFiles = Math.max(1, Math.floor(input.maxLeanFiles ?? DEFAULT_MAX_LEAN_FILES));
-  const [leanToolchain, lakefileLean, lakefileToml, lakeManifest, leanFiles, theoremCorpus] = await Promise.all([
+  const [leanToolchain, lakefileLean, lakefileToml, lakeManifest, leanFiles] = await Promise.all([
     summarizeFileIfPresent(root, join(projectRoot, "lean-toolchain")),
     summarizeFileIfPresent(root, join(projectRoot, "lakefile.lean")),
     summarizeFileIfPresent(root, join(projectRoot, "lakefile.toml")),
     summarizeFileIfPresent(root, join(projectRoot, "lake-manifest.json")),
-    collectLeanFiles(root, projectRoot, maxLeanFiles),
-    inspectLeanTheoremCorpus(root, projectRoot)
+    collectLeanFiles(root, projectRoot, maxLeanFiles)
   ]);
   const toolchain = leanToolchain ? await readLeanToolchain(projectRoot) : undefined;
   const mathlib = await detectMathlib(projectRoot, {
@@ -203,6 +227,7 @@ export async function inspectLeanProject(input: LeanProjectInspectionInput): Pro
     inspectLeanDeclarations(root, leanFiles),
     inspectLeanProofSafety(root, leanFiles)
   ]);
+  const theoremCorpus = await inspectLeanTheoremCorpus(root, projectRoot, declarations);
   const hasLakefile = Boolean(lakefileLean || lakefileToml);
   const hasLeanFiles = leanFiles.total > 0;
   const readiness = leanToolchain && hasLakefile && hasLeanFiles ? "ready" : hasLeanFiles || hasLakefile || leanToolchain ? "partial" : "missing";
@@ -241,6 +266,7 @@ export async function inspectLeanProject(input: LeanProjectInspectionInput): Pro
       hasLeanFiles,
       lakeManifest: Boolean(lakeManifest),
       declarations,
+      theoremCorpus,
       proofSafety
     }),
     nextActions: buildNextActions({
@@ -250,6 +276,7 @@ export async function inspectLeanProject(input: LeanProjectInspectionInput): Pro
       hasLeanFiles,
       lakeManifest: Boolean(lakeManifest),
       declarations,
+      theoremCorpus,
       proofSafety,
       projectPath
     })
@@ -258,7 +285,8 @@ export async function inspectLeanProject(input: LeanProjectInspectionInput): Pro
 
 async function inspectLeanTheoremCorpus(
   root: string,
-  projectRoot: string
+  projectRoot: string,
+  declarations: LeanProjectDeclarationInventory
 ): Promise<LeanProjectTheoremCorpusInspection | undefined> {
   const corpusPath = join(projectRoot, "theorem-corpus.json");
   let corpusStat;
@@ -299,12 +327,69 @@ async function inspectLeanTheoremCorpus(
       needsProof: families.filter((family) => family.status === "needs-proof").length,
       sample: families.slice(0, 12).map(theoremCorpusFamilySummary)
     },
+    declarationCoverage: theoremCorpusDeclarationCoverage(families, declarations),
     issues,
     trustBoundary: {
       corpusIsNotProof: true,
       provedRequiresProofCheckRecord: true,
       mathlibFamiliesRequirePinnedManifest: true
     }
+  };
+}
+
+function theoremCorpusDeclarationCoverage(
+  families: Record<string, unknown>[],
+  declarations: LeanProjectDeclarationInventory
+): LeanProjectTheoremCorpusDeclarationCoverage {
+  const declarationsByName = new Map<string, LeanProjectDeclaration>();
+  for (const declaration of declarations.sample) {
+    if (!declaration.name) {
+      continue;
+    }
+
+    declarationsByName.set(declaration.name, declaration);
+    const shortName = declaration.name.split(".").at(-1);
+    if (shortName && !declarationsByName.has(shortName)) {
+      declarationsByName.set(shortName, declaration);
+    }
+  }
+
+  const matched: LeanProjectTheoremCorpusDeclarationMatch[] = [];
+  const missing: LeanProjectTheoremCorpusDeclarationMissing[] = [];
+  for (const family of families) {
+    if (family.status !== "template-ready") {
+      continue;
+    }
+
+    const familyId = stringValue(family.familyId) ?? "unknown-family";
+    for (const declarationName of stringArrayValue(family.declarationNames)) {
+      const shortName = declarationName.split(".").at(-1) ?? declarationName;
+      const declaration = declarationsByName.get(declarationName) ?? declarationsByName.get(shortName);
+      if (!declaration) {
+        missing.push({ familyId, declarationName });
+        continue;
+      }
+
+      matched.push({
+        familyId,
+        declarationName,
+        path: declaration.path,
+        line: declaration.line,
+        kind: declaration.kind,
+        signatureSha256: declaration.signatureSha256
+      });
+    }
+  }
+
+  const sourceInventoryComplete = declarations.completeProjectScan && !declarations.truncated;
+  return {
+    sourceInventoryComplete,
+    templateReadyDeclarations: matched.length + missing.length,
+    matchedTemplateReadyDeclarations: matched.length,
+    missingTemplateReadyDeclarations: missing.length,
+    complete: sourceInventoryComplete && missing.length === 0,
+    matched: matched.slice(0, 24),
+    missing: missing.slice(0, 24)
   };
 }
 
@@ -808,6 +893,7 @@ function buildWarnings(input: {
   hasLeanFiles: boolean;
   lakeManifest: boolean;
   declarations: LeanProjectDeclarationInventory;
+  theoremCorpus?: LeanProjectTheoremCorpusInspection;
   proofSafety: LeanProjectProofSafety;
 }): string[] {
   const warnings = [
@@ -836,6 +922,14 @@ function buildWarnings(input: {
   if (input.proofSafety.markers.total > 0) {
     warnings.push(`Found ${input.proofSafety.markers.total} blocking Lean proof marker(s). Remove or justify them before any affected source can support \`proved\`.`);
   }
+  if (input.theoremCorpus?.declarationCoverage && !input.theoremCorpus.declarationCoverage.sourceInventoryComplete) {
+    warnings.push("Theorem corpus declaration coverage is partial because the Lean declaration scan was truncated.");
+  }
+  if ((input.theoremCorpus?.declarationCoverage?.missingTemplateReadyDeclarations ?? 0) > 0) {
+    warnings.push(
+      `Theorem corpus has ${input.theoremCorpus?.declarationCoverage?.missingTemplateReadyDeclarations ?? 0} template-ready declaration target(s) missing from scanned Lean sources.`
+    );
+  }
 
   return warnings;
 }
@@ -847,6 +941,7 @@ function buildNextActions(input: {
   hasLeanFiles: boolean;
   lakeManifest: boolean;
   declarations: LeanProjectDeclarationInventory;
+  theoremCorpus?: LeanProjectTheoremCorpusInspection;
   proofSafety: LeanProjectProofSafety;
   projectPath: string;
 }): string[] {
@@ -870,6 +965,14 @@ function buildNextActions(input: {
   }
   if (input.hasLakefile && !input.lakeManifest) {
     actions.push("Generate and review lake-manifest.json in a controlled environment before relying on dependency revisions.");
+  }
+  const missingCorpusDeclarations = input.theoremCorpus?.declarationCoverage?.missing ?? [];
+  if (missingCorpusDeclarations.length > 0) {
+    const names = missingCorpusDeclarations
+      .slice(0, 6)
+      .map((missing) => `${missing.familyId}:${missing.declarationName}`)
+      .join(", ");
+    actions.push(`Add or rename Lean declarations for theorem corpus targets ${names}, then rerun \`truth-harness proof project ${input.projectPath} --json\`.`);
   }
   if (input.readiness === "ready") {
     actions.push("Run `truth-harness proof check <workspace-local.lean> --write` for the concrete statement that should support `proved`.");

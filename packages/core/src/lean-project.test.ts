@@ -237,6 +237,21 @@ describe("Lean project inspection", () => {
       "nat-identity-rewrites",
       "mathlib-algebra-roadmap"
     ]);
+    expect(inspection.theoremCorpus?.declarationCoverage).toMatchObject({
+      sourceInventoryComplete: true,
+      templateReadyDeclarations: 6,
+      matchedTemplateReadyDeclarations: 6,
+      missingTemplateReadyDeclarations: 0,
+      complete: true
+    });
+    expect(inspection.theoremCorpus?.declarationCoverage?.matched.map((target) => target.declarationName)).toEqual([
+      "identity_implication",
+      "and_commutative",
+      "exists_self_nat",
+      "nat_zero_add_template",
+      "nat_add_zero_template",
+      "equality_substitution_template"
+    ]);
     expect(inspection.proofSafety).toMatchObject({
       blocksProvedTrust: false,
       markers: {
@@ -245,6 +260,105 @@ describe("Lean project inspection", () => {
       }
     });
     expect(inspection.trustBoundary.inspectionIsNotProof).toBe(true);
+  });
+
+  it("flags theorem corpus targets that are not backed by scanned Lean declarations", async () => {
+    const root = await tempRoot();
+    await mkdir(join(root, "Proofs"), { recursive: true });
+    await writeFile(join(root, "lean-toolchain"), "leanprover/lean4:v4.12.0\n", "utf8");
+    await writeFile(
+      join(root, "lakefile.lean"),
+      [
+        "import Lake",
+        "open Lake DSL",
+        "",
+        "package drift_test where",
+        "  version := v!\"0.1.0\"",
+        "",
+        "lean_lib Proofs where",
+        "  roots := #[`Proofs.Valid]",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      join(root, "Proofs", "Valid.lean"),
+      [
+        "namespace Proofs",
+        "",
+        "theorem present_target (p : Prop) : p -> p := by",
+        "  intro hp",
+        "  exact hp",
+        "",
+        "end Proofs",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      join(root, "theorem-corpus.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: "truth-harness.lean-theorem-corpus.v0",
+          corpusId: "ltc_drift_test",
+          title: "Drift test theorem corpus",
+          description: "Valid corpus that names one missing template-ready declaration.",
+          projectPath: ".",
+          localOnly: true,
+          networkAccess: "none",
+          sourceProject: {
+            toolchain: "leanprover/lean4:v4.12.0",
+            lakefile: "lakefile.lean",
+            mathlib: "not-required"
+          },
+          families: [
+            {
+              familyId: "logic-drift",
+              title: "Logic drift targets",
+              lane: "core-lean",
+              status: "template-ready",
+              trustCeiling: "proved-after-proof-check",
+              sourcePaths: ["Proofs/Valid.lean"],
+              declarationNames: ["present_target", "missing_target"],
+              evidenceRequired: ["accepted proof-check record"],
+              nextAction: "Add the missing declaration or remove it from the corpus."
+            }
+          ],
+          trustBoundary: {
+            corpusIsNotProof: true,
+            provedRequiresProofCheckRecord: true,
+            mathlibFamiliesRequirePinnedManifest: true,
+            externalReviewRequiredForFrontierClaims: true
+          },
+          escalationGates: [
+            {
+              gateId: "accepted-proof-check",
+              title: "Accepted proof check",
+              requiredBefore: "proved trust",
+              evidenceRequired: ["truth-harness proof check --write"]
+            }
+          ],
+          warnings: ["Corpus drift test only."]
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const inspection = await inspectLeanProject({ rootPath: root });
+
+    expect(inspection.theoremCorpus?.valid).toBe(true);
+    expect(inspection.theoremCorpus?.declarationCoverage).toMatchObject({
+      sourceInventoryComplete: true,
+      templateReadyDeclarations: 2,
+      matchedTemplateReadyDeclarations: 1,
+      missingTemplateReadyDeclarations: 1,
+      complete: false,
+      missing: [{ familyId: "logic-drift", declarationName: "missing_target" }]
+    });
+    expect(inspection.warnings.join(" ")).toContain("template-ready declaration target");
+    expect(inspection.nextActions.join(" ")).toContain("logic-drift:missing_target");
   });
 
   it("reports missing readiness for folders without Lean project metadata", async () => {

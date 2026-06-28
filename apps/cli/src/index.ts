@@ -6677,6 +6677,16 @@ function printLeanProjectInspection(inspection: LeanProjectInspection): void {
         `${inspection.theoremCorpus.families.templateReady} template-ready; ` +
         `${inspection.theoremCorpus.families.plannedMathlib} planned mathlib`
     );
+    if (inspection.theoremCorpus.declarationCoverage) {
+      const coverage = inspection.theoremCorpus.declarationCoverage;
+      console.log(
+        `  Declaration coverage: ${coverage.matchedTemplateReadyDeclarations}/${coverage.templateReadyDeclarations} ` +
+          `template-ready target(s) matched; complete=${String(coverage.complete)}`
+      );
+      for (const missing of coverage.missing.slice(0, 5)) {
+        console.log(`  Missing corpus target: ${missing.familyId}:${missing.declarationName}`);
+      }
+    }
     for (const family of inspection.theoremCorpus.families.sample.slice(0, 8)) {
       const declarations = family.declarationNames.length > 0 ? ` (${family.declarationNames.join(", ")})` : "";
       console.log(`  ${family.familyId}: ${family.title} - ${family.status}${declarations}`);

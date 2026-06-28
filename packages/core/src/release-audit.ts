@@ -1516,10 +1516,13 @@ async function leanTheoremTemplateCheck(rootPath: string, command: string): Prom
     const hasDeclarations = inspection.declarations.total > 0;
     const scannerClean = !inspection.proofSafety.blocksProvedTrust;
     const completeScan = !inspection.files.leanFiles.truncated;
+    const corpusCoverage = inspection.theoremCorpus?.declarationCoverage;
     const corpusReady =
       inspection.theoremCorpus?.valid === true &&
       inspection.theoremCorpus.families.total > 0 &&
-      inspection.theoremCorpus.families.templateReady > 0;
+      inspection.theoremCorpus.families.templateReady > 0 &&
+      corpusCoverage?.complete === true &&
+      corpusCoverage.templateReadyDeclarations > 0;
 
     if (inspection.readiness === "ready" && pinnedToolchain && hasDeclarations && scannerClean && completeScan && corpusReady) {
       return passCheck({
@@ -1536,6 +1539,7 @@ async function leanTheoremTemplateCheck(rootPath: string, command: string): Prom
           `Lean files scanned: ${inspection.files.leanFiles.sample.length}/${inspection.files.leanFiles.total}.`,
           `Theorem corpus: ${inspection.theoremCorpus?.path ?? "missing"}.`,
           `Template-ready families: ${inspection.theoremCorpus?.families.templateReady ?? 0}.`,
+          `Corpus declarations matched: ${corpusCoverage?.matchedTemplateReadyDeclarations ?? 0}/${corpusCoverage?.templateReadyDeclarations ?? 0}.`,
           `Planned mathlib families: ${inspection.theoremCorpus?.families.plannedMathlib ?? 0}.`,
           "This is a readiness gate only. It does not prove future claims until Docker or host Lean accepts a concrete proof-check record."
         ]
@@ -1556,6 +1560,8 @@ async function leanTheoremTemplateCheck(rootPath: string, command: string): Prom
         `Proof-safety blockers: ${inspection.proofSafety.markers.total}.`,
         `Theorem corpus valid: ${String(inspection.theoremCorpus?.valid === true)}.`,
         `Template-ready families: ${inspection.theoremCorpus?.families.templateReady ?? 0}.`,
+        `Corpus declarations matched: ${corpusCoverage?.matchedTemplateReadyDeclarations ?? 0}/${corpusCoverage?.templateReadyDeclarations ?? 0}.`,
+        ...(corpusCoverage?.missing ?? []).slice(0, 5).map((missing) => `Missing corpus target ${missing.familyId}:${missing.declarationName}.`),
         ...(inspection.theoremCorpus?.issues ?? []).slice(0, 5).map((issue) => `Corpus issue ${issue.path}: ${issue.message}.`),
         ...inspection.warnings.slice(0, 5)
       ]

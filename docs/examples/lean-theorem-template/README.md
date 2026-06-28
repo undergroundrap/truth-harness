@@ -20,6 +20,9 @@ the real source artifact.
 The `theorem-corpus.json` file is also not proof evidence. It only groups
 template-ready theorem families, planned mathlib upgrades, and escalation gates
 so agents reopen the proof lane with the right target instead of inventing work.
+Project inspection also checks that template-ready declaration names in the
+corpus resolve to scanned local Lean declarations, so manifest drift becomes an
+actionable warning instead of silent planning metadata.
 
 Local check:
 

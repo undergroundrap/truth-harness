@@ -148,6 +148,7 @@ describe("release audit", () => {
           expect.stringContaining("Project: docs/examples/lean-theorem-template."),
           expect.stringContaining("Theorem corpus: docs/examples/lean-theorem-template/theorem-corpus.json."),
           expect.stringContaining("Template-ready families: 1."),
+          expect.stringContaining("Corpus declarations matched: 1/1."),
           expect.stringContaining("This is a readiness gate only")
         ])
       })
