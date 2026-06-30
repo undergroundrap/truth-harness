@@ -401,6 +401,10 @@ export {
   inspectLeanProject
 } from "./lean-project.js";
 export {
+  leanMathlibDeclarationValidationClaim,
+  writeLeanMathlibValidationHarness
+} from "./lean-mathlib-validation.js";
+export {
   checkSymbolicWithCasSync,
   checkSymbolicWithMaximaSync,
   checkSymbolicWithSageSync,
@@ -961,6 +965,12 @@ export type {
   LeanProjectProofSafety,
   LeanProjectReadiness
 } from "./lean-project.js";
+export type {
+  LeanMathlibValidationHarnessInput,
+  LeanMathlibValidationHarnessWriteResult,
+  LeanMathlibValidationPlanResult,
+  LeanMathlibValidationTarget
+} from "./lean-mathlib-validation.js";
 export type {
   ProofBackendCommandResult,
   ProofBackendCommandRunner,

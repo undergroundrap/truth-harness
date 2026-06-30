@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { createReceipt, writeEngineVerificationRun } from "@truth-harness/core";
@@ -3574,6 +3574,58 @@ describe("benchmark CLI", () => {
     expect(listed.plans[0]?.planId).toBe(json.runNext?.plan.planId);
   });
 
+  it("seeds mathlib theorem-family validation gates from the CLI", async () => {
+    const root = await tempRoot();
+    await runCli(["workspace", "init", root, "--json"]);
+    await cp(
+      join(process.cwd(), "docs", "examples", "lean-mathlib-template"),
+      join(root, "docs", "examples", "lean-mathlib-template"),
+      { recursive: true }
+    );
+
+    const result = await runCli([
+      "validation",
+      "mathlib-plan",
+      "docs/examples/lean-mathlib-template",
+      "--workspace",
+      root,
+      "--json"
+    ]);
+    const json = JSON.parse(result.stdout) as {
+      session: { sessionId: string; evidenceRefs: Array<{ kind: string; ref: string }> };
+      familyCount: number;
+      declarationCount: number;
+      validationPlans: Array<{
+        familyId: string;
+        declarationName: string;
+        validationPlan: { plan: { planId: string; gates: Array<{ kind: string }> } };
+      }>;
+    };
+    const runNext = JSON.parse((await runCli(["workspace", "run-next", root, "--json"])).stdout) as {
+      item?: { kind: string; command?: string; validationGateKind?: string };
+    };
+
+    expect(result.exitCode).toBe(0);
+    expect(json.familyCount).toBe(5);
+    expect(json.declarationCount).toBe(5);
+    expect(json.validationPlans[0]).toMatchObject({
+      familyId: "finite-set-cardinality",
+      declarationName: "finset_card_singleton_template"
+    });
+    expect(json.validationPlans.every((target) => target.validationPlan.plan.gates.some((gate) => gate.kind === "proof"))).toBe(true);
+    expect(json.session.evidenceRefs).toContainEqual(
+      expect.objectContaining({ kind: "validation", ref: json.validationPlans[0]?.validationPlan.plan.planId })
+    );
+    expect(runNext.item).toMatchObject({
+      kind: "validation-gate",
+      validationGateKind: "proof",
+      command: expect.stringContaining("truth-harness proof check")
+    });
+    expect(runNext.item?.command).toContain("--project docs/examples/lean-mathlib-template");
+    expect(
+      json.validationPlans.some((target) => runNext.item?.command?.includes(`--declaration ${target.declarationName}`))
+    ).toBe(true);
+  });
   it("attaches verifier route evidence to validation gates from the CLI", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);

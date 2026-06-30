@@ -177,6 +177,7 @@ import {
   writeResearchHarness,
   writeResearchSession,
   writeHardMathSeedWorkspace,
+  writeLeanMathlibValidationHarness,
   writeProofRepairFixtureWorkspace,
   writeValidationPlan,
   writeVerifierRoute,
@@ -281,6 +282,7 @@ import {
   type LeanProofCheckSummary,
   type LeanProofCheckWriteResult,
   type LeanProjectInspection,
+  type LeanMathlibValidationHarnessWriteResult,
   type ProofBackendStatusReport,
   type Receipt,
   type ReceiptRenderFormat,
@@ -2033,6 +2035,27 @@ validation
     }
   );
 
+validation
+  .command("mathlib-plan")
+  .description("Seed linked validation proof gates from a Lean/mathlib theorem corpus.")
+  .argument("<project>", "Workspace-local Lean/Lake project path containing theorem-corpus.json")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--title <title>", "Research session title")
+  .option("--json", "Print the full mathlib validation harness JSON")
+  .action(async (projectPath: string, options: { workspace: string; title?: string; json?: boolean }) => {
+    const result = await writeLeanMathlibValidationHarness({
+      rootPath: options.workspace,
+      projectPath,
+      title: options.title
+    });
+
+    if (options.json) {
+      printJson(result);
+      return;
+    }
+
+    printLeanMathlibValidationHarness(result);
+  });
 validation
   .command("list")
   .description("List private local validation plans.")
@@ -9558,6 +9581,19 @@ function printEvidenceAuditList(audits: EvidenceAudit[]): void {
   }
 }
 
+function printLeanMathlibValidationHarness(result: LeanMathlibValidationHarnessWriteResult): void {
+  console.log(`Wrote mathlib validation harness ${result.session.sessionId}`);
+  console.log(`Project: ${result.inspection.projectPath}`);
+  console.log(`Families: ${result.familyCount}`);
+  console.log(`Declaration proof gates: ${result.declarationCount}`);
+  console.log(`Session JSON: ${result.sessionJsonPath}`);
+  console.log(`Session Markdown: ${result.sessionMarkdownPath}`);
+  console.log("Validation plans:");
+  for (const target of result.validationPlans) {
+    console.log(`  ${target.familyId}/${target.declarationName}: ${target.validationPlan.plan.planId}`);
+  }
+  console.log("Next: truth-harness workspace run-next . --json");
+}
 function printValidationPlan(plan: ValidationPlan): void {
   console.log(`Validation plan ${plan.planId}`);
   console.log(`Readiness: ${plan.readiness.status}`);

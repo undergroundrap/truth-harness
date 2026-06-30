@@ -151,6 +151,30 @@ layout and declaration coverage without fetching dependencies:
 npm run proof:mathlib-template
 ```
 
+The corpus can also seed validation-plan proof gates for every template-ready
+mathlib declaration. This does not run Lean, fetch dependencies, or claim proof;
+it writes a linked research session plus one validation plan per declaration so
+`workspace run-next` starts from the highest-value formal proof blocker instead
+of generic next steps:
+
+```bash
+npm run proof:mathlib-template:plan
+truth-harness validation mathlib-plan docs/examples/lean-mathlib-template --json
+truth-harness workspace run-next . --json
+```
+
+Each generated proof gate records the theorem-family id, declaration name,
+source file, theorem-corpus artifact, and research-session ref. Review and
+run-next turn those gates into concrete scoped commands such as:
+
+```bash
+truth-harness proof check <source.lean> --project <lean-project> --declaration <decl> --statement <claim> --write
+```
+
+A seeded validation plan is an agenda item, not evidence. The gate closes only
+when an accepted proof-check, scoped SMT/CAS evidence, benchmark artifact, or
+other supported local evidence satisfies the exact gate through the normal
+validation attach path.
 Once dependencies are pinned and available, the concrete proof check must run
 through Lake so mathlib imports resolve from the project environment:
 

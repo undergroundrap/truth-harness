@@ -1240,6 +1240,21 @@ function concreteValidationGateProofCommand(plan: ValidationPlan, workspacePath?
     return `truth-harness proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean --declaration smoke --statement ${quoteCommandArg(claim)} --write`;
   }
 
+  const mathlibDeclaration = /^Lean mathlib declaration (?<declaration>[A-Za-z0-9_.]+) in project (?<project>.+?) source (?<source>.+\.lean)$/u.exec(claim);
+  if (mathlibDeclaration?.groups) {
+    return [
+      "truth-harness proof check",
+      quoteCommandArg(mathlibDeclaration.groups.source),
+      "--project",
+      quoteCommandArg(mathlibDeclaration.groups.project),
+      "--declaration",
+      quoteCommandArg(mathlibDeclaration.groups.declaration),
+      "--statement",
+      quoteCommandArg(claim),
+      "--write"
+    ].join(" ");
+  }
+
   return undefined;
 }
 
