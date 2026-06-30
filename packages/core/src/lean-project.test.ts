@@ -287,20 +287,27 @@ describe("Lean project inspection", () => {
       valid: true,
       corpusId: "ltc_mathlib_template_v0",
       families: {
-        total: 2,
-        templateReady: 2,
+        total: 5,
+        templateReady: 5,
         plannedMathlib: 0,
         needsProof: 0
       },
       declarationCoverage: {
         sourceInventoryComplete: true,
-        templateReadyDeclarations: 2,
-        matchedTemplateReadyDeclarations: 2,
+        templateReadyDeclarations: 5,
+        matchedTemplateReadyDeclarations: 5,
         missingTemplateReadyDeclarations: 0,
         complete: true
       }
     });
-    expect(inspection.declarations.total).toBe(2);
+    expect(inspection.theoremCorpus?.declarationCoverage?.matched.map((target) => target.declarationName)).toEqual([
+      "finset_card_singleton_template",
+      "nat_add_comm_mathlib_template",
+      "int_add_comm_mathlib_template",
+      "nat_le_add_right_mathlib_template",
+      "real_sq_nonneg_mathlib_template"
+    ]);
+    expect(inspection.declarations.total).toBe(5);
     expect(inspection.proofSafety.blocksProvedTrust).toBe(false);
     expect(inspection.warnings.join(" ")).not.toContain("No lake-manifest.json found");
     expect(inspection.nextActions.join(" ")).toContain("proof check");

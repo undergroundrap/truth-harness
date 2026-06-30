@@ -2,7 +2,7 @@
   "schemaVersion": "truth-harness.lean-theorem-corpus.v0",
   "corpusId": "ltc_mathlib_template_v0",
   "title": "Mathlib theorem template corpus",
-  "description": "A local-first mathlib-backed starter corpus. This manifest organizes formal targets and missing dependency gates; it is not proof evidence by itself.",
+  "description": "A local-first mathlib-backed starter corpus. This manifest organizes formal targets for algebra, order, and analysis; it is not proof evidence by itself.",
   "projectPath": "docs/examples/lean-mathlib-template",
   "localOnly": true,
   "networkAccess": "none",
@@ -25,7 +25,7 @@
         "accepted proof-check record using truth-harness proof check --project",
         "no-runtime-network Docker proof run after dependencies are cached"
       ],
-      "nextAction": "Pin lake-manifest.json in a controlled Docker proof image, then run the project-aware proof check."
+      "nextAction": "Use this as the smallest set/cardinality fixture before adding finite sums or combinatorial counting targets."
     },
     {
       "familyId": "nat-algebra-smoke",
@@ -40,7 +40,52 @@
         "accepted proof-check record using truth-harness proof check --project",
         "reviewed mapping from informal algebra claim to formal statement"
       ],
-      "nextAction": "Use this as the smallest algebra family before adding ring, order, or analysis targets."
+      "nextAction": "Extend this family with associativity, distributivity, and cancellation only when each target has a validation plan."
+    },
+    {
+      "familyId": "integer-algebra-smoke",
+      "title": "Integer algebra smoke proofs",
+      "lane": "mathlib",
+      "status": "template-ready",
+      "trustCeiling": "proved-after-proof-check",
+      "sourcePaths": ["TruthHarnessMathlib/Algebra.lean"],
+      "declarationNames": ["int_add_comm_mathlib_template"],
+      "evidenceRequired": [
+        "reviewed lake-manifest.json pinning mathlib revisions",
+        "accepted proof-check record using truth-harness proof check --project",
+        "reviewed domain boundary explaining integer assumptions"
+      ],
+      "nextAction": "Grow toward ring-normalization fixtures that compare CAS simplification against Lean statements."
+    },
+    {
+      "familyId": "nat-order-smoke",
+      "title": "Natural-number order smoke proofs",
+      "lane": "mathlib",
+      "status": "template-ready",
+      "trustCeiling": "proved-after-proof-check",
+      "sourcePaths": ["TruthHarnessMathlib/Algebra.lean"],
+      "declarationNames": ["nat_le_add_right_mathlib_template"],
+      "evidenceRequired": [
+        "reviewed lake-manifest.json pinning mathlib revisions",
+        "accepted proof-check record using truth-harness proof check --project",
+        "reviewed inequality orientation and domain boundary"
+      ],
+      "nextAction": "Add monotonicity, bounds, and interval facts as separate validation-plan gates."
+    },
+    {
+      "familyId": "real-analysis-smoke",
+      "title": "Real-analysis nonnegativity smoke proofs",
+      "lane": "mathlib",
+      "status": "template-ready",
+      "trustCeiling": "proved-after-proof-check",
+      "sourcePaths": ["TruthHarnessMathlib/Algebra.lean"],
+      "declarationNames": ["real_sq_nonneg_mathlib_template"],
+      "evidenceRequired": [
+        "reviewed lake-manifest.json pinning mathlib revisions",
+        "accepted proof-check record using truth-harness proof check --project",
+        "reviewed mapping from numeric intuition to formal real-valued statement"
+      ],
+      "nextAction": "Use this as the bridge toward interval bounds, continuity, and calculus fixtures."
     }
   ],
   "trustBoundary": {
@@ -72,7 +117,7 @@
   ],
   "warnings": [
     "This corpus manifest organizes mathlib targets only; it never upgrades trust labels.",
-    "A missing lake-manifest.json keeps this fixture out of strict reviewer evidence.",
+    "The checked-in lake-manifest.json pins dependency revisions, but only an accepted proof-check record can support proved.",
     "Mathlib-backed proofs must run through Lake project context, not direct lean <file>."
   ]
 }

@@ -670,7 +670,7 @@ function frontierReadinessFor(input: {
       nextAction: leanFixtureReady
         ? leanTheoremTemplateReady && leanProofRepairGateReady
           ? leanMathlibTemplateReady
-            ? "Expand the mathlib scaffold into curated algebra, order, and analysis theorem families with validation plans."
+            ? "Attach validation-plan-backed proof gates to each curated mathlib family before claiming mature theorem discovery."
             : leanMathlibManifestPinned
               ? input.commands.dockerMathlibTemplate
               : "Pin lake-manifest.json for docs/examples/lean-mathlib-template, then run npm run docker:mathlib-template:write for no-runtime-network proof evidence."
@@ -1614,6 +1614,8 @@ async function leanMathlibTemplateCheck(rootPath: string, command: string): Prom
     const manifestPinned = manifest !== undefined;
     const scannerClean = !inspection.proofSafety.blocksProvedTrust;
     const completeScan = !inspection.files.leanFiles.truncated;
+    const normalizeProofPath = (value: string) => value.replace(/\\/gu, "/").replace(/^\.\//u, "");
+    const currentSource = inspection.files.leanFiles.sample.find((file) => normalizeProofPath(file.path) === sourcePath);
     const corpusCoverage = inspection.theoremCorpus?.declarationCoverage;
     const corpusReady =
       inspection.theoremCorpus?.valid === true &&
@@ -1621,18 +1623,19 @@ async function leanMathlibTemplateCheck(rootPath: string, command: string): Prom
       inspection.theoremCorpus.families.templateReady > 0 &&
       corpusCoverage?.complete === true &&
       corpusCoverage.templateReadyDeclarations > 0;
-    const normalizeProofPath = (value: string) => value.replace(/\\/gu, "/").replace(/^\.\//u, "");
     const proofChecks = await listLeanProofChecks(rootPath).catch((): LeanProofCheckSummary[] => []);
     const acceptedProof = proofChecks.find((proof) =>
       proof.status === "accepted" &&
       proof.trust === "proved" &&
       proof.proofCheckerBacked === true &&
-      normalizeProofPath(proof.sourcePath) === sourcePath
+      normalizeProofPath(proof.sourcePath) === sourcePath &&
+      proof.sourceSha256 === currentSource?.sha256
     );
 
     const sharedDetails = [
       `Project: ${projectPath}.`,
       `Checked source: ${sourcePath}.`,
+      `Current source SHA-256: ${currentSource?.sha256 ?? "missing"}.`,
       `Toolchain: ${inspection.toolchain?.channel ?? "missing"}.`,
       `Manifest: ${manifestPinned ? `present (${manifest.sha256})` : "missing"}.`,
       `Theorem corpus: ${inspection.theoremCorpus?.path ?? "missing"}.`,
@@ -1647,6 +1650,7 @@ async function leanMathlibTemplateCheck(rootPath: string, command: string): Prom
       manifestPinned &&
       scannerClean &&
       completeScan &&
+      currentSource &&
       corpusReady &&
       acceptedProof
     ) {
@@ -1665,12 +1669,12 @@ async function leanMathlibTemplateCheck(rootPath: string, command: string): Prom
       });
     }
 
-    if (inspection.readiness === "ready" && pinnedToolchain && manifestPinned && scannerClean && completeScan && corpusReady) {
+    if (inspection.readiness === "ready" && pinnedToolchain && manifestPinned && scannerClean && completeScan && currentSource && corpusReady) {
       return warnCheck({
         id: "lean-mathlib-template",
         title: "Lean mathlib scaffold",
         blocking: false,
-        summary: "Mathlib scaffold is manifest-pinned, but no accepted Lake proof receipt was found in this workspace.",
+        summary: "Mathlib scaffold is manifest-pinned, but no accepted Lake proof receipt for the current source SHA was found in this workspace.",
         command,
         details: [
           ...sharedDetails,
