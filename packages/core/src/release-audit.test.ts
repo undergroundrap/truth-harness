@@ -1,10 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { initLocalWorkspace } from "./local-workspace.js";
-import { type ProofBackendCommandRunner } from "./proof-backend.js";
+import { type ProofBackendCommandRunner, writeLeanProofCheckRecord } from "./proof-backend.js";
 import { writeProofRepairFixtureWorkspace } from "./proof-repair-fixture.js";
+import { writeLeanMathlibValidationHarness } from "./lean-mathlib-validation.js";
 import { createReleaseAudit, formatReleaseAuditEngineSummary, renderReleaseAuditMarkdown } from "./release-audit.js";
 import { rebuildWorkspaceCatalog } from "./workspace-catalog.js";
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
@@ -234,6 +235,72 @@ describe("release audit", () => {
     expect(markdown).toContain("Research sessions: 0 inspected, 0 continuation item(s)");
   });
 
+  it("recognizes seeded mathlib validation gates as the next formal-theorem blocker", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Mathlib Validation Audit", now: "2026-06-21T00:00:00.000Z" });
+    await writeLeanTheoremTemplateFixture(root);
+    await writeProofRepairFixtureWorkspace({
+      rootPath: join(root, "docs", "examples", "lean-repair-fixture"),
+      now: "2026-06-21T00:00:00.200Z",
+      runner: proofRepairRunner()
+    });
+    await cp(
+      join(process.cwd(), "docs", "examples", "lean-mathlib-template"),
+      join(root, "docs", "examples", "lean-mathlib-template"),
+      { recursive: true }
+    );
+    await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "docs/examples/lean-mathlib-template/TruthHarnessMathlib/Algebra.lean",
+      projectPath: "docs/examples/lean-mathlib-template",
+      leanCommand: "lean-test",
+      runner: passingProofRunner,
+      now: new Date("2026-06-21T00:00:00.400Z")
+    });
+    const harness = await writeLeanMathlibValidationHarness({
+      rootPath: root,
+      projectPath: "docs/examples/lean-mathlib-template",
+      now: "2026-06-21T00:00:00.600Z"
+    });
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-21T00:00:01.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-21T00:00:02.000Z",
+      engineRequirements: { lean: true },
+      leanCommand: "lean-test",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: passingEngineRunner
+    });
+    const formalStage = audit.frontierReadiness.stages.find((stage) => stage.id === "formal-theorem-workflows");
+
+    expect(harness.validationPlans).toHaveLength(5);
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "lean-mathlib-validation-gates",
+        status: "pass",
+        summary: expect.stringContaining("5/5 template-ready declarations"),
+        details: expect.arrayContaining([
+          "Declarations with seeded plans: 5/5.",
+          "Open proof gates: 5.",
+          "Satisfied proof gates: 0."
+        ])
+      })
+    );
+    expect(formalStage).toMatchObject({
+      id: "formal-theorem-workflows",
+      status: "partial",
+      summary: expect.stringContaining("seeded mathlib proof gates exist"),
+      nextAction: "Run truth-harness workspace run-next . --json, then close the first open mathlib validation proof gate with scoped proof-check evidence.",
+      blockers: expect.arrayContaining([
+        expect.stringContaining("Close at least one seeded mathlib validation proof gate")
+      ]),
+      evidence: expect.arrayContaining([
+        expect.stringContaining("Lean mathlib validation gates: pass")
+      ])
+    });
+  });
   it("uses a saved passing web UI review to clear launch-polish warnings", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "UI Review Audit", now: "2026-06-17T00:00:00.000Z" });
@@ -928,6 +995,12 @@ function proofRepairRunner(): ProofBackendCommandRunner {
       : { status: 0, stdout: "", stderr: "" };
   };
 }
+const passingProofRunner: ProofBackendCommandRunner = (_command, args) => {
+  if (args[0] === "--version") {
+    return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+  }
+  return { status: 0, stdout: "", stderr: "" };
+};
 const passingEngineRunner: EngineVerificationCommandRunner = (command, args) => {
   if (command === "maxima-test" && args[0] === "--version") {
     return { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" };

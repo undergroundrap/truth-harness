@@ -1,8 +1,10 @@
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
+import { addResearchSessionCheckpoint } from "./research-session.js";
 import { writeLeanMathlibValidationHarness } from "./lean-mathlib-validation.js";
 import { listValidationPlans } from "./validation-plan.js";
 import { createWorkspaceReview } from "./workspace-review.js";
@@ -80,7 +82,94 @@ describe("Lean mathlib validation harness", () => {
     expect(proofItems.map((item) => item.command)).toContain(runNext.item?.command);
     expect(runNext.execution.kind).toBe("dry-run");
   });
+  it("does not offer one scoped mathlib proof receipt for sibling declarations", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-30T00:00:00.000Z" });
+    await cp(
+      join(process.cwd(), "docs", "examples", "lean-mathlib-template"),
+      join(root, "docs", "examples", "lean-mathlib-template"),
+      { recursive: true }
+    );
+
+    const harness = await writeLeanMathlibValidationHarness({
+      rootPath: root,
+      projectPath: "docs/examples/lean-mathlib-template",
+      now: "2026-06-30T00:01:00.000Z"
+    });
+    const proof = await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "docs/examples/lean-mathlib-template/TruthHarnessMathlib/Algebra.lean",
+      projectPath: "docs/examples/lean-mathlib-template",
+      declarationName: "real_sq_nonneg_mathlib_template",
+      scope: {
+        statement:
+          "Lean mathlib declaration real_sq_nonneg_mathlib_template in project docs/examples/lean-mathlib-template source docs/examples/lean-mathlib-template/TruthHarnessMathlib/Algebra.lean"
+      },
+      leanCommand: "lean-test",
+      runner: passingProofRunner,
+      now: new Date("2026-06-30T00:02:00.000Z")
+    });
+    const proofRef = relative(root, proof.jsonPath).replace(/\\/gu, "/");
+    await addResearchSessionCheckpoint({
+      rootPath: root,
+      sessionRef: harness.session.sessionId,
+      summary: "Recorded one scoped mathlib proof receipt.",
+      evidenceRefs: [
+        {
+          kind: "proof",
+          ref: proofRef,
+          trust: "proved",
+          summary: "Scoped real analysis proof."
+        }
+      ],
+      now: "2026-06-30T00:03:00.000Z"
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-30T00:04:00.000Z"
+    });
+    const proofItems = review.items.filter((item) => item.kind === "validation-gate" && item.validationGateKind === "proof");
+    const realSqPlanId = harness.validationPlans.find(
+      (target) => target.declarationName === "real_sq_nonneg_mathlib_template"
+    )?.validationPlan.plan.planId;
+    if (!realSqPlanId) {
+      throw new Error("Expected a validation plan for real_sq_nonneg_mathlib_template.");
+    }
+    const realSqItem = proofItems.find((item) => item.validationPlanId === realSqPlanId);
+    if (!realSqItem) {
+      throw new Error("Expected the scoped real_sq proof gate to remain open for candidate attachment.");
+    }
+    const siblingItems = proofItems.filter((item) => item.validationPlanId !== realSqPlanId);
+
+    expect(realSqItem.candidateEvidenceRefs).toContainEqual(
+      expect.objectContaining({
+        kind: "proof",
+        ref: proofRef
+      })
+    );
+    expect(realSqItem.command).toContain(`proof:${proofRef}`);
+    expect(siblingItems).toHaveLength(4);
+    for (const item of siblingItems) {
+      expect(item.candidateEvidenceRefs).not.toContainEqual(
+        expect.objectContaining({
+          kind: "proof",
+          ref: proofRef
+        })
+      );
+      expect(item.command).not.toContain(`proof:${proofRef}`);
+      expect(item.command).toContain("truth-harness proof check");
+      expect(item.command).toContain("--declaration");
+    }
+  });
 });
+
+const passingProofRunner: ProofBackendCommandRunner = (_command, args) => {
+  if (args[0] === "--version") {
+    return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+  }
+  return { status: 0, stdout: "", stderr: "" };
+};
 
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-mathlib-validation-"));

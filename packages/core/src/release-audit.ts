@@ -13,6 +13,7 @@ import {
   type CodeRunSandboxRunSummary,
   type CodeRunSandboxStatus
 } from "./sandbox.js";
+import { listValidationPlans, type ValidationPlan } from "./validation-plan.js";
 import { listVerifierRoutes, readVerifierRoute, type VerifierRouteSummary } from "./verifier-route.js";
 import { listWebUiReviews, type WebUiReviewSummary } from "./web-ui-review.js";
 import { getWorkspaceCatalogStatus, type WorkspaceCatalogStatus } from "./workspace-catalog.js";
@@ -269,6 +270,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     leanProofSafetyCheck(credibilityPack),
     await leanTheoremTemplateCheck(rootPath, commands.dockerTheoremTemplate),
     await leanMathlibTemplateCheck(rootPath, commands.dockerMathlibTemplate),
+    await leanMathlibValidationGatesCheck(rootPath),
     await leanProofRepairGateCheck(rootPath, commands.dockerLeanRepairGate),
     researchSessionContinuityCheck(credibilityPack),
     savedStrictEngineRunCheck(credibilityPack, input.requireSavedStrictEngineRun === true),
@@ -554,6 +556,7 @@ function frontierReadinessFor(input: {
   const hardMathClosureReady = checkPassed(input.checks, "hard-math-closure");
   const leanTheoremTemplateReady = checkPassed(input.checks, "lean-theorem-template");
   const leanMathlibTemplateReady = checkPassed(input.checks, "lean-mathlib-template");
+  const leanMathlibValidationGatesReady = checkPassed(input.checks, "lean-mathlib-validation-gates");
   const leanMathlibTemplateCheck = input.checks.find((check) => check.id === "lean-mathlib-template");
   const leanMathlibManifestPinned = leanMathlibTemplateCheck?.details.some((detail) => detail.startsWith("Manifest: present")) === true;
   const leanProofRepairGateReady = checkPassed(input.checks, "lean-proof-repair-gate");
@@ -643,7 +646,9 @@ function frontierReadinessFor(input: {
       status: leanFixtureReady ? "partial" : "blocked",
       summary: leanFixtureReady
         ? leanMathlibTemplateReady
-          ? "Lean fixture evidence, a reusable theorem template, a manifest-pinned mathlib scaffold, and a saved proof-repair rehearsal exist, but this is not yet mature proof search."
+          ? leanMathlibValidationGatesReady
+            ? "Lean fixture evidence, a reusable theorem template, a manifest-pinned mathlib scaffold, saved proof-repair rehearsal, and seeded mathlib proof gates exist; open gates still need accepted scoped proof evidence."
+            : "Lean fixture evidence, a reusable theorem template, a manifest-pinned mathlib scaffold, and a saved proof-repair rehearsal exist, but mathlib validation proof gates are not seeded yet."
           : leanMathlibManifestPinned
             ? "Lean fixture evidence and a manifest-pinned mathlib scaffold exist, but the scaffold still needs accepted no-runtime-network proof evidence."
             : leanProofRepairGateReady && leanTheoremTemplateReady
@@ -656,6 +661,7 @@ function frontierReadinessFor(input: {
         `Lean/proved fixture evidence: ${leanFixtureReady ? "present" : "missing"}.`,
         `Reusable theorem template: ${checkSummary(input.checks, "lean-theorem-template")}.`,
         `Lean mathlib scaffold: ${checkSummary(input.checks, "lean-mathlib-template")}.`,
+        `Lean mathlib validation gates: ${checkSummary(input.checks, "lean-mathlib-validation-gates")}.`,
         `Lean repair rehearsal: ${checkSummary(input.checks, "lean-proof-repair-gate")}.`,
         "`proved` remains reserved for accepted proof-checker artifacts.",
         `Lean template gate: ${input.commands.dockerTheoremTemplate}.`,
@@ -663,14 +669,18 @@ function frontierReadinessFor(input: {
         `Lean repair gate: ${input.commands.dockerLeanRepairGate}.`
       ],
       blockers: leanMathlibTemplateReady
-        ? ["Curate professor-reviewed mathlib theorem families and proof-search regression budgets before claiming frontier theorem discovery."]
+        ? leanMathlibValidationGatesReady
+          ? ["Close at least one seeded mathlib validation proof gate with scoped accepted proof-check evidence before claiming mature theorem discovery."]
+          : ["Seed validation-plan-backed proof gates for each curated mathlib declaration before claiming mature theorem discovery."]
         : leanMathlibManifestPinned
           ? ["Run the no-runtime-network Docker mathlib proof gate and review the produced proof-check receipt."]
           : ["Pin the mathlib scaffold with a reviewed lake-manifest.json before treating it as dependency-reproducible theorem infrastructure."],
       nextAction: leanFixtureReady
         ? leanTheoremTemplateReady && leanProofRepairGateReady
           ? leanMathlibTemplateReady
-            ? "Attach validation-plan-backed proof gates to each curated mathlib family before claiming mature theorem discovery."
+            ? leanMathlibValidationGatesReady
+              ? "Run truth-harness workspace run-next . --json, then close the first open mathlib validation proof gate with scoped proof-check evidence."
+              : "npm run proof:mathlib-template:plan"
             : leanMathlibManifestPinned
               ? input.commands.dockerMathlibTemplate
               : "Pin lake-manifest.json for docs/examples/lean-mathlib-template, then run npm run docker:mathlib-template:write for no-runtime-network proof evidence."
@@ -1717,6 +1727,99 @@ async function leanMathlibTemplateCheck(rootPath: string, command: string): Prom
   }
 }
 
+async function leanMathlibValidationGatesCheck(rootPath: string): Promise<ReleaseAuditCheck> {
+  const projectPath = "docs/examples/lean-mathlib-template";
+  const command = "npm run proof:mathlib-template:plan";
+
+  try {
+    const inspection = await inspectLeanProject({
+      rootPath,
+      projectPath,
+      maxLeanFiles: 10
+    });
+    const expectedDeclarations = (inspection.theoremCorpus?.declarationCoverage?.matched ?? [])
+      .map((match) => match.declarationName)
+      .filter((declarationName) => declarationName.trim().length > 0);
+    const expected = new Set(expectedDeclarations);
+    const plans = await listValidationPlans(rootPath).catch((): ValidationPlan[] => []);
+    const mathlibPlans = plans.filter((plan) => mathlibValidationDeclaration(plan.claim, projectPath) !== undefined);
+    const plansByDeclaration = new Map<string, ValidationPlan>();
+    for (const plan of mathlibPlans) {
+      const declaration = mathlibValidationDeclaration(plan.claim, projectPath);
+      if (declaration && !plansByDeclaration.has(declaration)) {
+        plansByDeclaration.set(declaration, plan);
+      }
+    }
+    const proofGatePlans = mathlibPlans.filter((plan) => plan.gates.some((gate) => gate.kind === "proof"));
+    const satisfiedProofGatePlans = mathlibPlans.filter((plan) =>
+      plan.gates.some((gate) => gate.kind === "proof" && gate.status === "satisfied")
+    );
+    const openProofGatePlans = mathlibPlans.filter((plan) =>
+      plan.gates.some((gate) => gate.kind === "proof" && gate.status !== "satisfied" && gate.status !== "not-applicable")
+    );
+    const missingDeclarations = expectedDeclarations.filter((declarationName) => !plansByDeclaration.has(declarationName));
+    const details = [
+      `Project: ${projectPath}.`,
+      `Theorem corpus: ${inspection.theoremCorpus?.path ?? "missing"}.`,
+      `Expected template-ready declarations: ${expectedDeclarations.length}.`,
+      `Validation plans found: ${mathlibPlans.length}.`,
+      `Declarations with seeded plans: ${plansByDeclaration.size}/${expected.size}.`,
+      `Proof-gate plans: ${proofGatePlans.length}.`,
+      `Open proof gates: ${openProofGatePlans.length}.`,
+      `Satisfied proof gates: ${satisfiedProofGatePlans.length}.`,
+      "Seeded validation gates are planning artifacts only; they do not prove any theorem."
+    ];
+
+    if (expectedDeclarations.length > 0 && missingDeclarations.length === 0 && proofGatePlans.length >= expectedDeclarations.length) {
+      return passCheck({
+        id: "lean-mathlib-validation-gates",
+        title: "Lean mathlib validation gates",
+        summary:
+          `Mathlib validation gates are seeded for ${expectedDeclarations.length}/${expectedDeclarations.length} template-ready declaration${expectedDeclarations.length === 1 ? "" : "s"}; ` +
+          `${openProofGatePlans.length} proof gate${openProofGatePlans.length === 1 ? "" : "s"} remain open.`,
+        command: "truth-harness workspace run-next . --json",
+        details
+      });
+    }
+
+    return warnCheck({
+      id: "lean-mathlib-validation-gates",
+      title: "Lean mathlib validation gates",
+      blocking: false,
+      summary:
+        expectedDeclarations.length > 0
+          ? `Mathlib validation gates are not fully seeded; ${missingDeclarations.length} declaration target${missingDeclarations.length === 1 ? "" : "s"} missing.`
+          : "No template-ready mathlib declarations were available for validation-gate planning.",
+      command,
+      details: [
+        ...details,
+        ...missingDeclarations.slice(0, 8).map((declarationName) => `Missing validation plan for ${declarationName}.`),
+        "Run the mathlib-plan command before asking an autonomous agent to pursue mature theorem discovery."
+      ]
+    });
+  } catch (error) {
+    return warnCheck({
+      id: "lean-mathlib-validation-gates",
+      title: "Lean mathlib validation gates",
+      blocking: false,
+      summary: "Mathlib validation gates could not be inspected.",
+      command,
+      details: [
+        `Expected project: ${projectPath}.`,
+        `Inspection error: ${error instanceof Error ? error.message : String(error)}.`,
+        "Run the mathlib-plan command after the theorem corpus and scaffold are inspectable."
+      ]
+    });
+  }
+}
+
+function mathlibValidationDeclaration(claim: string, projectPath: string): string | undefined {
+  const match = /^Lean mathlib declaration (?<declaration>[A-Za-z0-9_.]+) in project (?<project>.+?) source (?<source>.+\.lean)$/u.exec(claim);
+  if (!match?.groups || match.groups.project !== projectPath) {
+    return undefined;
+  }
+  return match.groups.declaration;
+}
 async function leanProofRepairGateCheck(rootPath: string, command: string): Promise<ReleaseAuditCheck> {
   const fixtureRoot = resolve(rootPath, "docs", "examples", "lean-repair-fixture");
   const fixtureRef = toPortableWorkspacePath(rootPath, fixtureRoot);

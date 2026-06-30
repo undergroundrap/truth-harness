@@ -805,6 +805,9 @@ function candidateEvidenceRefsForValidationGate(
     if (!candidate) {
       return;
     }
+    if (gate.kind === "proof" && candidate.kind === "proof" && isMathlibDeclarationValidationPlan(plan)) {
+      return;
+    }
     collectCandidate(candidate);
   };
 
@@ -870,6 +873,10 @@ function isSnapshotCandidateForValidationPlan(
   }
 
   return snapshot.createdAt >= plan.updatedAt;
+}
+
+function isMathlibDeclarationValidationPlan(plan: ValidationPlan): boolean {
+  return /^Lean mathlib declaration [A-Za-z0-9_.]+ in project .+? source .+\.lean$/u.test(plan.claim);
 }
 
 function isProofCheckCandidateForValidationPlan(
