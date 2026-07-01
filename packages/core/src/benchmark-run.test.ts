@@ -59,6 +59,7 @@ describe("benchmark run records", () => {
       now: "2026-06-10T01:00:00.000Z"
     });
     const records = await listBenchmarkRunRecords(root);
+    const artifacts = await listBenchmarkArtifacts(root);
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
     expect(result.jsonPath).toContain(join(".truth-harness", "benchmarks"));
@@ -107,6 +108,20 @@ describe("benchmark run records", () => {
     );
     expect(records).toHaveLength(1);
     expect(records[0]?.benchmarkRunId).toBe(result.record.benchmarkRunId);
+    expect(artifacts[0]).toMatchObject({
+      artifactId: result.record.benchmarkRunId,
+      reviewContracts: [
+        {
+          taskId: "tiny-case",
+          reviewStatus: "self-reviewed",
+          requiredEvidence: ["exact arithmetic receipt", "receipt replay command"],
+          checkerBoundary: "native exact-arithmetic parser",
+          expectedTrust: "exact-computed",
+          actualTrust: "exact-computed",
+          evidenceKind: "exact-arithmetic"
+        }
+      ]
+    });
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.benchmarks).toBe(1);
   });

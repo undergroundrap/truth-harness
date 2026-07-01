@@ -552,6 +552,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
       `Path: \`${run.path}\``,
       `Replay: \`${run.replayCommand ?? run.command ?? pack.reviewerCommands.runAdversarialBenchmark}\``,
       `Receipt replay examples: ${formatBenchmarkReceiptReplays(run.receiptReplays)}`,
+      ...formatBenchmarkReviewContractLines(run),
       ""
     );
   } else {
@@ -567,6 +568,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
       `Path: \`${run.path}\``,
       `Replay: \`${run.replayCommand ?? run.command ?? pack.reviewerCommands.runMathCredibilityLadder}\``,
       `Receipt replay examples: ${formatBenchmarkReceiptReplays(run.receiptReplays)}`,
+      ...formatBenchmarkReviewContractLines(run),
       ""
     );
   } else {
@@ -582,6 +584,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
       `Path: \`${run.path}\``,
       `Replay: \`${run.replayCommand ?? run.command ?? pack.reviewerCommands.runProfessorMathChallenge}\``,
       `Receipt replay examples: ${formatBenchmarkReceiptReplays(run.receiptReplays)}`,
+      ...formatBenchmarkReviewContractLines(run),
       ""
     );
   } else {
@@ -597,6 +600,7 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
       `Path: \`${run.path}\``,
       `Replay: \`${run.replayCommand ?? run.command ?? pack.reviewerCommands.runFrontierHonestyChallenge}\``,
       `Receipt replay examples: ${formatBenchmarkReceiptReplays(run.receiptReplays)}`,
+      ...formatBenchmarkReviewContractLines(run),
       ""
     );
   }
@@ -667,6 +671,26 @@ export function renderCredibilityPackMarkdown(pack: Omit<CredibilityPack, "markd
   }
 
   return `${lines.join("\n")}\n`;
+}
+
+function formatBenchmarkReviewContractLines(run: BenchmarkArtifactSummary): string[] {
+  const contracts = run.reviewContracts ?? [];
+  if (contracts.length === 0) {
+    return [];
+  }
+
+  const lines = ["Review contracts:"];
+  for (const contract of contracts.slice(0, 4)) {
+    const evidence = contract.requiredEvidence.length > 0 ? contract.requiredEvidence.join("; ") : "not specified";
+    const boundary = contract.checkerBoundary ?? "not recorded";
+    lines.push(
+      `- \`${contract.taskId}\`: ${contract.reviewStatus}; required evidence: ${evidence}; boundary: ${boundary}`
+    );
+  }
+  if (contracts.length > 4) {
+    lines.push(`- ...${contracts.length - 4} more review contract(s)`);
+  }
+  return lines;
 }
 
 function formatBenchmarkReceiptReplays(replays: string[] | undefined): string {
@@ -1001,6 +1025,24 @@ function createReviewerActionPlan(input: {
     });
   }
 
+  for (const { run, contract } of unresolvedBenchmarkReviewContracts(input.benchmarkLedger)) {
+    pushAction({
+      category: "benchmark",
+      priority: "low",
+      title: `Record external review request for ${run.suiteId}/${contract.taskId}`,
+      detail: benchmarkReviewContractDetail(run, contract),
+      command: benchmarkReviewContractCommand(run, contract),
+      closes: [
+        `benchmark-contract:${run.suiteId}:${contract.taskId}`,
+        `benchmark-run:${run.artifactId}`
+      ],
+      source: {
+        kind: "benchmark-review-contract",
+        ref: `${run.path}#${contract.taskId}`
+      }
+    });
+  }
+
   pushHardMathClosureAction({
     report: input.hardMathClosureLedger.latestExactClosure,
     expectedCaseId: "exact-fraction-lemma",
@@ -1071,6 +1113,50 @@ function createReviewerActionPlan(input: {
     highActions: sorted.filter((item) => item.priority === "high").length,
     actions: sorted
   };
+}
+
+function unresolvedBenchmarkReviewContracts(ledger: CredibilityPackBenchmarkLedger): Array<{
+  run: BenchmarkArtifactSummary;
+  contract: NonNullable<BenchmarkArtifactSummary["reviewContracts"]>[number];
+}> {
+  return ledger.latestRuns.flatMap((run) =>
+    (run.reviewContracts ?? [])
+      .filter((contract) => contract.reviewStatus === "external-review-needed" || contract.reviewStatus === "unreviewed")
+      .map((contract) => ({ run, contract }))
+  );
+}
+
+function benchmarkReviewContractDetail(
+  run: BenchmarkArtifactSummary,
+  contract: NonNullable<BenchmarkArtifactSummary["reviewContracts"]>[number]
+): string {
+  const requiredEvidence = contract.requiredEvidence.length > 0 ? contract.requiredEvidence.join("; ") : "not specified";
+  const boundary = contract.checkerBoundary ?? "no checker boundary recorded";
+  return `Benchmark case ${run.suiteId}/${contract.taskId} is ${contract.reviewStatus}. Required evidence: ${requiredEvidence}. Checker boundary: ${boundary}. The benchmark can still pass as a harness regression check, but this case is not externally reviewed evidence for a discovery claim.`;
+}
+
+function benchmarkReviewContractCommand(
+  run: BenchmarkArtifactSummary,
+  contract: NonNullable<BenchmarkArtifactSummary["reviewContracts"]>[number]
+): string {
+  const subject = `Benchmark contract ${run.suiteId}/${contract.taskId}`;
+  const question = `Review the benchmark case, required evidence, checker boundary, and receipt posture before any broad claim cites it.`;
+  const nextChecks = contract.requiredEvidence.length > 0
+    ? contract.requiredEvidence
+    : ["Independent reviewer confirms the benchmark boundary and required evidence before publication."];
+  return [
+    "truth-harness review log",
+    quoteCommandArg(subject),
+    "--kind math",
+    "--status requested",
+    "--reviewer-role",
+    quoteCommandArg("qualified external reviewer"),
+    "--evidence",
+    quoteCommandArg(`benchmark:${run.path}`),
+    "--question",
+    quoteCommandArg(question),
+    ...nextChecks.flatMap((check) => ["--next-check", quoteCommandArg(check)])
+  ].join(" ");
 }
 
 function reviewerActionRank(action: CredibilityPackActionItem): number {

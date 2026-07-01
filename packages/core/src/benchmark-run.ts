@@ -248,6 +248,18 @@ export interface BenchmarkComparisonWriteResult {
 
 export type BenchmarkArtifactSummaryKind = "run" | "comparison";
 
+export interface BenchmarkReviewContractSummary {
+  taskId: string;
+  prompt: string;
+  reviewStatus: BenchmarkTaskReviewStatus;
+  requiredEvidence: string[];
+  checkerBoundary?: string;
+  passed: boolean;
+  expectedTrust: TrustLabel;
+  actualTrust: TrustLabel;
+  evidenceKind: string;
+}
+
 export interface BenchmarkArtifactSummary {
   kind: BenchmarkArtifactSummaryKind;
   path: string;
@@ -268,6 +280,7 @@ export interface BenchmarkArtifactSummary {
   receiptReplays?: string[];
   failedCaseIds?: string[];
   requiredNextChecks?: string[];
+  reviewContracts?: BenchmarkReviewContractSummary[];
   verdict?: BenchmarkComparisonVerdict;
   baselineRunId?: string;
   currentRunId?: string;
@@ -1196,6 +1209,7 @@ function summarizeBenchmarkRunArtifact(
     receiptReplays: uniqueStrings(record.cases.map((entry) => entry.receiptReplay)),
     failedCaseIds: record.cases.filter((entry) => !entry.passed).map((entry) => entry.taskId),
     requiredNextChecks: record.verificationBoundary.requiredNextChecks,
+    reviewContracts: summarizeBenchmarkReviewContracts(record.cases),
     warnings: record.warnings
   };
 }
@@ -1218,6 +1232,24 @@ function summarizeBenchmarkComparisonArtifact(
     currentRunId: record.current.benchmarkRunId,
     warnings: record.warnings
   };
+}
+
+function summarizeBenchmarkReviewContracts(cases: BenchmarkRunCaseRecord[]): BenchmarkReviewContractSummary[] | undefined {
+  const contracts = cases
+    .filter((entry) => entry.reviewStatus !== undefined || (entry.requiredEvidence?.length ?? 0) > 0 || entry.checkerBoundary !== undefined)
+    .map((entry) => ({
+      taskId: entry.taskId,
+      prompt: entry.prompt,
+      reviewStatus: entry.reviewStatus ?? "unreviewed",
+      requiredEvidence: entry.requiredEvidence ?? [],
+      checkerBoundary: entry.checkerBoundary,
+      passed: entry.passed,
+      expectedTrust: entry.expectedTrust,
+      actualTrust: entry.actualTrust,
+      evidenceKind: entry.evidenceKind
+    }));
+
+  return contracts.length > 0 ? contracts : undefined;
 }
 
 function currentProjectId(baseline: BenchmarkRunRecord, current: BenchmarkRunRecord): string {
