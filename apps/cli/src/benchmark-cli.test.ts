@@ -2483,6 +2483,9 @@ describe("benchmark CLI", () => {
         status: string;
         stopReason: string;
         firstCommand?: string;
+        runNextPlanCount?: number;
+        lastRunNextPlanPath?: string;
+        lastRunNextMarkdownPath?: string;
       }>;
     };
     const listedPilotLoop = pilotLoopListPayload.loops.find(
@@ -2496,11 +2499,19 @@ describe("benchmark CLI", () => {
       source: "saved-run-next",
       status: "stopped",
       stopReason: "dry-run",
-      firstCommand: expect.any(String)
+      firstCommand: expect.any(String),
+      runNextPlanCount: 1,
+      lastRunNextPlanPath: expect.stringContaining(".truth-harness/findings/"),
+      lastRunNextMarkdownPath: expect.stringContaining(".truth-harness/findings/")
     });
     const pilotLoopHumanList = await runCli(["workspace", "pilot-loops", root]);
     expect(pilotLoopHumanList.stdout).toContain("Truth Harness workspace pilot-loop transcripts");
     expect(pilotLoopHumanList.stdout).toContain(savedPilotLoopPayload.loop.loopId);
+    expect(pilotLoopHumanList.stdout).toContain("Run-next handoffs: 1");
+    expect(pilotLoopHumanList.stdout).toContain("Latest packet: .truth-harness/findings/");
+    expect(pilotLoopHumanList.stdout).toContain("Latest markdown: .truth-harness/findings/");
+    expect(pilotLoopHumanList.stdout).toContain("Continue: truth-harness workspace continue-pilot-loop");
+    expect(pilotLoopHumanList.stdout).toContain("Open latest handoff: truth-harness workspace show-run-next .truth-harness/findings/");
     const shownPilotLoop = await runCli([
       "workspace",
       "show-pilot-loop",
@@ -2523,6 +2534,8 @@ describe("benchmark CLI", () => {
       root
     ]);
     expect(shownPilotLoopHuman.stdout).toContain("Truth Harness workspace pilot-loop");
+    expect(shownPilotLoopHuman.stdout).toContain("Run-next packet: .truth-harness/findings/");
+    expect(shownPilotLoopHuman.stdout).toContain("Run-next markdown: .truth-harness/findings/");
     expect(shownPilotLoopHuman.stdout).toContain("Transcript:");
     expect(human.stdout).toContain("Truth Harness workspace run-next");
     expect(human.stdout).toContain("Plan:");

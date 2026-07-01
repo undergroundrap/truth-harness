@@ -8583,6 +8583,9 @@ function printWorkspacePilotLoop(
     if (step.runNextPlanPath) {
       console.log(`   Run-next packet: ${step.runNextPlanPath}`);
     }
+    if (step.runNextMarkdownPath) {
+      console.log(`   Run-next markdown: ${step.runNextMarkdownPath}`);
+    }
     console.log(`   Execution: ${step.execution.status} (${step.execution.kind})`);
     console.log(`   ${step.execution.summary}`);
     if (step.item?.command) {
@@ -8645,6 +8648,24 @@ function printWorkspacePilotLoopList(loops: WorkspacePilotLoopSummary[]): void {
     }
     if (loop.enginePlanStatuses.length > 0) {
       console.log(`  Engine plan statuses: ${loop.enginePlanStatuses.join(", ")}`);
+    }
+    if (loop.runNextPlanCount > 0) {
+      console.log(`  Run-next handoffs: ${loop.runNextPlanCount}`);
+      if (loop.firstRunNextPlanPath && loop.firstRunNextPlanPath !== loop.lastRunNextPlanPath) {
+        console.log(`    First packet: ${loop.firstRunNextPlanPath}`);
+      }
+      if (loop.lastRunNextPlanPath) {
+        console.log(`    Latest packet: ${loop.lastRunNextPlanPath}`);
+      }
+      if (loop.lastRunNextMarkdownPath) {
+        console.log(`    Latest markdown: ${loop.lastRunNextMarkdownPath}`);
+      }
+      console.log(`  Continue: truth-harness workspace continue-pilot-loop ${loop.loopId} --workspace . --json`);
+      if (loop.lastRunNextPlanPath) {
+        console.log(
+          `  Open latest handoff: truth-harness workspace show-run-next ${loop.lastRunNextPlanPath} --workspace . --verify-snapshot`
+        );
+      }
     }
     if (loop.evidenceRefs.length > 0) {
       console.log(`  Evidence refs: ${loop.evidenceRefs.length}`);

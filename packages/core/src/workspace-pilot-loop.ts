@@ -725,6 +725,7 @@ async function readWorkspacePilotLoopRecordWithPath(
 }
 
 export function renderWorkspacePilotLoopMarkdown(loop: WorkspacePilotLoopRecord): string {
+  const runNextHandoffCount = loop.steps.filter((step) => step.runNextPlanPath).length;
   const lines = [
     "# Truth Harness Pilot Loop",
     "",
@@ -742,6 +743,7 @@ export function renderWorkspacePilotLoopMarkdown(loop: WorkspacePilotLoopRecord)
     `- Blocked steps: ${loop.summary.blockedSteps}`,
     `- Attached evidence steps: ${loop.summary.attachedEvidenceSteps}`,
     `- Evidence refs: ${loop.summary.evidenceRefs.length > 0 ? loop.summary.evidenceRefs.join(", ") : "none"}`,
+    `- Run-next handoffs: ${runNextHandoffCount}`,
     "",
     "## Steps",
     ""
@@ -751,7 +753,9 @@ export function renderWorkspacePilotLoopMarkdown(loop: WorkspacePilotLoopRecord)
     lines.push(
       `### ${step.index}. ${step.item?.title ?? "No open item"}`,
       "",
-      `- Plan: ${step.planId}${step.runNextPlanPath ? ` (${step.runNextPlanPath})` : ""}`,
+      `- Plan: ${step.planId}`,
+      step.runNextPlanPath ? `- Run-next packet: ${step.runNextPlanPath}` : "- Run-next packet: none",
+      step.runNextMarkdownPath ? `- Run-next markdown: ${step.runNextMarkdownPath}` : "- Run-next markdown: none",
       `- Review: ${step.reviewId}`,
       `- Item kind: ${step.item?.kind ?? "none"}`,
       `- Command: ${step.item?.command ?? step.execution.command ?? "none"}`,

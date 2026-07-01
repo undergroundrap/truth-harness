@@ -118,6 +118,9 @@ describe("workspace pilot-loop", () => {
     });
     expect(written.loop.loopId).toBe(result.loop.loopId);
     expect(written.markdown).toContain("# Truth Harness Pilot Loop");
+    expect(written.markdown).toContain("- Run-next handoffs: 3");
+    expect(written.markdown).toContain("- Run-next packet: .truth-harness/findings/");
+    expect(written.markdown).toContain("- Run-next markdown: .truth-harness/findings/");
     expect(JSON.parse(await readFile(written.jsonPath, "utf8"))).toMatchObject({
       schemaVersion: "truth-harness.workspace-pilot-loop.v0",
       loopId: result.loop.loopId
