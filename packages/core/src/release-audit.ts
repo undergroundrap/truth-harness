@@ -584,6 +584,10 @@ function frontierReadinessFor(input: {
     leanMathlibTemplateReady &&
     leanMathlibValidationProofGatesClosed;
   const boundedHardMathReady = input.professorReady && engineEvidenceReady && frontierHonestyReady && hardMathClosureReady;
+  const benchmarkReviewContracts = summarizeBenchmarkReviewContractsForFrontier(input.credibilityPack);
+  const benchmarkReviewNextAction =
+    benchmarkReviewContracts.firstOpenAction?.command ??
+    "Grow from bounded fixtures into curated professor-reviewed hard-problem benchmark suites.";
   const status: ReleaseAuditFrontierReadinessStatus = boundedHardMathReady
     ? "bounded-hard-math-harness"
     : localHarnessReady
@@ -710,15 +714,25 @@ function frontierReadinessFor(input: {
         "Not ready: the harness can route, verify, and audit bounded claims, but cannot responsibly claim autonomous solutions to frontier open problems.",
       evidence: [
         "No local audit artifact can by itself establish a new frontier result.",
-        "Breakthrough claims still require formal proof, independent replay, expert review, and domain-specific validation."
+        "Breakthrough claims still require formal proof, independent replay, expert review, and domain-specific validation.",
+        benchmarkReviewContracts.total > 0
+          ? `Benchmark review contracts: ${benchmarkReviewContracts.total} recorded; ${benchmarkReviewContracts.openContracts} still need review (${benchmarkReviewContracts.externalReviewNeeded} external-review-needed, ${benchmarkReviewContracts.unreviewed} unreviewed); ${benchmarkReviewContracts.openActions} concrete review action(s) open.`
+          : "Benchmark review contracts: none recorded in this audit scope.",
+        benchmarkReviewContracts.firstOpenContract
+          ? `First open benchmark contract: ${benchmarkReviewContracts.firstOpenContract}. Required evidence: ${benchmarkReviewContracts.firstOpenRequiredEvidence}.`
+          : "First open benchmark contract: none cited by this audit."
       ],
       blockers: [
         "Long-horizon benchmark suites",
         "Proof-search regression budgets",
         "Independent verifier diversity on real research tasks",
-        "Human expert review and publication-grade artifacts"
+        benchmarkReviewContracts.openActions > 0
+          ? `Record ${benchmarkReviewContracts.openActions} benchmark reviewer contract request(s) before citing the suites as professor-reviewed evidence.`
+          : benchmarkReviewContracts.openContracts > 0
+            ? `Complete or update ${benchmarkReviewContracts.openContracts} benchmark contract review(s) before citing the suites as professor-reviewed evidence.`
+            : "Human expert review and publication-grade artifacts"
       ],
-      nextAction: "Grow from bounded fixtures into curated professor-reviewed hard-problem benchmark suites."
+      nextAction: benchmarkReviewNextAction
     }
   ];
   const nextMilestone = stages.find((stage) => stage.status !== "ready")?.title ?? "External professor review";
@@ -739,6 +753,48 @@ function frontierReadinessFor(input: {
       "We are building the evidence layer needed before agents attack hard problems; we are not yet an autonomous frontier solver.",
     nextMilestone,
     stages
+  };
+}
+
+function summarizeBenchmarkReviewContractsForFrontier(pack?: CredibilityPack): {
+  total: number;
+  externalReviewNeeded: number;
+  unreviewed: number;
+  externalReviewed: number;
+  selfReviewed: number;
+  openContracts: number;
+  openActions: number;
+  firstOpenAction?: CredibilityPack["reviewerActionPlan"]["actions"][number];
+  firstOpenContract?: string;
+  firstOpenRequiredEvidence: string;
+} {
+  const contracts = (pack?.benchmarkLedger.latestRuns ?? []).flatMap((run) =>
+    (run.reviewContracts ?? []).map((contract) => ({ run, contract }))
+  );
+  const openContracts = contracts.filter(
+    ({ contract }) => contract.reviewStatus === "external-review-needed" || contract.reviewStatus === "unreviewed"
+  );
+  const openActions =
+    pack?.reviewerActionPlan.actions.filter((action) => action.source.kind === "benchmark-review-contract") ?? [];
+  const firstOpenContract = openContracts[0];
+
+  return {
+    total: contracts.length,
+    externalReviewNeeded: contracts.filter(({ contract }) => contract.reviewStatus === "external-review-needed").length,
+    unreviewed: contracts.filter(({ contract }) => contract.reviewStatus === "unreviewed").length,
+    externalReviewed: contracts.filter(({ contract }) => contract.reviewStatus === "external-reviewed").length,
+    selfReviewed: contracts.filter(({ contract }) => contract.reviewStatus === "self-reviewed").length,
+    openContracts: openContracts.length,
+    openActions: openActions.length,
+    firstOpenAction: openActions[0],
+    firstOpenContract: firstOpenContract
+      ? `${firstOpenContract.run.suiteId}/${firstOpenContract.contract.taskId}`
+      : undefined,
+    firstOpenRequiredEvidence: firstOpenContract
+      ? firstOpenContract.contract.requiredEvidence.length > 0
+        ? firstOpenContract.contract.requiredEvidence.join("; ")
+        : "not specified"
+      : "none"
   };
 }
 
