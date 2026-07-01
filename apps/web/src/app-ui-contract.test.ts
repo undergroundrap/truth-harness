@@ -753,6 +753,11 @@ describe("web UI action contracts", () => {
     expect(html).toContain('id="workspace-pilot-loop-steps"');
     expect(html).toContain('id="refresh-pilot-loop"');
     expect(html).toContain('id="copy-pilot-loop-command"');
+    expect(html).toContain('id="workspace-pilot-loop-history"');
+    expect(html).toContain('id="workspace-pilot-loop-history-title"');
+    expect(html).toContain('id="workspace-pilot-loop-list"');
+    expect(html).toContain('id="workspace-pilot-loop-inspection"');
+    expect(html).toContain('id="refresh-pilot-loops"');
     expect(html).toContain("Reviewer loop preview");
     expect(html).toContain("Refresh reviewer loop");
     expect(source).toContain('fetch(query ? `/api/workspace-run-next?${query}` : "/api/workspace-run-next"');
@@ -761,7 +766,9 @@ describe("web UI action contracts", () => {
     expect(source).toContain('fetch("/api/workspace-seed/hard-math"');
     expect(source).toContain('fetch(`/api/workspace-seed/hard-math/latest?${params.toString()}`');
     expect(source).toContain('fetch(`/api/workspace-run-nexts?${params.toString()}`');
-    expect(source).toContain('fetch(`/api/workspace-run-nexts/${encodeURIComponent(ref)}${verifyParam}`');
+    expect(source).toContain('fetch(`/api/workspace-run-nexts/');
+    expect(source).toContain('fetch(`/api/workspace-pilot-loops?');
+    expect(source).toContain('fetch(`/api/workspace-pilot-loops/');
     expect(source).toContain('const verifyParam = verifySnapshot ? "?verifySnapshot=true" : ""');
     expect(source).toContain("verify-run-next-handoff");
     expect(source).toContain("function startResearchHarnessFromUi()");
@@ -845,6 +852,12 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function workspacePilotLoopApiPreviewCommand(source = workspacePilotLoopSource)");
     expect(source).toContain("reviewer credibility queue");
     expect(source).toContain("function renderWorkspacePilotLoop()");
+    expect(source).toContain("function refreshWorkspacePilotLoops({ announce = true } = {})");
+    expect(source).toContain("function openWorkspacePilotLoopTranscript(loopRef)");
+    expect(source).toContain("function renderWorkspacePilotLoops()");
+    expect(source).toContain("function renderWorkspacePilotLoopSummary(summary)");
+    expect(source).toContain("function renderWorkspacePilotLoopInspection(inspection)");
+    expect(source).toContain("copyWorkspacePilotLoopTranscriptCommand");
     expect(source).toContain("function workspacePilotLoopDetailsRows(loop)");
     expect(source).toContain("copyWorkspacePilotLoopCommand");
     expect(source).toContain("function renderWorkspaceRunNextIdleActions(plan)");
@@ -949,6 +962,7 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".workspace-run-next-idle-actions");
     expect(styles).toContain(".workspace-run-next-idle-card");
     expect(styles).toContain(".workspace-run-next-history");
+    expect(styles).toContain(".workspace-pilot-loop-history");
     expect(styles).toContain(".workspace-run-next-row");
     expect(styles).toContain(".workspace-run-next-opened");
     expect(styles).toContain(".workspace-run-next-artifact-refs");

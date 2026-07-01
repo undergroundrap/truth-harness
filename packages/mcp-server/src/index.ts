@@ -98,6 +98,8 @@ import {
   handleTruthHarnessWorkspaceRunNextList,
   handleTruthHarnessWorkspaceRunNextShow,
   handleTruthHarnessWorkspacePilotLoop,
+  handleTruthHarnessWorkspacePilotLoopList,
+  handleTruthHarnessWorkspacePilotLoopShow,
   handleTruthHarnessWorkspaceUiReview,
   handleTruthHarnessWorkspaceUiReviewList,
   handleTruthHarnessWorkspaceSnapshot,
@@ -1787,6 +1789,56 @@ export function createTruthHarnessMcpServer(): McpServer {
           ...input
         })
       )
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_pilot_loop_list",
+    {
+      title: "List Workspace Pilot-Loop Transcripts",
+      description:
+        "List persisted truth-harness.workspace-pilot-loop.v0 transcripts from .truth-harness/findings so agents can audit prior bounded loops before continuing work.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(50)
+          .optional()
+          .describe("Maximum saved pilot-loop transcripts to list. Defaults to the core list behavior.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, limit }) =>
+      toolJson(await handleTruthHarnessWorkspacePilotLoopList({ workspacePath, limit }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_pilot_loop_show",
+    {
+      title: "Show Workspace Pilot-Loop Transcript",
+      description:
+        "Read a persisted workspace pilot-loop transcript by loop id or workspace-local JSON path, including planned steps, execution boundary, evidence refs, and transcript paths.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        loopRef: z.string().min(1).describe("Loop id such as wpl_<hash> or workspace-local JSON path.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, loopRef }) =>
+      toolJson(await handleTruthHarnessWorkspacePilotLoopShow({ workspacePath, loopRef }))
   );
 
   server.registerTool(

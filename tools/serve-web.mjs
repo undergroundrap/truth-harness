@@ -251,6 +251,8 @@ async function handleApiRequest(request, response, requestUrl) {
         "workspace-run-next-list",
         "workspace-run-next-show",
         "workspace-pilot-loop-dry-run",
+        "workspace-pilot-loop-list",
+        "workspace-pilot-loop-show",
         "release-audit",
         "docker-verifier-guidance",
         "web-runtime-identity",
@@ -1081,6 +1083,55 @@ async function handleApiRequest(request, response, requestUrl) {
         response,
         error instanceof HttpError ? error.status : 400,
         error instanceof Error ? error.message : "Workspace pilot loop could not be previewed.",
+        request
+      );
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/workspace-pilot-loops" && request.method === "GET") {
+    try {
+      const { listWorkspacePilotLoopRecords } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const limit = boundedInteger(requestUrl.searchParams.get("limit"), 8, 1, 50);
+      const loops = await listWorkspacePilotLoopRecords(projectRoot, { limit });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-pilot-loop-list-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        total: loops.length,
+        limit,
+        loops
+      });
+    } catch (error) {
+      writeApiError(
+        response,
+        error instanceof HttpError ? error.status : 409,
+        error instanceof Error ? error.message : "Workspace pilot-loop transcripts could not be listed.",
+        request
+      );
+    }
+    return;
+  }
+
+  const pilotLoopMatch = requestUrl.pathname.match(/^\/api\/workspace-pilot-loops\/([^/]+)$/u);
+  if (pilotLoopMatch && request.method === "GET") {
+    try {
+      const { inspectWorkspacePilotLoopRecord } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const loopRef = decodeURIComponent(pilotLoopMatch[1] ?? "");
+      const inspection = await inspectWorkspacePilotLoopRecord(projectRoot, loopRef);
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-pilot-loop-show-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        inspection
+      });
+    } catch (error) {
+      writeApiError(
+        response,
+        error instanceof HttpError ? error.status : 404,
+        error instanceof Error ? error.message : "Workspace pilot-loop transcript could not be opened.",
         request
       );
     }

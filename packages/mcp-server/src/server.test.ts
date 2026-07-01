@@ -159,6 +159,8 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_workspace_hard_math_seed_list",
         "truth_harness_workspace_init",
         "truth_harness_workspace_pilot_loop",
+        "truth_harness_workspace_pilot_loop_list",
+        "truth_harness_workspace_pilot_loop_show",
         "truth_harness_workspace_repair",
         "truth_harness_workspace_review",
         "truth_harness_workspace_review_list",
@@ -515,7 +517,28 @@ describe("Truth Harness MCP server", () => {
       expect(workspacePilotLoopText).toContain("\"schemaVersion\": \"truth-harness.workspace-pilot-loop.v0\"");
       expect(workspacePilotLoopText).toContain("\"dryRun\": true");
       expect(workspacePilotLoopText).toContain("\"networkAccess\": \"none\"");
-      expect(workspacePilotLoopText).toContain("\"written\": true");
+      expect(workspacePilotLoopText).toContain('"written": true');
+      const workspacePilotLoopJson = JSON.parse(workspacePilotLoopText) as {
+        loop: { loopId: string };
+      };
+
+      const workspacePilotLoopList = await client.callTool({
+        name: "truth_harness_workspace_pilot_loop_list",
+        arguments: {}
+      });
+      const workspacePilotLoopListText = firstText(workspacePilotLoopList.content);
+      expect(workspacePilotLoopListText).toContain(workspacePilotLoopJson.loop.loopId);
+      expect(workspacePilotLoopListText).toContain('"schemaVersion": "truth-harness.workspace-pilot-loop.v0"');
+
+      const workspacePilotLoopShow = await client.callTool({
+        name: "truth_harness_workspace_pilot_loop_show",
+        arguments: {
+          loopRef: workspacePilotLoopJson.loop.loopId
+        }
+      });
+      expect(firstText(workspacePilotLoopShow.content)).toContain(
+        '"schemaVersion": "truth-harness.workspace-pilot-loop-inspection.v0"'
+      );
 
       const webUiReview = await client.callTool({
         name: "truth_harness_workspace_ui_review",

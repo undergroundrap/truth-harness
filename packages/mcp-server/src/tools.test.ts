@@ -104,6 +104,8 @@ import {
   handleTruthHarnessWorkspaceRunNextList,
   handleTruthHarnessWorkspaceRunNextShow,
   handleTruthHarnessWorkspacePilotLoop,
+  handleTruthHarnessWorkspacePilotLoopList,
+  handleTruthHarnessWorkspacePilotLoopShow,
   handleTruthHarnessWorkspaceUiReview,
   handleTruthHarnessWorkspaceUiReviewList,
   handleTruthHarnessWorkspaceSnapshot,
@@ -1560,6 +1562,31 @@ describe("MCP tool handlers", () => {
     expect(result.result.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
     expect(result.result.markdown).toContain("Truth Harness Pilot Loop");
     expect(result.run.runNextWrites.length).toBeGreaterThanOrEqual(1);
+
+    const savedLoops = await handleTruthHarnessWorkspacePilotLoopList({ limit: 5 });
+    expect(savedLoops).toMatchObject({
+      total: expect.any(Number),
+      limit: 5,
+      loops: [
+        expect.objectContaining({
+          loopId: result.loop.loopId,
+          path: expect.stringContaining(".truth-harness/findings/"),
+          markdownPath: expect.stringContaining(".truth-harness/findings/"),
+          status: result.loop.status,
+          source: result.loop.source
+        })
+      ]
+    });
+
+    const inspected = await handleTruthHarnessWorkspacePilotLoopShow({ loopRef: result.loop.loopId });
+    expect(inspected).toMatchObject({
+      schemaVersion: "truth-harness.workspace-pilot-loop-inspection.v0",
+      loop: {
+        loopId: result.loop.loopId,
+        schemaVersion: "truth-harness.workspace-pilot-loop.v0"
+      },
+      path: expect.stringContaining(".truth-harness/findings/")
+    });
   });
 
   it("can start a hard-problem harness and save the first agent handoff in one call", async () => {

@@ -10,10 +10,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createReceipt,
   initLocalWorkspace,
+  runWorkspacePilotLoop,
   verifierRouteStatementBoundaryHash,
   writeCredibilityBundle,
   writeClaimLedgerRecord,
   writeResearchSession,
+  writeWorkspacePilotLoopRecord,
   type EngineVerificationCommandRunner
 } from "../../../packages/core/src/index.js";
 
@@ -78,6 +80,8 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("workspace-run-next-list");
     expect(statusPayload.capabilities).toContain("workspace-run-next-show");
     expect(statusPayload.capabilities).toContain("workspace-pilot-loop-dry-run");
+    expect(statusPayload.capabilities).toContain("workspace-pilot-loop-list");
+    expect(statusPayload.capabilities).toContain("workspace-pilot-loop-show");
     expect(statusPayload.capabilities).toContain("workspace-maintenance");
     expect(statusPayload.capabilities).toContain("engine-evidence-verification");
     expect(statusPayload.capabilities).toContain("engine-readiness-report");
@@ -996,6 +1000,56 @@ describe("local web route ledger API", () => {
       resumeDecision: {
         action: expect.any(String),
         nextCommand: expect.stringContaining("truth-harness")
+      }
+    });
+
+    const savedPilotLoopRun = await runWorkspacePilotLoop({
+      rootPath: tempProjectRoot!,
+      source: "saved-run-next",
+      planRef: workspaceRunNextWritePayload.plan.planId,
+      maxSteps: 1
+    });
+    const savedPilotLoopWrite = await writeWorkspacePilotLoopRecord({
+      rootPath: tempProjectRoot!,
+      loop: savedPilotLoopRun.loop
+    });
+
+    const pilotLoopListResponse = await fetch(`${baseUrl}/api/workspace-pilot-loops?limit=5`);
+    expect(pilotLoopListResponse.status).toBe(200);
+    const pilotLoopListPayload = await pilotLoopListResponse.json();
+    expectLocalApiSuccess(pilotLoopListResponse, pilotLoopListPayload);
+    expect(pilotLoopListPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-pilot-loop-list-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      limit: 5
+    });
+    expect(pilotLoopListPayload.loops).toContainEqual(
+      expect.objectContaining({
+        loopId: savedPilotLoopWrite.loop.loopId,
+        path: expect.stringContaining(".truth-harness/findings/"),
+        markdownPath: expect.stringContaining(".truth-harness/findings/"),
+        source: "saved-run-next"
+      })
+    );
+
+    const pilotLoopShowResponse = await fetch(
+      `${baseUrl}/api/workspace-pilot-loops/${savedPilotLoopWrite.loop.loopId}`
+    );
+    expect(pilotLoopShowResponse.status).toBe(200);
+    const pilotLoopShowPayload = await pilotLoopShowResponse.json();
+    expectLocalApiSuccess(pilotLoopShowResponse, pilotLoopShowPayload);
+    expect(pilotLoopShowPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-pilot-loop-show-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      inspection: {
+        schemaVersion: "truth-harness.workspace-pilot-loop-inspection.v0",
+        loop: {
+          loopId: savedPilotLoopWrite.loop.loopId,
+          schemaVersion: "truth-harness.workspace-pilot-loop.v0"
+        },
+        path: expect.stringContaining(".truth-harness/findings/")
       }
     });
 

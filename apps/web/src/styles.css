@@ -4663,6 +4663,10 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   padding-top: 8px;
 }
 
+.workspace-pilot-loop-history {
+  border-top-color: rgba(122, 214, 170, 0.22);
+  background: #0e1110;
+}
 .workspace-run-next-history {
   display: grid;
   gap: 10px;

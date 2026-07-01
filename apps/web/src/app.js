@@ -227,6 +227,12 @@ let workspaceRunNextSaving = false;
 let workspacePilotLoop;
 let workspacePilotLoopError;
 let workspacePilotLoopSource = "credibility-actions";
+let workspacePilotLoopSummaries = [];
+let workspacePilotLoopSummariesError;
+let workspacePilotLoopSummariesLoading = false;
+let workspacePilotLoopSummariesLoadedAt = 0;
+let workspacePilotLoopOpenedInspection;
+let workspacePilotLoopOpenedError;
 let claimLedgerGraph = {
   schemaVersion: "truth-harness.claim-graph.v0",
   nodes: [],
@@ -514,6 +520,10 @@ const workspacePilotLoopDetails = document.querySelector("#workspace-pilot-loop-
 const workspacePilotLoopSteps = document.querySelector("#workspace-pilot-loop-steps");
 const refreshPilotLoopButton = document.querySelector("#refresh-pilot-loop");
 const copyPilotLoopCommandButton = document.querySelector("#copy-pilot-loop-command");
+const workspacePilotLoopHistoryTitle = document.querySelector("#workspace-pilot-loop-history-title");
+const workspacePilotLoopList = document.querySelector("#workspace-pilot-loop-list");
+const workspacePilotLoopInspection = document.querySelector("#workspace-pilot-loop-inspection");
+const refreshPilotLoopsButton = document.querySelector("#refresh-pilot-loops");
 const workspaceRunNextHistoryTitle = document.querySelector("#workspace-run-next-history-title");
 const workspaceRunNextList = document.querySelector("#workspace-run-next-list");
 const workspaceRunNextHistoryArtifactPreview = document.querySelector("#workspace-run-next-history-artifact-preview");
@@ -1222,6 +1232,7 @@ void refreshWorkspaceReview();
 void refreshLatestProfessorChallengeSeed({ announce: false });
 void refreshWorkspaceRunNext({ announce: false });
 void refreshWorkspacePilotLoop({ announce: false });
+void refreshWorkspacePilotLoops({ announce: false });
 void refreshWorkspaceRunNextHandoffs({ announce: false });
 void refreshWorkspaceGraph();
 void refreshCasChecks();
@@ -1303,6 +1314,7 @@ function render() {
   renderRunbook(receipt);
   renderWorkspaceRunNext();
   renderWorkspacePilotLoop();
+  renderWorkspacePilotLoops();
   renderWorkspaceRunNextHandoffs();
   renderVerificationMatrix(receipt);
   renderReviewerReadinessConsole();
@@ -6016,6 +6028,84 @@ async function refreshWorkspacePilotLoop({ announce = true, source = "credibilit
   }
 }
 
+function refreshWorkspacePilotLoopsIfStale({ maxAgeMs = 5000 } = {}) {
+  const neverLoaded = workspacePilotLoopSummariesLoadedAt === 0;
+  const stale = Date.now() - workspacePilotLoopSummariesLoadedAt > maxAgeMs;
+  if (!workspacePilotLoopSummariesLoading && (neverLoaded || stale)) {
+    void refreshWorkspacePilotLoops({ announce: false });
+  }
+}
+
+async function refreshWorkspacePilotLoops({ announce = true } = {}) {
+  if (!workspacePilotLoopList) {
+    return;
+  }
+  if (workspacePilotLoopSummariesLoading) {
+    return;
+  }
+
+  workspacePilotLoopSummariesLoading = true;
+  renderWorkspacePilotLoops();
+  try {
+    const params = new URLSearchParams({
+      limit: "6"
+    });
+    const response = await fetch(`/api/workspace-pilot-loops?${params.toString()}`, {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local saved pilot-loop API failed.");
+    workspacePilotLoopSummaries = Array.isArray(payload.loops) ? payload.loops : [];
+    workspacePilotLoopSummariesError = undefined;
+    workspacePilotLoopSummariesLoadedAt = Date.now();
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded saved pilot loops",
+        localApiSuccessMessage(payload, `${workspacePilotLoopSummaries.length} saved pilot-loop transcript${workspacePilotLoopSummaries.length === 1 ? "" : "s"} loaded.`),
+        "passed"
+      );
+    }
+  } catch (error) {
+    workspacePilotLoopSummaries = [];
+    workspacePilotLoopSummariesError = error instanceof Error ? error.message : "Unknown saved pilot-loop failure.";
+    workspacePilotLoopSummariesLoadedAt = Date.now();
+    addActivity("local-api", "Saved pilot loops unavailable", workspacePilotLoopSummariesError, "waiting");
+  } finally {
+    workspacePilotLoopSummariesLoading = false;
+    renderWorkspacePilotLoops();
+  }
+}
+
+async function openWorkspacePilotLoopTranscript(loopRef) {
+  const ref = String(loopRef ?? "").trim();
+  if (!ref) {
+    return;
+  }
+
+  workspacePilotLoopOpenedError = undefined;
+  addActivity("web-ui", "Opening saved pilot loop", `GET /api/workspace-pilot-loops/${ref}`, "waiting");
+  try {
+    const response = await fetch(`/api/workspace-pilot-loops/${encodeURIComponent(ref)}`, {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local saved pilot-loop inspection failed.");
+    workspacePilotLoopOpenedInspection = payload.inspection;
+    workspacePilotLoopError = undefined;
+    addActivity(
+      "local-api",
+      "Opened saved pilot loop",
+      localApiSuccessMessage(payload, `${ref} opened with ${payload.inspection?.loop?.steps?.length ?? 0} recorded step${payload.inspection?.loop?.steps?.length === 1 ? "" : "s"}.`),
+      workspacePilotLoopTrust(payload.inspection?.loop?.status)
+    );
+    render();
+  } catch (error) {
+    workspacePilotLoopOpenedError = error instanceof Error ? error.message : "Unknown saved pilot-loop inspection failure.";
+    renderWorkspacePilotLoops();
+    addActivity("local-api", "Open pilot loop failed", workspacePilotLoopOpenedError, "refuted");
+  }
+}
 function refreshWorkspaceRunNextHandoffsIfStale({ maxAgeMs = 5000 } = {}) {
   const neverLoaded = workspaceRunNextSummariesLoadedAt === 0;
   const stale = Date.now() - workspaceRunNextSummariesLoadedAt > maxAgeMs;
@@ -8379,14 +8469,18 @@ function renderWorkspacePilotLoopSteps(loop) {
     return;
   }
 
+  workspacePilotLoopSteps.innerHTML = workspacePilotLoopStepsHtml(loop, { limit: 3 });
+}
+
+function workspacePilotLoopStepsHtml(loop, { limit = 3 } = {}) {
   const steps = Array.isArray(loop?.steps) ? loop.steps : [];
   if (steps.length === 0) {
-    workspacePilotLoopSteps.innerHTML = `<div class="workspace-run-next-empty">No pilot-loop step selected yet. Start a validation-backed harness or refresh the reviewer queue to create a concrete blocker.</div>`;
-    return;
+    return `<div class="workspace-run-next-empty">No pilot-loop step selected yet. Start a validation-backed harness or refresh the reviewer queue to create a concrete blocker.</div>`;
   }
 
-  workspacePilotLoopSteps.innerHTML = steps
-    .slice(0, 3)
+  const visibleSteps = steps.slice(0, limit);
+  const hiddenCount = Math.max(0, steps.length - visibleSteps.length);
+  const cards = visibleSteps
     .map((step) => {
       const command = step.item?.command ?? step.execution?.command ?? "no command selected";
       const label = step.stopReason ?? step.execution?.kind ?? step.status ?? "planned";
@@ -8400,6 +8494,10 @@ function renderWorkspacePilotLoopSteps(loop) {
       </article>`;
     })
     .join("");
+  const hidden = hiddenCount > 0
+    ? `<div class="workspace-run-next-empty">${escapeHtml(`${hiddenCount} additional step${hiddenCount === 1 ? "" : "s"} hidden in this compact view.`)}</div>`
+    : "";
+  return `${cards}${hidden}`;
 }
 
 function renderWorkspaceRunNextIdleActions(plan) {
@@ -8947,6 +9045,120 @@ function workspacePilotLoopDetailsRows(loop) {
   ];
 }
 
+function renderWorkspacePilotLoops() {
+  if (!workspacePilotLoopHistoryTitle || !workspacePilotLoopList || !workspacePilotLoopInspection) {
+    return;
+  }
+
+  if (workspacePilotLoopSummariesError) {
+    workspacePilotLoopHistoryTitle.textContent = "Saved pilot loops unavailable.";
+    workspacePilotLoopList.innerHTML = `<div class="workspace-run-next-empty">${escapeHtml(workspacePilotLoopSummariesError)}</div>`;
+    workspacePilotLoopInspection.innerHTML = "";
+    return;
+  }
+
+  if (workspacePilotLoopSummariesLoading && workspacePilotLoopSummaries.length === 0) {
+    workspacePilotLoopHistoryTitle.textContent = "Loading saved pilot loops...";
+    workspacePilotLoopList.innerHTML = `<div class="workspace-run-next-empty">Loading local pilot-loop transcripts from .truth-harness/findings.</div>`;
+    workspacePilotLoopInspection.innerHTML = "";
+    return;
+  }
+
+  const count = workspacePilotLoopSummaries.length;
+  workspacePilotLoopHistoryTitle.textContent = count === 0
+    ? "No saved pilot-loop transcripts yet."
+    : `${count} saved pilot-loop transcript${count === 1 ? "" : "s"}.`;
+
+  if (count === 0) {
+    workspacePilotLoopList.innerHTML = `<div class="workspace-run-next-empty">Run the CLI/MCP pilot loop with --write after a validation-backed handoff to create an auditable transcript.</div>`;
+    workspacePilotLoopInspection.innerHTML = "";
+    return;
+  }
+
+  workspacePilotLoopList.innerHTML = workspacePilotLoopSummaries
+    .map((summary) => renderWorkspacePilotLoopSummary(summary))
+    .join("");
+  workspacePilotLoopInspection.innerHTML = workspacePilotLoopOpenedError
+    ? `<div class="workspace-run-next-empty refuted">${escapeHtml(workspacePilotLoopOpenedError)}</div>`
+    : renderWorkspacePilotLoopInspection(workspacePilotLoopOpenedInspection);
+}
+
+function renderWorkspacePilotLoopSummary(summary) {
+  const command = `truth-harness workspace show-pilot-loop ${summary.loopId} --json`;
+  const packetPathHtml = workspaceArtifactRefIsPreviewable(summary.path)
+    ? artifactRefControlHtml(summary.path, {
+        surface: "workspace-pilot-loop-history",
+        label: "Open JSON"
+      })
+    : escapeHtml(summary.path ?? "not recorded");
+  const markdownPathHtml = workspaceArtifactRefIsPreviewable(summary.markdownPath)
+    ? artifactRefControlHtml(summary.markdownPath, {
+        surface: "workspace-pilot-loop-history",
+        label: "Open Markdown"
+      })
+    : escapeHtml(summary.markdownPath ?? "not recorded");
+  return `<article class="workspace-run-next-row" data-loop-id="${escapeHtml(summary.loopId)}">
+    <div class="workspace-run-next-row-main">
+      <div class="workspace-run-next-row-head">
+        <span class="status-pill ${workspacePilotLoopTrust(summary.status)}">${escapeHtml(workspacePilotLoopStatusLabel(summary.status))}</span>
+        <strong>${escapeHtml(summary.firstItemTitle ?? summary.lastItemTitle ?? summary.stopReason ?? summary.loopId)}</strong>
+      </div>
+      <p>${escapeHtml(summary.stopReason ?? "bounded verifier-directed loop transcript")}</p>
+      <code>${escapeHtml(command)}</code>
+      <dl class="workspace-run-next-mini-details">
+        <div><dt>Loop</dt><dd>${escapeHtml(summary.loopId)}</dd></div>
+        <div><dt>Saved</dt><dd>${escapeHtml(formatActivityTime(summary.createdAt))}</dd></div>
+        <div><dt>Source</dt><dd>${escapeHtml(summary.source ?? "workspace-review")}</dd></div>
+        <div><dt>Steps</dt><dd>${escapeHtml(`${summary.plannedSteps ?? 0} planned / ${summary.executedSteps ?? 0} executed`)}</dd></div>
+        <div><dt>Evidence</dt><dd>${escapeHtml(String(Array.isArray(summary.evidenceRefs) ? summary.evidenceRefs.length : 0))}</dd></div>
+        <div><dt>Packet</dt><dd>${packetPathHtml}</dd></div>
+        <div><dt>Markdown</dt><dd>${markdownPathHtml}</dd></div>
+      </dl>
+    </div>
+    <div class="workspace-run-next-row-actions">
+      <button class="text-button compact-button open-pilot-loop-transcript" data-loop-id="${escapeHtml(summary.loopId)}" type="button">Open</button>
+      <button class="text-button compact-button copy-pilot-loop-transcript-command" data-command="${escapeHtml(command)}" type="button">Copy</button>
+    </div>
+  </article>`;
+}
+
+function renderWorkspacePilotLoopInspection(inspection) {
+  if (!inspection?.loop) {
+    return "";
+  }
+
+  const loop = inspection.loop;
+  const command = `truth-harness workspace show-pilot-loop ${loop.loopId} --json`;
+  const paths = [inspection.path, inspection.markdownPath].filter(Boolean);
+  return `<div class="workspace-run-next-opened">
+    <div class="workspace-run-next-opened-head">
+      <div>
+        <span class="mini-label">Opened pilot loop</span>
+        <strong>${escapeHtml(loop.loopId)}</strong>
+      </div>
+      <span class="status-pill ${workspacePilotLoopTrust(loop.status)}">${escapeHtml(workspacePilotLoopStatusLabel(loop.status))}</span>
+    </div>
+    <p>${escapeHtml(loop.stopReason ?? "Inspect the saved transcript before resuming autonomous work.")}</p>
+    <code>${escapeHtml(command)}</code>
+    <dl class="workspace-run-next-details compact">
+      <div><dt>Source</dt><dd>${escapeHtml(loop.source ?? "workspace-review")}</dd></div>
+      <div><dt>Boundary</dt><dd>${escapeHtml(loop.dryRun ? "Transcript was a dry-run preview." : "Transcript includes bounded local execution metadata.")}</dd></div>
+      <div><dt>Network</dt><dd>${escapeHtml(loop.networkAccess ?? "none")}</dd></div>
+      <div><dt>Steps</dt><dd>${escapeHtml(`${loop.summary?.plannedSteps ?? 0} planned / ${loop.summary?.executedSteps ?? 0} executed`)}</dd></div>
+      <div><dt>Evidence refs</dt><dd>${escapeHtml(loop.summary?.evidenceRefs?.join(", ") || "none")}</dd></div>
+      <div><dt>Packet</dt><dd>${artifactAwareValueHtml(inspection.path ?? "not recorded", "workspace-pilot-loop-inspection")}</dd></div>
+      <div><dt>Markdown</dt><dd>${artifactAwareValueHtml(inspection.markdownPath ?? "not recorded", "workspace-pilot-loop-inspection")}</dd></div>
+    </dl>
+    <div class="workspace-pilot-loop-steps">${workspacePilotLoopStepsHtml(loop, { limit: 6 })}</div>
+    ${workspaceArtifactPreviewHtml("workspace-pilot-loop-inspection", {
+      allowedPaths: paths,
+      emptyHtml: ""
+    })}
+    <div class="workspace-run-next-actions">
+      <button class="text-button compact-button copy-pilot-loop-transcript-command" data-command="${escapeHtml(command)}" type="button">Copy show command</button>
+    </div>
+  </div>`;
+}
 function renderWorkspaceRunNextHandoffs() {
   if (!workspaceRunNextHistoryTitle || !workspaceRunNextList || !workspaceRunNextInspection) {
     return;
@@ -10878,6 +11090,10 @@ function renderWorkspaceArtifactPreviewSurface(surface) {
   }
   if (surface === "workspace-run-next-history" || surface === "workspace-run-next-inspection") {
     renderWorkspaceRunNextHandoffs();
+    return;
+  }
+  if (surface === "workspace-pilot-loop-history" || surface === "workspace-pilot-loop-inspection") {
+    renderWorkspacePilotLoops();
     return;
   }
   if (surface === "report-drafts") {
@@ -15147,6 +15363,23 @@ async function copyWorkspacePilotLoopCommand() {
   });
 }
 
+async function copyWorkspacePilotLoopTranscriptCommand(command, button) {
+  const text = String(command ?? "").trim();
+  if (!text) {
+    return;
+  }
+
+  await copyOrDownloadText({
+    text: `${text}\n`,
+    filename: `truth-harness-pilot-loop-transcript-${safeFilenameTimestamp()}.txt`,
+    type: "text/plain",
+    button,
+    copiedTitle: "Copied pilot-loop command",
+    copiedDetail: "Saved pilot-loop transcript command copied for an agent or reviewer.",
+    fallbackTitle: "Downloaded pilot-loop command",
+    fallbackDetail: "Saved pilot-loop transcript command was saved as plain text instead."
+  });
+}
 async function copyWorkspaceRunNextHandoffCommand(command, button) {
   const text = String(command ?? "").trim();
   if (!text) {
@@ -18744,6 +18977,7 @@ surfaceTabs.forEach((button) => {
       requestVisualFit();
     }
     if (nextSurface === "runbook") {
+      refreshWorkspacePilotLoopsIfStale();
       refreshWorkspaceRunNextHandoffsIfStale();
     }
     if (nextSurface === "report" && !state.credibilityPack && !state.credibilityPackLoading) {
@@ -18926,6 +19160,37 @@ workspaceRunNextIdleActions?.addEventListener("click", (event) => {
   }
 });
 
+refreshPilotLoopsButton?.addEventListener("click", () => {
+  void refreshWorkspacePilotLoops({ announce: true });
+});
+
+workspacePilotLoopList?.addEventListener("click", (event) => {
+  if (event.target.closest(".open-workspace-artifact-preview")) {
+    return;
+  }
+
+  const openButton = event.target.closest(".open-pilot-loop-transcript");
+  if (openButton?.dataset.loopId) {
+    void openWorkspacePilotLoopTranscript(openButton.dataset.loopId);
+    return;
+  }
+
+  const copyButton = event.target.closest(".copy-pilot-loop-transcript-command");
+  if (copyButton?.dataset.command) {
+    void copyWorkspacePilotLoopTranscriptCommand(copyButton.dataset.command, copyButton);
+  }
+});
+
+workspacePilotLoopInspection?.addEventListener("click", (event) => {
+  if (event.target.closest(".open-workspace-artifact-preview")) {
+    return;
+  }
+
+  const copyButton = event.target.closest(".copy-pilot-loop-transcript-command");
+  if (copyButton?.dataset.command) {
+    void copyWorkspacePilotLoopTranscriptCommand(copyButton.dataset.command, copyButton);
+  }
+});
 refreshRunNextsButton?.addEventListener("click", () => {
   void refreshWorkspaceRunNextHandoffs({ announce: true });
 });

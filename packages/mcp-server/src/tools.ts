@@ -47,6 +47,7 @@ import {
   ingestLocalCorpus,
   initLocalWorkspace,
   addResearchSessionCheckpoint,
+  inspectWorkspacePilotLoopRecord,
   inspectWorkspaceRunNextPlan,
   listHardMathSeedWorkspaces,
   listClaimRecords,
@@ -72,6 +73,7 @@ import {
   listVerifierRoutes,
   listVisualArtifacts,
   listWorkspaceEvents,
+  listWorkspacePilotLoopRecords,
   listWorkspaceRunNextPlans,
   listWorkspaceReviews,
   listWorkspaceSnapshots,
@@ -270,7 +272,9 @@ import {
   type WorkspaceRunNextSummary,
   type WorkspaceRunNextWriteResult,
   type WorkspacePilotLoopRecord,
+  type WorkspacePilotLoopInspection,
   type WorkspacePilotLoopRunResult,
+  type WorkspacePilotLoopSummary,
   type WorkspacePilotLoopWriteResult,
   type WorkspaceReview,
   type WorkspaceReviewSummary,
@@ -759,6 +763,16 @@ export interface TruthHarnessWorkspacePilotLoopInput {
   requireDockerCore?: boolean;
   requireAllConcrete?: boolean;
   requireAllEngines?: boolean;
+}
+
+export interface TruthHarnessWorkspacePilotLoopListInput {
+  workspacePath?: string;
+  limit?: number;
+}
+
+export interface TruthHarnessWorkspacePilotLoopShowInput {
+  workspacePath?: string;
+  loopRef: string;
 }
 
 export interface TruthHarnessWorkspaceReviewListInput {
@@ -2157,6 +2171,27 @@ export async function handleTruthHarnessWorkspacePilotLoop(
   }
 
   return run;
+}
+
+export async function handleTruthHarnessWorkspacePilotLoopList(input: TruthHarnessWorkspacePilotLoopListInput): Promise<{
+  total: number;
+  limit?: number;
+  loops: WorkspacePilotLoopSummary[];
+}> {
+  const loops = await listWorkspacePilotLoopRecords(resolveWorkspaceRoot(input.workspacePath), {
+    limit: input.limit
+  });
+  return {
+    total: loops.length,
+    ...(input.limit ? { limit: input.limit } : {}),
+    loops
+  };
+}
+
+export async function handleTruthHarnessWorkspacePilotLoopShow(
+  input: TruthHarnessWorkspacePilotLoopShowInput
+): Promise<WorkspacePilotLoopInspection> {
+  return inspectWorkspacePilotLoopRecord(resolveWorkspaceRoot(input.workspacePath), input.loopRef);
 }
 
 export async function handleTruthHarnessWorkspaceReviewList(input: TruthHarnessWorkspaceReviewListInput): Promise<{
