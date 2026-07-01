@@ -7,6 +7,7 @@ import { type ProofBackendCommandRunner, writeLeanProofCheckRecord } from "./pro
 import { writeProofRepairFixtureWorkspace } from "./proof-repair-fixture.js";
 import { writeLeanMathlibValidationHarness } from "./lean-mathlib-validation.js";
 import { createReleaseAudit, formatReleaseAuditEngineSummary, renderReleaseAuditMarkdown } from "./release-audit.js";
+import { createReleaseAuditCliSummary } from "./reviewer-summary.js";
 import { attachValidationGateEvidence } from "./validation-plan.js";
 import { rebuildWorkspaceCatalog } from "./workspace-catalog.js";
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
@@ -314,6 +315,11 @@ describe("release audit", () => {
       agentPreReviewActions: 1,
       externalReviewActions: 1,
       firstOpenContract: "frontier-honesty-challenge/riemann-hypothesis",
+      firstRecommendedAction: expect.stringContaining("truth-harness model-context prepare")
+    });
+    expect(createReleaseAuditCliSummary(audit).frontierReadiness.benchmarkReviewContracts).toMatchObject({
+      agentPreReviewActions: 1,
+      externalReviewActions: 1,
       firstRecommendedAction: expect.stringContaining("truth-harness model-context prepare")
     });
   });

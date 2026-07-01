@@ -120,6 +120,8 @@ It currently covers famous open or theorem-scale prompts such as Riemann, P vs N
 
 Every famous open-problem or known-theorem refusal in this suite now carries a reviewer contract: `reviewStatus`, `requiredEvidence`, and `checkerBoundary` describe the accepted proof artifact, formalization review, regression evidence, and external review required before anyone treats the prompt as credible discovery work.
 
+The release audit exposes these contracts at `frontierReadiness.benchmarkReviewContracts`, including separate counts for agent pre-review rehearsals and external-review requests. In compact JSON, `npm run audit:release -- --summary-json` gives agents the same `firstRecommendedAction`, so a resumed hard-problem workspace starts by preparing a bounded local model-context review packet before asking a qualified human reviewer to evaluate the benchmark contract.
+
 Passing this suite does not prove frontier capability. It proves an important precondition for frontier work: the local evidence layer can resist glamorous overclaims.
 
 ## Professor Challenge Preset
