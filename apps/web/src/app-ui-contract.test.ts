@@ -864,6 +864,11 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function workspacePilotLoopDetailsRows(loop)");
     expect(source).toContain("copyWorkspacePilotLoopCommand");
     expect(source).toContain("function renderWorkspaceRunNextIdleActions(plan)");
+    expect(source).toContain("function renderWorkspaceRunNextIdleActionCard(action)");
+    expect(source).toContain("function workspaceRunNextIdleActionMetaHtml(action)");
+    expect(source).toContain("continue-latest-pilot-loop");
+    expect(source).toContain("resume recorded queue");
+    expect(source).toContain("Copy resume command");
     expect(source).toContain("function fallbackWorkspaceRunNextIdleActions(workspacePath)");
     expect(source).toContain("function workspaceRunNextDetailsRows(plan, command)");
     expect(source).toContain("function workspaceRunNextProofRepairRows(item)");
@@ -965,6 +970,8 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".workspace-run-next-safety-grid");
     expect(styles).toContain(".workspace-run-next-idle-actions");
     expect(styles).toContain(".workspace-run-next-idle-card");
+    expect(styles).toContain(".workspace-run-next-idle-card.resume");
+    expect(styles).toContain(".workspace-run-next-idle-meta");
     expect(styles).toContain(".workspace-run-next-history");
     expect(styles).toContain(".workspace-pilot-loop-history");
     expect(styles).toContain(".workspace-run-next-row");

@@ -8559,23 +8559,59 @@ function renderWorkspaceRunNextIdleActions(plan) {
 
   workspaceRunNextIdleActions.hidden = false;
   workspaceRunNextIdleActions.innerHTML = actions
-    .map((action) => {
-      const requiresHuman = action.requiresHumanInput ? "needs objective" : "local read only";
-      return `<article class="workspace-run-next-idle-card">
-        <div class="workspace-run-next-idle-head">
-          <span class="mini-label">${escapeHtml(action.actionId ?? "idle-action")}</span>
-          <span class="status-pill ${action.requiresHumanInput ? "waiting" : "passed"}">${escapeHtml(requiresHuman)}</span>
-        </div>
-        <strong>${escapeHtml(action.title ?? "Idle next action")}</strong>
-        <p>${escapeHtml(action.reason ?? "Use this when no workspace queue item is open.")}</p>
-        <code>${escapeHtml(action.command ?? "")}</code>
-        <div class="workspace-run-next-row-actions">
-          <button class="text-button compact-button copy-run-next-idle-command" type="button" data-command="${escapeHtml(action.command ?? "")}">Copy command</button>
-        </div>
-        <p class="workspace-run-next-boundary">${escapeHtml(action.boundary ?? "Local planning only; no browser execution.")}</p>
-      </article>`;
-    })
+    .map((action) => renderWorkspaceRunNextIdleActionCard(action))
     .join("");
+}
+
+function renderWorkspaceRunNextIdleActionCard(action) {
+  const actionId = action?.actionId ?? "idle-action";
+  const isResumeAction = actionId === "continue-latest-pilot-loop";
+  const requiresHuman = isResumeAction
+    ? "resume recorded queue"
+    : action?.requiresHumanInput
+      ? "needs objective"
+      : "local read only";
+  const cardClass = isResumeAction ? "workspace-run-next-idle-card resume" : "workspace-run-next-idle-card";
+  const copyLabel = isResumeAction ? "Copy resume command" : "Copy command";
+
+  return `<article class="${cardClass}">
+    <div class="workspace-run-next-idle-head">
+      <span class="mini-label">${escapeHtml(actionId)}</span>
+      <span class="status-pill ${action?.requiresHumanInput ? "waiting" : "passed"}">${escapeHtml(requiresHuman)}</span>
+    </div>
+    <strong>${escapeHtml(action?.title ?? "Idle next action")}</strong>
+    <p>${escapeHtml(action?.reason ?? "Use this when no workspace queue item is open.")}</p>
+    ${workspaceRunNextIdleActionMetaHtml(action)}
+    <code>${escapeHtml(action?.command ?? "")}</code>
+    <div class="workspace-run-next-row-actions">
+      <button class="text-button compact-button copy-run-next-idle-command" type="button" data-command="${escapeHtml(action?.command ?? "")}">${escapeHtml(copyLabel)}</button>
+    </div>
+    <p class="workspace-run-next-boundary">${escapeHtml(action?.boundary ?? "Local planning only; no browser execution.")}</p>
+  </article>`;
+}
+
+function workspaceRunNextIdleActionMetaHtml(action) {
+  if (action?.actionId !== "continue-latest-pilot-loop") {
+    return "";
+  }
+
+  const reason = String(action.reason ?? "");
+  const loopId = reason.match(/transcript\s+([a-z0-9_]+)/iu)?.[1];
+  const handoff = reason.match(/handoff\s+(.+?)\s+at step/iu)?.[1];
+  const step = reason.match(/at step\s+([0-9]+)/iu)?.[1];
+  const rows = [
+    ["Loop", loopId],
+    ["Saved handoff", handoff],
+    ["Step", step ? `step ${step}` : undefined]
+  ].filter((row) => row[1]);
+
+  if (rows.length === 0) {
+    return "";
+  }
+
+  return `<dl class="workspace-run-next-idle-meta">
+    ${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${artifactAwareValueHtml(value, "workspace-run-next")}</dd></div>`).join("")}
+  </dl>`;
 }
 
 function workspaceRunNextIdleActionsForUi(plan) {

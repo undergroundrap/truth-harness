@@ -4634,6 +4634,47 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   background: #12110f;
   padding: 10px;
 }
+.workspace-run-next-idle-card.resume {
+  grid-column: 1 / -1;
+  border-color: rgba(122, 214, 170, 0.42);
+  background: linear-gradient(180deg, rgba(28, 55, 40, 0.42), rgba(15, 17, 15, 0.94));
+}
+
+.workspace-run-next-idle-card.resume code {
+  min-height: 0;
+}
+
+.workspace-run-next-idle-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.workspace-run-next-idle-meta div {
+  min-width: 0;
+  border: 1px solid rgba(239, 232, 218, 0.09);
+  border-radius: 7px;
+  background: rgba(8, 8, 8, 0.36);
+  padding: 8px;
+}
+
+.workspace-run-next-idle-meta dt {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.workspace-run-next-idle-meta dd {
+  margin: 0;
+  min-width: 0;
+  color: #efe8da;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
 
 .workspace-run-next-idle-head {
   display: flex;
