@@ -109,6 +109,36 @@ describe("benchmark CLI", () => {
     expect(leanStep?.limitation).toContain(`Saved reviewer Docker evidence ${savedRun.record.runId} covers this capability`);
     expect(plan.nextActions.join("\n")).toContain(`Saved reviewer Docker evidence ${savedRun.record.runId} previously covered`);
     expect(humanResult.stdout).toContain(`Saved reviewer evidence: Saved strict all-engine Docker reviewer run ${savedRun.record.runId}`);
+
+    const packSummaryResult = await runCli([
+      "workspace",
+      "credibility-pack",
+      root,
+      "--dry-run",
+      "--summary-json",
+      "--require-all-engines",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--z3-command",
+      "truth-harness-missing-z3-command",
+      "--cvc5-command",
+      "truth-harness-missing-cvc5-command",
+      "--lean-command",
+      "truth-harness-missing-lean-command",
+      "--sage-command",
+      "truth-harness-missing-sage-command",
+      "--timeout-ms",
+      "50"
+    ]);
+    const packSummary = JSON.parse(packSummaryResult.stdout) as {
+      engine: { hostProbeStatus: string; effectiveStatus: string; latestStrictRunStatus: string; strongestSavedLevel: string };
+    };
+
+    expect(packSummaryResult.exitCode).toBe(0);
+    expect(packSummary.engine.hostProbeStatus).toBe("failed");
+    expect(packSummary.engine.effectiveStatus).toBe("satisfied-by-saved-strict-docker-evidence");
+    expect(packSummary.engine.latestStrictRunStatus).toBe("passed");
+    expect(packSummary.engine.strongestSavedLevel).toBe("engine-level-5-strict-all-engines");
   });
 
   it("writes and reopens visual artifacts from the CLI", async () => {
@@ -3270,7 +3300,7 @@ describe("benchmark CLI", () => {
       schemaVersion: string;
       status: string;
       professorReady: boolean;
-      engine: { status: string; savedRuns: number };
+      engine: { status: string; hostProbeStatus: string; effectiveStatus: string; savedRuns: number };
       reviewerActions: { total: number; next: unknown[] };
       written: boolean;
       artifacts?: unknown;
@@ -3283,6 +3313,8 @@ describe("benchmark CLI", () => {
     expect(packSummaryJson.status).toBe("blocked");
     expect(packSummaryJson.professorReady).toBe(false);
     expect(packSummaryJson.engine.status).toBe("failed");
+    expect(packSummaryJson.engine.hostProbeStatus).toBe("failed");
+    expect(packSummaryJson.engine.effectiveStatus).toBe("failed");
     expect(packSummaryJson.reviewerActions.total).toBeGreaterThan(0);
     expect(packSummaryJson.written).toBe(false);
     expect(packSummaryJson).not.toHaveProperty("embeddedSnapshot");

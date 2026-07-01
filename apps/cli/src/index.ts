@@ -7646,6 +7646,11 @@ function toReleaseAuditCheckCliSummary(check: ReleaseAudit["checks"][number]): u
 }
 
 function createCredibilityPackCliSummary(pack: CredibilityPack, writeResult?: CredibilityPackWriteResult): unknown {
+  const effectiveEngineStatus = pack.summary.latestStrictEngineRunStatus === "passed"
+    && pack.summary.savedEngineLadderLevel === "engine-level-5-strict-all-engines"
+    ? "satisfied-by-saved-strict-docker-evidence"
+    : pack.summary.engineStatus;
+
   return {
     schemaVersion: "truth-harness.credibility-pack-summary.v0",
     packId: pack.packId,
@@ -7661,6 +7666,8 @@ function createCredibilityPackCliSummary(pack: CredibilityPack, writeResult?: Cr
     validation: pack.validation,
     engine: {
       status: pack.summary.engineStatus,
+      hostProbeStatus: pack.summary.engineStatus,
+      effectiveStatus: effectiveEngineStatus,
       concreteGates: pack.summary.concreteEngineGates,
       requiredGates: pack.summary.requiredEngineGates,
       evidenceMinted: pack.summary.engineEvidenceMinted,
