@@ -103,6 +103,7 @@ import {
   handleTruthHarnessWorkspaceRunNext,
   handleTruthHarnessWorkspaceRunNextList,
   handleTruthHarnessWorkspaceRunNextShow,
+  handleTruthHarnessWorkspaceResumeIndex,
   handleTruthHarnessWorkspacePilotLoop,
   handleTruthHarnessWorkspacePilotLoopContinue,
   handleTruthHarnessWorkspacePilotLoopList,
@@ -1372,6 +1373,30 @@ describe("MCP tool handlers", () => {
       }
     });
     expect(executed.warnings.join(" ")).toContain("never executes shell strings");
+    const refreshedWrittenRunNext = await handleTruthHarnessWorkspaceRunNext({
+      maxRoutes: 0,
+      maxSessions: 0,
+      write: true
+    });
+    if (!("written" in refreshedWrittenRunNext)) {
+      throw new Error("Expected refreshed written run-next MCP output.");
+    }
+    const resumeIndex = await handleTruthHarnessWorkspaceResumeIndex({ limit: 6 });
+    expect(resumeIndex).toMatchObject({
+      schemaVersion: "truth-harness.workspace-resume-index.v0",
+      localOnly: true,
+      networkAccess: "none",
+      summary: {
+        safeSavedRunNextHandoffs: expect.any(Number),
+        savedRunNextHandoffs: expect.any(Number)
+      }
+    });
+    expect(resumeIndex.summary.safeSavedRunNextHandoffs).toBeGreaterThanOrEqual(1);
+    expect(resumeIndex.items[0]).toMatchObject({
+      kind: "saved-run-next",
+      safeToResume: true
+    });
+    expect(resumeIndex.warnings).toContainEqual(expect.stringContaining("navigation only"));
   });
 
   it("prioritizes linked validation gates for agent run-next calls", async () => {

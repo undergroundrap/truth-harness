@@ -2512,6 +2512,56 @@ describe("benchmark CLI", () => {
     expect(pilotLoopHumanList.stdout).toContain("Latest markdown: .truth-harness/findings/");
     expect(pilotLoopHumanList.stdout).toContain("Continue: truth-harness workspace continue-pilot-loop");
     expect(pilotLoopHumanList.stdout).toContain("Open latest handoff: truth-harness workspace show-run-next .truth-harness/findings/");
+    const refreshedWrittenDryRun = await runCli([
+      "workspace",
+      "run-next",
+      root,
+      "--max-routes",
+      "0",
+      "--max-sessions",
+      "0",
+      "--write",
+      "--json"
+    ]);
+    expect(refreshedWrittenDryRun.exitCode).toBe(0);
+    const resumeIndex = await runCli(["workspace", "resume-index", root, "--json"]);
+    const resumeIndexPayload = JSON.parse(resumeIndex.stdout) as {
+      schemaVersion: string;
+      summary: {
+        safeSavedRunNextHandoffs: number;
+        savedRunNextHandoffs: number;
+        pilotLoopTranscripts: number;
+        openReviewItems: number;
+      };
+      items: Array<{
+        kind: string;
+        command: string;
+        safeToResume?: boolean;
+        source: { ref: string };
+      }>;
+      warnings: string[];
+    };
+    const resumeIndexHuman = await runCli(["workspace", "resume-index", root]);
+    expect(resumeIndex.exitCode).toBe(0);
+    expect(resumeIndexPayload.schemaVersion).toBe("truth-harness.workspace-resume-index.v0");
+    expect(resumeIndexPayload.summary.safeSavedRunNextHandoffs).toBeGreaterThanOrEqual(1);
+    expect(resumeIndexPayload.summary.savedRunNextHandoffs).toBeGreaterThanOrEqual(1);
+    expect(resumeIndexPayload.summary.pilotLoopTranscripts).toBeGreaterThanOrEqual(1);
+    expect(resumeIndexPayload.items[0]).toMatchObject({
+      kind: "saved-run-next",
+      safeToResume: true
+    });
+    expect(resumeIndexPayload.items).toContainEqual(
+      expect.objectContaining({
+        kind: "pilot-loop-transcript",
+        command: expect.stringContaining("continue-pilot-loop")
+      })
+    );
+    expect(resumeIndexPayload.warnings).toContainEqual(expect.stringContaining("navigation only"));
+    expect(resumeIndexHuman.exitCode).toBe(0);
+    expect(resumeIndexHuman.stdout).toContain("Truth Harness workspace resume index");
+    expect(resumeIndexHuman.stdout).toContain("saved-run-next");
+    expect(resumeIndexHuman.stdout).toContain("Safe to resume: yes");
     const shownPilotLoop = await runCli([
       "workspace",
       "show-pilot-loop",

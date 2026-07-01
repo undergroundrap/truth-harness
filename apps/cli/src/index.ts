@@ -144,6 +144,7 @@ import {
   createWorkspaceRunNextPlan,
   continueWorkspacePilotLoopRecord,
   createWorkspaceGraph,
+  createWorkspaceResumeIndex,
   formatCredibilityPackEngineEvidenceSummary,
   formatCredibilityPackSavedEngineRunLedgerLabel,
   formatReleaseAuditEngineSummary,
@@ -215,6 +216,7 @@ import {
   type WorkspaceCatalogSearchResult,
   type WorkspaceCatalogStatus,
   type WorkspaceEventListResult,
+  type WorkspaceResumeIndex,
   type CodeRunSummary,
   type EngineManifest,
   type EnginePlan,
@@ -4270,6 +4272,45 @@ workspace
     printWorkspaceRunNextList(plans);
   });
 
+workspace
+  .command("resume-index")
+  .description("Rank saved handoffs, pilot loops, review blockers, and engine gates for agent resume.")
+  .argument("[path]", "Project root path", ".")
+  .option("--json", "Print the full workspace resume index JSON")
+  .option("--limit <count>", "Maximum ranked resume items to print", parsePositiveInteger, 12)
+  .option("--run-next-limit <count>", "Maximum saved run-next handoffs to inspect", parsePositiveInteger, 8)
+  .option("--pilot-loop-limit <count>", "Maximum saved pilot-loop transcripts to inspect", parsePositiveInteger, 5)
+  .option("--review-limit <count>", "Maximum current workspace review items to include", parsePositiveInteger, 5)
+  .option("--no-verify-snapshots", "Skip source revision/snapshot verification while listing saved handoffs")
+  .action(
+    async (
+      path: string,
+      options: {
+        json?: boolean;
+        limit: number;
+        runNextLimit: number;
+        pilotLoopLimit: number;
+        reviewLimit: number;
+        verifySnapshots?: boolean;
+      }
+    ) => {
+      const index = await createWorkspaceResumeIndex({
+        rootPath: path,
+        limit: options.limit,
+        runNextLimit: options.runNextLimit,
+        pilotLoopLimit: options.pilotLoopLimit,
+        reviewLimit: options.reviewLimit,
+        verifySnapshots: options.verifySnapshots
+      });
+
+      if (options.json) {
+        printJson(index);
+        return;
+      }
+
+      printWorkspaceResumeIndex(index);
+    }
+  );
 workspace
   .command("show-run-next")
   .description("Show a persisted workspace run-next plan by plan id or workspace-local JSON path.")
@@ -9025,6 +9066,49 @@ function printWorkspaceRunNextList(plans: WorkspaceRunNextSummary[]): void {
   }
 }
 
+function printWorkspaceResumeIndex(index: WorkspaceResumeIndex): void {
+  console.log("Truth Harness workspace resume index");
+  console.log(`Workspace: ${index.workspacePath}`);
+  console.log(
+    `Items: ${index.summary.totalItems} ranked; saved handoffs: ${index.summary.safeSavedRunNextHandoffs}/${index.summary.savedRunNextHandoffs} safe; review blockers: ${index.summary.openReviewItems}; pilot loops: ${index.summary.pilotLoopTranscripts}; engine gates: ${index.summary.blockedEngineGates}`
+  );
+
+  if (index.items.length === 0) {
+    console.log("");
+    console.log("No resume items found. Start with `truth-harness workspace run-next . --write` or `truth-harness research harness <objective> --plan-next`.");
+  }
+
+  for (const item of index.items) {
+    console.log("");
+    console.log(`${item.rank}. ${item.priority.toUpperCase()} ${item.kind}: ${item.title}`);
+    console.log(`  ${item.summary}`);
+    console.log(`  Command: ${item.command}`);
+    console.log(`  Why: ${item.reason}`);
+    console.log(`  Evidence: ${item.evidenceRequired}`);
+    console.log(`  Boundary: ${item.boundary}`);
+    console.log(`  Source: ${item.source.label} ${item.source.ref}`);
+    if (typeof item.safeToResume === "boolean") {
+      console.log(`  Safe to resume: ${item.safeToResume ? "yes" : "no"}`);
+    }
+    if (typeof item.requiresHumanInput === "boolean") {
+      console.log(`  Human input: ${item.requiresHumanInput ? "yes" : "no"}`);
+    }
+    if (item.refs && item.refs.length > 0) {
+      console.log(`  Refs: ${item.refs.slice(0, 3).join(", ")}`);
+      if (item.refs.length > 3) {
+        console.log(`    ... ${item.refs.length - 3} more`);
+      }
+    }
+  }
+
+  if (index.warnings.length > 0) {
+    console.log("");
+    console.log("Resume boundary:");
+    for (const warning of index.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
 function printWorkspaceGraph(graph: WorkspaceGraph): void {
   console.log("Truth Harness workspace graph");
   console.log(`Project: ${graph.projectId}`);

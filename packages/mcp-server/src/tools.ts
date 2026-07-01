@@ -34,6 +34,7 @@ import {
   createWorkspaceRunNextPlan,
   continueWorkspacePilotLoopRecord,
   createWorkspaceGraph,
+  createWorkspaceResumeIndex,
   createSymbolicCasCheckRecord,
   createEngineReadinessReport,
   getCasBackendStatus,
@@ -272,6 +273,7 @@ import {
   type WorkspaceRunNextPlan,
   type WorkspaceRunNextSummary,
   type WorkspaceRunNextWriteResult,
+  type WorkspaceResumeIndex,
   type WorkspacePilotLoopRecord,
   type WorkspacePilotLoopInspection,
   type WorkspacePilotLoopRunResult,
@@ -735,6 +737,15 @@ export interface TruthHarnessWorkspaceRunNextShowInput {
   workspacePath?: string;
   planRef: string;
   verifySnapshot?: boolean;
+}
+
+export interface TruthHarnessWorkspaceResumeIndexInput {
+  workspacePath?: string;
+  verifySnapshots?: boolean;
+  limit?: number;
+  runNextLimit?: number;
+  pilotLoopLimit?: number;
+  reviewLimit?: number;
 }
 
 export interface TruthHarnessWorkspacePilotLoopInput {
@@ -2142,6 +2153,19 @@ export async function handleTruthHarnessWorkspaceRunNextShow(
   }
 
   return readWorkspaceRunNextPlan(rootPath, input.planRef);
+}
+
+export async function handleTruthHarnessWorkspaceResumeIndex(
+  input: TruthHarnessWorkspaceResumeIndexInput
+): Promise<WorkspaceResumeIndex> {
+  return createWorkspaceResumeIndex({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    verifySnapshots: input.verifySnapshots,
+    limit: input.limit,
+    runNextLimit: input.runNextLimit,
+    pilotLoopLimit: input.pilotLoopLimit,
+    reviewLimit: input.reviewLimit
+  });
 }
 
 export async function handleTruthHarnessWorkspacePilotLoop(

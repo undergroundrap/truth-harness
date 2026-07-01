@@ -241,6 +241,7 @@ export {
   renderWorkspaceReviewMarkdown,
   writeWorkspaceReview
 } from "./workspace-review.js";
+export { createWorkspaceResumeIndex } from "./workspace-resume-index.js";
 export {
   createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlanFromSavedHandoff,
@@ -307,6 +308,13 @@ export {
   ReportDraftError,
   writeReportDraft
 } from "./report-draft.js";
+export type {
+  WorkspaceResumeIndex,
+  WorkspaceResumeIndexInput,
+  WorkspaceResumeIndexItem,
+  WorkspaceResumeIndexItemKind,
+  WorkspaceResumeIndexPriority
+} from "./workspace-resume-index.js";
 export type {
   WorkspaceRunNextPlan,
   WorkspaceRunNextInspection,

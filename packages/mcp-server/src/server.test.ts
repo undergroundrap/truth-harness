@@ -163,6 +163,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_workspace_pilot_loop_list",
         "truth_harness_workspace_pilot_loop_show",
         "truth_harness_workspace_repair",
+        "truth_harness_workspace_resume_index",
         "truth_harness_workspace_review",
         "truth_harness_workspace_review_list",
         "truth_harness_workspace_review_show",

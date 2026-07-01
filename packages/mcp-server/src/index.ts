@@ -97,6 +97,7 @@ import {
   handleTruthHarnessWorkspaceRunNext,
   handleTruthHarnessWorkspaceRunNextList,
   handleTruthHarnessWorkspaceRunNextShow,
+  handleTruthHarnessWorkspaceResumeIndex,
   handleTruthHarnessWorkspacePilotLoop,
   handleTruthHarnessWorkspacePilotLoopContinue,
   handleTruthHarnessWorkspacePilotLoopList,
@@ -1716,6 +1717,44 @@ export function createTruthHarnessMcpServer(): McpServer {
     },
     async ({ workspacePath, planRef, verifySnapshot }) =>
       toolJson(await handleTruthHarnessWorkspaceRunNextShow({ workspacePath, planRef, verifySnapshot }))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_resume_index",
+    {
+      title: "Rank Workspace Resume Queue",
+      description:
+        "Return a read-only ranked resume queue across verified saved run-next handoffs, current workspace blockers, saved pilot-loop transcripts, and blocked engine-readiness gates.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        verifySnapshots: z
+          .boolean()
+          .optional()
+          .describe("When true, verify saved run-next source revisions/snapshots before ranking. Defaults to true in core."),
+        limit: z.number().int().positive().max(50).optional().describe("Maximum ranked resume items to return."),
+        runNextLimit: z.number().int().positive().max(50).optional().describe("Maximum saved run-next handoffs to inspect."),
+        pilotLoopLimit: z.number().int().positive().max(50).optional().describe("Maximum saved pilot-loop transcripts to inspect."),
+        reviewLimit: z.number().int().positive().max(50).optional().describe("Maximum current workspace review items to include.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async ({ workspacePath, verifySnapshots, limit, runNextLimit, pilotLoopLimit, reviewLimit }) =>
+      toolJson(
+        await handleTruthHarnessWorkspaceResumeIndex({
+          workspacePath,
+          verifySnapshots,
+          limit,
+          runNextLimit,
+          pilotLoopLimit,
+          reviewLimit
+        })
+      )
   );
 
   server.registerTool(
