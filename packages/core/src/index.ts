@@ -253,6 +253,10 @@ export {
   writeWorkspaceRunNextPlan
 } from "./workspace-run-next.js";
 export {
+  inspectWorkspacePilotLoopRecord,
+  listWorkspacePilotLoopRecords,
+  parseWorkspacePilotLoopJson,
+  readWorkspacePilotLoopRecord,
   renderWorkspacePilotLoopMarkdown,
   runWorkspacePilotLoop,
   writeWorkspacePilotLoopRecord
@@ -317,11 +321,14 @@ export type {
 } from "./workspace-run-next.js";
 export type {
   WorkspacePilotLoopInput,
+  WorkspacePilotLoopInspection,
+  WorkspacePilotLoopListOptions,
   WorkspacePilotLoopRecord,
   WorkspacePilotLoopRunResult,
   WorkspacePilotLoopSource,
   WorkspacePilotLoopStatus,
   WorkspacePilotLoopStep,
+  WorkspacePilotLoopSummary,
   WorkspacePilotLoopWriteResult
 } from "./workspace-pilot-loop.js";
 export type {

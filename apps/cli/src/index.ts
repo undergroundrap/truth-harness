@@ -75,6 +75,7 @@ import {
   isValidationPlanDomain,
   inspectLeanProject,
   inspectWorkspaceRunNextPlan,
+  inspectWorkspacePilotLoopRecord,
   listHardMathSeedWorkspaces,
   listBenchmarkArtifacts,
   listSymbolicCasChecks,
@@ -101,6 +102,7 @@ import {
   listVisualArtifacts,
   listLocalWorkspaceArchives,
   listWorkspaceEvents,
+  listWorkspacePilotLoopRecords,
   listWorkspaceRunNextPlans,
   listWorkspaceReviews,
   listWorkspaceRevisions,
@@ -339,6 +341,7 @@ import {
   type WorkspaceRunNextPlan,
   type WorkspaceRunNextSummary,
   type WorkspacePilotLoopRecord,
+  type WorkspacePilotLoopSummary,
   type WorkspacePilotLoopWriteResult,
   type WorkspaceReview,
   type WorkspaceReviewSummary,
@@ -4143,6 +4146,48 @@ workspace
       }
     }
   );
+
+workspace
+  .command("pilot-loops")
+  .description("List persisted workspace pilot-loop transcripts.")
+  .argument("[path]", "Project root path", ".")
+  .option("--limit <count>", "Maximum saved pilot-loop transcripts to list", parsePositiveInteger, 25)
+  .option("--json", "Print the full workspace pilot-loop list JSON")
+  .action(async (path: string, options: { limit: number; json?: boolean }) => {
+    const loops = await listWorkspacePilotLoopRecords(path, {
+      limit: options.limit
+    });
+
+    if (options.json) {
+      printJson({ total: loops.length, limit: options.limit, loops });
+      return;
+    }
+
+    printWorkspacePilotLoopList(loops);
+  });
+
+workspace
+  .command("show-pilot-loop")
+  .description("Show a persisted workspace pilot-loop transcript by loop id or workspace-local JSON path.")
+  .argument("<loop>", "Loop id such as wpl_<hash> or workspace-local JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--json", "Print the full workspace pilot-loop inspection JSON")
+  .action(async (loopRef: string, options: { workspace: string; json?: boolean }) => {
+    const inspection = await inspectWorkspacePilotLoopRecord(options.workspace, loopRef);
+
+    if (options.json) {
+      printJson(inspection);
+      return;
+    }
+
+    printWorkspacePilotLoop(inspection.loop, undefined);
+    console.log("");
+    console.log("Transcript:");
+    console.log(`  JSON: ${inspection.path}`);
+    if (inspection.markdownPath) {
+      console.log(`  Markdown: ${inspection.markdownPath}`);
+    }
+  });
 
 workspace
   .command("run-nexts")
@@ -8509,6 +8554,48 @@ function printWorkspacePilotLoop(
     console.log("Written:");
     console.log(`  JSON: ${writeResult.jsonPath}`);
     console.log(`  Markdown: ${writeResult.markdownPath}`);
+  }
+}
+
+function printWorkspacePilotLoopList(loops: WorkspacePilotLoopSummary[]): void {
+  console.log(`Truth Harness workspace pilot-loop transcripts: ${loops.length}`);
+
+  for (const loop of loops) {
+    console.log("");
+    console.log(`${loop.loopId} ${loop.createdAt}`);
+    console.log(`  Path: ${loop.path}`);
+    if (loop.markdownPath) {
+      console.log(`  Markdown: ${loop.markdownPath}`);
+    }
+    console.log(`  Source: ${loop.source}`);
+    console.log(`  Status: ${loop.status} (${loop.stopReason})`);
+    console.log(`  Dry run: ${String(loop.dryRun)}`);
+    console.log(`  Steps: ${loop.executedSteps} executed / ${loop.plannedSteps} planned, ${loop.blockedSteps} blocked`);
+    if (loop.firstItemTitle) {
+      console.log(`  First item: ${loop.firstItemTitle}`);
+    }
+    if (loop.firstCommand) {
+      console.log(`  First command: ${loop.firstCommand}`);
+    }
+    if (loop.lastItemTitle && loop.lastItemTitle !== loop.firstItemTitle) {
+      console.log(`  Last item: ${loop.lastItemTitle}`);
+    }
+    if (loop.lastExecutionKind) {
+      console.log(`  Last execution: ${loop.lastExecutionKind}`);
+    }
+    if (loop.enginePlanStatuses.length > 0) {
+      console.log(`  Engine plan statuses: ${loop.enginePlanStatuses.join(", ")}`);
+    }
+    if (loop.evidenceRefs.length > 0) {
+      console.log(`  Evidence refs: ${loop.evidenceRefs.length}`);
+      for (const ref of loop.evidenceRefs.slice(0, 3)) {
+        console.log(`    ${ref}`);
+      }
+      if (loop.evidenceRefs.length > 3) {
+        console.log(`    ... ${loop.evidenceRefs.length - 3} more`);
+      }
+    }
+    console.log(`  Show: truth-harness workspace show-pilot-loop ${loop.loopId} --workspace .`);
   }
 }
 

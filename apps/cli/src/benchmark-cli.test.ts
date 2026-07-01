@@ -2427,11 +2427,13 @@ describe("benchmark CLI", () => {
       "saved-run-next",
       "--plan-ref",
       writtenDryRunPayload.plan.planId,
+      "--write",
       "--json"
     ]);
     const savedPilotLoopPayload = JSON.parse(savedPilotLoop.stdout) as {
       loop: {
         schemaVersion: string;
+        loopId: string;
         source: string;
         dryRun: boolean;
         status: string;
@@ -2443,6 +2445,8 @@ describe("benchmark CLI", () => {
         }>;
       };
       runNextWrites: unknown[];
+      written?: boolean;
+      result?: { jsonPath: string; markdownPath: string };
     };
     expect(savedPilotLoop.exitCode).toBe(0);
     expect(savedPilotLoopPayload.loop).toMatchObject({
@@ -2464,7 +2468,62 @@ describe("benchmark CLI", () => {
     expect(savedPilotLoopPayload.loop.warnings).toContainEqual(
       expect.stringContaining(`resumed ${writtenDryRunPayload.plan.planId}`)
     );
-    expect(savedPilotLoopPayload.runNextWrites).toEqual([]);
+    expect(savedPilotLoopPayload.written).toBe(true);
+    expect(savedPilotLoopPayload.result?.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(savedPilotLoopPayload.result?.markdownPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
+    expect(savedPilotLoopPayload.runNextWrites).toHaveLength(1);
+    const pilotLoopList = await runCli(["workspace", "pilot-loops", root, "--json"]);
+    const pilotLoopListPayload = JSON.parse(pilotLoopList.stdout) as {
+      total: number;
+      loops: Array<{
+        loopId: string;
+        path: string;
+        markdownPath?: string;
+        source: string;
+        status: string;
+        stopReason: string;
+        firstCommand?: string;
+      }>;
+    };
+    const listedPilotLoop = pilotLoopListPayload.loops.find(
+      (loop) => loop.loopId === savedPilotLoopPayload.loop.loopId
+    );
+    expect(pilotLoopList.exitCode).toBe(0);
+    expect(listedPilotLoop).toMatchObject({
+      loopId: savedPilotLoopPayload.loop.loopId,
+      path: expect.stringContaining(".truth-harness/findings/"),
+      markdownPath: expect.stringContaining(".truth-harness/findings/"),
+      source: "saved-run-next",
+      status: "stopped",
+      stopReason: "dry-run",
+      firstCommand: expect.any(String)
+    });
+    const pilotLoopHumanList = await runCli(["workspace", "pilot-loops", root]);
+    expect(pilotLoopHumanList.stdout).toContain("Truth Harness workspace pilot-loop transcripts");
+    expect(pilotLoopHumanList.stdout).toContain(savedPilotLoopPayload.loop.loopId);
+    const shownPilotLoop = await runCli([
+      "workspace",
+      "show-pilot-loop",
+      savedPilotLoopPayload.loop.loopId,
+      "--workspace",
+      root,
+      "--json"
+    ]);
+    expect(JSON.parse(shownPilotLoop.stdout)).toMatchObject({
+      schemaVersion: "truth-harness.workspace-pilot-loop-inspection.v0",
+      loop: {
+        loopId: savedPilotLoopPayload.loop.loopId
+      }
+    });
+    const shownPilotLoopHuman = await runCli([
+      "workspace",
+      "show-pilot-loop",
+      savedPilotLoopPayload.loop.loopId,
+      "--workspace",
+      root
+    ]);
+    expect(shownPilotLoopHuman.stdout).toContain("Truth Harness workspace pilot-loop");
+    expect(shownPilotLoopHuman.stdout).toContain("Transcript:");
     expect(human.stdout).toContain("Truth Harness workspace run-next");
     expect(human.stdout).toContain("Plan:");
     expect(human.stdout).toContain("Dry run: true");

@@ -14,6 +14,9 @@ import { listValidationPlans } from "./validation-plan.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createWorkspaceRunNextPlan, writeWorkspaceRunNextPlan } from "./workspace-run-next.js";
 import {
+  inspectWorkspacePilotLoopRecord,
+  listWorkspacePilotLoopRecords,
+  readWorkspacePilotLoopRecord,
   runWorkspacePilotLoop,
   writeWorkspacePilotLoopRecord
 } from "./workspace-pilot-loop.js";
@@ -119,6 +122,34 @@ describe("workspace pilot-loop", () => {
       loopId: result.loop.loopId
     });
 
+    const loops = await listWorkspacePilotLoopRecords(root);
+    const listedLoop = loops[0];
+    expect(listedLoop).toMatchObject({
+      loopId: result.loop.loopId,
+      path: expect.stringContaining(".truth-harness/findings/"),
+      markdownPath: expect.stringContaining(".truth-harness/findings/"),
+      status: result.loop.status,
+      source: "workspace-review",
+      dryRun: false,
+      plannedSteps: result.loop.summary.plannedSteps,
+      executedSteps: result.loop.summary.executedSteps,
+      firstCommand: expect.stringContaining("truth-harness"),
+      enginePlanStatuses: expect.arrayContaining([expect.any(String)])
+    });
+    if (!listedLoop) {
+      throw new Error("Expected a saved pilot-loop transcript summary.");
+    }
+    const inspected = await inspectWorkspacePilotLoopRecord(root, result.loop.loopId);
+    expect(inspected).toMatchObject({
+      schemaVersion: "truth-harness.workspace-pilot-loop-inspection.v0",
+      path: listedLoop.path,
+      markdownPath: listedLoop.markdownPath,
+      loop: {
+        loopId: result.loop.loopId
+      }
+    });
+    const readByPath = await readWorkspacePilotLoopRecord(root, listedLoop.path);
+    expect(readByPath.loopId).toBe(result.loop.loopId);
     const plans = await listValidationPlans(root);
     const validationPlan = plans.find((candidate) => candidate.planId === harness.validationPlan?.plan.planId);
     expect(validationPlan?.gates.find((gate) => gate.kind === "proof")).toMatchObject({

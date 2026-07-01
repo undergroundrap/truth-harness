@@ -1,5 +1,5 @@
-import { mkdir } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { mkdir, readFile, readdir } from "node:fs/promises";
+import { join, relative, resolve, sep } from "node:path";
 import { createCredibilityPack } from "./credibility-pack.js";
 import type { EngineVerificationRequirements } from "./engine-verification.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
@@ -122,6 +122,43 @@ export interface WorkspacePilotLoopWriteResult {
   jsonPath: string;
   markdownPath: string;
   markdown: string;
+}
+
+export interface WorkspacePilotLoopListOptions {
+  limit?: number;
+}
+
+export interface WorkspacePilotLoopSummary {
+  schemaVersion: typeof WORKSPACE_PILOT_LOOP_SCHEMA_VERSION;
+  loopId: string;
+  createdAt: string;
+  completedAt: string;
+  path: string;
+  markdownPath?: string;
+  localOnly: true;
+  networkAccess: "none";
+  dryRun: boolean;
+  source: WorkspacePilotLoopSource;
+  maxSteps: number;
+  status: WorkspacePilotLoopStatus;
+  stopReason: string;
+  plannedSteps: number;
+  executedSteps: number;
+  blockedSteps: number;
+  attachedEvidenceSteps: number;
+  evidenceRefs: string[];
+  firstItemTitle?: string;
+  firstCommand?: string;
+  lastItemTitle?: string;
+  lastExecutionKind?: string;
+  enginePlanStatuses: string[];
+}
+
+export interface WorkspacePilotLoopInspection {
+  schemaVersion: "truth-harness.workspace-pilot-loop-inspection.v0";
+  loop: WorkspacePilotLoopRecord;
+  path: string;
+  markdownPath?: string;
 }
 
 export async function runWorkspacePilotLoop(input: WorkspacePilotLoopInput): Promise<WorkspacePilotLoopRunResult> {
@@ -441,6 +478,124 @@ export async function writeWorkspacePilotLoopRecord(input: {
   };
 }
 
+export async function listWorkspacePilotLoopRecords(
+  rootPath: string,
+  options: WorkspacePilotLoopListOptions = {}
+): Promise<WorkspacePilotLoopSummary[]> {
+  const status = await requirePilotLoopWorkspace(rootPath);
+  const findingsDir = resolve(status.root, status.manifest.directories.findings);
+
+  let files: string[];
+  try {
+    files = await readdir(findingsDir);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const candidates = (
+    await Promise.all(
+      files
+        .filter((file) => file.endsWith(".json"))
+        .map(async (file) => {
+          const path = join(findingsDir, file);
+          const loop = tryParseWorkspacePilotLoopJson(await readFile(path, "utf8"));
+          if (!loop) {
+            return undefined;
+          }
+          return {
+            loop,
+            portablePath: toPortablePath(relative(status.root, path))
+          };
+        })
+    )
+  )
+    .filter((candidate): candidate is { loop: WorkspacePilotLoopRecord; portablePath: string } => candidate !== undefined)
+    .sort((left, right) => right.loop.createdAt.localeCompare(left.loop.createdAt));
+
+  const selectedCandidates = typeof options.limit === "number" ? candidates.slice(0, options.limit) : candidates;
+  return selectedCandidates.map(({ loop, portablePath }) => summarizeWorkspacePilotLoopRecord(loop, portablePath));
+}
+
+export async function readWorkspacePilotLoopRecord(rootPath: string, loopRef: string): Promise<WorkspacePilotLoopRecord> {
+  const status = await requirePilotLoopWorkspace(rootPath);
+  return (await readWorkspacePilotLoopRecordWithPath(status, loopRef)).loop;
+}
+
+export async function inspectWorkspacePilotLoopRecord(
+  rootPath: string,
+  loopRef: string
+): Promise<WorkspacePilotLoopInspection> {
+  const status = await requirePilotLoopWorkspace(rootPath);
+  const { loop, path } = await readWorkspacePilotLoopRecordWithPath(status, loopRef);
+  return {
+    schemaVersion: "truth-harness.workspace-pilot-loop-inspection.v0",
+    loop,
+    path,
+    ...(markdownPathForJsonPath(path) ? { markdownPath: markdownPathForJsonPath(path) } : {})
+  };
+}
+
+export function parseWorkspacePilotLoopJson(raw: string): WorkspacePilotLoopRecord {
+  const loop = JSON.parse(raw) as WorkspacePilotLoopRecord;
+  if (loop.schemaVersion !== WORKSPACE_PILOT_LOOP_SCHEMA_VERSION) {
+    throw new Error(`Unsupported workspace pilot-loop schema: ${JSON.stringify(loop.schemaVersion)}`);
+  }
+  if (!isWorkspacePilotLoopId(loop.loopId)) {
+    throw new Error(`Invalid workspace pilot-loop id: ${JSON.stringify(loop.loopId)}`);
+  }
+  if (loop.localOnly !== true || loop.networkAccess !== "none") {
+    throw new Error("Workspace pilot-loop records must be local-only with networkAccess none.");
+  }
+
+  return loop;
+}
+
+async function readWorkspacePilotLoopRecordWithPath(
+  status: LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> },
+  loopRef: string
+): Promise<{ loop: WorkspacePilotLoopRecord; path: string }> {
+  const ref = requireText(loopRef, "Workspace pilot-loop ref is required.");
+
+  if (isWorkspacePilotLoopId(ref)) {
+    const findingsDir = resolve(status.root, status.manifest.directories.findings);
+    let files: string[];
+    try {
+      files = await readdir(findingsDir);
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code === "ENOENT") {
+        throw new Error(`Workspace pilot-loop record not found: ${ref}`);
+      }
+
+      throw error;
+    }
+
+    for (const file of files.filter((candidate) => candidate.endsWith(".json"))) {
+      const path = join(findingsDir, file);
+      const loop = tryParseWorkspacePilotLoopJson(await readFile(path, "utf8"));
+      if (loop?.loopId === ref) {
+        return {
+          loop,
+          path: toPortablePath(relative(status.root, path))
+        };
+      }
+    }
+
+    throw new Error(`Workspace pilot-loop record not found: ${ref}`);
+  }
+
+  const path = resolveUnderRoot(status.root, ref);
+  return {
+    loop: parseWorkspacePilotLoopJson(await readFile(path, "utf8")),
+    path: toPortablePath(relative(status.root, path))
+  };
+}
+
 export function renderWorkspacePilotLoopMarkdown(loop: WorkspacePilotLoopRecord): string {
   const lines = [
     "# Truth Harness Pilot Loop",
@@ -658,6 +813,78 @@ function workspacePilotLoopId(createdAt: string, rootPath: string, source: Works
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
   return `wpl_${hash.toString(16).padStart(8, "0")}`;
+}
+
+function summarizeWorkspacePilotLoopRecord(loop: WorkspacePilotLoopRecord, path: string): WorkspacePilotLoopSummary {
+  const firstStep = loop.steps[0];
+  const lastStep = loop.steps.at(-1);
+
+  return {
+    schemaVersion: loop.schemaVersion,
+    loopId: loop.loopId,
+    createdAt: loop.createdAt,
+    completedAt: loop.completedAt,
+    path,
+    ...(markdownPathForJsonPath(path) ? { markdownPath: markdownPathForJsonPath(path) } : {}),
+    localOnly: loop.localOnly,
+    networkAccess: loop.networkAccess,
+    dryRun: loop.dryRun,
+    source: loop.source,
+    maxSteps: loop.maxSteps,
+    status: loop.status,
+    stopReason: loop.stopReason,
+    plannedSteps: loop.summary.plannedSteps,
+    executedSteps: loop.summary.executedSteps,
+    blockedSteps: loop.summary.blockedSteps,
+    attachedEvidenceSteps: loop.summary.attachedEvidenceSteps,
+    evidenceRefs: loop.summary.evidenceRefs,
+    firstItemTitle: firstStep?.item?.title,
+    firstCommand: firstStep?.item?.command ?? firstStep?.execution.command,
+    lastItemTitle: lastStep?.item?.title,
+    lastExecutionKind: lastStep?.execution.kind,
+    enginePlanStatuses: uniqueStrings(loop.steps.flatMap((step) => (step.enginePlan ? [step.enginePlan.status] : [])))
+  };
+}
+
+function tryParseWorkspacePilotLoopJson(raw: string): WorkspacePilotLoopRecord | undefined {
+  try {
+    return parseWorkspacePilotLoopJson(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+function markdownPathForJsonPath(path: string): string | undefined {
+  return path.endsWith(".json") ? `${path.slice(0, -5)}.md` : undefined;
+}
+
+function resolveUnderRoot(rootPath: string, path: string): string {
+  const root = resolve(rootPath);
+  const target = resolve(root, path);
+  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
+
+  if (target !== root && !target.startsWith(rootWithSep)) {
+    throw new Error(`Workspace pilot-loop path escapes workspace root: ${JSON.stringify(path)}`);
+  }
+
+  return target;
+}
+
+function requireText(value: string | undefined, message: string): string {
+  const normalized = value?.trim();
+  if (!normalized) {
+    throw new Error(message);
+  }
+
+  return normalized;
+}
+
+function isWorkspacePilotLoopId(value: string): boolean {
+  return /^wpl_[a-f0-9]{8}$/u.test(value);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 function toPortablePath(value: string): string {
