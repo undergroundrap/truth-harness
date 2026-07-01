@@ -100,6 +100,20 @@ npm run docker:smt-closure
 
 These commands write `truth-harness.hard-math-closure.v0` reports under `.truth-harness/findings/`. They are deliberately narrower than a general solver: exact closure must earn `exact-computed`, symbolic closure must earn `cross-checked`, and SMT closure must earn `smt-checked` for their seeded fixtures. A passing closure report proves the harness closed that scoped validation gate; it does not prove unrelated math claims.
 
+## Public Problem Probes
+
+Use public probes when you want to test Truth Harness against recognizable external problems before claiming broader math capability:
+
+```bash
+npm run demo:public-probes
+npm run docker:public-probes
+truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --write --fail-on-failures
+```
+
+The suite starts with a Project Euler 1 style bounded computation: sum the multiples of 3 or 5 below 1000. Truth Harness now earns `exact-computed` only by writing a finite multiple-sum certificate with inclusion-exclusion terms for 3, 5, and 15; a near-miss stated answer is `refuted`. This is the pattern for growth: import a public bounded problem, see whether the harness can produce a receipt, and if it cannot, add a narrow verifier adapter or honestly mark the gap.
+
+Passing this suite does not show competition-math breadth. It shows the harness can convert at least one externally recognizable prompt into replayable local arithmetic evidence instead of answer-memory.
+
 ## Frontier Honesty Challenge
 
 Run this suite when you want a reviewer-facing check that Truth Harness refuses to fake solutions to famous hard problems while still handling nearby supported claims:

@@ -61,6 +61,13 @@ interface BoundedIntegerSolutionClaim {
   };
 }
 
+interface FiniteMultipleSumClaim {
+  source: string;
+  divisors: bigint[];
+  limitExclusive: bigint;
+  statedSum?: bigint;
+}
+
 export interface CreateReceiptOptions {
   maximaCommand?: string;
   casRunner?: CasBackendCommandRunner;
@@ -200,6 +207,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const finiteMultipleSum = parseFiniteMultipleSumClaim(normalizedProblem);
+  if (finiteMultipleSum) {
+    return completeFiniteMultipleSumReceipt({
+      problem,
+      normalizedProblem,
+      claim: finiteMultipleSum,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const arithmeticSource = parseArithmeticPrompt(normalizedProblem);
   if (arithmeticSource) {
     return completeArithmeticReceipt({
@@ -224,7 +246,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -1587,6 +1609,119 @@ function completeBoundedIntegerSolutionReceipt(args: {
   });
 }
 
+function completeFiniteMultipleSumReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: FiniteMultipleSumClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = finiteMultipleSumCertificate(args.claim);
+  const hasStatedSum = args.claim.statedSum !== undefined;
+  const statedMatches = !hasStatedSum || certificate.result === args.claim.statedSum?.toString();
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const artifact = addArtifact(args.artifacts, {
+    kind: "finite-multiple-sum-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-finite-sum-inclusion-exclusion",
+      source: args.claim.source,
+      divisors: certificate.divisors,
+      limitExclusive: certificate.limitExclusive,
+      statedSum: certificate.statedSum
+    },
+    trust,
+    summary: hasStatedSum
+      ? statedMatches
+        ? "Finite multiple-sum claim matched exact inclusion-exclusion."
+        : "Finite multiple-sum claim disagreed with exact inclusion-exclusion."
+      : "Finite multiple-sum problem parsed into an exact bounded computation.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedSum ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-finite-sum-inclusion-exclusion",
+      domain: "positive integers",
+      divisors: certificate.divisors,
+      limitExclusive: certificate.limitExclusive,
+      exactArithmetic: true
+    },
+    trust,
+    summary: `Computed unique multiples below ${certificate.limitExclusive} by exact inclusion-exclusion across ${certificate.divisors.join(", ")}.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact finite multiple-sum result is ${certificate.result}.`
+      : `Exact finite multiple-sum result is ${certificate.result}, not ${certificate.statedSum}.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The bounded finite sum was computed by exact inclusion-exclusion over explicitly stated divisors and upper bound. This earns exact-computed, not proved."
+      : "The stated finite sum is refuted by exact inclusion-exclusion over the explicitly stated bounded domain."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact finite multiple-sum result: ${certificate.result}.`
+      : `Refuted finite multiple-sum claim: exact result is ${certificate.result}, stated ${certificate.statedSum}.`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-finite-sum-inclusion-exclusion",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedSum
+        ? [
+            `result=${certificate.result}`,
+            `stated=${certificate.statedSum}`,
+            statedMatches ? "finite-sum=passed" : "finite-sum=failed"
+          ]
+        : [`result=${certificate.result}`, "finite-sum=computed"],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only computes explicit positive-integer multiple sums below a finite positive bound.",
+        "The computation uses inclusion-exclusion over the stated divisors; it is not a proof of arbitrary surrounding word problems."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
+
 function completeArithmeticReceipt(args: {
   problem: string;
   normalizedProblem: string;
@@ -1933,6 +2068,141 @@ function maxBigint(current: bigint | undefined, candidate: bigint): bigint {
 
 function minBigint(current: bigint | undefined, candidate: bigint): bigint {
   return current === undefined || candidate < current ? candidate : current;
+}
+
+function parseFiniteMultipleSumClaim(problem: string): FiniteMultipleSumClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/^(?:please\s+)?(?:find|compute|calculate|evaluate)\s+/iu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/\.$/u, "");
+  const match = /^(?:the\s+)?sum of (?:all\s+)?(?:the\s+)?multiples of (?<divisors>\d+(?:\s*(?:,|or|and)\s*\d+)*) below (?<limit>\d+)(?:\s*=\s*(?<stated>-?\d+))?$/iu.exec(candidate);
+  const divisorText = match?.groups?.divisors;
+  const limitText = match?.groups?.limit;
+  if (!divisorText || !limitText) {
+    return undefined;
+  }
+
+  const divisors = uniqueSortedBigints(
+    divisorText
+      .split(/\s*(?:,|or|and)\s*/iu)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => BigInt(part))
+  );
+  const limitExclusive = BigInt(limitText);
+  if (limitExclusive <= 0n || divisors.length === 0 || divisors.length > 8 || divisors.some((divisor) => divisor <= 0n)) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    divisors,
+    limitExclusive,
+    statedSum: match.groups?.stated === undefined ? undefined : BigInt(match.groups.stated)
+  };
+}
+
+function finiteMultipleSumCertificate(claim: FiniteMultipleSumClaim): {
+  schemaVersion: "truth-harness.finite-multiple-sum.v0";
+  adapter: "local-finite-sum-inclusion-exclusion";
+  source: string;
+  domain: "positive integers";
+  divisors: string[];
+  limitExclusive: string;
+  statedSum?: string;
+  result: string;
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  inclusionExclusion: Array<{
+    subset: string[];
+    sign: "+" | "-";
+    lcm: string;
+    count: string;
+    sum: string;
+    signedContribution: string;
+  }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const terms = inclusionExclusionTerms(claim.divisors, claim.limitExclusive);
+  const result = terms.reduce((total, term) => total + term.signedContribution, 0n);
+  const resultText = result.toString();
+  const statedText = claim.statedSum?.toString();
+  const matches = statedText === undefined || statedText === resultText;
+  return {
+    schemaVersion: "truth-harness.finite-multiple-sum.v0",
+    adapter: "local-finite-sum-inclusion-exclusion",
+    source: claim.source,
+    domain: "positive integers",
+    divisors: claim.divisors.map((divisor) => divisor.toString()),
+    limitExclusive: claim.limitExclusive.toString(),
+    statedSum: statedText,
+    result: resultText,
+    checks: [
+      {
+        id: "finite-domain",
+        ok: true,
+        expected: "positive integers below an explicit finite bound",
+        observed: `n in [1, ${claim.limitExclusive - 1n}]`
+      },
+      {
+        id: "inclusion-exclusion-result",
+        ok: matches,
+        expected: resultText,
+        observed: statedText ?? resultText
+      }
+    ],
+    inclusionExclusion: terms.map((term) => ({
+      subset: term.subset.map((divisor) => divisor.toString()),
+      sign: term.sign,
+      lcm: term.lcm.toString(),
+      count: term.count.toString(),
+      sum: term.sum.toString(),
+      signedContribution: term.signedContribution.toString()
+    })),
+    trace: terms.map((term) => {
+      const prefix = term.sign === "+" ? "add" : "subtract";
+      return `${prefix} sum of multiples of lcm(${term.subset.join(",")})=${term.lcm} below ${claim.limitExclusive}: count=${term.count}, sum=${term.sum}.`;
+    }),
+    verdict: statedText === undefined ? "computed" : matches ? "accepted" : "refuted"
+  };
+}
+
+function inclusionExclusionTerms(divisors: bigint[], limitExclusive: bigint): Array<{
+  subset: bigint[];
+  sign: "+" | "-";
+  lcm: bigint;
+  count: bigint;
+  sum: bigint;
+  signedContribution: bigint;
+}> {
+  const terms: Array<{
+    subset: bigint[];
+    sign: "+" | "-";
+    lcm: bigint;
+    count: bigint;
+    sum: bigint;
+    signedContribution: bigint;
+  }> = [];
+  const totalSubsets = 1 << divisors.length;
+  for (let mask = 1; mask < totalSubsets; mask += 1) {
+    const subset = divisors.filter((_, index) => (mask & (1 << index)) !== 0);
+    const subsetLcm = subset.reduce((current, divisor) => lcm(current, divisor));
+    const count = (limitExclusive - 1n) / subsetLcm;
+    const sum = subsetLcm * count * (count + 1n) / 2n;
+    const sign: "+" | "-" = subset.length % 2 === 1 ? "+" : "-";
+    terms.push({
+      subset,
+      sign,
+      lcm: subsetLcm,
+      count,
+      sum,
+      signedContribution: sign === "+" ? sum : -sum
+    });
+  }
+  return terms;
 }
 
 function parseArithmeticPrompt(problem: string): string | undefined {

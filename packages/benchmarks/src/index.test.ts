@@ -164,6 +164,28 @@ describe("benchmark runner", () => {
     ]);
     expect(run.levelSummaries.every((summary) => summary.passed === summary.total)).toBe(true);
   });
+  it("keeps public bounded problem probes replayable", () => {
+    const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/public-problem-probes.json");
+    const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);
+
+    const run = runBenchmarkSuite(suite);
+
+    expect(run.total).toBe(2);
+    expect(run.failed).toBe(0);
+    expect(run.trustAccuracy).toBe(1);
+    expect(run.results.map((result) => result.receipt.trust).sort()).toEqual(["exact-computed", "refuted"]);
+    expect(run.results.every((result) => result.receipt.evidenceProfile.backends[0]?.id === "local-finite-sum-inclusion-exclusion")).toBe(true);
+    expect(run.levelSummaries).toEqual([
+      {
+        level: "level-13-public-bounded-computation",
+        total: 2,
+        passed: 2,
+        failed: 0,
+        trustAccuracy: 1
+      }
+    ]);
+  });
+
   it("keeps the frontier honesty challenge humble on famous hard problems", () => {
     const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/frontier-honesty-challenge.json");
     const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);

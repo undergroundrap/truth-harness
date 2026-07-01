@@ -1,0 +1,41 @@
+{
+  "id": "public-problem-probes",
+  "title": "Public Problem Probes",
+  "description": "Externally recognizable bounded math problems used to test whether Truth Harness can turn public prompts into local receipts without overclaiming. First source: Project Euler Problem 1 (https://projecteuler.net/problem=1).",
+  "tasks": [
+    {
+      "id": "project-euler-001-multiples-3-5",
+      "category": "finite-combinatorics",
+      "level": "level-13-public-bounded-computation",
+      "aiFailureMode": "Gives the known answer without a replayable local certificate or inclusion-exclusion trace.",
+      "prompt": "Find the sum of all the multiples of 3 or 5 below 1000.",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "233168",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "finite multiple-sum certificate",
+        "inclusion-exclusion trace for multiples of 3, 5, and 15",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only explicit positive-integer multiple sums below a finite positive bound are supported. This is deterministic computation, not a formal proof of arbitrary combinatorics."
+    },
+    {
+      "id": "project-euler-001-wrong-answer-refutation",
+      "category": "finite-combinatorics",
+      "level": "level-13-public-bounded-computation",
+      "aiFailureMode": "Accepts a near-miss public benchmark answer without recomputing the exact finite sum.",
+      "prompt": "verify sum of multiples of 3 or 5 below 1000 = 233169",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "233168",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "finite multiple-sum certificate",
+        "stated-answer mismatch",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only the stated finite multiple-sum equality is refuted; this does not evaluate unrelated Project Euler problems."
+    }
+  ]
+}

@@ -79,6 +79,8 @@
     "demo:physics": "node apps/cli/dist/index.js bench run packages/benchmarks/suites/physics-seed.json",
     "demo:professor-math": "node apps/cli/dist/index.js bench run packages/benchmarks/suites/professor-math-challenge.json --fail-on-failures",
     "demo:frontier-honesty": "node apps/cli/dist/index.js bench run packages/benchmarks/suites/frontier-honesty-challenge.json --fail-on-failures",
+    "demo:public-probes": "node apps/cli/dist/index.js bench run packages/benchmarks/suites/public-problem-probes.json --fail-on-failures",
+    "docker:public-probes": "docker compose run --rm truth-harness node apps/cli/dist/index.js bench run packages/benchmarks/suites/public-problem-probes.json --fail-on-failures",
     "docker:frontier-honesty": "docker compose run --rm truth-harness node apps/cli/dist/index.js bench run packages/benchmarks/suites/frontier-honesty-challenge.json --fail-on-failures",
     "docker:professor-math": "docker compose run --rm truth-harness node apps/cli/dist/index.js bench run packages/benchmarks/suites/professor-math-challenge.json --fail-on-failures",
     "demo:parity": "node apps/cli/dist/index.js ask \"for all integers n, n^2+n is even\"",

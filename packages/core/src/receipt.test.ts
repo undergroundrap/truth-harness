@@ -124,6 +124,45 @@ describe("createReceipt", () => {
     expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
   });
 
+  it("computes Project Euler style finite multiple sums exactly", () => {
+    const receipt = createReceipt("Find the sum of all the multiples of 3 or 5 below 1000.");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("233168");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-finite-sum-inclusion-exclusion");
+    expect(receipt.evidenceProfile.outputs).toEqual(expect.arrayContaining(["result=233168", "finite-sum=computed"]));
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("positive-integer multiple sums");
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "finite-multiple-sum-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      result?: string;
+      verdict?: string;
+      inclusionExclusion?: Array<{ lcm?: string; sum?: string; signedContribution?: string }>;
+    };
+    expect(payload.result).toBe("233168");
+    expect(payload.verdict).toBe("computed");
+    expect(payload.inclusionExclusion).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ lcm: "3", sum: "166833", signedContribution: "166833" }),
+        expect.objectContaining({ lcm: "5", sum: "99500", signedContribution: "99500" }),
+        expect.objectContaining({ lcm: "15", sum: "33165", signedContribution: "-33165" })
+      ])
+    );
+  });
+
+  it("refutes stated finite multiple sums when the exact inclusion-exclusion result disagrees", () => {
+    const receipt = createReceipt("verify sum of multiples of 3 or 5 below 1000 = 233169");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("233168");
+    expect(receipt.summary).toContain("233169");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["result=233168", "stated=233169", "finite-sum=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+  });
+
   it("marks MVP receipts as local-only with no external disclosure", () => {
     const receipt = createReceipt("compute 2 + 2");
 
