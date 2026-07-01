@@ -28,6 +28,16 @@ import {
   type SymbolicCasBackendId
 } from "./cas-backend.js";
 import { createEnginePlan, type CreateEnginePlanOptions, type EnginePlan } from "./engine-plan.js";
+import {
+  isExpertReviewKind,
+  isExpertReviewOutcome,
+  isExpertReviewStatus,
+  writeExpertReview,
+  type ExpertReviewEvidenceRef,
+  type ExpertReviewKind,
+  type ExpertReviewOutcome,
+  type ExpertReviewStatus
+} from "./expert-review.js";
 import { writeEngineVerificationRun, type EngineVerificationRequirements } from "./engine-verification.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
@@ -2079,6 +2089,56 @@ async function executeWorkspaceRunNextItem(
   const timeoutMs = parseOptionalPositiveIntegerOption(options["timeout-ms"], 3000);
 
   try {
+    if (group === "review" && action === "log") {
+      const subject = positionalArgsBeforeFirstOption(rest).join(" ").trim();
+      if (!subject) {
+        return {
+          status: "blocked",
+          kind: "expert-review",
+          command: item.command,
+          summary: "Expert-review run-next actions must include a review subject."
+        };
+      }
+      const reviewerRole = optionString(options["reviewer-role"]);
+      if (!reviewerRole) {
+        return {
+          status: "blocked",
+          kind: "expert-review",
+          command: item.command,
+          summary: "Expert-review run-next actions must include --reviewer-role so the human review boundary is explicit."
+        };
+      }
+
+      const result = await writeExpertReview({
+        rootPath: workspace,
+        title: optionString(options.title),
+        subject,
+        question: optionString(options.question),
+        kind: parseRunNextExpertReviewKind(optionString(options.kind)),
+        status: parseRunNextExpertReviewStatus(optionString(options.status)),
+        reviewerRole,
+        reviewerNameOrOrg: optionString(options.reviewer),
+        reviewerCredentials: optionString(options.credentials),
+        conflictDisclosure: optionString(options.conflict),
+        evidenceRefs: commandOptionValues(parsed.args, "evidence").map(parseRunNextExpertReviewEvidenceRef),
+        findings: commandOptionValues(parsed.args, "finding"),
+        limitations: commandOptionValues(parsed.args, "limitation"),
+        recommendations: commandOptionValues(parsed.args, "recommendation"),
+        requiredNextChecks: commandOptionValues(parsed.args, "next-check"),
+        outcomeStatus: parseRunNextExpertReviewOutcome(optionString(options.outcome)),
+        outcomeSummary: optionString(options.summary)
+      });
+      const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
+      return {
+        status: "executed",
+        kind: "expert-review",
+        command: item.command,
+        evidenceRef: `review:${evidenceRef}`,
+        attached: false,
+        summary: `Wrote expert review request ${result.review.reviewId} with status ${result.review.status}.`,
+        result: result.review
+      };
+    }
     if (group === "verify") {
       const problem = positionalArgsBeforeFirstOption([action, ...rest]).join(" ").trim();
       if (!problem) {
@@ -3231,6 +3291,23 @@ function commandOptionMap(args: string[]): Record<string, string | true> {
   return options;
 }
 
+function commandOptionValues(args: string[], optionName: string): string[] {
+  const values: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    if (token !== `--${optionName}`) {
+      continue;
+    }
+    const next = args[index + 1];
+    if (!next || next.startsWith("--")) {
+      continue;
+    }
+    values.push(next);
+    index += 1;
+  }
+  return values;
+}
+
 function positionalArgsBeforeFirstOption(args: Array<string | undefined>): string[] {
   const positional: string[] = [];
   for (const token of args) {
@@ -3362,6 +3439,80 @@ function isRunNextClaimEvidenceKind(value: string): value is ClaimLedgerEvidence
     value === "cas" ||
     value === "proof" ||
     value === "smt" ||
+    value === "route" ||
+    value === "invention" ||
+    value === "claim-chart" ||
+    value === "discovery-package" ||
+    value === "other"
+  );
+}
+
+function parseRunNextExpertReviewKind(value: string | undefined): ExpertReviewKind | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (isExpertReviewKind(value)) {
+    return value;
+  }
+  throw new Error(`Unsupported expert review kind ${JSON.stringify(value)}.`);
+}
+
+function parseRunNextExpertReviewStatus(value: string | undefined): ExpertReviewStatus | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (isExpertReviewStatus(value)) {
+    return value;
+  }
+  throw new Error(`Unsupported expert review status ${JSON.stringify(value)}.`);
+}
+
+function parseRunNextExpertReviewOutcome(value: string | undefined): ExpertReviewOutcome | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (isExpertReviewOutcome(value)) {
+    return value;
+  }
+  throw new Error(`Unsupported expert review outcome ${JSON.stringify(value)}.`);
+}
+
+function parseRunNextExpertReviewEvidenceRef(value: string): ExpertReviewEvidenceRef {
+  const separator = value.indexOf(":");
+  if (separator <= 0) {
+    return { kind: "other", ref: value };
+  }
+
+  const maybeKind = value.slice(0, separator);
+  const ref = value.slice(separator + 1);
+  if (isRunNextExpertReviewEvidenceKind(maybeKind)) {
+    return { kind: maybeKind, ref };
+  }
+
+  return { kind: "other", ref: value };
+}
+
+function isRunNextExpertReviewEvidenceKind(value: string): value is ExpertReviewEvidenceRef["kind"] {
+  return (
+    value === "receipt" ||
+    value === "artifact" ||
+    value === "source" ||
+    value === "literature" ||
+    value === "notebook" ||
+    value === "notebook-run" ||
+    value === "code-run" ||
+    value === "benchmark" ||
+    value === "cas" ||
+    value === "disclosure" ||
+    value === "simulation" ||
+    value === "experiment" ||
+    value === "vault" ||
+    value === "audit" ||
+    value === "snapshot" ||
+    value === "session" ||
+    value === "review" ||
+    value === "validation" ||
+    value === "model-context" ||
     value === "route" ||
     value === "invention" ||
     value === "claim-chart" ||

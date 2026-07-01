@@ -10,6 +10,7 @@ import {
 } from "./benchmark-run.js";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { createCredibilityPack, type CredibilityPack } from "./credibility-pack.js";
+import { listExpertReviews } from "./expert-review.js";
 import { listWorkspaceEvents } from "./event-log.js";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
@@ -1509,6 +1510,67 @@ describe("workspace run-next", () => {
     });
     expect(plan.execution.kind).toBe("dry-run");
     expect(plan.warnings.join(" ")).toContain("never executes shell strings");
+  });
+
+  it("executes benchmark reviewer-contract credibility actions as local expert-review records", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-24T00:00:00.000Z" });
+    const basePack = await createCredibilityPack({
+      rootPath: root,
+      now: "2026-06-24T00:01:00.000Z",
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      timeoutMs: 50
+    });
+    const reviewAction: CredibilityPack["reviewerActionPlan"]["actions"][number] = {
+      actionId: "cred_action_0000000000000001",
+      category: "benchmark",
+      priority: "low",
+      title: "Record external review request for frontier-honesty-challenge/riemann-hypothesis",
+      detail: "External review is required before citing this benchmark case as discovery evidence.",
+      command:
+        'truth-harness review log "Benchmark contract frontier-honesty-challenge/riemann-hypothesis" --kind math --status requested --reviewer-role "qualified external reviewer" --evidence benchmark:.truth-harness/benchmarks/bench_demo.json --question "Review the benchmark contract." --next-check "accepted formal proof artifact" --next-check "independent expert review"',
+      closes: ["benchmark-contract:frontier-honesty-challenge:riemann-hypothesis"],
+      source: {
+        kind: "benchmark-review-contract",
+        ref: ".truth-harness/benchmarks/bench_demo.json#riemann-hypothesis"
+      }
+    };
+    const pack: CredibilityPack = {
+      ...basePack,
+      reviewerActionPlan: {
+        totalActions: 1,
+        criticalActions: 0,
+        highActions: 0,
+        actions: [reviewAction]
+      }
+    };
+    const review = createWorkspaceReviewFromCredibilityPack({ rootPath: root, pack });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-24T00:02:00.000Z"
+    });
+    const reviews = await listExpertReviews(root);
+
+    expect(review.autonomy.nextItemId).toBe("cred_action_0000000000000001");
+    expect(plan.execution).toMatchObject({
+      status: "executed",
+      kind: "expert-review",
+      evidenceRef: expect.stringContaining("review:.truth-harness/reviews/")
+    });
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]).toMatchObject({
+      subject: "Benchmark contract frontier-honesty-challenge/riemann-hypothesis",
+      kind: "math",
+      status: "requested",
+      reviewer: { role: "qualified external reviewer" },
+      evidenceRefs: [{ kind: "benchmark", ref: ".truth-harness/benchmarks/bench_demo.json" }],
+      requiredNextChecks: ["accepted formal proof artifact", "independent expert review"]
+    });
   });
 
   it("prefers locally executable credibility actions over host-blocked proof actions at the same priority", async () => {
