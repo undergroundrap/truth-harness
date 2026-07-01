@@ -7660,6 +7660,26 @@ function printReleaseAudit(audit: ReleaseAudit): void {
   for (const stage of audit.frontierReadiness.stages) {
     console.log(`  ${stage.status.toUpperCase()} ${stage.title}`);
     console.log(`    ${stage.summary}`);
+    if (stage.status !== "ready") {
+      if (stage.evidence.length > 0) {
+        console.log("    Evidence:");
+        for (const item of stage.evidence.slice(0, 4)) {
+          console.log(`      - ${item}`);
+        }
+        if (stage.evidence.length > 4) {
+          console.log(`      - ... ${stage.evidence.length - 4} more evidence item(s)`);
+        }
+      }
+      if (stage.blockers.length > 0) {
+        console.log("    Blockers:");
+        for (const blocker of stage.blockers.slice(0, 4)) {
+          console.log(`      - ${blocker}`);
+        }
+        if (stage.blockers.length > 4) {
+          console.log(`      - ... ${stage.blockers.length - 4} more blocker(s)`);
+        }
+      }
+    }
     if (stage.nextAction && stage.status !== "ready") {
       console.log(`    Next: ${stage.nextAction}`);
     }

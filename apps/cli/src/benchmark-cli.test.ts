@@ -3337,6 +3337,9 @@ describe("benchmark CLI", () => {
     expect(human.exitCode).toBe(0);
     expect(human.stdout).toContain("Truth Harness release audit");
     expect(human.stdout).toContain("Lean proof-safety blockers: 0");
+    expect(human.stdout).toContain("Frontier readiness ladder:");
+    expect(human.stdout).toContain("Evidence:");
+    expect(human.stdout).toContain("Blockers:");
   });
 
   it("writes and lists web UI review records from the CLI", async () => {
