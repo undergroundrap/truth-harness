@@ -3209,6 +3209,85 @@ describe("benchmark CLI", () => {
     expect(json.commands.rebuildCatalog).toContain("truth-harness catalog rebuild");
     expect(json.commands.engineVerify).toContain("--require-maxima");
 
+    const summaryResult = await runCli([
+      "workspace",
+      "release-audit",
+      root,
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--max-sessions",
+      "0",
+      "--timeout-ms",
+      "50",
+      "--require-maxima",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command",
+      "--summary-json",
+      "--fail-on-blocked"
+    ]);
+    const summaryJson = JSON.parse(summaryResult.stdout) as {
+      schemaVersion: string;
+      status: string;
+      frontierReadiness: { canClaimWorldHardestProblems: boolean };
+      checks: { blockingFailures: number; failedChecks: Array<{ id: string; command?: string }> };
+      commands: { credibilityPack: string; dockerProfessorAll: string };
+      embeddedSnapshot?: unknown;
+      credibilityPack?: unknown;
+    };
+
+    expect(summaryResult.exitCode).toBe(1);
+    expect(summaryJson.schemaVersion).toBe("truth-harness.release-audit-summary.v0");
+    expect(summaryJson.status).toBe("blocked");
+    expect(summaryJson.frontierReadiness.canClaimWorldHardestProblems).toBe(false);
+    expect(summaryJson.checks.blockingFailures).toBeGreaterThan(0);
+    expect(summaryJson.checks.failedChecks).toContainEqual(expect.objectContaining({ id: "engine-evidence" }));
+    expect(summaryJson.commands.credibilityPack).toContain("truth-harness workspace credibility-pack");
+    expect(summaryJson.commands.dockerProfessorAll).toBe("npm run docker:professor:all");
+    expect(summaryJson).not.toHaveProperty("embeddedSnapshot");
+    expect(summaryJson).not.toHaveProperty("credibilityPack");
+
+    const packSummaryResult = await runCli([
+      "workspace",
+      "credibility-pack",
+      root,
+      "--dry-run",
+      "--summary-json",
+      "--max-routes",
+      "0",
+      "--max-claims",
+      "0",
+      "--max-sessions",
+      "0",
+      "--timeout-ms",
+      "50",
+      "--require-maxima",
+      "--maxima-command",
+      "truth-harness-missing-maxima-command"
+    ]);
+    const packSummaryJson = JSON.parse(packSummaryResult.stdout) as {
+      schemaVersion: string;
+      status: string;
+      professorReady: boolean;
+      engine: { status: string; savedRuns: number };
+      reviewerActions: { total: number; next: unknown[] };
+      written: boolean;
+      artifacts?: unknown;
+      embeddedSnapshot?: unknown;
+      markdown?: unknown;
+    };
+
+    expect(packSummaryResult.exitCode).toBe(0);
+    expect(packSummaryJson.schemaVersion).toBe("truth-harness.credibility-pack-summary.v0");
+    expect(packSummaryJson.status).toBe("blocked");
+    expect(packSummaryJson.professorReady).toBe(false);
+    expect(packSummaryJson.engine.status).toBe("failed");
+    expect(packSummaryJson.reviewerActions.total).toBeGreaterThan(0);
+    expect(packSummaryJson.written).toBe(false);
+    expect(packSummaryJson).not.toHaveProperty("embeddedSnapshot");
+    expect(packSummaryJson).not.toHaveProperty("markdown");
+
     const human = await runCli([
       "workspace",
       "release-audit",
