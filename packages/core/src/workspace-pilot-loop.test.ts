@@ -135,7 +135,11 @@ describe("workspace pilot-loop", () => {
       plannedSteps: result.loop.summary.plannedSteps,
       executedSteps: result.loop.summary.executedSteps,
       firstCommand: expect.stringContaining("truth-harness"),
-      enginePlanStatuses: expect.arrayContaining([expect.any(String)])
+      enginePlanStatuses: expect.arrayContaining([expect.any(String)]),
+      runNextPlanCount: 3,
+      firstRunNextPlanPath: expect.stringContaining(".truth-harness/findings/"),
+      lastRunNextPlanPath: expect.stringContaining(".truth-harness/findings/"),
+      lastRunNextMarkdownPath: expect.stringContaining(".truth-harness/findings/")
     });
     if (!listedLoop) {
       throw new Error("Expected a saved pilot-loop transcript summary.");

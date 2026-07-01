@@ -1,4 +1,4 @@
-﻿import { createServer, request as httpRequest } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -1030,7 +1030,10 @@ describe("local web route ledger API", () => {
         loopId: savedPilotLoopWrite.loop.loopId,
         path: expect.stringContaining(".truth-harness/findings/"),
         markdownPath: expect.stringContaining(".truth-harness/findings/"),
-        source: "saved-run-next"
+        source: "saved-run-next",
+        runNextPlanCount: 1,
+        lastRunNextPlanPath: expect.stringContaining(".truth-harness/findings/"),
+        lastRunNextMarkdownPath: expect.stringContaining(".truth-harness/findings/")
       })
     );
 

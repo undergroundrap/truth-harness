@@ -8536,6 +8536,7 @@ function workspacePilotLoopStepsHtml(loop, { limit = 3 } = {}) {
         </div>
         <p>${escapeHtml(step.execution?.summary ?? "No execution summary recorded.")}</p>
         <code>${escapeHtml(command)}</code>
+        ${workspacePilotLoopStepRunNextLinksHtml(step)}
       </article>`;
     })
     .join("");
@@ -9164,6 +9165,29 @@ function renderWorkspacePilotLoops() {
     : renderWorkspacePilotLoopInspection(workspacePilotLoopOpenedInspection);
 }
 
+function workspacePilotLoopSummaryRunNextHtml(summary) {
+  const count = Number(summary?.runNextPlanCount ?? 0);
+  const planPath = summary?.lastRunNextPlanPath ?? summary?.firstRunNextPlanPath;
+  if (!planPath) {
+    return escapeHtml(count > 0 ? `${count} saved` : "none saved");
+  }
+
+  const countText = count === 1 ? "1 saved" : `${count} saved`;
+  return `${escapeHtml(countText)}; ${artifactAwareValueHtml(planPath, "workspace-pilot-loop-history")}`;
+}
+
+function workspacePilotLoopStepRunNextLinksHtml(step) {
+  if (!step?.runNextPlanPath && !step?.runNextMarkdownPath) {
+    return "";
+  }
+
+  return `<div class="workspace-pilot-loop-handoff-links">
+    ${step.runNextPlanPath ? `<div><span>Run-next packet</span>${artifactAwareValueHtml(step.runNextPlanPath, "workspace-pilot-loop-inspection")}</div>` : ""}
+    ${step.runNextMarkdownPath ? `<div><span>Run-next markdown</span>${artifactAwareValueHtml(step.runNextMarkdownPath, "workspace-pilot-loop-inspection")}</div>` : ""}
+    ${step.runNextPlanPath ? `<button class="text-button compact-button open-pilot-loop-run-next" data-plan-ref="${escapeHtml(step.runNextPlanPath)}" type="button">Open handoff</button>` : ""}
+  </div>`;
+}
+
 function renderWorkspacePilotLoopSummary(summary) {
   const command = `truth-harness workspace show-pilot-loop ${summary.loopId} --json`;
   const packetPathHtml = workspaceArtifactRefIsPreviewable(summary.path)
@@ -9192,11 +9216,13 @@ function renderWorkspacePilotLoopSummary(summary) {
         <div><dt>Source</dt><dd>${escapeHtml(summary.source ?? "workspace-review")}</dd></div>
         <div><dt>Steps</dt><dd>${escapeHtml(`${summary.plannedSteps ?? 0} planned / ${summary.executedSteps ?? 0} executed`)}</dd></div>
         <div><dt>Evidence</dt><dd>${escapeHtml(String(Array.isArray(summary.evidenceRefs) ? summary.evidenceRefs.length : 0))}</dd></div>
+        <div><dt>Run-next handoffs</dt><dd>${workspacePilotLoopSummaryRunNextHtml(summary)}</dd></div>
         <div><dt>Packet</dt><dd>${packetPathHtml}</dd></div>
         <div><dt>Markdown</dt><dd>${markdownPathHtml}</dd></div>
       </dl>
     </div>
     <div class="workspace-run-next-row-actions">
+      ${summary.lastRunNextPlanPath ? `<button class="text-button compact-button open-pilot-loop-run-next" data-plan-ref="${escapeHtml(summary.lastRunNextPlanPath)}" type="button">Open handoff</button>` : ""}
       <button class="text-button compact-button open-pilot-loop-transcript" data-loop-id="${escapeHtml(summary.loopId)}" type="button">Open</button>
       <button class="text-button compact-button copy-pilot-loop-transcript-command" data-command="${escapeHtml(command)}" type="button">Copy</button>
     </div>
@@ -19290,6 +19316,12 @@ workspacePilotLoopList?.addEventListener("click", (event) => {
     return;
   }
 
+  const runNextButton = event.target.closest(".open-pilot-loop-run-next");
+  if (runNextButton?.dataset.planRef) {
+    void openWorkspaceRunNextHandoff(runNextButton.dataset.planRef);
+    return;
+  }
+
   const openButton = event.target.closest(".open-pilot-loop-transcript");
   if (openButton?.dataset.loopId) {
     void openWorkspacePilotLoopTranscript(openButton.dataset.loopId);
@@ -19304,6 +19336,12 @@ workspacePilotLoopList?.addEventListener("click", (event) => {
 
 workspacePilotLoopInspection?.addEventListener("click", (event) => {
   if (event.target.closest(".open-workspace-artifact-preview")) {
+    return;
+  }
+
+  const runNextButton = event.target.closest(".open-pilot-loop-run-next");
+  if (runNextButton?.dataset.planRef) {
+    void openWorkspaceRunNextHandoff(runNextButton.dataset.planRef);
     return;
   }
 

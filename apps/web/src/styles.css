@@ -4042,6 +4042,31 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   background: #0b0d0b;
   padding: 10px;
 }
+.workspace-pilot-loop-handoff-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 8px;
+}
+
+.workspace-pilot-loop-handoff-links div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.workspace-pilot-loop-handoff-links span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.workspace-pilot-loop-handoff-links .text-button {
+  justify-self: start;
+}
 
 .workspace-run-next-details {
   display: grid;

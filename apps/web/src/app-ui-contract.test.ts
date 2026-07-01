@@ -859,6 +859,10 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function openWorkspacePilotLoopTranscript(loopRef)");
     expect(source).toContain("function renderWorkspacePilotLoops()");
     expect(source).toContain("function renderWorkspacePilotLoopSummary(summary)");
+    expect(source).toContain("function workspacePilotLoopSummaryRunNextHtml(summary)");
+    expect(source).toContain("function workspacePilotLoopStepRunNextLinksHtml(step)");
+    expect(source).toContain("open-pilot-loop-run-next");
+    expect(source).toContain("Run-next handoffs");
     expect(source).toContain("function renderWorkspacePilotLoopInspection(inspection)");
     expect(source).toContain("copyWorkspacePilotLoopTranscriptCommand");
     expect(source).toContain("function workspacePilotLoopDetailsRows(loop)");
@@ -948,6 +952,7 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".workspace-pilot-loop-card");
     expect(styles).toContain(".workspace-pilot-loop-steps");
     expect(styles).toContain(".workspace-pilot-loop-step");
+    expect(styles).toContain(".workspace-pilot-loop-handoff-links");
     expect(styles).toContain(".workspace-run-next-engine-card");
     expect(styles).toContain(".workspace-run-next-engine-step");
     expect(styles).toContain(".workspace-run-next-details");

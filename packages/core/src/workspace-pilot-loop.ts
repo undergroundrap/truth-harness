@@ -154,6 +154,10 @@ export interface WorkspacePilotLoopSummary {
   lastItemTitle?: string;
   lastExecutionKind?: string;
   enginePlanStatuses: string[];
+  runNextPlanCount: number;
+  firstRunNextPlanPath?: string;
+  lastRunNextPlanPath?: string;
+  lastRunNextMarkdownPath?: string;
 }
 
 export interface WorkspacePilotLoopInspection {
@@ -942,6 +946,9 @@ function workspacePilotLoopId(createdAt: string, rootPath: string, source: Works
 function summarizeWorkspacePilotLoopRecord(loop: WorkspacePilotLoopRecord, path: string): WorkspacePilotLoopSummary {
   const firstStep = loop.steps[0];
   const lastStep = loop.steps.at(-1);
+  const runNextSteps = loop.steps.filter((step) => step.runNextPlanPath);
+  const firstRunNextStep = runNextSteps[0];
+  const lastRunNextStep = runNextSteps.at(-1);
 
   return {
     schemaVersion: loop.schemaVersion,
@@ -966,7 +973,11 @@ function summarizeWorkspacePilotLoopRecord(loop: WorkspacePilotLoopRecord, path:
     firstCommand: firstStep?.item?.command ?? firstStep?.execution.command,
     lastItemTitle: lastStep?.item?.title,
     lastExecutionKind: lastStep?.execution.kind,
-    enginePlanStatuses: uniqueStrings(loop.steps.flatMap((step) => (step.enginePlan ? [step.enginePlan.status] : [])))
+    enginePlanStatuses: uniqueStrings(loop.steps.flatMap((step) => (step.enginePlan ? [step.enginePlan.status] : []))),
+    runNextPlanCount: runNextSteps.length,
+    ...(firstRunNextStep?.runNextPlanPath ? { firstRunNextPlanPath: firstRunNextStep.runNextPlanPath } : {}),
+    ...(lastRunNextStep?.runNextPlanPath ? { lastRunNextPlanPath: lastRunNextStep.runNextPlanPath } : {}),
+    ...(lastRunNextStep?.runNextMarkdownPath ? { lastRunNextMarkdownPath: lastRunNextStep.runNextMarkdownPath } : {})
   };
 }
 
