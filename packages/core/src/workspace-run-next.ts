@@ -433,7 +433,7 @@ export async function createWorkspaceRunNextPlan(input: {
     return finalizeWorkspaceRunNextPlan(input.rootPath, {
       ...basePlan,
       status: "blocked",
-      idleNextActions: workspaceRunNextIdleActions(input.rootPath),
+      idleNextActions: await workspaceRunNextIdleActions(input.rootPath),
       execution: {
         status: "blocked",
         kind: "no-open-item",
@@ -1362,9 +1362,11 @@ function normalizeEngineProblem(value: string | undefined): string | undefined {
   return normalized && !normalized.includes("<") && !normalized.includes(">") ? normalized : undefined;
 }
 
-function workspaceRunNextIdleActions(rootPath: string): WorkspaceRunNextIdleAction[] {
+async function workspaceRunNextIdleActions(rootPath: string): Promise<WorkspaceRunNextIdleAction[]> {
   const workspace = quoteCommandArg(rootPath);
+  const pilotLoopAction = await latestPilotLoopContinuationIdleAction(rootPath, workspace);
   return [
+    ...(pilotLoopAction ? [pilotLoopAction] : []),
     {
       actionId: "start-validation-backed-harness",
       title: "Start a new hard-problem harness",
@@ -1419,6 +1421,108 @@ function workspaceRunNextIdleActions(rootPath: string): WorkspaceRunNextIdleActi
       requiresHumanInput: false
     }
   ];
+}
+
+interface ResumablePilotLoopCandidate {
+  loopId: string;
+  createdAt: string;
+  transcriptPath: string;
+  stepIndex: number;
+  runNextPlanPath: string;
+}
+
+async function latestPilotLoopContinuationIdleAction(
+  rootPath: string,
+  quotedWorkspacePath: string
+): Promise<WorkspaceRunNextIdleAction | undefined> {
+  const candidate = await latestResumablePilotLoopCandidate(rootPath);
+  if (!candidate) {
+    return undefined;
+  }
+
+  return {
+    actionId: "continue-latest-pilot-loop",
+    title: "Continue the latest saved pilot loop",
+    command: `truth-harness workspace continue-pilot-loop ${quoteCommandArg(candidate.loopId)} --workspace ${quotedWorkspacePath} --json`,
+    reason:
+      `Saved pilot-loop transcript ${candidate.loopId} recorded run-next handoff ${candidate.runNextPlanPath} at step ${candidate.stepIndex}. Continue that verified queue before starting duplicate work.`,
+    boundary:
+      "Dry-run continuation verifies the saved handoff source revision/snapshot before returning work. Use CLI/MCP execute-local only after approving bounded local execution.",
+    requiresHumanInput: false
+  };
+}
+
+async function latestResumablePilotLoopCandidate(rootPath: string): Promise<ResumablePilotLoopCandidate | undefined> {
+  const findingsDir = join(rootPath, ".truth-harness", "findings");
+  let files: string[];
+  try {
+    files = await readdir(findingsDir);
+  } catch {
+    return undefined;
+  }
+
+  const candidates = (
+    await Promise.all(
+      files
+        .filter((file) => file.endsWith("-workspace-pilot-loop.json"))
+        .map(async (file) => readResumablePilotLoopCandidate(rootPath, join(findingsDir, file)))
+    )
+  ).filter((candidate): candidate is ResumablePilotLoopCandidate => candidate !== undefined);
+
+  return candidates.sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+}
+
+async function readResumablePilotLoopCandidate(
+  rootPath: string,
+  absolutePath: string
+): Promise<ResumablePilotLoopCandidate | undefined> {
+  try {
+    const raw = await readFile(absolutePath, "utf8");
+    const loop = parseJsonWithOptionalBom(raw) as {
+      schemaVersion?: unknown;
+      loopId?: unknown;
+      createdAt?: unknown;
+      localOnly?: unknown;
+      networkAccess?: unknown;
+      steps?: unknown;
+    };
+    if (
+      loop.schemaVersion !== "truth-harness.workspace-pilot-loop.v0" ||
+      typeof loop.loopId !== "string" ||
+      typeof loop.createdAt !== "string" ||
+      loop.localOnly !== true ||
+      loop.networkAccess !== "none" ||
+      !Array.isArray(loop.steps)
+    ) {
+      return undefined;
+    }
+
+    const selected = [...loop.steps]
+      .reverse()
+      .find((step): step is { index?: unknown; runNextPlanPath: string } => {
+        return typeof step === "object" && step !== null && typeof (step as { runNextPlanPath?: unknown }).runNextPlanPath === "string";
+      });
+    if (!selected) {
+      return undefined;
+    }
+
+    const runNextPlanPath = normalizePortablePath(selected.runNextPlanPath);
+    const runNextPlanAbsolutePath = resolveUnderRoot(rootPath, runNextPlanPath);
+    const runNextPlanStat = await stat(runNextPlanAbsolutePath);
+    if (!runNextPlanStat.isFile()) {
+      return undefined;
+    }
+
+    return {
+      loopId: loop.loopId,
+      createdAt: loop.createdAt,
+      transcriptPath: toPortablePath(relative(rootPath, absolutePath)),
+      stepIndex: typeof selected.index === "number" ? selected.index : loop.steps.length,
+      runNextPlanPath
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function evidenceRefFromRunNextCommand(command: string | undefined): string | undefined {

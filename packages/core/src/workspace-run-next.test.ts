@@ -1805,6 +1805,71 @@ describe("workspace run-next", () => {
     });
   });
 
+  it("surfaces resumable pilot-loop transcripts before generic idle actions", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
+    const findingsDir = join(root, ".truth-harness", "findings");
+    await mkdir(findingsDir, { recursive: true });
+    const runNextRef = ".truth-harness/findings/2026-06-14-wrn_11111111-workspace-run-next.json";
+    await writeFile(join(root, runNextRef), "{}\n", "utf8");
+    await writeFile(
+      join(findingsDir, "2026-06-14-wpl_11111111-workspace-pilot-loop.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: "truth-harness.workspace-pilot-loop.v0",
+          loopId: "wpl_11111111",
+          createdAt: "2026-06-14T00:01:00.000Z",
+          localOnly: true,
+          networkAccess: "none",
+          steps: [
+            {
+              index: 1,
+              createdAt: "2026-06-14T00:01:01.000Z",
+              reviewId: "wrev_fixture",
+              planId: "wrn_11111111",
+              runNextPlanPath: runNextRef,
+              execution: {
+                status: "planned",
+                kind: "dry-run",
+                summary: "fixture run-next handoff"
+              }
+            }
+          ]
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    );
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      maxReports: 0,
+      now: "2026-06-14T00:02:00.000Z"
+    });
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-14T00:03:00.000Z"
+    });
+
+    expect(plan.status).toBe("blocked");
+    expect(plan.item).toBeUndefined();
+    expect(plan.idleNextActions?.[0]).toMatchObject({
+      actionId: "continue-latest-pilot-loop",
+      command: expect.stringContaining("truth-harness workspace continue-pilot-loop wpl_11111111"),
+      requiresHumanInput: false
+    });
+    expect(plan.idleNextActions?.[0]?.reason).toContain(runNextRef);
+    expect(plan.idleNextActions?.[1]).toMatchObject({
+      actionId: "start-validation-backed-harness"
+    });
+  });
+
   it("writes dry-run plans into findings with a local artifact event", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-14T00:00:00.000Z" });
