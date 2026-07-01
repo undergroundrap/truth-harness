@@ -210,6 +210,7 @@ export interface WorkspaceRunNextSavedHandoffInput {
   planRef: string;
   executeLocal: boolean;
   now?: string;
+  expectedAddedPaths?: string[];
   enginePlanOptions?: CreateEnginePlanOptions;
 }
 
@@ -784,12 +785,12 @@ export async function readWorkspaceRunNextPlan(rootPath: string, planRef: string
 export async function inspectWorkspaceRunNextPlan(
   rootPath: string,
   planRef: string,
-  options: { verifySnapshot?: boolean; now?: string } = {}
+  options: { verifySnapshot?: boolean; now?: string; expectedAddedPaths?: string[] } = {}
 ): Promise<WorkspaceRunNextInspection> {
   const status = await requireRunNextWorkspace(rootPath);
   const { plan, path } = await readWorkspaceRunNextPlanWithPath(status, planRef);
   const sourceChecks = options.verifySnapshot
-    ? await verifyRunNextSourceChecks(status.root, plan, path, options.now)
+    ? await verifyRunNextSourceChecks(status.root, plan, path, options.now, options.expectedAddedPaths)
     : {};
   const sourceRevision = sourceChecks.sourceRevision;
   const sourceSnapshot = sourceChecks.sourceSnapshot;
@@ -816,7 +817,8 @@ export async function createWorkspaceRunNextPlanFromSavedHandoff(
   const createdAt = input.now ?? new Date().toISOString();
   const inspection = await inspectWorkspaceRunNextPlan(status.root, input.planRef, {
     verifySnapshot: true,
-    now: createdAt
+    now: createdAt,
+    expectedAddedPaths: input.expectedAddedPaths
   });
   const sourcePlan = inspection.plan;
   const sourcePlanPath = inspection.path;
@@ -1543,7 +1545,8 @@ async function verifyRunNextSourceSnapshot(
   rootPath: string,
   plan: WorkspaceRunNextPlan,
   planPath: string,
-  now?: string
+  now?: string,
+  expectedAddedPaths: string[] = []
 ): Promise<WorkspaceRunNextSourceSnapshotCheck> {
   if (!plan.sourceSnapshot?.snapshotId) {
     return {
@@ -1559,7 +1562,7 @@ async function verifyRunNextSourceSnapshot(
       now
     });
     const ignoredSelfAdded = verification.addedSinceSnapshot.filter((entry) =>
-      isRunNextExpectedAddedPath(planPath, entry.path)
+      isRunNextExpectedAddedPath(planPath, entry.path, expectedAddedPaths)
     );
     const added = verification.addedSinceSnapshot.length - ignoredSelfAdded.length;
     const missing = verification.missing.length;
@@ -1590,14 +1593,15 @@ async function verifyRunNextSourceChecks(
   rootPath: string,
   plan: WorkspaceRunNextPlan,
   planPath: string,
-  now?: string
+  now?: string,
+  expectedAddedPaths: string[] = []
 ): Promise<{
   sourceRevision?: WorkspaceRunNextSourceRevisionCheck;
   sourceSnapshot?: WorkspaceRunNextSourceSnapshotCheck;
 }> {
   if (!plan.sourceRevision?.revisionId) {
     return {
-      sourceSnapshot: await verifyRunNextSourceSnapshot(rootPath, plan, planPath, now)
+      sourceSnapshot: await verifyRunNextSourceSnapshot(rootPath, plan, planPath, now, expectedAddedPaths)
     };
   }
 
@@ -1605,7 +1609,7 @@ async function verifyRunNextSourceChecks(
     const verification = await verifyWorkspaceRevision({
       rootPath,
       revisionRef: plan.sourceRevision.revisionId,
-      ignoreAddedPaths: runNextSelfAddedPaths(planPath),
+      ignoreAddedPaths: uniqueStrings([...runNextSelfAddedPaths(planPath), ...normalizePortablePaths(expectedAddedPaths)]),
       now
     });
     return {
@@ -1614,7 +1618,7 @@ async function verifyRunNextSourceChecks(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Source revision could not be verified.";
-    const sourceSnapshot = await verifyRunNextSourceSnapshot(rootPath, plan, planPath, now);
+    const sourceSnapshot = await verifyRunNextSourceSnapshot(rootPath, plan, planPath, now, expectedAddedPaths);
     return {
       sourceRevision: {
         sourceRevisionStatus: "missing",
@@ -1630,7 +1634,14 @@ function isRunNextSelfAddedPath(planPath: string, addedPath: string): boolean {
   if (addedPath === planPath) {
     return true;
   }
-  return planPath.endsWith(".json") && addedPath === planPath.replace(/\.json$/u, ".md");
+  if (planPath.endsWith(".json") && addedPath === planPath.replace(/\.json$/u, ".md")) {
+    return true;
+  }
+  return isWorkspacePilotLoopTranscriptPath(addedPath);
+}
+
+function isWorkspacePilotLoopTranscriptPath(path: string): boolean {
+  return path.startsWith(".truth-harness/findings/") && /-workspace-pilot-loop\.(json|md)$/u.test(path);
 }
 
 function runNextSourceSnapshotCheckFromRevisionVerification(
@@ -1731,8 +1742,21 @@ function runNextSelfAddedPaths(planPath: string): string[] {
   return planPath.endsWith(".json") ? [planPath, planPath.replace(/\.json$/u, ".md")] : [planPath];
 }
 
-function isRunNextExpectedAddedPath(planPath: string, addedPath: string): boolean {
-  return isRunNextSelfAddedPath(planPath, addedPath) || isRevisionManifestPath(addedPath);
+function isRunNextExpectedAddedPath(planPath: string, addedPath: string, expectedAddedPaths: string[] = []): boolean {
+  const normalizedAddedPath = normalizePortablePath(addedPath);
+  return (
+    isRunNextSelfAddedPath(planPath, normalizedAddedPath) ||
+    isRevisionManifestPath(normalizedAddedPath) ||
+    normalizePortablePaths(expectedAddedPaths).includes(normalizedAddedPath)
+  );
+}
+
+function normalizePortablePaths(paths: string[]): string[] {
+  return uniqueStrings(paths.map((path) => normalizePortablePath(path)).filter((path) => path.length > 0));
+}
+
+function normalizePortablePath(path: string): string {
+  return path.replace(/\\/gu, "/");
 }
 
 function isRevisionManifestPath(path: string): boolean {

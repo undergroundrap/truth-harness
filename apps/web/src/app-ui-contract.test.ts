@@ -769,6 +769,9 @@ describe("web UI action contracts", () => {
     expect(source).toContain('fetch(`/api/workspace-run-nexts/');
     expect(source).toContain('fetch(`/api/workspace-pilot-loops?');
     expect(source).toContain('fetch(`/api/workspace-pilot-loops/');
+    expect(source).toContain('/api/workspace-pilot-loops/${encodeURIComponent(ref)}/continue');
+    expect(source).toContain('continue-pilot-loop-transcript');
+    expect(source).toContain('workspace-pilot-loop-continuation');
     expect(source).toContain('const verifyParam = verifySnapshot ? "?verifySnapshot=true" : ""');
     expect(source).toContain("verify-run-next-handoff");
     expect(source).toContain("function startResearchHarnessFromUi()");
@@ -907,6 +910,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("copyWorkspaceRunNextHandoffCommand");
     expect(source).not.toContain("workspace-run-next?executeLocal=true");
     expect(source).not.toContain("workspace-pilot-loop?executeLocal=true");
+    expect(source).not.toContain("workspace-pilot-loops/executeLocal=true");
     expect(plannerCardStyles).toBeTruthy();
     expect(plannerCardStyles).toContain("grid-template-columns: minmax(0, 1fr);");
     expect(plannerCardStyles).toContain("border: 1px solid var(--line-soft);");

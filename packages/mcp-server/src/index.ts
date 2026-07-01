@@ -98,6 +98,7 @@ import {
   handleTruthHarnessWorkspaceRunNextList,
   handleTruthHarnessWorkspaceRunNextShow,
   handleTruthHarnessWorkspacePilotLoop,
+  handleTruthHarnessWorkspacePilotLoopContinue,
   handleTruthHarnessWorkspacePilotLoopList,
   handleTruthHarnessWorkspacePilotLoopShow,
   handleTruthHarnessWorkspaceUiReview,
@@ -1841,6 +1842,45 @@ export function createTruthHarnessMcpServer(): McpServer {
       toolJson(await handleTruthHarnessWorkspacePilotLoopShow({ workspacePath, loopRef }))
   );
 
+  server.registerTool(
+    "truth_harness_workspace_pilot_loop_continue",
+    {
+      title: "Continue Workspace Pilot-Loop Transcript",
+      description:
+        "Resolve a saved workspace pilot-loop transcript back to its latest saved run-next handoff, verify source drift through the existing run-next resume gate, and return the next bounded action. Dry-run by default; executeLocal runs only supported in-process Truth Harness actions.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        loopRef: z.string().min(1).describe("Loop id such as wpl_<hash> or workspace-local JSON path."),
+        executeLocal: z
+          .boolean()
+          .optional()
+          .describe("When true, execute one supported local Truth Harness action from the continued run-next plan."),
+        write: z
+          .boolean()
+          .optional()
+          .describe("When true, write the continuation run-next plan JSON/Markdown into .truth-harness/findings."),
+        timeoutMs: z.number().int().min(1).max(300000).optional().describe("Concrete engine check timeout in milliseconds."),
+        maximaCommand: z.string().optional().describe("Override Maxima executable for engine plans."),
+        sageCommand: z.string().optional().describe("Override SageMath executable for engine plans."),
+        leanCommand: z.string().optional().describe("Override Lean executable for engine plans."),
+        z3Command: z.string().optional().describe("Override Z3 executable for engine plans."),
+        cvc5Command: z.string().optional().describe("Override cvc5 executable for engine plans.")
+      },
+      annotations: {
+        readOnlyHint: false,
+        openWorldHint: false
+      }
+    },
+    async (input) =>
+      toolJson(
+        await handleTruthHarnessWorkspacePilotLoopContinue({
+          ...input
+        })
+      )
+  );
   server.registerTool(
     "truth_harness_workspace_ui_review",
     {

@@ -104,6 +104,7 @@ import {
   handleTruthHarnessWorkspaceRunNextList,
   handleTruthHarnessWorkspaceRunNextShow,
   handleTruthHarnessWorkspacePilotLoop,
+  handleTruthHarnessWorkspacePilotLoopContinue,
   handleTruthHarnessWorkspacePilotLoopList,
   handleTruthHarnessWorkspacePilotLoopShow,
   handleTruthHarnessWorkspaceUiReview,
@@ -1586,6 +1587,27 @@ describe("MCP tool handlers", () => {
         schemaVersion: "truth-harness.workspace-pilot-loop.v0"
       },
       path: expect.stringContaining(".truth-harness/findings/")
+    });
+    const continued = await handleTruthHarnessWorkspacePilotLoopContinue({
+      loopRef: result.loop.loopId
+    });
+    expect(continued).toMatchObject({
+      schemaVersion: "truth-harness.workspace-pilot-loop-continuation.v0",
+      loop: {
+        loopId: result.loop.loopId
+      },
+      selectedPlanRef: expect.stringContaining(".truth-harness/findings/"),
+      sourceInspection: {
+        schemaVersion: "truth-harness.workspace-run-next-inspection.v0",
+        resumeDecision: {
+          nextCommand: expect.stringContaining("truth-harness")
+        }
+      },
+      plan: {
+        schemaVersion: "truth-harness.workspace-run-next.v0",
+        localOnly: true,
+        networkAccess: "none"
+      }
     });
   });
 

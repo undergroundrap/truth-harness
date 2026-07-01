@@ -233,6 +233,9 @@ let workspacePilotLoopSummariesLoading = false;
 let workspacePilotLoopSummariesLoadedAt = 0;
 let workspacePilotLoopOpenedInspection;
 let workspacePilotLoopOpenedError;
+let workspacePilotLoopContinuation;
+let workspacePilotLoopContinuationError;
+let workspacePilotLoopContinuationLoading = false;
 let claimLedgerGraph = {
   schemaVersion: "truth-harness.claim-graph.v0",
   nodes: [],
@@ -6084,6 +6087,9 @@ async function openWorkspacePilotLoopTranscript(loopRef) {
   }
 
   workspacePilotLoopOpenedError = undefined;
+  workspacePilotLoopContinuation = undefined;
+  workspacePilotLoopContinuationError = undefined;
+  workspacePilotLoopContinuationLoading = false;
   addActivity("web-ui", "Opening saved pilot loop", `GET /api/workspace-pilot-loops/${ref}`, "waiting");
   try {
     const response = await fetch(`/api/workspace-pilot-loops/${encodeURIComponent(ref)}`, {
@@ -6104,6 +6110,45 @@ async function openWorkspacePilotLoopTranscript(loopRef) {
     workspacePilotLoopOpenedError = error instanceof Error ? error.message : "Unknown saved pilot-loop inspection failure.";
     renderWorkspacePilotLoops();
     addActivity("local-api", "Open pilot loop failed", workspacePilotLoopOpenedError, "refuted");
+  }
+}
+async function continueWorkspacePilotLoopTranscript(loopRef, button) {
+  const ref = String(loopRef ?? "").trim();
+  if (!ref || workspacePilotLoopContinuationLoading) {
+    return;
+  }
+
+  workspacePilotLoopContinuationLoading = true;
+  workspacePilotLoopContinuationError = undefined;
+  renderWorkspacePilotLoops();
+  if (button) {
+    button.disabled = true;
+  }
+  addActivity("web-ui", "Continuing saved pilot loop", `GET /api/workspace-pilot-loops/${ref}/continue`, "waiting");
+  try {
+    const response = await fetch(`/api/workspace-pilot-loops/${encodeURIComponent(ref)}/continue`, {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local pilot-loop continuation failed.");
+    workspacePilotLoopContinuation = payload.continuation;
+    workspacePilotLoopContinuationError = undefined;
+    addActivity(
+      "local-api",
+      "Continued saved pilot loop",
+      localApiSuccessMessage(payload, `${ref} resumed to run-next plan ${payload.continuation?.plan?.planId ?? "unknown"}.`),
+      payload.continuation?.plan?.status === "blocked" ? "waiting" : "passed"
+    );
+  } catch (error) {
+    workspacePilotLoopContinuation = undefined;
+    workspacePilotLoopContinuationError = error instanceof Error ? error.message : "Unknown pilot-loop continuation failure.";
+    addActivity("local-api", "Continue pilot loop failed", workspacePilotLoopContinuationError, "refuted");
+  } finally {
+    workspacePilotLoopContinuationLoading = false;
+    if (button) {
+      button.disabled = false;
+    }
+    renderWorkspacePilotLoops();
   }
 }
 function refreshWorkspaceRunNextHandoffsIfStale({ maxAgeMs = 5000 } = {}) {
@@ -9154,10 +9199,50 @@ function renderWorkspacePilotLoopInspection(inspection) {
       allowedPaths: paths,
       emptyHtml: ""
     })}
+    ${workspacePilotLoopContinuationHtml(loop.loopId)}
     <div class="workspace-run-next-actions">
+      <button class="text-button compact-button strong-action continue-pilot-loop-transcript" data-loop-id="${escapeHtml(loop.loopId)}" type="button" ${workspacePilotLoopContinuationLoading ? "disabled" : ""}>${workspacePilotLoopContinuationLoading ? "Continuing" : "Continue dry-run"}</button>
       <button class="text-button compact-button copy-pilot-loop-transcript-command" data-command="${escapeHtml(command)}" type="button">Copy show command</button>
     </div>
   </div>`;
+}
+
+function workspacePilotLoopContinuationHtml(loopId) {
+  if (workspacePilotLoopContinuationLoading) {
+    return `<section class="workspace-run-next-opened"><span class="mini-label">Continuation</span><p>Resolving the latest saved run-next packet and checking resume safety.</p></section>`;
+  }
+  if (workspacePilotLoopContinuationError) {
+    return `<section class="workspace-run-next-empty refuted">${escapeHtml(workspacePilotLoopContinuationError)}</section>`;
+  }
+  if (!workspacePilotLoopContinuation || workspacePilotLoopContinuation.loop?.loopId !== loopId) {
+    return "";
+  }
+
+  const continuation = workspacePilotLoopContinuation;
+  const plan = continuation.plan ?? {};
+  const decision = continuation.sourceInspection?.resumeDecision ?? {};
+  const command = continuation.resumeCommand ?? plan.item?.command ?? plan.execution?.command ?? "truth-harness workspace run-next . --json";
+  return `<section class="workspace-run-next-opened workspace-pilot-loop-continuation" aria-label="Pilot-loop continuation preview">
+    <div class="workspace-run-next-opened-head">
+      <div>
+        <span class="mini-label">Continuation preview</span>
+        <strong>${escapeHtml(plan.item?.title ?? plan.execution?.kind ?? "No selected item")}</strong>
+      </div>
+      <span class="status-pill ${plan.status === "blocked" ? "waiting" : "passed"}">${escapeHtml(plan.status ?? "planned")}</span>
+    </div>
+    <p>${escapeHtml(plan.execution?.summary ?? "Continuation resolved through the saved run-next handoff.")}</p>
+    <code>${escapeHtml(command)}</code>
+    <dl class="workspace-run-next-details compact">
+      <div><dt>Saved handoff</dt><dd>${artifactAwareValueHtml(continuation.sourcePlanPath ?? continuation.selectedPlanRef ?? "not recorded", "workspace-pilot-loop-inspection")}</dd></div>
+      <div><dt>Safe to resume</dt><dd>${escapeHtml(String(decision.safeToResume ?? false))}</dd></div>
+      <div><dt>Resume status</dt><dd>${escapeHtml(decision.status ?? "unchecked")}</dd></div>
+      <div><dt>Boundary</dt><dd>${escapeHtml(plan.rationale?.executionBoundary ?? "Dry-run only in the browser; use CLI/MCP for bounded local execution.")}</dd></div>
+    </dl>
+    ${workspaceRunNextSafetyHtml(continuation.sourceInspection, { surface: "workspace-pilot-loop-inspection", compact: true })}
+    <div class="workspace-run-next-actions">
+      <button class="text-button compact-button copy-pilot-loop-transcript-command" data-command="${escapeHtml(command)}" type="button">Copy continue command</button>
+    </div>
+  </section>`;
 }
 function renderWorkspaceRunNextHandoffs() {
   if (!workspaceRunNextHistoryTitle || !workspaceRunNextList || !workspaceRunNextInspection) {
@@ -19183,6 +19268,12 @@ workspacePilotLoopList?.addEventListener("click", (event) => {
 
 workspacePilotLoopInspection?.addEventListener("click", (event) => {
   if (event.target.closest(".open-workspace-artifact-preview")) {
+    return;
+  }
+
+  const continueButton = event.target.closest(".continue-pilot-loop-transcript");
+  if (continueButton?.dataset.loopId) {
+    void continueWorkspacePilotLoopTranscript(continueButton.dataset.loopId, continueButton);
     return;
   }
 

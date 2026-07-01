@@ -142,6 +142,7 @@ import {
   createWorkspaceReview,
   createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
+  continueWorkspacePilotLoopRecord,
   createWorkspaceGraph,
   formatCredibilityPackEngineEvidenceSummary,
   formatCredibilityPackSavedEngineRunLedgerLabel,
@@ -4189,6 +4190,65 @@ workspace
     }
   });
 
+workspace
+  .command("continue-pilot-loop")
+  .description("Continue from a saved workspace pilot-loop transcript through the verified saved run-next handoff it recorded.")
+  .argument("<loop>", "Loop id such as wpl_<hash> or workspace-local JSON path")
+  .option("--workspace <path>", "Project root path", ".")
+  .option("--json", "Print the full pilot-loop continuation JSON")
+  .option("--execute-local", "Execute one supported local Truth Harness action from the continued run-next plan; dry-run is the default")
+  .option("--write", "Write the continuation run-next plan JSON/Markdown into .truth-harness/findings")
+  .option("--timeout-ms <ms>", "Concrete engine check timeout in milliseconds", parsePositiveInteger, 3000)
+  .option("--maxima-command <command>", "Override Maxima executable for engine plans")
+  .option("--sage-command <command>", "Override SageMath executable for engine plans")
+  .option("--lean-command <command>", "Override Lean executable for engine plans")
+  .option("--z3-command <command>", "Override Z3 executable for engine plans")
+  .option("--cvc5-command <command>", "Override cvc5 executable for engine plans")
+  .option("--fail-on-blocked", "Exit non-zero if the continued run-next plan is blocked")
+  .action(
+    async (
+      loopRef: string,
+      options: {
+        workspace: string;
+        json?: boolean;
+        executeLocal?: boolean;
+        write?: boolean;
+        timeoutMs: number;
+        maximaCommand?: string;
+        sageCommand?: string;
+        leanCommand?: string;
+        z3Command?: string;
+        cvc5Command?: string;
+        failOnBlocked?: boolean;
+      }
+    ) => {
+      const continuation = await continueWorkspacePilotLoopRecord({
+        rootPath: options.workspace,
+        loopRef,
+        executeLocal: Boolean(options.executeLocal),
+        writeRunNextPlan: Boolean(options.write),
+        timeoutMs: options.timeoutMs,
+        maximaCommand: options.maximaCommand,
+        sageCommand: options.sageCommand,
+        leanCommand: options.leanCommand,
+        z3Command: options.z3Command,
+        cvc5Command: options.cvc5Command,
+        enginePlanOptions: {
+          savedEngineRuns: await listEngineVerificationRunsIfWorkspace(options.workspace)
+        }
+      });
+
+      if (options.json) {
+        printJson(continuation);
+      } else {
+        printWorkspacePilotLoopContinuation(continuation);
+      }
+
+      if (options.failOnBlocked && continuation.plan.status === "blocked") {
+        process.exitCode = 1;
+      }
+    }
+  );
 workspace
   .command("run-nexts")
   .description("List persisted workspace run-next intent packets.")
@@ -8599,6 +8659,39 @@ function printWorkspacePilotLoopList(loops: WorkspacePilotLoopSummary[]): void {
   }
 }
 
+function printWorkspacePilotLoopContinuation(result: Awaited<ReturnType<typeof continueWorkspacePilotLoopRecord>>): void {
+  console.log("Truth Harness workspace pilot-loop continuation");
+  console.log(`Loop: ${result.loop.loopId}`);
+  console.log(`Transcript: ${result.loopPath}`);
+  console.log(`Selected step: ${result.selectedStep.index} (${result.selectedStep.item?.title ?? result.selectedStep.execution.kind})`);
+  console.log(`Saved handoff: ${result.sourcePlan.planId} (${result.sourcePlanPath})`);
+  console.log(`Resume decision: ${result.sourceInspection.resumeDecision.status}`);
+  console.log(`Safe to resume: ${String(result.sourceInspection.resumeDecision.safeToResume)}`);
+  console.log(`Continuation plan: ${result.plan.planId}`);
+  console.log(`Status: ${result.plan.status}`);
+  console.log(`Dry run: ${String(result.plan.dryRun)}`);
+  if (result.plan.item) {
+    console.log("");
+    console.log(`Next item: ${result.plan.item.priority.toUpperCase()} ${result.plan.item.kind} ${result.plan.item.itemId}`);
+    console.log(`  ${result.plan.item.title}`);
+    console.log(`  Command: ${result.plan.item.command}`);
+  }
+  console.log("");
+  console.log(`Execution: ${result.plan.execution.status} (${result.plan.execution.kind})`);
+  console.log(`  ${result.plan.execution.summary}`);
+  console.log(`Resume command: ${result.resumeCommand}`);
+  if (result.written) {
+    console.log("");
+    console.log("Written continuation handoff:");
+    console.log(`  JSON: ${result.written.jsonPath}`);
+    console.log(`  Markdown: ${result.written.markdownPath}`);
+  }
+  console.log("");
+  console.log("Warnings:");
+  for (const warning of result.warnings) {
+    console.log(`  ${warning}`);
+  }
+}
 function printWorkspaceRunNextPlan(plan: WorkspaceRunNextPlan): void {
   console.log("Truth Harness workspace run-next");
   console.log(`Plan: ${plan.planId}`);

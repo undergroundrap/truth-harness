@@ -14,6 +14,7 @@ import { listValidationPlans } from "./validation-plan.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { createWorkspaceRunNextPlan, writeWorkspaceRunNextPlan } from "./workspace-run-next.js";
 import {
+  continueWorkspacePilotLoopRecord,
   inspectWorkspacePilotLoopRecord,
   listWorkspacePilotLoopRecords,
   readWorkspacePilotLoopRecord,
@@ -179,6 +180,76 @@ describe("workspace pilot-loop", () => {
     );
   }, 15000);
 
+  it("continues a saved pilot-loop transcript through its recorded run-next handoff", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-20T00:00:00.000Z" });
+    await writeResearchHarness({
+      rootPath: root,
+      objective: "3 / 4 + 5 / 8",
+      domains: ["math"],
+      now: "2026-06-20T00:01:00.000Z"
+    });
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-20T00:02:00.000Z"
+    });
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-20T00:03:00.000Z"
+    });
+    const saved = await writeWorkspaceRunNextPlan({
+      rootPath: root,
+      plan
+    });
+    const loopRun = await runWorkspacePilotLoop({
+      rootPath: root,
+      source: "saved-run-next",
+      planRef: saved.plan.planId,
+      executeLocal: false,
+      writeRunNextPlans: true,
+      now: "2026-06-20T00:04:00.000Z"
+    });
+    const loopWrite = await writeWorkspacePilotLoopRecord({
+      rootPath: root,
+      loop: loopRun.loop
+    });
+
+    const continuation = await continueWorkspacePilotLoopRecord({
+      rootPath: root,
+      loopRef: loopWrite.loop.loopId,
+      now: "2026-06-20T00:05:00.000Z"
+    });
+
+    expect(continuation).toMatchObject({
+      schemaVersion: "truth-harness.workspace-pilot-loop-continuation.v0",
+      loop: {
+        loopId: loopWrite.loop.loopId
+      },
+      loopPath: expect.stringContaining(".truth-harness/findings/"),
+      selectedStep: {
+        runNextPlanPath: expect.stringContaining(".truth-harness/findings/")
+      },
+      sourcePlan: {
+        schemaVersion: "truth-harness.workspace-run-next.v0"
+      },
+      sourceInspection: {
+        schemaVersion: "truth-harness.workspace-run-next-inspection.v0",
+        resumeDecision: {
+          nextCommand: expect.stringContaining("truth-harness")
+        }
+      },
+      plan: {
+        schemaVersion: "truth-harness.workspace-run-next.v0",
+        localOnly: true,
+        networkAccess: "none"
+      }
+    });
+    expect(continuation.selectedPlanRef).toBe(loopRun.loop.steps[0]?.runNextPlanPath);
+    expect(continuation.resumeCommand).toContain("continue-pilot-loop");
+    expect(continuation.warnings.join(" ")).toContain("provenance only");
+  });
   it("executes credibility-action review requests and stops after the reviewer queue clears", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-21T00:00:00.000Z" });

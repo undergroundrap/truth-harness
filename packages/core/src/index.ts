@@ -253,6 +253,7 @@ export {
   writeWorkspaceRunNextPlan
 } from "./workspace-run-next.js";
 export {
+  continueWorkspacePilotLoopRecord,
   inspectWorkspacePilotLoopRecord,
   listWorkspacePilotLoopRecords,
   parseWorkspacePilotLoopJson,
@@ -320,6 +321,8 @@ export type {
   WorkspaceRunNextWriteResult
 } from "./workspace-run-next.js";
 export type {
+  WorkspacePilotLoopContinuationInput,
+  WorkspacePilotLoopContinuationResult,
   WorkspacePilotLoopInput,
   WorkspacePilotLoopInspection,
   WorkspacePilotLoopListOptions,

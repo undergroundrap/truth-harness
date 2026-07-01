@@ -1007,7 +1007,8 @@ describe("local web route ledger API", () => {
       rootPath: tempProjectRoot!,
       source: "saved-run-next",
       planRef: workspaceRunNextWritePayload.plan.planId,
-      maxSteps: 1
+      maxSteps: 1,
+      writeRunNextPlans: true
     });
     const savedPilotLoopWrite = await writeWorkspacePilotLoopRecord({
       rootPath: tempProjectRoot!,
@@ -1052,6 +1053,40 @@ describe("local web route ledger API", () => {
         path: expect.stringContaining(".truth-harness/findings/")
       }
     });
+    const pilotLoopContinueResponse = await fetch(
+      `${baseUrl}/api/workspace-pilot-loops/${savedPilotLoopWrite.loop.loopId}/continue`
+    );
+    const pilotLoopContinuePayload = await pilotLoopContinueResponse.json();
+    expect(pilotLoopContinueResponse.status, JSON.stringify(pilotLoopContinuePayload)).toBe(200);
+    expectLocalApiSuccess(pilotLoopContinueResponse, pilotLoopContinuePayload);
+    expect(pilotLoopContinuePayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-pilot-loop-continue-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      continuation: {
+        schemaVersion: "truth-harness.workspace-pilot-loop-continuation.v0",
+        loop: {
+          loopId: savedPilotLoopWrite.loop.loopId
+        },
+        sourceInspection: {
+          schemaVersion: "truth-harness.workspace-run-next-inspection.v0",
+          resumeDecision: {
+            nextCommand: expect.stringContaining("truth-harness")
+          }
+        },
+        plan: {
+          schemaVersion: "truth-harness.workspace-run-next.v0",
+          localOnly: true,
+          networkAccess: "none"
+        }
+      }
+    });
+    expect(pilotLoopContinuePayload.activity).toContainEqual(
+      expect.objectContaining({
+        actor: "local-api",
+        action: "continued-workspace-pilot-loop"
+      })
+    );
 
     const pilotLoopResponse = await fetch(`${baseUrl}/api/workspace-pilot-loop?maxSteps=3`);
     expect(pilotLoopResponse.status).toBe(200);

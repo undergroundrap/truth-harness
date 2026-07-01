@@ -32,6 +32,7 @@ import {
   createWorkspaceReview,
   createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
+  continueWorkspacePilotLoopRecord,
   createWorkspaceGraph,
   createSymbolicCasCheckRecord,
   createEngineReadinessReport,
@@ -775,6 +776,18 @@ export interface TruthHarnessWorkspacePilotLoopShowInput {
   loopRef: string;
 }
 
+export interface TruthHarnessWorkspacePilotLoopContinueInput {
+  workspacePath?: string;
+  loopRef: string;
+  executeLocal?: boolean;
+  write?: boolean;
+  timeoutMs?: number;
+  maximaCommand?: string;
+  sageCommand?: string;
+  leanCommand?: string;
+  z3Command?: string;
+  cvc5Command?: string;
+}
 export interface TruthHarnessWorkspaceReviewListInput {
   workspacePath?: string;
 }
@@ -2194,6 +2207,26 @@ export async function handleTruthHarnessWorkspacePilotLoopShow(
   return inspectWorkspacePilotLoopRecord(resolveWorkspaceRoot(input.workspacePath), input.loopRef);
 }
 
+export async function handleTruthHarnessWorkspacePilotLoopContinue(
+  input: TruthHarnessWorkspacePilotLoopContinueInput
+): Promise<Awaited<ReturnType<typeof continueWorkspacePilotLoopRecord>>> {
+  const rootPath = resolveWorkspaceRoot(input.workspacePath);
+  return continueWorkspacePilotLoopRecord({
+    rootPath,
+    loopRef: input.loopRef,
+    executeLocal: input.executeLocal === true,
+    writeRunNextPlan: input.write === true,
+    timeoutMs: input.timeoutMs,
+    maximaCommand: input.maximaCommand,
+    sageCommand: input.sageCommand,
+    leanCommand: input.leanCommand,
+    z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command,
+    enginePlanOptions: {
+      savedEngineRuns: await listEngineVerificationRunsIfWorkspace(rootPath)
+    }
+  });
+}
 export async function handleTruthHarnessWorkspaceReviewList(input: TruthHarnessWorkspaceReviewListInput): Promise<{
   total: number;
   reviews: WorkspaceReviewSummary[];

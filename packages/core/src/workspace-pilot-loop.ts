@@ -17,7 +17,9 @@ import {
   createWorkspaceRunNextPlan,
   listWorkspaceRunNextPlans,
   writeWorkspaceRunNextPlan,
+  type WorkspaceRunNextInspection,
   type WorkspaceRunNextPlan,
+  type WorkspaceRunNextSavedHandoffResult,
   type WorkspaceRunNextWriteResult
 } from "./workspace-run-next.js";
 import type { CreateEnginePlanOptions, EnginePlan } from "./engine-plan.js";
@@ -159,6 +161,37 @@ export interface WorkspacePilotLoopInspection {
   loop: WorkspacePilotLoopRecord;
   path: string;
   markdownPath?: string;
+}
+
+export interface WorkspacePilotLoopContinuationInput {
+  rootPath: string;
+  loopRef: string;
+  executeLocal?: boolean;
+  writeRunNextPlan?: boolean;
+  now?: string;
+  timeoutMs?: number;
+  maximaCommand?: string;
+  sageCommand?: string;
+  leanCommand?: string;
+  z3Command?: string;
+  cvc5Command?: string;
+  enginePlanOptions?: CreateEnginePlanOptions;
+}
+
+export interface WorkspacePilotLoopContinuationResult {
+  schemaVersion: "truth-harness.workspace-pilot-loop-continuation.v0";
+  loop: WorkspacePilotLoopRecord;
+  loopPath: string;
+  loopMarkdownPath?: string;
+  selectedStep: WorkspacePilotLoopStep;
+  selectedPlanRef: string;
+  sourcePlan: WorkspaceRunNextPlan;
+  sourcePlanPath: string;
+  sourceInspection: WorkspaceRunNextInspection;
+  plan: WorkspaceRunNextPlan;
+  written?: WorkspaceRunNextWriteResult;
+  resumeCommand: string;
+  warnings: string[];
 }
 
 export async function runWorkspacePilotLoop(input: WorkspacePilotLoopInput): Promise<WorkspacePilotLoopRunResult> {
@@ -443,6 +476,47 @@ function savedRunNextPilotLoopStatus(
   return "completed";
 }
 
+function selectPilotLoopContinuationStep(loop: WorkspacePilotLoopRecord): WorkspacePilotLoopStep {
+  const selected = [...loop.steps].reverse().find((step) => step.runNextPlanPath || step.planId);
+  if (!selected) {
+    throw new Error(`Workspace pilot-loop ${loop.loopId} has no run-next step to continue.`);
+  }
+  if (!selected.runNextPlanPath) {
+    throw new Error(
+      `Workspace pilot-loop ${loop.loopId} step ${selected.index} has no saved run-next packet. Re-run the pilot loop with --write before continuing from the transcript.`
+    );
+  }
+  return selected;
+}
+
+function pilotLoopContinuationResumeCommand(
+  rootPath: string,
+  loop: WorkspacePilotLoopRecord,
+  plan: WorkspaceRunNextPlan,
+  wrotePlan: boolean
+): string {
+  if (wrotePlan) {
+    return `truth-harness workspace show-run-next ${quoteCommandArg(plan.planId)} --workspace ${quoteCommandArg(rootPath)} --verify-snapshot`;
+  }
+  return `truth-harness workspace continue-pilot-loop ${quoteCommandArg(loop.loopId)} --workspace ${quoteCommandArg(rootPath)} --json`;
+}
+
+function pilotLoopContinuationWarnings(
+  loop: WorkspacePilotLoopRecord,
+  loopPath: string,
+  resumed: WorkspaceRunNextSavedHandoffResult,
+  plan: WorkspaceRunNextPlan
+): string[] {
+  return uniqueStrings([
+    `Continuation came from pilot-loop transcript ${loop.loopId} at ${loopPath}.`,
+    `Selected saved run-next handoff ${resumed.sourcePlan.planId} at ${resumed.sourcePlanPath}.`,
+    `Saved handoff resume decision: ${resumed.inspection.resumeDecision.status} (${resumed.inspection.resumeDecision.reason}).`,
+    "The pilot-loop transcript is provenance only; it does not upgrade trust or close gates by itself.",
+    "Continuation still uses the bounded run-next executor and never executes shell strings.",
+    ...plan.warnings
+  ]);
+}
+
 export async function writeWorkspacePilotLoopRecord(input: {
   rootPath: string;
   loop: WorkspacePilotLoopRecord;
@@ -537,6 +611,56 @@ export async function inspectWorkspacePilotLoopRecord(
     loop,
     path,
     ...(markdownPathForJsonPath(path) ? { markdownPath: markdownPathForJsonPath(path) } : {})
+  };
+}
+
+export async function continueWorkspacePilotLoopRecord(
+  input: WorkspacePilotLoopContinuationInput
+): Promise<WorkspacePilotLoopContinuationResult> {
+  const status = await requirePilotLoopWorkspace(input.rootPath);
+  const createdAt = input.now ?? new Date().toISOString();
+  const { loop, path } = await readWorkspacePilotLoopRecordWithPath(status, input.loopRef);
+  const loopMarkdownPath = markdownPathForJsonPath(path);
+  const selectedStep = selectPilotLoopContinuationStep(loop);
+  const selectedPlanRef = selectedStep.runNextPlanPath ?? selectedStep.planId;
+  const resumed = await createWorkspaceRunNextPlanFromSavedHandoff({
+    rootPath: status.root,
+    planRef: selectedPlanRef,
+    executeLocal: input.executeLocal === true,
+    now: createdAt,
+    expectedAddedPaths: loopMarkdownPath ? [path, loopMarkdownPath] : [path],
+    enginePlanOptions: {
+      timeoutMs: input.timeoutMs,
+      maximaCommand: input.maximaCommand,
+      sageCommand: input.sageCommand,
+      leanCommand: input.leanCommand,
+      z3Command: input.z3Command,
+      cvc5Command: input.cvc5Command,
+      ...input.enginePlanOptions
+    }
+  });
+  const written = input.writeRunNextPlan
+    ? await writeWorkspaceRunNextPlan({
+        rootPath: status.root,
+        plan: resumed.plan
+      })
+    : undefined;
+  const plan = written?.plan ?? resumed.plan;
+
+  return {
+    schemaVersion: "truth-harness.workspace-pilot-loop-continuation.v0",
+    loop,
+    loopPath: path,
+    ...(loopMarkdownPath ? { loopMarkdownPath } : {}),
+    selectedStep,
+    selectedPlanRef,
+    sourcePlan: resumed.sourcePlan,
+    sourcePlanPath: resumed.sourcePlanPath,
+    sourceInspection: resumed.inspection,
+    plan,
+    ...(written ? { written } : {}),
+    resumeCommand: pilotLoopContinuationResumeCommand(status.root, loop, plan, Boolean(input.writeRunNextPlan)),
+    warnings: pilotLoopContinuationWarnings(loop, path, resumed, plan)
   };
 }
 
@@ -885,6 +1009,13 @@ function isWorkspacePilotLoopId(value: string): boolean {
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function quoteCommandArg(value: string): string {
+  if (/^[A-Za-z0-9_./:@=+-]+$/u.test(value)) {
+    return value;
+  }
+  return JSON.stringify(value);
 }
 
 function toPortablePath(value: string): string {

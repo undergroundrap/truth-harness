@@ -159,6 +159,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_workspace_hard_math_seed_list",
         "truth_harness_workspace_init",
         "truth_harness_workspace_pilot_loop",
+        "truth_harness_workspace_pilot_loop_continue",
         "truth_harness_workspace_pilot_loop_list",
         "truth_harness_workspace_pilot_loop_show",
         "truth_harness_workspace_repair",
@@ -539,6 +540,18 @@ describe("Truth Harness MCP server", () => {
       expect(firstText(workspacePilotLoopShow.content)).toContain(
         '"schemaVersion": "truth-harness.workspace-pilot-loop-inspection.v0"'
       );
+      const workspacePilotLoopContinue = await client.callTool({
+        name: "truth_harness_workspace_pilot_loop_continue",
+        arguments: {
+          loopRef: workspacePilotLoopJson.loop.loopId
+        }
+      });
+      const workspacePilotLoopContinueText = firstText(workspacePilotLoopContinue.content);
+      expect(workspacePilotLoopContinue.isError).not.toBe(true);
+      expect(workspacePilotLoopContinueText).toContain(
+        '"schemaVersion": "truth-harness.workspace-pilot-loop-continuation.v0"'
+      );
+      expect(workspacePilotLoopContinueText).toContain('"schemaVersion": "truth-harness.workspace-run-next-inspection.v0"');
 
       const webUiReview = await client.callTool({
         name: "truth_harness_workspace_ui_review",

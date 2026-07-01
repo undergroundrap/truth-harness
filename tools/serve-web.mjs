@@ -253,6 +253,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "workspace-pilot-loop-dry-run",
         "workspace-pilot-loop-list",
         "workspace-pilot-loop-show",
+        "workspace-pilot-loop-continue",
         "release-audit",
         "docker-verifier-guidance",
         "web-runtime-identity",
@@ -1114,6 +1115,55 @@ async function handleApiRequest(request, response, requestUrl) {
     return;
   }
 
+  const pilotLoopContinueMatch = requestUrl.pathname.match(/^\/api\/workspace-pilot-loops\/([^/]+)\/continue$/u);
+  if (pilotLoopContinueMatch && request.method === "GET") {
+    try {
+      if (isTruthyQueryParam(requestUrl.searchParams.get("executeLocal"))) {
+        throw new HttpError(
+          400,
+          "The web pilot-loop continuation endpoint is dry-run only. Use CLI or MCP executeLocal for bounded local execution."
+        );
+      }
+      if (isTruthyQueryParam(requestUrl.searchParams.get("write"))) {
+        throw new HttpError(
+          400,
+          "The web pilot-loop continuation endpoint does not write handoffs. Use CLI or MCP write mode after reviewing the plan."
+        );
+      }
+      const { continueWorkspacePilotLoopRecord } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const loopRef = decodeURIComponent(pilotLoopContinueMatch[1] ?? "");
+      const continuation = await continueWorkspacePilotLoopRecord({
+        rootPath: projectRoot,
+        loopRef,
+        executeLocal: false,
+        writeRunNextPlan: false,
+        timeoutMs: boundedPositiveNumberOrUndefined(requestUrl.searchParams.get("timeoutMs"), 300000)
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-pilot-loop-continue-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        continuation,
+        activity: [
+          {
+            actor: "local-api",
+            action: "continued-workspace-pilot-loop",
+            detail: `${continuation.loop.loopId} resolved to run-next plan ${continuation.plan.planId} through saved handoff ${continuation.sourcePlan.planId}.`,
+            at: continuation.plan.createdAt
+          }
+        ]
+      });
+    } catch (error) {
+      writeApiError(
+        response,
+        error instanceof HttpError ? error.status : 409,
+        error instanceof Error ? error.message : "Workspace pilot-loop transcript could not be continued.",
+        request
+      );
+    }
+    return;
+  }
   const pilotLoopMatch = requestUrl.pathname.match(/^\/api\/workspace-pilot-loops\/([^/]+)$/u);
   if (pilotLoopMatch && request.method === "GET") {
     try {
