@@ -57,6 +57,7 @@ export type WorkspaceReviewItemKind =
 export type WorkspaceReviewPriority = "critical" | "high" | "medium" | "low";
 export type WorkspaceReviewEvidenceSlotStatus = "open" | "satisfied" | "not-required";
 export type WorkspaceReviewAutonomyMode = "idle" | "local-verifier-loop" | "human-review-gated";
+export type WorkspaceReviewCommandActionability = "evidence-writing" | "bounded-action" | "passive-inspection";
 
 export interface WorkspaceReviewEvidenceSlot {
   slotId: string;
@@ -2499,13 +2500,24 @@ function sortReviewItems(items: WorkspaceReviewItem[]): WorkspaceReviewItem[] {
 }
 
 function actionabilityRank(item: WorkspaceReviewItem): number {
-  if (writesEvidenceOrLedger(item.command)) {
-    return 0;
+  switch (workspaceReviewCommandActionability(item.command)) {
+    case "evidence-writing":
+      return 0;
+    case "bounded-action":
+      return 1;
+    case "passive-inspection":
+      return 2;
   }
-  if (isPassiveInspectionCommand(item.command)) {
-    return 2;
+}
+
+export function workspaceReviewCommandActionability(command: string): WorkspaceReviewCommandActionability {
+  if (writesEvidenceOrLedger(command)) {
+    return "evidence-writing";
   }
-  return 1;
+  if (isPassiveInspectionCommand(command)) {
+    return "passive-inspection";
+  }
+  return "bounded-action";
 }
 
 function writesEvidenceOrLedger(command: string): boolean {

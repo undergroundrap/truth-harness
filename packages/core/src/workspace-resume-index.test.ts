@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { writeResearchSession } from "./research-session.js";
 import { createWorkspaceResumeIndex } from "./workspace-resume-index.js";
 import { createWorkspaceReview } from "./workspace-review.js";
 import { createWorkspaceRunNextPlan, writeWorkspaceRunNextPlan } from "./workspace-run-next.js";
@@ -96,6 +97,64 @@ describe("workspace resume index", () => {
       })
     );
     expect(index.warnings).toContainEqual(expect.stringContaining("navigation only"));
+  });
+
+  it("demotes passive inspection tasks below stale saved handoffs", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-21T01:00:00.000Z" });
+    await writeResearchSession({
+      rootPath: root,
+      objective: "Track passive context without mistaking it for verifier progress.",
+      domains: ["math"],
+      tasks: ["Review the existing proof notes before claiming progress."],
+      now: "2026-06-21T01:01:00.000Z"
+    });
+
+    const review = await createWorkspaceReview({
+      rootPath: root,
+      now: "2026-06-21T01:02:00.000Z"
+    });
+    expect(review.items).toContainEqual(
+      expect.objectContaining({
+        kind: "session-task",
+        command: expect.stringContaining("truth-harness research show")
+      })
+    );
+
+    for (let index = 0; index < 5; index += 1) {
+      const plan = await createWorkspaceRunNextPlan({
+        rootPath: root,
+        review,
+        executeLocal: false,
+        now: `2026-06-21T01:03:0${index}.000Z`
+      });
+      await writeWorkspaceRunNextPlan({ rootPath: root, plan });
+      await writeFile(join(root, `fresh-note-${index}.md`), "workspace changed after the saved handoff\n", "utf8");
+    }
+
+    const index = await createWorkspaceResumeIndex({
+      rootPath: root,
+      now: "2026-06-21T01:04:00.000Z",
+      limit: 8
+    });
+
+    const staleHandoffIndex = index.items.findIndex((item) => item.kind === "saved-run-next");
+    const passiveReviewIndex = index.items.findIndex(
+      (item) => item.kind === "workspace-review-item" && item.command.includes("truth-harness research show")
+    );
+    const passiveReviewItem = index.items[passiveReviewIndex];
+    const staleHandoffItem = index.items[staleHandoffIndex];
+    const staleHandoffCount = index.items.filter((item) => item.kind === "saved-run-next").length;
+
+    expect(staleHandoffCount).toBeLessThanOrEqual(2);
+    expect(staleHandoffIndex).toBeGreaterThanOrEqual(0);
+    expect(passiveReviewIndex).toBeGreaterThanOrEqual(0);
+    expect(staleHandoffIndex).toBeLessThan(passiveReviewIndex);
+    expect(staleHandoffItem?.score).toBeGreaterThan(passiveReviewItem?.score ?? 0);
+    expect(passiveReviewItem).toMatchObject({
+      requiresHumanInput: true,
+      reason: expect.stringContaining("read-only inspection")
+    });
   });
 
   it("fails closed before workspace initialization", async () => {

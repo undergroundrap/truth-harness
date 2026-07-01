@@ -2,7 +2,13 @@ import { resolve } from "node:path";
 import { createEngineReadinessReport } from "./engine-readiness.js";
 import { getLocalWorkspaceStatus } from "./local-workspace.js";
 import { listWorkspacePilotLoopRecords, type WorkspacePilotLoopSummary } from "./workspace-pilot-loop.js";
-import { createWorkspaceReview, type WorkspaceReviewItem, type WorkspaceReviewPriority } from "./workspace-review.js";
+import {
+  createWorkspaceReview,
+  workspaceReviewCommandActionability,
+  type WorkspaceReviewCommandActionability,
+  type WorkspaceReviewItem,
+  type WorkspaceReviewPriority
+} from "./workspace-review.js";
 import { listWorkspaceRunNextPlans, type WorkspaceRunNextSummary } from "./workspace-run-next.js";
 
 export type WorkspaceResumeIndexItemKind =
@@ -96,8 +102,10 @@ export async function createWorkspaceResumeIndex(input: WorkspaceResumeIndexInpu
   });
   const engineReadiness = createEngineReadinessReport();
 
+  const runNextItems = compactRunNextResumeItems(runNexts.flatMap((plan) => resumeIndexItemsFromRunNext(root, plan)));
+
   const items = [
-    ...runNexts.flatMap((plan) => resumeIndexItemsFromRunNext(root, plan)),
+    ...runNextItems,
     ...review.items.slice(0, input.reviewLimit ?? DEFAULT_REVIEW_LIMIT).map((item) => resumeIndexItemFromReview(item)),
     ...pilotLoops.flatMap((loop) => resumeIndexItemsFromPilotLoop(root, loop)),
     ...engineReadiness.gates
@@ -149,6 +157,15 @@ export async function createWorkspaceResumeIndex(input: WorkspaceResumeIndexInpu
   };
 }
 
+function compactRunNextResumeItems(items: WorkspaceResumeIndexItem[]): WorkspaceResumeIndexItem[] {
+  const safe = items.filter((item) => item.safeToResume === true);
+  const unsafe = items
+    .filter((item) => item.safeToResume !== true)
+    .sort((left, right) => right.score - left.score || (right.createdAt ?? "").localeCompare(left.createdAt ?? ""));
+
+  return [...safe, ...unsafe.slice(0, 2)];
+}
+
 function resumeIndexItemsFromRunNext(root: string, plan: WorkspaceRunNextSummary): WorkspaceResumeIndexItem[] {
   const title = plan.itemTitle ?? plan.rationaleTarget ?? "Saved run-next handoff";
   const refs = [plan.path, plan.sourceRevisionPath, plan.sourceSnapshotPath].filter((ref): ref is string => Boolean(ref));
@@ -189,6 +206,8 @@ function resumeIndexItemsFromRunNext(root: string, plan: WorkspaceRunNextSummary
 
 function resumeIndexItemFromReview(item: WorkspaceReviewItem): WorkspaceResumeIndexItem {
   const priority = item.priority;
+  const actionability = workspaceReviewCommandActionability(item.command);
+  const firstOpenSlot = item.evidenceSlots?.find((slot) => slot.required && slot.status !== "satisfied");
   return {
     rank: 0,
     itemId: `review:${item.itemId}`,
@@ -197,17 +216,24 @@ function resumeIndexItemFromReview(item: WorkspaceReviewItem): WorkspaceResumeIn
     title: item.title,
     summary: item.summary,
     command: item.command,
-    reason: "Current workspace review selected this as an open blocker.",
-    evidenceRequired: item.evidenceSlots?.find((slot) => slot.required && slot.status !== "satisfied")?.description ?? "Write or attach the artifact requested by the review item.",
+    reason:
+      actionability === "passive-inspection"
+        ? "Current workspace review selected this as context, but it is read-only inspection; close concrete verifier gates before spending agent time here."
+        : "Current workspace review selected this as an open blocker.",
+    evidenceRequired:
+      firstOpenSlot?.description ??
+      (actionability === "passive-inspection"
+        ? "A follow-up checkpoint, verifier artifact, or refreshed run-next plan; inspection alone does not close the blocker."
+        : "Write or attach the artifact requested by the review item."),
     boundary: item.agentPacket ?? "Use the existing Truth Harness command; do not treat review text as evidence.",
     source: {
       label: item.source.label,
       ref: item.source.ref
     },
-    score: 90 + priorityWeight(priority),
+    score: reviewItemBaseScore(actionability) + priorityWeight(priority),
     createdAt: item.createdAt,
     status: item.kind,
-    requiresHumanInput: item.command.includes("<") || item.command.includes("review"),
+    requiresHumanInput: item.command.includes("<") || item.command.includes("review") || actionability === "passive-inspection",
     refs: [item.routeId, item.claimId, item.sessionId, item.validationPlanId, item.validationGateId].filter(
       (ref): ref is string => Boolean(ref)
     )
@@ -257,6 +283,17 @@ function priorityWeight(priority: WorkspaceReviewPriority): number {
       return 3;
     case "low":
       return 1;
+  }
+}
+
+function reviewItemBaseScore(actionability: WorkspaceReviewCommandActionability): number {
+  switch (actionability) {
+    case "evidence-writing":
+      return 90;
+    case "bounded-action":
+      return 70;
+    case "passive-inspection":
+      return 25;
   }
 }
 
