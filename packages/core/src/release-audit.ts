@@ -557,6 +557,9 @@ function frontierReadinessFor(input: {
   const leanTheoremTemplateReady = checkPassed(input.checks, "lean-theorem-template");
   const leanMathlibTemplateReady = checkPassed(input.checks, "lean-mathlib-template");
   const leanMathlibValidationGatesReady = checkPassed(input.checks, "lean-mathlib-validation-gates");
+  const leanMathlibValidationProofGatesClosed =
+    leanMathlibValidationGatesReady &&
+    input.checks.find((check) => check.id === "lean-mathlib-validation-gates")?.details.includes("Open proof gates: 0.") === true;
   const leanMathlibTemplateCheck = input.checks.find((check) => check.id === "lean-mathlib-template");
   const leanMathlibManifestPinned = leanMathlibTemplateCheck?.details.some((detail) => detail.startsWith("Manifest: present")) === true;
   const leanProofRepairGateReady = checkPassed(input.checks, "lean-proof-repair-gate");
@@ -574,6 +577,12 @@ function frontierReadinessFor(input: {
     ) === true ||
     input.credibilityPack?.summary.latestStrictEngineRunStatus === "passed" ||
     input.credibilityPack?.summary.latestProfessorEngineRunStatus === "passed";
+  const formalTheoremWorkflowReady =
+    leanFixtureReady &&
+    leanTheoremTemplateReady &&
+    leanProofRepairGateReady &&
+    leanMathlibTemplateReady &&
+    leanMathlibValidationProofGatesClosed;
   const boundedHardMathReady = input.professorReady && engineEvidenceReady && frontierHonestyReady && hardMathClosureReady;
   const status: ReleaseAuditFrontierReadinessStatus = boundedHardMathReady
     ? "bounded-hard-math-harness"
@@ -643,12 +652,14 @@ function frontierReadinessFor(input: {
     {
       id: "formal-theorem-workflows",
       title: "Formal theorem workflows",
-      status: leanFixtureReady ? "partial" : "blocked",
+      status: formalTheoremWorkflowReady ? "ready" : leanFixtureReady ? "partial" : "blocked",
       summary: leanFixtureReady
-        ? leanMathlibTemplateReady
-          ? leanMathlibValidationGatesReady
-            ? "Lean fixture evidence, a reusable theorem template, a manifest-pinned mathlib scaffold, saved proof-repair rehearsal, and seeded mathlib proof gates exist; open gates still need accepted scoped proof evidence."
-            : "Lean fixture evidence, a reusable theorem template, a manifest-pinned mathlib scaffold, and a saved proof-repair rehearsal exist, but mathlib validation proof gates are not seeded yet."
+        ? formalTheoremWorkflowReady
+          ? "Lean fixture evidence, a reusable theorem template, a manifest-pinned mathlib scaffold, saved proof-repair rehearsal, and all seeded mathlib proof gates have accepted scoped proof evidence."
+          : leanMathlibTemplateReady
+            ? leanMathlibValidationGatesReady
+              ? "Lean fixture evidence, a reusable theorem template, a manifest-pinned mathlib scaffold, saved proof-repair rehearsal, and seeded mathlib proof gates exist; open gates still need accepted scoped proof evidence."
+              : "Lean fixture evidence, a reusable theorem template, a manifest-pinned mathlib scaffold, and a saved proof-repair rehearsal exist, but mathlib validation proof gates are not seeded yet."
           : leanMathlibManifestPinned
             ? "Lean fixture evidence and a manifest-pinned mathlib scaffold exist, but the scaffold still needs accepted no-runtime-network proof evidence."
             : leanProofRepairGateReady && leanTheoremTemplateReady
@@ -668,19 +679,23 @@ function frontierReadinessFor(input: {
         `Lean mathlib gate: ${input.commands.dockerMathlibTemplate}.`,
         `Lean repair gate: ${input.commands.dockerLeanRepairGate}.`
       ],
-      blockers: leanMathlibTemplateReady
-        ? leanMathlibValidationGatesReady
-          ? ["Close at least one seeded mathlib validation proof gate with scoped accepted proof-check evidence before claiming mature theorem discovery."]
-          : ["Seed validation-plan-backed proof gates for each curated mathlib declaration before claiming mature theorem discovery."]
+      blockers: formalTheoremWorkflowReady
+        ? []
+        : leanMathlibTemplateReady
+          ? leanMathlibValidationGatesReady
+            ? ["Close the remaining seeded mathlib validation proof gates with scoped accepted proof-check evidence before claiming mature theorem discovery."]
+            : ["Seed validation-plan-backed proof gates for each curated mathlib declaration before claiming mature theorem discovery."]
         : leanMathlibManifestPinned
           ? ["Run the no-runtime-network Docker mathlib proof gate and review the produced proof-check receipt."]
           : ["Pin the mathlib scaffold with a reviewed lake-manifest.json before treating it as dependency-reproducible theorem infrastructure."],
-      nextAction: leanFixtureReady
-        ? leanTheoremTemplateReady && leanProofRepairGateReady
-          ? leanMathlibTemplateReady
-            ? leanMathlibValidationGatesReady
-              ? "Run truth-harness workspace run-next . --json, then close the first open mathlib validation proof gate with scoped proof-check evidence."
-              : "npm run proof:mathlib-template:plan"
+      nextAction: formalTheoremWorkflowReady
+        ? undefined
+        : leanFixtureReady
+          ? leanTheoremTemplateReady && leanProofRepairGateReady
+            ? leanMathlibTemplateReady
+              ? leanMathlibValidationGatesReady
+                ? "Run truth-harness workspace run-next . --json, then close the first open mathlib validation proof gate with scoped proof-check evidence."
+                : "npm run proof:mathlib-template:plan"
             : leanMathlibManifestPinned
               ? input.commands.dockerMathlibTemplate
               : "Pin lake-manifest.json for docs/examples/lean-mathlib-template, then run npm run docker:mathlib-template:write for no-runtime-network proof evidence."

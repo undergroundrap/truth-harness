@@ -1,12 +1,13 @@
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { initLocalWorkspace } from "./local-workspace.js";
 import { type ProofBackendCommandRunner, writeLeanProofCheckRecord } from "./proof-backend.js";
 import { writeProofRepairFixtureWorkspace } from "./proof-repair-fixture.js";
 import { writeLeanMathlibValidationHarness } from "./lean-mathlib-validation.js";
 import { createReleaseAudit, formatReleaseAuditEngineSummary, renderReleaseAuditMarkdown } from "./release-audit.js";
+import { attachValidationGateEvidence } from "./validation-plan.js";
 import { rebuildWorkspaceCatalog } from "./workspace-catalog.js";
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
 import { writeCredibilityBundle, writeCredibilityBundleVerification } from "./credibility-bundle.js";
@@ -294,8 +295,101 @@ describe("release audit", () => {
       summary: expect.stringContaining("seeded mathlib proof gates exist"),
       nextAction: "Run truth-harness workspace run-next . --json, then close the first open mathlib validation proof gate with scoped proof-check evidence.",
       blockers: expect.arrayContaining([
-        expect.stringContaining("Close at least one seeded mathlib validation proof gate")
+        expect.stringContaining("Close the remaining seeded mathlib validation proof gates")
       ]),
+      evidence: expect.arrayContaining([
+        expect.stringContaining("Lean mathlib validation gates: pass")
+      ])
+    });
+  });
+  it("marks formal theorem workflows ready after every mathlib validation proof gate is closed", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { displayName: "Closed Mathlib Validation Audit", now: "2026-06-21T01:00:00.000Z" });
+    await writeLeanTheoremTemplateFixture(root);
+    await writeProofRepairFixtureWorkspace({
+      rootPath: join(root, "docs", "examples", "lean-repair-fixture"),
+      now: "2026-06-21T01:00:00.200Z",
+      runner: proofRepairRunner()
+    });
+    await cp(
+      join(process.cwd(), "docs", "examples", "lean-mathlib-template"),
+      join(root, "docs", "examples", "lean-mathlib-template"),
+      { recursive: true }
+    );
+    await writeLeanProofCheckRecord({
+      rootPath: root,
+      sourcePath: "docs/examples/lean-mathlib-template/TruthHarnessMathlib/Algebra.lean",
+      projectPath: "docs/examples/lean-mathlib-template",
+      leanCommand: "lean-test",
+      runner: passingProofRunner,
+      now: new Date("2026-06-21T01:00:00.400Z")
+    });
+    const harness = await writeLeanMathlibValidationHarness({
+      rootPath: root,
+      projectPath: "docs/examples/lean-mathlib-template",
+      now: "2026-06-21T01:00:00.600Z"
+    });
+
+    let offset = 700;
+    for (const target of harness.validationPlans) {
+      const plan = target.validationPlan.plan;
+      const proofGate = plan.gates.find((gate) => gate.kind === "proof");
+      expect(proofGate).toBeDefined();
+      const proof = await writeLeanProofCheckRecord({
+        rootPath: root,
+        sourcePath: target.sourcePath,
+        declarationName: target.declarationName,
+        projectPath: "docs/examples/lean-mathlib-template",
+        scope: { statement: plan.claim },
+        leanCommand: "lean-test",
+        runner: passingProofRunner,
+        now: new Date(`2026-06-21T01:00:00.${offset}Z`)
+      });
+      await attachValidationGateEvidence({
+        rootPath: root,
+        planRef: plan.planId,
+        gateId: proofGate!.gateId,
+        evidenceRef: {
+          kind: "proof",
+          ref: relative(root, proof.jsonPath).replace(/\\/gu, "/"),
+          trust: proof.record.trust,
+          summary: `Scoped proof check for ${target.declarationName}.`
+        },
+        now: new Date(`2026-06-21T01:00:00.${offset + 1}Z`)
+      });
+      offset += 10;
+    }
+    await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-21T01:00:01.000Z" });
+
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      now: "2026-06-21T01:00:02.000Z",
+      engineRequirements: { lean: true },
+      leanCommand: "lean-test",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: passingEngineRunner
+    });
+    const formalStage = audit.frontierReadiness.stages.find((stage) => stage.id === "formal-theorem-workflows");
+
+    expect(harness.validationPlans).toHaveLength(5);
+    expect(audit.checks).toContainEqual(
+      expect.objectContaining({
+        id: "lean-mathlib-validation-gates",
+        status: "pass",
+        details: expect.arrayContaining([
+          "Declarations with seeded plans: 5/5.",
+          "Open proof gates: 0.",
+          "Satisfied proof gates: 5."
+        ])
+      })
+    );
+    expect(formalStage).toMatchObject({
+      id: "formal-theorem-workflows",
+      status: "ready",
+      summary: expect.stringContaining("all seeded mathlib proof gates have accepted scoped proof evidence"),
+      blockers: [],
+      nextAction: undefined,
       evidence: expect.arrayContaining([
         expect.stringContaining("Lean mathlib validation gates: pass")
       ])
