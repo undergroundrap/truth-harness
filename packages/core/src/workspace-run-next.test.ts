@@ -1632,6 +1632,70 @@ describe("workspace run-next", () => {
     });
     expect(contexts[0].boundary.externalCallNotPerformed).toBe(true);
   });
+  it("prefers benchmark agent pre-review before external review requests", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-24T00:00:00.000Z" });
+    const basePack = await createCredibilityPack({
+      rootPath: root,
+      now: "2026-06-24T00:01:00.000Z",
+      maxRoutes: 0,
+      maxClaims: 0,
+      maxSessions: 0,
+      timeoutMs: 50
+    });
+    const externalReviewAction: CredibilityPack["reviewerActionPlan"]["actions"][number] = {
+      actionId: "cred_action_00000000000000aa",
+      category: "benchmark",
+      priority: "low",
+      title: "Record external review request for frontier-honesty-challenge/riemann-hypothesis",
+      detail: "External review is required before citing this benchmark case as discovery evidence.",
+      command:
+        'truth-harness review log "Benchmark contract frontier-honesty-challenge/riemann-hypothesis" --kind math --status requested --reviewer-role "qualified external reviewer" --evidence benchmark:.truth-harness/benchmarks/bench_demo.json --question "Review the benchmark contract." --next-check "accepted formal proof artifact" --next-check "independent expert review"',
+      closes: ["benchmark-contract:frontier-honesty-challenge:riemann-hypothesis"],
+      source: {
+        kind: "benchmark-review-contract",
+        ref: ".truth-harness/benchmarks/bench_demo.json#riemann-hypothesis"
+      }
+    };
+    const preReviewAction: CredibilityPack["reviewerActionPlan"]["actions"][number] = {
+      actionId: "cred_action_00000000000000bb",
+      category: "benchmark",
+      priority: "low",
+      title: "Prepare agent pre-review rehearsal for frontier-honesty-challenge/riemann-hypothesis",
+      detail: "Prepare a local-only skeptical mathematician rehearsal packet; qualified external review remains required.",
+      command:
+        'truth-harness model-context prepare "Agent pre-review rehearsal frontier-honesty-challenge/riemann-hypothesis" --service local-agent --target local-model --title "Agent pre-review rehearsal frontier-honesty-challenge/riemann-hypothesis" --data benchmark-review-contract --data agent-pre-review-rehearsal --ref benchmark:.truth-harness/benchmarks/bench_demo.json --section "Reviewer rehearsal=Act as a skeptical mathematician, but do not mark the case externally reviewed." --redaction "local-only packet" --exclude "qualified external review is not included"',
+      closes: ["benchmark-contract-pre-review:frontier-honesty-challenge:riemann-hypothesis"],
+      source: {
+        kind: "benchmark-agent-pre-review",
+        ref: ".truth-harness/benchmarks/bench_demo.json#riemann-hypothesis"
+      }
+    };
+    const pack: CredibilityPack = {
+      ...basePack,
+      reviewerActionPlan: {
+        totalActions: 2,
+        criticalActions: 0,
+        highActions: 0,
+        actions: [externalReviewAction, preReviewAction]
+      }
+    };
+    const review = createWorkspaceReviewFromCredibilityPack({ rootPath: root, pack });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: true,
+      now: "2026-06-24T00:02:00.000Z"
+    });
+    const contexts = await listModelContexts(root);
+    const reviews = await listExpertReviews(root);
+
+    expect(review.autonomy.nextItemId).toBe("cred_action_00000000000000bb");
+    expect(plan.execution.kind).toBe("model-context");
+    expect(contexts).toHaveLength(1);
+    expect(reviews).toHaveLength(0);
+  });
   it("prefers locally executable credibility actions over host-blocked proof actions at the same priority", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-23T00:00:00.000Z" });

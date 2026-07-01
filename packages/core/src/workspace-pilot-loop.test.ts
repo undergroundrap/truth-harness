@@ -8,6 +8,7 @@ import { listExpertReviews } from "./expert-review.js";
 import { listWorkspaceEvents } from "./event-log.js";
 import { writeHardMathClosureReport } from "./hard-math-closure-report.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { listModelContexts } from "./model-context.js";
 import { createReceipt } from "./receipt.js";
 import { writeResearchHarness } from "./research-session.js";
 import { listValidationPlans } from "./validation-plan.js";
@@ -289,6 +290,7 @@ describe("workspace pilot-loop", () => {
       leanCommand: "truth-harness-missing-lean-command",
       z3Command: "truth-harness-missing-z3-command"
     });
+    const contexts = await listModelContexts(root);
     const reviews = await listExpertReviews(root);
 
     expect(result.loop).toMatchObject({
@@ -298,6 +300,18 @@ describe("workspace pilot-loop", () => {
       stopReason: "no-open-item"
     });
     expect(result.loop.steps[0]).toMatchObject({
+      item: {
+        kind: "credibility-action",
+        title: "Prepare agent pre-review rehearsal for frontier-honesty-challenge/riemann-hypothesis",
+        command: expect.stringContaining("truth-harness model-context prepare")
+      },
+      execution: {
+        status: "executed",
+        kind: "model-context",
+        evidenceRef: expect.stringContaining("model-context:.truth-harness/model-contexts/")
+      }
+    });
+    expect(result.loop.steps[1]).toMatchObject({
       item: {
         kind: "credibility-action",
         title: "Record external review request for frontier-honesty-challenge/riemann-hypothesis",
@@ -315,12 +329,18 @@ describe("workspace pilot-loop", () => {
         kind: "no-open-item"
       }
     });
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]).toMatchObject({
+      purpose: "Agent pre-review rehearsal frontier-honesty-challenge/riemann-hypothesis",
+      target: { kind: "local-model", service: "local-agent" }
+    });
     expect(reviews).toHaveLength(1);
     expect(reviews[0]).toMatchObject({
       subject: "Benchmark contract frontier-honesty-challenge/riemann-hypothesis",
       status: "requested",
       evidenceRefs: [expect.objectContaining({ kind: "benchmark" })]
     });
+    expect(result.loop.summary.evidenceRefs).toContainEqual(expect.stringContaining("model-context:.truth-harness/model-contexts/"));
     expect(result.loop.summary.evidenceRefs).toContainEqual(expect.stringContaining("review:.truth-harness/reviews/"));
   }, 15000);
   it("resumes a verified saved run-next handoff as the pilot-loop source", async () => {

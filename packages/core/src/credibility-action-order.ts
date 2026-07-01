@@ -40,9 +40,10 @@ function credibilityActionLocalFirstRank(command: string): number {
   if (/^truth-harness\s+bench\s+(?:run|compare)\b/u.test(normalized)) return 1;
   if (/^truth-harness\s+validation\s+attach\b/u.test(normalized)) return 2;
   if (/^truth-harness\s+claim\s+(?:add|review)\b/u.test(normalized)) return 3;
-  if (/^truth-harness\s+review\s+log\b/u.test(normalized)) return 4;
-  if (/^truth-harness\s+(?:smt|cas|proof)\s+check\b/u.test(normalized)) return 5;
-  if (/^truth-harness\s+engines\s+verify\b/u.test(normalized)) return 6;
+  if (/^truth-harness\s+model-context\s+prepare\b/u.test(normalized)) return 4;
+  if (/^truth-harness\s+review\s+log\b/u.test(normalized)) return 5;
+  if (/^truth-harness\s+(?:smt|cas|proof)\s+check\b/u.test(normalized)) return 6;
+  if (/^truth-harness\s+engines\s+verify\b/u.test(normalized)) return 7;
   if (/^(?:npm\s+run\s+docker:[\w:-]+|docker\s+compose\s+run)\b/u.test(normalized)) return 8;
   return 9;
 }
