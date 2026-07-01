@@ -21,16 +21,21 @@ describe("engine readiness", () => {
       expect.objectContaining({
         id: "professor-review",
         status: "blocked",
-        missingClaimClasses: ["independent-cas-cross-check", "smt-constraint-check", "accepted-proof-checking"]
+        missingClaimClasses: ["independent-cas-cross-check", "smt-constraint-check", "accepted-proof-checking"],
+        nextActions: expect.arrayContaining(["npm run docker:professor", "npm run docker:engines"])
       })
     );
+    expect(report.gates.find((gate) => gate.id === "professor-review")?.nextActions[0]).toBe("npm run docker:professor");
     expect(report.gates).toContainEqual(
       expect.objectContaining({
         id: "strict-professor-review",
         status: "blocked",
-        missingClaimClasses: ["dual-cas-reviewer-cross-check", "dual-smt-reviewer-check", "accepted-proof-checking"]
+        missingClaimClasses: ["dual-cas-reviewer-cross-check", "dual-smt-reviewer-check", "accepted-proof-checking"],
+        nextActions: expect.arrayContaining(["npm run docker:professor:all", "npm run docker:all-engines:write"])
       })
     );
+    expect(report.gates.find((gate) => gate.id === "strict-professor-review")?.nextActions[0]).toBe("npm run docker:professor:all");
+    expect(report.gates.find((gate) => gate.id === "agent-autonomy")?.nextActions[0]).toBe("npm run docker:sandbox:write");
     expect(report.claimClasses).toContainEqual(
       expect.objectContaining({
         id: "accepted-proof-checking",

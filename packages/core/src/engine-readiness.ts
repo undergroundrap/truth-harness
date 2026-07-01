@@ -314,7 +314,8 @@ const GATE_DEFINITIONS = [
     title: "Professor review",
     requiredClaimClasses: ["independent-cas-cross-check", "smt-constraint-check", "accepted-proof-checking"],
     readySummary: "Independent CAS, SMT, and proof-checker paths are available for reviewer-facing math work.",
-    blockedSummary: "Reviewer-facing math is blocked until independent CAS, SMT, and Lean proof gates are available or run through Docker."
+    blockedSummary: "Reviewer-facing math is blocked until independent CAS, SMT, and Lean proof gates are available or run through Docker.",
+    blockedNextActions: ["npm run docker:professor", "npm run docker:engines"]
   },
   {
     id: "strict-professor-review",
@@ -322,14 +323,16 @@ const GATE_DEFINITIONS = [
     requiredClaimClasses: ["dual-cas-reviewer-cross-check", "dual-smt-reviewer-check", "accepted-proof-checking"],
     readySummary: "Maxima, SageMath, Z3, cvc5, and Lean are all available for strict all-engine reviewer packets.",
     blockedSummary:
-      "Strict reviewer-facing math is blocked until Maxima, SageMath, Z3, cvc5, and Lean are available or refreshed through the all-engine Docker route."
+      "Strict reviewer-facing math is blocked until Maxima, SageMath, Z3, cvc5, and Lean are available or refreshed through the all-engine Docker route.",
+    blockedNextActions: ["npm run docker:professor:all", "npm run docker:all-engines:write"]
   },
   {
     id: "agent-autonomy",
     title: "Agent autonomy",
     requiredClaimClasses: ["workspace-provenance", "code-execution-safety"],
     readySummary: "Agents can route work through local provenance and an attested execution boundary.",
-    blockedSummary: "Autonomous agent loops should stay limited until the code execution boundary is attested."
+    blockedSummary: "Autonomous agent loops should stay limited until the code execution boundary is attested.",
+    blockedNextActions: ["npm run docker:sandbox:write"]
   }
 ] as const;
 
@@ -510,10 +513,13 @@ function readinessGate(
     return claimClass?.status !== "ready";
   });
   const status = missingClaimClasses.length === 0 ? "ready" : "blocked";
-  const nextActions = missingClaimClasses.flatMap((id) => {
+  const claimClassNextActions = missingClaimClasses.flatMap((id) => {
     const claimClass = claimClasses.find((entry) => entry.id === id);
     return claimClass?.nextActions ?? [];
   });
+  const nextActions = status === "ready"
+    ? []
+    : [...("blockedNextActions" in gate ? gate.blockedNextActions : []), ...claimClassNextActions];
 
   return {
     id: gate.id,

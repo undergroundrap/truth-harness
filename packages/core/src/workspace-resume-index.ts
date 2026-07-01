@@ -110,25 +110,28 @@ export async function createWorkspaceResumeIndex(input: WorkspaceResumeIndexInpu
     ...pilotLoops.flatMap((loop) => resumeIndexItemsFromPilotLoop(root, loop)),
     ...engineReadiness.gates
       .filter((gate) => gate.status === "blocked")
-      .map((gate): WorkspaceResumeIndexItem => ({
-        rank: 0,
-        itemId: `engine-gate:${gate.id}`,
-        kind: "engine-readiness-gate" as const,
-        priority: gate.id.includes("professor") ? "high" : "medium",
-        title: gate.title,
-        summary: gate.summary,
-        command: gate.nextActions[0] ?? "truth-harness engines",
-        reason: "Engine readiness is blocked; concrete verifier evidence may require a Docker or local engine gate before a stronger claim can close.",
-        evidenceRequired: "A concrete engine verification run, not a readiness probe.",
-        boundary: "Readiness gates do not prove claims; they only tell agents which verifier stack is available.",
-        source: {
-          label: "engine-readiness",
-          ref: gate.id
-        },
-        score: gate.id.includes("strict") ? 45 : 40,
-        status: gate.status,
-        requiresHumanInput: true
-      }))
+      .map((gate): WorkspaceResumeIndexItem => {
+        const priority = engineReadinessGatePriority(gate.id);
+        return {
+          rank: 0,
+          itemId: `engine-gate:${gate.id}`,
+          kind: "engine-readiness-gate" as const,
+          priority,
+          title: gate.title,
+          summary: gate.summary,
+          command: gate.nextActions[0] ?? "truth-harness engines",
+          reason: "Engine readiness is blocked; concrete verifier evidence may require a Docker or local engine gate before a stronger claim can close.",
+          evidenceRequired: "A concrete engine verification run, not a readiness probe.",
+          boundary: "Readiness gates do not prove claims; they only tell agents which verifier stack is available.",
+          source: {
+            label: "engine-readiness",
+            ref: gate.id
+          },
+          score: engineReadinessGateScore(gate.id, priority),
+          status: gate.status,
+          requiresHumanInput: true
+        };
+      })
   ]
     .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
     .slice(0, input.limit ?? DEFAULT_LIMIT)
@@ -271,6 +274,15 @@ function resumeIndexItemsFromPilotLoop(root: string, loop: WorkspacePilotLoopSum
       )
     }
   ];
+}
+
+function engineReadinessGatePriority(gateId: string): WorkspaceResumeIndexPriority {
+  return gateId.includes("professor") ? "high" : "medium";
+}
+
+function engineReadinessGateScore(gateId: string, priority: WorkspaceResumeIndexPriority): number {
+  const baseScore = gateId === "strict-professor-review" ? 45 : gateId === "professor-review" ? 43 : 40;
+  return baseScore + priorityWeight(priority);
 }
 
 function priorityWeight(priority: WorkspaceReviewPriority): number {
