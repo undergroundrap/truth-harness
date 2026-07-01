@@ -240,7 +240,7 @@ export async function runWorkspacePilotLoop(input: WorkspacePilotLoopInput): Pro
     }
     if (!plan.item) {
       stopReason = "no-open-item";
-      loopStatus = "blocked";
+      loopStatus = pilotLoopHasDurableProgress(steps) ? "completed" : "blocked";
       break;
     }
     if (plan.status === "blocked" || plan.execution.status === "blocked") {
@@ -581,6 +581,10 @@ async function recordPilotLoopStep(input: {
 
 function pilotLoopMadeDurableProgress(plan: WorkspaceRunNextPlan): boolean {
   return Boolean(plan.execution.evidenceRef || plan.execution.attached);
+}
+
+function pilotLoopHasDurableProgress(steps: WorkspacePilotLoopStep[]): boolean {
+  return steps.some((step) => Boolean(step.execution.evidenceRef || step.execution.attached));
 }
 
 function pilotLoopStepStopReason(plan: WorkspaceRunNextPlan): string | undefined {

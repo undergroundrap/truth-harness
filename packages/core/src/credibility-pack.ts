@@ -2,6 +2,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { listBenchmarkArtifacts, type BenchmarkArtifactSummary } from "./benchmark-run.js";
+import { listExpertReviews, type ExpertReviewRecord } from "./expert-review.js";
 import {
   engineVerificationCaseEvidenceMeaning,
   engineVerificationCaseEvidenceTier,
@@ -253,6 +254,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
   const engineRunLedger = summarizeEngineRunLedger(await listEngineVerificationRuns(status.root));
   const benchmarkLedger = summarizeBenchmarkLedger(await listBenchmarkArtifacts(status.root));
   const hardMathClosureLedger = summarizeHardMathClosureLedger(await listHardMathClosureReports(status.root));
+  const expertReviews = await listExpertReviews(status.root);
   const review = await createWorkspaceReview({
     rootPath: status.root,
     maxRoutes: input.maxRoutes,
@@ -346,6 +348,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       engineRunLedger,
       benchmarkLedger,
       hardMathClosureLedger,
+      expertReviews,
       review,
       reviewerCommands
     }),
@@ -848,6 +851,7 @@ function createReviewerActionPlan(input: {
   engineRunLedger: CredibilityPackEngineRunLedger;
   benchmarkLedger: CredibilityPackBenchmarkLedger;
   hardMathClosureLedger: CredibilityPackHardMathClosureLedger;
+  expertReviews: ExpertReviewRecord[];
   review: WorkspaceReview;
   reviewerCommands: CredibilityPackCommandSet;
 }): CredibilityPack["reviewerActionPlan"] {
@@ -1025,7 +1029,7 @@ function createReviewerActionPlan(input: {
     });
   }
 
-  for (const { run, contract } of unresolvedBenchmarkReviewContracts(input.benchmarkLedger)) {
+  for (const { run, contract } of unresolvedBenchmarkReviewContracts(input.benchmarkLedger, input.expertReviews)) {
     pushAction({
       category: "benchmark",
       priority: "low",
@@ -1115,15 +1119,47 @@ function createReviewerActionPlan(input: {
   };
 }
 
-function unresolvedBenchmarkReviewContracts(ledger: CredibilityPackBenchmarkLedger): Array<{
+function unresolvedBenchmarkReviewContracts(ledger: CredibilityPackBenchmarkLedger, expertReviews: ExpertReviewRecord[]): Array<{
   run: BenchmarkArtifactSummary;
   contract: NonNullable<BenchmarkArtifactSummary["reviewContracts"]>[number];
 }> {
   return ledger.latestRuns.flatMap((run) =>
     (run.reviewContracts ?? [])
       .filter((contract) => contract.reviewStatus === "external-review-needed" || contract.reviewStatus === "unreviewed")
+      .filter((contract) => !hasSavedBenchmarkContractReview(run, contract, expertReviews))
       .map((contract) => ({ run, contract }))
   );
+}
+
+function benchmarkReviewContractSubject(
+  run: BenchmarkArtifactSummary,
+  contract: NonNullable<BenchmarkArtifactSummary["reviewContracts"]>[number]
+): string {
+  return `Benchmark contract ${run.suiteId}/${contract.taskId}`;
+}
+
+function hasSavedBenchmarkContractReview(
+  run: BenchmarkArtifactSummary,
+  contract: NonNullable<BenchmarkArtifactSummary["reviewContracts"]>[number],
+  expertReviews: ExpertReviewRecord[]
+): boolean {
+  const subject = benchmarkReviewContractSubject(run, contract);
+  const benchmarkRef = normalizeBenchmarkReviewRef(run.path);
+  return expertReviews.some((review) => {
+    if (review.subject !== subject) {
+      return false;
+    }
+    if (review.status !== "requested" && review.status !== "in-review" && review.status !== "completed") {
+      return false;
+    }
+    return review.evidenceRefs.some(
+      (ref) => ref.kind === "benchmark" && normalizeBenchmarkReviewRef(ref.ref) === benchmarkRef
+    );
+  });
+}
+
+function normalizeBenchmarkReviewRef(value: string): string {
+  return value.replace(/\\/gu, "/").replace(/^\.\//u, "");
 }
 
 function benchmarkReviewContractDetail(
@@ -1139,7 +1175,7 @@ function benchmarkReviewContractCommand(
   run: BenchmarkArtifactSummary,
   contract: NonNullable<BenchmarkArtifactSummary["reviewContracts"]>[number]
 ): string {
-  const subject = `Benchmark contract ${run.suiteId}/${contract.taskId}`;
+  const subject = benchmarkReviewContractSubject(run, contract);
   const question = `Review the benchmark case, required evidence, checker boundary, and receipt posture before any broad claim cites it.`;
   const nextChecks = contract.requiredEvidence.length > 0
     ? contract.requiredEvidence

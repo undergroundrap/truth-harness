@@ -9,6 +9,7 @@ import { createCredibilityPack, writeCredibilityPack } from "./credibility-pack.
 import { writeEngineVerificationRun, type EngineVerificationCommandRunner } from "./engine-verification.js";
 import { writeHardMathClosureReport } from "./hard-math-closure-report.js";
 import { writeBenchmarkRunRecord } from "./benchmark-run.js";
+import { writeExpertReview } from "./expert-review.js";
 import { createReceipt } from "./receipt.js";
 import { writeReportDraft } from "./report-draft.js";
 import { writeVerifierRoute } from "./verifier-route.js";
@@ -358,6 +359,36 @@ describe("professor credibility pack", () => {
     expect(action?.detail).toContain("accepted formal proof artifact");
     expect(pack.markdown).toContain("Review contracts:");
     expect(pack.markdown).toContain("riemann-hypothesis");
+
+    await writeExpertReview({
+      rootPath: root,
+      subject: "Benchmark contract frontier-honesty-challenge/riemann-hypothesis",
+      kind: "math",
+      status: "requested",
+      reviewerRole: "qualified external reviewer",
+      evidenceRefs: [{ kind: "benchmark", ref: toWorkspaceRef(root, benchmark.jsonPath) }],
+      requiredNextChecks: [
+        "accepted formal proof artifact for the exact theorem statement",
+        "independent expert review before any discovery claim"
+      ],
+      now: "2026-06-16T00:01:30.000Z"
+    });
+    const reviewedPack = await createCredibilityPack({
+      rootPath: root,
+      now: "2026-06-16T00:02:00.000Z",
+      engineRequirements: { maxima: true, z3: true, lean: true },
+      maximaCommand: "maxima-test",
+      z3Command: "z3-test",
+      leanCommand: "lean-test",
+      sageCommand: "sage-test",
+      smtSourcePath: "constraints.smt2",
+      smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
+      leanSourcePath: "Proof.lean",
+      leanSourceText: "theorem smoke : True := by\n  trivial\n",
+      runner: passingEngineRunner
+    });
+
+    expect(reviewedPack.reviewerActionPlan.actions.find((item) => item.source.kind === "benchmark-review-contract")).toBeUndefined();
   });
 
   it("rejects malformed credibility packs before writing reviewer artifacts", async () => {
@@ -970,6 +1001,10 @@ async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-credibility-pack-"));
   roots.push(root);
   return root;
+}
+
+function toWorkspaceRef(root: string, path: string): string {
+  return path.slice(root.length + 1).replace(/\\/gu, "/");
 }
 
 async function writePassingHardMathClosures(root: string): Promise<void> {
