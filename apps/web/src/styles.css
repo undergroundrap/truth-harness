@@ -3963,6 +3963,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 }
 
 .workspace-run-next-card,
+.workspace-resume-index-card,
 .workspace-pilot-loop-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -3973,6 +3974,37 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   background: #0f0f0f;
   padding: 16px 18px;
   overflow: hidden;
+}
+
+.workspace-resume-index-card {
+  background: linear-gradient(180deg, rgba(231, 197, 119, 0.06), rgba(15, 15, 15, 0.98));
+  border-color: rgba(231, 197, 119, 0.22);
+}
+
+.workspace-resume-index-list {
+  display: grid;
+  gap: 8px;
+}
+
+.workspace-resume-index-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #0c0c0c;
+  padding: 11px 12px;
+}
+
+.workspace-resume-index-item.ready {
+  border-color: rgba(122, 214, 170, 0.35);
+  background: #0b130f;
+}
+
+.workspace-resume-index-item.blocked {
+  border-color: rgba(231, 197, 119, 0.35);
 }
 
 .workspace-pilot-loop-card {
@@ -3995,6 +4027,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 }
 
 .workspace-run-next-card strong,
+.workspace-resume-index-card strong,
 .workspace-pilot-loop-card strong {
   color: #f1eadc;
   font-size: 14px;
@@ -4003,6 +4036,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 }
 
 .workspace-run-next-card p,
+.workspace-resume-index-card p,
 .workspace-pilot-loop-card p {
   color: #cfc7ba;
   font-size: 12px;
@@ -4012,6 +4046,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 }
 
 .workspace-run-next-card code,
+.workspace-resume-index-card code,
 .workspace-pilot-loop-card code {
   display: block;
   min-width: 0;
@@ -4457,6 +4492,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 }
 
 .workspace-run-next-card > .workspace-run-next-actions,
+.workspace-resume-index-card > .workspace-run-next-actions,
 .workspace-pilot-loop-card > .workspace-run-next-actions {
   border-top: 1px solid var(--line-soft);
   padding-top: 10px;
@@ -4766,6 +4802,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 }
 
 .workspace-run-next-row,
+.workspace-resume-index-item,
 .workspace-run-next-opened,
 .workspace-run-next-empty {
   min-width: 0;
@@ -4789,6 +4826,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 }
 
 .workspace-run-next-row p,
+.workspace-resume-index-item p,
 .workspace-run-next-opened p {
   margin: 0;
   color: #c9c1b6;
@@ -4798,6 +4836,7 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
 }
 
 .workspace-run-next-row code,
+.workspace-resume-index-item code,
 .workspace-run-next-opened code {
   display: block;
   min-width: 0;
@@ -4983,8 +5022,10 @@ body.visual-detail-collapsed[data-surface="plot"] .plot-canvas svg {
   .runbook-hero,
   .runbook-next,
   .workspace-run-next-card,
+  .workspace-resume-index-card,
   .workspace-pilot-loop-card,
   .workspace-run-next-row,
+  .workspace-resume-index-item,
   .runbook-utility-row {
     grid-template-columns: 1fr;
   }

@@ -79,6 +79,7 @@ describe("local web route ledger API", () => {
     expect(statusPayload.capabilities).toContain("workspace-run-next-save");
     expect(statusPayload.capabilities).toContain("workspace-run-next-list");
     expect(statusPayload.capabilities).toContain("workspace-run-next-show");
+    expect(statusPayload.capabilities).toContain("workspace-resume-index");
     expect(statusPayload.capabilities).toContain("workspace-pilot-loop-dry-run");
     expect(statusPayload.capabilities).toContain("workspace-pilot-loop-list");
     expect(statusPayload.capabilities).toContain("workspace-pilot-loop-show");
@@ -1256,6 +1257,30 @@ describe("local web route ledger API", () => {
           action: expect.any(String),
           nextCommand: expect.stringContaining("truth-harness")
         })
+      })
+    );
+
+    const resumeIndexResponse = await fetch(`${baseUrl}/api/workspace-resume-index?limit=5&verifySnapshots=false`);
+    expect(resumeIndexResponse.status).toBe(200);
+    const resumeIndexPayload = await resumeIndexResponse.json();
+    expectLocalApiSuccess(resumeIndexResponse, resumeIndexPayload);
+    expect(resumeIndexPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-resume-index-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      index: {
+        schemaVersion: "truth-harness.workspace-resume-index.v0",
+        localOnly: true,
+        networkAccess: "none"
+      }
+    });
+    expect(resumeIndexPayload.index.summary.savedRunNextHandoffs).toBeGreaterThanOrEqual(1);
+    expect(resumeIndexPayload.index.items.length).toBeLessThanOrEqual(5);
+    expect(resumeIndexPayload.index.items).toContainEqual(
+      expect.objectContaining({
+        kind: "saved-run-next",
+        command: expect.stringContaining("truth-harness"),
+        source: expect.objectContaining({ label: "workspace-run-next" })
       })
     );
 

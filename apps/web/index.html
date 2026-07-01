@@ -417,6 +417,23 @@
                       <button class="text-button compact-button" id="copy-run-next-command" type="button">Copy command</button>
                     </div>
                   </section>
+                  <section class="workspace-resume-index-card" id="workspace-resume-index-card" aria-label="Agent resume queue">
+                    <div class="workspace-run-next-history-head">
+                      <div>
+                        <span class="mini-label">agent resume queue</span>
+                        <strong id="workspace-resume-index-title">Loading ranked proof blockers.</strong>
+                      </div>
+                      <span class="status-pill waiting" id="workspace-resume-index-status">loading</span>
+                    </div>
+                    <p id="workspace-resume-index-summary">Ranks saved handoffs, pilot-loop transcripts, review items, and engine gates so agents resume with the highest-value verifier blocker.</p>
+                    <code id="workspace-resume-index-command">GET /api/workspace-resume-index</code>
+                    <div class="workspace-resume-index-list" id="workspace-resume-index-list"></div>
+                    <div class="workspace-run-next-actions">
+                      <button class="text-button compact-button strong-action" id="refresh-resume-index" type="button">Refresh queue</button>
+                      <button class="text-button compact-button" id="verify-resume-index" type="button">Verify drift</button>
+                      <button class="text-button compact-button" id="copy-resume-index-command" type="button">Copy top command</button>
+                    </div>
+                  </section>
                   <section class="workspace-pilot-loop-card" id="workspace-pilot-loop-card" aria-label="Workspace pilot-loop preview">
                     <div class="workspace-run-next-main">
                       <div class="workspace-run-next-head">

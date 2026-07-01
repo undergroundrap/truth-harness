@@ -224,6 +224,11 @@ let workspaceRunNextSummariesLoadedAt = 0;
 let workspaceRunNextOpenedInspection;
 let workspaceRunNextOpenedError;
 let workspaceRunNextSaving = false;
+let workspaceResumeIndex;
+let workspaceResumeIndexError;
+let workspaceResumeIndexLoading = false;
+let workspaceResumeIndexVerified = true;
+let workspaceResumeIndexLoadedAt = 0;
 let workspacePilotLoop;
 let workspacePilotLoopError;
 let workspacePilotLoopSource = "credibility-actions";
@@ -515,6 +520,14 @@ const seedHardMathButton = document.querySelector("#seed-hard-math");
 const saveRunNextHandoffButton = document.querySelector("#save-run-next-handoff");
 const refreshRunNextButton = document.querySelector("#refresh-run-next");
 const copyRunNextCommandButton = document.querySelector("#copy-run-next-command");
+const workspaceResumeIndexStatus = document.querySelector("#workspace-resume-index-status");
+const workspaceResumeIndexTitle = document.querySelector("#workspace-resume-index-title");
+const workspaceResumeIndexSummary = document.querySelector("#workspace-resume-index-summary");
+const workspaceResumeIndexCommand = document.querySelector("#workspace-resume-index-command");
+const workspaceResumeIndexList = document.querySelector("#workspace-resume-index-list");
+const refreshResumeIndexButton = document.querySelector("#refresh-resume-index");
+const verifyResumeIndexButton = document.querySelector("#verify-resume-index");
+const copyResumeIndexCommandButton = document.querySelector("#copy-resume-index-command");
 const workspacePilotLoopStatus = document.querySelector("#workspace-pilot-loop-status");
 const workspacePilotLoopTitle = document.querySelector("#workspace-pilot-loop-title");
 const workspacePilotLoopSummary = document.querySelector("#workspace-pilot-loop-summary");
@@ -1234,6 +1247,7 @@ void refreshVisualArtifacts();
 void refreshWorkspaceReview();
 void refreshLatestProfessorChallengeSeed({ announce: false });
 void refreshWorkspaceRunNext({ announce: false });
+void refreshWorkspaceResumeIndex({ announce: false });
 void refreshWorkspacePilotLoop({ announce: false });
 void refreshWorkspacePilotLoops({ announce: false });
 void refreshWorkspaceRunNextHandoffs({ announce: false });
@@ -1316,6 +1330,7 @@ function render() {
   renderAgentRoutes(receipt);
   renderRunbook(receipt);
   renderWorkspaceRunNext();
+  renderWorkspaceResumeIndex();
   renderWorkspacePilotLoop();
   renderWorkspacePilotLoops();
   renderWorkspaceRunNextHandoffs();
@@ -5977,6 +5992,7 @@ async function saveWorkspaceRunNextHandoffFromUi({ source = "workspace-review", 
     void refreshCatalogStatus({ announce: false });
     void refreshWorkspaceEvents({ announce: false });
     await refreshWorkspaceRunNextHandoffs({ announce: false, verifySnapshots: true });
+    await refreshWorkspaceResumeIndex({ announce: false, verifySnapshots: true });
     if (payload.plan?.planId) {
       await openWorkspaceRunNextHandoff(payload.plan.planId);
     }
@@ -6246,6 +6262,180 @@ async function openWorkspaceRunNextHandoff(planRef, { verifySnapshot = false } =
   }
 }
 
+function refreshWorkspaceResumeIndexIfStale({ maxAgeMs = 5000 } = {}) {
+  const neverLoaded = workspaceResumeIndexLoadedAt === 0;
+  const stale = Date.now() - workspaceResumeIndexLoadedAt > maxAgeMs;
+  if (!workspaceResumeIndexLoading && (neverLoaded || stale)) {
+    void refreshWorkspaceResumeIndex({ announce: false });
+  }
+}
+
+async function refreshWorkspaceResumeIndex({ announce = true, verifySnapshots = true } = {}) {
+  if (!workspaceResumeIndexTitle || workspaceResumeIndexLoading) {
+    return;
+  }
+
+  workspaceResumeIndexLoading = true;
+  workspaceResumeIndexVerified = verifySnapshots;
+  renderWorkspaceResumeIndex();
+  try {
+    const params = new URLSearchParams({
+      limit: "8",
+      runNextLimit: "8",
+      pilotLoopLimit: "5",
+      reviewLimit: "5",
+      verifySnapshots: verifySnapshots ? "true" : "false"
+    });
+    const response = await fetch(`/api/workspace-resume-index?${params.toString()}`, {
+      method: "GET",
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Local workspace resume index API failed.");
+    workspaceResumeIndex = payload.index;
+    workspaceResumeIndexError = undefined;
+    workspaceResumeIndexLoadedAt = Date.now();
+    if (announce) {
+      const total = workspaceResumeIndex?.summary?.totalItems ?? workspaceResumeIndex?.items?.length ?? 0;
+      const safe = workspaceResumeIndex?.summary?.safeSavedRunNextHandoffs ?? 0;
+      addActivity(
+        "local-api",
+        verifySnapshots ? "Verified agent resume queue" : "Loaded agent resume queue",
+        localApiSuccessMessage(payload, `${total} ranked resume item${total === 1 ? "" : "s"}; ${safe} saved handoff${safe === 1 ? "" : "s"} safe to resume.`),
+        total > 0 ? "passed" : "waiting"
+      );
+    }
+  } catch (error) {
+    workspaceResumeIndex = undefined;
+    workspaceResumeIndexError = error instanceof Error ? error.message : "Unknown workspace resume index failure.";
+    workspaceResumeIndexLoadedAt = Date.now();
+    addActivity("local-api", "Resume queue unavailable", workspaceResumeIndexError, "waiting");
+  } finally {
+    workspaceResumeIndexLoading = false;
+    renderWorkspaceResumeIndex();
+  }
+}
+
+function renderWorkspaceResumeIndex() {
+  if (!workspaceResumeIndexTitle || !workspaceResumeIndexStatus || !workspaceResumeIndexSummary || !workspaceResumeIndexCommand || !workspaceResumeIndexList) {
+    return;
+  }
+
+  const command = "truth-harness workspace resume-index . --json";
+  workspaceResumeIndexCommand.textContent = workspaceResumeIndexVerified
+    ? `${command} --verify-snapshots`
+    : command;
+
+  if (workspaceResumeIndexError) {
+    workspaceResumeIndexStatus.textContent = "unavailable";
+    workspaceResumeIndexStatus.className = "status-pill waiting";
+    workspaceResumeIndexTitle.textContent = "Agent resume queue unavailable.";
+    workspaceResumeIndexSummary.textContent = workspaceResumeIndexError;
+    workspaceResumeIndexList.innerHTML = `<div class="workspace-run-next-empty">Use the CLI resume-index command after checking the local API.</div>`;
+    if (copyResumeIndexCommandButton) {
+      copyResumeIndexCommandButton.disabled = false;
+    }
+    return;
+  }
+
+  const items = Array.isArray(workspaceResumeIndex?.items) ? workspaceResumeIndex.items : [];
+  if (workspaceResumeIndexLoading && items.length === 0) {
+    workspaceResumeIndexStatus.textContent = workspaceResumeIndexVerified ? "verifying" : "loading";
+    workspaceResumeIndexStatus.className = "status-pill waiting";
+    workspaceResumeIndexTitle.textContent = workspaceResumeIndexVerified ? "Checking resume drift." : "Loading ranked proof blockers.";
+    workspaceResumeIndexSummary.textContent = workspaceResumeIndexVerified
+      ? "Checking saved handoffs against their source revision and snapshot before suggesting resumption."
+      : "Reading saved handoffs, pilot loops, review items, and blocked engine gates.";
+    workspaceResumeIndexList.innerHTML = `<div class="workspace-run-next-empty">Resume queue is local-only and read-only.</div>`;
+    if (copyResumeIndexCommandButton) {
+      copyResumeIndexCommandButton.disabled = true;
+    }
+    return;
+  }
+
+  const summary = workspaceResumeIndex?.summary ?? {};
+  workspaceResumeIndexStatus.textContent = items.length > 0 ? `${items.length} ranked` : "empty";
+  workspaceResumeIndexStatus.className = `status-pill ${items.length > 0 ? "passed" : "waiting"}`;
+  workspaceResumeIndexTitle.textContent = items.length > 0
+    ? "Highest-value verifier blockers are ready."
+    : "No resume blockers found yet.";
+  workspaceResumeIndexSummary.textContent = items.length > 0
+    ? `${summary.safeSavedRunNextHandoffs ?? 0}/${summary.savedRunNextHandoffs ?? 0} saved handoffs are safe, ${summary.openReviewItems ?? 0} review items are open, and ${summary.blockedEngineGates ?? 0} engine gates are blocked.`
+    : "Start a research harness or save a run-next handoff so future agents reopen the workspace with a concrete proof blocker.";
+  workspaceResumeIndexList.innerHTML = items.length > 0
+    ? items.map((item) => renderWorkspaceResumeIndexItem(item)).join("")
+    : `<div class="workspace-run-next-empty">No ranked resume work yet. Start harnesses, close gates, and save handoffs to build the queue.</div>`;
+  if (copyResumeIndexCommandButton) {
+    copyResumeIndexCommandButton.disabled = items.length === 0;
+  }
+}
+
+function renderWorkspaceResumeIndexItem(item) {
+  const command = item?.command ?? "truth-harness workspace resume-index . --json";
+  const sourceLabel = item?.source?.label ?? item?.kind ?? "workspace";
+  const sourceRef = item?.source?.ref ?? "not recorded";
+  const statusText = item?.safeToResume === true
+    ? "safe"
+    : item?.requiresHumanInput
+      ? "review"
+      : item?.status ?? item?.priority ?? "planned";
+  const openButton = workspaceResumeIndexOpenButtonHtml(item);
+  return `<article class="workspace-resume-index-item ${workspaceResumeIndexItemClass(item)}">
+    <div class="workspace-run-next-row-main">
+      <div class="workspace-run-next-row-head">
+        <span class="status-pill ${workspaceResumeIndexItemTrust(item)}">${escapeHtml(statusText)}</span>
+        <strong>${escapeHtml(`#${item?.rank ?? "?"} ${item?.title ?? "Resume item"}`)}</strong>
+      </div>
+      <p>${escapeHtml(item?.summary ?? item?.reason ?? "Resume from this local evidence blocker before inventing new work.")}</p>
+      <dl class="workspace-run-next-mini-details">
+        <div><dt>Kind</dt><dd>${escapeHtml(item?.kind ?? "unknown")}</dd></div>
+        <div><dt>Priority</dt><dd>${escapeHtml(item?.priority ?? "medium")}</dd></div>
+        <div><dt>Source</dt><dd>${escapeHtml(sourceLabel)}</dd></div>
+        <div><dt>Ref</dt><dd>${escapeHtml(sourceRef)}</dd></div>
+        <div><dt>Evidence</dt><dd>${escapeHtml(item?.evidenceRequired ?? "Attach verifier evidence before upgrading trust.")}</dd></div>
+        <div><dt>Boundary</dt><dd>${escapeHtml(item?.boundary ?? "Read-only resume planning; no browser execution.")}</dd></div>
+      </dl>
+      <code>${escapeHtml(command)}</code>
+    </div>
+    <div class="workspace-run-next-row-actions">
+      ${openButton}
+      <button class="text-button compact-button copy-resume-index-command" data-command="${escapeHtml(command)}" type="button">Copy</button>
+    </div>
+  </article>`;
+}
+
+function workspaceResumeIndexOpenButtonHtml(item) {
+  const ref = item?.source?.ref;
+  if (!ref) {
+    return "";
+  }
+  if (item.kind === "saved-run-next") {
+    return `<button class="text-button compact-button open-resume-index-run-next" data-ref="${escapeHtml(ref)}" type="button">Open handoff</button>`;
+  }
+  if (item.kind === "pilot-loop-transcript") {
+    return `<button class="text-button compact-button open-resume-index-pilot-loop" data-ref="${escapeHtml(ref)}" type="button">Open loop</button>`;
+  }
+  return "";
+}
+
+function workspaceResumeIndexItemClass(item) {
+  if (item?.safeToResume === true) {
+    return "ready";
+  }
+  if (item?.priority === "critical" || item?.priority === "high") {
+    return "blocked";
+  }
+  return "planned";
+}
+
+function workspaceResumeIndexItemTrust(item) {
+  if (item?.safeToResume === true) {
+    return "passed";
+  }
+  if (item?.priority === "critical") {
+    return "refuted";
+  }
+  return "waiting";
+}
 async function startResearchHarnessFromUi() {
   const currentReceipt = receiptStore.get(state.receiptKey);
   const objective = promptInput?.value?.trim() || currentReceipt?.title?.trim();
@@ -6299,6 +6489,7 @@ async function startResearchHarnessFromUi() {
     await refreshWorkspaceReview({ announce: false });
     await refreshWorkspaceRunNext({ announce: false });
     await refreshWorkspaceRunNextHandoffs({ announce: false });
+    await refreshWorkspaceResumeIndex({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
     await refreshWorkspaceReadiness({ announce: false });
     await refreshWorkspaceEvents({ announce: false });
@@ -6362,6 +6553,7 @@ async function seedHardMathWorkspaceFromUi({
     await refreshWorkspaceRunNext({ announce: false });
     await refreshWorkspacePilotLoop({ announce: false });
     await refreshWorkspaceRunNextHandoffs({ announce: false });
+    await refreshWorkspaceResumeIndex({ announce: false });
     await refreshWorkspaceGraph({ announce: false });
     await refreshWorkspaceReadiness({ announce: false });
     await refreshWorkspaceEvents({ announce: false });
@@ -19124,6 +19316,7 @@ surfaceTabs.forEach((button) => {
       requestVisualFit();
     }
     if (nextSurface === "runbook") {
+      refreshWorkspaceResumeIndexIfStale();
       refreshWorkspacePilotLoopsIfStale();
       refreshWorkspaceRunNextHandoffsIfStale();
     }
@@ -19272,6 +19465,21 @@ refreshRunNextButton?.addEventListener("click", () => {
   void refreshWorkspaceRunNext();
 });
 
+refreshResumeIndexButton?.addEventListener("click", () => {
+  void refreshWorkspaceResumeIndex({ announce: true });
+});
+
+verifyResumeIndexButton?.addEventListener("click", () => {
+  void refreshWorkspaceResumeIndex({ announce: true, verifySnapshots: true });
+});
+
+copyResumeIndexCommandButton?.addEventListener("click", () => {
+  const command = workspaceResumeIndex?.items?.[0]?.command ?? "truth-harness workspace resume-index . --json";
+  copyWorkspaceRunNextHandoffCommand(command, copyResumeIndexCommandButton).catch((error) => {
+    addActivity("web-ui", "Copy resume queue command failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
+  });
+});
+
 copyRunNextCommandButton?.addEventListener("click", () => {
   copyWorkspaceRunNextCommand().catch((error) => {
     addActivity("web-ui", "Copy next action failed", error instanceof Error ? error.message : "Clipboard write failed.", "refuted");
@@ -19300,13 +19508,35 @@ workspaceProfessorChallenge?.addEventListener("click", (event) => {
   });
 });
 
+workspaceResumeIndexList?.addEventListener("click", (event) => {
+  if (event.target.closest(".open-workspace-artifact-preview")) {
+    return;
+  }
+
+  const copyButton = event.target.closest(".copy-resume-index-command");
+  if (copyButton?.dataset.command) {
+    void copyWorkspaceRunNextHandoffCommand(copyButton.dataset.command, copyButton);
+    return;
+  }
+
+  const runNextButton = event.target.closest(".open-resume-index-run-next");
+  if (runNextButton?.dataset.ref) {
+    void openWorkspaceRunNextHandoff(runNextButton.dataset.ref, { verifySnapshot: true });
+    return;
+  }
+
+  const pilotLoopButton = event.target.closest(".open-resume-index-pilot-loop");
+  if (pilotLoopButton?.dataset.ref) {
+    void openWorkspacePilotLoopTranscript(pilotLoopButton.dataset.ref);
+  }
+});
+
 workspaceRunNextIdleActions?.addEventListener("click", (event) => {
   const copyButton = event.target.closest(".copy-run-next-idle-command");
   if (copyButton?.dataset.command) {
     void copyWorkspaceRunNextHandoffCommand(copyButton.dataset.command, copyButton);
   }
 });
-
 refreshPilotLoopsButton?.addEventListener("click", () => {
   void refreshWorkspacePilotLoops({ announce: true });
 });

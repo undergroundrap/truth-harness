@@ -716,8 +716,8 @@ describe("web UI action contracts", () => {
       readFile(appSourcePath, "utf8"),
       readFile(appStylesPath, "utf8")
     ]);
-    const plannerCardStyles = styles.match(/\.workspace-run-next-card,\r?\n\.workspace-pilot-loop-card \{[\s\S]*?\r?\n\}/u)?.[0];
-    const plannerActionStyles = styles.match(/\.workspace-run-next-card > \.workspace-run-next-actions,\r?\n\.workspace-pilot-loop-card > \.workspace-run-next-actions \{[\s\S]*?\r?\n\}/u)?.[0];
+    const plannerCardStyles = styles.match(/\.workspace-run-next-card,\r?\n\.workspace-resume-index-card,\r?\n\.workspace-pilot-loop-card \{[\s\S]*?\r?\n\}/u)?.[0];
+    const plannerActionStyles = styles.match(/\.workspace-run-next-card > \.workspace-run-next-actions,\r?\n\.workspace-resume-index-card > \.workspace-run-next-actions,\r?\n\.workspace-pilot-loop-card > \.workspace-run-next-actions \{[\s\S]*?\r?\n\}/u)?.[0];
     const runDetailsStyles = styles.match(/\.workspace-run-next-details \{[\s\S]*?\r?\n\}/u)?.[0];
     const runDetailsCompactStyles = styles.match(/\.workspace-run-next-details\.compact \{[\s\S]*?\r?\n\}/u)?.[0];
     const runMiniDetailsStyles = styles.match(/(?:^|\r?\n)\.workspace-run-next-mini-details \{[\s\S]*?\r?\n\}/u)?.[0];
@@ -745,6 +745,13 @@ describe("web UI action contracts", () => {
     expect(html).toContain('id="workspace-run-next-list"');
     expect(html).toContain('id="workspace-run-next-history-artifact-preview"');
     expect(html).toContain('id="workspace-run-next-inspection"');
+    expect(html).toContain('id="workspace-resume-index-card"');
+    expect(html).toContain('id="workspace-resume-index-command"');
+    expect(html).toContain('id="workspace-resume-index-list"');
+    expect(html).toContain('id="refresh-resume-index"');
+    expect(html).toContain('id="verify-resume-index"');
+    expect(html).toContain('id="copy-resume-index-command"');
+    expect(html).toContain('agent resume queue');
     expect(html).toContain('id="refresh-run-nexts"');
     expect(html).toContain('id="verify-run-nexts"');
     expect(html).toContain('id="workspace-pilot-loop-card"');
@@ -794,6 +801,11 @@ describe("web UI action contracts", () => {
     expect(source).toContain("let workspaceRunNextSummariesLoading = false;");
     expect(source).toContain("let workspaceRunNextSummariesLoadedAt = 0;");
     expect(source).toContain("function refreshWorkspaceRunNextHandoffsIfStale({ maxAgeMs = 5000 } = {})");
+    expect(source).toContain("function refreshWorkspaceResumeIndex({ announce = true, verifySnapshots = true } = {})");
+    expect(source).toContain('fetch(`/api/workspace-resume-index?${params.toString()}`');
+    expect(source).toContain("function renderWorkspaceResumeIndex()");
+    expect(source).toContain("workspaceResumeIndexList?.addEventListener");
+    expect(source).toContain("refreshWorkspaceResumeIndexIfStale();");
     expect(source).toContain("workspaceRunNextSummariesLoading = true;");
     expect(source).toContain("renderWorkspaceRunNextHandoffs();");
     expect(source).toContain("Loading saved handoffs...");
@@ -921,6 +933,8 @@ describe("web UI action contracts", () => {
     expect(source).not.toContain("workspace-pilot-loop?executeLocal=true");
     expect(source).not.toContain("workspace-pilot-loops/executeLocal=true");
     expect(plannerCardStyles).toBeTruthy();
+    expect(styles).toContain(".workspace-resume-index-list");
+    expect(styles).toContain(".workspace-resume-index-item");
     expect(plannerCardStyles).toContain("grid-template-columns: minmax(0, 1fr);");
     expect(plannerCardStyles).toContain("border: 1px solid var(--line-soft);");
     expect(plannerCardStyles).toContain("border-radius: 8px;");

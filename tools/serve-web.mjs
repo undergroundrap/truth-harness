@@ -1,4 +1,4 @@
-﻿import { createReadStream } from "node:fs";
+import { createReadStream } from "node:fs";
 import { lstat, mkdir, open, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
@@ -250,6 +250,7 @@ async function handleApiRequest(request, response, requestUrl) {
         "workspace-run-next-save",
         "workspace-run-next-list",
         "workspace-run-next-show",
+        "workspace-resume-index",
         "workspace-pilot-loop-dry-run",
         "workspace-pilot-loop-list",
         "workspace-pilot-loop-show",
@@ -1212,6 +1213,37 @@ async function handleApiRequest(request, response, requestUrl) {
         response,
         error instanceof HttpError ? error.status : 409,
         error instanceof Error ? error.message : "Workspace run-next plans could not be listed.",
+        request
+      );
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/workspace-resume-index" && request.method === "GET") {
+    try {
+      const { createWorkspaceResumeIndex } = await loadCoreModule();
+      await ensureLocalWorkspace();
+      const index = await createWorkspaceResumeIndex({
+        rootPath: projectRoot,
+        limit: boundedInteger(requestUrl.searchParams.get("limit"), 12, 1, 50),
+        runNextLimit: boundedInteger(requestUrl.searchParams.get("runNextLimit"), 8, 1, 50),
+        pilotLoopLimit: boundedInteger(requestUrl.searchParams.get("pilotLoopLimit"), 5, 1, 50),
+        reviewLimit: boundedInteger(requestUrl.searchParams.get("reviewLimit"), 5, 1, 50),
+        verifySnapshots: requestUrl.searchParams.has("verifySnapshots")
+          ? isTruthyQueryParam(requestUrl.searchParams.get("verifySnapshots"))
+          : true
+      });
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-workspace-resume-index-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        index
+      });
+    } catch (error) {
+      writeApiError(
+        response,
+        error instanceof HttpError ? error.status : 409,
+        error instanceof Error ? error.message : "Workspace resume index could not be created.",
         request
       );
     }
