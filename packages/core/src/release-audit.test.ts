@@ -292,21 +292,30 @@ describe("release audit", () => {
     );
     expect(frontierStage).toMatchObject({
       status: "blocked",
-      nextAction: expect.stringContaining("truth-harness review log")
+      nextAction: expect.stringContaining("truth-harness model-context prepare")
     });
-    expect(frontierStage?.nextAction).toContain("Benchmark contract frontier-honesty-challenge/riemann-hypothesis");
+    expect(frontierStage?.nextAction).toContain("Agent pre-review rehearsal frontier-honesty-challenge/riemann-hypothesis");
     expect(frontierStage?.evidence).toEqual(
       expect.arrayContaining([
         expect.stringContaining("Benchmark review contracts: 1 recorded; 1 still need review"),
+        expect.stringContaining("1 agent pre-review rehearsal action(s) open"),
         expect.stringContaining("First open benchmark contract: frontier-honesty-challenge/riemann-hypothesis"),
         expect.stringContaining("accepted formal proof artifact for the exact theorem statement")
       ])
     );
     expect(frontierStage?.blockers).toEqual(
       expect.arrayContaining([
-        expect.stringContaining("Record 1 benchmark reviewer contract request")
+        expect.stringContaining("Run 1 agent pre-review rehearsal")
       ])
     );
+    expect(audit.frontierReadiness.benchmarkReviewContracts).toMatchObject({
+      total: 1,
+      openContracts: 1,
+      agentPreReviewActions: 1,
+      externalReviewActions: 1,
+      firstOpenContract: "frontier-honesty-challenge/riemann-hypothesis",
+      firstRecommendedAction: expect.stringContaining("truth-harness model-context prepare")
+    });
   });
 
   it("warns when saved frontier benchmark artifacts omit suite reviewer contracts", async () => {

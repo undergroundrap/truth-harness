@@ -29,6 +29,7 @@ export interface ReleaseAuditCliSummary {
     canClaimWorldHardestProblems: ReleaseAudit["frontierReadiness"]["canClaimWorldHardestProblems"];
     strongestHonestClaim: string;
     nextMilestone: string;
+    benchmarkReviewContracts: ReleaseAudit["frontierReadiness"]["benchmarkReviewContracts"];
     stages: Array<{
       id: string;
       title: string;
@@ -147,6 +148,7 @@ export function createReleaseAuditCliSummary(audit: ReleaseAudit): ReleaseAuditC
       canClaimWorldHardestProblems: audit.frontierReadiness.canClaimWorldHardestProblems,
       strongestHonestClaim: audit.frontierReadiness.strongestHonestClaim,
       nextMilestone: audit.frontierReadiness.nextMilestone,
+      benchmarkReviewContracts: audit.frontierReadiness.benchmarkReviewContracts,
       stages: audit.frontierReadiness.stages.map((stage) => ({
         id: stage.id,
         title: stage.title,

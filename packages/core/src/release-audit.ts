@@ -61,6 +61,25 @@ export interface ReleaseAuditFrontierReadinessStage {
   nextAction?: string;
 }
 
+export interface ReleaseAuditFrontierBenchmarkReviewContracts {
+  total: number;
+  externalReviewNeeded: number;
+  unreviewed: number;
+  externalReviewed: number;
+  selfReviewed: number;
+  openContracts: number;
+  agentPreReviewActions: number;
+  externalReviewActions: number;
+  declaredSuiteContracts: number;
+  declaredSuitePath: string;
+  savedArtifactMissingDeclaredContracts: boolean;
+  firstOpenContract?: string;
+  firstOpenRequiredEvidence: string;
+  firstDeclaredOpenContract?: string;
+  firstDeclaredOpenRequiredEvidence: string;
+  firstRecommendedAction?: string;
+}
+
 export interface ReleaseAuditFrontierReadiness {
   schemaVersion: "truth-harness.frontier-readiness.v0";
   status: ReleaseAuditFrontierReadinessStatus;
@@ -69,6 +88,7 @@ export interface ReleaseAuditFrontierReadiness {
   strongestHonestClaim: string;
   summary: string;
   nextMilestone: string;
+  benchmarkReviewContracts: ReleaseAuditFrontierBenchmarkReviewContracts;
   stages: ReleaseAuditFrontierReadinessStage[];
 }
 
@@ -609,7 +629,8 @@ function frontierReadinessFor(input: {
   );
   const benchmarkReviewNextAction = benchmarkReviewContracts.savedArtifactMissingDeclaredContracts
     ? input.commands.frontierHonestyChallenge
-    : benchmarkReviewContracts.firstOpenAction?.command ??
+    : benchmarkReviewContracts.firstAgentPreReviewAction?.command ??
+      benchmarkReviewContracts.firstOpenAction?.command ??
       "Grow from bounded fixtures into curated professor-reviewed hard-problem benchmark suites.";
   const status: ReleaseAuditFrontierReadinessStatus = boundedHardMathReady
     ? "bounded-hard-math-harness"
@@ -739,7 +760,7 @@ function frontierReadinessFor(input: {
         "No local audit artifact can by itself establish a new frontier result.",
         "Breakthrough claims still require formal proof, independent replay, expert review, and domain-specific validation.",
         benchmarkReviewContracts.total > 0
-          ? `Benchmark review contracts: ${benchmarkReviewContracts.total} recorded; ${benchmarkReviewContracts.openContracts} still need review (${benchmarkReviewContracts.externalReviewNeeded} external-review-needed, ${benchmarkReviewContracts.unreviewed} unreviewed); ${benchmarkReviewContracts.openActions} concrete review action(s) open.`
+          ? `Benchmark review contracts: ${benchmarkReviewContracts.total} recorded; ${benchmarkReviewContracts.openContracts} still need review (${benchmarkReviewContracts.externalReviewNeeded} external-review-needed, ${benchmarkReviewContracts.unreviewed} unreviewed); ${benchmarkReviewContracts.agentPreReviewActions} agent pre-review rehearsal action(s) open; ${benchmarkReviewContracts.openActions} external-review request action(s) open.`
           : benchmarkReviewContracts.declaredSuiteContracts > 0
             ? `Benchmark review contracts: none recorded in latest artifacts, but ${benchmarkReviewContracts.declaredSuitePath} declares ${benchmarkReviewContracts.declaredSuiteContracts} contract(s); rerun the suite to preserve reviewer gates in evidence.`
             : "Benchmark review contracts: none recorded in this audit scope.",
@@ -755,9 +776,11 @@ function frontierReadinessFor(input: {
         "Independent verifier diversity on real research tasks",
         benchmarkReviewContracts.savedArtifactMissingDeclaredContracts
           ? `Rerun ${benchmarkReviewContracts.declaredSuitePath} so saved benchmark artifacts carry ${benchmarkReviewContracts.declaredSuiteContracts} declared reviewer contract(s).`
-          : benchmarkReviewContracts.openActions > 0
-            ? `Record ${benchmarkReviewContracts.openActions} benchmark reviewer contract request(s) before citing the suites as professor-reviewed evidence.`
-            : benchmarkReviewContracts.openContracts > 0
+          : benchmarkReviewContracts.agentPreReviewActions > 0
+            ? `Run ${benchmarkReviewContracts.agentPreReviewActions} agent pre-review rehearsal(s) before asking a qualified external reviewer to evaluate the benchmark contract(s).`
+            : benchmarkReviewContracts.openActions > 0
+              ? `Record ${benchmarkReviewContracts.openActions} benchmark reviewer contract request(s) before citing the suites as professor-reviewed evidence.`
+              : benchmarkReviewContracts.openContracts > 0
               ? `Complete or update ${benchmarkReviewContracts.openContracts} benchmark contract review(s) before citing the suites as professor-reviewed evidence.`
               : "Human expert review and publication-grade artifacts"
       ],
@@ -781,6 +804,24 @@ function frontierReadinessFor(input: {
     summary:
       "We are building the evidence layer needed before agents attack hard problems; we are not yet an autonomous frontier solver.",
     nextMilestone,
+    benchmarkReviewContracts: {
+      total: benchmarkReviewContracts.total,
+      externalReviewNeeded: benchmarkReviewContracts.externalReviewNeeded,
+      unreviewed: benchmarkReviewContracts.unreviewed,
+      externalReviewed: benchmarkReviewContracts.externalReviewed,
+      selfReviewed: benchmarkReviewContracts.selfReviewed,
+      openContracts: benchmarkReviewContracts.openContracts,
+      agentPreReviewActions: benchmarkReviewContracts.agentPreReviewActions,
+      externalReviewActions: benchmarkReviewContracts.openActions,
+      declaredSuiteContracts: benchmarkReviewContracts.declaredSuiteContracts,
+      declaredSuitePath: benchmarkReviewContracts.declaredSuitePath,
+      savedArtifactMissingDeclaredContracts: benchmarkReviewContracts.savedArtifactMissingDeclaredContracts,
+      firstOpenContract: benchmarkReviewContracts.firstOpenContract,
+      firstOpenRequiredEvidence: benchmarkReviewContracts.firstOpenRequiredEvidence,
+      firstDeclaredOpenContract: benchmarkReviewContracts.firstDeclaredOpenContract,
+      firstDeclaredOpenRequiredEvidence: benchmarkReviewContracts.firstDeclaredOpenRequiredEvidence,
+      firstRecommendedAction: benchmarkReviewNextAction
+    },
     stages
   };
 }
@@ -796,10 +837,12 @@ function summarizeBenchmarkReviewContractsForFrontier(
   selfReviewed: number;
   openContracts: number;
   openActions: number;
+  agentPreReviewActions: number;
   declaredSuiteContracts: number;
   declaredSuitePath: string;
   savedArtifactMissingDeclaredContracts: boolean;
   firstOpenAction?: CredibilityPack["reviewerActionPlan"]["actions"][number];
+  firstAgentPreReviewAction?: CredibilityPack["reviewerActionPlan"]["actions"][number];
   firstOpenContract?: string;
   firstOpenRequiredEvidence: string;
   firstDeclaredOpenContract?: string;
@@ -813,6 +856,8 @@ function summarizeBenchmarkReviewContractsForFrontier(
   );
   const openActions =
     pack?.reviewerActionPlan.actions.filter((action) => action.source.kind === "benchmark-review-contract") ?? [];
+  const agentPreReviewActions =
+    pack?.reviewerActionPlan.actions.filter((action) => action.source.kind === "benchmark-agent-pre-review") ?? [];
   const firstOpenContract = openContracts[0];
   const declaredSuiteContracts = suiteContracts?.totalContracts ?? 0;
   const savedArtifactMissingDeclaredContracts = declaredSuiteContracts > 0 && contracts.length === 0;
@@ -825,10 +870,12 @@ function summarizeBenchmarkReviewContractsForFrontier(
     selfReviewed: contracts.filter(({ contract }) => contract.reviewStatus === "self-reviewed").length,
     openContracts: openContracts.length,
     openActions: openActions.length,
+    agentPreReviewActions: agentPreReviewActions.length,
     declaredSuiteContracts,
     declaredSuitePath: suiteContracts?.suitePath ?? FRONTIER_HONESTY_SUITE_PATH,
     savedArtifactMissingDeclaredContracts,
     firstOpenAction: openActions[0],
+    firstAgentPreReviewAction: agentPreReviewActions[0],
     firstOpenContract: firstOpenContract
       ? `${firstOpenContract.run.suiteId}/${firstOpenContract.contract.taskId}`
       : undefined,
