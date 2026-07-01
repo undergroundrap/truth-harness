@@ -16,6 +16,7 @@ import {
 } from "./engine-verification.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { listHardMathClosureReports, type HardMathClosureReportSummary } from "./hard-math-closure-report.js";
+import { listModelContexts, type ModelContextPacket } from "./model-context.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { stableHash } from "./stable-hash.js";
@@ -255,6 +256,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
   const benchmarkLedger = summarizeBenchmarkLedger(await listBenchmarkArtifacts(status.root));
   const hardMathClosureLedger = summarizeHardMathClosureLedger(await listHardMathClosureReports(status.root));
   const expertReviews = await listExpertReviews(status.root);
+  const modelContexts = await listModelContexts(status.root);
   const review = await createWorkspaceReview({
     rootPath: status.root,
     maxRoutes: input.maxRoutes,
@@ -349,6 +351,7 @@ export async function createCredibilityPack(input: CreateCredibilityPackInput): 
       benchmarkLedger,
       hardMathClosureLedger,
       expertReviews,
+      modelContexts,
       review,
       reviewerCommands
     }),
@@ -852,6 +855,7 @@ function createReviewerActionPlan(input: {
   benchmarkLedger: CredibilityPackBenchmarkLedger;
   hardMathClosureLedger: CredibilityPackHardMathClosureLedger;
   expertReviews: ExpertReviewRecord[];
+  modelContexts: ModelContextPacket[];
   review: WorkspaceReview;
   reviewerCommands: CredibilityPackCommandSet;
 }): CredibilityPack["reviewerActionPlan"] {
@@ -1030,6 +1034,24 @@ function createReviewerActionPlan(input: {
   }
 
   for (const { run, contract } of unresolvedBenchmarkReviewContracts(input.benchmarkLedger, input.expertReviews)) {
+    if (!hasSavedBenchmarkContractAgentPreReview(run, contract, input.modelContexts)) {
+      pushAction({
+        category: "benchmark",
+        priority: "low",
+        title: `Prepare agent pre-review rehearsal for ${run.suiteId}/${contract.taskId}`,
+        detail: benchmarkAgentPreReviewDetail(run, contract),
+        command: benchmarkAgentPreReviewCommand(run, contract),
+        closes: [
+          `benchmark-contract-pre-review:${run.suiteId}:${contract.taskId}`,
+          `benchmark-run:${run.artifactId}`
+        ],
+        source: {
+          kind: "benchmark-agent-pre-review",
+          ref: `${run.path}#${contract.taskId}`
+        }
+      });
+    }
+
     pushAction({
       category: "benchmark",
       priority: "low",
@@ -1126,7 +1148,7 @@ function unresolvedBenchmarkReviewContracts(ledger: CredibilityPackBenchmarkLedg
   return ledger.latestRuns.flatMap((run) =>
     (run.reviewContracts ?? [])
       .filter((contract) => contract.reviewStatus === "external-review-needed" || contract.reviewStatus === "unreviewed")
-      .filter((contract) => !hasSavedBenchmarkContractReview(run, contract, expertReviews))
+      .filter((contract) => !hasSavedQualifiedBenchmarkContractReview(run, contract, expertReviews))
       .map((contract) => ({ run, contract }))
   );
 }
@@ -1138,7 +1160,7 @@ function benchmarkReviewContractSubject(
   return `Benchmark contract ${run.suiteId}/${contract.taskId}`;
 }
 
-function hasSavedBenchmarkContractReview(
+function hasSavedQualifiedBenchmarkContractReview(
   run: BenchmarkArtifactSummary,
   contract: NonNullable<BenchmarkArtifactSummary["reviewContracts"]>[number],
   expertReviews: ExpertReviewRecord[]
@@ -1152,14 +1174,48 @@ function hasSavedBenchmarkContractReview(
     if (review.status !== "requested" && review.status !== "in-review" && review.status !== "completed") {
       return false;
     }
+    if (!isQualifiedExternalReviewerRole(review.reviewer.role)) {
+      return false;
+    }
     return review.evidenceRefs.some(
       (ref) => ref.kind === "benchmark" && normalizeBenchmarkReviewRef(ref.ref) === benchmarkRef
     );
   });
 }
 
+function hasSavedBenchmarkContractAgentPreReview(
+  run: BenchmarkArtifactSummary,
+  contract: NonNullable<BenchmarkArtifactSummary["reviewContracts"]>[number],
+  modelContexts: ModelContextPacket[]
+): boolean {
+  const subject = benchmarkAgentPreReviewSubject(run, contract);
+  const benchmarkRef = normalizeBenchmarkReviewRef(run.path);
+  return modelContexts.some((packet) => {
+    if (packet.purpose !== subject && packet.title !== subject) {
+      return false;
+    }
+    return packet.selectedContextRefs.some((ref) => normalizeModelContextBenchmarkRef(ref) === benchmarkRef);
+  });
+}
+
+function isQualifiedExternalReviewerRole(role: string): boolean {
+  const normalized = role.toLowerCase();
+  if (/\b(?:agent|ai|model|llm|simulated|simulation|rehearsal|pre-review|self|owner|author)\b/u.test(normalized)) {
+    return false;
+  }
+  return /\b(?:qualified|external|independent|professor|mathematician|domain expert|expert reviewer|reviewer)\b/u.test(
+    normalized
+  );
+}
+
+
 function normalizeBenchmarkReviewRef(value: string): string {
   return value.replace(/\\/gu, "/").replace(/^\.\//u, "");
+}
+
+function normalizeModelContextBenchmarkRef(value: string): string {
+  const withoutKind = value.startsWith("benchmark:") ? value.slice("benchmark:".length) : value;
+  return normalizeBenchmarkReviewRef(withoutKind);
 }
 
 function benchmarkReviewContractDetail(
@@ -1169,6 +1225,61 @@ function benchmarkReviewContractDetail(
   const requiredEvidence = contract.requiredEvidence.length > 0 ? contract.requiredEvidence.join("; ") : "not specified";
   const boundary = contract.checkerBoundary ?? "no checker boundary recorded";
   return `Benchmark case ${run.suiteId}/${contract.taskId} is ${contract.reviewStatus}. Required evidence: ${requiredEvidence}. Checker boundary: ${boundary}. The benchmark can still pass as a harness regression check, but this case is not externally reviewed evidence for a discovery claim.`;
+}
+
+function benchmarkAgentPreReviewSubject(
+  run: BenchmarkArtifactSummary,
+  contract: NonNullable<BenchmarkArtifactSummary["reviewContracts"]>[number]
+): string {
+  return `Agent pre-review rehearsal ${run.suiteId}/${contract.taskId}`;
+}
+
+function benchmarkAgentPreReviewDetail(
+  run: BenchmarkArtifactSummary,
+  contract: NonNullable<BenchmarkArtifactSummary["reviewContracts"]>[number]
+): string {
+  const requiredEvidence = contract.requiredEvidence.length > 0 ? contract.requiredEvidence.join("; ") : "not specified";
+  const boundary = contract.checkerBoundary ?? "no checker boundary recorded";
+  return `Prepare a local-only packet that tells an agent to act as a skeptical mathematician before final wording: restate the claim, attack assumptions, identify missing evidence, and list reviewer questions. This rehearsal helps non-expert users, but it cannot close ${contract.reviewStatus}; qualified external review is still required. Required evidence: ${requiredEvidence}. Checker boundary: ${boundary}.`;
+}
+
+function benchmarkAgentPreReviewCommand(
+  run: BenchmarkArtifactSummary,
+  contract: NonNullable<BenchmarkArtifactSummary["reviewContracts"]>[number]
+): string {
+  const subject = benchmarkAgentPreReviewSubject(run, contract);
+  const evidence = contract.requiredEvidence.length > 0 ? contract.requiredEvidence.join("; ") : "not specified";
+  const boundary = contract.checkerBoundary ?? "no checker boundary recorded";
+  const prompt = [
+    "Act as a skeptical mathematician preparing a pre-review rehearsal, not as the qualified reviewer of record.",
+    `Benchmark case: ${run.suiteId}/${contract.taskId}.`,
+    `Review status: ${contract.reviewStatus}.`,
+    `Required evidence: ${evidence}.`,
+    `Checker boundary: ${boundary}.`,
+    "Return objections, missing definitions, proof gaps, counterexample searches, exact engine commands to run next, and wording that keeps the final claim below the strongest verified evidence.",
+    "Do not mark this claim externally reviewed, proved, or publication-ready."
+  ].join(" ");
+  return [
+    "truth-harness model-context prepare",
+    quoteCommandArg(subject),
+    "--service",
+    quoteCommandArg("local-agent"),
+    "--target local-model",
+    "--title",
+    quoteCommandArg(subject),
+    "--data",
+    quoteCommandArg("benchmark-review-contract"),
+    "--data",
+    quoteCommandArg("agent-pre-review-rehearsal"),
+    "--ref",
+    quoteCommandArg(`benchmark:${run.path}`),
+    "--section",
+    quoteCommandArg(`Reviewer rehearsal=${prompt}`),
+    "--redaction",
+    quoteCommandArg("No external call is made; this packet is local-only reviewer rehearsal context."),
+    "--exclude",
+    quoteCommandArg("This packet excludes unrelated workspace history and cannot satisfy qualified external review.")
+  ].join(" ");
 }
 
 function benchmarkReviewContractCommand(

@@ -42,6 +42,14 @@ import { writeEngineVerificationRun, type EngineVerificationRequirements } from 
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
 import { inspectLeanProject } from "./lean-project.js";
+import {
+  isModelContextDisclosureStatus,
+  isModelContextTarget,
+  writeModelContext,
+  type ModelContextDisclosureStatus,
+  type ModelContextSection,
+  type ModelContextTarget
+} from "./model-context.js";
 import { getProofBackendStatus, writeLeanProofCheckRecord } from "./proof-backend.js";
 import { readReportDraft } from "./report-draft.js";
 import { createReceipt } from "./receipt.js";
@@ -2217,6 +2225,57 @@ async function executeWorkspaceRunNextItem(
   const timeoutMs = parseOptionalPositiveIntegerOption(options["timeout-ms"], 3000);
 
   try {
+    if (group === "model-context" && action === "prepare") {
+      const purpose = positionalArgsBeforeFirstOption(rest).join(" ").trim();
+      if (!purpose) {
+        return {
+          status: "blocked",
+          kind: "model-context",
+          command: item.command,
+          summary: "Model-context run-next actions must include a purpose."
+        };
+      }
+      const service = optionString(options.service);
+      if (!service) {
+        return {
+          status: "blocked",
+          kind: "model-context",
+          command: item.command,
+          summary: "Model-context run-next actions must include --service so the target boundary is explicit."
+        };
+      }
+
+      const result = await writeModelContext({
+        rootPath: workspace,
+        title: optionString(options.title),
+        purpose,
+        service,
+        target: parseRunNextModelContextTarget(optionString(options.target)),
+        model: optionString(options.model),
+        endpoint: optionString(options.endpoint),
+        dataClasses: commandOptionValues(parsed.args, "data"),
+        selectedContextRefs: commandOptionValues(parsed.args, "ref"),
+        sections: commandOptionValues(parsed.args, "section").map(parseRunNextModelContextSection),
+        redactions: commandOptionValues(parsed.args, "redaction"),
+        exclusions: commandOptionValues(parsed.args, "exclude"),
+        approvalRef: optionString(options.approval),
+        approvedBy: optionString(options["approved-by"]),
+        approvedAt: optionString(options["approved-at"]),
+        disclosureRef: optionString(options.disclosure),
+        disclosureStatus: parseRunNextModelContextDisclosureStatus(optionString(options["disclosure-status"]))
+      });
+      const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
+      return {
+        status: "executed",
+        kind: "model-context",
+        command: item.command,
+        evidenceRef: `model-context:${evidenceRef}`,
+        attached: false,
+        summary: `Wrote local model-context packet ${result.packet.packetId}; no model or network call was performed.`,
+        result: result.packet
+      };
+    }
+
     if (group === "review" && action === "log") {
       const subject = positionalArgsBeforeFirstOption(rest).join(" ").trim();
       if (!subject) {
@@ -3573,6 +3632,39 @@ function isRunNextClaimEvidenceKind(value: string): value is ClaimLedgerEvidence
     value === "discovery-package" ||
     value === "other"
   );
+}
+
+function parseRunNextModelContextTarget(value: string | undefined): ModelContextTarget | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (isModelContextTarget(value)) {
+    return value;
+  }
+  throw new Error(`Unsupported model context target ${JSON.stringify(value)}.`);
+}
+
+function parseRunNextModelContextDisclosureStatus(value: string | undefined): ModelContextDisclosureStatus | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (isModelContextDisclosureStatus(value)) {
+    return value;
+  }
+  throw new Error(`Unsupported model context disclosure status ${JSON.stringify(value)}.`);
+}
+
+function parseRunNextModelContextSection(value: string): ModelContextSection {
+  const separator = value.indexOf("=");
+  if (separator <= 0) {
+    throw new Error(`Model context section must use title=content: ${JSON.stringify(value)}.`);
+  }
+
+  return {
+    title: value.slice(0, separator).trim(),
+    content: value.slice(separator + 1).trim(),
+    sourceRefs: []
+  };
 }
 
 function parseRunNextExpertReviewKind(value: string | undefined): ExpertReviewKind | undefined {
