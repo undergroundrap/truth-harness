@@ -1797,7 +1797,7 @@ export function createTruthHarnessMcpServer(): McpServer {
     {
       title: "List Workspace Pilot-Loop Transcripts",
       description:
-        "List persisted truth-harness.workspace-pilot-loop.v0 transcripts from .truth-harness/findings so agents can audit prior bounded loops before continuing work.",
+        "List persisted truth-harness.workspace-pilot-loop.v0 transcripts from .truth-harness/findings, including run-next handoff counts and first/latest packet refs when available, so agents can audit prior bounded loops before continuing work.",
       inputSchema: {
         workspacePath: z
           .string()
@@ -1825,7 +1825,7 @@ export function createTruthHarnessMcpServer(): McpServer {
     {
       title: "Show Workspace Pilot-Loop Transcript",
       description:
-        "Read a persisted workspace pilot-loop transcript by loop id or workspace-local JSON path, including planned steps, execution boundary, evidence refs, and transcript paths.",
+        "Read a persisted workspace pilot-loop transcript by loop id or workspace-local JSON path, including planned steps, execution boundary, evidence refs, transcript paths, and per-step run-next packet refs when the loop wrote handoffs.",
       inputSchema: {
         workspacePath: z
           .string()

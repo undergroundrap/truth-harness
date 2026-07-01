@@ -1558,7 +1558,8 @@ describe("MCP tool handlers", () => {
         kind: "verifier-route",
         attached: true
       },
-      runNextPlanPath: expect.stringContaining(".truth-harness/findings/")
+      runNextPlanPath: expect.stringContaining(".truth-harness/findings/"),
+      runNextMarkdownPath: expect.stringContaining(".truth-harness/findings/")
     });
     expect(result.result.jsonPath.replace(/\\/gu, "/")).toContain(".truth-harness/findings/");
     expect(result.result.markdown).toContain("Truth Harness Pilot Loop");
@@ -1574,7 +1575,11 @@ describe("MCP tool handlers", () => {
           path: expect.stringContaining(".truth-harness/findings/"),
           markdownPath: expect.stringContaining(".truth-harness/findings/"),
           status: result.loop.status,
-          source: result.loop.source
+          source: result.loop.source,
+          runNextPlanCount: expect.any(Number),
+          firstRunNextPlanPath: expect.stringContaining(".truth-harness/findings/"),
+          lastRunNextPlanPath: expect.stringContaining(".truth-harness/findings/"),
+          lastRunNextMarkdownPath: expect.stringContaining(".truth-harness/findings/")
         })
       ]
     });

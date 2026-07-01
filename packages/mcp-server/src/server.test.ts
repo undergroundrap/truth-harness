@@ -530,6 +530,8 @@ describe("Truth Harness MCP server", () => {
       const workspacePilotLoopListText = firstText(workspacePilotLoopList.content);
       expect(workspacePilotLoopListText).toContain(workspacePilotLoopJson.loop.loopId);
       expect(workspacePilotLoopListText).toContain('"schemaVersion": "truth-harness.workspace-pilot-loop.v0"');
+      expect(workspacePilotLoopListText).toContain('"runNextPlanCount":');
+      expect(workspacePilotLoopListText).toContain('"lastRunNextPlanPath": ".truth-harness/findings/');
 
       const workspacePilotLoopShow = await client.callTool({
         name: "truth_harness_workspace_pilot_loop_show",
