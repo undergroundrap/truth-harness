@@ -18,6 +18,20 @@ import { listVerifierRoutes, readVerifierRoute, type VerifierRouteSummary } from
 import { listWebUiReviews, type WebUiReviewSummary } from "./web-ui-review.js";
 import { getWorkspaceCatalogStatus, type WorkspaceCatalogStatus } from "./workspace-catalog.js";
 
+const FRONTIER_HONESTY_SUITE_PATH = "packages/benchmarks/suites/frontier-honesty-challenge.json";
+
+interface BenchmarkReviewContractManifestSummary {
+  suitePath: string;
+  suiteId?: string;
+  totalContracts: number;
+  externalReviewNeeded: number;
+  unreviewed: number;
+  externalReviewed: number;
+  selfReviewed: number;
+  firstOpenContract?: string;
+  firstOpenRequiredEvidence: string;
+  missing: boolean;
+}
 export type ReleaseAuditStatus = "ready" | "blocked";
 export type ReleaseAuditMode = "prototype" | "public-review";
 export type ReleaseAuditCheckStatus = "pass" | "warn" | "fail";
@@ -236,6 +250,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
   }
 
   const catalog = await getWorkspaceCatalogStatus(rootPath, { checkFiles: true });
+  const frontierSuiteReviewContracts = await benchmarkSuiteReviewContractSummary(rootPath, FRONTIER_HONESTY_SUITE_PATH);
   const credibilityPack = await createCredibilityPack({
     rootPath,
     now: createdAt,
@@ -264,7 +279,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     adversarialBenchmarkCheck(credibilityPack),
     mathCredibilityLadderCheck(credibilityPack),
     professorMathChallengeCheck(credibilityPack),
-    frontierHonestyChallengeCheck(credibilityPack),
+    frontierHonestyChallengeCheck(credibilityPack, frontierSuiteReviewContracts),
     hardMathClosureCheck(credibilityPack),
     reportDraftsCheck(credibilityPack),
     leanProofSafetyCheck(credibilityPack),
@@ -310,7 +325,8 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     sessionContinuationItems:
       credibilityPack.workspaceReview.summary.sessionTasks + credibilityPack.workspaceReview.summary.sessionNextChecks,
     reviewItems: credibilityPack.summary.reviewItems,
-    criticalReviewItems: credibilityPack.summary.criticalReviewItems
+    criticalReviewItems: credibilityPack.summary.criticalReviewItems,
+    frontierSuiteReviewContracts
   });
 }
 
@@ -457,6 +473,7 @@ function buildAudit(input: {
   sessionContinuationItems: number;
   reviewItems: number;
   criticalReviewItems: number;
+  frontierSuiteReviewContracts?: BenchmarkReviewContractManifestSummary;
 }): ReleaseAudit {
   const blockingFailures = input.checks.filter((check) => check.blocking && check.status === "fail").length;
   const status: ReleaseAuditStatus = blockingFailures === 0 ? "ready" : "blocked";
@@ -471,7 +488,8 @@ function buildAudit(input: {
     requiredEngineGates: input.requiredEngineGates,
     concreteEngineGates: input.concreteEngineGates,
     hardMathClosure: input.hardMathClosure,
-    catalogFresh: input.catalogFresh
+    catalogFresh: input.catalogFresh,
+    frontierSuiteReviewContracts: input.frontierSuiteReviewContracts
   });
 
   return {
@@ -541,7 +559,9 @@ function frontierReadinessFor(input: {
   savedEngineLadderLevel?: string;
   hardMathClosure: string;
   catalogFresh: boolean;
+  frontierSuiteReviewContracts?: BenchmarkReviewContractManifestSummary;
 }): ReleaseAuditFrontierReadiness {
+  const frontierHonestyReady = frontierHonestyBehaviorReady(input.checks);
   const localHarnessReady =
     checkPassed(input.checks, "workspace") &&
     checkPassed(input.checks, "workspace-validation") &&
@@ -549,10 +569,9 @@ function frontierReadinessFor(input: {
     checkPassed(input.checks, "adversarial-ai-benchmark") &&
     checkPassed(input.checks, "math-credibility-ladder") &&
     checkPassed(input.checks, "professor-math-challenge") &&
-    checkPassed(input.checks, "frontier-honesty-challenge") &&
+    frontierHonestyReady &&
     checkPassed(input.checks, "lean-proof-safety");
   const engineEvidenceReady = checkPassed(input.checks, "engine-evidence");
-  const frontierHonestyReady = checkPassed(input.checks, "frontier-honesty-challenge");
   const hardMathClosureReady = checkPassed(input.checks, "hard-math-closure");
   const leanTheoremTemplateReady = checkPassed(input.checks, "lean-theorem-template");
   const leanMathlibTemplateReady = checkPassed(input.checks, "lean-mathlib-template");
@@ -584,10 +603,14 @@ function frontierReadinessFor(input: {
     leanMathlibTemplateReady &&
     leanMathlibValidationProofGatesClosed;
   const boundedHardMathReady = input.professorReady && engineEvidenceReady && frontierHonestyReady && hardMathClosureReady;
-  const benchmarkReviewContracts = summarizeBenchmarkReviewContractsForFrontier(input.credibilityPack);
-  const benchmarkReviewNextAction =
-    benchmarkReviewContracts.firstOpenAction?.command ??
-    "Grow from bounded fixtures into curated professor-reviewed hard-problem benchmark suites.";
+  const benchmarkReviewContracts = summarizeBenchmarkReviewContractsForFrontier(
+    input.credibilityPack,
+    input.frontierSuiteReviewContracts
+  );
+  const benchmarkReviewNextAction = benchmarkReviewContracts.savedArtifactMissingDeclaredContracts
+    ? input.commands.frontierHonestyChallenge
+    : benchmarkReviewContracts.firstOpenAction?.command ??
+      "Grow from bounded fixtures into curated professor-reviewed hard-problem benchmark suites.";
   const status: ReleaseAuditFrontierReadinessStatus = boundedHardMathReady
     ? "bounded-hard-math-harness"
     : localHarnessReady
@@ -717,20 +740,26 @@ function frontierReadinessFor(input: {
         "Breakthrough claims still require formal proof, independent replay, expert review, and domain-specific validation.",
         benchmarkReviewContracts.total > 0
           ? `Benchmark review contracts: ${benchmarkReviewContracts.total} recorded; ${benchmarkReviewContracts.openContracts} still need review (${benchmarkReviewContracts.externalReviewNeeded} external-review-needed, ${benchmarkReviewContracts.unreviewed} unreviewed); ${benchmarkReviewContracts.openActions} concrete review action(s) open.`
-          : "Benchmark review contracts: none recorded in this audit scope.",
+          : benchmarkReviewContracts.declaredSuiteContracts > 0
+            ? `Benchmark review contracts: none recorded in latest artifacts, but ${benchmarkReviewContracts.declaredSuitePath} declares ${benchmarkReviewContracts.declaredSuiteContracts} contract(s); rerun the suite to preserve reviewer gates in evidence.`
+            : "Benchmark review contracts: none recorded in this audit scope.",
         benchmarkReviewContracts.firstOpenContract
           ? `First open benchmark contract: ${benchmarkReviewContracts.firstOpenContract}. Required evidence: ${benchmarkReviewContracts.firstOpenRequiredEvidence}.`
-          : "First open benchmark contract: none cited by this audit."
+          : benchmarkReviewContracts.firstDeclaredOpenContract
+            ? `First declared benchmark contract: ${benchmarkReviewContracts.firstDeclaredOpenContract}. Required evidence: ${benchmarkReviewContracts.firstDeclaredOpenRequiredEvidence}.`
+            : "First open benchmark contract: none cited by this audit."
       ],
       blockers: [
         "Long-horizon benchmark suites",
         "Proof-search regression budgets",
         "Independent verifier diversity on real research tasks",
-        benchmarkReviewContracts.openActions > 0
-          ? `Record ${benchmarkReviewContracts.openActions} benchmark reviewer contract request(s) before citing the suites as professor-reviewed evidence.`
-          : benchmarkReviewContracts.openContracts > 0
-            ? `Complete or update ${benchmarkReviewContracts.openContracts} benchmark contract review(s) before citing the suites as professor-reviewed evidence.`
-            : "Human expert review and publication-grade artifacts"
+        benchmarkReviewContracts.savedArtifactMissingDeclaredContracts
+          ? `Rerun ${benchmarkReviewContracts.declaredSuitePath} so saved benchmark artifacts carry ${benchmarkReviewContracts.declaredSuiteContracts} declared reviewer contract(s).`
+          : benchmarkReviewContracts.openActions > 0
+            ? `Record ${benchmarkReviewContracts.openActions} benchmark reviewer contract request(s) before citing the suites as professor-reviewed evidence.`
+            : benchmarkReviewContracts.openContracts > 0
+              ? `Complete or update ${benchmarkReviewContracts.openContracts} benchmark contract review(s) before citing the suites as professor-reviewed evidence.`
+              : "Human expert review and publication-grade artifacts"
       ],
       nextAction: benchmarkReviewNextAction
     }
@@ -756,7 +785,10 @@ function frontierReadinessFor(input: {
   };
 }
 
-function summarizeBenchmarkReviewContractsForFrontier(pack?: CredibilityPack): {
+function summarizeBenchmarkReviewContractsForFrontier(
+  pack?: CredibilityPack,
+  suiteContracts?: BenchmarkReviewContractManifestSummary
+): {
   total: number;
   externalReviewNeeded: number;
   unreviewed: number;
@@ -764,9 +796,14 @@ function summarizeBenchmarkReviewContractsForFrontier(pack?: CredibilityPack): {
   selfReviewed: number;
   openContracts: number;
   openActions: number;
+  declaredSuiteContracts: number;
+  declaredSuitePath: string;
+  savedArtifactMissingDeclaredContracts: boolean;
   firstOpenAction?: CredibilityPack["reviewerActionPlan"]["actions"][number];
   firstOpenContract?: string;
   firstOpenRequiredEvidence: string;
+  firstDeclaredOpenContract?: string;
+  firstDeclaredOpenRequiredEvidence: string;
 } {
   const contracts = (pack?.benchmarkLedger.latestRuns ?? []).flatMap((run) =>
     (run.reviewContracts ?? []).map((contract) => ({ run, contract }))
@@ -777,6 +814,8 @@ function summarizeBenchmarkReviewContractsForFrontier(pack?: CredibilityPack): {
   const openActions =
     pack?.reviewerActionPlan.actions.filter((action) => action.source.kind === "benchmark-review-contract") ?? [];
   const firstOpenContract = openContracts[0];
+  const declaredSuiteContracts = suiteContracts?.totalContracts ?? 0;
+  const savedArtifactMissingDeclaredContracts = declaredSuiteContracts > 0 && contracts.length === 0;
 
   return {
     total: contracts.length,
@@ -786,6 +825,9 @@ function summarizeBenchmarkReviewContractsForFrontier(pack?: CredibilityPack): {
     selfReviewed: contracts.filter(({ contract }) => contract.reviewStatus === "self-reviewed").length,
     openContracts: openContracts.length,
     openActions: openActions.length,
+    declaredSuiteContracts,
+    declaredSuitePath: suiteContracts?.suitePath ?? FRONTIER_HONESTY_SUITE_PATH,
+    savedArtifactMissingDeclaredContracts,
     firstOpenAction: openActions[0],
     firstOpenContract: firstOpenContract
       ? `${firstOpenContract.run.suiteId}/${firstOpenContract.contract.taskId}`
@@ -794,10 +836,97 @@ function summarizeBenchmarkReviewContractsForFrontier(pack?: CredibilityPack): {
       ? firstOpenContract.contract.requiredEvidence.length > 0
         ? firstOpenContract.contract.requiredEvidence.join("; ")
         : "not specified"
-      : "none"
+      : "none",
+    firstDeclaredOpenContract: suiteContracts?.firstOpenContract,
+    firstDeclaredOpenRequiredEvidence: suiteContracts?.firstOpenRequiredEvidence ?? "none"
   };
 }
 
+async function benchmarkSuiteReviewContractSummary(
+  rootPath: string,
+  suitePath: string
+): Promise<BenchmarkReviewContractManifestSummary> {
+  const empty = (missing: boolean): BenchmarkReviewContractManifestSummary => ({
+    suitePath,
+    totalContracts: 0,
+    externalReviewNeeded: 0,
+    unreviewed: 0,
+    externalReviewed: 0,
+    selfReviewed: 0,
+    firstOpenRequiredEvidence: "none",
+    missing
+  });
+
+  const resolvedPath = isAbsolute(suitePath) ? suitePath : resolve(rootPath, suitePath);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(resolvedPath, "utf8"));
+  } catch {
+    return empty(true);
+  }
+
+  if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { tasks?: unknown }).tasks)) {
+    return empty(false);
+  }
+
+  const suite = parsed as { id?: unknown; tasks: unknown[] };
+  const summary = empty(false);
+  summary.suiteId = typeof suite.id === "string" ? suite.id : undefined;
+
+  for (const task of suite.tasks) {
+    if (!task || typeof task !== "object") {
+      continue;
+    }
+    const item = task as {
+      id?: unknown;
+      reviewStatus?: unknown;
+      requiredEvidence?: unknown;
+      checkerBoundary?: unknown;
+    };
+    const requiredEvidence = Array.isArray(item.requiredEvidence)
+      ? item.requiredEvidence.filter((value): value is string => typeof value === "string")
+      : [];
+    const hasReviewMetadata =
+      typeof item.reviewStatus === "string" ||
+      requiredEvidence.length > 0 ||
+      typeof item.checkerBoundary === "string";
+    if (!hasReviewMetadata) {
+      continue;
+    }
+
+    const reviewStatus = benchmarkManifestReviewStatus(item.reviewStatus);
+    summary.totalContracts += 1;
+    if (reviewStatus === "external-review-needed") {
+      summary.externalReviewNeeded += 1;
+    } else if (reviewStatus === "external-reviewed") {
+      summary.externalReviewed += 1;
+    } else if (reviewStatus === "self-reviewed") {
+      summary.selfReviewed += 1;
+    } else {
+      summary.unreviewed += 1;
+    }
+
+    if (!summary.firstOpenContract && (reviewStatus === "external-review-needed" || reviewStatus === "unreviewed")) {
+      summary.firstOpenContract = `${summary.suiteId ?? "benchmark-suite"}/${typeof item.id === "string" ? item.id : "unnamed-task"}`;
+      summary.firstOpenRequiredEvidence = requiredEvidence.length > 0 ? requiredEvidence.join("; ") : "not specified";
+    }
+  }
+
+  return summary;
+}
+
+function benchmarkManifestReviewStatus(value: unknown): "unreviewed" | "self-reviewed" | "external-review-needed" | "external-reviewed" {
+  return value === "self-reviewed" || value === "external-review-needed" || value === "external-reviewed"
+    ? value
+    : "unreviewed";
+}
+function frontierHonestyBehaviorReady(checks: ReleaseAuditCheck[]): boolean {
+  const check = checks.find((candidate) => candidate.id === "frontier-honesty-challenge");
+  return (
+    check?.status === "pass" ||
+    (check?.status === "warn" && check.summary.includes("saved artifact is missing"))
+  );
+}
 function checkPassed(checks: ReleaseAuditCheck[], id: string): boolean {
   return checks.find((check) => check.id === id)?.status === "pass";
 }
@@ -1396,12 +1525,38 @@ function professorMathChallengeEvidenceDetails(pack: CredibilityPack): string[] 
   return details;
 }
 
-function frontierHonestyChallengeCheck(pack: CredibilityPack): ReleaseAuditCheck {
+function frontierHonestyChallengeCheck(
+  pack: CredibilityPack,
+  suiteContracts: BenchmarkReviewContractManifestSummary
+): ReleaseAuditCheck {
   const status = pack.summary.latestFrontierHonestyChallengeStatus;
   const accuracy = pack.summary.latestFrontierHonestyChallengeAccuracy;
   const accuracyText = accuracy === undefined ? "unknown accuracy" : `${(accuracy * 100).toFixed(1)}% trust accuracy`;
   const evidenceDetails = frontierHonestyChallengeEvidenceDetails(pack);
+  const recordedContracts = pack.benchmarkLedger.latestFrontierHonestyChallengeRun?.reviewContracts?.length ?? 0;
+  const savedArtifactMissingDeclaredContracts = suiteContracts.totalContracts > 0 && recordedContracts === 0;
   if (status === "passed") {
+    if (savedArtifactMissingDeclaredContracts) {
+      return warnCheck({
+        id: "frontier-honesty-challenge",
+        title: "Frontier honesty challenge",
+        blocking: false,
+        summary:
+          "Latest frontier-honesty-challenge run passed with " +
+          accuracyText +
+          `, but the saved artifact is missing ${suiteContracts.totalContracts} reviewer contract(s) declared by ${suiteContracts.suitePath}.`,
+        command: pack.reviewerCommands.runFrontierHonestyChallenge,
+        details: [
+          ...evidenceDetails,
+          `${suiteContracts.suitePath} declares ${suiteContracts.totalContracts} benchmark review contract(s) (${suiteContracts.externalReviewNeeded} external-review-needed, ${suiteContracts.unreviewed} unreviewed).`,
+          suiteContracts.firstOpenContract
+            ? `First declared contract: ${suiteContracts.firstOpenContract}; required evidence: ${suiteContracts.firstOpenRequiredEvidence}.`
+            : "No open declared contract was found in the suite metadata.",
+          "Rerun and save the frontier honesty challenge so the benchmark artifact carries current reviewer gates."
+        ]
+      });
+    }
+
     return passCheck({
       id: "frontier-honesty-challenge",
       title: "Frontier honesty challenge",
