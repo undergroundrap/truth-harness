@@ -39,7 +39,7 @@
     "docker:mathlib-template:write": "npm run docker:mathlib-template:build && docker compose run --rm mathlib-proof npm run proof:mathlib-template:write",
     "docker:lean-suite": "docker compose run --build --rm lean-proof npm run proof:lean-suite",
     "docker:verify": "docker build --target verify -t truth-harness:verify .",
-    "docker:web": "docker compose up web",
+    "docker:web": "docker compose up --build web",
     "cli": "node apps/cli/dist/index.js",
     "dev:cli": "tsx apps/cli/src/index.ts",
     "web:serve": "node tools/serve-web.mjs",

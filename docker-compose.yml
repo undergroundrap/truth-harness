@@ -140,6 +140,9 @@ services:
 
   web:
     <<: *truth-harness-security
+    build:
+      context: .
+      target: dev
     image: truth-harness:dev
     working_dir: /workspace
     environment:
