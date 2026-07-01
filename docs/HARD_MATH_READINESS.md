@@ -118,6 +118,8 @@ packages/benchmarks/suites/frontier-honesty-challenge.json
 
 It currently covers famous open or theorem-scale prompts such as Riemann, P vs NP, Collatz, Goldbach, twin primes, Navier-Stokes, Birch and Swinnerton-Dyer, Hodge, Fermat Last Theorem, and infinitude of primes. Those prompts must stay `unverified` until a concrete accepted proof artifact exists. The same suite also includes nearby exact, parity, interval, and dimensional checks so the harness still has to verify and refute claims it actually supports.
 
+Every famous open-problem or known-theorem refusal in this suite now carries a reviewer contract: `reviewStatus`, `requiredEvidence`, and `checkerBoundary` describe the accepted proof artifact, formalization review, regression evidence, and external review required before anyone treats the prompt as credible discovery work.
+
 Passing this suite does not prove frontier capability. It proves an important precondition for frontier work: the local evidence layer can resist glamorous overclaims.
 
 ## Professor Challenge Preset

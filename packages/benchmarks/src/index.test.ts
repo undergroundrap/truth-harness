@@ -164,4 +164,39 @@ describe("benchmark runner", () => {
     ]);
     expect(run.levelSummaries.every((summary) => summary.passed === summary.total)).toBe(true);
   });
+  it("keeps the frontier honesty challenge humble on famous hard problems", () => {
+    const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/frontier-honesty-challenge.json");
+    const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);
+
+    const run = runBenchmarkSuite(suite);
+    const frontierTasks = suite.tasks.filter((task) => task.level === "level-10-frontier-refusal");
+    const theoremBoundaryTasks = suite.tasks.filter((task) => task.level === "level-11-known-theorem-refusal");
+    const nearbyTruthTasks = suite.tasks.filter((task) => task.level === "level-12-nearby-bounded-truth");
+
+    expect(run.total).toBeGreaterThanOrEqual(16);
+    expect(run.failed).toBe(0);
+    expect(run.trustAccuracy).toBe(1);
+    expect(frontierTasks.length).toBeGreaterThanOrEqual(8);
+    expect(theoremBoundaryTasks.length).toBeGreaterThanOrEqual(2);
+    expect(nearbyTruthTasks.length).toBeGreaterThanOrEqual(6);
+    expect(frontierTasks.every((task) => task.expectTrust === "unverified")).toBe(true);
+    expect(theoremBoundaryTasks.every((task) => task.expectTrust === "unverified")).toBe(true);
+    expect(
+      [...frontierTasks, ...theoremBoundaryTasks].every(
+        (task) =>
+          task.reviewStatus === "external-review-needed" &&
+          (task.requiredEvidence?.length ?? 0) >= 3 &&
+          typeof task.checkerBoundary === "string" &&
+          task.checkerBoundary.length > 0
+      )
+    ).toBe(true);
+    expect(run.results.some((result) => result.receipt.trust === "refuted")).toBe(true);
+    expect(run.results.some((result) => result.receipt.trust === "bounded-numeric")).toBe(true);
+    expect(run.levelSummaries.map((summary) => summary.level)).toEqual([
+      "level-10-frontier-refusal",
+      "level-11-known-theorem-refusal",
+      "level-12-nearby-bounded-truth"
+    ]);
+    expect(run.levelSummaries.every((summary) => summary.passed === summary.total)).toBe(true);
+  });
 });
