@@ -269,7 +269,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function credibilityRunNextHtml()");
     expect(source).toContain("function credibilityRunNextPathRows(paths)");
     expect(source).toContain('fetch(`/api/workspace-run-next?${params.toString()}`');
-    expect(source).toContain('fetch("/api/workspace-run-next"');
+    expect(source).toContain('fetch(query ? `/api/workspace-run-next?${query}` : "/api/workspace-run-next"');
     expect(source).toContain('source: "credibility-actions"');
     expect(source).toContain('data-testid="plan-credibility-run-next"');
     expect(source).toContain('data-testid="save-credibility-run-next"');
@@ -753,7 +753,9 @@ describe("web UI action contracts", () => {
     expect(html).toContain('id="workspace-pilot-loop-steps"');
     expect(html).toContain('id="refresh-pilot-loop"');
     expect(html).toContain('id="copy-pilot-loop-command"');
-    expect(source).toContain('fetch("/api/workspace-run-next"');
+    expect(html).toContain("Reviewer loop preview");
+    expect(html).toContain("Refresh reviewer loop");
+    expect(source).toContain('fetch(query ? `/api/workspace-run-next?${query}` : "/api/workspace-run-next"');
     expect(source).toContain('fetch(`/api/workspace-pilot-loop?${params.toString()}`');
     expect(source).toContain('fetch("/api/research-harness"');
     expect(source).toContain('fetch("/api/workspace-seed/hard-math"');
@@ -771,10 +773,10 @@ describe("web UI action contracts", () => {
     expect(source).toContain('preset: "professor-challenge"');
     expect(source).toContain('payload.seed?.preset === "professor-challenge"');
     expect(source).toContain("let workspaceRunNextSaving = false;");
-    expect(source).toContain("function saveWorkspaceRunNextHandoffFromUi()");
+    expect(source).toContain('function saveWorkspaceRunNextHandoffFromUi({ source = "workspace-review"');
     expect(source).toContain("Saved revision-backed handoff");
-    expect(source).toContain('body: JSON.stringify({');
-    expect(source).toContain('source: "workspace-review"');
+    expect(source).toContain('body: JSON.stringify(body)');
+    expect(source).toContain('source = "workspace-review"');
     expect(source).toContain("saveRunNextHandoffButton?.addEventListener");
     expect(source).toContain("seedProfessorChallengeButton?.addEventListener");
     expect(source).toContain('saveRunNextHandoffButton.textContent = workspaceRunNextSaving');
@@ -799,7 +801,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function renderWorkspaceRunNextHandoffs()");
     expect(source).toContain("planNext: true");
     expect(source).toContain("writeRunNextPlan: true");
-    expect(source).toContain("function refreshWorkspaceRunNext({ announce = true } = {})");
+    expect(source).toContain('function refreshWorkspaceRunNext({ announce = true, source = "workspace-review"');
     expect(source).toContain("function renderWorkspaceRunNext()");
     expect(source).toContain("function renderProfessorChallengeSummary()");
     expect(source).toContain("workspace-professor-challenge-empty");
@@ -837,7 +839,11 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function workspaceRunNextEnginePlanHtml(enginePlan)");
     expect(source).toContain("function workspaceRunNextEngineFirstStep(enginePlan)");
     expect(source).toContain("Engine plans route work only");
-    expect(source).toContain("function refreshWorkspacePilotLoop({ announce = true } = {})");
+    expect(source).toContain('function refreshWorkspacePilotLoop({ announce = true, source = "credibility-actions"');
+    expect(source).toContain("function workspacePilotLoopCliCommand(source = workspacePilotLoopSource)");
+    expect(source).toContain("truth-harness workspace pilot-loop . --source credibility-actions --require-all-engines --execute-local --write --max-steps 3");
+    expect(source).toContain("function workspacePilotLoopApiPreviewCommand(source = workspacePilotLoopSource)");
+    expect(source).toContain("reviewer credibility queue");
     expect(source).toContain("function renderWorkspacePilotLoop()");
     expect(source).toContain("function workspacePilotLoopDetailsRows(loop)");
     expect(source).toContain("copyWorkspacePilotLoopCommand");

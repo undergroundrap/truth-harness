@@ -226,6 +226,7 @@ let workspaceRunNextOpenedError;
 let workspaceRunNextSaving = false;
 let workspacePilotLoop;
 let workspacePilotLoopError;
+let workspacePilotLoopSource = "credibility-actions";
 let claimLedgerGraph = {
   schemaVersion: "truth-harness.claim-graph.v0",
   nodes: [],
@@ -5880,13 +5881,24 @@ function applyWorkspaceReviewPayload(payload) {
   };
 }
 
-async function refreshWorkspaceRunNext({ announce = true } = {}) {
+async function refreshWorkspaceRunNext({ announce = true, source = "workspace-review", requireAllEngines = false, timeoutMs } = {}) {
   if (!workspaceRunNextTitle) {
     return;
   }
 
   try {
-    const response = await fetch("/api/workspace-run-next", {
+    const params = new URLSearchParams();
+    if (source && source !== "workspace-review") {
+      params.set("source", source);
+    }
+    if (requireAllEngines) {
+      params.set("requireAllEngines", "true");
+    }
+    if (timeoutMs) {
+      params.set("timeoutMs", String(timeoutMs));
+    }
+    const query = params.toString();
+    const response = await fetch(query ? `/api/workspace-run-next?${query}` : "/api/workspace-run-next", {
       method: "GET",
       cache: "no-store"
     });
@@ -5910,7 +5922,7 @@ async function refreshWorkspaceRunNext({ announce = true } = {}) {
   }
 }
 
-async function saveWorkspaceRunNextHandoffFromUi() {
+async function saveWorkspaceRunNextHandoffFromUi({ source = "workspace-review", requireAllEngines = false, timeoutMs } = {}) {
   if (workspaceRunNextSaving) {
     return;
   }
@@ -5920,15 +5932,20 @@ async function saveWorkspaceRunNextHandoffFromUi() {
   renderWorkspaceRunNext();
 
   try {
+    const body = { source };
+    if (requireAllEngines) {
+      body.requireAllEngines = true;
+    }
+    if (timeoutMs) {
+      body.timeoutMs = Number(timeoutMs);
+    }
     const response = await fetch("/api/workspace-run-next", {
       method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        source: "workspace-review"
-      })
+      body: JSON.stringify(body)
     });
     const payload = await readLocalApiJson(response, "Local workspace run-next save failed.");
     workspaceRunNextPlan = payload.plan;
@@ -5958,15 +5975,23 @@ async function saveWorkspaceRunNextHandoffFromUi() {
   }
 }
 
-async function refreshWorkspacePilotLoop({ announce = true } = {}) {
+async function refreshWorkspacePilotLoop({ announce = true, source = "credibility-actions", requireAllEngines = source === "credibility-actions", timeoutMs = source === "credibility-actions" ? 1500 : undefined } = {}) {
   if (!workspacePilotLoopTitle) {
     return;
   }
 
   try {
+    workspacePilotLoopSource = source;
     const params = new URLSearchParams({
-      maxSteps: "3"
+      maxSteps: "3",
+      source
     });
+    if (requireAllEngines) {
+      params.set("requireAllEngines", "true");
+    }
+    if (timeoutMs) {
+      params.set("timeoutMs", String(timeoutMs));
+    }
     const response = await fetch(`/api/workspace-pilot-loop?${params.toString()}`, {
       method: "GET",
       cache: "no-store"
@@ -5977,7 +6002,7 @@ async function refreshWorkspacePilotLoop({ announce = true } = {}) {
     if (announce) {
       addActivity(
         "local-api",
-        "Loaded pilot-loop preview",
+        source === "credibility-actions" ? "Loaded reviewer pilot-loop preview" : "Loaded pilot-loop preview",
         localApiSuccessMessage(payload, workspacePilotLoopActivitySummary(workspacePilotLoop)),
         workspacePilotLoopTrust(workspacePilotLoop?.status)
       );
@@ -8204,8 +8229,8 @@ async function handleProfessorChallengeAction(action, button) {
 
     if (action === "refresh-run-next") {
       await refreshLatestProfessorChallengeSeed({ announce: false });
-      await refreshWorkspaceRunNext({ announce: true });
-      await refreshWorkspacePilotLoop({ announce: false });
+      await refreshWorkspaceRunNext({ announce: true, source: "credibility-actions", requireAllEngines: true, timeoutMs: 1500 });
+      await refreshWorkspacePilotLoop({ announce: false, source: "credibility-actions" });
       addActivity(
         "web-ui",
         "Professor challenge resumed",
@@ -8216,8 +8241,8 @@ async function handleProfessorChallengeAction(action, button) {
     }
 
     if (action === "preview-loop") {
-      await refreshWorkspaceRunNext({ announce: false });
-      await refreshWorkspacePilotLoop({ announce: true });
+      await refreshWorkspaceRunNext({ announce: false, source: "credibility-actions", requireAllEngines: true, timeoutMs: 1500 });
+      await refreshWorkspacePilotLoop({ announce: true, source: "credibility-actions" });
       addActivity(
         "web-ui",
         "Professor challenge loop previewed",
@@ -8228,7 +8253,7 @@ async function handleProfessorChallengeAction(action, button) {
     }
 
     if (action === "save-handoff") {
-      await saveWorkspaceRunNextHandoffFromUi();
+      await saveWorkspaceRunNextHandoffFromUi({ source: "credibility-actions", requireAllEngines: true, timeoutMs: 1500 });
       return;
     }
   } finally {
@@ -8259,12 +8284,46 @@ async function copyProfessorChallengeHandoffPacket(button) {
   });
 }
 
+function workspacePilotLoopCliCommand(source = workspacePilotLoopSource) {
+  if (source === "credibility-actions") {
+    return "truth-harness workspace pilot-loop . --source credibility-actions --require-all-engines --execute-local --write --max-steps 3";
+  }
+  if (source === "saved-run-next") {
+    return "truth-harness workspace pilot-loop . --source saved-run-next --execute-local --write --max-steps 3";
+  }
+  return "truth-harness workspace pilot-loop . --execute-local --write --max-steps 3";
+}
+
+function workspacePilotLoopApiPreviewCommand(source = workspacePilotLoopSource) {
+  const params = new URLSearchParams({
+    maxSteps: "3",
+    source
+  });
+  if (source === "credibility-actions") {
+    params.set("requireAllEngines", "true");
+    params.set("timeoutMs", "1500");
+  }
+  return `GET /api/workspace-pilot-loop?${params.toString()}`;
+}
+
+function workspacePilotLoopSourceLabel(source = workspacePilotLoopSource) {
+  if (source === "credibility-actions") {
+    return "reviewer credibility queue";
+  }
+  if (source === "saved-run-next") {
+    return "saved handoff queue";
+  }
+  return "workspace review queue";
+}
+
 function renderWorkspacePilotLoop() {
   if (!workspacePilotLoopStatus || !workspacePilotLoopTitle || !workspacePilotLoopSummary || !workspacePilotLoopCommand) {
     return;
   }
 
-  const supervisedCommand = "truth-harness workspace pilot-loop . --execute-local --write --max-steps 3";
+  const source = workspacePilotLoop?.source ?? workspacePilotLoopSource ?? "credibility-actions";
+  const sourceLabel = workspacePilotLoopSourceLabel(source);
+  const supervisedCommand = workspacePilotLoopCliCommand(source);
   workspacePilotLoopCommand.textContent = supervisedCommand;
 
   if (workspacePilotLoopError) {
@@ -8273,6 +8332,7 @@ function renderWorkspacePilotLoop() {
     workspacePilotLoopTitle.textContent = "Local pilot-loop preview unavailable.";
     workspacePilotLoopSummary.textContent = workspacePilotLoopError;
     setDefinitionRows(workspacePilotLoopDetails, [
+      ["Source", sourceLabel],
       ["Boundary", "Preview failed before any autonomous loop could be inspected."],
       ["Fallback", "Use CLI or MCP pilot-loop after checking the local API."]
     ]);
@@ -8286,10 +8346,11 @@ function renderWorkspacePilotLoop() {
   if (!workspacePilotLoop) {
     workspacePilotLoopStatus.textContent = "loading";
     workspacePilotLoopStatus.className = "status-pill waiting";
-    workspacePilotLoopTitle.textContent = "Loading bounded loop preview.";
+    workspacePilotLoopTitle.textContent = `Loading ${sourceLabel} preview.`;
     workspacePilotLoopSummary.textContent = "Truth Harness will simulate the next verifier-directed loop without executing anything in the browser.";
-    workspacePilotLoopCommand.textContent = "GET /api/workspace-pilot-loop";
+    workspacePilotLoopCommand.textContent = workspacePilotLoopApiPreviewCommand(source);
     setDefinitionRows(workspacePilotLoopDetails, [
+      ["Source", sourceLabel],
       ["Boundary", "Browser loop preview is dry-run only."],
       ["Execution", "CLI/MCP gates are required before local work runs."]
     ]);
@@ -8304,7 +8365,7 @@ function renderWorkspacePilotLoop() {
   const status = workspacePilotLoop.status ?? "stopped";
   workspacePilotLoopStatus.textContent = `${workspacePilotLoopStatusLabel(status)} preview`;
   workspacePilotLoopStatus.className = `status-pill ${workspacePilotLoopTrust(status)}`;
-  workspacePilotLoopTitle.textContent = firstStep?.item?.title ?? "No open verifier-directed item.";
+  workspacePilotLoopTitle.textContent = firstStep?.item?.title ?? `No open ${sourceLabel} item.`;
   workspacePilotLoopSummary.textContent = firstStep?.execution?.summary ?? `Pilot loop stopped at ${workspacePilotLoop.stopReason}.`;
   setDefinitionRows(workspacePilotLoopDetails, workspacePilotLoopDetailsRows(workspacePilotLoop));
   renderWorkspacePilotLoopSteps(workspacePilotLoop);

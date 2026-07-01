@@ -1028,6 +1028,32 @@ describe("local web route ledger API", () => {
       })
     );
 
+    const credibilityPilotLoopResponse = await fetch(
+      `${baseUrl}/api/workspace-pilot-loop?source=credibility-actions&requireAllEngines=true&timeoutMs=50&maxSteps=2`
+    );
+    expect(credibilityPilotLoopResponse.status).toBe(200);
+    const credibilityPilotLoopPayload = await credibilityPilotLoopResponse.json();
+    expectLocalApiSuccess(credibilityPilotLoopResponse, credibilityPilotLoopPayload);
+    expect(credibilityPilotLoopPayload).toMatchObject({
+      schemaVersion: "truth-harness.web-workspace-pilot-loop-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      source: "credibility-actions",
+      mode: "all-engines",
+      loop: {
+        schemaVersion: "truth-harness.workspace-pilot-loop.v0",
+        localOnly: true,
+        networkAccess: "none",
+        dryRun: true,
+        source: "credibility-actions",
+        maxSteps: 2,
+        status: "stopped",
+        stopReason: "dry-run"
+      }
+    });
+    expect(credibilityPilotLoopPayload.loop.summary.plannedSteps).toBeGreaterThanOrEqual(1);
+    expect(credibilityPilotLoopPayload.loop.steps[0].item.kind).toBe("credibility-action");
+
     const forbiddenPilotLoopResponse = await fetch(`${baseUrl}/api/workspace-pilot-loop?executeLocal=true`);
     expect(forbiddenPilotLoopResponse.status).toBe(400);
     const forbiddenPilotLoopPayload = await forbiddenPilotLoopResponse.json();
