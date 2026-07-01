@@ -1,4 +1,4 @@
-﻿# Professor Credibility Pack
+# Professor Credibility Pack
 
 The credibility pack is the first reviewer-facing artifact for serious mathematicians, professors, and technical auditors.
 
@@ -107,6 +107,8 @@ A bundle can remain valid even after the live workspace changes. That is useful 
 
 Agents can use the same workflow through MCP:
 
+- `truth_harness_workspace_release_audit_summary`
+- `truth_harness_workspace_credibility_summary`
 - `truth_harness_workspace_credibility_actions`
 - `truth_harness_workspace_credibility_bundle`
 - `truth_harness_workspace_credibility_bundle_verify`

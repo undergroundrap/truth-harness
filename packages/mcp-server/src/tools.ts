@@ -29,6 +29,9 @@ import {
   createWebUiReviewRecord,
   parseWebUiLayoutAuditSummaryJson,
   createCredibilityPack,
+  createCredibilityPackCliSummary,
+  createReleaseAudit,
+  createReleaseAuditCliSummary,
   createWorkspaceReview,
   createWorkspaceReviewFromCredibilityPack,
   createWorkspaceRunNextPlan,
@@ -164,6 +167,7 @@ import {
   type CredibilityBundleWriteResult,
   type CredibilityPack,
   type CredibilityPackActionItem,
+  type CredibilityPackCliSummary,
   type DiscoveryPackage,
   type DiscoveryPackageWriteResult,
   type EngineManifest,
@@ -220,6 +224,7 @@ import {
   type ProofBackendStatusReport,
   type Receipt,
   type ReceiptRenderFormat,
+  type ReleaseAuditCliSummary,
   type ReportDraftReadResult,
   type ReportDraftSummary,
   type ResearchHarnessWriteResult,
@@ -878,6 +883,14 @@ export interface TruthHarnessWorkspaceCredibilityActionsInput extends TruthHarne
   priority?: CredibilityPackActionItem["priority"];
   category?: CredibilityPackActionItem["category"];
 }
+
+export interface TruthHarnessWorkspaceReleaseAuditSummaryInput extends TruthHarnessWorkspaceCredibilityBundleInput {
+  mode?: "prototype" | "public-review";
+  requireSandbox?: boolean;
+  requireSavedStrictEngineRun?: boolean;
+}
+
+export type TruthHarnessWorkspaceCredibilitySummaryInput = TruthHarnessWorkspaceCredibilityBundleInput;
 
 export interface TruthHarnessWorkspaceCredibilityActionsOutput {
   schemaVersion: "truth-harness.credibility-actions.v0";
@@ -2327,6 +2340,55 @@ export async function handleTruthHarnessWorkspaceSnapshotVerify(
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     snapshotRef: input.snapshotRef
   });
+}
+
+export async function handleTruthHarnessWorkspaceReleaseAuditSummary(
+  input: TruthHarnessWorkspaceReleaseAuditSummaryInput
+): Promise<ReleaseAuditCliSummary> {
+  const audit = await createReleaseAudit({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    mode: input.mode,
+    maxRoutes: input.maxRoutes,
+    maxClaims: input.maxClaims,
+    maxSessions: input.maxSessions,
+    maxReports: input.maxReports,
+    timeoutMs: input.timeoutMs,
+    maximaCommand: input.maximaCommand,
+    sageCommand: input.sageCommand,
+    leanCommand: input.leanCommand,
+    z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command,
+    smtSourcePath: input.smtSourcePath,
+    leanSourcePath: input.leanSourcePath,
+    engineRequirements: credibilityEngineRequirementsFromInput(input),
+    requireSandbox: input.requireSandbox === true,
+    requireSavedStrictEngineRun: input.requireSavedStrictEngineRun === true
+  });
+
+  return createReleaseAuditCliSummary(audit);
+}
+
+export async function handleTruthHarnessWorkspaceCredibilitySummary(
+  input: TruthHarnessWorkspaceCredibilitySummaryInput
+): Promise<CredibilityPackCliSummary> {
+  const pack = await createCredibilityPack({
+    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    maxRoutes: input.maxRoutes,
+    maxClaims: input.maxClaims,
+    maxSessions: input.maxSessions,
+    maxReports: input.maxReports,
+    timeoutMs: input.timeoutMs,
+    maximaCommand: input.maximaCommand,
+    sageCommand: input.sageCommand,
+    leanCommand: input.leanCommand,
+    z3Command: input.z3Command,
+    cvc5Command: input.cvc5Command,
+    smtSourcePath: input.smtSourcePath,
+    leanSourcePath: input.leanSourcePath,
+    engineRequirements: credibilityEngineRequirementsFromInput(input)
+  });
+
+  return createCredibilityPackCliSummary(pack);
 }
 
 export async function handleTruthHarnessWorkspaceCredibilityBundle(

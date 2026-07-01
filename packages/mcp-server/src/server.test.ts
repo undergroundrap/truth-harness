@@ -154,6 +154,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_workspace_credibility_actions",
         "truth_harness_workspace_credibility_bundle",
         "truth_harness_workspace_credibility_bundle_verify",
+        "truth_harness_workspace_credibility_summary",
         "truth_harness_workspace_events",
         "truth_harness_workspace_graph",
         "truth_harness_workspace_hard_math_seed_list",
@@ -162,6 +163,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_workspace_pilot_loop_continue",
         "truth_harness_workspace_pilot_loop_list",
         "truth_harness_workspace_pilot_loop_show",
+        "truth_harness_workspace_release_audit_summary",
         "truth_harness_workspace_repair",
         "truth_harness_workspace_resume_index",
         "truth_harness_workspace_review",
@@ -716,6 +718,67 @@ describe("Truth Harness MCP server", () => {
       });
       const snapshotVerifyText = firstText(snapshotVerifyResult.content);
       expect(snapshotVerifyText).toContain("\"passed\": true");
+
+      const releaseAuditSummary = await client.callTool({
+        name: "truth_harness_workspace_release_audit_summary",
+        arguments: {
+          maxRoutes: 0,
+          maxClaims: 0,
+          maxSessions: 0,
+          timeoutMs: 50,
+          maximaCommand: "truth-harness-missing-maxima-command",
+          z3Command: "truth-harness-missing-z3-command",
+          leanCommand: "truth-harness-missing-lean-command",
+          sageCommand: "truth-harness-missing-sage-command",
+          requireDockerCore: true,
+          requireSandbox: true,
+          requireSavedStrictEngineRun: true
+        }
+      });
+      const releaseAuditSummaryJson = JSON.parse(firstText(releaseAuditSummary.content)) as {
+        schemaVersion: string;
+        status: string;
+        frontierReadiness: { canClaimWorldHardestProblems: boolean };
+        checks: { blockingFailures: number; failedChecks: Array<{ id: string }> };
+        embeddedSnapshot?: unknown;
+        credibilityPack?: unknown;
+      };
+      expect(releaseAuditSummary.isError).not.toBe(true);
+      expect(releaseAuditSummaryJson.schemaVersion).toBe("truth-harness.release-audit-summary.v0");
+      expect(releaseAuditSummaryJson.status).toBe("blocked");
+      expect(releaseAuditSummaryJson.frontierReadiness.canClaimWorldHardestProblems).toBe(false);
+      expect(releaseAuditSummaryJson.checks.blockingFailures).toBeGreaterThan(0);
+      expect(releaseAuditSummaryJson).not.toHaveProperty("embeddedSnapshot");
+      expect(releaseAuditSummaryJson).not.toHaveProperty("credibilityPack");
+
+      const credibilitySummary = await client.callTool({
+        name: "truth_harness_workspace_credibility_summary",
+        arguments: {
+          maxRoutes: 0,
+          maxClaims: 0,
+          maxSessions: 0,
+          timeoutMs: 50,
+          maximaCommand: "truth-harness-missing-maxima-command",
+          z3Command: "truth-harness-missing-z3-command",
+          leanCommand: "truth-harness-missing-lean-command",
+          sageCommand: "truth-harness-missing-sage-command",
+          requireDockerCore: true
+        }
+      });
+      const credibilitySummaryJson = JSON.parse(firstText(credibilitySummary.content)) as {
+        schemaVersion: string;
+        status: string;
+        engine: { hostProbeStatus: string; effectiveStatus: string };
+        embeddedSnapshot?: unknown;
+        markdown?: unknown;
+      };
+      expect(credibilitySummary.isError).not.toBe(true);
+      expect(credibilitySummaryJson.schemaVersion).toBe("truth-harness.credibility-pack-summary.v0");
+      expect(credibilitySummaryJson.status).toBe("blocked");
+      expect(credibilitySummaryJson.engine.hostProbeStatus).toBe("failed");
+      expect(credibilitySummaryJson.engine.effectiveStatus).toBe("failed");
+      expect(credibilitySummaryJson).not.toHaveProperty("embeddedSnapshot");
+      expect(credibilitySummaryJson).not.toHaveProperty("markdown");
 
       const credibilityActions = await client.callTool({
         name: "truth_harness_workspace_credibility_actions",

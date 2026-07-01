@@ -302,6 +302,10 @@ export {
   renderReleaseAuditMarkdown
 } from "./release-audit.js";
 export {
+  createCredibilityPackCliSummary,
+  createReleaseAuditCliSummary
+} from "./reviewer-summary.js";
+export {
   listReportDrafts,
   readReportDraft,
   REPORT_DRAFT_SCHEMA_VERSION,
@@ -799,6 +803,12 @@ export type {
   ReleaseAuditMode,
   ReleaseAuditStatus
 } from "./release-audit.js";
+export type {
+  CredibilityActionSummary,
+  CredibilityPackCliSummary,
+  ReleaseAuditCheckSummary,
+  ReleaseAuditCliSummary
+} from "./reviewer-summary.js";
 export type {
   ListReportDraftsInput,
   ReadReportDraftInput,

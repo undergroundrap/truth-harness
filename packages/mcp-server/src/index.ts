@@ -84,6 +84,8 @@ import {
   handleTruthHarnessVerify,
   handleTruthHarnessWorkspaceInit,
   handleTruthHarnessWorkspaceEvents,
+  handleTruthHarnessWorkspaceReleaseAuditSummary,
+  handleTruthHarnessWorkspaceCredibilitySummary,
   handleTruthHarnessWorkspaceCredibilityActions,
   handleTruthHarnessWorkspaceCredibilityBundle,
   handleTruthHarnessWorkspaceCredibilityBundleVerify,
@@ -2150,6 +2152,139 @@ export function createTruthHarnessMcpServer(): McpServer {
       toolJson(await handleTruthHarnessWorkspaceSnapshotVerify({ workspacePath, snapshotRef }))
   );
 
+  server.registerTool(
+    "truth_harness_workspace_release_audit_summary",
+    {
+      title: "Compact Release Audit Summary",
+      description:
+        "Return compact local release/professor readiness JSON without embedded snapshots or full credibility-pack bodies. Use this first when an agent needs machine-readable status.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        mode: z.enum(["prototype", "public-review"]).optional().describe("Release audit mode. Defaults to public-review."),
+        maxRoutes: z
+          .number()
+          .int()
+          .min(0)
+          .max(500)
+          .optional()
+          .describe("Maximum route summaries to inspect. Defaults to 100; use 0 to skip routes."),
+        maxClaims: z
+          .number()
+          .int()
+          .min(0)
+          .max(1000)
+          .optional()
+          .describe("Maximum claim records to inspect. Defaults to 200; use 0 to skip claims."),
+        maxSessions: z
+          .number()
+          .int()
+          .min(0)
+          .max(500)
+          .optional()
+          .describe("Maximum research sessions to inspect. Defaults to 100; use 0 to skip sessions."),
+        maxReports: z
+          .number()
+          .int()
+          .min(0)
+          .max(200)
+          .optional()
+          .describe("Maximum saved report drafts to inspect. Defaults to 50; use 0 to skip report drafts."),
+        timeoutMs: z.number().int().min(1).max(300000).optional().describe("Concrete engine check timeout in milliseconds."),
+        maximaCommand: z.string().optional().describe("Override Maxima executable for the symbolic cross-check."),
+        sageCommand: z.string().optional().describe("Override SageMath executable for the optional CAS readiness probe."),
+        leanCommand: z.string().optional().describe("Override Lean executable for the proof fixture."),
+        z3Command: z.string().optional().describe("Override Z3 executable for the SMT check."),
+        cvc5Command: z.string().optional().describe("Override cvc5 executable for the optional second SMT check."),
+        smtSourcePath: z.string().optional().describe("Workspace-local SMT-LIB source for SMT checks."),
+        leanSourcePath: z.string().optional().describe("Workspace-local Lean source for the Lean fixture."),
+        requireMaxima: z.boolean().optional().describe("Mark Maxima as required for reviewer readiness."),
+        requireZ3: z.boolean().optional().describe("Mark Z3 as required for reviewer readiness."),
+        requireCvc5: z.boolean().optional().describe("Mark cvc5 as required for reviewer readiness."),
+        requireLean: z.boolean().optional().describe("Mark Lean as required for reviewer readiness."),
+        requireSage: z.boolean().optional().describe("Require SageMath to earn a constrained CAS cross-check."),
+        requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima, Z3, and cvc5 evidence gates."),
+        requireAllConcrete: z.boolean().optional().describe("Require Maxima, Z3, and Lean concrete evidence gates."),
+        requireAllEngines: z.boolean().optional().describe("Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates."),
+        requireSandbox: z.boolean().optional().describe("Require saved measured sandbox evidence for release readiness."),
+        requireSavedStrictEngineRun: z
+          .boolean()
+          .optional()
+          .describe("Require a saved strict all-engine reviewer run for release readiness.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTruthHarnessWorkspaceReleaseAuditSummary(input))
+  );
+
+  server.registerTool(
+    "truth_harness_workspace_credibility_summary",
+    {
+      title: "Compact Credibility Pack Summary",
+      description:
+        "Return compact local professor credibility status JSON without embedded snapshots, Markdown, or full evidence bodies. This is a dry-run status view, not a writer.",
+      inputSchema: {
+        workspacePath: z
+          .string()
+          .optional()
+          .describe("Workspace-local project root. Defaults to the MCP server workspace root."),
+        maxRoutes: z
+          .number()
+          .int()
+          .min(0)
+          .max(500)
+          .optional()
+          .describe("Maximum route summaries to inspect. Defaults to 100; use 0 to skip routes."),
+        maxClaims: z
+          .number()
+          .int()
+          .min(0)
+          .max(1000)
+          .optional()
+          .describe("Maximum claim records to inspect. Defaults to 200; use 0 to skip claims."),
+        maxSessions: z
+          .number()
+          .int()
+          .min(0)
+          .max(500)
+          .optional()
+          .describe("Maximum research sessions to inspect. Defaults to 100; use 0 to skip sessions."),
+        maxReports: z
+          .number()
+          .int()
+          .min(0)
+          .max(200)
+          .optional()
+          .describe("Maximum saved report drafts to inspect. Defaults to 50; use 0 to skip report drafts."),
+        timeoutMs: z.number().int().min(1).max(300000).optional().describe("Concrete engine check timeout in milliseconds."),
+        maximaCommand: z.string().optional().describe("Override Maxima executable for the symbolic cross-check."),
+        sageCommand: z.string().optional().describe("Override SageMath executable for the optional CAS readiness probe."),
+        leanCommand: z.string().optional().describe("Override Lean executable for the proof fixture."),
+        z3Command: z.string().optional().describe("Override Z3 executable for the SMT check."),
+        cvc5Command: z.string().optional().describe("Override cvc5 executable for the optional second SMT check."),
+        smtSourcePath: z.string().optional().describe("Workspace-local SMT-LIB source for SMT checks."),
+        leanSourcePath: z.string().optional().describe("Workspace-local Lean source for the Lean fixture."),
+        requireMaxima: z.boolean().optional().describe("Mark Maxima as required for reviewer readiness."),
+        requireZ3: z.boolean().optional().describe("Mark Z3 as required for reviewer readiness."),
+        requireCvc5: z.boolean().optional().describe("Mark cvc5 as required for reviewer readiness."),
+        requireLean: z.boolean().optional().describe("Mark Lean as required for reviewer readiness."),
+        requireSage: z.boolean().optional().describe("Require SageMath to earn a constrained CAS cross-check."),
+        requireDockerCore: z.boolean().optional().describe("Require Docker-core Maxima, Z3, and cvc5 evidence gates."),
+        requireAllConcrete: z.boolean().optional().describe("Require Maxima, Z3, and Lean concrete evidence gates."),
+        requireAllEngines: z.boolean().optional().describe("Require Maxima, Z3, cvc5, Lean, and SageMath evidence gates.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(await handleTruthHarnessWorkspaceCredibilitySummary(input))
+  );
   server.registerTool(
     "truth_harness_workspace_credibility_actions",
     {
