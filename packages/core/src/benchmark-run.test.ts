@@ -75,6 +75,9 @@ describe("benchmark run records", () => {
       level: "level-1-exact-arithmetic",
       category: "exact-computation",
       aiFailureMode: "wrong arithmetic",
+      reviewStatus: "self-reviewed",
+      requiredEvidence: ["exact arithmetic receipt", "receipt replay command"],
+      checkerBoundary: "native exact-arithmetic parser",
       expectedEvidenceKind: "exact-arithmetic",
       evidenceKind: "exact-arithmetic"
     });
@@ -93,6 +96,9 @@ describe("benchmark run records", () => {
     expect(result.markdown).toContain("level=level-1-exact-arithmetic");
     expect(result.markdown).toContain("category=exact-computation");
     expect(result.markdown).toContain("expected-evidence=exact-arithmetic");
+    expect(result.markdown).toContain("review=self-reviewed");
+    expect(result.markdown).toContain("boundary=native exact-arithmetic parser");
+    expect(result.markdown).toContain("required evidence: exact arithmetic receipt; receipt replay command");
     expect(parseBenchmarkRunRecordJson(JSON.stringify(result.record), "roundtrip").benchmarkRunId).toBe(
       result.record.benchmarkRunId
     );
@@ -283,7 +289,10 @@ function benchmarkRun(
           expectEvidenceKind: receipt.evidenceProfile.kind,
           level: "level-1-exact-arithmetic",
           category: "exact-computation",
-          aiFailureMode: "wrong arithmetic"
+          aiFailureMode: "wrong arithmetic",
+          reviewStatus: "self-reviewed" as const,
+          requiredEvidence: ["exact arithmetic receipt", "receipt replay command"],
+          checkerBoundary: "native exact-arithmetic parser"
         },
         receipt,
         passed,

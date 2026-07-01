@@ -8,6 +8,8 @@ import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, Receipt, TrustLabel } from "./types.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
+export type BenchmarkTaskReviewStatus = "unreviewed" | "self-reviewed" | "external-review-needed" | "external-reviewed";
+
 export interface BenchmarkRunTaskLike {
   id: string;
   prompt: string;
@@ -17,6 +19,9 @@ export interface BenchmarkRunTaskLike {
   level?: string;
   category?: string;
   aiFailureMode?: string;
+  reviewStatus?: BenchmarkTaskReviewStatus;
+  requiredEvidence?: string[];
+  checkerBoundary?: string;
 }
 
 export interface BenchmarkRunTaskResultLike {
@@ -44,6 +49,9 @@ export interface BenchmarkRunCaseRecord {
   level?: string;
   category?: string;
   aiFailureMode?: string;
+  reviewStatus?: BenchmarkTaskReviewStatus;
+  requiredEvidence?: string[];
+  checkerBoundary?: string;
   expectedTrust: TrustLabel;
   expectedSummaryIncludes?: string;
   expectedEvidenceKind?: Receipt["evidenceProfile"]["kind"];
@@ -703,12 +711,17 @@ export function renderBenchmarkRunMarkdown(record: BenchmarkRunRecord): string {
       result.level ? `level=${result.level}` : undefined,
       result.category ? `category=${result.category}` : undefined,
       result.aiFailureMode ? `failure-mode=${result.aiFailureMode}` : undefined,
+      result.reviewStatus ? `review=${result.reviewStatus}` : undefined,
+      result.checkerBoundary ? `boundary=${result.checkerBoundary}` : undefined,
       result.expectedEvidenceKind ? `expected-evidence=${result.expectedEvidenceKind}` : undefined,
       `actual-evidence=${result.evidenceKind}`
     ].filter((part): part is string => Boolean(part));
     lines.push(`- ${status} \`${result.taskId}\`: ${result.actualTrust} - ${result.receiptSummary}`);
     if (context.length > 0) {
       lines.push(`  - ${context.join("; ")}`);
+    }
+    if (result.requiredEvidence && result.requiredEvidence.length > 0) {
+      lines.push(`  - required evidence: ${result.requiredEvidence.join("; ")}`);
     }
     for (const failure of result.failures) {
       lines.push(`  - ${failure}`);
@@ -755,6 +768,9 @@ function toCaseRecord(result: BenchmarkRunTaskResultLike): BenchmarkRunCaseRecor
     level: normalizeOptionalText(result.task.level),
     category: normalizeOptionalText(result.task.category),
     aiFailureMode: normalizeOptionalText(result.task.aiFailureMode),
+    reviewStatus: result.task.reviewStatus,
+    requiredEvidence: normalizeStringList(result.task.requiredEvidence ?? []),
+    checkerBoundary: normalizeOptionalText(result.task.checkerBoundary),
     expectedTrust: result.task.expectTrust,
     expectedSummaryIncludes: normalizeOptionalText(result.task.expectSummaryIncludes),
     expectedEvidenceKind: result.task.expectEvidenceKind,

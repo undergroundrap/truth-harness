@@ -1,6 +1,7 @@
 import { createReceipt, type Receipt, type TrustLabel } from "@truth-harness/core";
 
 export type BenchmarkEvidenceKind = Receipt["evidenceProfile"]["kind"];
+export type BenchmarkTaskReviewStatus = "unreviewed" | "self-reviewed" | "external-review-needed" | "external-reviewed";
 
 export interface BenchmarkTask {
   id: string;
@@ -11,6 +12,9 @@ export interface BenchmarkTask {
   level?: string;
   category?: string;
   aiFailureMode?: string;
+  reviewStatus?: BenchmarkTaskReviewStatus;
+  requiredEvidence?: string[];
+  checkerBoundary?: string;
 }
 
 export interface BenchmarkSuite {
@@ -140,7 +144,10 @@ function parseBenchmarkTask(raw: unknown, index: number): BenchmarkTask {
     expectEvidenceKind: parseOptionalString(task.expectEvidenceKind, `Task ${index} expectEvidenceKind`) as BenchmarkEvidenceKind | undefined,
     level: parseOptionalString(task.level, `Task ${index} level`),
     category: parseOptionalString(task.category, `Task ${index} category`),
-    aiFailureMode: parseOptionalString(task.aiFailureMode, `Task ${index} aiFailureMode`)
+    aiFailureMode: parseOptionalString(task.aiFailureMode, `Task ${index} aiFailureMode`),
+    reviewStatus: parseReviewStatus(task.reviewStatus, index),
+    requiredEvidence: parseOptionalStringArray(task.requiredEvidence, `Task ${index} requiredEvidence`),
+    checkerBoundary: parseOptionalString(task.checkerBoundary, `Task ${index} checkerBoundary`)
   };
 }
 
@@ -197,6 +204,39 @@ function compareLevelLabels(left: string, right: string): number {
 function parseLevelOrdinal(value: string): number | undefined {
   const match = /^level-(\d+)/u.exec(value);
   return match ? Number.parseInt(match[1], 10) : undefined;
+}
+
+function parseReviewStatus(value: unknown, index: number): BenchmarkTaskReviewStatus | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    value === "unreviewed" ||
+    value === "self-reviewed" ||
+    value === "external-review-needed" ||
+    value === "external-reviewed"
+  ) {
+    return value;
+  }
+
+  throw new Error(`Task ${index} has unsupported reviewStatus ${JSON.stringify(value)}`);
+}
+
+function parseOptionalStringArray(value: unknown, field: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${field} must be an array when provided`);
+  }
+  const normalized = value.map((entry, index) => {
+    if (typeof entry !== "string") {
+      throw new Error(`${field}[${index}] must be a string`);
+    }
+    return entry.trim();
+  }).filter((entry) => entry.length > 0);
+
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function parseOptionalString(value: unknown, field: string): string | undefined {

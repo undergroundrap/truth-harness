@@ -18,6 +18,9 @@ describe("benchmark runner", () => {
           level: "level-1-exact-arithmetic",
           category: "exact-computation",
           aiFailureMode: "rounding instead of exact arithmetic",
+          reviewStatus: "self-reviewed",
+          requiredEvidence: ["exact arithmetic receipt", "receipt replay command"],
+          checkerBoundary: "native exact-arithmetic parser",
           expectSummaryIncludes: "4"
         },
         {
@@ -36,7 +39,10 @@ describe("benchmark runner", () => {
       expectEvidenceKind: "exact-arithmetic",
       level: "level-1-exact-arithmetic",
       category: "exact-computation",
-      aiFailureMode: "rounding instead of exact arithmetic"
+      aiFailureMode: "rounding instead of exact arithmetic",
+      reviewStatus: "self-reviewed",
+      requiredEvidence: ["exact arithmetic receipt", "receipt replay command"],
+      checkerBoundary: "native exact-arithmetic parser"
     });
     expect(run.levelSummaries).toEqual([
       {

@@ -231,6 +231,15 @@
         "aiFailureMode": {
           "type": "string"
         },
+        "reviewStatus": {
+          "enum": ["unreviewed", "self-reviewed", "external-review-needed", "external-reviewed"]
+        },
+        "requiredEvidence": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "checkerBoundary": {
+          "type": "string"
+        },
         "expectedTrust": {
           "$ref": "#/$defs/trust"
         },

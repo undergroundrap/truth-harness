@@ -3465,7 +3465,10 @@ function parseRunNextBenchmarkTask(raw: unknown, index: number): BenchmarkRunTas
       | undefined,
     level: optionalString(raw.level, `Benchmark task ${index} level`),
     category: optionalString(raw.category, `Benchmark task ${index} category`),
-    aiFailureMode: optionalString(raw.aiFailureMode, `Benchmark task ${index} aiFailureMode`)
+    aiFailureMode: optionalString(raw.aiFailureMode, `Benchmark task ${index} aiFailureMode`),
+    reviewStatus: parseBenchmarkTaskReviewStatus(raw.reviewStatus, index),
+    requiredEvidence: optionalStringArray(raw.requiredEvidence, `Benchmark task ${index} requiredEvidence`),
+    checkerBoundary: optionalString(raw.checkerBoundary, `Benchmark task ${index} checkerBoundary`)
   };
 }
 
@@ -3526,6 +3529,37 @@ function isTrustLabel(value: unknown): value is TrustLabel {
     value === "cross-checked" ||
     value === "refuted"
   );
+}
+
+function parseBenchmarkTaskReviewStatus(value: unknown, index: number): BenchmarkRunTaskLike["reviewStatus"] {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    value === "unreviewed" ||
+    value === "self-reviewed" ||
+    value === "external-review-needed" ||
+    value === "external-reviewed"
+  ) {
+    return value;
+  }
+  throw new Error(`Benchmark task ${index} has unsupported reviewStatus ${JSON.stringify(value)}.`);
+}
+
+function optionalStringArray(value: unknown, field: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${field} must be an array when provided.`);
+  }
+  const normalized = value.map((entry, index) => {
+    if (typeof entry !== "string") {
+      throw new Error(`${field}[${index}] must be a string.`);
+    }
+    return entry.trim();
+  }).filter((entry) => entry.length > 0);
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function optionalString(value: unknown, field: string): string | undefined {
