@@ -1,7 +1,7 @@
 {
   "id": "engine-math-seed",
   "title": "Engine Math Seed Suite",
-  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap, swept AABB intersection, circle/AABB intersection, segment intersection, ray/AABB, and point-in-triangle receipts before expanding to harder engine invariants.",
+  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap, swept AABB intersection, circle/circle intersection, circle/AABB intersection, segment intersection, ray/AABB, and point-in-triangle receipts before expanding to harder engine invariants.",
   "tasks": [
     {
       "id": "aabb-overlap-true",
@@ -116,6 +116,63 @@
         "stated-answer mismatch"
       ],
       "checkerBoundary": "Only the stated finite swept AABB predicate is refuted. The receipt does not evaluate arbitrary scenes, collision response, or runtime engine state."
+    },
+    {
+      "id": "circle-circle-overlap",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Guesses circular collision visually instead of recording the exact squared-distance predicate and disk convention.",
+      "prompt": "Do circle A center(0,0) radius 3 and circle B center(4,0) radius 2 intersect?",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "overlap",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate circle/circle certificate",
+        "closed-disk convention",
+        "squared center-distance comparison",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only 2D closed disks with integer centers and integer radii are checked. Boundary tangency and containment count as intersection. This is not a manifold, collision-response, or physics-engine proof."
+    },
+    {
+      "id": "circle-circle-tangent-counts-as-hit",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Forgets to specify whether touching circle boundaries count as collision, creating boundary-policy bugs.",
+      "prompt": "verify circle A center(0,0) radius 3 and circle B center(5,0) radius 2 intersect = true",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "external-tangent",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate circle/circle certificate",
+        "external tangency classification",
+        "distance squared equals radius-sum squared",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "The result depends on the recorded closed-disk convention. Open-boundary or tolerance-based physics policies need separate adapters and receipts."
+    },
+    {
+      "id": "circle-circle-separated-refuted",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Accepts a stated circle collision without checking that the centers are too far apart.",
+      "prompt": "verify circle A center(0,0) radius 2 and circle B center(6,0) radius 2 intersect = true",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "separated",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate circle/circle certificate",
+        "squared center-distance comparison",
+        "distance squared greater than radius-sum squared",
+        "stated-answer mismatch"
+      ],
+      "checkerBoundary": "Only the stated finite circle/circle predicate is refuted. The receipt does not evaluate arbitrary collision scenes, swept disks, collision response, or runtime engine state."
     },
     {
       "id": "circle-aabb-overlap",

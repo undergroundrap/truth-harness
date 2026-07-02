@@ -38,6 +38,13 @@ export interface Circle2AabbIntersectionClaim {
   statedIntersect?: boolean;
 }
 
+export interface Circle2IntersectionClaim {
+  source: string;
+  a: Circle2;
+  b: Circle2;
+  statedIntersect?: boolean;
+}
+
 export interface Segment2 {
   from: Point2;
   to: Point2;
@@ -76,6 +83,7 @@ export interface PointInTriangle2Claim {
 }
 
 export type Circle2AabbClassification = "center-inside" | "overlap" | "tangent" | "separated";
+export type Circle2IntersectionClassification = "overlap" | "external-tangent" | "concentric-overlap" | "contained-overlap" | "separated";
 export type PointInTriangle2Classification = "inside" | "edge" | "vertex" | "outside";
 export type RaySlabEndpoint = Rational | "negative-infinity" | "positive-infinity";
 export type Ray2AabbClassification = "ray-hit" | "origin-inside" | "parallel-miss" | "behind-ray" | "slab-miss";
@@ -424,6 +432,116 @@ function sweptAabb2At(aabb: Aabb2, velocity: Point2, t: Rational): Record<keyof 
     maxX: Rational.integer(aabb.maxX).add(offsetX).toString(),
     maxY: Rational.integer(aabb.maxY).add(offsetY).toString()
   };
+}
+
+export function parseCircle2IntersectionClaim(problem: string): Circle2IntersectionClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.?]$/u, "");
+  const match = /^(?:do\s+)?circle\s+a\s+center\s*\(\s*(?<aCenterX>-?\d+)\s*,\s*(?<aCenterY>-?\d+)\s*\)\s+radius\s*(?<aRadius>\d+)\s+and\s+circle\s+b\s+center\s*\(\s*(?<bCenterX>-?\d+)\s*,\s*(?<bCenterY>-?\d+)\s*\)\s+radius\s*(?<bRadius>\d+)\s+intersects?(?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  const requiredGroups = ["aCenterX", "aCenterY", "aRadius", "bCenterX", "bCenterY", "bRadius"];
+  if (requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18)) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    a: {
+      center: { x: BigInt(match.groups.aCenterX), y: BigInt(match.groups.aCenterY) },
+      radius: BigInt(match.groups.aRadius)
+    },
+    b: {
+      center: { x: BigInt(match.groups.bCenterX), y: BigInt(match.groups.bCenterY) },
+      radius: BigInt(match.groups.bRadius)
+    },
+    statedIntersect: match.groups.stated === undefined ? undefined : match.groups.stated.toLowerCase() === "true"
+  };
+}
+
+export function circle2IntersectionCertificate(claim: Circle2IntersectionClaim): {
+  schemaVersion: "truth-harness.circle2-intersection.v0";
+  adapter: "local-circle2-intersection";
+  source: string;
+  convention: "closed-disks-boundary-counts-as-intersection";
+  a: { center: Record<keyof Point2, string>; radius: string };
+  b: { center: Record<keyof Point2, string>; radius: string };
+  statedIntersect?: boolean;
+  delta: { dx: string; dy: string };
+  distanceSquared: string;
+  radiusSumSquared: string;
+  radiusDifferenceSquared: string;
+  intersect: boolean;
+  classification: Circle2IntersectionClassification;
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const dx = claim.a.center.x - claim.b.center.x;
+  const dy = claim.a.center.y - claim.b.center.y;
+  const distanceSquared = dx * dx + dy * dy;
+  const radiusSum = claim.a.radius + claim.b.radius;
+  const radiusDifference = absBigInt(claim.a.radius - claim.b.radius);
+  const radiusSumSquared = radiusSum * radiusSum;
+  const radiusDifferenceSquared = radiusDifference * radiusDifference;
+  const intersect = distanceSquared <= radiusSumSquared;
+  const classification: Circle2IntersectionClassification = !intersect
+    ? "separated"
+    : distanceSquared === 0n
+      ? "concentric-overlap"
+      : distanceSquared === radiusSumSquared
+        ? "external-tangent"
+        : distanceSquared < radiusDifferenceSquared
+          ? "contained-overlap"
+          : "overlap";
+  const statedMatches = claim.statedIntersect === undefined || claim.statedIntersect === intersect;
+
+  return {
+    schemaVersion: "truth-harness.circle2-intersection.v0",
+    adapter: "local-circle2-intersection",
+    source: claim.source,
+    convention: "closed-disks-boundary-counts-as-intersection",
+    a: stringifyCircle2(claim.a),
+    b: stringifyCircle2(claim.b),
+    statedIntersect: claim.statedIntersect,
+    delta: { dx: dx.toString(), dy: dy.toString() },
+    distanceSquared: distanceSquared.toString(),
+    radiusSumSquared: radiusSumSquared.toString(),
+    radiusDifferenceSquared: radiusDifferenceSquared.toString(),
+    intersect,
+    classification,
+    checks: [
+      {
+        id: "valid-circle-inputs",
+        ok: true,
+        expected: "nonnegative integer radii and integer centers for both circles",
+        observed: "both circles have nonnegative integer radii and integer centers"
+      },
+      {
+        id: "closed-disk-distance-result",
+        ok: statedMatches,
+        expected: String(intersect),
+        observed: claim.statedIntersect === undefined ? String(intersect) : String(claim.statedIntersect)
+      }
+    ],
+    trace: [
+      "Use closed disks, so boundary tangency and containment count as intersection.",
+      `Squared center distance is ${distanceSquared.toString()}; squared radius sum is ${radiusSumSquared.toString()}.`,
+      `Squared radius difference is ${radiusDifferenceSquared.toString()} and is recorded for containment classification, not for rejecting disk overlap.`,
+      `Exact circle/circle result is ${String(intersect)} (${classification}).`
+    ],
+    verdict: claim.statedIntersect === undefined ? "computed" : statedMatches ? "accepted" : "refuted"
+  };
+}
+
+function absBigInt(value: bigint): bigint {
+  return value < 0n ? -value : value;
 }
 
 export function parseCircle2AabbIntersectionClaim(problem: string): Circle2AabbIntersectionClaim | undefined {

@@ -411,6 +411,59 @@ describe("createReceipt", () => {
     expect(payload.tExit).toBe("1");
   });
 
+  it("computes circle/circle intersections with exact squared-distance arithmetic", () => {
+    const receipt = createReceipt("Do circle A center(0,0) radius 3 and circle B center(4,0) radius 2 intersect?");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("true");
+    expect(receipt.summary).toContain("overlap");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-circle2-intersection");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "classification=overlap", "circle2-intersection=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "circle2-intersection-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      intersect?: boolean;
+      classification?: string;
+      distanceSquared?: string;
+      radiusSumSquared?: string;
+    };
+    expect(payload).toMatchObject({
+      intersect: true,
+      classification: "overlap",
+      distanceSquared: "16",
+      radiusSumSquared: "25"
+    });
+  });
+
+  it("treats circle/circle tangency as intersection under the closed-disk convention", () => {
+    const receipt = createReceipt("verify circle A center(0,0) radius 3 and circle B center(5,0) radius 2 intersect = true");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("external-tangent");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "stated=true", "classification=external-tangent", "circle2-intersection=passed"])
+    );
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("boundary tangency and containment count as intersection");
+  });
+
+  it("refutes wrong circle/circle intersection claims with exact squared-distance evidence", () => {
+    const receipt = createReceipt("verify circle A center(0,0) radius 2 and circle B center(6,0) radius 2 intersect = true");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("false");
+    expect(receipt.summary).toContain("separated");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=false", "stated=true", "classification=separated", "circle2-intersection=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "circle2-intersection-certificate");
+    const payload = JSON.parse(certificate?.content ?? "{}") as { distanceSquared?: string; radiusSumSquared?: string };
+    expect(payload.distanceSquared).toBe("36");
+    expect(payload.radiusSumSquared).toBe("16");
+  });
   it("computes circle/AABB intersections with exact squared-distance arithmetic", () => {
     const receipt = createReceipt("Do circle center(2,2) radius 2 intersect AABB min(3,0) max(6,4)?");
 
