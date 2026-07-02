@@ -464,6 +464,64 @@ describe("createReceipt", () => {
     expect(payload.distanceSquared).toBe("36");
     expect(payload.radiusSumSquared).toBe("16");
   });
+
+  it("computes capsule/circle intersections with exact closest-point arithmetic", () => {
+    const receipt = createReceipt("Do capsule A from (0,0) to (4,0) radius 1 and circle B center(2,1) radius 1 intersect?");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("true");
+    expect(receipt.summary).toContain("side-overlap");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-capsule2-circle-intersection");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "classification=side-overlap", "capsule2-circle-intersection=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "capsule2-circle-intersection-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      intersect?: boolean;
+      classification?: string;
+      closestPoint?: { x?: string; y?: string };
+      segmentParameter?: string;
+      distanceSquared?: string;
+      radiusSumSquared?: string;
+    };
+    expect(payload).toMatchObject({
+      intersect: true,
+      classification: "side-overlap",
+      closestPoint: { x: "2", y: "0" },
+      segmentParameter: "1/2",
+      distanceSquared: "1",
+      radiusSumSquared: "4"
+    });
+  });
+
+  it("treats capsule/circle tangency as intersection under the closed-boundary convention", () => {
+    const receipt = createReceipt("verify capsule A from (0,0) to (4,0) radius 1 and circle B center(2,2) radius 1 intersect = true");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("side-tangent");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "stated=true", "classification=side-tangent", "capsule2-circle-intersection=passed"])
+    );
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("Boundary tangency counts as intersection");
+  });
+
+  it("refutes wrong capsule/circle intersection claims with exact distance evidence", () => {
+    const receipt = createReceipt("verify capsule A from (0,0) to (4,0) radius 1 and circle B center(2,4) radius 1 intersect = true");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("false");
+    expect(receipt.summary).toContain("separated");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=false", "stated=true", "classification=separated", "capsule2-circle-intersection=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "capsule2-circle-intersection-certificate");
+    const payload = JSON.parse(certificate?.content ?? "{}") as { distanceSquared?: string; radiusSumSquared?: string };
+    expect(payload.distanceSquared).toBe("16");
+    expect(payload.radiusSumSquared).toBe("4");
+  });
   it("computes circle/AABB intersections with exact squared-distance arithmetic", () => {
     const receipt = createReceipt("Do circle center(2,2) radius 2 intersect AABB min(3,0) max(6,4)?");
 

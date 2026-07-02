@@ -45,6 +45,18 @@ export interface Circle2IntersectionClaim {
   statedIntersect?: boolean;
 }
 
+export interface Capsule2 {
+  segment: Segment2;
+  radius: bigint;
+}
+
+export interface Capsule2CircleIntersectionClaim {
+  source: string;
+  capsule: Capsule2;
+  circle: Circle2;
+  statedIntersect?: boolean;
+}
+
 export interface Segment2 {
   from: Point2;
   to: Point2;
@@ -84,6 +96,7 @@ export interface PointInTriangle2Claim {
 
 export type Circle2AabbClassification = "center-inside" | "overlap" | "tangent" | "separated";
 export type Circle2IntersectionClassification = "overlap" | "external-tangent" | "concentric-overlap" | "contained-overlap" | "separated";
+export type Capsule2CircleClassification = "side-overlap" | "side-tangent" | "endpoint-overlap" | "endpoint-tangent" | "separated";
 export type PointInTriangle2Classification = "inside" | "edge" | "vertex" | "outside";
 export type RaySlabEndpoint = Rational | "negative-infinity" | "positive-infinity";
 export type Ray2AabbClassification = "ray-hit" | "origin-inside" | "parallel-miss" | "behind-ray" | "slab-miss";
@@ -542,6 +555,177 @@ export function circle2IntersectionCertificate(claim: Circle2IntersectionClaim):
 
 function absBigInt(value: bigint): bigint {
   return value < 0n ? -value : value;
+}
+
+export function parseCapsule2CircleIntersectionClaim(problem: string): Capsule2CircleIntersectionClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.?]$/u, "");
+  const match = /^(?:do\s+)?capsule\s+a\s+from\s*\(\s*(?<fromX>-?\d+)\s*,\s*(?<fromY>-?\d+)\s*\)\s+to\s*\(\s*(?<toX>-?\d+)\s*,\s*(?<toY>-?\d+)\s*\)\s+radius\s*(?<capsuleRadius>\d+)\s+and\s+circle\s+b\s+center\s*\(\s*(?<centerX>-?\d+)\s*,\s*(?<centerY>-?\d+)\s*\)\s+radius\s*(?<circleRadius>\d+)\s+intersects?(?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  const requiredGroups = ["fromX", "fromY", "toX", "toY", "capsuleRadius", "centerX", "centerY", "circleRadius"];
+  if (requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18)) {
+    return undefined;
+  }
+
+  const segment: Segment2 = {
+    from: { x: BigInt(match.groups.fromX), y: BigInt(match.groups.fromY) },
+    to: { x: BigInt(match.groups.toX), y: BigInt(match.groups.toY) }
+  };
+  if (!isNonDegenerateSegment2(segment)) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    capsule: {
+      segment,
+      radius: BigInt(match.groups.capsuleRadius)
+    },
+    circle: {
+      center: { x: BigInt(match.groups.centerX), y: BigInt(match.groups.centerY) },
+      radius: BigInt(match.groups.circleRadius)
+    },
+    statedIntersect: match.groups.stated === undefined ? undefined : match.groups.stated.toLowerCase() === "true"
+  };
+}
+
+export function capsule2CircleIntersectionCertificate(claim: Capsule2CircleIntersectionClaim): {
+  schemaVersion: "truth-harness.capsule2-circle-intersection.v0";
+  adapter: "local-capsule2-circle-intersection";
+  source: string;
+  convention: "closed-capsule-closed-disk-boundary-counts-as-intersection";
+  capsule: { segment: { from: Record<keyof Point2, string>; to: Record<keyof Point2, string> }; radius: string };
+  circle: { center: Record<keyof Point2, string>; radius: string };
+  statedIntersect?: boolean;
+  closestPoint: Record<keyof Point2, string>;
+  closestRegion: "start" | "interior" | "end";
+  segmentParameter: string;
+  distanceSquared: string;
+  radiusSumSquared: string;
+  intersect: boolean;
+  classification: Capsule2CircleClassification;
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const distance = pointToSegment2DistanceSquared(claim.circle.center, claim.capsule.segment);
+  const radiusSum = claim.capsule.radius + claim.circle.radius;
+  const radiusSumSquared = Rational.integer(radiusSum * radiusSum);
+  const comparison = distance.distanceSquared.compare(radiusSumSquared);
+  const intersect = comparison <= 0;
+  const classification: Capsule2CircleClassification = !intersect
+    ? "separated"
+    : distance.closestRegion === "interior"
+      ? comparison === 0
+        ? "side-tangent"
+        : "side-overlap"
+      : comparison === 0
+        ? "endpoint-tangent"
+        : "endpoint-overlap";
+  const statedMatches = claim.statedIntersect === undefined || claim.statedIntersect === intersect;
+
+  return {
+    schemaVersion: "truth-harness.capsule2-circle-intersection.v0",
+    adapter: "local-capsule2-circle-intersection",
+    source: claim.source,
+    convention: "closed-capsule-closed-disk-boundary-counts-as-intersection",
+    capsule: stringifyCapsule2(claim.capsule),
+    circle: stringifyCircle2(claim.circle),
+    statedIntersect: claim.statedIntersect,
+    closestPoint: distance.closestPoint,
+    closestRegion: distance.closestRegion,
+    segmentParameter: distance.segmentParameter,
+    distanceSquared: distance.distanceSquared.toString(),
+    radiusSumSquared: radiusSumSquared.toString(),
+    intersect,
+    classification,
+    checks: [
+      {
+        id: "valid-capsule-circle-inputs",
+        ok: true,
+        expected: "non-degenerate integer segment, nonnegative capsule radius, and nonnegative circle radius",
+        observed: "capsule segment is non-degenerate and both radii are nonnegative integers"
+      },
+      {
+        id: "closed-capsule-circle-distance-result",
+        ok: statedMatches,
+        expected: String(intersect),
+        observed: claim.statedIntersect === undefined ? String(intersect) : String(claim.statedIntersect)
+      }
+    ],
+    trace: [
+      "Use a closed capsule and closed disk, so boundary tangency counts as intersection.",
+      `Project the circle center onto the capsule segment; clamped segment parameter is ${distance.segmentParameter} (${distance.closestRegion}).`,
+      `Closest point is (${distance.closestPoint.x}, ${distance.closestPoint.y}).`,
+      `Squared center-to-segment distance is ${distance.distanceSquared.toString()}; squared radius sum is ${radiusSumSquared.toString()}.`,
+      `Exact capsule/circle result is ${String(intersect)} (${classification}).`
+    ],
+    verdict: claim.statedIntersect === undefined ? "computed" : statedMatches ? "accepted" : "refuted"
+  };
+}
+
+function pointToSegment2DistanceSquared(point: Point2, segment: Segment2): {
+  closestPoint: Record<keyof Point2, string>;
+  closestRegion: "start" | "interior" | "end";
+  segmentParameter: string;
+  distanceSquared: Rational;
+} {
+  const vx = segment.to.x - segment.from.x;
+  const vy = segment.to.y - segment.from.y;
+  const wx = point.x - segment.from.x;
+  const wy = point.y - segment.from.y;
+  const lengthSquared = vx * vx + vy * vy;
+  const projection = wx * vx + wy * vy;
+
+  if (projection <= 0n) {
+    const dx = point.x - segment.from.x;
+    const dy = point.y - segment.from.y;
+    return {
+      closestPoint: stringifyPoint2(segment.from),
+      closestRegion: "start",
+      segmentParameter: "0",
+      distanceSquared: Rational.integer(dx * dx + dy * dy)
+    };
+  }
+
+  if (projection >= lengthSquared) {
+    const dx = point.x - segment.to.x;
+    const dy = point.y - segment.to.y;
+    return {
+      closestPoint: stringifyPoint2(segment.to),
+      closestRegion: "end",
+      segmentParameter: "1",
+      distanceSquared: Rational.integer(dx * dx + dy * dy)
+    };
+  }
+
+  const parameter = new Rational(projection, lengthSquared);
+  const closestX = Rational.integer(segment.from.x).add(Rational.integer(vx).multiply(parameter));
+  const closestY = Rational.integer(segment.from.y).add(Rational.integer(vy).multiply(parameter));
+  const pointX = Rational.integer(point.x);
+  const pointY = Rational.integer(point.y);
+  const dx = pointX.subtract(closestX);
+  const dy = pointY.subtract(closestY);
+  return {
+    closestPoint: { x: closestX.toString(), y: closestY.toString() },
+    closestRegion: "interior",
+    segmentParameter: parameter.toString(),
+    distanceSquared: dx.multiply(dx).add(dy.multiply(dy))
+  };
+}
+
+function stringifyCapsule2(capsule: Capsule2): { segment: { from: Record<keyof Point2, string>; to: Record<keyof Point2, string> }; radius: string } {
+  return {
+    segment: stringifySegment2(capsule.segment),
+    radius: capsule.radius.toString()
+  };
 }
 
 export function parseCircle2AabbIntersectionClaim(problem: string): Circle2AabbIntersectionClaim | undefined {
