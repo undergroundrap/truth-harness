@@ -81,6 +81,13 @@ export interface Ray2AabbIntersectionClaim {
   statedIntersect?: boolean;
 }
 
+export interface Ray2CircleIntersectionClaim {
+  source: string;
+  ray: Ray2;
+  circle: Circle2;
+  statedIntersect?: boolean;
+}
+
 export interface Triangle2 {
   a: Point2;
   b: Point2;
@@ -100,6 +107,7 @@ export type Capsule2CircleClassification = "side-overlap" | "side-tangent" | "en
 export type PointInTriangle2Classification = "inside" | "edge" | "vertex" | "outside";
 export type RaySlabEndpoint = Rational | "negative-infinity" | "positive-infinity";
 export type Ray2AabbClassification = "ray-hit" | "origin-inside" | "parallel-miss" | "behind-ray" | "slab-miss";
+export type Ray2CircleClassification = "ray-hit" | "origin-inside" | "tangent" | "behind-ray" | "ray-miss";
 export type SweptAabb2Classification = "initial-overlap" | "swept-hit" | "parallel-miss" | "axis-window-miss" | "time-window-miss";
 
 export interface RaySlabAxisInterval {
@@ -1077,6 +1085,168 @@ export function parseRay2AabbIntersectionClaim(problem: string): Ray2AabbInterse
 
 function isNonZeroDirection2(direction: Point2): boolean {
   return direction.x !== 0n || direction.y !== 0n;
+}
+
+export function parseRay2CircleIntersectionClaim(problem: string): Ray2CircleIntersectionClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.?]$/u, "");
+  const match = /^(?:do\s+)?ray\s+origin\s*\(\s*(?<originX>-?\d+)\s*,\s*(?<originY>-?\d+)\s*\)\s+direction\s*\(\s*(?<directionX>-?\d+)\s*,\s*(?<directionY>-?\d+)\s*\)\s+intersects?\s+circle\s+center\s*\(\s*(?<centerX>-?\d+)\s*,\s*(?<centerY>-?\d+)\s*\)\s+radius\s*(?<radius>\d+)(?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  const requiredGroups = ["originX", "originY", "directionX", "directionY", "centerX", "centerY", "radius"];
+  if (requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18)) {
+    return undefined;
+  }
+
+  const ray: Ray2 = {
+    origin: { x: BigInt(match.groups.originX), y: BigInt(match.groups.originY) },
+    direction: { x: BigInt(match.groups.directionX), y: BigInt(match.groups.directionY) }
+  };
+  if (!isNonZeroDirection2(ray.direction)) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    ray,
+    circle: {
+      center: { x: BigInt(match.groups.centerX), y: BigInt(match.groups.centerY) },
+      radius: BigInt(match.groups.radius)
+    },
+    statedIntersect: match.groups.stated === undefined ? undefined : match.groups.stated.toLowerCase() === "true"
+  };
+}
+
+export function ray2CircleIntersectionCertificate(claim: Ray2CircleIntersectionClaim): {
+  schemaVersion: "truth-harness.ray2-circle-intersection.v0";
+  adapter: "local-ray2-circle-intersection";
+  source: string;
+  convention: "closed-disk-ray-domain-t-greater-than-or-equal-zero";
+  ray: { origin: Record<keyof Point2, string>; direction: Record<keyof Point2, string> };
+  circle: { center: Record<keyof Point2, string>; radius: string };
+  statedIntersect?: boolean;
+  projection: string;
+  directionLengthSquared: string;
+  closestPoint: Record<keyof Point2, string>;
+  closestRegion: "origin" | "interior";
+  rayParameter: string;
+  distanceSquared: string;
+  radiusSquared: string;
+  intersect: boolean;
+  classification: Ray2CircleClassification;
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const distance = pointToRay2DistanceSquared(claim.circle.center, claim.ray);
+  const radiusSquared = Rational.integer(claim.circle.radius * claim.circle.radius);
+  const originDx = claim.ray.origin.x - claim.circle.center.x;
+  const originDy = claim.ray.origin.y - claim.circle.center.y;
+  const originDistanceSquared = originDx * originDx + originDy * originDy;
+  const originInside = originDistanceSquared <= claim.circle.radius * claim.circle.radius;
+  const comparison = distance.distanceSquared.compare(radiusSquared);
+  const intersect = comparison <= 0;
+  const classification: Ray2CircleClassification = intersect
+    ? originInside
+      ? "origin-inside"
+      : comparison === 0
+        ? "tangent"
+        : "ray-hit"
+    : distance.closestRegion === "origin"
+      ? "behind-ray"
+      : "ray-miss";
+  const statedMatches = claim.statedIntersect === undefined || claim.statedIntersect === intersect;
+
+  return {
+    schemaVersion: "truth-harness.ray2-circle-intersection.v0",
+    adapter: "local-ray2-circle-intersection",
+    source: claim.source,
+    convention: "closed-disk-ray-domain-t-greater-than-or-equal-zero",
+    ray: stringifyRay2(claim.ray),
+    circle: stringifyCircle2(claim.circle),
+    statedIntersect: claim.statedIntersect,
+    projection: distance.projection.toString(),
+    directionLengthSquared: distance.directionLengthSquared.toString(),
+    closestPoint: distance.closestPoint,
+    closestRegion: distance.closestRegion,
+    rayParameter: distance.rayParameter,
+    distanceSquared: distance.distanceSquared.toString(),
+    radiusSquared: radiusSquared.toString(),
+    intersect,
+    classification,
+    checks: [
+      {
+        id: "valid-ray-circle-inputs",
+        ok: true,
+        expected: "nonzero integer ray direction and nonnegative integer circle radius",
+        observed: "ray direction is nonzero and circle radius is a nonnegative integer"
+      },
+      {
+        id: "closed-disk-ray-distance-result",
+        ok: statedMatches,
+        expected: String(intersect),
+        observed: claim.statedIntersect === undefined ? String(intersect) : String(claim.statedIntersect)
+      }
+    ],
+    trace: [
+      "Use a closed disk and ray parameter domain t >= 0; boundary tangency counts as intersection.",
+      `Projection of center-origin onto ray direction is ${distance.projection.toString()}; direction length squared is ${distance.directionLengthSquared.toString()}.`,
+      `Closest ray parameter is ${distance.rayParameter} (${distance.closestRegion}).`,
+      `Closest point is (${distance.closestPoint.x}, ${distance.closestPoint.y}).`,
+      `Squared distance to circle center is ${distance.distanceSquared.toString()}; radius squared is ${radiusSquared.toString()}.`,
+      `Exact ray/circle result is ${String(intersect)} (${classification}).`
+    ],
+    verdict: claim.statedIntersect === undefined ? "computed" : statedMatches ? "accepted" : "refuted"
+  };
+}
+
+function pointToRay2DistanceSquared(point: Point2, ray: Ray2): {
+  closestPoint: Record<keyof Point2, string>;
+  closestRegion: "origin" | "interior";
+  projection: bigint;
+  directionLengthSquared: bigint;
+  rayParameter: string;
+  distanceSquared: Rational;
+} {
+  const wx = point.x - ray.origin.x;
+  const wy = point.y - ray.origin.y;
+  const projection = wx * ray.direction.x + wy * ray.direction.y;
+  const directionLengthSquared = ray.direction.x * ray.direction.x + ray.direction.y * ray.direction.y;
+
+  if (projection <= 0n) {
+    const dx = point.x - ray.origin.x;
+    const dy = point.y - ray.origin.y;
+    return {
+      closestPoint: stringifyPoint2(ray.origin),
+      closestRegion: "origin",
+      projection,
+      directionLengthSquared,
+      rayParameter: "0",
+      distanceSquared: Rational.integer(dx * dx + dy * dy)
+    };
+  }
+
+  const parameter = new Rational(projection, directionLengthSquared);
+  const closestX = Rational.integer(ray.origin.x).add(Rational.integer(ray.direction.x).multiply(parameter));
+  const closestY = Rational.integer(ray.origin.y).add(Rational.integer(ray.direction.y).multiply(parameter));
+  const pointX = Rational.integer(point.x);
+  const pointY = Rational.integer(point.y);
+  const dx = pointX.subtract(closestX);
+  const dy = pointY.subtract(closestY);
+  return {
+    closestPoint: { x: closestX.toString(), y: closestY.toString() },
+    closestRegion: "interior",
+    projection,
+    directionLengthSquared,
+    rayParameter: parameter.toString(),
+    distanceSquared: dx.multiply(dx).add(dy.multiply(dy))
+  };
 }
 
 export function ray2AabbIntersectionCertificate(claim: Ray2AabbIntersectionClaim): {

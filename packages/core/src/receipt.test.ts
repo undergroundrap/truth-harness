@@ -627,6 +627,67 @@ describe("createReceipt", () => {
     );
     expect(receipt.evidenceProfile.limitations.join(" ")).toContain("endpoint touches and collinear overlaps count as intersection");
   });
+
+  it("computes ray/circle intersections with exact closest-point arithmetic", () => {
+    const receipt = createReceipt("Do ray origin(0,0) direction(1,0) intersect circle center(3,1) radius 2?");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("true");
+    expect(receipt.summary).toContain("ray-hit");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-ray2-circle-intersection");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "classification=ray-hit", "ray2-circle-intersection=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "ray2-circle-intersection-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      intersect?: boolean;
+      classification?: string;
+      closestPoint?: { x?: string; y?: string };
+      rayParameter?: string;
+      distanceSquared?: string;
+      radiusSquared?: string;
+    };
+    expect(payload).toMatchObject({
+      intersect: true,
+      classification: "ray-hit",
+      closestPoint: { x: "3", y: "0" },
+      rayParameter: "3",
+      distanceSquared: "1",
+      radiusSquared: "4"
+    });
+  });
+
+  it("treats ray/circle tangency as intersection under the closed-disk convention", () => {
+    const receipt = createReceipt("verify ray origin(0,0) direction(1,0) intersect circle center(3,2) radius 2 = true");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("tangent");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "stated=true", "classification=tangent", "ray2-circle-intersection=passed"])
+    );
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("boundary tangency counts as intersection");
+  });
+
+  it("refutes wrong ray/circle claims when the circle is behind the ray", () => {
+    const receipt = createReceipt("verify ray origin(0,0) direction(1,0) intersect circle center(-3,0) radius 1 = true");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("false");
+    expect(receipt.summary).toContain("behind-ray");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=false", "stated=true", "classification=behind-ray", "ray2-circle-intersection=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "ray2-circle-intersection-certificate");
+    const payload = JSON.parse(certificate?.content ?? "{}") as { closestRegion?: string; rayParameter?: string; distanceSquared?: string; radiusSquared?: string };
+    expect(payload.closestRegion).toBe("origin");
+    expect(payload.rayParameter).toBe("0");
+    expect(payload.distanceSquared).toBe("9");
+    expect(payload.radiusSquared).toBe("1");
+  });
+
   it("computes ray/AABB intersections with exact rational slab intervals", () => {
     const receipt = createReceipt("Do ray origin(0,2) direction(1,0) intersect AABB min(3,0) max(5,4)?");
 

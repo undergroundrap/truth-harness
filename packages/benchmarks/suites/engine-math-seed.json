@@ -1,7 +1,7 @@
 {
   "id": "engine-math-seed",
   "title": "Engine Math Seed Suite",
-  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap, swept AABB intersection, circle/circle intersection, capsule/circle intersection, circle/AABB intersection, segment intersection, ray/AABB, and point-in-triangle receipts before expanding to harder engine invariants.",
+  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap, swept AABB intersection, circle/circle intersection, capsule/circle intersection, circle/AABB intersection, segment intersection, ray/circle intersection, ray/AABB, and point-in-triangle receipts before expanding to harder engine invariants.",
   "tasks": [
     {
       "id": "aabb-overlap-true",
@@ -344,6 +344,63 @@
         "receipt replay command"
       ],
       "checkerBoundary": "The result depends on the recorded closed-segment convention. Open-segment or tolerance-based policies need separate adapters and receipts."
+    },
+    {
+      "id": "ray-circle-hit",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Uses raycast intuition without preserving the exact closest-point distance predicate.",
+      "prompt": "Do ray origin(0,0) direction(1,0) intersect circle center(3,1) radius 2?",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "ray-hit",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate ray/circle certificate",
+        "t >= 0 ray-domain convention",
+        "exact rational closest-point projection",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only one 2D ray with integer origin and nonzero integer direction against one closed disk with integer center and integer radius is checked. This is not a full raycaster, visibility, BVH, rendering, or physics proof."
+    },
+    {
+      "id": "ray-circle-tangent-counts-as-hit",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Forgets to define whether ray tangency against a circle counts as a hit.",
+      "prompt": "verify ray origin(0,0) direction(1,0) intersect circle center(3,2) radius 2 = true",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "tangent",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate ray/circle certificate",
+        "closed-disk tangency convention",
+        "distance squared equals radius squared",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "The result depends on the recorded closed-disk and t >= 0 ray-domain convention. Open-boundary or segment-limited raycasts need separate adapters and receipts."
+    },
+    {
+      "id": "ray-circle-behind-ray-refuted",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Checks the infinite line against the circle but forgets that the ray only exists for t >= 0.",
+      "prompt": "verify ray origin(0,0) direction(1,0) intersect circle center(-3,0) radius 1 = true",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "behind-ray",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate ray/circle certificate",
+        "negative projection / clamped origin evidence",
+        "t >= 0 ray-domain check",
+        "stated-answer mismatch"
+      ],
+      "checkerBoundary": "Only the stated finite ray/circle predicate is refuted. The receipt does not evaluate arbitrary raycast systems, acceleration structures, visibility, or runtime engine state."
     },
     {
       "id": "ray-aabb-hit",

@@ -9,6 +9,7 @@ import {
   circle2AabbIntersectionCertificate,
   circle2IntersectionCertificate,
   capsule2CircleIntersectionCertificate,
+  ray2CircleIntersectionCertificate,
   parseSweptAabb2IntersectionClaim,
   parseAabb2OverlapClaim,
   parseCircle2AabbIntersectionClaim,
@@ -16,6 +17,7 @@ import {
   parseCapsule2CircleIntersectionClaim,
   parsePointInTriangle2Claim,
   parseRay2AabbIntersectionClaim,
+  parseRay2CircleIntersectionClaim,
   parseSegment2IntersectionClaim,
   pointInTriangle2Certificate,
   ray2AabbIntersectionCertificate,
@@ -27,6 +29,7 @@ import {
   type Capsule2CircleIntersectionClaim,
   type PointInTriangle2Claim,
   type Ray2AabbIntersectionClaim,
+  type Ray2CircleIntersectionClaim,
   type Segment2IntersectionClaim,
   type SweptAabb2IntersectionClaim
 } from "./engine-geometry.js";
@@ -425,6 +428,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const ray2CircleIntersection = parseRay2CircleIntersectionClaim(normalizedProblem);
+  if (ray2CircleIntersection) {
+    return completeRay2CircleIntersectionReceipt({
+      problem,
+      normalizedProblem,
+      claim: ray2CircleIntersection,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const ray2AabbIntersection = parseRay2AabbIntersectionClaim(normalizedProblem);
   if (ray2AabbIntersection) {
     return completeRay2AabbIntersectionReceipt({
@@ -479,7 +497,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate swept AABB intersection predicates, integer-coordinate circle/circle intersection predicates, integer-coordinate capsule/circle intersection predicates, integer-coordinate circle/AABB intersection predicates, integer-coordinate segment intersection predicates, integer-coordinate ray/AABB intersection predicates, integer-coordinate point-in-triangle predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate swept AABB intersection predicates, integer-coordinate circle/circle intersection predicates, integer-coordinate capsule/circle intersection predicates, integer-coordinate circle/AABB intersection predicates, integer-coordinate segment intersection predicates, integer-coordinate ray/circle intersection predicates, integer-coordinate ray/AABB intersection predicates, integer-coordinate point-in-triangle predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -3128,6 +3146,130 @@ function completeSegment2IntersectionReceipt(args: {
         "This adapter only checks non-degenerate 2D line segments with integer coordinates.",
         "Closed segments are used: endpoint touches and collinear overlaps count as intersection.",
         "This is a deterministic geometry predicate, not a full mesh, physics, or rendering-engine proof."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
+function completeRay2CircleIntersectionReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: Ray2CircleIntersectionClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = ray2CircleIntersectionCertificate(args.claim);
+  const hasStatedIntersect = args.claim.statedIntersect !== undefined;
+  const statedMatches = !hasStatedIntersect || certificate.intersect === certificate.statedIntersect;
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const artifact = addArtifact(args.artifacts, {
+    kind: "ray2-circle-intersection-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-ray2-circle-intersection",
+      source: args.claim.source,
+      convention: certificate.convention,
+      ray: certificate.ray,
+      circle: certificate.circle,
+      statedIntersect: certificate.statedIntersect
+    },
+    trust,
+    summary: hasStatedIntersect
+      ? statedMatches
+        ? "Ray/circle intersection claim matched exact closest-point distance arithmetic."
+        : "Ray/circle intersection claim disagreed with exact closest-point distance arithmetic."
+      : "Ray/circle intersection question parsed into exact rational closest-point distance arithmetic.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedIntersect ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-ray2-circle-intersection",
+      exactArithmetic: true,
+      operation: "2D ray versus closed disk intersection predicate",
+      convention: certificate.convention,
+      classification: certificate.classification,
+      rayParameter: certificate.rayParameter,
+      closestPoint: certificate.closestPoint,
+      closestRegion: certificate.closestRegion,
+      distanceSquared: certificate.distanceSquared,
+      radiusSquared: certificate.radiusSquared
+    },
+    trust,
+    summary: "Checked 2D ray/circle intersection with exact rational closest-point and squared-distance arithmetic.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact ray/circle intersection result is ${String(certificate.intersect)} (${certificate.classification}).`
+      : `Exact ray/circle intersection result is ${String(certificate.intersect)}, not ${String(certificate.statedIntersect)} (${certificate.classification}).`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The ray/circle result was computed by exact rational closest-point distance arithmetic. This earns exact-computed, not a full raycaster proof."
+      : "The stated ray/circle result is refuted by exact rational closest-point distance arithmetic under the recorded closed-disk convention."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact ray/circle intersection result: ${String(certificate.intersect)} (${certificate.classification}).`
+      : `Refuted ray/circle intersection claim: exact result is ${String(certificate.intersect)}, stated ${String(certificate.statedIntersect)} (${certificate.classification}).`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-ray2-circle-intersection",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedIntersect
+        ? [
+            `intersect=${String(certificate.intersect)}`,
+            `stated=${String(certificate.statedIntersect)}`,
+            `classification=${certificate.classification}`,
+            statedMatches ? "ray2-circle-intersection=passed" : "ray2-circle-intersection=failed"
+          ]
+        : [
+            `intersect=${String(certificate.intersect)}`,
+            `classification=${certificate.classification}`,
+            "ray2-circle-intersection=computed"
+          ],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only checks one 2D ray with integer origin and nonzero integer direction against one closed disk with integer center and integer radius.",
+        "The ray domain is t >= 0, boundary tangency counts as intersection, and closest-point projection is computed with exact rational arithmetic.",
+        "This is deterministic distance-predicate arithmetic, not a full raycaster, broad-phase, visibility, or rendering-engine proof."
       ]
     },
     nodes: args.nodes,
