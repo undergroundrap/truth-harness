@@ -103,10 +103,24 @@ export interface PointInTriangle2Claim {
   statedInside?: boolean;
 }
 
+export interface BarycentricCoordinateTriple {
+  a: Rational;
+  b: Rational;
+  c: Rational;
+}
+
+export interface Barycentric2Claim {
+  source: string;
+  point: Point2;
+  triangle: Triangle2;
+  statedCoordinates?: BarycentricCoordinateTriple;
+}
+
 export type Circle2AabbClassification = "center-inside" | "overlap" | "tangent" | "separated";
 export type Circle2IntersectionClassification = "overlap" | "external-tangent" | "concentric-overlap" | "contained-overlap" | "separated";
 export type Capsule2CircleClassification = "side-overlap" | "side-tangent" | "endpoint-overlap" | "endpoint-tangent" | "separated";
 export type PointInTriangle2Classification = "inside" | "edge" | "vertex" | "outside";
+export type Barycentric2Classification = PointInTriangle2Classification;
 export type RaySlabEndpoint = Rational | "negative-infinity" | "positive-infinity";
 export type Ray2AabbClassification = "ray-hit" | "origin-inside" | "parallel-miss" | "behind-ray" | "past-max-t" | "slab-miss";
 export type Ray2CircleClassification = "ray-hit" | "origin-inside" | "tangent" | "behind-ray" | "past-max-t" | "ray-miss";
@@ -1033,6 +1047,33 @@ function maxBigInt(left: bigint, right: bigint): bigint {
   return left > right ? left : right;
 }
 
+function parseRationalLiteral(value: string): Rational | undefined {
+  const match = /^(?<numerator>-?\d+)(?:\/(?<denominator>\d+))?$/u.exec(value.trim());
+  if (!match?.groups) {
+    return undefined;
+  }
+  if (match.groups.numerator.length > 18 || (match.groups.denominator !== undefined && match.groups.denominator.length > 18)) {
+    return undefined;
+  }
+  try {
+    return new Rational(match.groups.numerator, match.groups.denominator ?? "1");
+  } catch {
+    return undefined;
+  }
+}
+
+function stringifyBarycentricTriple(coordinates: BarycentricCoordinateTriple): Record<keyof BarycentricCoordinateTriple, string> {
+  return {
+    a: coordinates.a.toString(),
+    b: coordinates.b.toString(),
+    c: coordinates.c.toString()
+  };
+}
+
+function formatBarycentricTriple(coordinates: Record<keyof BarycentricCoordinateTriple, string>): string {
+  return `(${coordinates.a}, ${coordinates.b}, ${coordinates.c})`;
+}
+
 function stringifySegment2(segment: Segment2): { from: Record<keyof Point2, string>; to: Record<keyof Point2, string> } {
   return {
     from: stringifyPoint2(segment.from),
@@ -1466,6 +1507,142 @@ function stringifyRay2(ray: Ray2): { origin: Record<keyof Point2, string>; direc
   return {
     origin: stringifyPoint2(ray.origin),
     direction: stringifyPoint2(ray.direction)
+  };
+}
+export function parseBarycentric2Claim(problem: string): Barycentric2Claim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/^(?:please\s+)?(?:compute|find|verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.?]$/u, "");
+  const match = /^(?:the\s+)?barycentric(?:\s+coordinates?)?\s+for\s+point\s*\(\s*(?<pointX>-?\d+)\s*,\s*(?<pointY>-?\d+)\s*\)\s+in\s+triangle\s+a\s*\(\s*(?<aX>-?\d+)\s*,\s*(?<aY>-?\d+)\s*\)\s+b\s*\(\s*(?<bX>-?\d+)\s*,\s*(?<bY>-?\d+)\s*\)\s+c\s*\(\s*(?<cX>-?\d+)\s*,\s*(?<cY>-?\d+)\s*\)(?:\s*(?:=|is)\s*\(\s*(?<weightA>-?\d+(?:\/\d+)?)\s*,\s*(?<weightB>-?\d+(?:\/\d+)?)\s*,\s*(?<weightC>-?\d+(?:\/\d+)?)\s*\))?$/iu.exec(candidate);
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  const requiredGroups = ["pointX", "pointY", "aX", "aY", "bX", "bY", "cX", "cY"];
+  if (requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18)) {
+    return undefined;
+  }
+
+  const triangle: Triangle2 = {
+    a: { x: BigInt(match.groups.aX), y: BigInt(match.groups.aY) },
+    b: { x: BigInt(match.groups.bX), y: BigInt(match.groups.bY) },
+    c: { x: BigInt(match.groups.cX), y: BigInt(match.groups.cY) }
+  };
+  if (!isNonDegenerateTriangle2(triangle)) {
+    return undefined;
+  }
+
+  let statedCoordinates: BarycentricCoordinateTriple | undefined;
+  if (match.groups.weightA !== undefined || match.groups.weightB !== undefined || match.groups.weightC !== undefined) {
+    const a = parseRationalLiteral(match.groups.weightA ?? "");
+    const b = parseRationalLiteral(match.groups.weightB ?? "");
+    const c = parseRationalLiteral(match.groups.weightC ?? "");
+    if (a === undefined || b === undefined || c === undefined) {
+      return undefined;
+    }
+    statedCoordinates = { a, b, c };
+  }
+
+  return {
+    source: candidate,
+    point: { x: BigInt(match.groups.pointX), y: BigInt(match.groups.pointY) },
+    triangle,
+    statedCoordinates
+  };
+}
+
+export function barycentric2Certificate(claim: Barycentric2Claim): {
+  schemaVersion: "truth-harness.barycentric2.v0";
+  adapter: "local-barycentric2";
+  source: string;
+  convention: "signed-area-barycentric-coordinates";
+  point: Record<keyof Point2, string>;
+  triangle: { a: Record<keyof Point2, string>; b: Record<keyof Point2, string>; c: Record<keyof Point2, string> };
+  statedCoordinates?: Record<keyof BarycentricCoordinateTriple, string>;
+  triangleArea2: string;
+  subTriangleArea2: Array<{ coordinate: keyof BarycentricCoordinateTriple; value: string }>;
+  coordinates: Record<keyof BarycentricCoordinateTriple, string>;
+  coordinateSum: string;
+  inside: boolean;
+  classification: Barycentric2Classification;
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const area2 = orientationValue(claim.triangle.a, claim.triangle.b, claim.triangle.c);
+  const subTriangleArea2 = [
+    { coordinate: "a" as const, value: orientationValue(claim.point, claim.triangle.b, claim.triangle.c) },
+    { coordinate: "b" as const, value: orientationValue(claim.point, claim.triangle.c, claim.triangle.a) },
+    { coordinate: "c" as const, value: orientationValue(claim.point, claim.triangle.a, claim.triangle.b) }
+  ];
+  const coordinates: BarycentricCoordinateTriple = {
+    a: new Rational(subTriangleArea2[0].value, area2),
+    b: new Rational(subTriangleArea2[1].value, area2),
+    c: new Rational(subTriangleArea2[2].value, area2)
+  };
+  const coordinateStrings = stringifyBarycentricTriple(coordinates);
+  const zero = Rational.integer(0);
+  const coordinateSum = coordinates.a.add(coordinates.b).add(coordinates.c);
+  const inside = !coordinates.a.lessThan(zero) && !coordinates.b.lessThan(zero) && !coordinates.c.lessThan(zero);
+  const zeroCount = [coordinates.a, coordinates.b, coordinates.c].filter((coordinate) => coordinate.compare(zero) === 0).length;
+  const classification: Barycentric2Classification = inside
+    ? zeroCount >= 2
+      ? "vertex"
+      : zeroCount === 1
+        ? "edge"
+        : "inside"
+    : "outside";
+  const statedMatches = claim.statedCoordinates === undefined ||
+    (claim.statedCoordinates.a.compare(coordinates.a) === 0 &&
+      claim.statedCoordinates.b.compare(coordinates.b) === 0 &&
+      claim.statedCoordinates.c.compare(coordinates.c) === 0);
+  const statedCoordinates = claim.statedCoordinates === undefined ? undefined : stringifyBarycentricTriple(claim.statedCoordinates);
+
+  return {
+    schemaVersion: "truth-harness.barycentric2.v0",
+    adapter: "local-barycentric2",
+    source: claim.source,
+    convention: "signed-area-barycentric-coordinates",
+    point: stringifyPoint2(claim.point),
+    triangle: stringifyTriangle2(claim.triangle),
+    statedCoordinates,
+    triangleArea2: area2.toString(),
+    subTriangleArea2: subTriangleArea2.map((item) => ({ coordinate: item.coordinate, value: item.value.toString() })),
+    coordinates: coordinateStrings,
+    coordinateSum: coordinateSum.toString(),
+    inside,
+    classification,
+    checks: [
+      {
+        id: "non-degenerate-triangle-input",
+        ok: true,
+        expected: "triangle area determinant is nonzero",
+        observed: `area2=${area2.toString()}`
+      },
+      {
+        id: "barycentric-coordinate-sum",
+        ok: coordinateSum.compare(Rational.integer(1)) === 0,
+        expected: "1",
+        observed: coordinateSum.toString()
+      },
+      {
+        id: "stated-barycentric-result",
+        ok: statedMatches,
+        expected: formatBarycentricTriple(coordinateStrings),
+        observed: statedCoordinates === undefined ? formatBarycentricTriple(coordinateStrings) : formatBarycentricTriple(statedCoordinates)
+      }
+    ],
+    trace: [
+      "Use signed double-area determinants to compute barycentric coordinates exactly.",
+      `Triangle signed double-area determinant is ${area2.toString()}.`,
+      `Sub-triangle determinants are ${subTriangleArea2.map((item) => `${item.coordinate}=${item.value.toString()}`).join(", ")}.`,
+      `Barycentric coordinates are ${formatBarycentricTriple(coordinateStrings)} and sum to ${coordinateSum.toString()}.`,
+      `Exact barycentric classification is ${classification}; inside=${String(inside)}.`
+    ],
+    verdict: claim.statedCoordinates === undefined ? "computed" : statedMatches ? "accepted" : "refuted"
   };
 }
 export function parsePointInTriangle2Claim(problem: string): PointInTriangle2Claim | undefined {

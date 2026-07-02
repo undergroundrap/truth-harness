@@ -192,7 +192,7 @@ export function classifyProblem(problem: string): EnginePlanProblemKind[] {
   if (/\b(source|citation|cite|paper|literature|doi|arxiv|study|dataset)\b/u.test(text)) {
     kinds.push("source-grounded");
   }
-  if (/\b(aabb|axis[-\s]?aligned|circle|capsule|segment|ray|raycast|triangle|collision|collide|overlap|intersect|intersection|hit[-\s]?test|point[-\s]?in[-\s]?triangle|swept)\b/u.test(text)) {
+  if (/\b(aabb|axis[-\s]?aligned|circle|capsule|segment|ray|raycast|triangle|barycentric|interpolation|collision|collide|overlap|intersect|intersection|hit[-\s]?test|point[-\s]?in[-\s]?triangle|swept)\b/u.test(text)) {
     kinds.push("engine-geometry");
   }
   if (/\b(simulate|simulation|physics engine|graphics engine|robotics|geometry|numerical|floating|float|ode|pde|finite element)\b/u.test(text)) {

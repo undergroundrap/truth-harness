@@ -1,5 +1,5 @@
 export type EngineVerifierPackStatus = "ready" | "partial" | "planned";
-export type EngineVerifierPackCapabilityRole = "collision-predicate" | "spatial-query" | "continuous-collision-predicate";
+export type EngineVerifierPackCapabilityRole = "collision-predicate" | "spatial-query" | "continuous-collision-predicate" | "interpolation-coordinate";
 
 export interface EngineVerifierPackCapability {
   id: string;
@@ -182,6 +182,21 @@ const ENGINE_2D_COLLISION_CAPABILITIES: EngineVerifierPackCapability[] = [
     boundary: "Only integer-origin, nonzero integer-direction 2D rays against integer-coordinate AABBs are checked; optional max-t finite raycast domains are supported."
   },
   {
+    id: "barycentric2-coordinates",
+    displayName: "Barycentric coordinates",
+    role: "interpolation-coordinate",
+    backendId: "local-barycentric2",
+    promptForms: [
+      "compute barycentric coordinates for point (1,1) in triangle A(0,0) B(4,0) C(0,4)",
+      "verify barycentric coordinates for point (1,1) in triangle A(0,0) B(4,0) C(0,4) = (1/3,1/3,1/3)"
+    ],
+    benchmarkTaskIds: ["barycentric-interior", "barycentric-wrong-statement-refuted"],
+    evidenceKind: "exact-arithmetic",
+    strongestTrust: "exact-computed",
+    convention: "signed-area-barycentric-coordinates",
+    boundary: "Only one non-degenerate integer-coordinate 2D triangle and one integer-coordinate point are checked."
+  },
+  {
     id: "point2-triangle2-membership",
     displayName: "Point-in-triangle membership",
     role: "spatial-query",
@@ -216,10 +231,10 @@ export function getEngineVerifierPacks(): EngineVerifierPack[] {
         path: ENGINE_MATH_SEED_SUITE_PATH,
         nativeCommand: "npm run demo:engine-math",
         dockerCommand: "npm run docker:engine-math",
-        totalTasks: 31,
+        totalTasks: 33,
         expectedTrustCounts: {
-          "exact-computed": 20,
-          refuted: 11
+          "exact-computed": 21,
+          refuted: 12
         }
       },
       capabilities: ENGINE_2D_COLLISION_CAPABILITIES,
@@ -238,7 +253,7 @@ export function getEngineVerifierPacks(): EngineVerifierPack[] {
       nextActions: [
         "Run npm run demo:engine-math for a native replay of every pack predicate.",
         "Run npm run docker:engine-math before sharing reviewer evidence or claiming the pack works in the Docker-first workflow.",
-        "When an agent sees AABB, circle, capsule, segment, ray, triangle, collision, overlap, intersection, raycast, or hit-test language, route here before generic CAS/SMT planning."
+        "When an agent sees AABB, circle, capsule, segment, ray, barycentric, triangle, collision, overlap, intersection, raycast, or hit-test language, route here before generic CAS/SMT planning."
       ]
     }
   ];

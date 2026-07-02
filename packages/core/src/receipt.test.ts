@@ -808,6 +808,43 @@ describe("createReceipt", () => {
       classification: "past-max-t"
     });
   });
+  it("computes barycentric coordinates with exact signed-area arithmetic", () => {
+    const receipt = createReceipt("compute barycentric coordinates for point (1,1) in triangle A(0,0) B(4,0) C(0,4)");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("(1/2, 1/4, 1/4)");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-barycentric2");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["barycentric=(1/2, 1/4, 1/4)", "inside=true", "classification=inside", "barycentric2=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "barycentric2-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      coordinates?: { a?: string; b?: string; c?: string };
+      coordinateSum?: string;
+      triangleArea2?: string;
+      classification?: string;
+    };
+    expect(payload).toMatchObject({
+      coordinates: { a: "1/2", b: "1/4", c: "1/4" },
+      coordinateSum: "1",
+      triangleArea2: "16",
+      classification: "inside"
+    });
+  });
+
+  it("refutes wrong barycentric coordinate claims", () => {
+    const receipt = createReceipt("verify barycentric coordinates for point (1,1) in triangle A(0,0) B(4,0) C(0,4) = (1/3,1/3,1/3)");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("(1/2, 1/4, 1/4)");
+    expect(receipt.summary).toContain("(1/3, 1/3, 1/3)");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["barycentric=(1/2, 1/4, 1/4)", "stated=(1/3, 1/3, 1/3)", "inside=true", "classification=inside", "barycentric2=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+  });
   it("computes point-in-triangle membership with exact orientation tests", () => {
     const receipt = createReceipt("Is point (1,1) in triangle A(0,0) B(4,0) C(0,4)?");
 

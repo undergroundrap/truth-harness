@@ -6,12 +6,14 @@ import { Rational } from "./rational.js";
 import { createArithmeticTrace } from "./arithmetic-trace.js";
 import {
   aabb2OverlapCertificate,
+  barycentric2Certificate,
   circle2AabbIntersectionCertificate,
   circle2IntersectionCertificate,
   capsule2CircleIntersectionCertificate,
   ray2CircleIntersectionCertificate,
   parseSweptAabb2IntersectionClaim,
   parseAabb2OverlapClaim,
+  parseBarycentric2Claim,
   parseCircle2AabbIntersectionClaim,
   parseCircle2IntersectionClaim,
   parseCapsule2CircleIntersectionClaim,
@@ -24,6 +26,7 @@ import {
   segment2IntersectionCertificate,
   sweptAabb2IntersectionCertificate,
   type Aabb2OverlapClaim,
+  type Barycentric2Claim,
   type Circle2AabbIntersectionClaim,
   type Circle2IntersectionClaim,
   type Capsule2CircleIntersectionClaim,
@@ -458,6 +461,20 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const barycentric2 = parseBarycentric2Claim(normalizedProblem);
+  if (barycentric2) {
+    return completeBarycentric2Receipt({
+      problem,
+      normalizedProblem,
+      claim: barycentric2,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
   const pointInTriangle2 = parsePointInTriangle2Claim(normalizedProblem);
   if (pointInTriangle2) {
     return completePointInTriangle2Receipt({
@@ -497,7 +514,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate swept AABB intersection predicates, integer-coordinate circle/circle intersection predicates, integer-coordinate capsule/circle intersection predicates, integer-coordinate circle/AABB intersection predicates, integer-coordinate segment intersection predicates, integer-coordinate ray/circle intersection predicates, integer-coordinate ray/AABB intersection predicates, integer-coordinate point-in-triangle predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate swept AABB intersection predicates, integer-coordinate circle/circle intersection predicates, integer-coordinate capsule/circle intersection predicates, integer-coordinate circle/AABB intersection predicates, integer-coordinate segment intersection predicates, integer-coordinate ray/circle intersection predicates, integer-coordinate ray/AABB intersection predicates, integer-coordinate barycentric coordinate predicates, integer-coordinate point-in-triangle predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -3402,6 +3419,136 @@ function completeRay2AabbIntersectionReceipt(args: {
         "This adapter only checks 2D rays and AABBs with integer coordinates and integer direction vectors.",
         `The ray domain is ${rayDomainDescription} and the AABB is closed; boundary hits count as intersection.`,
         "This is deterministic slab arithmetic, not a full raycaster, BVH traversal, rendering, or physics proof."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
+function completeBarycentric2Receipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: Barycentric2Claim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = barycentric2Certificate(args.claim);
+  const hasStatedCoordinates = args.claim.statedCoordinates !== undefined;
+  const statedMatches = certificate.verdict !== "refuted";
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const coordinateTuple = `(${certificate.coordinates.a}, ${certificate.coordinates.b}, ${certificate.coordinates.c})`;
+  const statedTuple = certificate.statedCoordinates === undefined
+    ? undefined
+    : `(${certificate.statedCoordinates.a}, ${certificate.statedCoordinates.b}, ${certificate.statedCoordinates.c})`;
+  const artifact = addArtifact(args.artifacts, {
+    kind: "barycentric2-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-barycentric2",
+      source: args.claim.source,
+      convention: certificate.convention,
+      point: certificate.point,
+      triangle: certificate.triangle,
+      statedCoordinates: certificate.statedCoordinates
+    },
+    trust,
+    summary: hasStatedCoordinates
+      ? statedMatches
+        ? "Barycentric coordinate claim matched exact signed-area arithmetic."
+        : "Barycentric coordinate claim disagreed with exact signed-area arithmetic."
+      : "Barycentric coordinate question parsed into exact signed-area arithmetic.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedCoordinates ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-barycentric2",
+      exactArithmetic: true,
+      operation: "2D barycentric coordinate computation",
+      convention: certificate.convention,
+      triangleArea2: certificate.triangleArea2,
+      subTriangleArea2: certificate.subTriangleArea2,
+      coordinates: certificate.coordinates,
+      coordinateSum: certificate.coordinateSum,
+      inside: certificate.inside,
+      classification: certificate.classification
+    },
+    trust,
+    summary: "Computed 2D barycentric coordinates with exact signed double-area determinants.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact barycentric coordinates are ${coordinateTuple} (${certificate.classification}).`
+      : `Exact barycentric coordinates are ${coordinateTuple}, not ${statedTuple ?? "the stated coordinates"} (${certificate.classification}).`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The barycentric coordinates were computed by exact signed-area arithmetic. This earns exact-computed, not a full mesh, rasterizer, or shader proof."
+      : "The stated barycentric coordinates are refuted by exact signed-area arithmetic under the recorded triangle convention."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact barycentric coordinates: ${coordinateTuple} (${certificate.classification}).`
+      : `Refuted barycentric coordinate claim: exact coordinates are ${coordinateTuple}, stated ${statedTuple ?? "unknown"} (${certificate.classification}).`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-barycentric2",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedCoordinates
+        ? [
+            `barycentric=${coordinateTuple}`,
+            `stated=${statedTuple ?? "unknown"}`,
+            `inside=${String(certificate.inside)}`,
+            `classification=${certificate.classification}`,
+            statedMatches ? "barycentric2=passed" : "barycentric2=failed"
+          ]
+        : [
+            `barycentric=${coordinateTuple}`,
+            `inside=${String(certificate.inside)}`,
+            `classification=${certificate.classification}`,
+            "barycentric2=computed"
+          ],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only computes barycentric coordinates for one non-degenerate 2D triangle and one point with integer coordinates.",
+        "Coordinates are exact signed-area rationals; points outside the triangle are allowed and reported with a negative coordinate.",
+        "This is deterministic geometry arithmetic, not a full mesh interpolation, rasterizer, shader, or rendering-engine proof."
       ]
     },
     nodes: args.nodes,

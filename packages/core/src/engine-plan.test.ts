@@ -151,7 +151,7 @@ describe("engine plan", () => {
     expect(plan.verifierPacks[0]).toMatchObject({
       id: "engine-2d-collision-verifier-pack",
       capabilityId: "local-engine-geometry-2d",
-      benchmarkTasks: 31,
+      benchmarkTasks: 33,
       dockerReplayCommand: "npm run docker:engine-math",
       supportedBackendIds: expect.arrayContaining(["local-ray2-circle-intersection"]),
       agentContract: expect.objectContaining({
@@ -253,6 +253,7 @@ describe("engine plan", () => {
     expect(classifyProblem("prove a Rust lock-free queue cannot deadlock")).toContain("concurrent-systems");
     expect(classifyProblem("verify a Verilog ALU equivalence property")).toContain("hardware-eda");
     expect(classifyProblem("does this ray intersect the circle?")).toContain("engine-geometry");
+    expect(classifyProblem("compute barycentric coordinates for point interpolation")).toContain("engine-geometry");
     expect(classifyProblem("cite the paper that supports this theorem")).toEqual(
       expect.arrayContaining(["formal-proof", "source-grounded"])
     );

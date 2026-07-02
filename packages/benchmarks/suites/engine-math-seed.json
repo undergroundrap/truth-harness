@@ -1,7 +1,7 @@
 {
   "id": "engine-math-seed",
   "title": "Engine Math Seed Suite",
-  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap, swept AABB intersection, circle/circle intersection, capsule/circle intersection, circle/AABB intersection, segment intersection, ray/circle intersection, ray/AABB, and point-in-triangle receipts before expanding to harder engine invariants.",
+  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap, swept AABB intersection, circle/circle intersection, capsule/circle intersection, circle/AABB intersection, segment intersection, ray/circle intersection, ray/AABB, barycentric coordinates, and point-in-triangle receipts before expanding to harder engine invariants.",
   "tasks": [
     {
       "id": "aabb-overlap-true",
@@ -534,6 +534,44 @@
         "stated-answer mismatch"
       ],
       "checkerBoundary": "Only the stated finite ray/AABB predicate is refuted. The receipt does not evaluate arbitrary scene geometry or runtime engine state."
+    },
+    {
+      "id": "barycentric-interior",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Uses approximate or visual triangle interpolation instead of exact barycentric coordinates.",
+      "prompt": "compute barycentric coordinates for point (1,1) in triangle A(0,0) B(4,0) C(0,4)",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "1/2, 1/4, 1/4",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate barycentric certificate",
+        "signed double-area determinant trace",
+        "coordinate sum equals 1",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only one non-degenerate 2D triangle and one integer-coordinate point are checked. This does not verify arbitrary meshes, UV interpolation, rasterizers, shaders, or rendering-engine behavior."
+    },
+    {
+      "id": "barycentric-wrong-statement-refuted",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Accepts a plausible barycentric triple without checking signed-area determinants.",
+      "prompt": "verify barycentric coordinates for point (1,1) in triangle A(0,0) B(4,0) C(0,4) = (1/3,1/3,1/3)",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "1/2, 1/4, 1/4",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate barycentric certificate",
+        "signed double-area determinant trace",
+        "stated-coordinate mismatch",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only the stated barycentric coordinate claim is refuted. The receipt does not evaluate arbitrary mesh data, interpolation pipelines, shaders, or runtime rendering state."
     },
     {
       "id": "point-triangle-inside",

@@ -20,6 +20,7 @@ Supported predicate families:
 | Segment/segment intersection | `local-segment2-intersection` | Closed non-degenerate segments; endpoints count as intersection. |
 | Ray/circle intersection | `local-ray2-circle-intersection` | Ray domain is `t >= 0` or finite `0 <= t <= max t`; closed disk boundary counts as hit. |
 | Ray/AABB intersection | `local-ray2-aabb-intersection` | Exact rational slab interval with ray domain `t >= 0` or finite `0 <= t <= max t`. |
+| Barycentric coordinates | `local-barycentric2` | Exact signed double-area barycentric coordinates for one non-degenerate integer-coordinate triangle. |
 | Point-in-triangle membership | `local-point-in-triangle2` | Closed non-degenerate triangle; edges count as inside. |
 
 Accepted examples:
@@ -33,10 +34,12 @@ npm run cli -- ask "Do circle center(2,2) radius 2 intersect AABB min(3,0) max(6
 npm run cli -- ask "Do segment A from (0,0) to (4,4) and segment B from (0,4) to (4,0) intersect?"
 npm run cli -- ask "Do ray origin(0,0) direction(1,0) intersect circle center(3,1) radius 2?"
 npm run cli -- ask "Do ray origin(0,2) direction(1,0) intersect AABB min(3,0) max(5,4)?"
+npm run cli -- ask "compute barycentric coordinates for point (1,1) in triangle A(0,0) B(4,0) C(0,4)"
+npm run cli -- ask "verify barycentric coordinates for point (1,1) in triangle A(0,0) B(4,0) C(0,4) = (1/3,1/3,1/3)"
 npm run cli -- ask "Is point (1,1) in triangle A(0,0) B(4,0) C(0,4)?"
 ```
 
-The planner now recognizes AABB, circle, capsule, segment, ray, raycast, triangle, collision, overlap, intersection, hit-test, and swept-collision language as `engine-geometry`, and routes to `local-engine-geometry-2d` before generic symbolic or SMT planning.
+The planner now recognizes AABB, circle, capsule, segment, ray, raycast, triangle, barycentric, interpolation, collision, overlap, intersection, hit-test, and swept-collision language as `engine-geometry`, and routes to `local-engine-geometry-2d` before generic symbolic or SMT planning.
 
 ```bash
 npm run cli -- engines plan "does this ray intersect the circle?"
@@ -66,7 +69,7 @@ Run it through the Docker-first workflow:
 npm run docker:engine-math
 ```
 
-The suite lives at `packages/benchmarks/suites/engine-math-seed.json` and currently has 31 cases: 20 `exact-computed` receipts and 11 `refuted` receipts. The regression tests tie the verifier pack to those 31 task IDs so docs, manifest, and benchmark coverage cannot drift quietly.
+The suite lives at `packages/benchmarks/suites/engine-math-seed.json` and currently has 33 cases: 21 `exact-computed` receipts and 12 `refuted` receipts. The regression tests tie the verifier pack to those 33 task IDs so docs, manifest, and benchmark coverage cannot drift quietly.
 
 ## Evidence Boundary
 
@@ -77,6 +80,7 @@ This lane currently does not verify:
 - broadphase data structures
 - meshes, polygons beyond the listed primitives, or rotated boxes
 - open-boundary ray policies or engine-specific normalized-distance semantics
+- full mesh interpolation pipelines, shaders, or runtime rendering state
 - floating-point tolerance policy or numerical drift
 - rendering visibility, BVH correctness, or GPU behavior
 - physics integration or timestep stability
@@ -90,7 +94,7 @@ Good next slices:
 
 1. Half-open and open boundary variants so engines can compare collision policies explicitly.
 2. Open/closed finite-ray endpoint policies and normalized-direction distance conventions.
-3. Barycentric coordinate certificates for interpolation and rendering workflows.
+3. Scalar/vector attribute interpolation certificates built on barycentric coordinates.
 4. Broadphase grid bucket membership predicates.
 5. Fixed-timestep accumulator invariants and drift bounds.
 6. Lock-order and ECS schedule constraints compiled to SMT.

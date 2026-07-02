@@ -318,7 +318,7 @@ function nativeCapabilities(): RawEngineCapability[] {
       trustBoundary:
         "Can support exact-computed or refuted only for the supported integer-coordinate 2D predicates listed in the verifier pack; never emits proved.",
       limitations: [
-        "Covers supported AABB, swept AABB, circle, capsule, segment, ray, and point-in-triangle prompt forms only.",
+        "Covers supported AABB, swept AABB, circle, capsule, segment, ray, barycentric-coordinate, and point-in-triangle prompt forms only.",
         "Does not verify collision response, broadphase, meshes, floating-point tolerance policy, rendering visibility, or engine runtime state."
       ],
       nextStep: "Run npm run demo:engine-math or npm run docker:engine-math before using the pack as reviewer evidence."

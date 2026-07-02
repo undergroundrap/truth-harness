@@ -34,7 +34,7 @@ describe("engine manifest", () => {
       lane: "engine-math",
       benchmarkSuite: {
         id: "engine-math-seed",
-        totalTasks: 31
+        totalTasks: 33
       }
     });
     expect(manifest.trustBoundary.statusProbeIsNotEvidence).toBe(true);

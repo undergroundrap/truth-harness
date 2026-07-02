@@ -31,8 +31,8 @@ describe("engine verifier packs", () => {
       path: ENGINE_MATH_SEED_SUITE_PATH,
       totalTasks: suite.tasks.length,
       expectedTrustCounts: {
-        "exact-computed": 20,
-        refuted: 11
+        "exact-computed": 21,
+        refuted: 12
       }
     });
     expect(pack.capabilities.map((capability) => capability.backendId)).toEqual([
@@ -44,6 +44,7 @@ describe("engine verifier packs", () => {
       "local-segment2-intersection",
       "local-ray2-circle-intersection",
       "local-ray2-aabb-intersection",
+      "local-barycentric2",
       "local-point-in-triangle2"
     ]);
 
