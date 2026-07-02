@@ -206,18 +206,18 @@ describe("benchmark runner", () => {
     }, {});
     const backendIds = new Set(run.results.map((result) => result.receipt.evidenceProfile.backends[0]?.id));
 
-    expect(run.total).toBe(6);
+    expect(run.total).toBe(9);
     expect(run.failed).toBe(0);
     expect(run.trustAccuracy).toBe(1);
-    expect(trustCounts).toMatchObject({ "exact-computed": 4, refuted: 2 });
-    expect(backendIds).toEqual(new Set(["local-aabb2-overlap", "local-segment2-intersection"]));
+    expect(trustCounts).toMatchObject({ "exact-computed": 6, refuted: 3 });
+    expect(backendIds).toEqual(new Set(["local-aabb2-overlap", "local-segment2-intersection", "local-ray2-aabb-intersection"]));
     expect(suite.tasks.every((task) => task.category === "engine-geometry")).toBe(true);
     expect(suite.tasks.every((task) => task.reviewStatus === "self-reviewed")).toBe(true);
     expect(run.levelSummaries).toEqual([
       {
         level: "level-1-engine-geometry-predicate",
-        total: 6,
-        passed: 6,
+        total: 9,
+        passed: 9,
         failed: 0,
         trustAccuracy: 1
       }

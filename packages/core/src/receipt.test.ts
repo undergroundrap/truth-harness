@@ -404,6 +404,57 @@ describe("createReceipt", () => {
     );
     expect(receipt.evidenceProfile.limitations.join(" ")).toContain("endpoint touches and collinear overlaps count as intersection");
   });
+  it("computes ray/AABB intersections with exact rational slab intervals", () => {
+    const receipt = createReceipt("Do ray origin(0,2) direction(1,0) intersect AABB min(3,0) max(5,4)?");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("true");
+    expect(receipt.summary).toContain("ray-hit");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-ray2-aabb-intersection");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "classification=ray-hit", "ray2-aabb-intersection=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "ray2-aabb-intersection-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      intersect?: boolean;
+      classification?: string;
+      tEnter?: string;
+      tExit?: string;
+      hitPoint?: { x?: string; y?: string };
+    };
+    expect(payload).toMatchObject({
+      intersect: true,
+      classification: "ray-hit",
+      tEnter: "3",
+      tExit: "5",
+      hitPoint: { x: "3", y: "2" }
+    });
+  });
+
+  it("refutes wrong ray/AABB intersection claims when a parallel slab is outside", () => {
+    const receipt = createReceipt("verify ray origin(0,5) direction(1,0) intersect AABB min(3,0) max(5,4) = true");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("false");
+    expect(receipt.summary).toContain("parallel-miss");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=false", "stated=true", "classification=parallel-miss", "ray2-aabb-intersection=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+  });
+
+  it("detects ray/AABB misses when the box is entirely behind the ray", () => {
+    const receipt = createReceipt("verify ray origin(6,2) direction(1,0) intersect AABB min(3,0) max(5,4) = false");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("behind-ray");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=false", "stated=false", "classification=behind-ray", "ray2-aabb-intersection=passed"])
+    );
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("ray domain is t >= 0");
+  });
   it("marks MVP receipts as local-only with no external disclosure", () => {
     const receipt = createReceipt("compute 2 + 2");
 

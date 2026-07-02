@@ -4,7 +4,7 @@ Truth Harness is starting an engine-math lane for game, simulation, robotics, an
 
 ## Supported Predicates
 
-The first slice is a 2D integer-coordinate AABB overlap adapter. The second slice is a 2D integer-coordinate segment intersection adapter backed by exact orientation determinants.
+The first slice is a 2D integer-coordinate AABB overlap adapter. The second slice is a 2D integer-coordinate segment intersection adapter backed by exact orientation determinants. The third slice is a 2D integer-coordinate ray/AABB adapter backed by exact rational slab intervals.
 
 Accepted prompt shape:
 
@@ -15,6 +15,9 @@ npm run cli -- ask "verify AABB A min(0,0) max(4,4) and AABB B min(4,4) max(6,6)
 npm run cli -- ask "Do segment A from (0,0) to (4,4) and segment B from (0,4) to (4,0) intersect?"
 npm run cli -- ask "verify segment A from (0,0) to (1,1) and segment B from (2,2) to (3,3) intersect = true"
 npm run cli -- ask "verify segment A from (0,0) to (4,0) and segment B from (2,0) to (6,0) intersect = true"
+npm run cli -- ask "Do ray origin(0,2) direction(1,0) intersect AABB min(3,0) max(5,4)?"
+npm run cli -- ask "verify ray origin(0,5) direction(1,0) intersect AABB min(3,0) max(5,4) = true"
+npm run cli -- ask "verify ray origin(6,2) direction(1,0) intersect AABB min(3,0) max(5,4) = false"
 ```
 
 The AABB adapter records:
@@ -32,6 +35,15 @@ The segment adapter records:
 - the convention `closed-segments-endpoints-count-as-intersection`
 - four orientation determinants and signs
 - whether the intersection is a proper crossing, endpoint touch, collinear overlap, collinear disjoint case, or disjoint case
+- the replay command and receipt artifact
+
+The ray/AABB adapter records:
+
+- exact integer origin, integer direction vector, and integer AABB bounds
+- the convention `closed-aabb-ray-domain-t-greater-than-or-equal-zero`
+- per-axis slab intervals, including parallel-inside and parallel-outside axes
+- the final exact rational `tEnter` and `tExit` interval after intersecting with `t >= 0`
+- whether the result is a ray hit, origin-inside hit, parallel miss, behind-ray miss, or slab miss
 - the replay command and receipt artifact
 
 Trust labels are conservative:
@@ -63,6 +75,9 @@ The suite lives at `packages/benchmarks/suites/engine-math-seed.json` and curren
 - proper crossing line segments
 - a false collinear-disjoint segment claim refuted by bounds checks
 - collinear overlapping segments under the recorded closed-segment convention
+- a ray/AABB hit with exact rational `t` interval
+- a false parallel-slab ray/AABB claim refuted by slab status
+- a ray/AABB miss where the box lies behind the ray domain
 
 ## Boundary
 
@@ -71,6 +86,7 @@ This lane currently does not verify:
 - swept collision
 - rotated boxes
 - zero-length point segments
+- ray direction vector `(0,0)`
 - circles, capsules, meshes, or convex polygons
 - floating-point tolerance policy
 - broadphase data structures
@@ -85,7 +101,7 @@ Those should become separate adapters with their own receipts and benchmark gate
 Good next slices:
 
 1. AABB half-open interval variant, so engines can compare closed vs half-open collision policy.
-2. Ray vs AABB intersection with exact rational parameters.
+2. Ray/AABB variants for finite ray segments, maximum travel distance, and open boundary policies.
 3. Segment intersection variants for open or half-open endpoint policies.
 4. Barycentric point-in-triangle checks for rendering and collision picking.
 5. Fixed-timestep accumulator invariants and drift bounds.

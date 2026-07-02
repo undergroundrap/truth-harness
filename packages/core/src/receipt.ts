@@ -126,6 +126,28 @@ interface Segment2IntersectionClaim {
   statedIntersect?: boolean;
 }
 
+interface Ray2 {
+  origin: Point2;
+  direction: Point2;
+}
+
+interface Ray2AabbIntersectionClaim {
+  source: string;
+  ray: Ray2;
+  box: Aabb2;
+  statedIntersect?: boolean;
+}
+
+type RaySlabEndpoint = Rational | "negative-infinity" | "positive-infinity";
+type Ray2AabbClassification = "ray-hit" | "origin-inside" | "parallel-miss" | "behind-ray" | "slab-miss";
+
+interface RaySlabAxisInterval {
+  axis: "x" | "y";
+  status: "bounded" | "parallel-inside" | "parallel-outside";
+  enter: RaySlabEndpoint;
+  exit: RaySlabEndpoint;
+}
+
 export interface CreateReceiptOptions {
   maximaCommand?: string;
   casRunner?: CasBackendCommandRunner;
@@ -370,6 +392,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const ray2AabbIntersection = parseRay2AabbIntersectionClaim(normalizedProblem);
+  if (ray2AabbIntersection) {
+    return completeRay2AabbIntersectionReceipt({
+      problem,
+      normalizedProblem,
+      claim: ray2AabbIntersection,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const arithmeticSource = parseArithmeticPrompt(normalizedProblem);
   if (arithmeticSource) {
     return completeArithmeticReceipt({
@@ -394,7 +431,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate segment intersection predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate segment intersection predicates, integer-coordinate ray/AABB intersection predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -2555,6 +2592,128 @@ function completeSegment2IntersectionReceipt(args: {
     findings: args.findings
   });
 }
+function completeRay2AabbIntersectionReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: Ray2AabbIntersectionClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = ray2AabbIntersectionCertificate(args.claim);
+  const hasStatedIntersect = args.claim.statedIntersect !== undefined;
+  const statedMatches = !hasStatedIntersect || certificate.intersect === certificate.statedIntersect;
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const artifact = addArtifact(args.artifacts, {
+    kind: "ray2-aabb-intersection-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-ray2-aabb-intersection",
+      source: args.claim.source,
+      convention: certificate.convention,
+      ray: certificate.ray,
+      box: certificate.box,
+      statedIntersect: certificate.statedIntersect
+    },
+    trust,
+    summary: hasStatedIntersect
+      ? statedMatches
+        ? "Ray/AABB intersection claim matched exact rational slab arithmetic."
+        : "Ray/AABB intersection claim disagreed with exact rational slab arithmetic."
+      : "Ray/AABB intersection question parsed into exact rational slab arithmetic.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedIntersect ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-ray2-aabb-intersection",
+      exactArithmetic: true,
+      operation: "2D ray versus axis-aligned bounding-box intersection predicate",
+      convention: certificate.convention,
+      classification: certificate.classification,
+      tEnter: certificate.tEnter,
+      tExit: certificate.tExit,
+      axisIntervals: certificate.axisIntervals
+    },
+    trust,
+    summary: "Checked 2D ray/AABB intersection with exact rational slab intervals and t >= 0.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact ray/AABB intersection result is ${String(certificate.intersect)} (${certificate.classification}).`
+      : `Exact ray/AABB intersection result is ${String(certificate.intersect)}, not ${String(certificate.statedIntersect)} (${certificate.classification}).`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The ray/AABB intersection result was computed by exact rational slab arithmetic. This earns exact-computed, not a full raycaster or physics proof."
+      : "The stated ray/AABB intersection result is refuted by exact rational slab arithmetic under the recorded ray and box convention."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact ray/AABB intersection result: ${String(certificate.intersect)} (${certificate.classification}).`
+      : `Refuted ray/AABB intersection claim: exact result is ${String(certificate.intersect)}, stated ${String(certificate.statedIntersect)} (${certificate.classification}).`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-ray2-aabb-intersection",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedIntersect
+        ? [
+            `intersect=${String(certificate.intersect)}`,
+            `stated=${String(certificate.statedIntersect)}`,
+            `classification=${certificate.classification}`,
+            statedMatches ? "ray2-aabb-intersection=passed" : "ray2-aabb-intersection=failed"
+          ]
+        : [
+            `intersect=${String(certificate.intersect)}`,
+            `classification=${certificate.classification}`,
+            "ray2-aabb-intersection=computed"
+          ],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only checks 2D rays and AABBs with integer coordinates and integer direction vectors.",
+        "The ray domain is t >= 0 and the AABB is closed; boundary hits count as intersection.",
+        "This is deterministic slab arithmetic, not a full raycaster, BVH traversal, rendering, or physics proof."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
 function completeArithmeticReceipt(args: {
   problem: string;
   normalizedProblem: string;
@@ -3826,6 +3985,218 @@ function stringifyPoint2(point: Point2): Record<keyof Point2, string> {
   return {
     x: point.x.toString(),
     y: point.y.toString()
+  };
+}
+function parseRay2AabbIntersectionClaim(problem: string): Ray2AabbIntersectionClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.?]$/u, "");
+  const match = /^(?:do\s+)?ray\s+origin\s*\(\s*(?<originX>-?\d+)\s*,\s*(?<originY>-?\d+)\s*\)\s+direction\s*\(\s*(?<directionX>-?\d+)\s*,\s*(?<directionY>-?\d+)\s*\)\s+intersects?\s+aabb\s+min\s*\(\s*(?<minX>-?\d+)\s*,\s*(?<minY>-?\d+)\s*\)\s+max\s*\(\s*(?<maxX>-?\d+)\s*,\s*(?<maxY>-?\d+)\s*\)(?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  const requiredGroups = ["originX", "originY", "directionX", "directionY", "minX", "minY", "maxX", "maxY"];
+  if (requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18)) {
+    return undefined;
+  }
+
+  const ray: Ray2 = {
+    origin: { x: BigInt(match.groups.originX), y: BigInt(match.groups.originY) },
+    direction: { x: BigInt(match.groups.directionX), y: BigInt(match.groups.directionY) }
+  };
+  const box: Aabb2 = {
+    minX: BigInt(match.groups.minX),
+    minY: BigInt(match.groups.minY),
+    maxX: BigInt(match.groups.maxX),
+    maxY: BigInt(match.groups.maxY)
+  };
+  if (!isNonZeroDirection2(ray.direction) || !isValidAabb2(box)) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    ray,
+    box,
+    statedIntersect: match.groups.stated === undefined ? undefined : match.groups.stated.toLowerCase() === "true"
+  };
+}
+
+function isNonZeroDirection2(direction: Point2): boolean {
+  return direction.x !== 0n || direction.y !== 0n;
+}
+
+function ray2AabbIntersectionCertificate(claim: Ray2AabbIntersectionClaim): {
+  schemaVersion: "truth-harness.ray2-aabb-intersection.v0";
+  adapter: "local-ray2-aabb-intersection";
+  source: string;
+  convention: "closed-aabb-ray-domain-t-greater-than-or-equal-zero";
+  ray: { origin: Record<keyof Point2, string>; direction: Record<keyof Point2, string> };
+  box: Record<keyof Aabb2, string>;
+  statedIntersect?: boolean;
+  axisIntervals: Array<{
+    axis: "x" | "y";
+    status: "bounded" | "parallel-inside" | "parallel-outside";
+    enter: string;
+    exit: string;
+  }>;
+  tEnter: string;
+  tExit: string;
+  intersect: boolean;
+  classification: Ray2AabbClassification;
+  hitPoint?: Record<keyof Point2, string>;
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const xInterval = raySlabAxisInterval("x", claim.ray.origin.x, claim.ray.direction.x, claim.box.minX, claim.box.maxX);
+  const yInterval = raySlabAxisInterval("y", claim.ray.origin.y, claim.ray.direction.y, claim.box.minY, claim.box.maxY);
+  const axisIntervals = [xInterval, yInterval];
+  const parallelMiss = axisIntervals.some((interval) => interval.status === "parallel-outside");
+  const zero = Rational.integer(0);
+  const tEnterEndpoint = maxRaySlabEndpoint([zero, xInterval.enter, yInterval.enter]);
+  const tExitEndpoint = minRaySlabEndpoint([xInterval.exit, yInterval.exit]);
+  const intervalOverlaps = compareRaySlabEndpoint(tEnterEndpoint, tExitEndpoint) <= 0;
+  const intersect = !parallelMiss && intervalOverlaps;
+  const originInside = pointInAabb2(claim.ray.origin, claim.box);
+  const classification: Ray2AabbClassification = intersect
+    ? originInside
+      ? "origin-inside"
+      : "ray-hit"
+    : parallelMiss
+      ? "parallel-miss"
+      : isFiniteRaySlabEndpoint(tExitEndpoint) && tExitEndpoint.lessThan(zero)
+        ? "behind-ray"
+        : "slab-miss";
+  const hitPoint = intersect && isFiniteRaySlabEndpoint(tEnterEndpoint)
+    ? rayPointAt(claim.ray, tEnterEndpoint)
+    : undefined;
+  const statedMatches = claim.statedIntersect === undefined || claim.statedIntersect === intersect;
+
+  return {
+    schemaVersion: "truth-harness.ray2-aabb-intersection.v0",
+    adapter: "local-ray2-aabb-intersection",
+    source: claim.source,
+    convention: "closed-aabb-ray-domain-t-greater-than-or-equal-zero",
+    ray: stringifyRay2(claim.ray),
+    box: stringifyAabb2(claim.box),
+    statedIntersect: claim.statedIntersect,
+    axisIntervals: axisIntervals.map((interval) => ({
+      axis: interval.axis,
+      status: interval.status,
+      enter: raySlabEndpointToString(interval.enter),
+      exit: raySlabEndpointToString(interval.exit)
+    })),
+    tEnter: raySlabEndpointToString(tEnterEndpoint),
+    tExit: raySlabEndpointToString(tExitEndpoint),
+    intersect,
+    classification,
+    hitPoint,
+    checks: [
+      {
+        id: "valid-ray-aabb-inputs",
+        ok: true,
+        expected: "nonzero ray direction and valid AABB min/max bounds",
+        observed: "ray direction is nonzero and AABB bounds are valid"
+      },
+      {
+        id: "ray-domain-slab-result",
+        ok: statedMatches,
+        expected: String(intersect),
+        observed: claim.statedIntersect === undefined ? String(intersect) : String(claim.statedIntersect)
+      }
+    ],
+    trace: [
+      "Use a closed AABB and ray parameter domain t >= 0; boundary hits count as intersection.",
+      `X slab interval is [${raySlabEndpointToString(xInterval.enter)}, ${raySlabEndpointToString(xInterval.exit)}] (${xInterval.status}).`,
+      `Y slab interval is [${raySlabEndpointToString(yInterval.enter)}, ${raySlabEndpointToString(yInterval.exit)}] (${yInterval.status}).`,
+      `Intersect the slabs with t >= 0 to get [${raySlabEndpointToString(tEnterEndpoint)}, ${raySlabEndpointToString(tExitEndpoint)}].`,
+      `Exact ray/AABB result is ${String(intersect)} (${classification}).`
+    ],
+    verdict: claim.statedIntersect === undefined ? "computed" : statedMatches ? "accepted" : "refuted"
+  };
+}
+
+function raySlabAxisInterval(
+  axis: "x" | "y",
+  origin: bigint,
+  direction: bigint,
+  minimum: bigint,
+  maximum: bigint
+): RaySlabAxisInterval {
+  if (direction === 0n) {
+    const inside = origin >= minimum && origin <= maximum;
+    return {
+      axis,
+      status: inside ? "parallel-inside" : "parallel-outside",
+      enter: "negative-infinity",
+      exit: "positive-infinity"
+    };
+  }
+
+  const first = new Rational(minimum - origin, direction);
+  const second = new Rational(maximum - origin, direction);
+  return {
+    axis,
+    status: "bounded",
+    enter: first.lessThanOrEqual(second) ? first : second,
+    exit: first.lessThanOrEqual(second) ? second : first
+  };
+}
+
+function compareRaySlabEndpoint(left: RaySlabEndpoint, right: RaySlabEndpoint): -1 | 0 | 1 {
+  if (left === right) {
+    return 0;
+  }
+  if (left === "negative-infinity" || right === "positive-infinity") {
+    return -1;
+  }
+  if (left === "positive-infinity" || right === "negative-infinity") {
+    return 1;
+  }
+  return left.compare(right);
+}
+
+function maxRaySlabEndpoint(values: RaySlabEndpoint[]): RaySlabEndpoint {
+  return values.reduce((current, value) => (compareRaySlabEndpoint(current, value) >= 0 ? current : value));
+}
+
+function minRaySlabEndpoint(values: RaySlabEndpoint[]): RaySlabEndpoint {
+  return values.reduce((current, value) => (compareRaySlabEndpoint(current, value) <= 0 ? current : value));
+}
+
+function isFiniteRaySlabEndpoint(value: RaySlabEndpoint): value is Rational {
+  return value !== "negative-infinity" && value !== "positive-infinity";
+}
+
+function raySlabEndpointToString(value: RaySlabEndpoint): string {
+  if (value === "negative-infinity") {
+    return "-infinity";
+  }
+  if (value === "positive-infinity") {
+    return "infinity";
+  }
+  return value.toString();
+}
+
+function pointInAabb2(point: Point2, box: Aabb2): boolean {
+  return point.x >= box.minX && point.x <= box.maxX && point.y >= box.minY && point.y <= box.maxY;
+}
+
+function rayPointAt(ray: Ray2, t: Rational): Record<keyof Point2, string> {
+  const x = Rational.integer(ray.origin.x).add(Rational.integer(ray.direction.x).multiply(t));
+  const y = Rational.integer(ray.origin.y).add(Rational.integer(ray.direction.y).multiply(t));
+  return { x: x.toString(), y: y.toString() };
+}
+
+function stringifyRay2(ray: Ray2): { origin: Record<keyof Point2, string>; direction: Record<keyof Point2, string> } {
+  return {
+    origin: stringifyPoint2(ray.origin),
+    direction: stringifyPoint2(ray.direction)
   };
 }
 function parseArithmeticPrompt(problem: string): string | undefined {
