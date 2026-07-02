@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "truth-harness.engine-case-bundle.v0",
+  "producer": {
+    "name": "example-rust-engine",
+    "version": "0.1.0",
+    "commit": "replace-with-git-sha",
+    "command": "cargo test --test engine_math_export -- --emit-truth-harness-json",
+    "generatedAt": "2026-07-02T00:00:00.000Z"
+  },
+  "cases": [
+    {
+      "caseId": "aabb-overlap-smoke",
+      "primitive": "aabb2-overlap",
+      "boundary": "closed-intervals-touching-counts-as-overlap",
+      "inputs": {
+        "a": { "minX": "0", "minY": "0", "maxX": "4", "maxY": "4" },
+        "b": { "minX": "3", "minY": "1", "maxX": "6", "maxY": "5" }
+      },
+      "observed": { "overlap": true }
+    },
+    {
+      "caseId": "ray-aabb-max-t-refutation-smoke",
+      "primitive": "ray2-aabb2-intersection",
+      "inputs": {
+        "ray": {
+          "origin": { "x": "0", "y": "2" },
+          "direction": { "x": "1", "y": "0" }
+        },
+        "box": { "minX": "3", "minY": "0", "maxX": "5", "maxY": "4" },
+        "maxRayParameter": "2"
+      },
+      "observed": { "intersect": false }
+    },
+    {
+      "caseId": "barycentric-smoke",
+      "primitive": "barycentric2-coordinates",
+      "inputs": {
+        "point": { "x": "1", "y": "1" },
+        "triangle": {
+          "a": { "x": "0", "y": "0" },
+          "b": { "x": "4", "y": "0" },
+          "c": { "x": "0", "y": "4" }
+        }
+      },
+      "observed": {
+        "coordinates": { "a": "1/2", "b": "1/4", "c": "1/4" }
+      }
+    }
+  ]
+}

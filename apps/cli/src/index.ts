@@ -125,6 +125,7 @@ import {
   readVerifierRoute,
   renderHardMathSeedHandoffMarkdown,
   renderReceipt,
+  renderEngineCaseBundleValidationReport,
   renderGraphvizVisualArtifact,
   renderPlotlyVisualArtifact,
   renderTeachingPacketMarkdown,
@@ -195,6 +196,7 @@ import {
   writeWorkspaceSnapshot,
   writeWebUiReview,
   writeClaimChart,
+  validateEngineCaseBundleJson,
   createValidationPlan,
   type ClaimFileCheck,
   type BenchmarkArtifactSummary,
@@ -230,6 +232,7 @@ import {
   type EngineVerificationRequirements,
   type EngineVerificationRunSummary,
   type EngineVerificationRunWriteResult,
+  type EngineCaseBundleValidationReport,
   type CodeRunPolicyInput,
   type CodeRunWriteResult,
   type CredibilityBundleVerification,
@@ -5158,6 +5161,31 @@ engines
   });
 
 engines
+  .command("validate")
+  .description("Validate a structured external engine math case bundle against local deterministic verifier packs.")
+  .argument("<bundle>", "Path to a truth-harness.engine-case-bundle.v0 JSON file exported by an engine")
+  .option("--json", "Print the full validation report JSON")
+  .option("--case-id <case-id>", "Validate only one case from the bundle")
+  .action(async (bundlePath: string, options: { json?: boolean; caseId?: string }) => {
+    const sourceRef = resolve(bundlePath);
+    const raw = await readFile(sourceRef, "utf8");
+    const report = validateEngineCaseBundleJson(raw, {
+      sourceRef,
+      caseId: options.caseId
+    });
+    const json = Boolean(options.json || engines.opts<{ json?: boolean }>().json);
+
+    if (json) {
+      printJson(report);
+    } else {
+      printEngineCaseBundleValidationReport(report);
+    }
+
+    if (report.status !== "passed") {
+      process.exitCode = 1;
+    }
+  });
+engines
   .command("plan")
   .description("Plan the verifier stack for a problem without running engines or minting evidence.")
   .argument("<problem>", "Problem or claim to route through the engine ladder")
@@ -5745,7 +5773,7 @@ async function runDemoGauntlet(options: {
   const unexpectedLabels: string[] = [];
   const recordingGateFailures: string[] = [];
 
-  console.log(color.bold("Truth Harness — Verified Math for AI Agents"));
+  console.log(color.bold("Truth Harness \u2014 Verified Math for AI Agents"));
   console.log(color.dim("Local engines catch false claims, verify bounded truths, and admit uncertainty."));
   console.log("");
 
@@ -5753,7 +5781,7 @@ async function runDemoGauntlet(options: {
   for (const [index, demoCase] of cases.entries()) {
     if (demoCase.category !== currentCategory) {
       currentCategory = demoCase.category;
-      console.log(color.dim(`── ${currentCategory} ─────────────────────────────────────────`));
+      console.log(color.dim(`${"\u2500".repeat(2)} ${currentCategory} ${"\u2500".repeat(42)}`));
     }
 
     const evaluation = await evaluateDemoCase(demoCase, options);
@@ -5895,14 +5923,14 @@ function createDemoColorizer(enabled: boolean): {
 
 function colorTrustLabel(trust: TrustLabel, color: ReturnType<typeof createDemoColorizer>): string {
   if (trust === "refuted") {
-    return color.red(`✗ ${trust}`);
+    return color.red(`\u2717 ${trust}`);
   }
 
   if (trust === "unverified") {
     return color.yellow(`? ${trust}`);
   }
 
-  return color.green(`✓ ${trust}`);
+  return color.green(`\u2713 ${trust}`);
 }
 
 function demoTrustBucket(trust: TrustLabel): DemoTrustBucket {
@@ -5994,8 +6022,8 @@ function printDemoScorecard(args: {
 }): void {
   const lines = [
     "Truth Harness Demo Results",
-    `✓ Verified:    ${String(args.tally.verified).padStart(2, " ")}`,
-    `✗ Refuted:     ${String(args.tally.refuted).padStart(2, " ")}`,
+    `\u2713 Verified:    ${String(args.tally.verified).padStart(2, " ")}`,
+    `\u2717 Refuted:     ${String(args.tally.refuted).padStart(2, " ")}`,
     `? Unverified:  ${String(args.tally.unverified).padStart(2, " ")}  (honest limits)`,
     `Total:        ${String(args.total).padStart(2, " ")}`,
     "",
@@ -6003,14 +6031,14 @@ function printDemoScorecard(args: {
     "No result claims more than earned."
   ];
   const width = Math.max(...lines.map((line) => line.length)) + 4;
-  const border = "─".repeat(width);
+  const border = "\u2500".repeat(width);
 
-  console.log(args.color.dim(`┌${border}┐`));
+  console.log(args.color.dim(`\u250c${border}\u2510`));
   for (const line of lines) {
     const padded = `  ${line}`.padEnd(width, " ");
-    console.log(args.color.dim("│") + padded + args.color.dim("│"));
+    console.log(args.color.dim("\u2502") + padded + args.color.dim("\u2502"));
   }
-  console.log(args.color.dim(`└${border}┘`));
+  console.log(args.color.dim(`\u2514${border}\u2518`));
   console.log(`Report: ${args.reportPath}`);
 }
 
@@ -6071,7 +6099,7 @@ function renderDemoReport(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Truth Harness Demo Report — generated locally, zero network access, every result replayable</title>
+  <title>Truth Harness Demo Report &mdash; generated locally, zero network access, every result replayable</title>
   <style>
     :root {
       color-scheme: dark;
@@ -6191,7 +6219,7 @@ function renderDemoReport(
   <main>
     <header>
       <p class="eyebrow">Generated ${escapeHtml(generatedAt)}</p>
-      <h1>Truth Harness Demo Report — generated locally, zero network access, every result replayable.</h1>
+      <h1>Truth Harness Demo Report &mdash; generated locally, zero network access, every result replayable.</h1>
       <p class="muted">Generated locally, zero network access, every result replayable. This report shows refutations, exact computation, cross-checks, SMT checks, honest uncertainty, dimensional analysis, interval bounds, replay commands, and evidence JSON.</p>
       <div class="scorecard">
         <div class="score"><span class="muted">Verified/computed</span><strong>${tally.verified}</strong></div>
@@ -6317,6 +6345,9 @@ function printEngineVerifierPack(pack: EngineVerifierPack): void {
   }
 }
 
+function printEngineCaseBundleValidationReport(report: EngineCaseBundleValidationReport): void {
+  console.log(renderEngineCaseBundleValidationReport(report).trimEnd());
+}
 function printEnginePlan(plan: EnginePlan): void {
   console.log("Truth Harness engine plan");
   console.log(`Status: ${plan.status}`);

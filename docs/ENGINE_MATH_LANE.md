@@ -54,6 +54,55 @@ npm run cli -- engines packs
 npm run cli -- engines packs local-engine-geometry-2d -- --json
 ```
 
+## External Engine Case Bundle Contract
+
+Truth Harness can now validate math exported by a separate engine, including a Rust game engine, without running arbitrary engine code. The engine writes a JSON bundle; Truth Harness recomputes each narrow primitive through the local verifier pack and reports whether the engine output is accepted, refuted, or unsupported.
+
+Validate the checked example:
+
+```bash
+npm run cli -- engines validate docs/examples/engine-case-bundle.json
+npm run cli -- engines validate docs/examples/engine-case-bundle.json -- --json
+```
+
+A Rust engine CI job should emit this shape after running its own math fixtures:
+
+```json
+{
+  "schemaVersion": "truth-harness.engine-case-bundle.v0",
+  "producer": {
+    "name": "my-rust-engine",
+    "version": "0.1.0",
+    "commit": "<git-sha>",
+    "command": "cargo test --test engine_math_export"
+  },
+  "cases": [
+    {
+      "caseId": "aabb-overlap-smoke",
+      "primitive": "aabb2-overlap",
+      "boundary": "closed-intervals-touching-counts-as-overlap",
+      "inputs": {
+        "a": { "minX": "0", "minY": "0", "maxX": "4", "maxY": "4" },
+        "b": { "minX": "3", "minY": "1", "maxX": "6", "maxY": "5" }
+      },
+      "observed": { "overlap": true }
+    }
+  ]
+}
+```
+
+Rules for v0:
+
+- External engine output is untrusted until Truth Harness recomputes it.
+- Truth Harness does not execute the engine bundle or run arbitrary code.
+- Integer fields should be strings. Rational fields should be strings like `1/4`.
+- Floating-point tolerances are not part of v0; they need explicit future tolerance-policy adapters.
+- If the bundle boundary does not match the verifier convention, the case stays `unverified` / `unsupported` instead of being force-fit.
+- The CLI exits non-zero unless every selected case is accepted, making it suitable for CI.
+
+Supported `primitive` values mirror the verifier pack: `aabb2-overlap`, `swept-aabb2-intersection`, `circle2-intersection`, `capsule2-circle2-intersection`, `circle2-aabb2-intersection`, `segment2-segment2-intersection`, `ray2-circle2-intersection`, `ray2-aabb2-intersection`, `barycentric2-coordinates`, and `point2-triangle2-membership`. Backend aliases such as `local-aabb2-overlap` are accepted so engines can emit Truth Harness backend ids directly.
+
+This is the first concrete bridge for external engines: production code can run fast, export its claimed primitive results, and let Truth Harness provide the independent local correctness oracle.
 ## Benchmark Gate
 
 Run the pack natively:

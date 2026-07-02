@@ -417,6 +417,11 @@ export {
   writeEngineVerificationRun
 } from "./engine-verification.js";
 export {
+  renderEngineCaseBundleValidationReport,
+  validateEngineCaseBundle,
+  validateEngineCaseBundleJson
+} from "./engine-case-bundle.js";
+export {
   createVerifierRoute,
   listVerifierRoutes,
   readVerifierRoute,
@@ -937,6 +942,14 @@ export type {
   EngineVerificationStatus,
   WriteEngineVerificationRunInput
 } from "./engine-verification.js";
+export type {
+  EngineCaseBundleProducer,
+  EngineCaseBundleValidationCase,
+  EngineCaseBundleValidationReport,
+  EngineCaseBundleValidationStatus,
+  EngineCasePrimitive,
+  EngineCaseValidationStatus
+} from "./engine-case-bundle.js";
 export type {
   CreateVerifierRouteOptions,
   ProofObligation,
