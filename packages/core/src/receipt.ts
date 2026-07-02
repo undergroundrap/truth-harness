@@ -138,6 +138,20 @@ interface Ray2AabbIntersectionClaim {
   statedIntersect?: boolean;
 }
 
+interface Triangle2 {
+  a: Point2;
+  b: Point2;
+  c: Point2;
+}
+
+interface PointInTriangle2Claim {
+  source: string;
+  point: Point2;
+  triangle: Triangle2;
+  statedInside?: boolean;
+}
+
+type PointInTriangle2Classification = "inside" | "edge" | "vertex" | "outside";
 type RaySlabEndpoint = Rational | "negative-infinity" | "positive-infinity";
 type Ray2AabbClassification = "ray-hit" | "origin-inside" | "parallel-miss" | "behind-ray" | "slab-miss";
 
@@ -407,6 +421,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const pointInTriangle2 = parsePointInTriangle2Claim(normalizedProblem);
+  if (pointInTriangle2) {
+    return completePointInTriangle2Receipt({
+      problem,
+      normalizedProblem,
+      claim: pointInTriangle2,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const arithmeticSource = parseArithmeticPrompt(normalizedProblem);
   if (arithmeticSource) {
     return completeArithmeticReceipt({
@@ -431,7 +460,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate segment intersection predicates, integer-coordinate ray/AABB intersection predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate segment intersection predicates, integer-coordinate ray/AABB intersection predicates, integer-coordinate point-in-triangle predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -2714,6 +2743,127 @@ function completeRay2AabbIntersectionReceipt(args: {
     findings: args.findings
   });
 }
+function completePointInTriangle2Receipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: PointInTriangle2Claim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = pointInTriangle2Certificate(args.claim);
+  const hasStatedInside = args.claim.statedInside !== undefined;
+  const statedMatches = !hasStatedInside || certificate.inside === certificate.statedInside;
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const artifact = addArtifact(args.artifacts, {
+    kind: "point-in-triangle2-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-point-in-triangle2",
+      source: args.claim.source,
+      convention: certificate.convention,
+      point: certificate.point,
+      triangle: certificate.triangle,
+      statedInside: certificate.statedInside
+    },
+    trust,
+    summary: hasStatedInside
+      ? statedMatches
+        ? "Point-in-triangle claim matched exact integer orientation tests."
+        : "Point-in-triangle claim disagreed with exact integer orientation tests."
+      : "Point-in-triangle question parsed into exact integer orientation tests.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedInside ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-point-in-triangle2",
+      exactArithmetic: true,
+      operation: "2D point-in-triangle predicate",
+      convention: certificate.convention,
+      classification: certificate.classification,
+      triangleArea2: certificate.triangleArea2,
+      edgeOrientations: certificate.edgeOrientations
+    },
+    trust,
+    summary: "Checked 2D point-in-triangle membership with exact integer orientation tests and closed edges.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact point-in-triangle result is ${String(certificate.inside)} (${certificate.classification}).`
+      : `Exact point-in-triangle result is ${String(certificate.inside)}, not ${String(certificate.statedInside)} (${certificate.classification}).`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The point-in-triangle result was computed by exact integer orientation tests. This earns exact-computed, not a full mesh or rendering proof."
+      : "The stated point-in-triangle result is refuted by exact integer orientation tests under the closed-triangle convention."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact point-in-triangle result: ${String(certificate.inside)} (${certificate.classification}).`
+      : `Refuted point-in-triangle claim: exact result is ${String(certificate.inside)}, stated ${String(certificate.statedInside)} (${certificate.classification}).`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-point-in-triangle2",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedInside
+        ? [
+            `inside=${String(certificate.inside)}`,
+            `stated=${String(certificate.statedInside)}`,
+            `classification=${certificate.classification}`,
+            statedMatches ? "point-in-triangle2=passed" : "point-in-triangle2=failed"
+          ]
+        : [
+            `inside=${String(certificate.inside)}`,
+            `classification=${certificate.classification}`,
+            "point-in-triangle2=computed"
+          ],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only checks non-degenerate 2D triangles and points with integer coordinates.",
+        "The triangle is closed: points on edges or vertices count as inside.",
+        "This is deterministic orientation arithmetic, not a full mesh, rasterizer, collision, or rendering proof."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
 function completeArithmeticReceipt(args: {
   problem: string;
   normalizedProblem: string;
@@ -4197,6 +4347,125 @@ function stringifyRay2(ray: Ray2): { origin: Record<keyof Point2, string>; direc
   return {
     origin: stringifyPoint2(ray.origin),
     direction: stringifyPoint2(ray.direction)
+  };
+}
+function parsePointInTriangle2Claim(problem: string): PointInTriangle2Claim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.?]$/u, "");
+  const match = /^(?:is\s+)?point\s*\(\s*(?<pointX>-?\d+)\s*,\s*(?<pointY>-?\d+)\s*\)\s+in\s+triangle\s+a\s*\(\s*(?<aX>-?\d+)\s*,\s*(?<aY>-?\d+)\s*\)\s+b\s*\(\s*(?<bX>-?\d+)\s*,\s*(?<bY>-?\d+)\s*\)\s+c\s*\(\s*(?<cX>-?\d+)\s*,\s*(?<cY>-?\d+)\s*\)(?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  const requiredGroups = ["pointX", "pointY", "aX", "aY", "bX", "bY", "cX", "cY"];
+  if (requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18)) {
+    return undefined;
+  }
+
+  const triangle: Triangle2 = {
+    a: { x: BigInt(match.groups.aX), y: BigInt(match.groups.aY) },
+    b: { x: BigInt(match.groups.bX), y: BigInt(match.groups.bY) },
+    c: { x: BigInt(match.groups.cX), y: BigInt(match.groups.cY) }
+  };
+  if (!isNonDegenerateTriangle2(triangle)) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    point: { x: BigInt(match.groups.pointX), y: BigInt(match.groups.pointY) },
+    triangle,
+    statedInside: match.groups.stated === undefined ? undefined : match.groups.stated.toLowerCase() === "true"
+  };
+}
+
+function isNonDegenerateTriangle2(triangle: Triangle2): boolean {
+  return orientationValue(triangle.a, triangle.b, triangle.c) !== 0n;
+}
+
+function pointInTriangle2Certificate(claim: PointInTriangle2Claim): {
+  schemaVersion: "truth-harness.point-in-triangle2.v0";
+  adapter: "local-point-in-triangle2";
+  source: string;
+  convention: "closed-triangle-edges-count-as-inside";
+  point: Record<keyof Point2, string>;
+  triangle: { a: Record<keyof Point2, string>; b: Record<keyof Point2, string>; c: Record<keyof Point2, string> };
+  statedInside?: boolean;
+  triangleArea2: string;
+  edgeOrientations: Array<{ id: string; value: string; sign: "clockwise" | "counterclockwise" | "collinear" }>;
+  inside: boolean;
+  classification: PointInTriangle2Classification;
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const area2 = orientationValue(claim.triangle.a, claim.triangle.b, claim.triangle.c);
+  const orientationSignMultiplier = area2 > 0n ? 1n : -1n;
+  const abp = orientationValue(claim.triangle.a, claim.triangle.b, claim.point) * orientationSignMultiplier;
+  const bcp = orientationValue(claim.triangle.b, claim.triangle.c, claim.point) * orientationSignMultiplier;
+  const cap = orientationValue(claim.triangle.c, claim.triangle.a, claim.point) * orientationSignMultiplier;
+  const edgeValues = [abp, bcp, cap];
+  const inside = edgeValues.every((value) => value >= 0n);
+  const zeroCount = edgeValues.filter((value) => value === 0n).length;
+  const classification: PointInTriangle2Classification = inside
+    ? zeroCount >= 2
+      ? "vertex"
+      : zeroCount === 1
+        ? "edge"
+        : "inside"
+    : "outside";
+  const statedMatches = claim.statedInside === undefined || claim.statedInside === inside;
+  const edgeOrientations = [
+    { id: "orient(a,b,point)", value: abp.toString(), sign: orientationSign(abp) },
+    { id: "orient(b,c,point)", value: bcp.toString(), sign: orientationSign(bcp) },
+    { id: "orient(c,a,point)", value: cap.toString(), sign: orientationSign(cap) }
+  ];
+
+  return {
+    schemaVersion: "truth-harness.point-in-triangle2.v0",
+    adapter: "local-point-in-triangle2",
+    source: claim.source,
+    convention: "closed-triangle-edges-count-as-inside",
+    point: stringifyPoint2(claim.point),
+    triangle: stringifyTriangle2(claim.triangle),
+    statedInside: claim.statedInside,
+    triangleArea2: area2.toString(),
+    edgeOrientations,
+    inside,
+    classification,
+    checks: [
+      {
+        id: "non-degenerate-triangle-input",
+        ok: true,
+        expected: "triangle area determinant is nonzero",
+        observed: `area2=${area2.toString()}`
+      },
+      {
+        id: "closed-triangle-membership-result",
+        ok: statedMatches,
+        expected: String(inside),
+        observed: claim.statedInside === undefined ? String(inside) : String(claim.statedInside)
+      }
+    ],
+    trace: [
+      "Use a closed triangle, so points on edges or vertices count as inside.",
+      `Triangle signed double-area determinant is ${area2.toString()}; edge tests are normalized to the triangle orientation.`,
+      `Normalized edge orientations are ${edgeOrientations.map((item) => `${item.id}=${item.value} (${item.sign})`).join(", ")}.`,
+      `Exact point-in-triangle result is ${String(inside)} (${classification}).`
+    ],
+    verdict: claim.statedInside === undefined ? "computed" : statedMatches ? "accepted" : "refuted"
+  };
+}
+
+function stringifyTriangle2(triangle: Triangle2): { a: Record<keyof Point2, string>; b: Record<keyof Point2, string>; c: Record<keyof Point2, string> } {
+  return {
+    a: stringifyPoint2(triangle.a),
+    b: stringifyPoint2(triangle.b),
+    c: stringifyPoint2(triangle.c)
   };
 }
 function parseArithmeticPrompt(problem: string): string | undefined {

@@ -1,7 +1,7 @@
 {
   "id": "engine-math-seed",
   "title": "Engine Math Seed Suite",
-  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap, segment intersection, and ray/AABB receipts before expanding to harder engine invariants.",
+  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap, segment intersection, ray/AABB, and point-in-triangle receipts before expanding to harder engine invariants.",
   "tasks": [
     {
       "id": "aabb-overlap-true",
@@ -173,6 +173,63 @@
         "receipt replay command"
       ],
       "checkerBoundary": "The result depends on the recorded ray-domain convention. Infinite-line or segment-cast checks need separate adapters and receipts."
+    },
+    {
+      "id": "point-triangle-inside",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Uses a sketch or floating-point intuition for triangle picking without preserving exact edge tests.",
+      "prompt": "Is point (1,1) in triangle A(0,0) B(4,0) C(0,4)?",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "inside",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate point-in-triangle certificate",
+        "triangle area determinant",
+        "edge orientation trace",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only non-degenerate 2D triangles and points with integer coordinates are checked. This does not verify arbitrary mesh, rasterizer, or collision-engine behavior."
+    },
+    {
+      "id": "point-triangle-edge-counts-inside",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Forgets to define whether triangle edges count for picking and collision membership.",
+      "prompt": "verify point (2,0) in triangle A(0,0) B(4,0) C(0,4) = true",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "edge",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate point-in-triangle certificate",
+        "closed-triangle boundary convention",
+        "edge orientation trace",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "The result depends on the recorded closed-triangle convention. Open-triangle or tolerance-based policies need separate adapters and receipts."
+    },
+    {
+      "id": "point-triangle-outside-refuted",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Accepts a visual triangle-membership claim without checking all three oriented edges.",
+      "prompt": "verify point (5,5) in triangle A(0,0) B(4,0) C(0,4) = true",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "outside",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate point-in-triangle certificate",
+        "edge orientation trace",
+        "stated-answer mismatch",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only the stated finite point-in-triangle predicate is refuted. The receipt does not evaluate arbitrary meshes or runtime engine state."
     }
   ]
 }

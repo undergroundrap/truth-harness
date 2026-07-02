@@ -455,6 +455,55 @@ describe("createReceipt", () => {
     );
     expect(receipt.evidenceProfile.limitations.join(" ")).toContain("ray domain is t >= 0");
   });
+  it("computes point-in-triangle membership with exact orientation tests", () => {
+    const receipt = createReceipt("Is point (1,1) in triangle A(0,0) B(4,0) C(0,4)?");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("true");
+    expect(receipt.summary).toContain("inside");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-point-in-triangle2");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["inside=true", "classification=inside", "point-in-triangle2=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "point-in-triangle2-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      inside?: boolean;
+      classification?: string;
+      triangleArea2?: string;
+      edgeOrientations?: Array<{ value?: string }>;
+    };
+    expect(payload).toMatchObject({
+      inside: true,
+      classification: "inside",
+      triangleArea2: "16"
+    });
+    expect(payload.edgeOrientations?.map((item) => item.value)).toEqual(["4", "8", "4"]);
+  });
+
+  it("treats triangle edges as inside under the recorded closed-triangle convention", () => {
+    const receipt = createReceipt("verify point (2,0) in triangle A(0,0) B(4,0) C(0,4) = true");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("edge");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["inside=true", "stated=true", "classification=edge", "point-in-triangle2=passed"])
+    );
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("points on edges or vertices count as inside");
+  });
+
+  it("refutes wrong point-in-triangle claims with exact edge orientation evidence", () => {
+    const receipt = createReceipt("verify point (5,5) in triangle A(0,0) B(4,0) C(0,4) = true");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("false");
+    expect(receipt.summary).toContain("outside");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["inside=false", "stated=true", "classification=outside", "point-in-triangle2=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+  });
   it("marks MVP receipts as local-only with no external disclosure", () => {
     const receipt = createReceipt("compute 2 + 2");
 
