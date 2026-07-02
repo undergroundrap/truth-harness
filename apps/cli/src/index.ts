@@ -3,7 +3,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { parseBenchmarkSuite, runBenchmarkSuite, type BenchmarkRun } from "@truth-harness/benchmarks";
+import { parseBenchmarkSuite, parsePublicMathProblemCatalog, runBenchmarkSuite, summarizePublicMathProblemCatalog, type BenchmarkRun, type PublicMathProblemCatalogSummary } from "@truth-harness/benchmarks";
 import {
   benchmarkComparisonFailsGate,
   benchmarkRunFailsGate,
@@ -1021,6 +1021,23 @@ bench
       }
     }
   );
+
+bench
+  .command("catalog")
+  .description("Inspect a public math problem catalog.")
+  .argument("[catalog]", "Path to a public math problem catalog JSON file", "packages/benchmarks/catalog/public-math-problem-catalog.json")
+  .option("--json", "Print the full catalog summary JSON")
+  .action(async (catalogPath: string, options: { json?: boolean }) => {
+    const catalog = parsePublicMathProblemCatalog(JSON.parse(await readFile(resolve(catalogPath), "utf8")) as unknown);
+    const summary = summarizePublicMathProblemCatalog(catalog);
+
+    if (options.json) {
+      printJson({ catalogPath, summary });
+      return;
+    }
+
+    printPublicMathProblemCatalog(summary, catalogPath);
+  });
 
 bench
   .command("list")
@@ -7461,6 +7478,64 @@ function printBenchmarkComparison(
   }
 }
 
+function printPublicMathProblemCatalog(summary: PublicMathProblemCatalogSummary, catalogPath: string): void {
+  console.log(summary.title);
+  console.log(`Catalog: ${catalogPath}`);
+  console.log(`Updated: ${summary.updatedAt}`);
+  console.log(`Problems: ${summary.totalProblems} total, ${summary.solved} solved, ${summary.openGaps} open gaps, ${summary.queued} queued`);
+  console.log(`Source-needed targets: ${summary.sourceNeeded}`);
+
+  if (summary.suiteRefs.length > 0) {
+    console.log("");
+    console.log("Suites:");
+    for (const suite of summary.suiteRefs) {
+      console.log(`  - ${suite.suiteId}: ${suite.path}`);
+    }
+  }
+
+  if (summary.defaultCommands.length > 0) {
+    console.log("");
+    console.log("Default commands:");
+    for (const command of summary.defaultCommands) {
+      console.log(`  ${command}`);
+    }
+  }
+
+  console.log("");
+  console.log("Problems:");
+  for (const problem of summary.problems) {
+    console.log(`  - ${problem.id}: ${problem.status} [${problem.domain}]`);
+    console.log(`    source: ${problem.sourceTitle} (${problem.sourceUrl})`);
+    if (problem.resultSummary) {
+      console.log(`    result: ${problem.resultSummary}`);
+    }
+    if (problem.verifierBackends.length > 0) {
+      console.log(`    backends: ${problem.verifierBackends.join(", ")}`);
+    }
+    if (problem.trustOutcomes.length > 0) {
+      console.log(`    trust: ${problem.trustOutcomes.join(", ")}`);
+    }
+    if (problem.suiteTaskIds.length > 0) {
+      console.log(`    tasks: ${problem.suiteTaskIds.join(", ")}`);
+    }
+  }
+
+  if (summary.nextTargets.length > 0) {
+    console.log("");
+    console.log("Next targets:");
+    for (const target of summary.nextTargets) {
+      console.log(`  - ${target.id}: ${target.status} - ${target.goal}`);
+    }
+  }
+
+  if (summary.warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const warning of summary.warnings) {
+      console.log(`  - ${warning}`);
+    }
+  }
+}
 function printBenchmarkArtifactList(artifacts: BenchmarkArtifactSummary[]): void {
   console.log(`Truth Harness benchmark artifacts: ${artifacts.length}`);
 

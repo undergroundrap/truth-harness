@@ -20,8 +20,11 @@ Benchmark suite: [public-problem-probes.json](../packages/benchmarks/suites/publ
 ## Commands
 
 ```bash
+npm run demo:public-catalog
 npm run demo:public-probes
+npm run docker:public-catalog
 npm run docker:public-probes
+truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json
 truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --write --fail-on-failures
 ```
 
@@ -35,7 +38,7 @@ truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --
 
 ## Publication Rule
 
-If this repo is linked in a forum or classroom answer, cite the source problem, the benchmark suite path, the generated benchmark-run record if one exists, and the receipt replay command. Do not claim a result is `proved` unless an accepted proof-checking backend produced that label. Exact finite computation is valuable, but it is not the same thing as a formal proof of a general theorem.
+If this repo is linked in a forum or classroom answer, cite the source problem, the benchmark suite path, the generated benchmark-run record if one exists, and the receipt replay command. `truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json` is the quick human/agent entry point for finding the source URL, solved status, local backend, suite task ids, and next target queues. Do not claim a result is `proved` unless an accepted proof-checking backend produced that label. Exact finite computation is valuable, but it is not the same thing as a formal proof of a general theorem.
 
 ## Next Catalog Targets
 

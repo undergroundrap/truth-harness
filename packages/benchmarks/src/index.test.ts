@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseBenchmarkSuite, runBenchmarkSuite } from "./index.js";
+import { parseBenchmarkSuite, parsePublicMathProblemCatalog, runBenchmarkSuite, summarizePublicMathProblemCatalog } from "./index.js";
 
 describe("benchmark runner", () => {
   it("scores trust-label expectations", () => {
@@ -199,29 +199,54 @@ describe("benchmark runner", () => {
     const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/public-problem-probes.json");
     const catalogPath = resolve(process.cwd(), "packages/benchmarks/catalog/public-math-problem-catalog.json");
     const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);
-    const catalog = JSON.parse(readFileSync(catalogPath, "utf8")) as {
-      schemaVersion?: string;
-      updatedAt?: string;
-      problems?: Array<{
-        id?: string;
-        source?: { url?: string };
-        suitePath?: string;
-        suiteTaskIds?: string[];
-        status?: string;
-      }>;
-    };
+    const catalog = parsePublicMathProblemCatalog(JSON.parse(readFileSync(catalogPath, "utf8")) as unknown);
+    const summary = summarizePublicMathProblemCatalog(catalog);
     const taskIds = new Set(suite.tasks.map((task) => task.id));
 
     expect(catalog.schemaVersion).toBe("truth-harness.public-math-problem-catalog.v0");
     expect(catalog.updatedAt).toBe("2026-07-01");
     expect(catalog.problems).toHaveLength(3);
-    for (const problem of catalog.problems ?? []) {
+    expect(summary).toMatchObject({
+      totalProblems: 3,
+      solved: 3,
+      openGaps: 0,
+      queued: 0,
+      sourceNeeded: 3,
+      warnings: []
+    });
+    expect(summary.defaultCommands).toContain("npm run docker:public-probes");
+    for (const problem of catalog.problems) {
       expect(problem.status).toBe("solved-by-local-receipt");
-      expect(problem.source?.url).toMatch(/^https:\/\/projecteuler\.net\/problem=\d+$/u);
+      expect(problem.source.url).toMatch(/^https:\/\/projecteuler\.net\/problem=\d+$/u);
       expect(problem.suitePath).toBe("packages/benchmarks/suites/public-problem-probes.json");
       expect(problem.suiteTaskIds?.length).toBe(2);
       expect(problem.suiteTaskIds?.every((taskId) => taskIds.has(taskId))).toBe(true);
     }
+  });
+
+  it("rejects malformed public math catalog statuses", () => {
+    expect(() =>
+      parsePublicMathProblemCatalog({
+        schemaVersion: "truth-harness.public-math-problem-catalog.v0",
+        catalogId: "bad-catalog",
+        title: "Bad Catalog",
+        updatedAt: "2026-07-02",
+        purpose: "test",
+        workflow: { stages: ["one"], defaultCommands: ["run"] },
+        suiteRefs: [],
+        problems: [
+          {
+            id: "bad",
+            firstLoggedAt: "2026-07-02",
+            source: { site: "Example", title: "Example", url: "https://example.test", accessedAt: "2026-07-02" },
+            status: "magically-solved",
+            domain: "test"
+          }
+        ],
+        nextTargets: [],
+        honestyBoundary: "test"
+      })
+    ).toThrow("unsupported status");
   });
   it("keeps the frontier honesty challenge humble on famous hard problems", () => {
     const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/frontier-honesty-challenge.json");
