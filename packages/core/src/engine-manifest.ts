@@ -2,6 +2,7 @@ import { getCasBackendStatus, type CasBackendStatusOptions } from "./cas-backend
 import { getCodeRunSandboxStatus, type CodeRunSandboxStatus } from "./sandbox.js";
 import { getProofBackendStatus, type ProofBackendStatusOptions } from "./proof-backend.js";
 import { getSmtBackendStatus, type SmtBackendCommandRunner, type SmtBackendStatusOptions } from "./smt-backend.js";
+import { ENGINE_2D_COLLISION_CAPABILITY_ID, getEngineVerifierPacks, type EngineVerifierPack } from "./engine-verifier-pack.js";
 import type { TrustLabel } from "./types.js";
 
 export type EngineCapabilityKind = "native-kernel" | "adapter" | "workspace-service" | "safety-boundary" | "planned-adapter";
@@ -29,6 +30,7 @@ export type EnginePrimitiveSemantics =
   | "simulation-provenance"
   | "concurrency-model"
   | "hardware-description"
+  | "engine-geometry-predicate"
   | "not-implemented";
 
 export interface EngineDeterminismProfile {
@@ -89,6 +91,7 @@ export interface EngineManifest {
   deterministicCount: number;
   replayDeterministicCount: number;
   capabilities: EngineCapability[];
+  verifierPacks: EngineVerifierPack[];
   machineContract: {
     jsonFirst: true;
     diagnosticsAreStructured: true;
@@ -158,6 +161,7 @@ export function getEngineManifest(options: EngineManifestOptions = {}): EngineMa
     deterministicCount: capabilities.filter((capability) => capability.determinism.determinismClass === "strict-deterministic").length,
     replayDeterministicCount: capabilities.filter((capability) => capability.determinism.determinismClass === "replay-deterministic").length,
     capabilities,
+    verifierPacks: getEngineVerifierPacks(),
     machineContract: {
       jsonFirst: true,
       diagnosticsAreStructured: true,
@@ -297,6 +301,27 @@ function nativeCapabilities(): RawEngineCapability[] {
       statusProbeMintedEvidence: false,
       trustBoundary: "Can support source-cited receipts when local chunks are retrieved; retrieval is not proof of entailment.",
       limitations: ["Lexical search is local and simple; citation entailment still needs review."]
+    },
+    {
+      id: ENGINE_2D_COLLISION_CAPABILITY_ID,
+      displayName: "2D engine geometry verifier pack",
+      kind: "native-kernel",
+      lane: "engine-math",
+      status: "ready",
+      role: "collision-and-spatial-query",
+      command: "npm run demo:engine-math",
+      localOnly: true,
+      networkAccess: "none",
+      strongestTrust: "exact-computed",
+      canMintTrust: true,
+      statusProbeMintedEvidence: false,
+      trustBoundary:
+        "Can support exact-computed or refuted only for the supported integer-coordinate 2D predicates listed in the verifier pack; never emits proved.",
+      limitations: [
+        "Covers supported AABB, swept AABB, circle, capsule, segment, ray, and point-in-triangle prompt forms only.",
+        "Does not verify collision response, broadphase, meshes, floating-point tolerance policy, rendering visibility, or engine runtime state."
+      ],
+      nextStep: "Run npm run demo:engine-math or npm run docker:engine-math before using the pack as reviewer evidence."
     }
   ];
 }
@@ -607,6 +632,8 @@ function nativePrimitiveSemantics(id: string): EnginePrimitiveSemantics {
       return "symbolic-expression";
     case "local-corpus-lexical-search":
       return "local-source-index";
+    case ENGINE_2D_COLLISION_CAPABILITY_ID:
+      return "engine-geometry-predicate";
     default:
       return "workspace-artifact";
   }

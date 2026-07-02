@@ -6210,6 +6210,19 @@ function printEngineManifest(manifest: EngineManifest): void {
   );
   console.log(`Network: ${manifest.networkAccess}`);
 
+  if (manifest.verifierPacks.length > 0) {
+    console.log("");
+    console.log("Verifier packs:");
+    for (const pack of manifest.verifierPacks) {
+      console.log(`  ${pack.displayName}`);
+      console.log(`    Status: ${pack.status}; lane: ${pack.lane}; capability: ${pack.capabilityId}`);
+      console.log(`    Predicates: ${pack.capabilities.length}; benchmark tasks: ${pack.benchmarkSuite.totalTasks}`);
+      console.log(`    Native: ${pack.benchmarkSuite.nativeCommand}`);
+      console.log(`    Docker: ${pack.benchmarkSuite.dockerCommand}`);
+      console.log(`    Boundary: ${pack.limitations[0]}`);
+    }
+  }
+
   printEngineCapabilityGroup(
     "Native kernels",
     manifest.capabilities.filter((capability) => capability.kind === "native-kernel")

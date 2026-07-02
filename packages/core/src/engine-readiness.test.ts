@@ -193,6 +193,7 @@ function minimalManifest(): EngineManifest {
     deterministicCount: 6,
     replayDeterministicCount: 6,
     capabilities,
+    verifierPacks: [],
     machineContract: {
       jsonFirst: true,
       diagnosticsAreStructured: true,

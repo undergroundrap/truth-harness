@@ -390,6 +390,13 @@ export { renderGraphvizVisualArtifact, renderPlotlyVisualArtifact } from "./visu
 export { runWorkspaceStress } from "./workspace-stress.js";
 export { getEngineManifest } from "./engine-manifest.js";
 export {
+  ENGINE_2D_COLLISION_CAPABILITY_ID,
+  ENGINE_2D_COLLISION_VERIFIER_PACK_ID,
+  ENGINE_MATH_SEED_SUITE_PATH,
+  getEngineVerifierPackById,
+  getEngineVerifierPacks
+} from "./engine-verifier-pack.js";
+export {
   createEnginePlan,
   classifyProblem
 } from "./engine-plan.js";
@@ -899,6 +906,12 @@ export type {
   EngineManifest,
   EngineManifestOptions
 } from "./engine-manifest.js";
+export type {
+  EngineVerifierPack,
+  EngineVerifierPackCapability,
+  EngineVerifierPackCapabilityRole,
+  EngineVerifierPackStatus
+} from "./engine-verifier-pack.js";
 export type {
   EngineReadinessClaimClass,
   EngineReadinessGate,

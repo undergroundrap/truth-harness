@@ -1,4 +1,5 @@
 import { createEngineReadinessReportFromManifest } from "./engine-readiness.js";
+import { ENGINE_2D_COLLISION_CAPABILITY_ID } from "./engine-verifier-pack.js";
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
 import type { EngineVerificationRunSummary } from "./engine-verification.js";
 import type { TrustLabel } from "./types.js";
@@ -13,6 +14,7 @@ export type EnginePlanProblemKind =
   | "interval-bound"
   | "source-grounded"
   | "simulation-or-engineering"
+  | "engine-geometry"
   | "concurrent-systems"
   | "hardware-eda"
   | "unknown";
@@ -173,6 +175,9 @@ export function classifyProblem(problem: string): EnginePlanProblemKind[] {
   if (/\b(source|citation|cite|paper|literature|doi|arxiv|study|dataset)\b/u.test(text)) {
     kinds.push("source-grounded");
   }
+  if (/\b(aabb|axis[-\s]?aligned|circle|capsule|segment|ray|raycast|triangle|collision|collide|overlap|intersect|intersection|hit[-\s]?test|point[-\s]?in[-\s]?triangle|swept)\b/u.test(text)) {
+    kinds.push("engine-geometry");
+  }
   if (/\b(simulate|simulation|physics engine|graphics engine|robotics|geometry|numerical|floating|float|ode|pde|finite element)\b/u.test(text)) {
     kinds.push("simulation-or-engineering");
   }
@@ -223,6 +228,15 @@ function routeTemplatesFor(kinds: EnginePlanProblemKind[]): StepTemplate[] {
       capabilityId: "local-dimensional-analysis",
       role: "primary-check",
       evidenceRequired: "Dimension-vector receipt for both sides of the equation.",
+      agreementValue: "primary"
+    });
+  }
+  if (kinds.includes("engine-geometry")) {
+    templates.push({
+      capabilityId: ENGINE_2D_COLLISION_CAPABILITY_ID,
+      role: "primary-check",
+      evidenceRequired:
+        "Concrete engine-math receipt from the 2D verifier pack, including integer inputs, boundary convention, exact predicate trace, backend id, and replay command.",
       agreementValue: "primary"
     });
   }
@@ -490,6 +504,9 @@ function nextActionsFor(
   }
   if (missing.some((step) => step.capabilityId === "sage-cas")) {
     actions.push("Use `npm run docker:sage` or the all-engine reviewer image when SageMath breadth is required.");
+  }
+  if (steps.some((step) => step.capabilityId === ENGINE_2D_COLLISION_CAPABILITY_ID)) {
+    actions.push("Use `npm run demo:engine-math` or `npm run docker:engine-math` when changing or reviewer-checking the 2D collision verifier pack.");
   }
   if (steps.some((step) => step.capabilityId === "concurrent-systems-verifier")) {
     actions.push(

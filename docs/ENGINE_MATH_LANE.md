@@ -1,72 +1,50 @@
 # Engine Math Lane
 
-Truth Harness is starting an engine-math lane for game, simulation, robotics, and graphics-engine work. The goal is not to become a full engine inside the verifier. The goal is to make engine claims replayable: a human or agent can state a small geometry, physics, or scheduling claim, then route it to the smallest deterministic checker that can earn the right trust label.
+Truth Harness has an engine-math lane for game, simulation, robotics, graphics, and agentic engine work. It is not trying to become a full game engine. It verifies small engine claims as replayable evidence: a human or agent states a narrow geometry predicate, Truth Harness routes it to the smallest deterministic checker, and the receipt records the exact inputs, convention, trace, backend id, trust label, and replay command.
 
-## Supported Predicates
+## 2D Collision Verifier Pack
 
-The first slice is a 2D integer-coordinate AABB overlap adapter. The second slice is a 2D integer-coordinate segment intersection adapter backed by exact orientation determinants. The third slice is a 2D integer-coordinate ray/AABB adapter backed by exact rational slab intervals. The fourth slice is a 2D integer-coordinate point-in-triangle adapter backed by exact orientation tests.
+The current pack is `engine-2d-collision-verifier-pack`, exposed through the engine manifest as capability `local-engine-geometry-2d`.
 
-Accepted prompt shape:
+It is local-only, deterministic, and no-network. It can earn `exact-computed` or `refuted` for supported integer-coordinate 2D predicates. It never earns `proved`, because these are native deterministic kernels, not accepted Lean proof-checker artifacts.
+
+Supported predicate families:
+
+| Predicate | Backend id | Boundary convention |
+| --- | --- | --- |
+| AABB/AABB overlap | `local-aabb2-overlap` | Closed intervals; touching edges/corners count as overlap. |
+| Swept AABB/AABB intersection | `local-swept-aabb2-intersection` | One moving integer AABB against one static AABB over `0 <= t <= 1`. |
+| Circle/circle intersection | `local-circle2-intersection` | Closed disks; tangency and containment count as intersection. |
+| Capsule/circle intersection | `local-capsule2-circle-intersection` | Closed capsule and closed disk; boundary contact counts as intersection. |
+| Circle/AABB intersection | `local-circle2-aabb-intersection` | Exact closest-point distance against a closed AABB. |
+| Segment/segment intersection | `local-segment2-intersection` | Closed non-degenerate segments; endpoints count as intersection. |
+| Ray/circle intersection | `local-ray2-circle-intersection` | Ray domain is `t >= 0`; closed disk boundary counts as hit. |
+| Ray/AABB intersection | `local-ray2-aabb-intersection` | Exact rational slab interval with ray domain `t >= 0`. |
+| Point-in-triangle membership | `local-point-in-triangle2` | Closed non-degenerate triangle; edges count as inside. |
+
+Accepted examples:
 
 ```bash
 npm run cli -- ask "Do AABB A min(0,0) max(4,4) and AABB B min(3,1) max(6,5) overlap?"
-npm run cli -- ask "verify AABB A min(0,0) max(4,4) and AABB B min(5,1) max(7,3) overlap = true"
-npm run cli -- ask "verify AABB A min(0,0) max(4,4) and AABB B min(4,4) max(6,6) overlap = true"
+npm run cli -- ask "Do swept AABB A min(0,0) max(1,1) velocity(3,0) intersect AABB B min(3,0) max(4,1) over t in [0,1]?"
+npm run cli -- ask "Do circle A center(0,0) radius 3 and circle B center(4,0) radius 2 intersect?"
+npm run cli -- ask "Do capsule A from (0,0) to (4,0) radius 1 and circle B center(2,1) radius 1 intersect?"
+npm run cli -- ask "Do circle center(2,2) radius 2 intersect AABB min(3,0) max(6,4)?"
 npm run cli -- ask "Do segment A from (0,0) to (4,4) and segment B from (0,4) to (4,0) intersect?"
-npm run cli -- ask "verify segment A from (0,0) to (1,1) and segment B from (2,2) to (3,3) intersect = true"
-npm run cli -- ask "verify segment A from (0,0) to (4,0) and segment B from (2,0) to (6,0) intersect = true"
+npm run cli -- ask "Do ray origin(0,0) direction(1,0) intersect circle center(3,1) radius 2?"
 npm run cli -- ask "Do ray origin(0,2) direction(1,0) intersect AABB min(3,0) max(5,4)?"
-npm run cli -- ask "verify ray origin(0,5) direction(1,0) intersect AABB min(3,0) max(5,4) = true"
-npm run cli -- ask "verify ray origin(6,2) direction(1,0) intersect AABB min(3,0) max(5,4) = false"
 npm run cli -- ask "Is point (1,1) in triangle A(0,0) B(4,0) C(0,4)?"
-npm run cli -- ask "verify point (2,0) in triangle A(0,0) B(4,0) C(0,4) = true"
-npm run cli -- ask "verify point (5,5) in triangle A(0,0) B(4,0) C(0,4) = true"
 ```
 
-The AABB adapter records:
+The planner now recognizes AABB, circle, capsule, segment, ray, raycast, triangle, collision, overlap, intersection, hit-test, and swept-collision language as `engine-geometry`, and routes to `local-engine-geometry-2d` before generic symbolic or SMT planning.
 
-- exact integer coordinates for both boxes
-- the convention `closed-intervals-touching-counts-as-overlap`
-- the four axis comparisons used by the predicate
-- whether each axis overlaps
-- separating-axis evidence when a stated overlap is false
-- the replay command and receipt artifact
+```bash
+npm run cli -- engines plan "does this ray intersect the circle?"
+```
 
-The segment adapter records:
+## Benchmark Gate
 
-- exact integer endpoints for both non-degenerate segments
-- the convention `closed-segments-endpoints-count-as-intersection`
-- four orientation determinants and signs
-- whether the intersection is a proper crossing, endpoint touch, collinear overlap, collinear disjoint case, or disjoint case
-- the replay command and receipt artifact
-
-The ray/AABB adapter records:
-
-- exact integer origin, integer direction vector, and integer AABB bounds
-- the convention `closed-aabb-ray-domain-t-greater-than-or-equal-zero`
-- per-axis slab intervals, including parallel-inside and parallel-outside axes
-- the final exact rational `tEnter` and `tExit` interval after intersecting with `t >= 0`
-- whether the result is a ray hit, origin-inside hit, parallel miss, behind-ray miss, or slab miss
-- the replay command and receipt artifact
-
-The point-in-triangle adapter records:
-
-- exact integer point and non-degenerate triangle vertices
-- the convention `closed-triangle-edges-count-as-inside`
-- the signed double-area determinant of the triangle
-- three normalized edge orientation tests
-- whether the point is inside, on an edge, on a vertex, or outside
-- the replay command and receipt artifact
-
-Trust labels are conservative:
-
-- `exact-computed` when no stated result is provided, or the stated result matches the exact predicate
-- `refuted` when the stated result disagrees with the exact predicate
-- never `proved`, because this is a local deterministic predicate, not an accepted formal proof-checker result
-
-## Benchmark
-
-Run the engine seed suite natively:
+Run the pack natively:
 
 ```bash
 npm run build
@@ -79,49 +57,32 @@ Run it through the Docker-first workflow:
 npm run docker:engine-math
 ```
 
-The suite lives at `packages/benchmarks/suites/engine-math-seed.json` and currently covers:
+The suite lives at `packages/benchmarks/suites/engine-math-seed.json` and currently has 27 cases: 18 `exact-computed` receipts and 9 `refuted` receipts. The regression tests tie the verifier pack to those 27 task IDs so docs, manifest, and benchmark coverage cannot drift quietly.
 
-- overlapping AABBs
-- a false stated overlap refuted by a separating axis
-- a touching-corner boundary case under the recorded closed-interval convention
-- proper crossing line segments
-- a false collinear-disjoint segment claim refuted by bounds checks
-- collinear overlapping segments under the recorded closed-segment convention
-- a ray/AABB hit with exact rational `t` interval
-- a false parallel-slab ray/AABB claim refuted by slab status
-- a ray/AABB miss where the box lies behind the ray domain
-- a point inside a triangle with exact edge tests
-- a point on a triangle edge under the recorded closed-triangle convention
-- a false point-in-triangle claim refuted by edge orientations
-
-## Boundary
+## Evidence Boundary
 
 This lane currently does not verify:
 
-- swept collision
-- rotated boxes
-- zero-length point segments
-- ray direction vector `(0,0)`
-- degenerate triangles with zero area
-- circles, capsules, meshes, or convex polygons
-- floating-point tolerance policy
+- arbitrary engine runtime state
+- collision response or contact manifolds
 - broadphase data structures
-- physics integration
-- engine runtime state
+- meshes, polygons beyond the listed primitives, or rotated boxes
+- finite ray segments or maximum ray travel distance
+- floating-point tolerance policy or numerical drift
+- rendering visibility, BVH correctness, or GPU behavior
+- physics integration or timestep stability
 - concurrency, deadlock, or ECS scheduling
 
-Those should become separate adapters with their own receipts and benchmark gates.
+Those become separate adapters, receipts, and benchmark gates. The rule is still one small primitive at a time: make the evidence machine-readable, replay it in Docker, then let agents compose primitives into larger validation plans.
 
 ## Roadmap
 
 Good next slices:
 
-1. AABB half-open interval variant, so engines can compare closed vs half-open collision policy.
-2. Ray/AABB variants for finite ray segments, maximum travel distance, and open boundary policies.
-3. Segment intersection variants for open or half-open endpoint policies.
-4. Barycentric coordinate certificates for point-in-triangle interpolation and rendering workflows.
+1. Half-open and open boundary variants so engines can compare collision policies explicitly.
+2. Finite ray segment and maximum-travel raycast variants.
+3. Barycentric coordinate certificates for interpolation and rendering workflows.
+4. Broadphase grid bucket membership predicates.
 5. Fixed-timestep accumulator invariants and drift bounds.
-6. Broadphase grid bucket membership predicates.
-7. Lock-order and ECS schedule constraints compiled to SMT.
-
-The strategic rule is simple: add one small engine primitive at a time, make the evidence machine-readable, then let agents compose primitives into larger validation plans.
+6. Lock-order and ECS schedule constraints compiled to SMT.
+7. Rust engine geometry fixtures that compare production code against the verifier pack.

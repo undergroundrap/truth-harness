@@ -27,6 +27,16 @@ describe("engine manifest", () => {
       deterministicTrustRequiresReplayableArtifact: true,
       primitivesRemainComposable: true
     });
+    expect(manifest.verifierPacks).toHaveLength(1);
+    expect(manifest.verifierPacks[0]).toMatchObject({
+      id: "engine-2d-collision-verifier-pack",
+      capabilityId: "local-engine-geometry-2d",
+      lane: "engine-math",
+      benchmarkSuite: {
+        id: "engine-math-seed",
+        totalTasks: 27
+      }
+    });
     expect(manifest.trustBoundary.statusProbeIsNotEvidence).toBe(true);
     expect(manifest.trustBoundary.claimTrustRequiresResolvableEvidence).toBe(true);
     expect(manifest.capabilities.every((capability) => capability.determinism.aiParserFriendly)).toBe(true);
@@ -89,6 +99,18 @@ describe("engine manifest", () => {
           determinismClass: "environment-measured",
           deterministic: false,
           primitiveSemantics: "sandbox-measurement"
+        })
+      })
+    );
+    expect(manifest.capabilities).toContainEqual(
+      expect.objectContaining({
+        id: "local-engine-geometry-2d",
+        lane: "engine-math",
+        strongestTrust: "exact-computed",
+        canMintTrust: true,
+        determinism: expect.objectContaining({
+          determinismClass: "strict-deterministic",
+          primitiveSemantics: "engine-geometry-predicate"
         })
       })
     );

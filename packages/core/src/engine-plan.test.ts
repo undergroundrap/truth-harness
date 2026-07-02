@@ -130,6 +130,26 @@ describe("engine plan", () => {
     });
   });
 
+  it("routes 2D collision and raycast problems to the local engine geometry pack first", () => {
+    const plan = createEnginePlan("verify ray origin(0,0) direction(1,0) intersect circle center(3,1) radius 2 = true", {
+      manifest: manifestWith()
+    });
+
+    expect(plan.classifications).toContain("engine-geometry");
+    expect(plan.status).toBe("ready-to-route");
+    expect(plan.steps[0]).toMatchObject({
+      capabilityId: "local-engine-geometry-2d",
+      role: "primary-check",
+      canRunNow: true,
+      trustIfSuccessful: "exact-computed"
+    });
+    expect(plan.comparisonMatrix[0]).toMatchObject({
+      capabilityId: "local-engine-geometry-2d",
+      agreementValue: "primary"
+    });
+    expect(plan.nextActions.join("\n")).toContain("docker:engine-math");
+  });
+
   it("keeps simulation and engine-grade numerical work honest about planned adapters", () => {
     const plan = createEnginePlan("simulate robotics geometry with deterministic floating point bounds", {
       manifest: manifestWith()
@@ -220,6 +240,7 @@ describe("engine plan", () => {
     expect(classifyProblem("solve integer constraints x > 0 and x < 3")).toContain("smt-constraint");
     expect(classifyProblem("prove a Rust lock-free queue cannot deadlock")).toContain("concurrent-systems");
     expect(classifyProblem("verify a Verilog ALU equivalence property")).toContain("hardware-eda");
+    expect(classifyProblem("does this ray intersect the circle?")).toContain("engine-geometry");
     expect(classifyProblem("cite the paper that supports this theorem")).toEqual(
       expect.arrayContaining(["formal-proof", "source-grounded"])
     );
@@ -233,6 +254,8 @@ function manifestWith(overrides: Record<string, Partial<EngineCapability>> = {})
     ["local-mod2-parity-kernel", "native-kernel", "ready", "exact-computed", true],
     ["local-dimensional-analysis", "native-kernel", "ready", "dimension-checked", true],
     ["rational-interval-bounds", "native-kernel", "ready", "bounded-numeric", true],
+    ["local-engine-geometry-2d", "native-kernel", "ready", "exact-computed", true],
+
     ["sympy-symbolic-adapter", "adapter", "available", "exact-computed", true],
     ["local-corpus-lexical-search", "native-kernel", "ready", "source-cited", true],
     ["claim-ledger", "workspace-service", "ready", "none", false],
@@ -275,6 +298,7 @@ function manifestWith(overrides: Record<string, Partial<EngineCapability>> = {})
     deterministicCount: capabilities.filter((entry) => entry.kind === "native-kernel").length,
     replayDeterministicCount: capabilities.filter((entry) => entry.kind === "adapter").length,
     capabilities,
+    verifierPacks: [],
     machineContract: {
       jsonFirst: true,
       diagnosticsAreStructured: true,
