@@ -195,6 +195,34 @@ describe("benchmark runner", () => {
     ]);
   });
 
+  it("keeps the engine math seed suite replayable", () => {
+    const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/engine-math-seed.json");
+    const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);
+
+    const run = runBenchmarkSuite(suite);
+    const trustCounts = run.results.reduce<Record<string, number>>((counts, result) => {
+      counts[result.receipt.trust] = (counts[result.receipt.trust] ?? 0) + 1;
+      return counts;
+    }, {});
+    const backendIds = new Set(run.results.map((result) => result.receipt.evidenceProfile.backends[0]?.id));
+
+    expect(run.total).toBe(3);
+    expect(run.failed).toBe(0);
+    expect(run.trustAccuracy).toBe(1);
+    expect(trustCounts).toMatchObject({ "exact-computed": 2, refuted: 1 });
+    expect(backendIds).toEqual(new Set(["local-aabb2-overlap"]));
+    expect(suite.tasks.every((task) => task.category === "engine-geometry")).toBe(true);
+    expect(suite.tasks.every((task) => task.reviewStatus === "self-reviewed")).toBe(true);
+    expect(run.levelSummaries).toEqual([
+      {
+        level: "level-1-engine-geometry-predicate",
+        total: 3,
+        passed: 3,
+        failed: 0,
+        trustAccuracy: 1
+      }
+    ]);
+  });
   it("keeps the public math catalog linked to runnable suite tasks", () => {
     const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/public-problem-probes.json");
     const catalogPath = resolve(process.cwd(), "packages/benchmarks/catalog/public-math-problem-catalog.json");

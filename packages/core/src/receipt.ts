@@ -95,6 +95,20 @@ interface BinomialThresholdCountClaim {
   statedCount?: bigint;
 }
 
+interface Aabb2 {
+  minX: bigint;
+  minY: bigint;
+  maxX: bigint;
+  maxY: bigint;
+}
+
+interface Aabb2OverlapClaim {
+  source: string;
+  a: Aabb2;
+  b: Aabb2;
+  statedOverlap?: boolean;
+}
+
 export interface CreateReceiptOptions {
   maximaCommand?: string;
   casRunner?: CasBackendCommandRunner;
@@ -309,6 +323,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const aabb2Overlap = parseAabb2OverlapClaim(normalizedProblem);
+  if (aabb2Overlap) {
+    return completeAabb2OverlapReceipt({
+      problem,
+      normalizedProblem,
+      claim: aabb2Overlap,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const arithmeticSource = parseArithmeticPrompt(normalizedProblem);
   if (arithmeticSource) {
     return completeArithmeticReceipt({
@@ -333,7 +362,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -2260,6 +2289,120 @@ function completeBinomialThresholdCountReceipt(args: {
   });
 }
 
+function completeAabb2OverlapReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: Aabb2OverlapClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = aabb2OverlapCertificate(args.claim);
+  const hasStatedOverlap = args.claim.statedOverlap !== undefined;
+  const statedMatches = !hasStatedOverlap || certificate.overlap === certificate.statedOverlap;
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const artifact = addArtifact(args.artifacts, {
+    kind: "aabb2-overlap-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-aabb2-overlap",
+      source: args.claim.source,
+      convention: certificate.convention,
+      a: certificate.a,
+      b: certificate.b,
+      statedOverlap: certificate.statedOverlap
+    },
+    trust,
+    summary: hasStatedOverlap
+      ? statedMatches
+        ? "AABB overlap claim matched the exact closed-interval predicate."
+        : "AABB overlap claim disagreed with the exact closed-interval predicate."
+      : "AABB overlap question parsed into an exact integer geometry predicate.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedOverlap ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-aabb2-overlap",
+      exactArithmetic: true,
+      operation: "2D axis-aligned bounding-box overlap predicate",
+      convention: certificate.convention,
+      comparisons: certificate.comparisons
+    },
+    trust,
+    summary: "Checked 2D AABB overlap with exact integer comparisons and a closed-interval touching convention.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact AABB overlap result is ${String(certificate.overlap)}.`
+      : `Exact AABB overlap result is ${String(certificate.overlap)}, not ${String(certificate.statedOverlap)}.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The AABB overlap result was computed by an exact integer geometry predicate. This earns exact-computed, not a full physics proof."
+      : "The stated AABB overlap result is refuted by the exact closed-interval integer geometry predicate."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact AABB overlap result: ${String(certificate.overlap)}.`
+      : `Refuted AABB overlap claim: exact result is ${String(certificate.overlap)}, stated ${String(certificate.statedOverlap)}.`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-aabb2-overlap",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedOverlap
+        ? [
+            `overlap=${String(certificate.overlap)}`,
+            `stated=${String(certificate.statedOverlap)}`,
+            statedMatches ? "aabb2-overlap=passed" : "aabb2-overlap=failed"
+          ]
+        : [`overlap=${String(certificate.overlap)}`, "aabb2-overlap=computed"],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only checks 2D axis-aligned bounding boxes with integer coordinates.",
+        "Closed intervals are used: touching edges or corners count as overlap.",
+        "This is a deterministic geometry predicate, not a full collision simulation, swept test, or physics proof."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
 function completeArithmeticReceipt(args: {
   problem: string;
   normalizedProblem: string;
@@ -3210,6 +3353,146 @@ function binomialCoefficient(n: bigint, r: bigint): bigint {
   return result;
 }
 
+function parseAabb2OverlapClaim(problem: string): Aabb2OverlapClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.?]$/u, "");
+  const match = /^(?:do\s+)?aabb\s+a\s+min\s*\(\s*(?<aMinX>-?\d+)\s*,\s*(?<aMinY>-?\d+)\s*\)\s+max\s*\(\s*(?<aMaxX>-?\d+)\s*,\s*(?<aMaxY>-?\d+)\s*\)\s+and\s+aabb\s+b\s+min\s*\(\s*(?<bMinX>-?\d+)\s*,\s*(?<bMinY>-?\d+)\s*\)\s+max\s*\(\s*(?<bMaxX>-?\d+)\s*,\s*(?<bMaxY>-?\d+)\s*\)\s+overlap(?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  const requiredGroups = [
+    "aMinX",
+    "aMinY",
+    "aMaxX",
+    "aMaxY",
+    "bMinX",
+    "bMinY",
+    "bMaxX",
+    "bMaxY"
+  ];
+  if (requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18)) {
+    return undefined;
+  }
+
+  const a: Aabb2 = {
+    minX: BigInt(match.groups.aMinX),
+    minY: BigInt(match.groups.aMinY),
+    maxX: BigInt(match.groups.aMaxX),
+    maxY: BigInt(match.groups.aMaxY)
+  };
+  const b: Aabb2 = {
+    minX: BigInt(match.groups.bMinX),
+    minY: BigInt(match.groups.bMinY),
+    maxX: BigInt(match.groups.bMaxX),
+    maxY: BigInt(match.groups.bMaxY)
+  };
+  if (!isValidAabb2(a) || !isValidAabb2(b)) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    a,
+    b,
+    statedOverlap: match.groups.stated === undefined ? undefined : match.groups.stated.toLowerCase() === "true"
+  };
+}
+
+function isValidAabb2(box: Aabb2): boolean {
+  return box.minX <= box.maxX && box.minY <= box.maxY;
+}
+
+function aabb2OverlapCertificate(claim: Aabb2OverlapClaim): {
+  schemaVersion: "truth-harness.aabb2-overlap.v0";
+  adapter: "local-aabb2-overlap";
+  source: string;
+  convention: "closed-intervals-touching-counts-as-overlap";
+  a: Record<keyof Aabb2, string>;
+  b: Record<keyof Aabb2, string>;
+  statedOverlap?: boolean;
+  xOverlap: boolean;
+  yOverlap: boolean;
+  overlap: boolean;
+  comparisons: Record<string, boolean>;
+  separatingAxes: string[];
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const comparisons = {
+    "a.minX <= b.maxX": claim.a.minX <= claim.b.maxX,
+    "a.maxX >= b.minX": claim.a.maxX >= claim.b.minX,
+    "a.minY <= b.maxY": claim.a.minY <= claim.b.maxY,
+    "a.maxY >= b.minY": claim.a.maxY >= claim.b.minY
+  };
+  const xOverlap = comparisons["a.minX <= b.maxX"] && comparisons["a.maxX >= b.minX"];
+  const yOverlap = comparisons["a.minY <= b.maxY"] && comparisons["a.maxY >= b.minY"];
+  const overlap = xOverlap && yOverlap;
+  const separatingAxes: string[] = [];
+  if (claim.a.maxX < claim.b.minX) {
+    separatingAxes.push("a.maxX < b.minX");
+  }
+  if (claim.b.maxX < claim.a.minX) {
+    separatingAxes.push("b.maxX < a.minX");
+  }
+  if (claim.a.maxY < claim.b.minY) {
+    separatingAxes.push("a.maxY < b.minY");
+  }
+  if (claim.b.maxY < claim.a.minY) {
+    separatingAxes.push("b.maxY < a.minY");
+  }
+
+  const statedMatches = claim.statedOverlap === undefined || claim.statedOverlap === overlap;
+  return {
+    schemaVersion: "truth-harness.aabb2-overlap.v0",
+    adapter: "local-aabb2-overlap",
+    source: claim.source,
+    convention: "closed-intervals-touching-counts-as-overlap",
+    a: stringifyAabb2(claim.a),
+    b: stringifyAabb2(claim.b),
+    statedOverlap: claim.statedOverlap,
+    xOverlap,
+    yOverlap,
+    overlap,
+    comparisons,
+    separatingAxes,
+    checks: [
+      {
+        id: "valid-aabb-inputs",
+        ok: true,
+        expected: "minX <= maxX and minY <= maxY for both boxes",
+        observed: "both boxes are valid integer-coordinate AABBs"
+      },
+      {
+        id: "closed-interval-overlap-result",
+        ok: statedMatches,
+        expected: String(overlap),
+        observed: claim.statedOverlap === undefined ? String(overlap) : String(claim.statedOverlap)
+      }
+    ],
+    trace: [
+      "Use closed intervals, so touching edges or corners count as overlap.",
+      `X-axis overlap requires a.minX <= b.maxX (${String(comparisons["a.minX <= b.maxX"])}) and a.maxX >= b.minX (${String(comparisons["a.maxX >= b.minX"])}).`,
+      `Y-axis overlap requires a.minY <= b.maxY (${String(comparisons["a.minY <= b.maxY"])}) and a.maxY >= b.minY (${String(comparisons["a.maxY >= b.minY"])}).`,
+      `Exact overlap result is ${String(overlap)}.`
+    ],
+    verdict: claim.statedOverlap === undefined ? "computed" : statedMatches ? "accepted" : "refuted"
+  };
+}
+
+function stringifyAabb2(box: Aabb2): Record<keyof Aabb2, string> {
+  return {
+    minX: box.minX.toString(),
+    minY: box.minY.toString(),
+    maxX: box.maxX.toString(),
+    maxY: box.maxY.toString()
+  };
+}
 function parseArithmeticPrompt(problem: string): string | undefined {
   const computeMatch = /^(?:compute|calculate|evaluate)\s+(.+)$/i.exec(problem);
   const candidate = computeMatch ? computeMatch[1].trim() : problem;

@@ -305,6 +305,56 @@ describe("createReceipt", () => {
     expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
   });
 
+  it("computes integer-coordinate AABB overlap exactly", () => {
+    const receipt = createReceipt("Do AABB A min(0,0) max(4,4) and AABB B min(3,1) max(6,5) overlap?");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("true");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-aabb2-overlap");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["overlap=true", "aabb2-overlap=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "aabb2-overlap-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      overlap?: boolean;
+      xOverlap?: boolean;
+      yOverlap?: boolean;
+      convention?: string;
+    };
+    expect(payload).toMatchObject({
+      overlap: true,
+      xOverlap: true,
+      yOverlap: true,
+      convention: "closed-intervals-touching-counts-as-overlap"
+    });
+  });
+
+  it("refutes wrong AABB overlap claims with an exact geometry certificate", () => {
+    const receipt = createReceipt("verify AABB A min(0,0) max(4,4) and AABB B min(5,1) max(7,3) overlap = true");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("false");
+    expect(receipt.summary).toContain("true");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["overlap=false", "stated=true", "aabb2-overlap=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "aabb2-overlap-certificate");
+    const payload = JSON.parse(certificate?.content ?? "{}") as { separatingAxes?: string[] };
+    expect(payload.separatingAxes).toEqual(["a.maxX < b.minX"]);
+  });
+
+  it("treats touching AABB corners as overlap under the recorded closed-interval convention", () => {
+    const receipt = createReceipt("verify AABB A min(0,0) max(4,4) and AABB B min(4,4) max(6,6) overlap = true");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["overlap=true", "stated=true", "aabb2-overlap=passed"])
+    );
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("touching edges or corners count as overlap");
+  });
   it("marks MVP receipts as local-only with no external disclosure", () => {
     const receipt = createReceipt("compute 2 + 2");
 
