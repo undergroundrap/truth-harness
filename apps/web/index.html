@@ -57,6 +57,10 @@
             <span>Physics notes</span>
             <span>3h</span>
           </button>
+          <button class="project-row" data-project-lane="engine" type="button">
+            <span>Engine math lab</span>
+            <span>fixtures</span>
+          </button>
         </section>
 
         <section class="sidebar-section sessions-section" aria-label="Research sessions">
@@ -80,6 +84,10 @@
             <button class="lane-row" data-lane="code" type="button">
               <span>Code</span>
               <small>tests, formal</small>
+            </button>
+            <button class="lane-row" data-lane="engine" type="button">
+              <span>Engine</span>
+              <small>geometry, sim</small>
             </button>
             <button class="lane-row" data-lane="data" type="button">
               <span>Data</span>
@@ -254,6 +262,7 @@
                   <button class="surface-tab" id="tab-plot" role="tab" aria-controls="surface-plot" aria-selected="false" data-surface="plot" type="button">Visuals</button>
                   <button class="surface-tab" id="tab-runbook" role="tab" aria-controls="surface-runbook" aria-selected="false" data-surface="runbook" type="button">Run</button>
                   <button class="surface-tab" id="tab-checks" role="tab" aria-controls="surface-checks" aria-selected="false" data-surface="checks" type="button">Checks</button>
+                  <button class="surface-tab" id="tab-engine" role="tab" aria-controls="surface-engine" aria-selected="false" data-surface="engine" type="button">Engine</button>
                   <button class="surface-tab" id="tab-graph" role="tab" aria-controls="surface-graph" aria-selected="false" data-surface="graph" type="button">Lineage</button>
                   <button class="surface-tab" id="tab-protocol" role="tab" aria-controls="surface-protocol" aria-selected="false" data-surface="protocol" type="button">Protocol</button>
                   <button class="surface-tab" id="tab-notes" role="tab" aria-controls="surface-notes" aria-selected="false" data-surface="notes" type="button">Notes</button>
@@ -641,6 +650,82 @@
                   </div>
                   <div class="parity-ledger" id="capability-ledger"></div>
                 </section>
+              </section>
+
+              <section class="surface-panel" id="surface-engine" role="tabpanel" aria-labelledby="tab-engine" data-surface-panel="engine" tabindex="0" aria-label="Game engine math verifier" hidden>
+                <div class="panel-heading engine-lane-heading">
+                  <div>
+                    <h3>Engine Math</h3>
+                    <span class="mini-label">game / simulation verifier</span>
+                  </div>
+                  <div class="activity-actions" aria-label="Engine actions">
+                    <button class="text-button compact-button strong-action" id="open-engine-checks" type="button">Open checks</button>
+                    <button class="text-button compact-button" id="copy-engine-docker-gate" type="button">Copy Docker gate</button>
+                  </div>
+                </div>
+                <div class="engine-lane-panel">
+                  <section class="engine-lane-hero">
+                    <div>
+                      <span class="mini-label">verifier pack</span>
+                      <h4>2D geometry and collision oracle</h4>
+                      <p>Engine claims route through deterministic primitive checks before they become Rust fixtures, simulations, or design decisions.</p>
+                    </div>
+                    <dl class="engine-lane-stats" aria-label="Engine verifier status">
+                      <div>
+                        <dt>Docker gate</dt>
+                        <dd>33 fixtures</dd>
+                      </div>
+                      <div>
+                        <dt>Boundary</dt>
+                        <dd>primitive claims only</dd>
+                      </div>
+                      <div>
+                        <dt>Replay</dt>
+                        <dd>local, no network</dd>
+                      </div>
+                    </dl>
+                  </section>
+                  <section class="engine-command-grid" aria-label="Engine commands">
+                    <article>
+                      <span>Strict gate</span>
+                      <code>npm run docker:engine-math</code>
+                    </article>
+                    <article>
+                      <span>Local demo</span>
+                      <code>npm run demo:engine-math</code>
+                    </article>
+                    <article>
+                      <span>Pack manifest</span>
+                      <code>truth-harness engines packs local-engine-geometry-2d --json</code>
+                    </article>
+                  </section>
+                  <section class="engine-primitive-grid" aria-label="Engine primitive coverage">
+                    <article><strong>AABB overlap</strong><span>axis-aligned broad phase</span></article>
+                    <article><strong>Swept AABB</strong><span>continuous collision time</span></article>
+                    <article><strong>Circle / circle</strong><span>exact distance boundary</span></article>
+                    <article><strong>Capsule / circle</strong><span>segment radius tests</span></article>
+                    <article><strong>Circle / AABB</strong><span>closest-point witness</span></article>
+                    <article><strong>Segment intersection</strong><span>orientation predicates</span></article>
+                    <article><strong>Ray / circle</strong><span>entry and miss cases</span></article>
+                    <article><strong>Ray / AABB</strong><span>slab interval checks</span></article>
+                    <article><strong>Barycentric</strong><span>triangle coordinate oracle</span></article>
+                    <article><strong>Point in triangle</strong><span>inside, edge, outside</span></article>
+                  </section>
+                  <section class="engine-next-grid" aria-label="Engine next actions">
+                    <article>
+                      <h4>Use as oracle</h4>
+                      <p>Attach verifier receipts to Rust engine tests before trusting optimized collision or simulation code.</p>
+                    </article>
+                    <article>
+                      <h4>Do not overclaim</h4>
+                      <p>Primitive receipts do not prove full physics response, renderer behavior, GPU timing, or broad engine correctness.</p>
+                    </article>
+                    <article>
+                      <h4>Next gate</h4>
+                      <p>Promote production engine examples into replayable fixtures that compare runtime output against the verifier pack.</p>
+                    </article>
+                  </section>
+                </div>
               </section>
 
               <section class="surface-panel" id="surface-graph" role="tabpanel" aria-labelledby="tab-graph" data-surface-panel="graph" tabindex="0" aria-label="Claim lineage" hidden>

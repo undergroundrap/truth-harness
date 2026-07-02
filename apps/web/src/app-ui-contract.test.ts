@@ -557,10 +557,21 @@ describe("web UI action contracts", () => {
     expect(html).toContain('id="session-list"');
     expect(html).toContain('data-project-lane="finance"');
     expect(html).toContain('data-project-lane="physics"');
+    expect(html).toContain('data-project-lane="engine"');
+    expect(html).toContain('data-lane="engine"');
+    expect(html).toContain('id="tab-engine"');
+    expect(html).toContain('id="surface-engine"');
+    expect(html).toContain('id="open-engine-checks"');
+    expect(html).toContain('id="copy-engine-docker-gate"');
     expect(source).toContain("function openSidebarAction(action)");
     expect(source).toContain('state.surface = "graph";');
     expect(source).toContain('state.surface = "runbook";');
     expect(source).toContain('state.surface = "checks";');
+    expect(source).toContain('state.surface = lane === "math" ? "trace" : lane === "engine" ? "engine" : "protocol";');
+    expect(source).toContain('state.surface = "engine";');
+    expect(source).toContain('engine: "Engine lane"');
+    expect(source).toContain('title: "Game Engine Math Review"');
+    expect(source).toContain('npm run docker:engine-math');
     expect(source).toContain("function openSidebarProject(row)");
     expect(source).toContain("function refreshResearchSessions");
     expect(source).toContain("function renderResearchSessions()");
@@ -580,6 +591,9 @@ describe("web UI action contracts", () => {
     expect(styles).toContain("grid-template-columns: repeat(2, minmax(0, 1fr));");
     expect(styles).toContain(".session-row");
     expect(styles).toContain("max-height: min(15vh, 142px);");
+    expect(styles).toContain("#surface-engine.active");
+    expect(styles).toContain(".engine-lane-panel");
+    expect(styles).toContain(".engine-primitive-grid");
   });
 
   it("keeps the bottom dock as a readable command console instead of a cramped strip", async () => {
@@ -609,7 +623,7 @@ describe("web UI action contracts", () => {
     const workSurfaceStyles = [...styles.matchAll(/\.work-surface \{[\s\S]*?\r?\n\}/gu)]
       .map((match) => match[0])
       .find((block) => block.includes("container-type: inline-size;"));
-    const plotSurfaceStyles = styles.match(/body\[data-surface="plot"\] \.work-surface,[\s\S]*?body\[data-surface="graph"\] \.work-surface \{[\s\S]*?\r?\n\}/u)?.[0];
+    const plotSurfaceStyles = styles.match(/body\[data-surface="plot"\] \.work-surface,[\s\S]*?body\[data-surface="engine"\] \.work-surface,[\s\S]*?body\[data-surface="graph"\] \.work-surface \{[\s\S]*?\r?\n\}/u)?.[0];
     const plotLayoutStyles = styles.match(/\.plot-layout \{[\s\S]*?\r?\n\}/u)?.[0];
     const plotCanvasStyles = styles.match(/\.plot-canvas \{[\s\S]*?\r?\n\}/u)?.[0];
     const plotSvgStyles = styles.match(/\.plot-canvas svg \{[\s\S]*?\r?\n\}/u)?.[0];
@@ -658,7 +672,7 @@ describe("web UI action contracts", () => {
     expect(html).toContain('href="./src/styles.css?v=2026-06-22-professor-handoff-packet"');
     expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
     expect(html).toContain('aria-hidden="true"');
-    expect(source).toContain('const UI_AUDIT_SURFACES = ["trace", "plot", "runbook", "checks", "graph", "protocol", "notes", "replay", "report"];');
+    expect(source).toContain('const UI_AUDIT_SURFACES = ["trace", "plot", "runbook", "checks", "engine", "graph", "protocol", "notes", "replay", "report"];');
     expect(source).toContain('const UI_AUDIT_SCROLL_ALLOWLIST = [');
     expect(source).toContain('".plot-canvas"');
     expect(source).toContain('".git-branch-stage"');

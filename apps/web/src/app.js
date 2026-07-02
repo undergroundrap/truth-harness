@@ -629,11 +629,14 @@ const taskDockSummary = document.querySelector("#task-dock-summary");
 const taskList = document.querySelector("#task-list");
 const taskConsoleList = document.querySelector("#task-console-list");
 const copyTaskConsoleButton = document.querySelector("#copy-task-console");
+const openEngineChecksButton = document.querySelector("#open-engine-checks");
+const copyEngineDockerGateButton = document.querySelector("#copy-engine-docker-gate");
 const surfaceStatusText = {
   trace: "math workspace",
   plot: "visual modes",
   runbook: "agent harness",
   checks: "verification gates",
+  engine: "engine verifier",
   graph: "claim lineage",
   protocol: "review standard",
   notes: "local scratchpad",
@@ -644,6 +647,7 @@ const laneStatusText = {
   math: "Math lane",
   sources: "Sources lane",
   code: "Code lane",
+  engine: "Engine lane",
   data: "Data lane",
   writing: "Writing lane",
   physics: "Physics lane",
@@ -659,6 +663,7 @@ const researchHarnessDomainByLane = {
   math: "math",
   sources: "general",
   code: "code",
+  engine: "code",
   data: "general",
   writing: "learning",
   physics: "physics",
@@ -934,6 +939,34 @@ const laneProtocols = {
       "Reproduction recipe and rollback notes.",
       "Security and dependency review packet.",
       "Human-readable change log."
+    ]
+  },
+  engine: {
+    name: "Engine",
+    title: "Game Engine Math Review",
+    claimStandard: "An engine claim must be narrowed to a deterministic geometry, physics, scheduling, or performance property with explicit inputs, replay command, and boundary conditions before it can guide production code.",
+    acceptedEvidence: [
+      "Engine verifier pack receipts for AABB, swept AABB, circle, capsule, segment, ray, barycentric, and point-in-triangle predicates.",
+      "Docker replay of `npm run docker:engine-math` before using the pack as reviewer evidence.",
+      "Production Rust tests that compare engine output against Truth Harness oracle receipts.",
+      "Simulation and performance records that include timestep, seed, hardware, tolerance, and environment metadata."
+    ],
+    verificationGates: [
+      "State the smallest primitive claim before touching broad engine architecture.",
+      "Run the local engine-math checker or benchmark gate and attach the receipt.",
+      "Compare production engine behavior against the receipt as a regression fixture.",
+      "Escalate to SMT/proof or simulation only after the primitive evidence is recorded."
+    ],
+    reviewBoundary: [
+      "A primitive geometry receipt is not a full engine correctness proof.",
+      "A passing collision predicate does not prove physics response, rendering, GPU behavior, or performance.",
+      "Floating-point runtime code must be separately checked against tolerance and determinism policies."
+    ],
+    deliverables: [
+      "Engine-math receipt with exact inputs and replay command.",
+      "Docker benchmark run showing the verifier pack is green.",
+      "Rust fixture or property test linked to the receipt.",
+      "Reviewer packet explaining assumptions, limits, and next engine gates."
     ]
   },
   data: {
@@ -7717,7 +7750,7 @@ function resetActiveSurfaceScroll() {
   document.querySelector(`[data-surface-panel="${state.surface}"]`)?.scrollTo({ top: 0, left: 0 });
 }
 
-const UI_AUDIT_SURFACES = ["trace", "plot", "runbook", "checks", "graph", "protocol", "notes", "replay", "report"];
+const UI_AUDIT_SURFACES = ["trace", "plot", "runbook", "checks", "engine", "graph", "protocol", "notes", "replay", "report"];
 const UI_AUDIT_SCROLL_ALLOWLIST = [
   ".plot-canvas",
   ".git-branch-stage",
@@ -18832,7 +18865,7 @@ function openSidebarProject(row) {
   }
 
   state.lane = lane;
-  state.surface = lane === "math" ? "trace" : "protocol";
+  state.surface = lane === "math" ? "trace" : lane === "engine" ? "engine" : "protocol";
   render();
   resetActiveSurfaceScroll();
   const projectName = row.querySelector("span")?.textContent?.trim() ?? "Project";
@@ -19115,6 +19148,11 @@ laneButtons.forEach((button) => {
     }
 
     state.lane = nextLane;
+    if (nextLane === "engine") {
+      state.surface = "engine";
+    } else if (state.surface === "engine") {
+      state.surface = nextLane === "math" ? "trace" : "protocol";
+    }
     renderLane();
     renderProtocol();
     renderAgentRoutes(receiptStore.get(state.receiptKey));
@@ -19258,6 +19296,26 @@ document.querySelectorAll(".docker-copy-command").forEach((button) => {
       fallbackTitle: "Downloaded Docker verifier command",
       fallbackDetail: "the Docker verifier command was saved as plain text instead."
     });
+  });
+});
+
+openEngineChecksButton?.addEventListener("click", () => {
+  state.surface = "checks";
+  render();
+  resetActiveSurfaceScroll();
+  addActivity("human", "Opened engine evidence checks", "Concrete engine verifier gates and saved Docker evidence are visible.", "waiting");
+});
+
+copyEngineDockerGateButton?.addEventListener("click", async () => {
+  await copyOrDownloadText({
+    text: "npm run docker:engine-math\n",
+    filename: `truth-harness-engine-math-command-${safeFilenameTimestamp()}.txt`,
+    type: "text/plain",
+    button: copyEngineDockerGateButton,
+    copiedTitle: "Copied engine math gate",
+    copiedDetail: "npm run docker:engine-math",
+    fallbackTitle: "Downloaded engine math gate",
+    fallbackDetail: "the engine math Docker command was saved as plain text instead."
   });
 });
 
