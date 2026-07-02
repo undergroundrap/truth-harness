@@ -563,6 +563,10 @@ describe("web UI action contracts", () => {
     expect(html).toContain('id="surface-engine"');
     expect(html).toContain('id="open-engine-checks"');
     expect(html).toContain('id="copy-engine-docker-gate"');
+    expect(html).toContain('id="engine-lane-status"');
+    expect(html).toContain('id="engine-lane-saved-run"');
+    expect(html).toContain('id="engine-lane-latest-run"');
+    expect(html).toContain('id="engine-lane-case-coverage"');
     expect(source).toContain("function openSidebarAction(action)");
     expect(source).toContain('state.surface = "graph";');
     expect(source).toContain('state.surface = "runbook";');
@@ -572,6 +576,10 @@ describe("web UI action contracts", () => {
     expect(source).toContain('engine: "Engine lane"');
     expect(source).toContain('title: "Game Engine Math Review"');
     expect(source).toContain('npm run docker:engine-math');
+    expect(source).toContain('function renderEngineLane');
+    expect(source).toContain('renderEngineLane(state.safetyStatus);');
+    expect(source).toContain('latestEngineRun({ requireAllEngines: true })');
+    expect(source).toContain('engineLaneStrictCommand?.textContent');
     expect(source).toContain("function openSidebarProject(row)");
     expect(source).toContain("function refreshResearchSessions");
     expect(source).toContain("function renderResearchSessions()");
@@ -593,6 +601,7 @@ describe("web UI action contracts", () => {
     expect(styles).toContain("max-height: min(15vh, 142px);");
     expect(styles).toContain("#surface-engine.active");
     expect(styles).toContain(".engine-lane-panel");
+    expect(styles).toContain(".engine-live-ledger");
     expect(styles).toContain(".engine-primitive-grid");
   });
 

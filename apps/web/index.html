@@ -658,6 +658,7 @@
                     <h3>Engine Math</h3>
                     <span class="mini-label">game / simulation verifier</span>
                   </div>
+                  <span class="status-pill waiting" id="engine-lane-status">checking</span>
                   <div class="activity-actions" aria-label="Engine actions">
                     <button class="text-button compact-button strong-action" id="open-engine-checks" type="button">Open checks</button>
                     <button class="text-button compact-button" id="copy-engine-docker-gate" type="button">Copy Docker gate</button>
@@ -668,35 +669,57 @@
                     <div>
                       <span class="mini-label">verifier pack</span>
                       <h4>2D geometry and collision oracle</h4>
-                      <p>Engine claims route through deterministic primitive checks before they become Rust fixtures, simulations, or design decisions.</p>
+                      <p id="engine-lane-summary">Loading saved engine evidence and current verifier status.</p>
                     </div>
                     <dl class="engine-lane-stats" aria-label="Engine verifier status">
                       <div>
-                        <dt>Docker gate</dt>
-                        <dd>33 fixtures</dd>
+                        <dt>Current smoke</dt>
+                        <dd id="engine-lane-smoke">checking</dd>
+                        <small id="engine-lane-smoke-detail">status API</small>
                       </div>
                       <div>
-                        <dt>Boundary</dt>
-                        <dd>primitive claims only</dd>
+                        <dt>Saved run</dt>
+                        <dd id="engine-lane-saved-run">loading</dd>
+                        <small id="engine-lane-saved-detail">.truth-harness/engine-runs</small>
                       </div>
                       <div>
-                        <dt>Replay</dt>
-                        <dd>local, no network</dd>
+                        <dt>Strict gate</dt>
+                        <dd id="engine-lane-strict-run">not saved</dd>
+                        <small id="engine-lane-strict-detail">all-engines reviewer standard</small>
+                      </div>
+                      <div>
+                        <dt>Network</dt>
+                        <dd id="engine-lane-network">local</dd>
+                        <small id="engine-lane-network-detail">no hosted model call</small>
                       </div>
                     </dl>
                   </section>
                   <section class="engine-command-grid" aria-label="Engine commands">
                     <article>
                       <span>Strict gate</span>
-                      <code>npm run docker:engine-math</code>
+                      <code id="engine-lane-strict-command">npm run docker:engine-math</code>
                     </article>
                     <article>
                       <span>Local demo</span>
-                      <code>npm run demo:engine-math</code>
+                      <code id="engine-lane-local-command">npm run demo:engine-math</code>
                     </article>
                     <article>
                       <span>Pack manifest</span>
-                      <code>truth-harness engines packs local-engine-geometry-2d --json</code>
+                      <code id="engine-lane-pack-command">truth-harness engines packs local-engine-geometry-2d --json</code>
+                    </article>
+                  </section>
+                  <section class="engine-live-ledger" aria-label="Live engine evidence ledger">
+                    <article>
+                      <span>Latest saved evidence</span>
+                      <strong id="engine-lane-latest-run">No saved run loaded yet.</strong>
+                      <small id="engine-lane-latest-detail">Save an engine run from Checks to create durable evidence.</small>
+                      <code id="engine-lane-latest-command">truth-harness engines verify --write</code>
+                    </article>
+                    <article>
+                      <span>Case coverage</span>
+                      <strong id="engine-lane-case-coverage">checking</strong>
+                      <small id="engine-lane-case-detail">current smoke report</small>
+                      <code id="engine-lane-case-command">npm run docker:engine-math</code>
                     </article>
                   </section>
                   <section class="engine-primitive-grid" aria-label="Engine primitive coverage">

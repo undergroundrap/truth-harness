@@ -631,6 +631,25 @@ const taskConsoleList = document.querySelector("#task-console-list");
 const copyTaskConsoleButton = document.querySelector("#copy-task-console");
 const openEngineChecksButton = document.querySelector("#open-engine-checks");
 const copyEngineDockerGateButton = document.querySelector("#copy-engine-docker-gate");
+const engineLaneStatus = document.querySelector("#engine-lane-status");
+const engineLaneSummary = document.querySelector("#engine-lane-summary");
+const engineLaneSmoke = document.querySelector("#engine-lane-smoke");
+const engineLaneSmokeDetail = document.querySelector("#engine-lane-smoke-detail");
+const engineLaneSavedRun = document.querySelector("#engine-lane-saved-run");
+const engineLaneSavedDetail = document.querySelector("#engine-lane-saved-detail");
+const engineLaneStrictRun = document.querySelector("#engine-lane-strict-run");
+const engineLaneStrictDetail = document.querySelector("#engine-lane-strict-detail");
+const engineLaneNetwork = document.querySelector("#engine-lane-network");
+const engineLaneNetworkDetail = document.querySelector("#engine-lane-network-detail");
+const engineLaneStrictCommand = document.querySelector("#engine-lane-strict-command");
+const engineLaneLocalCommand = document.querySelector("#engine-lane-local-command");
+const engineLanePackCommand = document.querySelector("#engine-lane-pack-command");
+const engineLaneLatestRun = document.querySelector("#engine-lane-latest-run");
+const engineLaneLatestDetail = document.querySelector("#engine-lane-latest-detail");
+const engineLaneLatestCommand = document.querySelector("#engine-lane-latest-command");
+const engineLaneCaseCoverage = document.querySelector("#engine-lane-case-coverage");
+const engineLaneCaseDetail = document.querySelector("#engine-lane-case-detail");
+const engineLaneCaseCommand = document.querySelector("#engine-lane-case-command");
 const surfaceStatusText = {
   trace: "math workspace",
   plot: "visual modes",
@@ -1359,6 +1378,7 @@ function render() {
   renderProjectStart();
   renderProtocol();
   renderSafetyStatus();
+  renderEngineLane();
   renderWorkspaceReadinessStatus();
   renderAgentRoutes(receipt);
   renderRunbook(receipt);
@@ -10933,6 +10953,7 @@ async function refreshEngineRuns({ announce = true } = {}) {
     state.engineRuns = Array.isArray(payload.runs) ? payload.runs : [];
     state.engineRunsError = undefined;
     renderEngineEvidenceGate(state.safetyStatus);
+    renderEngineLane(state.safetyStatus);
     if (announce) {
       addActivity(
         "local-api",
@@ -10945,6 +10966,7 @@ async function refreshEngineRuns({ announce = true } = {}) {
     state.engineRuns = [];
     state.engineRunsError = error instanceof Error ? error.message : "Unknown engine evidence run failure.";
     renderEngineEvidenceGate(state.safetyStatus);
+    renderEngineLane(state.safetyStatus);
     if (announce) {
       addActivity("local-api", "Engine evidence runs unavailable", state.engineRunsError, "waiting");
     }
@@ -10997,6 +11019,7 @@ async function saveEngineEvidenceRun(button, { requireAllEngines = false } = {})
     state.engineRunsSaving = false;
     state.engineRunsSavingMode = undefined;
     renderEngineEvidenceGate(state.safetyStatus);
+    renderEngineLane(state.safetyStatus);
   }
 }
 
@@ -13957,6 +13980,7 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
     dockerVerifierSummary.textContent = "Checking local proof, CAS, and SMT engines before recommending the isolated verifier path.";
     dockerVerifierNotes.innerHTML = `<li>Engine probes are readiness checks only; claim evidence still requires a concrete replayable run.</li>`;
     renderEngineEvidenceGate(payload);
+    renderEngineLane(payload);
     return;
   }
 
@@ -13966,6 +13990,7 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
     dockerVerifierSummary.textContent = "The local status API is unavailable, so use the Docker commands manually when you are ready to verify engines.";
     dockerVerifierNotes.innerHTML = `<li>${escapeHtml(payload.error)}</li>`;
     renderEngineEvidenceGate(payload);
+    renderEngineLane(payload);
     return;
   }
 
@@ -14040,6 +14065,103 @@ function renderDockerVerifierPath(payload = state.safetyStatus) {
       ];
   dockerVerifierNotes.innerHTML = notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("");
   renderEngineEvidenceGate(payload);
+  renderEngineLane(payload);
+}
+
+function renderEngineLane(payload = state.safetyStatus) {
+  if (!engineLaneStatus || !engineLaneSummary) {
+    return;
+  }
+
+  const report = payload?.engineVerification;
+  const cases = Array.isArray(report?.cases) ? report.cases : [];
+  const runs = Array.isArray(state.engineRuns) ? state.engineRuns : [];
+  const latest = latestEngineRun();
+  const strict = latestEngineRun({ requireAllEngines: true });
+  const concretePassed = Number.isFinite(report?.concretePassed) ? report.concretePassed : 0;
+  const concreteTotal = Number.isFinite(report?.concreteTotal) ? report.concreteTotal : cases.length;
+  const evidenceMinted = Number.isFinite(report?.evidenceMinted) ? report.evidenceMinted : 0;
+  const status = report?.status ?? (payload?.error ? "failed" : "missing");
+  const strictCommand = report?.docker?.allEnginesCommand ?? report?.docker?.coreCommand ?? "npm run docker:engine-math";
+  const smokeCommand = report?.docker?.coreCommand ?? "npm run demo:engine-math";
+  const packCommand = "truth-harness engines packs local-engine-geometry-2d --json";
+  const passedCases = cases.filter((entry) => entry?.status === "passed").length;
+
+  engineLaneStatus.textContent = report ? engineEvidenceStatusLabel(status) : payload?.error ? "unavailable" : "checking";
+  engineLaneStatus.className = `status-pill ${engineLaneStatusClass(status)}`;
+  engineLaneSummary.textContent = payload?.error
+    ? payload.error
+    : report
+      ? `${engineEvidenceSummary(payload)} Saved runs: ${runs.length}.`
+      : "Loading concrete engine evidence checks. Readiness probes alone never satisfy engine trust.";
+
+  if (engineLaneSmoke) {
+    engineLaneSmoke.textContent = report ? `${concretePassed}/${concreteTotal}` : "checking";
+  }
+  if (engineLaneSmokeDetail) {
+    engineLaneSmokeDetail.textContent = report ? `${evidenceMinted} evidence records minted` : "status API not loaded yet";
+  }
+  if (engineLaneSavedRun) {
+    engineLaneSavedRun.textContent = latest ? latest.status : runs.length > 0 ? `${runs.length} saved` : "none saved";
+  }
+  if (engineLaneSavedDetail) {
+    engineLaneSavedDetail.textContent = latest ? compactRuntimePathForUi(latest.path) : state.engineRunsError ?? "Save an engine run from Checks.";
+  }
+  if (engineLaneStrictRun) {
+    engineLaneStrictRun.textContent = strict ? strict.status : "not saved";
+  }
+  if (engineLaneStrictDetail) {
+    engineLaneStrictDetail.textContent = strict ? `${strict.requiredPassed ?? 0}/${strict.requiredTotal ?? 0} required gates` : "Use Save strict run before review.";
+  }
+  if (engineLaneNetwork) {
+    engineLaneNetwork.textContent = report?.networkAccess ?? "none";
+  }
+  if (engineLaneNetworkDetail) {
+    engineLaneNetworkDetail.textContent = report?.docker?.networkPolicy ?? "local status";
+  }
+  if (engineLaneStrictCommand) {
+    engineLaneStrictCommand.textContent = strictCommand;
+  }
+  if (engineLaneLocalCommand) {
+    engineLaneLocalCommand.textContent = smokeCommand;
+  }
+  if (engineLanePackCommand) {
+    engineLanePackCommand.textContent = packCommand;
+  }
+  if (engineLaneLatestRun) {
+    engineLaneLatestRun.textContent = latest ? `${latest.runId} (${latest.status})` : "No saved run loaded yet.";
+  }
+  if (engineLaneLatestDetail) {
+    engineLaneLatestDetail.textContent = latest
+      ? `${latest.createdAt ?? "unknown time"} / ${compactRuntimePathForUi(latest.path)}`
+      : state.engineRunsError ?? "Save an engine run from Checks to create durable evidence.";
+  }
+  if (engineLaneLatestCommand) {
+    engineLaneLatestCommand.textContent = latest ? "truth-harness engines verify --write" : "truth-harness engines verify --write";
+  }
+  if (engineLaneCaseCoverage) {
+    engineLaneCaseCoverage.textContent = report ? `${concretePassed}/${concreteTotal} concrete checks` : "checking";
+  }
+  if (engineLaneCaseDetail) {
+    engineLaneCaseDetail.textContent = report ? `${passedCases} passed cases in current status report` : "current smoke report";
+  }
+  if (engineLaneCaseCommand) {
+    engineLaneCaseCommand.textContent = smokeCommand;
+  }
+}
+
+function engineLaneStatusClass(status) {
+  switch (status) {
+    case "passed":
+      return "exact";
+    case "partial":
+      return "checked";
+    case "failed":
+      return "refuted";
+    case "missing":
+    default:
+      return "waiting";
+  }
 }
 
 function renderEngineEvidenceGate(payload = state.safetyStatus) {
@@ -19307,13 +19429,14 @@ openEngineChecksButton?.addEventListener("click", () => {
 });
 
 copyEngineDockerGateButton?.addEventListener("click", async () => {
+  const command = engineLaneStrictCommand?.textContent?.trim() || "npm run docker:engine-math";
   await copyOrDownloadText({
-    text: "npm run docker:engine-math\n",
+    text: `${command}\n`,
     filename: `truth-harness-engine-math-command-${safeFilenameTimestamp()}.txt`,
     type: "text/plain",
     button: copyEngineDockerGateButton,
     copiedTitle: "Copied engine math gate",
-    copiedDetail: "npm run docker:engine-math",
+    copiedDetail: command,
     fallbackTitle: "Downloaded engine math gate",
     fallbackDetail: "the engine math Docker command was saved as plain text instead."
   });
