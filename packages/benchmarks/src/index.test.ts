@@ -215,6 +215,13 @@ describe("benchmark runner", () => {
       warnings: []
     });
     expect(summary.defaultCommands).toContain("npm run docker:public-probes");
+    expect(summary.nextAction).toMatchObject({
+      kind: "catalog-target-search",
+      targetId: "public-modular-arithmetic-queue",
+      status: "source-needed",
+      priority: 55
+    });
+    expect(summary.nextAction.requiredEvidence).toContain("Stable public source URL");
     for (const problem of catalog.problems) {
       expect(problem.status).toBe("solved-by-local-receipt");
       expect(problem.source.url).toMatch(/^https:\/\/projecteuler\.net\/problem=\d+$/u);
@@ -222,6 +229,65 @@ describe("benchmark runner", () => {
       expect(problem.suiteTaskIds?.length).toBe(2);
       expect(problem.suiteTaskIds?.every((taskId) => taskIds.has(taskId))).toBe(true);
     }
+  });
+
+  it("prioritizes open catalog gaps before future public problem searches", () => {
+    const catalog = parsePublicMathProblemCatalog({
+      schemaVersion: "truth-harness.public-math-problem-catalog.v0",
+      catalogId: "gap-catalog",
+      title: "Gap Catalog",
+      updatedAt: "2026-07-02",
+      purpose: "test",
+      workflow: { stages: ["one"], defaultCommands: ["truth-harness bench run gaps.json"] },
+      suiteRefs: [{ suiteId: "gaps", path: "packages/benchmarks/suites/gaps.json" }],
+      problems: [
+        {
+          id: "needs-adapter",
+          firstLoggedAt: "2026-07-02",
+          source: { site: "Example", title: "Adapter Gap", url: "https://example.test/gap", accessedAt: "2026-07-02" },
+          status: "unsupported-adapter-gap",
+          domain: "symbolic",
+          resultSummary: "No local adapter covers the normalized expression yet.",
+          checkerBoundary: "unsupported fixture boundary"
+        }
+      ],
+      nextTargets: [{ id: "future-source", status: "source-needed", goal: "Find another problem." }],
+      honestyBoundary: "test boundary"
+    });
+    const summary = summarizePublicMathProblemCatalog(catalog);
+
+    expect(summary.nextAction).toMatchObject({
+      kind: "catalog-problem-gap",
+      targetId: "needs-adapter",
+      status: "unsupported-adapter-gap",
+      priority: 100,
+      suitePath: "packages/benchmarks/suites/gaps.json"
+    });
+    expect(summary.nextAction.requiredEvidence).toContain("Smallest verifier adapter that covers the normalized problem");
+    expect(summary.nextAction.honestyBoundary).toBe("unsupported fixture boundary");
+  });
+
+  it("returns a complete catalog action when there are no problems or queued targets", () => {
+    const catalog = parsePublicMathProblemCatalog({
+      schemaVersion: "truth-harness.public-math-problem-catalog.v0",
+      catalogId: "complete-catalog",
+      title: "Complete Catalog",
+      updatedAt: "2026-07-02",
+      purpose: "test",
+      workflow: { stages: ["one"], defaultCommands: ["truth-harness bench catalog catalog.json --json"] },
+      suiteRefs: [],
+      problems: [],
+      nextTargets: [],
+      honestyBoundary: "no target boundary"
+    });
+    const summary = summarizePublicMathProblemCatalog(catalog);
+
+    expect(summary.nextAction).toMatchObject({
+      kind: "catalog-complete",
+      priority: 0,
+      honestyBoundary: "no target boundary"
+    });
+    expect(summary.warnings).toContain("No public problems are recorded yet.");
   });
 
   it("rejects malformed public math catalog statuses", () => {

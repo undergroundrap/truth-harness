@@ -62,6 +62,26 @@ export interface PublicMathProblemCatalogTarget {
   goal: string;
 }
 
+export type PublicMathProblemCatalogNextActionKind =
+  | "catalog-problem-gap"
+  | "catalog-target-search"
+  | "catalog-complete";
+
+export interface PublicMathProblemCatalogNextAction {
+  kind: PublicMathProblemCatalogNextActionKind;
+  priority: number;
+  targetId?: string;
+  status?: PublicMathProblemStatus | PublicMathProblemCatalogTarget["status"];
+  goal: string;
+  sourceUrl?: string;
+  suitePath?: string;
+  suiteTaskIds: string[];
+  recommendedCommand: string;
+  requiredEvidence: string[];
+  stopCondition: string;
+  honestyBoundary: string;
+}
+
 export interface PublicMathProblemCatalog {
   schemaVersion: "truth-harness.public-math-problem-catalog.v0";
   catalogId: string;
@@ -101,6 +121,7 @@ export interface PublicMathProblemCatalogSummary {
     trustOutcomes: string[];
   }>;
   nextTargets: PublicMathProblemCatalogTarget[];
+  nextAction: PublicMathProblemCatalogNextAction;
   warnings: string[];
 }
 
@@ -287,9 +308,155 @@ export function summarizePublicMathProblemCatalog(catalog: PublicMathProblemCata
       trustOutcomes: problem.trustOutcomes ?? []
     })),
     nextTargets: catalog.nextTargets,
+    nextAction: selectPublicMathProblemCatalogNextAction(catalog),
     warnings
   };
 }
+
+export function selectPublicMathProblemCatalogNextAction(catalog: PublicMathProblemCatalog): PublicMathProblemCatalogNextAction {
+  const openProblem = [...catalog.problems]
+    .filter((problem) => problem.status !== "solved-by-local-receipt")
+    .sort((left, right) => publicProblemPriority(right.status) - publicProblemPriority(left.status))[0];
+
+  if (openProblem) {
+    const suitePath = openProblem.suitePath ?? catalog.suiteRefs[0]?.path;
+    return {
+      kind: "catalog-problem-gap",
+      priority: publicProblemPriority(openProblem.status),
+      targetId: openProblem.id,
+      status: openProblem.status,
+      goal: publicProblemGoal(openProblem),
+      sourceUrl: openProblem.source.url,
+      suitePath,
+      suiteTaskIds: openProblem.suiteTaskIds ?? [],
+      recommendedCommand: suitePath
+        ? `truth-harness bench run ${suitePath} --write --fail-on-failures`
+        : "truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json",
+      requiredEvidence: openProblem.requiredEvidence ?? requiredEvidenceForStatus(openProblem.status),
+      stopCondition: stopConditionForStatus(openProblem.status),
+      honestyBoundary: openProblem.checkerBoundary ?? catalog.honestyBoundary
+    };
+  }
+
+  const target = [...catalog.nextTargets].sort((left, right) => catalogTargetPriority(right.status) - catalogTargetPriority(left.status))[0];
+  if (target) {
+    return {
+      kind: "catalog-target-search",
+      priority: catalogTargetPriority(target.status),
+      targetId: target.id,
+      status: target.status,
+      goal: target.goal,
+      suiteTaskIds: [],
+      recommendedCommand: "truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json",
+      requiredEvidence: requiredEvidenceForTargetStatus(target.status),
+      stopCondition:
+        "Stop when the target has a stable source URL, a narrow checker boundary, runnable benchmark tasks, and honest solved/gap metadata.",
+      honestyBoundary: catalog.honestyBoundary
+    };
+  }
+
+  return {
+    kind: "catalog-complete",
+    priority: 0,
+    goal: "No open public catalog targets are recorded. Add a new public problem only after identifying a stable source and verifier boundary.",
+    suiteTaskIds: [],
+    recommendedCommand: "truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json",
+    requiredEvidence: ["Stable public source URL", "Narrow checker boundary", "Runnable local/Docker benchmark or explicit unsupported gap"],
+    stopCondition: "Stop when a new catalog target is added or the catalog remains complete after review.",
+    honestyBoundary: catalog.honestyBoundary
+  };
+}
+
+function publicProblemPriority(status: PublicMathProblemStatus): number {
+  switch (status) {
+    case "unsupported-adapter-gap":
+      return 100;
+    case "external-review-needed":
+      return 90;
+    case "queued":
+      return 70;
+    case "source-needed":
+      return 60;
+    case "solved-by-local-receipt":
+      return 0;
+  }
+}
+
+function catalogTargetPriority(status: PublicMathProblemCatalogTarget["status"]): number {
+  switch (status) {
+    case "adapter-needed":
+      return 85;
+    case "external-review-needed":
+      return 80;
+    case "queued":
+      return 65;
+    case "source-needed":
+      return 55;
+  }
+}
+
+function publicProblemGoal(problem: PublicMathProblemCatalogEntry): string {
+  switch (problem.status) {
+    case "unsupported-adapter-gap":
+      return `Close adapter gap for ${problem.id}: ${problem.resultSummary ?? problem.source.title}`;
+    case "external-review-needed":
+      return `Get external review for ${problem.id}: ${problem.source.title}`;
+    case "queued":
+      return `Turn queued public problem ${problem.id} into runnable benchmark probes.`;
+    case "source-needed":
+      return `Attach stable source metadata before trusting public problem ${problem.id}.`;
+    case "solved-by-local-receipt":
+      return `Already solved by local receipt: ${problem.id}.`;
+  }
+}
+
+function requiredEvidenceForStatus(status: PublicMathProblemStatus): string[] {
+  switch (status) {
+    case "unsupported-adapter-gap":
+      return [
+        "Smallest verifier adapter that covers the normalized problem",
+        "Correct probe and near-miss refutation probe",
+        "Native and Docker benchmark-run records"
+      ];
+    case "external-review-needed":
+      return ["Reviewer note", "Replay command", "Receipt or benchmark-run artifact cited by path"];
+    case "queued":
+      return ["Stable source URL", "Normalized checker boundary", "Runnable benchmark suite task ids"];
+    case "source-needed":
+      return ["Stable public source URL", "Access date", "Source title and site metadata"];
+    case "solved-by-local-receipt":
+      return ["Existing local receipt metadata"];
+  }
+}
+
+function requiredEvidenceForTargetStatus(status: PublicMathProblemCatalogTarget["status"]): string[] {
+  switch (status) {
+    case "adapter-needed":
+      return ["Adapter design note", "Minimal local verifier", "Correct and near-miss benchmark probes"];
+    case "external-review-needed":
+      return ["Reviewer packet", "Replay command", "Explicit trust-boundary note"];
+    case "queued":
+      return ["Stable source URL", "Normalized prompt", "Runnable benchmark probe"];
+    case "source-needed":
+      return ["Stable public source URL", "Access date", "Problem title and domain"];
+  }
+}
+
+function stopConditionForStatus(status: PublicMathProblemStatus): string {
+  switch (status) {
+    case "unsupported-adapter-gap":
+      return "Stop when the adapter produces a receipt-backed benchmark result or the unsupported boundary is documented with no overclaim.";
+    case "external-review-needed":
+      return "Stop when an external reviewer packet is attached or the result remains explicitly marked review-needed.";
+    case "queued":
+      return "Stop when the problem has runnable suite task ids and a replayable benchmark command.";
+    case "source-needed":
+      return "Stop when stable source metadata is attached before any local claim is promoted.";
+    case "solved-by-local-receipt":
+      return "Stop when the existing solved receipt is still replayable.";
+  }
+}
+
 function parseBenchmarkTask(raw: unknown, index: number): BenchmarkTask {
   if (!raw || typeof raw !== "object") {
     throw new Error(`Task ${index} must be an object`);

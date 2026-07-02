@@ -7520,6 +7520,26 @@ function printPublicMathProblemCatalog(summary: PublicMathProblemCatalogSummary,
     }
   }
 
+  console.log("");
+  console.log("Recommended next action:");
+  console.log(`  ${summary.nextAction.kind}: ${summary.nextAction.goal}`);
+  console.log(`  priority: ${summary.nextAction.priority}`);
+  if (summary.nextAction.targetId) {
+    console.log(`  target: ${summary.nextAction.targetId}${summary.nextAction.status ? ` (${summary.nextAction.status})` : ""}`);
+  }
+  if (summary.nextAction.sourceUrl) {
+    console.log(`  source: ${summary.nextAction.sourceUrl}`);
+  }
+  if (summary.nextAction.suitePath) {
+    console.log(`  suite: ${summary.nextAction.suitePath}`);
+  }
+  if (summary.nextAction.suiteTaskIds.length > 0) {
+    console.log(`  tasks: ${summary.nextAction.suiteTaskIds.join(", ")}`);
+  }
+  console.log(`  command: ${summary.nextAction.recommendedCommand}`);
+  console.log(`  evidence: ${summary.nextAction.requiredEvidence.join("; ")}`);
+  console.log(`  stop: ${summary.nextAction.stopCondition}`);
+
   if (summary.nextTargets.length > 0) {
     console.log("");
     console.log("Next targets:");
