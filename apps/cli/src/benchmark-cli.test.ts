@@ -504,6 +504,46 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.provedRequiresAcceptedProofCheckerRun).toBe(true);
   });
 
+  it("lists engine verifier packs for agents", async () => {
+    const jsonResult = await runCli(["engines", "packs", "local-engine-geometry-2d", "--json"]);
+    const json = JSON.parse(jsonResult.stdout) as {
+      schemaVersion: string;
+      total: number;
+      filteredBy?: { id: string };
+      packs: Array<{
+        id: string;
+        capabilityId: string;
+        benchmarkSuite: { totalTasks: number; dockerCommand: string };
+        capabilities: Array<{ backendId: string }>;
+        agentContract: { routeBeforeGenericMath: boolean };
+      }>;
+      warnings: string[];
+    };
+    const humanResult = await runCli(["engines", "packs"]);
+
+    expect(jsonResult.exitCode).toBe(0);
+    expect(json.schemaVersion).toBe("truth-harness.engine-verifier-packs.v0");
+    expect(json.total).toBe(1);
+    expect(json.filteredBy).toEqual({ id: "local-engine-geometry-2d" });
+    expect(json.packs[0]).toMatchObject({
+      id: "engine-2d-collision-verifier-pack",
+      capabilityId: "local-engine-geometry-2d",
+      benchmarkSuite: {
+        totalTasks: 27,
+        dockerCommand: "npm run docker:engine-math"
+      },
+      agentContract: {
+        routeBeforeGenericMath: true
+      }
+    });
+    expect(json.packs[0]?.capabilities.map((capability) => capability.backendId)).toContain("local-ray2-circle-intersection");
+    expect(json.warnings).toEqual([]);
+    expect(humanResult.exitCode).toBe(0);
+    expect(humanResult.stdout).toContain("Truth Harness engine verifier packs");
+    expect(humanResult.stdout).toContain("2D collision verifier pack");
+    expect(humanResult.stdout).toContain("Docker replay: npm run docker:engine-math");
+  });
+
   it("prints engine readiness without upgrading status probes into evidence", async () => {
     const result = await runCli([
       "engines",

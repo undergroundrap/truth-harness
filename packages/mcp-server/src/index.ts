@@ -27,6 +27,7 @@ import {
   handleTruthHarnessDiscoveryPackage,
   handleTruthHarnessEngineReadiness,
   handleTruthHarnessEngineManifest,
+  handleTruthHarnessEnginePacks,
   handleTruthHarnessEnginePlan,
   handleTruthHarnessEvidenceAudit,
   handleTruthHarnessEvidenceAuditList,
@@ -762,6 +763,26 @@ export function createTruthHarnessMcpServer(): McpServer {
       }
     },
     async (input) => toolJson(handleTruthHarnessEngineManifest(input))
+  );
+
+  server.registerTool(
+    "truth_harness_engine_packs",
+    {
+      title: "Engine Verifier Packs",
+      description:
+        "Return the local Truth Harness verifier packs that agents can route to before generic engines. This is a read-only support contract with benchmark replay commands; it never runs engines or mints evidence.",
+      inputSchema: {
+        packId: z
+          .string()
+          .optional()
+          .describe("Optional pack id or capability id, such as engine-2d-collision-verifier-pack or local-engine-geometry-2d.")
+      },
+      annotations: {
+        readOnlyHint: true,
+        openWorldHint: false
+      }
+    },
+    async (input) => toolJson(handleTruthHarnessEnginePacks(input))
   );
 
   server.registerTool(

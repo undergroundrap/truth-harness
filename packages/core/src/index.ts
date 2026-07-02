@@ -394,7 +394,9 @@ export {
   ENGINE_2D_COLLISION_VERIFIER_PACK_ID,
   ENGINE_MATH_SEED_SUITE_PATH,
   getEngineVerifierPackById,
-  getEngineVerifierPacks
+  getEngineVerifierPacks,
+  listEngineVerifierPacks,
+  type EngineVerifierPackList
 } from "./engine-verifier-pack.js";
 export {
   createEnginePlan,

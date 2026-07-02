@@ -44,6 +44,16 @@ export interface EngineVerifierPack {
   nextActions: string[];
 }
 
+export interface EngineVerifierPackList {
+  schemaVersion: "truth-harness.engine-verifier-packs.v0";
+  total: number;
+  filteredBy?: {
+    id: string;
+  };
+  packs: EngineVerifierPack[];
+  warnings: string[];
+}
+
 export const ENGINE_2D_COLLISION_VERIFIER_PACK_ID = "engine-2d-collision-verifier-pack";
 export const ENGINE_2D_COLLISION_CAPABILITY_ID = "local-engine-geometry-2d";
 export const ENGINE_MATH_SEED_SUITE_PATH = "packages/benchmarks/suites/engine-math-seed.json";
@@ -234,4 +244,15 @@ export function getEngineVerifierPacks(): EngineVerifierPack[] {
 
 export function getEngineVerifierPackById(id: string): EngineVerifierPack | undefined {
   return getEngineVerifierPacks().find((pack) => pack.id === id || pack.capabilityId === id);
+}
+
+export function listEngineVerifierPacks(input: { packId?: string } = {}): EngineVerifierPackList {
+  const packs = input.packId ? getEngineVerifierPacks().filter((pack) => pack.id === input.packId || pack.capabilityId === input.packId) : getEngineVerifierPacks();
+  return {
+    schemaVersion: "truth-harness.engine-verifier-packs.v0",
+    total: packs.length,
+    filteredBy: input.packId ? { id: input.packId } : undefined,
+    packs,
+    warnings: input.packId && packs.length === 0 ? [`No engine verifier pack found for '${input.packId}'.`] : []
+  };
 }

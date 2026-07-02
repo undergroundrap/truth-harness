@@ -34,6 +34,7 @@ import {
   handleTruthHarnessDiscoveryPackage,
   handleTruthHarnessEngineReadiness,
   handleTruthHarnessEngineManifest,
+  handleTruthHarnessEnginePacks,
   handleTruthHarnessEvidenceAudit,
   handleTruthHarnessEvidenceAuditList,
   handleTruthHarnessExpertReviewList,
@@ -461,6 +462,34 @@ describe("MCP tool handlers", () => {
       })
     );
     expect(result.trustBoundary.statusProbeIsNotEvidence).toBe(true);
+  });
+
+  it("reports engine verifier packs for agents", () => {
+    const result = handleTruthHarnessEnginePacks({ packId: "local-engine-geometry-2d" });
+
+    expect(result).toMatchObject({
+      schemaVersion: "truth-harness.engine-verifier-packs.v0",
+      total: 1,
+      filteredBy: { id: "local-engine-geometry-2d" },
+      warnings: []
+    });
+    expect(result.packs[0]).toMatchObject({
+      id: "engine-2d-collision-verifier-pack",
+      capabilityId: "local-engine-geometry-2d",
+      benchmarkSuite: {
+        totalTasks: 27,
+        dockerCommand: "npm run docker:engine-math"
+      },
+      agentContract: {
+        routeBeforeGenericMath: true,
+        attachConcreteReceiptBeforeClaim: true
+      }
+    });
+    expect(result.packs[0]?.capabilities.map((capability) => capability.backendId)).toContain("local-capsule2-circle-intersection");
+
+    const missing = handleTruthHarnessEnginePacks({ packId: "missing-pack" });
+    expect(missing.total).toBe(0);
+    expect(missing.warnings[0]).toContain("missing-pack");
   });
 
   it("reports reviewer-facing engine readiness for agents without minting evidence", () => {

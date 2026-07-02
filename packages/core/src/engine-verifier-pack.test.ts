@@ -5,7 +5,8 @@ import {
   ENGINE_2D_COLLISION_CAPABILITY_ID,
   ENGINE_2D_COLLISION_VERIFIER_PACK_ID,
   ENGINE_MATH_SEED_SUITE_PATH,
-  getEngineVerifierPacks
+  getEngineVerifierPacks,
+  listEngineVerifierPacks
 } from "./engine-verifier-pack.js";
 
 describe("engine verifier packs", () => {
@@ -57,5 +58,23 @@ describe("engine verifier packs", () => {
       attachConcreteReceiptBeforeClaim: true,
       benchmarkReplayRequiredForPackChanges: true
     });
+  });
+
+  it("returns a stable list response for CLI and agent surfaces", () => {
+    const all = listEngineVerifierPacks();
+    const filtered = listEngineVerifierPacks({ packId: ENGINE_2D_COLLISION_CAPABILITY_ID });
+    const missing = listEngineVerifierPacks({ packId: "not-a-pack" });
+
+    expect(all).toMatchObject({
+      schemaVersion: "truth-harness.engine-verifier-packs.v0",
+      total: 1,
+      warnings: []
+    });
+    expect(all.packs[0]?.id).toBe(ENGINE_2D_COLLISION_VERIFIER_PACK_ID);
+    expect(filtered.total).toBe(1);
+    expect(filtered.filteredBy).toEqual({ id: ENGINE_2D_COLLISION_CAPABILITY_ID });
+    expect(filtered.packs[0]?.capabilityId).toBe(ENGINE_2D_COLLISION_CAPABILITY_ID);
+    expect(missing.total).toBe(0);
+    expect(missing.warnings[0]).toContain("not-a-pack");
   });
 });

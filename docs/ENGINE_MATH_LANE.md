@@ -42,6 +42,13 @@ The planner now recognizes AABB, circle, capsule, segment, ray, raycast, triangl
 npm run cli -- engines plan "does this ray intersect the circle?"
 ```
 
+Agents can also list verifier packs before planning a claim. This is read-only: it exposes supported predicates, backend ids, replay commands, and the benchmark gate without running engines or minting evidence.
+
+```bash
+npm run cli -- engines packs
+npm run cli -- engines packs local-engine-geometry-2d -- --json
+```
+
 ## Benchmark Gate
 
 Run the pack natively:

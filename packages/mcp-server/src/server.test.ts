@@ -97,6 +97,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_disclosure_log",
         "truth_harness_discovery_package",
         "truth_harness_engine_manifest",
+        "truth_harness_engine_packs",
         "truth_harness_engine_plan",
         "truth_harness_engine_readiness",
         "truth_harness_evidence_audit",
@@ -256,6 +257,16 @@ describe("Truth Harness MCP server", () => {
       expect(engineManifestText).toContain("\"id\": \"local-rational-arithmetic\"");
       expect(engineManifestText).toContain("\"statusProbeIsNotEvidence\": true");
 
+      const enginePacks = await client.callTool({
+        name: "truth_harness_engine_packs",
+        arguments: {
+          packId: "local-engine-geometry-2d"
+        }
+      });
+      const enginePacksText = firstText(enginePacks.content);
+      expect(enginePacksText).toContain("\"schemaVersion\": \"truth-harness.engine-verifier-packs.v0\"");
+      expect(enginePacksText).toContain("\"id\": \"engine-2d-collision-verifier-pack\"");
+      expect(enginePacksText).toContain("\"backendId\": \"local-ray2-circle-intersection\"");
       const enginePlan = await client.callTool({
         name: "truth_harness_engine_plan",
         arguments: {

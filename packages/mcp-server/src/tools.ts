@@ -45,6 +45,7 @@ import {
   isClaimLedgerStatus,
   getCodeRunSandboxStatus,
   getEngineManifest,
+  listEngineVerifierPacks,
   getLocalWorkspaceStatus,
   getProofBackendStatus,
   getSmtBackendStatus,
@@ -172,6 +173,7 @@ import {
   type DiscoveryPackageWriteResult,
   type EngineManifest,
   type EnginePlan,
+  type EngineVerifierPackList,
   type EngineReadinessReport,
   type EngineVerificationRequirements,
   type EvidenceAudit,
@@ -356,6 +358,10 @@ export interface TruthHarnessEngineManifestInput {
 export interface TruthHarnessEnginePlanInput extends TruthHarnessEngineManifestInput {
   workspacePath?: string;
   problem: string;
+}
+
+export interface TruthHarnessEnginePacksInput {
+  packId?: string;
 }
 
 export interface TruthHarnessEngineReadinessInput extends TruthHarnessEngineManifestInput {}
@@ -1481,6 +1487,10 @@ export function handleTruthHarnessEngineManifest(input: TruthHarnessEngineManife
     z3Command: input.z3Command,
     cvc5Command: input.cvc5Command
   });
+}
+
+export function handleTruthHarnessEnginePacks(input: TruthHarnessEnginePacksInput = {}): EngineVerifierPackList {
+  return listEngineVerifierPacks({ packId: input.packId });
 }
 
 export async function handleTruthHarnessEnginePlan(input: TruthHarnessEnginePlanInput): Promise<EnginePlan> {

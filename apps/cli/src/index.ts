@@ -44,6 +44,7 @@ import {
   engineVerificationCaseEvidenceMeaning,
   engineVerificationCaseEvidenceTier,
   getEngineManifest,
+  listEngineVerifierPacks,
   getLocalWorkspaceStatus,
   getWorkspaceCatalogStatus,
   getProofBackendStatus,
@@ -222,6 +223,8 @@ import {
   type CodeRunSummary,
   type EngineManifest,
   type EnginePlan,
+  type EngineVerifierPack,
+  type EngineVerifierPackList,
   type EngineReadinessReport,
   type EngineVerificationReport,
   type EngineVerificationRequirements,
@@ -5135,6 +5138,26 @@ const engines = program
   );
 
 engines
+  .command("packs")
+  .description("List verifier packs that agents can route to before generic engines.")
+  .argument("[pack-id]", "Optional pack id or capability id to filter")
+  .option("--json", "Print the verifier pack list JSON")
+  .action((packId: string | undefined, options: { json?: boolean }) => {
+    const result = listEngineVerifierPacks({ packId });
+    const json = Boolean(options.json || engines.opts<{ json?: boolean }>().json);
+
+    if (json) {
+      printJson(result);
+      return;
+    }
+
+    printEngineVerifierPacks(result);
+    if (result.total === 0) {
+      process.exitCode = 1;
+    }
+  });
+
+engines
   .command("plan")
   .description("Plan the verifier stack for a problem without running engines or minting evidence.")
   .argument("<problem>", "Problem or claim to route through the engine ladder")
@@ -6256,6 +6279,41 @@ function printEngineManifest(manifest: EngineManifest): void {
     for (const warning of manifest.warnings) {
       console.log(`  ${warning}`);
     }
+  }
+}
+
+function printEngineVerifierPacks(result: EngineVerifierPackList): void {
+  console.log("Truth Harness engine verifier packs");
+  console.log(`Packs: ${result.total}`);
+  console.log("Network: none");
+  if (result.filteredBy) {
+    console.log(`Filter: ${result.filteredBy.id}`);
+  }
+
+  for (const pack of result.packs) {
+    printEngineVerifierPack(pack);
+  }
+
+  if (result.warnings.length > 0) {
+    console.log("");
+    console.log("Warnings:");
+    for (const warning of result.warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function printEngineVerifierPack(pack: EngineVerifierPack): void {
+  console.log("");
+  console.log(`${pack.displayName} (${pack.id})`);
+  console.log(`  Capability: ${pack.capabilityId}; lane: ${pack.lane}; status: ${pack.status}`);
+  console.log(`  Predicates: ${pack.capabilities.length}; benchmark tasks: ${pack.benchmarkSuite.totalTasks}`);
+  console.log(`  Native replay: ${pack.benchmarkSuite.nativeCommand}`);
+  console.log(`  Docker replay: ${pack.benchmarkSuite.dockerCommand}`);
+  console.log(`  Boundary: ${pack.limitations[0]}`);
+  console.log("  Supported backends:");
+  for (const capability of pack.capabilities) {
+    console.log(`    - ${capability.displayName}: ${capability.backendId}`);
   }
 }
 
