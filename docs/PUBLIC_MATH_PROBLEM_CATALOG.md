@@ -1,6 +1,6 @@
 # Public Math Problem Catalog
 
-Updated: 2026-07-01
+Updated: 2026-07-02
 
 This is the working ledger for public math problems that Truth Harness can solve, refute, or honestly reject with local evidence. The point is not to memorize public answers. The point is to turn public prompts into replayable receipts, source-linked metadata, reviewer evidence, and explicit checker boundaries.
 
@@ -36,6 +36,7 @@ truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --
 | Project Euler 1: multiples below a bound | [Project Euler Problem 1](https://projecteuler.net/problem=1) | solved by local receipt | `exact-computed`, `refuted` | `local-finite-sum-inclusion-exclusion` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
 | Project Euler 2: bounded even Fibonacci sum | [Project Euler Problem 2](https://projecteuler.net/problem=2) | solved by local receipt | `exact-computed`, `refuted` | `local-fibonacci-even-sum` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
 | Project Euler 6: finite sum-square difference | [Project Euler Problem 6](https://projecteuler.net/problem=6) | solved by local receipt | `exact-computed`, `refuted` | `local-sum-square-difference` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
+| Project Euler 48: self-power last digits | [Project Euler Problem 48](https://projecteuler.net/problem=48) | solved by local receipt | `exact-computed`, `refuted` | `local-self-power-modular-sum` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
 
 ## Publication Rule
 
@@ -43,7 +44,6 @@ If this repo is linked in a forum or classroom answer, cite the source problem, 
 
 ## Next Catalog Targets
 
-- Recent modular arithmetic questions that can be refuted or escalated to Lean/SMT.
 - Bounded inequality and interval problems that exercise interval arithmetic and verifier boundaries.
 - Symbolic identity questions that require independent CAS agreement in Docker.
 - Forum-style problems where the answer is less important than the transparent route: prompt, source, assumptions, receipt, replay, and limitation.

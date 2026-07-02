@@ -80,6 +80,13 @@ interface SumSquareDifferenceClaim {
   statedDifference?: bigint;
 }
 
+interface SelfPowerLastDigitsClaim {
+  source: string;
+  upper: bigint;
+  digits: number;
+  statedLastDigits?: string;
+}
+
 export interface CreateReceiptOptions {
   maximaCommand?: string;
   casRunner?: CasBackendCommandRunner;
@@ -264,6 +271,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const selfPowerLastDigits = parseSelfPowerLastDigitsClaim(normalizedProblem);
+  if (selfPowerLastDigits) {
+    return completeSelfPowerLastDigitsReceipt({
+      problem,
+      normalizedProblem,
+      claim: selfPowerLastDigits,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const arithmeticSource = parseArithmeticPrompt(normalizedProblem);
   if (arithmeticSource) {
     return completeArithmeticReceipt({
@@ -288,7 +310,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -1985,6 +2007,121 @@ function completeSumSquareDifferenceReceipt(args: {
     findings: args.findings
   });
 }
+function completeSelfPowerLastDigitsReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: SelfPowerLastDigitsClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = selfPowerLastDigitsCertificate(args.claim);
+  const hasStatedLastDigits = args.claim.statedLastDigits !== undefined;
+  const statedMatches = !hasStatedLastDigits || certificate.result === certificate.statedLastDigits;
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const artifact = addArtifact(args.artifacts, {
+    kind: "self-power-last-digits-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-self-power-modular-sum",
+      source: args.claim.source,
+      upper: certificate.upper,
+      digits: certificate.digits,
+      modulus: certificate.modulus,
+      statedLastDigits: certificate.statedLastDigits
+    },
+    trust,
+    summary: hasStatedLastDigits
+      ? statedMatches
+        ? "Self-power last-digits claim matched exact modular summation."
+        : "Self-power last-digits claim disagreed with exact modular summation."
+      : "Self-power last-digits problem parsed into an exact bounded modular computation.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedLastDigits ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-self-power-modular-sum",
+      upper: certificate.upper,
+      digits: certificate.digits,
+      modulus: certificate.modulus,
+      exactArithmetic: true,
+      operation: "sum k^k modulo 10^digits"
+    },
+    trust,
+    summary: `Computed self-power sum through ${certificate.upper} modulo ${certificate.modulus} by exact modular exponentiation.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact self-power last digits are ${certificate.result}.`
+      : `Exact self-power last digits are ${certificate.result}, not ${certificate.statedLastDigits}.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The bounded self-power last-digits sum was computed by exact modular exponentiation over an explicit finite range. This earns exact-computed, not proved."
+      : "The stated self-power last-digits value is refuted by exact modular exponentiation over the explicitly stated finite range."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact self-power last-digits result: ${certificate.result}.`
+      : `Refuted self-power last-digits claim: exact result is ${certificate.result}, stated ${certificate.statedLastDigits}.`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-self-power-modular-sum",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedLastDigits
+        ? [
+            `lastDigits=${certificate.result}`,
+            `stated=${certificate.statedLastDigits}`,
+            statedMatches ? "self-power-last-digits=passed" : "self-power-last-digits=failed"
+          ]
+        : [`lastDigits=${certificate.result}`, "self-power-last-digits=computed"],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only computes last digits of explicit finite self-power sums 1^1 + 2^2 + ... + n^n.",
+        "The computation uses exact modular arithmetic; it is not a proof of arbitrary modular identities."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
+
 function completeArithmeticReceipt(args: {
   problem: string;
   normalizedProblem: string;
@@ -2647,6 +2784,161 @@ function sumSquareDifferenceCertificate(claim: SumSquareDifferenceClaim): {
     verdict: statedText === undefined ? "computed" : matches ? "accepted" : "refuted"
   };
 }
+function parseSelfPowerLastDigitsClaim(problem: string): SelfPowerLastDigitsClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/,/gu, "")
+    .replace(/\$/gu, "")
+    .replace(/^(?:please\s+)?(?:find|compute|calculate|evaluate)\s+/iu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/\.$/u, "");
+  const digitsPattern = "(?<digits>\\d+|one|two|three|four|five|six|seven|eight|nine|ten)";
+  const seriesPattern = new RegExp(
+    `^(?:the\\s+)?last\\s+${digitsPattern}\\s+digits?\\s+of\\s+(?:the\\s+)?(?:series|sum)\\s+1\\^1\\s*\\+\\s*2\\^2(?:\\s*\\+\\s*3\\^3)?\\s*\\+\\s*(?:\\.{3}|cdots|…)\\s*\\+\\s*(?<upper>\\d+)\\^(?<upperExp>\\d+)(?:\\s*=\\s*(?<stated>\\d+))?$`,
+    "iu"
+  );
+  const namedPattern = new RegExp(
+    `^(?:the\\s+)?last\\s+${digitsPattern}\\s+digits?\\s+of\\s+(?:the\\s+)?self powers?\\s+(?:through|up to|to)\\s+(?<upper>\\d+)(?:\\s*=\\s*(?<stated>\\d+))?$`,
+    "iu"
+  );
+  const match = seriesPattern.exec(candidate) ?? namedPattern.exec(candidate);
+  const digitsText = match?.groups?.digits;
+  const upperText = match?.groups?.upper;
+  const upperExpText = match?.groups?.upperExp;
+  if (!digitsText || !upperText || upperText.length > 12) {
+    return undefined;
+  }
+
+  if (upperExpText !== undefined && upperExpText !== upperText) {
+    return undefined;
+  }
+
+  const digits = parseSmallPositiveIntegerWord(digitsText);
+  if (digits === undefined || digits <= 0 || digits > 18) {
+    return undefined;
+  }
+
+  const upper = BigInt(upperText);
+  if (upper <= 0n || upper > 100000n) {
+    return undefined;
+  }
+
+  const stated = match.groups?.stated;
+  if (stated !== undefined && stated.length > digits) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    upper,
+    digits,
+    statedLastDigits: stated === undefined ? undefined : stated.padStart(digits, "0")
+  };
+}
+
+function selfPowerLastDigitsCertificate(claim: SelfPowerLastDigitsClaim): {
+  schemaVersion: "truth-harness.self-power-last-digits.v0";
+  adapter: "local-self-power-modular-sum";
+  source: string;
+  upper: string;
+  digits: number;
+  modulus: string;
+  statedLastDigits?: string;
+  result: string;
+  rawResidue: string;
+  termsChecked: string;
+  sampledTerms: Array<{ k: string; residue: string }>;
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const modulus = 10n ** BigInt(claim.digits);
+  let residue = 0n;
+  const sampledTerms: Array<{ k: string; residue: string }> = [];
+
+  for (let k = 1n; k <= claim.upper; k += 1n) {
+    const termResidue = modPow(k, k, modulus);
+    residue = (residue + termResidue) % modulus;
+    if (k <= 5n || k > claim.upper - 5n) {
+      sampledTerms.push({ k: k.toString(), residue: termResidue.toString().padStart(claim.digits, "0") });
+    }
+  }
+
+  const result = residue.toString().padStart(claim.digits, "0");
+  const stated = claim.statedLastDigits;
+  const matches = stated === undefined || stated === result;
+  return {
+    schemaVersion: "truth-harness.self-power-last-digits.v0",
+    adapter: "local-self-power-modular-sum",
+    source: claim.source,
+    upper: claim.upper.toString(),
+    digits: claim.digits,
+    modulus: modulus.toString(),
+    statedLastDigits: stated,
+    result,
+    rawResidue: residue.toString(),
+    termsChecked: claim.upper.toString(),
+    sampledTerms,
+    checks: [
+      {
+        id: "finite-self-power-range",
+        ok: true,
+        expected: "self powers k^k for k from 1 through an explicit finite upper bound",
+        observed: `1 <= k <= ${claim.upper.toString()}`
+      },
+      {
+        id: "modular-last-digits-result",
+        ok: matches,
+        expected: result,
+        observed: stated ?? result
+      }
+    ],
+    trace: [
+      `Use modulus 10^${claim.digits} = ${modulus.toString()}.`,
+      `For each k from 1 to ${claim.upper.toString()}, compute k^k modulo ${modulus.toString()} by repeated squaring.`,
+      `Add ${claim.upper.toString()} residues modulo ${modulus.toString()}.`,
+      `Last ${claim.digits} digits are ${result}.`
+    ],
+    verdict: stated === undefined ? "computed" : matches ? "accepted" : "refuted"
+  };
+}
+
+function parseSmallPositiveIntegerWord(value: string): number | undefined {
+  const words: Record<string, number> = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10
+  };
+  if (/^\d+$/u.test(value)) {
+    return Number(value);
+  }
+  return words[value.toLowerCase()];
+}
+
+function modPow(base: bigint, exponent: bigint, modulus: bigint): bigint {
+  let result = 1n;
+  let currentBase = base % modulus;
+  let remaining = exponent;
+
+  while (remaining > 0n) {
+    if (remaining % 2n === 1n) {
+      result = (result * currentBase) % modulus;
+    }
+    currentBase = (currentBase * currentBase) % modulus;
+    remaining /= 2n;
+  }
+
+  return result;
+}
+
 function parseArithmeticPrompt(problem: string): string | undefined {
   const computeMatch = /^(?:compute|calculate|evaluate)\s+(.+)$/i.exec(problem);
   const candidate = computeMatch ? computeMatch[1].trim() : problem;

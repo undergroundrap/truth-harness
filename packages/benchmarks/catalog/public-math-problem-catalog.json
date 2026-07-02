@@ -2,7 +2,7 @@
   "schemaVersion": "truth-harness.public-math-problem-catalog.v0",
   "catalogId": "public-math-problems-2026",
   "title": "Public Math Problem Catalog 2026",
-  "updatedAt": "2026-07-01",
+  "updatedAt": "2026-07-02",
   "purpose": "Track externally recognizable bounded math problems that Truth Harness can solve, refute, or honestly mark as unsupported with replayable local evidence.",
   "workflow": {
     "stages": [
@@ -103,14 +103,35 @@
         "receipt replay command"
       ],
       "checkerBoundary": "Square-of-sum minus sum-of-squares for the first n natural numbers with explicit positive integer n only."
+    },
+    {
+      "id": "project-euler-048",
+      "firstLoggedAt": "2026-07-02",
+      "source": {
+        "site": "Project Euler",
+        "title": "Problem 48: Self Powers",
+        "url": "https://projecteuler.net/problem=48",
+        "accessedAt": "2026-07-02"
+      },
+      "status": "solved-by-local-receipt",
+      "domain": "modular-arithmetic",
+      "suitePath": "packages/benchmarks/suites/public-problem-probes.json",
+      "suiteTaskIds": [
+        "project-euler-048-self-powers-last-digits",
+        "project-euler-048-wrong-answer-refutation"
+      ],
+      "verifierBackends": ["local-self-power-modular-sum"],
+      "trustOutcomes": ["exact-computed", "refuted"],
+      "resultSummary": "Exact last ten digits of the self-power sum through 1000 are 9110846700; near-miss 9110846701 is refuted.",
+      "requiredEvidence": [
+        "self-power modular-sum certificate",
+        "modulo 10^10 repeated-squaring trace",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Last-digits computations for explicit finite self-power sums 1^1 + 2^2 + ... + n^n only."
     }
   ],
   "nextTargets": [
-    {
-      "id": "public-modular-arithmetic-queue",
-      "status": "source-needed",
-      "goal": "Find recent public modular arithmetic questions where Truth Harness can either refute a false universal claim or require Lean/SMT proof evidence."
-    },
     {
       "id": "public-inequality-bound-queue",
       "status": "source-needed",

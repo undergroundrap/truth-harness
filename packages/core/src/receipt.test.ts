@@ -234,6 +234,43 @@ describe("createReceipt", () => {
     );
     expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
   });
+
+  it("computes Project Euler style self-power last digits exactly", () => {
+    const receipt = createReceipt("Find the last ten digits of the series 1^1 + 2^2 + 3^3 + ... + 1000^1000.");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("9110846700");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-self-power-modular-sum");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["lastDigits=9110846700", "self-power-last-digits=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "self-power-last-digits-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      result?: string;
+      modulus?: string;
+      termsChecked?: string;
+      sampledTerms?: Array<{ k?: string; residue?: string }>;
+    };
+    expect(payload.result).toBe("9110846700");
+    expect(payload.modulus).toBe("10000000000");
+    expect(payload.termsChecked).toBe("1000");
+    expect(payload.sampledTerms).toEqual(expect.arrayContaining([expect.objectContaining({ k: "1000", residue: "0000000000" })]));
+  });
+
+  it("refutes wrong self-power last-digit claims", () => {
+    const receipt = createReceipt("verify last ten digits of self powers through 1000 = 9110846701");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("9110846700");
+    expect(receipt.summary).toContain("9110846701");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["lastDigits=9110846700", "stated=9110846701", "self-power-last-digits=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+  });
+
   it("marks MVP receipts as local-only with no external disclosure", () => {
     const receipt = createReceipt("compute 2 + 2");
 
