@@ -18,8 +18,8 @@ Supported predicate families:
 | Capsule/circle intersection | `local-capsule2-circle-intersection` | Closed capsule and closed disk; boundary contact counts as intersection. |
 | Circle/AABB intersection | `local-circle2-aabb-intersection` | Exact closest-point distance against a closed AABB. |
 | Segment/segment intersection | `local-segment2-intersection` | Closed non-degenerate segments; endpoints count as intersection. |
-| Ray/circle intersection | `local-ray2-circle-intersection` | Ray domain is `t >= 0`; closed disk boundary counts as hit. |
-| Ray/AABB intersection | `local-ray2-aabb-intersection` | Exact rational slab interval with ray domain `t >= 0`. |
+| Ray/circle intersection | `local-ray2-circle-intersection` | Ray domain is `t >= 0` or finite `0 <= t <= max t`; closed disk boundary counts as hit. |
+| Ray/AABB intersection | `local-ray2-aabb-intersection` | Exact rational slab interval with ray domain `t >= 0` or finite `0 <= t <= max t`. |
 | Point-in-triangle membership | `local-point-in-triangle2` | Closed non-degenerate triangle; edges count as inside. |
 
 Accepted examples:
@@ -66,7 +66,7 @@ Run it through the Docker-first workflow:
 npm run docker:engine-math
 ```
 
-The suite lives at `packages/benchmarks/suites/engine-math-seed.json` and currently has 27 cases: 18 `exact-computed` receipts and 9 `refuted` receipts. The regression tests tie the verifier pack to those 27 task IDs so docs, manifest, and benchmark coverage cannot drift quietly.
+The suite lives at `packages/benchmarks/suites/engine-math-seed.json` and currently has 31 cases: 20 `exact-computed` receipts and 11 `refuted` receipts. The regression tests tie the verifier pack to those 31 task IDs so docs, manifest, and benchmark coverage cannot drift quietly.
 
 ## Evidence Boundary
 
@@ -76,7 +76,7 @@ This lane currently does not verify:
 - collision response or contact manifolds
 - broadphase data structures
 - meshes, polygons beyond the listed primitives, or rotated boxes
-- finite ray segments or maximum ray travel distance
+- open-boundary ray policies or engine-specific normalized-distance semantics
 - floating-point tolerance policy or numerical drift
 - rendering visibility, BVH correctness, or GPU behavior
 - physics integration or timestep stability
@@ -89,7 +89,7 @@ Those become separate adapters, receipts, and benchmark gates. The rule is still
 Good next slices:
 
 1. Half-open and open boundary variants so engines can compare collision policies explicitly.
-2. Finite ray segment and maximum-travel raycast variants.
+2. Open/closed finite-ray endpoint policies and normalized-direction distance conventions.
 3. Barycentric coordinate certificates for interpolation and rendering workflows.
 4. Broadphase grid bucket membership predicates.
 5. Fixed-timestep accumulator invariants and drift bounds.

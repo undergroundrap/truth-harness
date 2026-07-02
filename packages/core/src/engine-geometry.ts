@@ -78,6 +78,7 @@ export interface Ray2AabbIntersectionClaim {
   source: string;
   ray: Ray2;
   box: Aabb2;
+  maxRayParameter?: bigint;
   statedIntersect?: boolean;
 }
 
@@ -85,6 +86,7 @@ export interface Ray2CircleIntersectionClaim {
   source: string;
   ray: Ray2;
   circle: Circle2;
+  maxRayParameter?: bigint;
   statedIntersect?: boolean;
 }
 
@@ -106,8 +108,8 @@ export type Circle2IntersectionClassification = "overlap" | "external-tangent" |
 export type Capsule2CircleClassification = "side-overlap" | "side-tangent" | "endpoint-overlap" | "endpoint-tangent" | "separated";
 export type PointInTriangle2Classification = "inside" | "edge" | "vertex" | "outside";
 export type RaySlabEndpoint = Rational | "negative-infinity" | "positive-infinity";
-export type Ray2AabbClassification = "ray-hit" | "origin-inside" | "parallel-miss" | "behind-ray" | "slab-miss";
-export type Ray2CircleClassification = "ray-hit" | "origin-inside" | "tangent" | "behind-ray" | "ray-miss";
+export type Ray2AabbClassification = "ray-hit" | "origin-inside" | "parallel-miss" | "behind-ray" | "past-max-t" | "slab-miss";
+export type Ray2CircleClassification = "ray-hit" | "origin-inside" | "tangent" | "behind-ray" | "past-max-t" | "ray-miss";
 export type SweptAabb2Classification = "initial-overlap" | "swept-hit" | "parallel-miss" | "axis-window-miss" | "time-window-miss";
 
 export interface RaySlabAxisInterval {
@@ -1051,13 +1053,16 @@ export function parseRay2AabbIntersectionClaim(problem: string): Ray2AabbInterse
     .replace(/\s+/gu, " ")
     .trim()
     .replace(/[.?]$/u, "");
-  const match = /^(?:do\s+)?ray\s+origin\s*\(\s*(?<originX>-?\d+)\s*,\s*(?<originY>-?\d+)\s*\)\s+direction\s*\(\s*(?<directionX>-?\d+)\s*,\s*(?<directionY>-?\d+)\s*\)\s+intersects?\s+aabb\s+min\s*\(\s*(?<minX>-?\d+)\s*,\s*(?<minY>-?\d+)\s*\)\s+max\s*\(\s*(?<maxX>-?\d+)\s*,\s*(?<maxY>-?\d+)\s*\)(?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
+  const match = /^(?:do\s+)?ray\s+origin\s*\(\s*(?<originX>-?\d+)\s*,\s*(?<originY>-?\d+)\s*\)\s+direction\s*\(\s*(?<directionX>-?\d+)\s*,\s*(?<directionY>-?\d+)\s*\)\s+intersects?\s+aabb\s+min\s*\(\s*(?<minX>-?\d+)\s*,\s*(?<minY>-?\d+)\s*\)\s+max\s*\(\s*(?<maxX>-?\d+)\s*,\s*(?<maxY>-?\d+)\s*\)(?:\s+(?:with\s+)?(?:max\s*t|max\s*parameter|maximum\s*t|within\s*t)\s*(?<maxT>\d+))?(?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
   if (!match?.groups) {
     return undefined;
   }
 
   const requiredGroups = ["originX", "originY", "directionX", "directionY", "minX", "minY", "maxX", "maxY"];
-  if (requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18)) {
+  if (
+    requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18) ||
+    (match.groups.maxT !== undefined && match.groups.maxT.length > 18)
+  ) {
     return undefined;
   }
 
@@ -1079,6 +1084,7 @@ export function parseRay2AabbIntersectionClaim(problem: string): Ray2AabbInterse
     source: candidate,
     ray,
     box,
+    maxRayParameter: match.groups.maxT === undefined ? undefined : BigInt(match.groups.maxT),
     statedIntersect: match.groups.stated === undefined ? undefined : match.groups.stated.toLowerCase() === "true"
   };
 }
@@ -1094,13 +1100,16 @@ export function parseRay2CircleIntersectionClaim(problem: string): Ray2CircleInt
     .replace(/\s+/gu, " ")
     .trim()
     .replace(/[.?]$/u, "");
-  const match = /^(?:do\s+)?ray\s+origin\s*\(\s*(?<originX>-?\d+)\s*,\s*(?<originY>-?\d+)\s*\)\s+direction\s*\(\s*(?<directionX>-?\d+)\s*,\s*(?<directionY>-?\d+)\s*\)\s+intersects?\s+circle\s+center\s*\(\s*(?<centerX>-?\d+)\s*,\s*(?<centerY>-?\d+)\s*\)\s+radius\s*(?<radius>\d+)(?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
+  const match = /^(?:do\s+)?ray\s+origin\s*\(\s*(?<originX>-?\d+)\s*,\s*(?<originY>-?\d+)\s*\)\s+direction\s*\(\s*(?<directionX>-?\d+)\s*,\s*(?<directionY>-?\d+)\s*\)\s+intersects?\s+circle\s+center\s*\(\s*(?<centerX>-?\d+)\s*,\s*(?<centerY>-?\d+)\s*\)\s+radius\s*(?<radius>\d+)(?:\s+(?:with\s+)?(?:max\s*t|max\s*parameter|maximum\s*t|within\s*t)\s*(?<maxT>\d+))?(?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
   if (!match?.groups) {
     return undefined;
   }
 
   const requiredGroups = ["originX", "originY", "directionX", "directionY", "centerX", "centerY", "radius"];
-  if (requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18)) {
+  if (
+    requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18) ||
+    (match.groups.maxT !== undefined && match.groups.maxT.length > 18)
+  ) {
     return undefined;
   }
 
@@ -1119,6 +1128,7 @@ export function parseRay2CircleIntersectionClaim(problem: string): Ray2CircleInt
       center: { x: BigInt(match.groups.centerX), y: BigInt(match.groups.centerY) },
       radius: BigInt(match.groups.radius)
     },
+    maxRayParameter: match.groups.maxT === undefined ? undefined : BigInt(match.groups.maxT),
     statedIntersect: match.groups.stated === undefined ? undefined : match.groups.stated.toLowerCase() === "true"
   };
 }
@@ -1127,14 +1137,15 @@ export function ray2CircleIntersectionCertificate(claim: Ray2CircleIntersectionC
   schemaVersion: "truth-harness.ray2-circle-intersection.v0";
   adapter: "local-ray2-circle-intersection";
   source: string;
-  convention: "closed-disk-ray-domain-t-greater-than-or-equal-zero";
+  convention: "closed-disk-ray-domain-t-greater-than-or-equal-zero" | "closed-disk-ray-domain-0-to-max-t";
   ray: { origin: Record<keyof Point2, string>; direction: Record<keyof Point2, string> };
   circle: { center: Record<keyof Point2, string>; radius: string };
   statedIntersect?: boolean;
+  maxRayParameter?: string;
   projection: string;
   directionLengthSquared: string;
   closestPoint: Record<keyof Point2, string>;
-  closestRegion: "origin" | "interior";
+  closestRegion: "origin" | "interior" | "max-t";
   rayParameter: string;
   distanceSquared: string;
   radiusSquared: string;
@@ -1144,7 +1155,8 @@ export function ray2CircleIntersectionCertificate(claim: Ray2CircleIntersectionC
   trace: string[];
   verdict: "computed" | "accepted" | "refuted";
 } {
-  const distance = pointToRay2DistanceSquared(claim.circle.center, claim.ray);
+  const maxRayParameter = claim.maxRayParameter === undefined ? undefined : Rational.integer(claim.maxRayParameter);
+  const distance = pointToRay2DistanceSquared(claim.circle.center, claim.ray, maxRayParameter);
   const radiusSquared = Rational.integer(claim.circle.radius * claim.circle.radius);
   const originDx = claim.ray.origin.x - claim.circle.center.x;
   const originDy = claim.ray.origin.y - claim.circle.center.y;
@@ -1160,17 +1172,24 @@ export function ray2CircleIntersectionCertificate(claim: Ray2CircleIntersectionC
         : "ray-hit"
     : distance.closestRegion === "origin"
       ? "behind-ray"
-      : "ray-miss";
+      : distance.closestRegion === "max-t"
+        ? "past-max-t"
+        : "ray-miss";
   const statedMatches = claim.statedIntersect === undefined || claim.statedIntersect === intersect;
+  const convention = maxRayParameter === undefined
+    ? "closed-disk-ray-domain-t-greater-than-or-equal-zero"
+    : "closed-disk-ray-domain-0-to-max-t";
+  const domainDescription = maxRayParameter === undefined ? "t >= 0" : `0 <= t <= ${maxRayParameter.toString()}`;
 
   return {
     schemaVersion: "truth-harness.ray2-circle-intersection.v0",
     adapter: "local-ray2-circle-intersection",
     source: claim.source,
-    convention: "closed-disk-ray-domain-t-greater-than-or-equal-zero",
+    convention,
     ray: stringifyRay2(claim.ray),
     circle: stringifyCircle2(claim.circle),
     statedIntersect: claim.statedIntersect,
+    maxRayParameter: maxRayParameter?.toString(),
     projection: distance.projection.toString(),
     directionLengthSquared: distance.directionLengthSquared.toString(),
     closestPoint: distance.closestPoint,
@@ -1195,7 +1214,7 @@ export function ray2CircleIntersectionCertificate(claim: Ray2CircleIntersectionC
       }
     ],
     trace: [
-      "Use a closed disk and ray parameter domain t >= 0; boundary tangency counts as intersection.",
+      `Use a closed disk and ray parameter domain ${domainDescription}; boundary tangency counts as intersection.`,
       `Projection of center-origin onto ray direction is ${distance.projection.toString()}; direction length squared is ${distance.directionLengthSquared.toString()}.`,
       `Closest ray parameter is ${distance.rayParameter} (${distance.closestRegion}).`,
       `Closest point is (${distance.closestPoint.x}, ${distance.closestPoint.y}).`,
@@ -1205,10 +1224,9 @@ export function ray2CircleIntersectionCertificate(claim: Ray2CircleIntersectionC
     verdict: claim.statedIntersect === undefined ? "computed" : statedMatches ? "accepted" : "refuted"
   };
 }
-
-function pointToRay2DistanceSquared(point: Point2, ray: Ray2): {
+function pointToRay2DistanceSquared(point: Point2, ray: Ray2, maxRayParameter?: Rational): {
   closestPoint: Record<keyof Point2, string>;
-  closestRegion: "origin" | "interior";
+  closestRegion: "origin" | "interior" | "max-t";
   projection: bigint;
   directionLengthSquared: bigint;
   rayParameter: string;
@@ -1233,6 +1251,23 @@ function pointToRay2DistanceSquared(point: Point2, ray: Ray2): {
   }
 
   const parameter = new Rational(projection, directionLengthSquared);
+  if (maxRayParameter !== undefined && maxRayParameter.lessThan(parameter)) {
+    const closestX = Rational.integer(ray.origin.x).add(Rational.integer(ray.direction.x).multiply(maxRayParameter));
+    const closestY = Rational.integer(ray.origin.y).add(Rational.integer(ray.direction.y).multiply(maxRayParameter));
+    const pointX = Rational.integer(point.x);
+    const pointY = Rational.integer(point.y);
+    const dx = pointX.subtract(closestX);
+    const dy = pointY.subtract(closestY);
+    return {
+      closestPoint: { x: closestX.toString(), y: closestY.toString() },
+      closestRegion: "max-t",
+      projection,
+      directionLengthSquared,
+      rayParameter: maxRayParameter.toString(),
+      distanceSquared: dx.multiply(dx).add(dy.multiply(dy))
+    };
+  }
+
   const closestX = Rational.integer(ray.origin.x).add(Rational.integer(ray.direction.x).multiply(parameter));
   const closestY = Rational.integer(ray.origin.y).add(Rational.integer(ray.direction.y).multiply(parameter));
   const pointX = Rational.integer(point.x);
@@ -1248,15 +1283,15 @@ function pointToRay2DistanceSquared(point: Point2, ray: Ray2): {
     distanceSquared: dx.multiply(dx).add(dy.multiply(dy))
   };
 }
-
 export function ray2AabbIntersectionCertificate(claim: Ray2AabbIntersectionClaim): {
   schemaVersion: "truth-harness.ray2-aabb-intersection.v0";
   adapter: "local-ray2-aabb-intersection";
   source: string;
-  convention: "closed-aabb-ray-domain-t-greater-than-or-equal-zero";
+  convention: "closed-aabb-ray-domain-t-greater-than-or-equal-zero" | "closed-aabb-ray-domain-0-to-max-t";
   ray: { origin: Record<keyof Point2, string>; direction: Record<keyof Point2, string> };
   box: Record<keyof Aabb2, string>;
   statedIntersect?: boolean;
+  maxRayParameter?: string;
   axisIntervals: Array<{
     axis: "x" | "y";
     status: "bounded" | "parallel-inside" | "parallel-outside";
@@ -1277,33 +1312,49 @@ export function ray2AabbIntersectionCertificate(claim: Ray2AabbIntersectionClaim
   const axisIntervals = [xInterval, yInterval];
   const parallelMiss = axisIntervals.some((interval) => interval.status === "parallel-outside");
   const zero = Rational.integer(0);
-  const tEnterEndpoint = maxRaySlabEndpoint([zero, xInterval.enter, yInterval.enter]);
-  const tExitEndpoint = minRaySlabEndpoint([xInterval.exit, yInterval.exit]);
+  const maxT = claim.maxRayParameter === undefined ? undefined : Rational.integer(claim.maxRayParameter);
+  const unboundedEnterEndpoint = maxRaySlabEndpoint([zero, xInterval.enter, yInterval.enter]);
+  const unboundedExitEndpoint = minRaySlabEndpoint([xInterval.exit, yInterval.exit]);
+  const tEnterEndpoint = unboundedEnterEndpoint;
+  const tExitEndpoint = maxT === undefined ? unboundedExitEndpoint : minRaySlabEndpoint([unboundedExitEndpoint, maxT]);
   const intervalOverlaps = compareRaySlabEndpoint(tEnterEndpoint, tExitEndpoint) <= 0;
+  const unboundedIntervalOverlaps = compareRaySlabEndpoint(unboundedEnterEndpoint, unboundedExitEndpoint) <= 0;
   const intersect = !parallelMiss && intervalOverlaps;
   const originInside = pointInAabb2(claim.ray.origin, claim.box);
+  const pastMaxT = maxT !== undefined &&
+    !intersect &&
+    !parallelMiss &&
+    unboundedIntervalOverlaps &&
+    compareRaySlabEndpoint(maxT, unboundedEnterEndpoint) < 0;
   const classification: Ray2AabbClassification = intersect
     ? originInside
       ? "origin-inside"
       : "ray-hit"
     : parallelMiss
       ? "parallel-miss"
-      : isFiniteRaySlabEndpoint(tExitEndpoint) && tExitEndpoint.lessThan(zero)
+      : isFiniteRaySlabEndpoint(unboundedExitEndpoint) && unboundedExitEndpoint.lessThan(zero)
         ? "behind-ray"
-        : "slab-miss";
+        : pastMaxT
+          ? "past-max-t"
+          : "slab-miss";
   const hitPoint = intersect && isFiniteRaySlabEndpoint(tEnterEndpoint)
     ? rayPointAt(claim.ray, tEnterEndpoint)
     : undefined;
   const statedMatches = claim.statedIntersect === undefined || claim.statedIntersect === intersect;
+  const convention = maxT === undefined
+    ? "closed-aabb-ray-domain-t-greater-than-or-equal-zero"
+    : "closed-aabb-ray-domain-0-to-max-t";
+  const domainDescription = maxT === undefined ? "t >= 0" : `0 <= t <= ${maxT.toString()}`;
 
   return {
     schemaVersion: "truth-harness.ray2-aabb-intersection.v0",
     adapter: "local-ray2-aabb-intersection",
     source: claim.source,
-    convention: "closed-aabb-ray-domain-t-greater-than-or-equal-zero",
+    convention,
     ray: stringifyRay2(claim.ray),
     box: stringifyAabb2(claim.box),
     statedIntersect: claim.statedIntersect,
+    maxRayParameter: maxT?.toString(),
     axisIntervals: axisIntervals.map((interval) => ({
       axis: interval.axis,
       status: interval.status,
@@ -1330,16 +1381,15 @@ export function ray2AabbIntersectionCertificate(claim: Ray2AabbIntersectionClaim
       }
     ],
     trace: [
-      "Use a closed AABB and ray parameter domain t >= 0; boundary hits count as intersection.",
+      `Use a closed AABB and ray parameter domain ${domainDescription}; boundary hits count as intersection.`,
       `X slab interval is [${raySlabEndpointToString(xInterval.enter)}, ${raySlabEndpointToString(xInterval.exit)}] (${xInterval.status}).`,
       `Y slab interval is [${raySlabEndpointToString(yInterval.enter)}, ${raySlabEndpointToString(yInterval.exit)}] (${yInterval.status}).`,
-      `Intersect the slabs with t >= 0 to get [${raySlabEndpointToString(tEnterEndpoint)}, ${raySlabEndpointToString(tExitEndpoint)}].`,
+      `Intersect the slabs with ${domainDescription} to get [${raySlabEndpointToString(tEnterEndpoint)}, ${raySlabEndpointToString(tExitEndpoint)}].`,
       `Exact ray/AABB result is ${String(intersect)} (${classification}).`
     ],
     verdict: claim.statedIntersect === undefined ? "computed" : statedMatches ? "accepted" : "refuted"
   };
 }
-
 function raySlabAxisInterval(
   axis: "x" | "y",
   origin: bigint,

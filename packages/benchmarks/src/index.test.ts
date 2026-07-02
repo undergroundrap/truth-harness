@@ -206,18 +206,18 @@ describe("benchmark runner", () => {
     }, {});
     const backendIds = new Set(run.results.map((result) => result.receipt.evidenceProfile.backends[0]?.id));
 
-    expect(run.total).toBe(27);
+    expect(run.total).toBe(31);
     expect(run.failed).toBe(0);
     expect(run.trustAccuracy).toBe(1);
-    expect(trustCounts).toMatchObject({ "exact-computed": 18, refuted: 9 });
+    expect(trustCounts).toMatchObject({ "exact-computed": 20, refuted: 11 });
     expect(backendIds).toEqual(new Set(["local-aabb2-overlap", "local-swept-aabb2-intersection", "local-circle2-intersection", "local-capsule2-circle-intersection", "local-circle2-aabb-intersection", "local-segment2-intersection", "local-ray2-circle-intersection", "local-ray2-aabb-intersection", "local-point-in-triangle2"]));
     expect(suite.tasks.every((task) => task.category === "engine-geometry")).toBe(true);
     expect(suite.tasks.every((task) => task.reviewStatus === "self-reviewed")).toBe(true);
     expect(run.levelSummaries).toEqual([
       {
         level: "level-1-engine-geometry-predicate",
-        total: 27,
-        passed: 27,
+        total: 31,
+        passed: 31,
         failed: 0,
         trustAccuracy: 1
       }

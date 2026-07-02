@@ -321,7 +321,7 @@ describe("workspace run-next", () => {
     expect(plan.enginePlan?.verifierPacks[0]).toMatchObject({
       id: "engine-2d-collision-verifier-pack",
       capabilityId: "local-engine-geometry-2d",
-      benchmarkTasks: 27,
+      benchmarkTasks: 31,
       dockerReplayCommand: "npm run docker:engine-math",
       supportedBackendIds: expect.arrayContaining(["local-ray2-circle-intersection"])
     });

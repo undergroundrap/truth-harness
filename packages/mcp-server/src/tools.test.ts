@@ -477,7 +477,7 @@ describe("MCP tool handlers", () => {
       id: "engine-2d-collision-verifier-pack",
       capabilityId: "local-engine-geometry-2d",
       benchmarkSuite: {
-        totalTasks: 27,
+        totalTasks: 31,
         dockerCommand: "npm run docker:engine-math"
       },
       agentContract: {

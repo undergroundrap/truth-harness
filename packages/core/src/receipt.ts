@@ -3174,6 +3174,7 @@ function completeRay2CircleIntersectionReceipt(args: {
     mimeType: "application/json",
     content: JSON.stringify(certificate, null, 2)
   });
+  const rayDomainDescription = certificate.maxRayParameter === undefined ? "t >= 0" : `0 <= t <= ${certificate.maxRayParameter}`;
 
   const claimNode = addNode(args.nodes, args.createdAt, {
     kind: "claim",
@@ -3183,6 +3184,7 @@ function completeRay2CircleIntersectionReceipt(args: {
       convention: certificate.convention,
       ray: certificate.ray,
       circle: certificate.circle,
+      maxRayParameter: certificate.maxRayParameter,
       statedIntersect: certificate.statedIntersect
     },
     trust,
@@ -3204,13 +3206,14 @@ function completeRay2CircleIntersectionReceipt(args: {
       convention: certificate.convention,
       classification: certificate.classification,
       rayParameter: certificate.rayParameter,
+      maxRayParameter: certificate.maxRayParameter,
       closestPoint: certificate.closestPoint,
       closestRegion: certificate.closestRegion,
       distanceSquared: certificate.distanceSquared,
       radiusSquared: certificate.radiusSquared
     },
     trust,
-    summary: "Checked 2D ray/circle intersection with exact rational closest-point and squared-distance arithmetic.",
+    summary: `Checked 2D ray/circle intersection with exact rational closest-point arithmetic over ${rayDomainDescription}.`,
     artifactRefs: [artifact.id]
   });
   args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
@@ -3257,18 +3260,20 @@ function completeRay2CircleIntersectionReceipt(args: {
             `intersect=${String(certificate.intersect)}`,
             `stated=${String(certificate.statedIntersect)}`,
             `classification=${certificate.classification}`,
+            ...(certificate.maxRayParameter === undefined ? [] : [`maxRayParameter=${certificate.maxRayParameter}`]),
             statedMatches ? "ray2-circle-intersection=passed" : "ray2-circle-intersection=failed"
           ]
         : [
             `intersect=${String(certificate.intersect)}`,
             `classification=${certificate.classification}`,
+            ...(certificate.maxRayParameter === undefined ? [] : [`maxRayParameter=${certificate.maxRayParameter}`]),
             "ray2-circle-intersection=computed"
           ],
       replayable: true,
       proofCheckerBacked: false,
       limitations: [
         "This adapter only checks one 2D ray with integer origin and nonzero integer direction against one closed disk with integer center and integer radius.",
-        "The ray domain is t >= 0, boundary tangency counts as intersection, and closest-point projection is computed with exact rational arithmetic.",
+        `The ray domain is ${rayDomainDescription}, boundary tangency counts as intersection, and closest-point projection is computed with exact rational arithmetic.`,
         "This is deterministic distance-predicate arithmetic, not a full raycaster, broad-phase, visibility, or rendering-engine proof."
       ]
     },
@@ -3298,6 +3303,7 @@ function completeRay2AabbIntersectionReceipt(args: {
     mimeType: "application/json",
     content: JSON.stringify(certificate, null, 2)
   });
+  const rayDomainDescription = certificate.maxRayParameter === undefined ? "t >= 0" : `0 <= t <= ${certificate.maxRayParameter}`;
 
   const claimNode = addNode(args.nodes, args.createdAt, {
     kind: "claim",
@@ -3307,6 +3313,7 @@ function completeRay2AabbIntersectionReceipt(args: {
       convention: certificate.convention,
       ray: certificate.ray,
       box: certificate.box,
+      maxRayParameter: certificate.maxRayParameter,
       statedIntersect: certificate.statedIntersect
     },
     trust,
@@ -3329,10 +3336,11 @@ function completeRay2AabbIntersectionReceipt(args: {
       classification: certificate.classification,
       tEnter: certificate.tEnter,
       tExit: certificate.tExit,
+      maxRayParameter: certificate.maxRayParameter,
       axisIntervals: certificate.axisIntervals
     },
     trust,
-    summary: "Checked 2D ray/AABB intersection with exact rational slab intervals and t >= 0.",
+    summary: `Checked 2D ray/AABB intersection with exact rational slab intervals over ${rayDomainDescription}.`,
     artifactRefs: [artifact.id]
   });
   args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
@@ -3379,18 +3387,20 @@ function completeRay2AabbIntersectionReceipt(args: {
             `intersect=${String(certificate.intersect)}`,
             `stated=${String(certificate.statedIntersect)}`,
             `classification=${certificate.classification}`,
+            ...(certificate.maxRayParameter === undefined ? [] : [`maxRayParameter=${certificate.maxRayParameter}`]),
             statedMatches ? "ray2-aabb-intersection=passed" : "ray2-aabb-intersection=failed"
           ]
         : [
             `intersect=${String(certificate.intersect)}`,
             `classification=${certificate.classification}`,
+            ...(certificate.maxRayParameter === undefined ? [] : [`maxRayParameter=${certificate.maxRayParameter}`]),
             "ray2-aabb-intersection=computed"
           ],
       replayable: true,
       proofCheckerBacked: false,
       limitations: [
         "This adapter only checks 2D rays and AABBs with integer coordinates and integer direction vectors.",
-        "The ray domain is t >= 0 and the AABB is closed; boundary hits count as intersection.",
+        `The ray domain is ${rayDomainDescription} and the AABB is closed; boundary hits count as intersection.`,
         "This is deterministic slab arithmetic, not a full raycaster, BVH traversal, rendering, or physics proof."
       ]
     },
@@ -4194,7 +4204,7 @@ function parseSelfPowerLastDigitsClaim(problem: string): SelfPowerLastDigitsClai
     .replace(/\.$/u, "");
   const digitsPattern = "(?<digits>\\d+|one|two|three|four|five|six|seven|eight|nine|ten)";
   const seriesPattern = new RegExp(
-    `^(?:the\\s+)?last\\s+${digitsPattern}\\s+digits?\\s+of\\s+(?:the\\s+)?(?:series|sum)\\s+1\\^1\\s*\\+\\s*2\\^2(?:\\s*\\+\\s*3\\^3)?\\s*\\+\\s*(?:\\.{3}|cdots|…)\\s*\\+\\s*(?<upper>\\d+)\\^(?<upperExp>\\d+)(?:\\s*=\\s*(?<stated>\\d+))?$`,
+    `^(?:the\\s+)?last\\s+${digitsPattern}\\s+digits?\\s+of\\s+(?:the\\s+)?(?:series|sum)\\s+1\\^1\\s*\\+\\s*2\\^2(?:\\s*\\+\\s*3\\^3)?\\s*\\+\\s*(?:\\.{3}|cdots|â€¦)\\s*\\+\\s*(?<upper>\\d+)\\^(?<upperExp>\\d+)(?:\\s*=\\s*(?<stated>\\d+))?$`,
     "iu"
   );
   const namedPattern = new RegExp(
@@ -4342,7 +4352,7 @@ function parseBinomialThresholdCountClaim(problem: string): BinomialThresholdCou
   const candidate = latexToReadableMath(problem)
     .replace(/,/gu, "")
     .replace(/\$/gu, "")
-    .replace(/[≤]/gu, "<=")
+    .replace(/[â‰¤]/gu, "<=")
     .replace(/\bone[-\s]?million\b/giu, "1000000")
     .replace(/^(?:please\s+)?(?:find|compute|calculate|evaluate)\s+/iu, "")
     .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")

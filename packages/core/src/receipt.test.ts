@@ -687,6 +687,39 @@ describe("createReceipt", () => {
     expect(payload.distanceSquared).toBe("9");
     expect(payload.radiusSquared).toBe("1");
   });
+  it("supports finite max-t ray/circle hits", () => {
+    const receipt = createReceipt("verify ray origin(0,0) direction(1,0) intersect circle center(2,1) radius 1 max t 2 = true");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("tangent");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "stated=true", "classification=tangent", "maxRayParameter=2", "ray2-circle-intersection=passed"])
+    );
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("0 <= t <= 2");
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "ray2-circle-intersection-certificate");
+    const payload = JSON.parse(certificate?.content ?? "{}") as { convention?: string; maxRayParameter?: string; rayParameter?: string };
+    expect(payload).toMatchObject({
+      convention: "closed-disk-ray-domain-0-to-max-t",
+      maxRayParameter: "2",
+      rayParameter: "2"
+    });
+  });
+
+  it("refutes finite max-t ray/circle claims when the hit is beyond the raycast range", () => {
+    const receipt = createReceipt("verify ray origin(0,0) direction(1,0) intersect circle center(4,0) radius 1 max t 2 = true");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("past-max-t");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=false", "stated=true", "classification=past-max-t", "maxRayParameter=2", "ray2-circle-intersection=failed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "ray2-circle-intersection-certificate");
+    const payload = JSON.parse(certificate?.content ?? "{}") as { closestRegion?: string; rayParameter?: string; distanceSquared?: string; radiusSquared?: string };
+    expect(payload.closestRegion).toBe("max-t");
+    expect(payload.rayParameter).toBe("2");
+    expect(payload.distanceSquared).toBe("4");
+    expect(payload.radiusSquared).toBe("1");
+  });
 
   it("computes ray/AABB intersections with exact rational slab intervals", () => {
     const receipt = createReceipt("Do ray origin(0,2) direction(1,0) intersect AABB min(3,0) max(5,4)?");
@@ -738,6 +771,42 @@ describe("createReceipt", () => {
       expect.arrayContaining(["intersect=false", "stated=false", "classification=behind-ray", "ray2-aabb-intersection=passed"])
     );
     expect(receipt.evidenceProfile.limitations.join(" ")).toContain("ray domain is t >= 0");
+  });
+  it("supports finite max-t ray/AABB hits", () => {
+    const receipt = createReceipt("verify ray origin(0,2) direction(1,0) intersect AABB min(3,0) max(5,4) max t 3 = true");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("ray-hit");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "stated=true", "classification=ray-hit", "maxRayParameter=3", "ray2-aabb-intersection=passed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "ray2-aabb-intersection-certificate");
+    const payload = JSON.parse(certificate?.content ?? "{}") as { convention?: string; maxRayParameter?: string; tEnter?: string; tExit?: string; hitPoint?: { x?: string; y?: string } };
+    expect(payload).toMatchObject({
+      convention: "closed-aabb-ray-domain-0-to-max-t",
+      maxRayParameter: "3",
+      tEnter: "3",
+      tExit: "3",
+      hitPoint: { x: "3", y: "2" }
+    });
+  });
+
+  it("refutes finite max-t ray/AABB claims when the box is beyond the raycast range", () => {
+    const receipt = createReceipt("verify ray origin(0,2) direction(1,0) intersect AABB min(3,0) max(5,4) max t 2 = true");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("past-max-t");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=false", "stated=true", "classification=past-max-t", "maxRayParameter=2", "ray2-aabb-intersection=failed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "ray2-aabb-intersection-certificate");
+    const payload = JSON.parse(certificate?.content ?? "{}") as { maxRayParameter?: string; tEnter?: string; tExit?: string; classification?: string };
+    expect(payload).toMatchObject({
+      maxRayParameter: "2",
+      tEnter: "3",
+      tExit: "2",
+      classification: "past-max-t"
+    });
   });
   it("computes point-in-triangle membership with exact orientation tests", () => {
     const receipt = createReceipt("Is point (1,1) in triangle A(0,0) B(4,0) C(0,4)?");

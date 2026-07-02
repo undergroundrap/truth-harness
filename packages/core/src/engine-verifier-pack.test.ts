@@ -31,8 +31,8 @@ describe("engine verifier packs", () => {
       path: ENGINE_MATH_SEED_SUITE_PATH,
       totalTasks: suite.tasks.length,
       expectedTrustCounts: {
-        "exact-computed": 18,
-        refuted: 9
+        "exact-computed": 20,
+        refuted: 11
       }
     });
     expect(pack.capabilities.map((capability) => capability.backendId)).toEqual([

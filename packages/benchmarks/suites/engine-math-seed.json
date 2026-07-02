@@ -403,6 +403,44 @@
       "checkerBoundary": "Only the stated finite ray/circle predicate is refuted. The receipt does not evaluate arbitrary raycast systems, acceleration structures, visibility, or runtime engine state."
     },
     {
+      "id": "ray-circle-max-t-hit",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Treats a finite engine raycast like an infinite ray and loses the max-t boundary.",
+      "prompt": "verify ray origin(0,0) direction(1,0) intersect circle center(2,1) radius 1 max t 2 = true",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "tangent",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate ray/circle certificate",
+        "0 <= t <= max-t ray-domain convention",
+        "exact rational closest-point projection",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only the stated 2D closed-disk raycast with integer data and max t is checked. This is not a full raycaster, visibility, BVH, rendering, or physics-engine proof."
+    },
+    {
+      "id": "ray-circle-max-t-refuted",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Accepts an infinite-ray circle hit even though the finite raycast stops before the circle.",
+      "prompt": "verify ray origin(0,0) direction(1,0) intersect circle center(4,0) radius 1 max t 2 = true",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "past-max-t",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate ray/circle certificate",
+        "0 <= t <= max-t ray-domain convention",
+        "closest point clamped to max t",
+        "stated-answer mismatch"
+      ],
+      "checkerBoundary": "Only the stated finite ray/circle predicate is refuted. The receipt does not evaluate arbitrary raycast systems, acceleration structures, visibility, or runtime engine state."
+    },
+    {
       "id": "ray-aabb-hit",
       "firstLoggedAt": "2026-07-02",
       "category": "engine-geometry",
@@ -458,6 +496,44 @@
         "receipt replay command"
       ],
       "checkerBoundary": "The result depends on the recorded ray-domain convention. Infinite-line or segment-cast checks need separate adapters and receipts."
+    },
+    {
+      "id": "ray-aabb-max-t-hit",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Loses the finite raycast endpoint when checking exact slab intervals.",
+      "prompt": "verify ray origin(0,2) direction(1,0) intersect AABB min(3,0) max(5,4) max t 3 = true",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "ray-hit",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate ray/AABB certificate",
+        "0 <= t <= max-t ray-domain convention",
+        "exact rational slab interval",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only one bounded 2D ray/AABB predicate with integer data is checked. This is not a full raycaster, BVH traversal, rendering, or physics proof."
+    },
+    {
+      "id": "ray-aabb-max-t-refuted",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Accepts an infinite-ray AABB hit even though the finite raycast ends before box entry.",
+      "prompt": "verify ray origin(0,2) direction(1,0) intersect AABB min(3,0) max(5,4) max t 2 = true",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "past-max-t",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate ray/AABB certificate",
+        "0 <= t <= max-t ray-domain convention",
+        "entry t exceeds max t",
+        "stated-answer mismatch"
+      ],
+      "checkerBoundary": "Only the stated finite ray/AABB predicate is refuted. The receipt does not evaluate arbitrary scene geometry or runtime engine state."
     },
     {
       "id": "point-triangle-inside",

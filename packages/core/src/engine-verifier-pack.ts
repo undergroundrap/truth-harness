@@ -156,13 +156,14 @@ const ENGINE_2D_COLLISION_CAPABILITIES: EngineVerifierPackCapability[] = [
     backendId: "local-ray2-circle-intersection",
     promptForms: [
       "Do ray origin(0,0) direction(1,0) intersect circle center(3,1) radius 2?",
-      "verify ray origin(0,0) direction(1,0) intersect circle center(-3,0) radius 1 = true"
+      "verify ray origin(0,0) direction(1,0) intersect circle center(-3,0) radius 1 = true",
+      "verify ray origin(0,0) direction(1,0) intersect circle center(4,0) radius 1 max t 2 = true"
     ],
-    benchmarkTaskIds: ["ray-circle-hit", "ray-circle-tangent-counts-as-hit", "ray-circle-behind-ray-refuted"],
+    benchmarkTaskIds: ["ray-circle-hit", "ray-circle-tangent-counts-as-hit", "ray-circle-behind-ray-refuted", "ray-circle-max-t-hit", "ray-circle-max-t-refuted"],
     evidenceKind: "exact-arithmetic",
     strongestTrust: "exact-computed",
     convention: "closed-disk-ray-domain-t-greater-than-or-equal-zero",
-    boundary: "Only integer-origin, nonzero integer-direction 2D rays against integer-coordinate closed disks are checked."
+    boundary: "Only integer-origin, nonzero integer-direction 2D rays against integer-coordinate closed disks are checked; optional max-t finite raycast domains are supported."
   },
   {
     id: "ray2-aabb2-intersection",
@@ -171,13 +172,14 @@ const ENGINE_2D_COLLISION_CAPABILITIES: EngineVerifierPackCapability[] = [
     backendId: "local-ray2-aabb-intersection",
     promptForms: [
       "Do ray origin(0,2) direction(1,0) intersect AABB min(3,0) max(5,4)?",
-      "verify ray origin(0,5) direction(1,0) intersect AABB min(3,0) max(5,4) = true"
+      "verify ray origin(0,5) direction(1,0) intersect AABB min(3,0) max(5,4) = true",
+      "verify ray origin(0,2) direction(1,0) intersect AABB min(3,0) max(5,4) max t 2 = true"
     ],
-    benchmarkTaskIds: ["ray-aabb-hit", "ray-aabb-parallel-miss-refuted", "ray-aabb-behind-ray"],
+    benchmarkTaskIds: ["ray-aabb-hit", "ray-aabb-parallel-miss-refuted", "ray-aabb-behind-ray", "ray-aabb-max-t-hit", "ray-aabb-max-t-refuted"],
     evidenceKind: "exact-arithmetic",
     strongestTrust: "exact-computed",
     convention: "closed-aabb-ray-domain-t-greater-than-or-equal-zero",
-    boundary: "Only integer-origin, nonzero integer-direction 2D rays against integer-coordinate AABBs are checked."
+    boundary: "Only integer-origin, nonzero integer-direction 2D rays against integer-coordinate AABBs are checked; optional max-t finite raycast domains are supported."
   },
   {
     id: "point2-triangle2-membership",
@@ -214,10 +216,10 @@ export function getEngineVerifierPacks(): EngineVerifierPack[] {
         path: ENGINE_MATH_SEED_SUITE_PATH,
         nativeCommand: "npm run demo:engine-math",
         dockerCommand: "npm run docker:engine-math",
-        totalTasks: 27,
+        totalTasks: 31,
         expectedTrustCounts: {
-          "exact-computed": 18,
-          refuted: 9
+          "exact-computed": 20,
+          refuted: 11
         }
       },
       capabilities: ENGINE_2D_COLLISION_CAPABILITIES,
