@@ -1,5 +1,5 @@
 import { createEngineReadinessReportFromManifest } from "./engine-readiness.js";
-import { ENGINE_2D_COLLISION_CAPABILITY_ID } from "./engine-verifier-pack.js";
+import { ENGINE_2D_COLLISION_CAPABILITY_ID, type EngineVerifierPack } from "./engine-verifier-pack.js";
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
 import type { EngineVerificationRunSummary } from "./engine-verification.js";
 import type { TrustLabel } from "./types.js";
@@ -66,6 +66,7 @@ export interface EnginePlan {
   recommendedFirstCommand: string;
   steps: EnginePlanStep[];
   comparisonMatrix: EnginePlanComparisonRow[];
+  verifierPacks: EnginePlanVerifierPackSummary[];
   blockedCapabilityIds: string[];
   readyCapabilityIds: string[];
   savedReviewerEvidence: EnginePlanSavedReviewerEvidence;
@@ -85,6 +86,20 @@ export interface CreateEnginePlanOptions extends EngineManifestOptions {
   now?: Date;
   manifest?: EngineManifest;
   savedEngineRuns?: EngineVerificationRunSummary[];
+}
+
+export interface EnginePlanVerifierPackSummary {
+  id: string;
+  capabilityId: string;
+  displayName: string;
+  lane: string;
+  status: EngineVerifierPack["status"];
+  benchmarkTasks: number;
+  nativeReplayCommand: string;
+  dockerReplayCommand: string;
+  supportedBackendIds: string[];
+  agentContract: EngineVerifierPack["agentContract"];
+  limitations: string[];
 }
 
 export interface EnginePlanSavedReviewerEvidence {
@@ -113,6 +128,7 @@ export function createEnginePlan(problem: string, options: CreateEnginePlanOptio
   const templates = routeTemplatesFor(classifications);
   const savedReviewerEvidence = savedReviewerEvidenceFor(options.savedEngineRuns ?? []);
   const steps = buildPlanSteps(templates, manifest.capabilities, savedReviewerEvidence);
+  const verifierPacks = verifierPackSummariesFor(steps, manifest.verifierPacks);
   const readyCapabilityIds = steps.filter((step) => step.canRunNow).map((step) => step.capabilityId);
   const blockedCapabilityIds = steps.filter((step) => !step.canRunNow).map((step) => step.capabilityId);
   const targetTrustCeiling = strongestTrustFor(steps);
@@ -131,6 +147,7 @@ export function createEnginePlan(problem: string, options: CreateEnginePlanOptio
     recommendedFirstCommand: recommendedFirstCommand(problem, steps),
     steps,
     comparisonMatrix: steps.map((step, index) => comparisonRow(step, templates[index])),
+    verifierPacks,
     blockedCapabilityIds,
     readyCapabilityIds,
     savedReviewerEvidence,
@@ -417,6 +434,25 @@ function buildPlanSteps(
       limitation
     };
   });
+}
+
+function verifierPackSummariesFor(steps: EnginePlanStep[], packs: EngineVerifierPack[]): EnginePlanVerifierPackSummary[] {
+  const stepCapabilityIds = new Set(steps.map((step) => step.capabilityId));
+  return packs
+    .filter((pack) => stepCapabilityIds.has(pack.capabilityId))
+    .map((pack) => ({
+      id: pack.id,
+      capabilityId: pack.capabilityId,
+      displayName: pack.displayName,
+      lane: pack.lane,
+      status: pack.status,
+      benchmarkTasks: pack.benchmarkSuite.totalTasks,
+      nativeReplayCommand: pack.benchmarkSuite.nativeCommand,
+      dockerReplayCommand: pack.benchmarkSuite.dockerCommand,
+      supportedBackendIds: pack.capabilities.map((capability) => capability.backendId),
+      agentContract: pack.agentContract,
+      limitations: pack.limitations
+    }));
 }
 
 function comparisonRow(step: EnginePlanStep, template: StepTemplate | undefined): EnginePlanComparisonRow {

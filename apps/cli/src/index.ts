@@ -6345,6 +6345,16 @@ function printEnginePlan(plan: EnginePlan): void {
     console.log(`     Boundary: ${step.limitation}`);
   }
 
+  if (plan.verifierPacks.length > 0) {
+    console.log("");
+    console.log("Matched verifier packs:");
+    for (const pack of plan.verifierPacks) {
+      console.log(`  ${pack.displayName} (${pack.id})`);
+      console.log(`    Capability: ${pack.capabilityId}; status: ${pack.status}; benchmark tasks: ${pack.benchmarkTasks}`);
+      console.log(`    Docker replay: ${pack.dockerReplayCommand}`);
+      console.log(`    Backends: ${pack.supportedBackendIds.join(", ")}`);
+    }
+  }
   console.log("");
   console.log("Comparison matrix:");
   for (const row of plan.comparisonMatrix) {

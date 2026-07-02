@@ -44,6 +44,8 @@ npm run cli -- engines plan "does this ray intersect the circle?"
 
 Agents can also list verifier packs before planning a claim. This is read-only: it exposes supported predicates, backend ids, replay commands, and the benchmark gate without running engines or minting evidence.
 
+When `engines plan` selects this lane, the plan JSON and any `workspace run-next` handoff embed a compact matched-pack summary so agents see the pack id, backend ids, benchmark task count, and Docker replay command without a second lookup.
+
 ```bash
 npm run cli -- engines packs
 npm run cli -- engines packs local-engine-geometry-2d -- --json

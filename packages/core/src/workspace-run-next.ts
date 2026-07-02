@@ -1116,6 +1116,15 @@ export function renderWorkspaceRunNextMarkdown(plan: WorkspaceRunNextPlan): stri
           ...plan.enginePlan.steps.map((step) =>
             `  - ${step.rank}. ${step.displayName} (\`${step.capabilityId}\`, \`${step.role}\`, \`${step.status}\`) - ${step.evidenceRequired}`
           ),
+          ...(plan.enginePlan.verifierPacks.length > 0
+            ? [
+                "- Matched verifier packs:",
+                ...plan.enginePlan.verifierPacks.map(
+                  (pack) =>
+                    `  - ${pack.displayName} (\`${pack.id}\`): ${pack.benchmarkTasks} benchmark tasks; Docker replay \`${pack.dockerReplayCommand}\`; backends ${pack.supportedBackendIds.join(", ")}`
+                )
+              ]
+            : []),
           "- Planner boundary: engine plans are routing contracts only; concrete receipts/proof/SMT/CAS artifacts must still be written."
         ]
       : []),

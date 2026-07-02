@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { classifyProblem, createEnginePlan } from "./engine-plan.js";
+import { getEngineVerifierPacks } from "./engine-verifier-pack.js";
 import type { EngineCapability, EngineManifest } from "./engine-manifest.js";
 
 describe("engine plan", () => {
@@ -146,6 +147,17 @@ describe("engine plan", () => {
     expect(plan.comparisonMatrix[0]).toMatchObject({
       capabilityId: "local-engine-geometry-2d",
       agreementValue: "primary"
+    });
+    expect(plan.verifierPacks[0]).toMatchObject({
+      id: "engine-2d-collision-verifier-pack",
+      capabilityId: "local-engine-geometry-2d",
+      benchmarkTasks: 27,
+      dockerReplayCommand: "npm run docker:engine-math",
+      supportedBackendIds: expect.arrayContaining(["local-ray2-circle-intersection"]),
+      agentContract: expect.objectContaining({
+        routeBeforeGenericMath: true,
+        attachConcreteReceiptBeforeClaim: true
+      })
     });
     expect(plan.nextActions.join("\n")).toContain("docker:engine-math");
   });
@@ -298,7 +310,7 @@ function manifestWith(overrides: Record<string, Partial<EngineCapability>> = {})
     deterministicCount: capabilities.filter((entry) => entry.kind === "native-kernel").length,
     replayDeterministicCount: capabilities.filter((entry) => entry.kind === "adapter").length,
     capabilities,
-    verifierPacks: [],
+    verifierPacks: getEngineVerifierPacks(),
     machineContract: {
       jsonFirst: true,
       diagnosticsAreStructured: true,

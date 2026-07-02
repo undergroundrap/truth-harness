@@ -294,6 +294,42 @@ describe("workspace run-next", () => {
     );
   });
 
+  it("embeds matched verifier pack summaries in engine handoff packets", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
+    const review = minimalReview({
+      rootPath: root,
+      command:
+        `truth-harness verify "verify ray origin(0,0) direction(1,0) intersect circle center(3,1) radius 2 = true" --write --workspace ${root} --json`,
+      claimId: "claim_engine_geometry_pack",
+      kind: "validation-gate",
+      validationPlanId: "vpl_engine_geometry_pack",
+      validationGateId: "gate_engine_geometry_pack",
+      validationGateKind: "proof",
+      domain: "engineering"
+    });
+
+    const plan = await createWorkspaceRunNextPlan({
+      rootPath: root,
+      review,
+      executeLocal: false,
+      now: "2026-06-18T00:02:00.000Z"
+    });
+    const result = await writeWorkspaceRunNextPlan({ rootPath: root, plan });
+
+    expect(plan.enginePlan?.classifications).toContain("engine-geometry");
+    expect(plan.enginePlan?.verifierPacks[0]).toMatchObject({
+      id: "engine-2d-collision-verifier-pack",
+      capabilityId: "local-engine-geometry-2d",
+      benchmarkTasks: 27,
+      dockerReplayCommand: "npm run docker:engine-math",
+      supportedBackendIds: expect.arrayContaining(["local-ray2-circle-intersection"])
+    });
+    expect(result.markdown).toContain("Matched verifier packs");
+    expect(result.markdown).toContain("engine-2d-collision-verifier-pack");
+    expect(result.markdown).toContain("npm run docker:engine-math");
+  });
+
   it("attaches direct proof-check artifacts to linked validation gates without overclaiming", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });

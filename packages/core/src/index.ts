@@ -896,6 +896,7 @@ export type {
   EnginePlanSavedReviewerEvidence,
   EnginePlanStatus,
   EnginePlanStep,
+  EnginePlanVerifierPackSummary,
   EnginePlanStepRole
 } from "./engine-plan.js";
 export type {
