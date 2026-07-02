@@ -106,14 +106,20 @@ This is the first concrete bridge for external engines: production code can run 
 
 ## Known External Producer: VIRE
 
-Last verified: 2026-07-02 against sibling VIRE commit `e0ceef70a0462436273e04775fb0637382850f8e` (`feat(verification): share exact geometry predicates`).
+Last verified: 2026-07-02 against sibling VIRE commit `0037f21d91e9cf965cc0a17c1ab01b94a09708d4` (`feat(verification): add truth harness validate command`).
 
-VIRE now owns the observed primitive answers in `vire_core::geometry2`; its CLI exporter serializes those engine-owned exact predicates into `truth-harness.engine-case-bundle.v0`. Truth Harness then validates the bundle by recomputing every case locally without executing VIRE code.
+VIRE now owns the observed primitive answers in `vire_core::geometry2`; its CLI exporter serializes those engine-owned exact predicates into `truth-harness.engine-case-bundle.v0`. The `vire truth-harness validate` lane exports the bundle, invokes Truth Harness, and returns the validation report while Truth Harness recomputes every case locally without executing VIRE code.
 
-Validation command from this Truth Harness checkout:
+Validation command from the sibling VIRE checkout:
 
 ```powershell
-node apps\cli\dist\index.js engines validate ..\vire-engine\target\truth-harness\engine-cases.json
+& "$env:USERPROFILE\.cargo\bin\cargo.exe" run -p vire_cli -- truth-harness validate
+```
+
+Equivalent direct Truth Harness command:
+
+```powershell
+node apps\cli\dist\index.js engines validate ..\vire-engine\target\truth-harness\engine-cases.json --json
 ```
 
 Observed result:
