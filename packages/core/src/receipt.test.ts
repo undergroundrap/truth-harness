@@ -355,6 +355,62 @@ describe("createReceipt", () => {
     );
     expect(receipt.evidenceProfile.limitations.join(" ")).toContain("touching edges or corners count as overlap");
   });
+  it("computes swept AABB hits with exact rational time windows", () => {
+    const receipt = createReceipt("Do swept AABB A min(0,0) max(1,1) velocity(3,0) intersect AABB B min(3,0) max(4,1) over t in [0,1]?");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("true");
+    expect(receipt.summary).toContain("swept-hit");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-swept-aabb2-intersection");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "classification=swept-hit", "tEnter=2/3", "tExit=1", "swept-aabb2-intersection=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "swept-aabb2-intersection-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      intersect?: boolean;
+      classification?: string;
+      tEnter?: string;
+      tExit?: string;
+      impactAabb?: { minX?: string; maxX?: string };
+    };
+    expect(payload).toMatchObject({
+      intersect: true,
+      classification: "swept-hit",
+      tEnter: "2/3",
+      tExit: "1",
+      impactAabb: { minX: "2", maxX: "3" }
+    });
+  });
+
+  it("detects initial swept AABB overlap at t=0 under the closed AABB convention", () => {
+    const receipt = createReceipt("verify swept AABB A min(0,0) max(2,2) velocity(5,0) intersect AABB B min(1,1) max(3,3) over t in [0,1] = true");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("initial-overlap");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "stated=true", "classification=initial-overlap", "tEnter=0", "swept-aabb2-intersection=passed"])
+    );
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("boundary contact counts as intersection");
+  });
+
+  it("refutes wrong swept AABB claims when impact happens after the frame window", () => {
+    const receipt = createReceipt("verify swept AABB A min(0,0) max(1,1) velocity(1,0) intersect AABB B min(3,0) max(4,1) over t in [0,1] = true");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("false");
+    expect(receipt.summary).toContain("time-window-miss");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=false", "stated=true", "classification=time-window-miss", "swept-aabb2-intersection=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "swept-aabb2-intersection-certificate");
+    const payload = JSON.parse(certificate?.content ?? "{}") as { tEnter?: string; tExit?: string };
+    expect(payload.tEnter).toBe("2");
+    expect(payload.tExit).toBe("1");
+  });
+
   it("computes circle/AABB intersections with exact squared-distance arithmetic", () => {
     const receipt = createReceipt("Do circle center(2,2) radius 2 intersect AABB min(3,0) max(6,4)?");
 

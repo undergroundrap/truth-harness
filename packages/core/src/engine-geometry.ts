@@ -18,6 +18,14 @@ export interface Point2 {
   y: bigint;
 }
 
+export interface SweptAabb2IntersectionClaim {
+  source: string;
+  moving: Aabb2;
+  velocity: Point2;
+  target: Aabb2;
+  statedIntersect?: boolean;
+}
+
 export interface Circle2 {
   center: Point2;
   radius: bigint;
@@ -71,10 +79,18 @@ export type Circle2AabbClassification = "center-inside" | "overlap" | "tangent" 
 export type PointInTriangle2Classification = "inside" | "edge" | "vertex" | "outside";
 export type RaySlabEndpoint = Rational | "negative-infinity" | "positive-infinity";
 export type Ray2AabbClassification = "ray-hit" | "origin-inside" | "parallel-miss" | "behind-ray" | "slab-miss";
+export type SweptAabb2Classification = "initial-overlap" | "swept-hit" | "parallel-miss" | "axis-window-miss" | "time-window-miss";
 
 export interface RaySlabAxisInterval {
   axis: "x" | "y";
   status: "bounded" | "parallel-inside" | "parallel-outside";
+  enter: RaySlabEndpoint;
+  exit: RaySlabEndpoint;
+}
+
+export interface SweptAabb2AxisInterval {
+  axis: "x" | "y";
+  status: "bounded" | "static-overlap" | "static-separated";
   enter: RaySlabEndpoint;
   exit: RaySlabEndpoint;
 }
@@ -217,6 +233,196 @@ function stringifyAabb2(box: Aabb2): Record<keyof Aabb2, string> {
     minY: box.minY.toString(),
     maxX: box.maxX.toString(),
     maxY: box.maxY.toString()
+  };
+}
+
+export function parseSweptAabb2IntersectionClaim(problem: string): SweptAabb2IntersectionClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.?]$/u, "");
+  const match = /^(?:do\s+)?swept\s+aabb\s+a\s+min\s*\(\s*(?<aMinX>-?\d+)\s*,\s*(?<aMinY>-?\d+)\s*\)\s+max\s*\(\s*(?<aMaxX>-?\d+)\s*,\s*(?<aMaxY>-?\d+)\s*\)\s+velocity\s*\(\s*(?<velocityX>-?\d+)\s*,\s*(?<velocityY>-?\d+)\s*\)\s+intersects?\s+aabb\s+b\s+min\s*\(\s*(?<bMinX>-?\d+)\s*,\s*(?<bMinY>-?\d+)\s*\)\s+max\s*\(\s*(?<bMaxX>-?\d+)\s*,\s*(?<bMaxY>-?\d+)\s*\)\s+over\s+t\s+in\s*\[\s*0\s*,\s*1\s*\](?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  const requiredGroups = [
+    "aMinX",
+    "aMinY",
+    "aMaxX",
+    "aMaxY",
+    "velocityX",
+    "velocityY",
+    "bMinX",
+    "bMinY",
+    "bMaxX",
+    "bMaxY"
+  ];
+  if (requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18)) {
+    return undefined;
+  }
+
+  const moving: Aabb2 = {
+    minX: BigInt(match.groups.aMinX),
+    minY: BigInt(match.groups.aMinY),
+    maxX: BigInt(match.groups.aMaxX),
+    maxY: BigInt(match.groups.aMaxY)
+  };
+  const target: Aabb2 = {
+    minX: BigInt(match.groups.bMinX),
+    minY: BigInt(match.groups.bMinY),
+    maxX: BigInt(match.groups.bMaxX),
+    maxY: BigInt(match.groups.bMaxY)
+  };
+  if (!isValidAabb2(moving) || !isValidAabb2(target)) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    moving,
+    velocity: { x: BigInt(match.groups.velocityX), y: BigInt(match.groups.velocityY) },
+    target,
+    statedIntersect: match.groups.stated === undefined ? undefined : match.groups.stated.toLowerCase() === "true"
+  };
+}
+
+export function sweptAabb2IntersectionCertificate(claim: SweptAabb2IntersectionClaim): {
+  schemaVersion: "truth-harness.swept-aabb2-intersection.v0";
+  adapter: "local-swept-aabb2-intersection";
+  source: string;
+  convention: "closed-aabb-continuous-time-t-in-zero-one";
+  moving: Record<keyof Aabb2, string>;
+  target: Record<keyof Aabb2, string>;
+  velocity: Record<keyof Point2, string>;
+  statedIntersect?: boolean;
+  axisIntervals: Array<{
+    axis: "x" | "y";
+    status: "bounded" | "static-overlap" | "static-separated";
+    enter: string;
+    exit: string;
+  }>;
+  tEnter: string;
+  tExit: string;
+  intersect: boolean;
+  classification: SweptAabb2Classification;
+  impactAabb?: Record<keyof Aabb2, string>;
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const xInterval = sweptAabb2AxisInterval("x", claim.moving.minX, claim.moving.maxX, claim.target.minX, claim.target.maxX, claim.velocity.x);
+  const yInterval = sweptAabb2AxisInterval("y", claim.moving.minY, claim.moving.maxY, claim.target.minY, claim.target.maxY, claim.velocity.y);
+  const axisIntervals = [xInterval, yInterval];
+  const staticSeparated = axisIntervals.some((interval) => interval.status === "static-separated");
+  const zero = Rational.integer(0);
+  const one = Rational.integer(1);
+  const tEnterEndpoint = maxRaySlabEndpoint([zero, xInterval.enter, yInterval.enter]);
+  const tExitEndpoint = minRaySlabEndpoint([one, xInterval.exit, yInterval.exit]);
+  const axisWindowsOverlap = compareRaySlabEndpoint(maxRaySlabEndpoint([xInterval.enter, yInterval.enter]), minRaySlabEndpoint([xInterval.exit, yInterval.exit])) <= 0;
+  const intersect = !staticSeparated && axisWindowsOverlap && compareRaySlabEndpoint(tEnterEndpoint, tExitEndpoint) <= 0;
+  const initialOverlap = aabb2OverlapBoolean(claim.moving, claim.target);
+  const classification: SweptAabb2Classification = intersect
+    ? initialOverlap
+      ? "initial-overlap"
+      : "swept-hit"
+    : staticSeparated
+      ? "parallel-miss"
+      : axisWindowsOverlap
+        ? "time-window-miss"
+        : "axis-window-miss";
+  const impactAabb = intersect && isFiniteRaySlabEndpoint(tEnterEndpoint)
+    ? sweptAabb2At(claim.moving, claim.velocity, tEnterEndpoint)
+    : undefined;
+  const statedMatches = claim.statedIntersect === undefined || claim.statedIntersect === intersect;
+
+  return {
+    schemaVersion: "truth-harness.swept-aabb2-intersection.v0",
+    adapter: "local-swept-aabb2-intersection",
+    source: claim.source,
+    convention: "closed-aabb-continuous-time-t-in-zero-one",
+    moving: stringifyAabb2(claim.moving),
+    target: stringifyAabb2(claim.target),
+    velocity: stringifyPoint2(claim.velocity),
+    statedIntersect: claim.statedIntersect,
+    axisIntervals: axisIntervals.map((interval) => ({
+      axis: interval.axis,
+      status: interval.status,
+      enter: raySlabEndpointToString(interval.enter),
+      exit: raySlabEndpointToString(interval.exit)
+    })),
+    tEnter: raySlabEndpointToString(tEnterEndpoint),
+    tExit: raySlabEndpointToString(tExitEndpoint),
+    intersect,
+    classification,
+    impactAabb,
+    checks: [
+      {
+        id: "valid-swept-aabb-inputs",
+        ok: true,
+        expected: "valid moving and target AABBs with integer velocity over 0 <= t <= 1",
+        observed: "moving AABB, target AABB, and integer velocity are valid"
+      },
+      {
+        id: "closed-continuous-time-sweep-result",
+        ok: statedMatches,
+        expected: String(intersect),
+        observed: claim.statedIntersect === undefined ? String(intersect) : String(claim.statedIntersect)
+      }
+    ],
+    trace: [
+      "Use continuous time 0 <= t <= 1 with closed AABBs; boundary contact counts as intersection.",
+      `X overlap time window is [${raySlabEndpointToString(xInterval.enter)}, ${raySlabEndpointToString(xInterval.exit)}] (${xInterval.status}).`,
+      `Y overlap time window is [${raySlabEndpointToString(yInterval.enter)}, ${raySlabEndpointToString(yInterval.exit)}] (${yInterval.status}).`,
+      `Intersect the axis windows with [0, 1] to get [${raySlabEndpointToString(tEnterEndpoint)}, ${raySlabEndpointToString(tExitEndpoint)}].`,
+      `Exact swept AABB result is ${String(intersect)} (${classification}).`
+    ],
+    verdict: claim.statedIntersect === undefined ? "computed" : statedMatches ? "accepted" : "refuted"
+  };
+}
+
+function sweptAabb2AxisInterval(
+  axis: "x" | "y",
+  movingMin: bigint,
+  movingMax: bigint,
+  targetMin: bigint,
+  targetMax: bigint,
+  velocity: bigint
+): SweptAabb2AxisInterval {
+  if (velocity === 0n) {
+    const overlaps = movingMin <= targetMax && movingMax >= targetMin;
+    return {
+      axis,
+      status: overlaps ? "static-overlap" : "static-separated",
+      enter: overlaps ? "negative-infinity" : "positive-infinity",
+      exit: overlaps ? "positive-infinity" : "negative-infinity"
+    };
+  }
+
+  const first = new Rational(targetMin - movingMax, velocity);
+  const second = new Rational(targetMax - movingMin, velocity);
+  return {
+    axis,
+    status: "bounded",
+    enter: first.lessThanOrEqual(second) ? first : second,
+    exit: first.lessThanOrEqual(second) ? second : first
+  };
+}
+
+function aabb2OverlapBoolean(a: Aabb2, b: Aabb2): boolean {
+  return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
+}
+
+function sweptAabb2At(aabb: Aabb2, velocity: Point2, t: Rational): Record<keyof Aabb2, string> {
+  const offsetX = Rational.integer(velocity.x).multiply(t);
+  const offsetY = Rational.integer(velocity.y).multiply(t);
+  return {
+    minX: Rational.integer(aabb.minX).add(offsetX).toString(),
+    minY: Rational.integer(aabb.minY).add(offsetY).toString(),
+    maxX: Rational.integer(aabb.maxX).add(offsetX).toString(),
+    maxY: Rational.integer(aabb.maxY).add(offsetY).toString()
   };
 }
 

@@ -1,7 +1,7 @@
 {
   "id": "engine-math-seed",
   "title": "Engine Math Seed Suite",
-  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap, circle/AABB intersection, segment intersection, ray/AABB, and point-in-triangle receipts before expanding to harder engine invariants.",
+  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap, swept AABB intersection, circle/AABB intersection, segment intersection, ray/AABB, and point-in-triangle receipts before expanding to harder engine invariants.",
   "tasks": [
     {
       "id": "aabb-overlap-true",
@@ -59,6 +59,63 @@
         "receipt replay command"
       ],
       "checkerBoundary": "The result depends on the recorded closed-interval convention. A half-open or open-interval engine policy would need a different adapter and receipt."
+    },
+    {
+      "id": "swept-aabb-frame-hit",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Uses discrete end-position collision checks and misses the exact time-of-impact window.",
+      "prompt": "Do swept AABB A min(0,0) max(1,1) velocity(3,0) intersect AABB B min(3,0) max(4,1) over t in [0,1]?",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "swept-hit",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate swept AABB certificate",
+        "exact rational axis time windows",
+        "time-of-impact interval over 0 <= t <= 1",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only one moving 2D AABB against one static 2D AABB with integer velocity over the frame interval 0 <= t <= 1 is checked. This is not a full physics, broad-phase, or response solver proof."
+    },
+    {
+      "id": "swept-aabb-initial-overlap",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Forgets that already-overlapping boxes at t=0 satisfy a closed continuous-time sweep.",
+      "prompt": "verify swept AABB A min(0,0) max(2,2) velocity(5,0) intersect AABB B min(1,1) max(3,3) over t in [0,1] = true",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "initial-overlap",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate swept AABB certificate",
+        "initial overlap classification",
+        "closed-boundary convention",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "The result depends on the recorded closed-AABB convention. Open-boundary or tolerance-based physics policies need separate adapters and receipts."
+    },
+    {
+      "id": "swept-aabb-after-frame-refuted",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Claims a collision without checking that the time-of-impact occurs inside the current frame window.",
+      "prompt": "verify swept AABB A min(0,0) max(1,1) velocity(1,0) intersect AABB B min(3,0) max(4,1) over t in [0,1] = true",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "time-window-miss",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate swept AABB certificate",
+        "exact rational axis time windows",
+        "time-of-impact outside 0 <= t <= 1",
+        "stated-answer mismatch"
+      ],
+      "checkerBoundary": "Only the stated finite swept AABB predicate is refuted. The receipt does not evaluate arbitrary scenes, collision response, or runtime engine state."
     },
     {
       "id": "circle-aabb-overlap",

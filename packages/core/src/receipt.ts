@@ -7,6 +7,7 @@ import { createArithmeticTrace } from "./arithmetic-trace.js";
 import {
   aabb2OverlapCertificate,
   circle2AabbIntersectionCertificate,
+  parseSweptAabb2IntersectionClaim,
   parseAabb2OverlapClaim,
   parseCircle2AabbIntersectionClaim,
   parsePointInTriangle2Claim,
@@ -15,11 +16,13 @@ import {
   pointInTriangle2Certificate,
   ray2AabbIntersectionCertificate,
   segment2IntersectionCertificate,
+  sweptAabb2IntersectionCertificate,
   type Aabb2OverlapClaim,
   type Circle2AabbIntersectionClaim,
   type PointInTriangle2Claim,
   type Ray2AabbIntersectionClaim,
-  type Segment2IntersectionClaim
+  type Segment2IntersectionClaim,
+  type SweptAabb2IntersectionClaim
 } from "./engine-geometry.js";
 import { checkSymbolicWithMaximaSync, type CasBackendCommandRunner } from "./cas-backend.js";
 import { stableHash } from "./stable-hash.js";
@@ -341,6 +344,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const sweptAabb2Intersection = parseSweptAabb2IntersectionClaim(normalizedProblem);
+  if (sweptAabb2Intersection) {
+    return completeSweptAabb2IntersectionReceipt({
+      problem,
+      normalizedProblem,
+      claim: sweptAabb2Intersection,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const circle2AabbIntersection = parseCircle2AabbIntersectionClaim(normalizedProblem);
   if (circle2AabbIntersection) {
     return completeCircle2AabbIntersectionReceipt({
@@ -425,7 +443,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate circle/AABB intersection predicates, integer-coordinate segment intersection predicates, integer-coordinate ray/AABB intersection predicates, integer-coordinate point-in-triangle predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate swept AABB intersection predicates, integer-coordinate circle/AABB intersection predicates, integer-coordinate segment intersection predicates, integer-coordinate ray/AABB intersection predicates, integer-coordinate point-in-triangle predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -2458,6 +2476,134 @@ function completeAabb2OverlapReceipt(args: {
         "This adapter only checks 2D axis-aligned bounding boxes with integer coordinates.",
         "Closed intervals are used: touching edges or corners count as overlap.",
         "This is a deterministic geometry predicate, not a full collision simulation, swept test, or physics proof."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
+function completeSweptAabb2IntersectionReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: SweptAabb2IntersectionClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = sweptAabb2IntersectionCertificate(args.claim);
+  const hasStatedIntersect = args.claim.statedIntersect !== undefined;
+  const statedMatches = !hasStatedIntersect || certificate.intersect === certificate.statedIntersect;
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const artifact = addArtifact(args.artifacts, {
+    kind: "swept-aabb2-intersection-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-swept-aabb2-intersection",
+      source: args.claim.source,
+      convention: certificate.convention,
+      moving: certificate.moving,
+      velocity: certificate.velocity,
+      target: certificate.target,
+      statedIntersect: certificate.statedIntersect
+    },
+    trust,
+    summary: hasStatedIntersect
+      ? statedMatches
+        ? "Swept AABB intersection claim matched exact rational time-window arithmetic."
+        : "Swept AABB intersection claim disagreed with exact rational time-window arithmetic."
+      : "Swept AABB intersection question parsed into exact rational time-window arithmetic.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedIntersect ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-swept-aabb2-intersection",
+      exactArithmetic: true,
+      operation: "2D swept AABB versus static AABB continuous-time intersection predicate",
+      convention: certificate.convention,
+      classification: certificate.classification,
+      axisIntervals: certificate.axisIntervals,
+      tEnter: certificate.tEnter,
+      tExit: certificate.tExit,
+      impactAabb: certificate.impactAabb
+    },
+    trust,
+    summary: "Checked 2D swept AABB intersection with exact rational axis time windows over 0 <= t <= 1.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact swept AABB intersection result is ${String(certificate.intersect)} (${certificate.classification}).`
+      : `Exact swept AABB intersection result is ${String(certificate.intersect)}, not ${String(certificate.statedIntersect)} (${certificate.classification}).`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The swept AABB result was computed by exact rational time-window arithmetic. This earns exact-computed, not a full physics proof."
+      : "The stated swept AABB result is refuted by exact rational time-window arithmetic under the recorded closed continuous-time convention."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact swept AABB intersection result: ${String(certificate.intersect)} (${certificate.classification}).`
+      : `Refuted swept AABB intersection claim: exact result is ${String(certificate.intersect)}, stated ${String(certificate.statedIntersect)} (${certificate.classification}).`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-swept-aabb2-intersection",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedIntersect
+        ? [
+            `intersect=${String(certificate.intersect)}`,
+            `stated=${String(certificate.statedIntersect)}`,
+            `classification=${certificate.classification}`,
+            `tEnter=${certificate.tEnter}`,
+            `tExit=${certificate.tExit}`,
+            statedMatches ? "swept-aabb2-intersection=passed" : "swept-aabb2-intersection=failed"
+          ]
+        : [
+            `intersect=${String(certificate.intersect)}`,
+            `classification=${certificate.classification}`,
+            `tEnter=${certificate.tEnter}`,
+            `tExit=${certificate.tExit}`,
+            "swept-aabb2-intersection=computed"
+          ],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only checks one moving 2D AABB against one static 2D AABB with integer coordinates and integer velocity.",
+        "The time domain is continuous 0 <= t <= 1 and AABBs are closed; boundary contact counts as intersection.",
+        "This is deterministic rational time-window arithmetic, not a full collision solver, broad phase, response solver, or physics-engine proof."
       ]
     },
     nodes: args.nodes,
