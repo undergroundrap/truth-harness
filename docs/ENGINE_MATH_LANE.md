@@ -103,6 +103,30 @@ Rules for v0:
 Supported `primitive` values mirror the verifier pack: `aabb2-overlap`, `swept-aabb2-intersection`, `circle2-intersection`, `capsule2-circle2-intersection`, `circle2-aabb2-intersection`, `segment2-segment2-intersection`, `ray2-circle2-intersection`, `ray2-aabb2-intersection`, `barycentric2-coordinates`, and `point2-triangle2-membership`. Backend aliases such as `local-aabb2-overlap` are accepted so engines can emit Truth Harness backend ids directly.
 
 This is the first concrete bridge for external engines: production code can run fast, export its claimed primitive results, and let Truth Harness provide the independent local correctness oracle.
+
+## Known External Producer: VIRE
+
+Last verified: 2026-07-02 against sibling VIRE commit `e0ceef70a0462436273e04775fb0637382850f8e` (`feat(verification): share exact geometry predicates`).
+
+VIRE now owns the observed primitive answers in `vire_core::geometry2`; its CLI exporter serializes those engine-owned exact predicates into `truth-harness.engine-case-bundle.v0`. Truth Harness then validates the bundle by recomputing every case locally without executing VIRE code.
+
+Validation command from this Truth Harness checkout:
+
+```powershell
+node apps\cli\dist\index.js engines validate ..\vire-engine\target\truth-harness\engine-cases.json
+```
+
+Observed result:
+
+- Producer: `vire-engine 0.0.1`.
+- Exported cases: 6 exact 2D primitive fixtures.
+- Accepted by Truth Harness: 6.
+- Refuted by Truth Harness: 0.
+- Unsupported by Truth Harness: 0.
+- Trust earned per case: `exact-computed`.
+
+This is the first confirmed external-engine bridge: a separate Rust engine exports scoped math evidence from its own core geometry module, and Truth Harness independently recomputes the claimed primitive outputs. The scope remains narrow: this validates the exported fixtures only, not full gameplay physics, collision response, broadphase behavior, renderer behavior, or concurrency safety.
+
 ## Benchmark Gate
 
 Run the pack natively:
