@@ -37,6 +37,7 @@ truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --
 | Project Euler 2: bounded even Fibonacci sum | [Project Euler Problem 2](https://projecteuler.net/problem=2) | solved by local receipt | `exact-computed`, `refuted` | `local-fibonacci-even-sum` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
 | Project Euler 6: finite sum-square difference | [Project Euler Problem 6](https://projecteuler.net/problem=6) | solved by local receipt | `exact-computed`, `refuted` | `local-sum-square-difference` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
 | Project Euler 48: self-power last digits | [Project Euler Problem 48](https://projecteuler.net/problem=48) | solved by local receipt | `exact-computed`, `refuted` | `local-self-power-modular-sum` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
+| Project Euler 53: binomial threshold count | [Project Euler Problem 53](https://projecteuler.net/problem=53) | solved by local receipt | `exact-computed`, `refuted` | `local-binomial-threshold-counter` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
 
 ## Publication Rule
 
@@ -44,6 +45,5 @@ If this repo is linked in a forum or classroom answer, cite the source problem, 
 
 ## Next Catalog Targets
 
-- Bounded inequality and interval problems that exercise interval arithmetic and verifier boundaries.
 - Symbolic identity questions that require independent CAS agreement in Docker.
 - Forum-style problems where the answer is less important than the transparent route: prompt, source, assumptions, receipt, replay, and limitation.

@@ -87,6 +87,14 @@ interface SelfPowerLastDigitsClaim {
   statedLastDigits?: string;
 }
 
+interface BinomialThresholdCountClaim {
+  source: string;
+  nMax: bigint;
+  threshold: bigint;
+  comparison: ">";
+  statedCount?: bigint;
+}
+
 export interface CreateReceiptOptions {
   maximaCommand?: string;
   casRunner?: CasBackendCommandRunner;
@@ -286,6 +294,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const binomialThresholdCount = parseBinomialThresholdCountClaim(normalizedProblem);
+  if (binomialThresholdCount) {
+    return completeBinomialThresholdCountReceipt({
+      problem,
+      normalizedProblem,
+      claim: binomialThresholdCount,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const arithmeticSource = parseArithmeticPrompt(normalizedProblem);
   if (arithmeticSource) {
     return completeArithmeticReceipt({
@@ -310,7 +333,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -2122,6 +2145,121 @@ function completeSelfPowerLastDigitsReceipt(args: {
   });
 }
 
+function completeBinomialThresholdCountReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: BinomialThresholdCountClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = binomialThresholdCountCertificate(args.claim);
+  const hasStatedCount = args.claim.statedCount !== undefined;
+  const statedMatches = !hasStatedCount || certificate.count === certificate.statedCount;
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const artifact = addArtifact(args.artifacts, {
+    kind: "binomial-threshold-count-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-binomial-threshold-counter",
+      source: args.claim.source,
+      nMax: certificate.nMax,
+      threshold: certificate.threshold,
+      comparison: certificate.comparison,
+      statedCount: certificate.statedCount
+    },
+    trust,
+    summary: hasStatedCount
+      ? statedMatches
+        ? "Binomial threshold-count claim matched exact finite enumeration."
+        : "Binomial threshold-count claim disagreed with exact finite enumeration."
+      : "Binomial threshold-count problem parsed into an exact bounded inequality computation.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedCount ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-binomial-threshold-counter",
+      nMax: certificate.nMax,
+      threshold: certificate.threshold,
+      comparison: certificate.comparison,
+      exactArithmetic: true,
+      operation: "count binomial coefficients over explicit finite n,r range"
+    },
+    trust,
+    summary: `Counted binomial coefficients C(n,r) > ${certificate.threshold} for 1 <= n <= ${certificate.nMax} by exact integer arithmetic.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact binomial threshold count is ${certificate.count}.`
+      : `Exact binomial threshold count is ${certificate.count}, not ${certificate.statedCount}.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The bounded binomial threshold count was computed by exact finite enumeration over the stated n range. This earns exact-computed, not proved."
+      : "The stated binomial threshold count is refuted by exact finite enumeration over the stated n range."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact binomial threshold count result: ${certificate.count}.`
+      : `Refuted binomial threshold count claim: exact result is ${certificate.count}, stated ${certificate.statedCount}.`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-binomial-threshold-counter",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedCount
+        ? [
+            `count=${certificate.count}`,
+            `stated=${certificate.statedCount}`,
+            statedMatches ? "binomial-threshold-count=passed" : "binomial-threshold-count=failed"
+          ]
+        : [`count=${certificate.count}`, "binomial-threshold-count=computed"],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only counts binomial coefficients C(n,r) above a positive integer threshold for an explicit finite n range.",
+        "The computation is exact finite enumeration, not a proof of arbitrary combinatorial inequalities."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
+
 function completeArithmeticReceipt(args: {
   problem: string;
   normalizedProblem: string;
@@ -2936,6 +3074,139 @@ function modPow(base: bigint, exponent: bigint, modulus: bigint): bigint {
     remaining /= 2n;
   }
 
+  return result;
+}
+
+function parseBinomialThresholdCountClaim(problem: string): BinomialThresholdCountClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/,/gu, "")
+    .replace(/\$/gu, "")
+    .replace(/[≤]/gu, "<=")
+    .replace(/\bone[-\s]?million\b/giu, "1000000")
+    .replace(/^(?:please\s+)?(?:find|compute|calculate|evaluate)\s+/iu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.?]$/u, "");
+  const phrasePattern =
+    "(?:values of\\s+n\\s+choose\\s+r|n\\s+choose\\s+r\\s+values|binomial coefficients?\\s+c\\s*\\(\\s*n\\s*,\\s*r\\s*\\)|binomial coefficients?)";
+  const match = new RegExp(
+    `^(?:(?:how many(?:\\s+not necessarily distinct)?\\s+)|(?:the\\s+)?count of\\s+)?${phrasePattern}\\s+for\\s+1\\s*<=\\s*n\\s*<=\\s*(?<nMax>\\d+)\\s+(?:are\\s+)?greater than\\s+(?<threshold>\\d+)(?:\\s*=\\s*(?<stated>\\d+))?$`,
+    "iu"
+  ).exec(candidate);
+  const nMaxText = match?.groups?.nMax;
+  const thresholdText = match?.groups?.threshold;
+  if (!nMaxText || !thresholdText || nMaxText.length > 8 || thresholdText.length > 30) {
+    return undefined;
+  }
+
+  const nMax = BigInt(nMaxText);
+  const threshold = BigInt(thresholdText);
+  if (nMax <= 0n || nMax > 1000n || threshold <= 0n) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    nMax,
+    threshold,
+    comparison: ">",
+    statedCount: match.groups?.stated === undefined ? undefined : BigInt(match.groups.stated)
+  };
+}
+
+function binomialThresholdCountCertificate(claim: BinomialThresholdCountClaim): {
+  schemaVersion: "truth-harness.binomial-threshold-count.v0";
+  adapter: "local-binomial-threshold-counter";
+  source: string;
+  nRange: "1 <= n <= nMax";
+  rRange: "0 <= r <= n";
+  nMax: string;
+  threshold: string;
+  comparison: ">";
+  statedCount?: string;
+  count: string;
+  firstExceeding?: { n: string; r: string; value: string };
+  perNCounts: Array<{ n: string; aboveThreshold: string }>;
+  sampleAboveThreshold: Array<{ n: string; r: string; value: string }>;
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  let count = 0n;
+  let firstExceeding: { n: string; r: string; value: string } | undefined;
+  const perNCounts: Array<{ n: string; aboveThreshold: string }> = [];
+  const sampleAboveThreshold: Array<{ n: string; r: string; value: string }> = [];
+
+  for (let n = 1n; n <= claim.nMax; n += 1n) {
+    let rowCount = 0n;
+    for (let r = 0n; r <= n; r += 1n) {
+      const value = binomialCoefficient(n, r);
+      if (value > claim.threshold) {
+        count += 1n;
+        rowCount += 1n;
+        const sample = { n: n.toString(), r: r.toString(), value: value.toString() };
+        firstExceeding ??= sample;
+        if (sampleAboveThreshold.length < 12) {
+          sampleAboveThreshold.push(sample);
+        }
+      }
+    }
+    if (rowCount > 0n) {
+      perNCounts.push({ n: n.toString(), aboveThreshold: rowCount.toString() });
+    }
+  }
+
+  const countText = count.toString();
+  const statedText = claim.statedCount?.toString();
+  const matches = statedText === undefined || statedText === countText;
+  return {
+    schemaVersion: "truth-harness.binomial-threshold-count.v0",
+    adapter: "local-binomial-threshold-counter",
+    source: claim.source,
+    nRange: "1 <= n <= nMax",
+    rRange: "0 <= r <= n",
+    nMax: claim.nMax.toString(),
+    threshold: claim.threshold.toString(),
+    comparison: ">",
+    statedCount: statedText,
+    count: countText,
+    firstExceeding,
+    perNCounts,
+    sampleAboveThreshold,
+    checks: [
+      {
+        id: "finite-binomial-domain",
+        ok: true,
+        expected: "binomial coefficients C(n,r) over explicit finite range",
+        observed: `1 <= n <= ${claim.nMax.toString()}, 0 <= r <= n`
+      },
+      {
+        id: "threshold-count-result",
+        ok: matches,
+        expected: countText,
+        observed: statedText ?? countText
+      }
+    ],
+    trace: [
+      `Enumerate n from 1 through ${claim.nMax.toString()}.`,
+      `For each n, enumerate r from 0 through n and compute C(n,r) exactly.`,
+      `Count entries where C(n,r) > ${claim.threshold.toString()}.`,
+      `Exact threshold count is ${countText}.`
+    ],
+    verdict: statedText === undefined ? "computed" : matches ? "accepted" : "refuted"
+  };
+}
+
+function binomialCoefficient(n: bigint, r: bigint): bigint {
+  if (r < 0n || r > n) {
+    return 0n;
+  }
+  const k = r < n - r ? r : n - r;
+  let result = 1n;
+  for (let i = 1n; i <= k; i += 1n) {
+    result = (result * (n - k + i)) / i;
+  }
   return result;
 }
 

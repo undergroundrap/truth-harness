@@ -271,6 +271,40 @@ describe("createReceipt", () => {
     expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
   });
 
+  it("computes Project Euler style binomial threshold counts exactly", () => {
+    const receipt = createReceipt("How many values of n choose r for 1 <= n <= 100 are greater than 1000000?");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("4075");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-binomial-threshold-counter");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["count=4075", "binomial-threshold-count=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "binomial-threshold-count-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      count?: string;
+      firstExceeding?: { n?: string; r?: string; value?: string };
+      perNCounts?: Array<{ n?: string; aboveThreshold?: string }>;
+    };
+    expect(payload.count).toBe("4075");
+    expect(payload.firstExceeding).toEqual({ n: "23", r: "10", value: "1144066" });
+    expect(payload.perNCounts).toEqual(expect.arrayContaining([expect.objectContaining({ n: "100", aboveThreshold: "93" })]));
+  });
+
+  it("refutes wrong binomial threshold counts", () => {
+    const receipt = createReceipt("verify count of n choose r values for 1 <= n <= 100 greater than 1000000 = 4076");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("4075");
+    expect(receipt.summary).toContain("4076");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["count=4075", "stated=4076", "binomial-threshold-count=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+  });
+
   it("marks MVP receipts as local-only with no external disclosure", () => {
     const receipt = createReceipt("compute 2 + 2");
 

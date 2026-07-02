@@ -175,20 +175,20 @@ describe("benchmark runner", () => {
     }, {});
     const backendIds = new Set(run.results.map((result) => result.receipt.evidenceProfile.backends[0]?.id));
 
-    expect(run.total).toBe(8);
+    expect(run.total).toBe(10);
     expect(run.failed).toBe(0);
     expect(run.trustAccuracy).toBe(1);
-    expect(trustCounts).toMatchObject({ "exact-computed": 4, refuted: 4 });
+    expect(trustCounts).toMatchObject({ "exact-computed": 5, refuted: 5 });
     expect(backendIds).toEqual(
-      new Set(["local-finite-sum-inclusion-exclusion", "local-fibonacci-even-sum", "local-sum-square-difference", "local-self-power-modular-sum"])
+      new Set(["local-finite-sum-inclusion-exclusion", "local-fibonacci-even-sum", "local-sum-square-difference", "local-self-power-modular-sum", "local-binomial-threshold-counter"])
     );
     expect(suite.tasks.every((task) => task.sourceUrl?.startsWith("https://projecteuler.net/problem="))).toBe(true);
     expect(suite.tasks.every((task) => task.firstLoggedAt === "2026-07-01" || task.firstLoggedAt === "2026-07-02")).toBe(true);
     expect(run.levelSummaries).toEqual([
       {
         level: "level-13-public-bounded-computation",
-        total: 8,
-        passed: 8,
+        total: 10,
+        passed: 10,
         failed: 0,
         trustAccuracy: 1
       }
@@ -205,19 +205,19 @@ describe("benchmark runner", () => {
 
     expect(catalog.schemaVersion).toBe("truth-harness.public-math-problem-catalog.v0");
     expect(catalog.updatedAt).toBe("2026-07-02");
-    expect(catalog.problems).toHaveLength(4);
+    expect(catalog.problems).toHaveLength(5);
     expect(summary).toMatchObject({
-      totalProblems: 4,
-      solved: 4,
+      totalProblems: 5,
+      solved: 5,
       openGaps: 0,
       queued: 0,
-      sourceNeeded: 2,
+      sourceNeeded: 1,
       warnings: []
     });
     expect(summary.defaultCommands).toContain("npm run docker:public-probes");
     expect(summary.nextAction).toMatchObject({
       kind: "catalog-target-search",
-      targetId: "public-inequality-bound-queue",
+      targetId: "public-symbolic-identity-queue",
       status: "source-needed",
       priority: 55
     });

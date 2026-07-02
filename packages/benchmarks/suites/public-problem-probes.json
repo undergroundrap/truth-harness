@@ -1,7 +1,7 @@
 {
   "id": "public-problem-probes",
   "title": "Public Problem Probes",
-  "description": "Externally recognizable bounded math problems used to test whether Truth Harness can turn public prompts into local receipts without overclaiming. Initial sources: Project Euler Problems 1, 2, 6, and 48.",
+  "description": "Externally recognizable bounded math problems used to test whether Truth Harness can turn public prompts into local receipts without overclaiming. Initial sources: Project Euler Problems 1, 2, 6, 48, and 53.",
   "tasks": [
     {
       "id": "project-euler-001-multiples-3-5",
@@ -162,6 +162,46 @@
         "receipt replay command"
       ],
       "checkerBoundary": "Only the stated finite modular last-digits equality is refuted; this does not prove arbitrary modular identities."
+    },
+    {
+      "id": "project-euler-053-binomial-threshold-count",
+      "sourceUrl": "https://projecteuler.net/problem=53",
+      "sourceTitle": "Project Euler Problem 53: Combinatoric Selections",
+      "firstLoggedAt": "2026-07-02",
+      "category": "bounded-inequality",
+      "level": "level-13-public-bounded-computation",
+      "aiFailureMode": "Returns a memorized count without checking every binomial coefficient in the finite n,r grid.",
+      "prompt": "How many values of n choose r for 1 <= n <= 100 are greater than 1000000?",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "4075",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "binomial threshold-count certificate",
+        "finite n,r enumeration trace",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only binomial coefficients C(n,r) over an explicit finite n range and positive integer threshold are supported."
+    },
+    {
+      "id": "project-euler-053-wrong-answer-refutation",
+      "sourceUrl": "https://projecteuler.net/problem=53",
+      "sourceTitle": "Project Euler Problem 53: Combinatoric Selections",
+      "firstLoggedAt": "2026-07-02",
+      "category": "bounded-inequality",
+      "level": "level-13-public-bounded-computation",
+      "aiFailureMode": "Accepts a one-off threshold-count slip in a public combinatorics problem.",
+      "prompt": "verify count of n choose r values for 1 <= n <= 100 greater than 1000000 = 4076",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "4075",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "binomial threshold-count certificate",
+        "stated-answer mismatch",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only the stated finite binomial threshold-count equality is refuted; this does not prove arbitrary combinatorial inequalities."
     }
   ]
 }

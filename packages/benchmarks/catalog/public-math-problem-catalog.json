@@ -129,14 +129,35 @@
         "receipt replay command"
       ],
       "checkerBoundary": "Last-digits computations for explicit finite self-power sums 1^1 + 2^2 + ... + n^n only."
+    },
+    {
+      "id": "project-euler-053",
+      "firstLoggedAt": "2026-07-02",
+      "source": {
+        "site": "Project Euler",
+        "title": "Problem 53: Combinatoric Selections",
+        "url": "https://projecteuler.net/problem=53",
+        "accessedAt": "2026-07-02"
+      },
+      "status": "solved-by-local-receipt",
+      "domain": "bounded-inequality",
+      "suitePath": "packages/benchmarks/suites/public-problem-probes.json",
+      "suiteTaskIds": [
+        "project-euler-053-binomial-threshold-count",
+        "project-euler-053-wrong-answer-refutation"
+      ],
+      "verifierBackends": ["local-binomial-threshold-counter"],
+      "trustOutcomes": ["exact-computed", "refuted"],
+      "resultSummary": "Exact count of binomial coefficients C(n,r) greater than one million for 1 <= n <= 100 is 4075; near-miss 4076 is refuted.",
+      "requiredEvidence": [
+        "binomial threshold-count certificate",
+        "finite n,r enumeration trace",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Binomial coefficients C(n,r) over explicit finite n range and positive integer threshold only."
     }
   ],
   "nextTargets": [
-    {
-      "id": "public-inequality-bound-queue",
-      "status": "source-needed",
-      "goal": "Find bounded inequality or interval-estimation problems that exercise the interval and SMT lanes without requiring hidden internet context."
-    },
     {
       "id": "public-symbolic-identity-queue",
       "status": "source-needed",
