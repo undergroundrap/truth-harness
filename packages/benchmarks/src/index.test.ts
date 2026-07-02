@@ -169,23 +169,60 @@ describe("benchmark runner", () => {
     const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);
 
     const run = runBenchmarkSuite(suite);
+    const trustCounts = run.results.reduce<Record<string, number>>((counts, result) => {
+      counts[result.receipt.trust] = (counts[result.receipt.trust] ?? 0) + 1;
+      return counts;
+    }, {});
+    const backendIds = new Set(run.results.map((result) => result.receipt.evidenceProfile.backends[0]?.id));
 
-    expect(run.total).toBe(2);
+    expect(run.total).toBe(6);
     expect(run.failed).toBe(0);
     expect(run.trustAccuracy).toBe(1);
-    expect(run.results.map((result) => result.receipt.trust).sort()).toEqual(["exact-computed", "refuted"]);
-    expect(run.results.every((result) => result.receipt.evidenceProfile.backends[0]?.id === "local-finite-sum-inclusion-exclusion")).toBe(true);
+    expect(trustCounts).toMatchObject({ "exact-computed": 3, refuted: 3 });
+    expect(backendIds).toEqual(
+      new Set(["local-finite-sum-inclusion-exclusion", "local-fibonacci-even-sum", "local-sum-square-difference"])
+    );
+    expect(suite.tasks.every((task) => task.sourceUrl?.startsWith("https://projecteuler.net/problem="))).toBe(true);
+    expect(suite.tasks.every((task) => task.firstLoggedAt === "2026-07-01")).toBe(true);
     expect(run.levelSummaries).toEqual([
       {
         level: "level-13-public-bounded-computation",
-        total: 2,
-        passed: 2,
+        total: 6,
+        passed: 6,
         failed: 0,
         trustAccuracy: 1
       }
     ]);
   });
 
+  it("keeps the public math catalog linked to runnable suite tasks", () => {
+    const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/public-problem-probes.json");
+    const catalogPath = resolve(process.cwd(), "packages/benchmarks/catalog/public-math-problem-catalog.json");
+    const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);
+    const catalog = JSON.parse(readFileSync(catalogPath, "utf8")) as {
+      schemaVersion?: string;
+      updatedAt?: string;
+      problems?: Array<{
+        id?: string;
+        source?: { url?: string };
+        suitePath?: string;
+        suiteTaskIds?: string[];
+        status?: string;
+      }>;
+    };
+    const taskIds = new Set(suite.tasks.map((task) => task.id));
+
+    expect(catalog.schemaVersion).toBe("truth-harness.public-math-problem-catalog.v0");
+    expect(catalog.updatedAt).toBe("2026-07-01");
+    expect(catalog.problems).toHaveLength(3);
+    for (const problem of catalog.problems ?? []) {
+      expect(problem.status).toBe("solved-by-local-receipt");
+      expect(problem.source?.url).toMatch(/^https:\/\/projecteuler\.net\/problem=\d+$/u);
+      expect(problem.suitePath).toBe("packages/benchmarks/suites/public-problem-probes.json");
+      expect(problem.suiteTaskIds?.length).toBe(2);
+      expect(problem.suiteTaskIds?.every((taskId) => taskIds.has(taskId))).toBe(true);
+    }
+  });
   it("keeps the frontier honesty challenge humble on famous hard problems", () => {
     const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/frontier-honesty-challenge.json");
     const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);

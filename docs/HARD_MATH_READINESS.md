@@ -110,9 +110,11 @@ npm run docker:public-probes
 truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --write --fail-on-failures
 ```
 
-The suite starts with a Project Euler 1 style bounded computation: sum the multiples of 3 or 5 below 1000. Truth Harness now earns `exact-computed` only by writing a finite multiple-sum certificate with inclusion-exclusion terms for 3, 5, and 15; a near-miss stated answer is `refuted`. This is the pattern for growth: import a public bounded problem, see whether the harness can produce a receipt, and if it cannot, add a narrow verifier adapter or honestly mark the gap.
+The suite now starts a dated public-problem ladder from Project Euler 1, 2, and 6. Truth Harness earns `exact-computed` only by writing narrow certificates: inclusion-exclusion for finite multiple sums, exact recurrence for bounded even Fibonacci sums, and exact closed-form arithmetic for finite sum-square differences. Each problem also includes a near-miss stated answer that must be `refuted`, not accepted from memory.
 
-Passing this suite does not show competition-math breadth. It shows the harness can convert at least one externally recognizable prompt into replayable local arithmetic evidence instead of answer-memory.
+The progress ledger lives in [PUBLIC_MATH_PROBLEM_CATALOG.md](PUBLIC_MATH_PROBLEM_CATALOG.md), with machine-readable metadata at `packages/benchmarks/catalog/public-math-problem-catalog.json`. This is the pattern for growth: import a public bounded problem, record its source and date, see whether the harness can produce a receipt, and if it cannot, add a narrow verifier adapter or honestly mark the gap.
+
+Passing this suite does not show competition-math breadth. It shows the harness can convert a small set of externally recognizable prompts into replayable local arithmetic evidence instead of answer-memory.
 
 ## Frontier Honesty Challenge
 

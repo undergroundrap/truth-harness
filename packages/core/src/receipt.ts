@@ -68,6 +68,18 @@ interface FiniteMultipleSumClaim {
   statedSum?: bigint;
 }
 
+interface FibonacciEvenSumClaim {
+  source: string;
+  limitInclusive: bigint;
+  statedSum?: bigint;
+}
+
+interface SumSquareDifferenceClaim {
+  source: string;
+  n: bigint;
+  statedDifference?: bigint;
+}
+
 export interface CreateReceiptOptions {
   maximaCommand?: string;
   casRunner?: CasBackendCommandRunner;
@@ -222,6 +234,36 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const fibonacciEvenSum = parseFibonacciEvenSumClaim(normalizedProblem);
+  if (fibonacciEvenSum) {
+    return completeFibonacciEvenSumReceipt({
+      problem,
+      normalizedProblem,
+      claim: fibonacciEvenSum,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
+  const sumSquareDifference = parseSumSquareDifferenceClaim(normalizedProblem);
+  if (sumSquareDifference) {
+    return completeSumSquareDifferenceReceipt({
+      problem,
+      normalizedProblem,
+      claim: sumSquareDifference,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const arithmeticSource = parseArithmeticPrompt(normalizedProblem);
   if (arithmeticSource) {
     return completeArithmeticReceipt({
@@ -246,7 +288,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -1722,6 +1764,227 @@ function completeFiniteMultipleSumReceipt(args: {
   });
 }
 
+function completeFibonacciEvenSumReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: FibonacciEvenSumClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = fibonacciEvenSumCertificate(args.claim);
+  const hasStatedSum = args.claim.statedSum !== undefined;
+  const statedMatches = !hasStatedSum || certificate.result === args.claim.statedSum?.toString();
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const artifact = addArtifact(args.artifacts, {
+    kind: "finite-fibonacci-even-sum-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-fibonacci-even-sum",
+      source: args.claim.source,
+      limitInclusive: certificate.limitInclusive,
+      statedSum: certificate.statedSum
+    },
+    trust,
+    summary: hasStatedSum
+      ? statedMatches
+        ? "Even Fibonacci sum claim matched exact finite recurrence."
+        : "Even Fibonacci sum claim disagreed with exact finite recurrence."
+      : "Even Fibonacci problem parsed into an exact bounded recurrence computation.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedSum ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-fibonacci-even-sum",
+      limitInclusive: certificate.limitInclusive,
+      exactArithmetic: true,
+      recurrence: "F(n)=F(n-1)+F(n-2), starting 1,2"
+    },
+    trust,
+    summary: `Computed even Fibonacci terms not exceeding ${certificate.limitInclusive} by exact integer recurrence.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact even Fibonacci sum is ${certificate.result}.`
+      : `Exact even Fibonacci sum is ${certificate.result}, not ${certificate.statedSum}.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The bounded even Fibonacci sum was computed by exact recurrence over an explicit finite limit. This earns exact-computed, not proved."
+      : "The stated even Fibonacci sum is refuted by exact recurrence over the explicitly stated bounded domain."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact even Fibonacci sum result: ${certificate.result}.`
+      : `Refuted even Fibonacci sum claim: exact result is ${certificate.result}, stated ${certificate.statedSum}.`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-fibonacci-even-sum",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedSum
+        ? [
+            `result=${certificate.result}`,
+            `stated=${certificate.statedSum}`,
+            statedMatches ? "finite-sequence=passed" : "finite-sequence=failed"
+          ]
+        : [`result=${certificate.result}`, "finite-sequence=computed"],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only computes even Fibonacci terms from the 1, 2 seed sequence up to an explicit finite positive bound.",
+        "The computation is deterministic finite recurrence, not a proof of arbitrary recurrence identities."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
+
+function completeSumSquareDifferenceReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: SumSquareDifferenceClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = sumSquareDifferenceCertificate(args.claim);
+  const hasStatedDifference = args.claim.statedDifference !== undefined;
+  const statedMatches = !hasStatedDifference || certificate.difference === args.claim.statedDifference?.toString();
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const artifact = addArtifact(args.artifacts, {
+    kind: "sum-square-difference-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-sum-square-difference",
+      source: args.claim.source,
+      n: certificate.n,
+      statedDifference: certificate.statedDifference
+    },
+    trust,
+    summary: hasStatedDifference
+      ? statedMatches
+        ? "Sum-square difference claim matched exact closed-form arithmetic."
+        : "Sum-square difference claim disagreed with exact closed-form arithmetic."
+      : "Sum-square difference problem parsed into an exact bounded computation.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedDifference ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-sum-square-difference",
+      n: certificate.n,
+      exactArithmetic: true,
+      formulas: ["sum=n(n+1)/2", "sumSquares=n(n+1)(2n+1)/6"]
+    },
+    trust,
+    summary: `Computed square-of-sum minus sum-of-squares for n=${certificate.n} by exact integer formulas.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact sum-square difference is ${certificate.difference}.`
+      : `Exact sum-square difference is ${certificate.difference}, not ${certificate.statedDifference}.`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The bounded sum-square difference was computed with exact integer formulas for the explicit finite range. This earns exact-computed, not proved."
+      : "The stated sum-square difference is refuted by exact integer formulas for the explicit finite range."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact sum-square difference result: ${certificate.difference}.`
+      : `Refuted sum-square difference claim: exact result is ${certificate.difference}, stated ${certificate.statedDifference}.`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-sum-square-difference",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedDifference
+        ? [
+            `difference=${certificate.difference}`,
+            `stated=${certificate.statedDifference}`,
+            statedMatches ? "sum-square-difference=passed" : "sum-square-difference=failed"
+          ]
+        : [`difference=${certificate.difference}`, "sum-square-difference=computed"],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only computes square-of-sum minus sum-of-squares for the first n natural numbers with explicit positive integer n.",
+        "The computation uses exact closed-form arithmetic; it is not a proof of arbitrary summation identities."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
 function completeArithmeticReceipt(args: {
   problem: string;
   normalizedProblem: string;
@@ -2205,6 +2468,185 @@ function inclusionExclusionTerms(divisors: bigint[], limitExclusive: bigint): Ar
   return terms;
 }
 
+function parseFibonacciEvenSumClaim(problem: string): FibonacciEvenSumClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/,/gu, "")
+    .replace(/^(?:please\s+)?(?:find|compute|calculate|evaluate)\s+/iu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/\.$/u, "");
+  const match = /^(?:the\s+)?sum of (?:all\s+)?(?:the\s+)?even(?:-valued)?\s+fibonacci(?:\s+sequence)?\s+(?:terms|numbers)(?:\s+whose values)?\s+(?:do not exceed|not exceeding|no greater than|up to|below)\s+(?<limit>\d+)(?:\s*=\s*(?<stated>-?\d+))?$/iu.exec(candidate);
+  const limitText = match?.groups?.limit;
+  if (!limitText || limitText.length > 18) {
+    return undefined;
+  }
+
+  const limitInclusive = BigInt(limitText);
+  if (limitInclusive <= 0n) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    limitInclusive,
+    statedSum: match.groups?.stated === undefined ? undefined : BigInt(match.groups.stated)
+  };
+}
+
+function fibonacciEvenSumCertificate(claim: FibonacciEvenSumClaim): {
+  schemaVersion: "truth-harness.fibonacci-even-sum.v0";
+  adapter: "local-fibonacci-even-sum";
+  source: string;
+  sequenceSeed: ["1", "2"];
+  limitInclusive: string;
+  statedSum?: string;
+  result: string;
+  termsChecked: string;
+  evenTerms: string[];
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  let previous = 1n;
+  let current = 2n;
+  let checked = 0n;
+  let result = 0n;
+  const evenTerms: bigint[] = [];
+
+  while (previous <= claim.limitInclusive) {
+    checked += 1n;
+    if (previous % 2n === 0n) {
+      evenTerms.push(previous);
+      result += previous;
+    }
+    const next = previous + current;
+    previous = current;
+    current = next;
+  }
+
+  const resultText = result.toString();
+  const statedText = claim.statedSum?.toString();
+  const matches = statedText === undefined || statedText === resultText;
+  const evenTermText = evenTerms.map((term) => term.toString());
+  return {
+    schemaVersion: "truth-harness.fibonacci-even-sum.v0",
+    adapter: "local-fibonacci-even-sum",
+    source: claim.source,
+    sequenceSeed: ["1", "2"],
+    limitInclusive: claim.limitInclusive.toString(),
+    statedSum: statedText,
+    result: resultText,
+    termsChecked: checked.toString(),
+    evenTerms: evenTermText,
+    checks: [
+      {
+        id: "finite-sequence-bound",
+        ok: true,
+        expected: "Fibonacci terms from seed 1,2 not exceeding an explicit finite bound",
+        observed: `termsChecked=${checked.toString()}`
+      },
+      {
+        id: "even-term-sum-result",
+        ok: matches,
+        expected: resultText,
+        observed: statedText ?? resultText
+      }
+    ],
+    trace: [
+      `Start from Fibonacci seed terms 1 and 2.`,
+      `Enumerate ${checked.toString()} terms not exceeding ${claim.limitInclusive.toString()}.`,
+      `Even terms included: ${evenTermText.join(", ")}.`,
+      `Exact sum of included terms is ${resultText}.`
+    ],
+    verdict: statedText === undefined ? "computed" : matches ? "accepted" : "refuted"
+  };
+}
+
+function parseSumSquareDifferenceClaim(problem: string): SumSquareDifferenceClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/,/gu, "")
+    .replace(/^(?:please\s+)?(?:find|compute|calculate|evaluate)\s+/iu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/\.$/u, "");
+  const match = /^(?:the\s+)?difference between (?:the\s+)?square of (?:the\s+)?sum and (?:the\s+)?sum of (?:the\s+)?squares (?:for|of) (?:the\s+)?first\s+(?<n>\d+)\s+natural numbers(?:\s*=\s*(?<stated>-?\d+))?$/iu.exec(candidate);
+  const nText = match?.groups?.n;
+  if (!nText || nText.length > 12) {
+    return undefined;
+  }
+
+  const n = BigInt(nText);
+  if (n <= 0n) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    n,
+    statedDifference: match.groups?.stated === undefined ? undefined : BigInt(match.groups.stated)
+  };
+}
+
+function sumSquareDifferenceCertificate(claim: SumSquareDifferenceClaim): {
+  schemaVersion: "truth-harness.sum-square-difference.v0";
+  adapter: "local-sum-square-difference";
+  source: string;
+  n: string;
+  statedDifference?: string;
+  sum: string;
+  sumSquared: string;
+  sumOfSquares: string;
+  difference: string;
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const n = claim.n;
+  const sum = n * (n + 1n) / 2n;
+  const sumOfSquares = n * (n + 1n) * (2n * n + 1n) / 6n;
+  const sumSquared = sum * sum;
+  const difference = sumSquared - sumOfSquares;
+  const differenceText = difference.toString();
+  const statedText = claim.statedDifference?.toString();
+  const matches = statedText === undefined || statedText === differenceText;
+
+  return {
+    schemaVersion: "truth-harness.sum-square-difference.v0",
+    adapter: "local-sum-square-difference",
+    source: claim.source,
+    n: n.toString(),
+    statedDifference: statedText,
+    sum: sum.toString(),
+    sumSquared: sumSquared.toString(),
+    sumOfSquares: sumOfSquares.toString(),
+    difference: differenceText,
+    checks: [
+      {
+        id: "finite-natural-range",
+        ok: true,
+        expected: "first n natural numbers for explicit positive integer n",
+        observed: `n=${n.toString()}`
+      },
+      {
+        id: "closed-form-difference-result",
+        ok: matches,
+        expected: differenceText,
+        observed: statedText ?? differenceText
+      }
+    ],
+    trace: [
+      `sum = n(n+1)/2 = ${sum.toString()}.`,
+      `sumOfSquares = n(n+1)(2n+1)/6 = ${sumOfSquares.toString()}.`,
+      `sumSquared = ${sum.toString()}^2 = ${sumSquared.toString()}.`,
+      `difference = sumSquared - sumOfSquares = ${differenceText}.`
+    ],
+    verdict: statedText === undefined ? "computed" : matches ? "accepted" : "refuted"
+  };
+}
 function parseArithmeticPrompt(problem: string): string | undefined {
   const computeMatch = /^(?:compute|calculate|evaluate)\s+(.+)$/i.exec(problem);
   const candidate = computeMatch ? computeMatch[1].trim() : problem;

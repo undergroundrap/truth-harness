@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "truth-harness.public-math-problem-catalog.v0",
+  "catalogId": "public-math-problems-2026",
+  "title": "Public Math Problem Catalog 2026",
+  "updatedAt": "2026-07-01",
+  "purpose": "Track externally recognizable bounded math problems that Truth Harness can solve, refute, or honestly mark as unsupported with replayable local evidence.",
+  "workflow": {
+    "stages": [
+      "Find a public bounded math problem with a stable source URL.",
+      "Normalize the prompt into the narrowest local verifier boundary.",
+      "Run the public problem probe suite through the local or Docker benchmark command.",
+      "Record exact receipts, refutations, gaps, and required reviewer evidence.",
+      "Promote unsupported cases into explicit adapter backlog instead of overclaiming."
+    ],
+    "defaultCommands": [
+      "npm run demo:public-probes",
+      "npm run docker:public-probes",
+      "truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --write --fail-on-failures"
+    ]
+  },
+  "suiteRefs": [
+    {
+      "suiteId": "public-problem-probes",
+      "path": "packages/benchmarks/suites/public-problem-probes.json",
+      "description": "Replayable public bounded-problem probe suite."
+    }
+  ],
+  "problems": [
+    {
+      "id": "project-euler-001",
+      "firstLoggedAt": "2026-07-01",
+      "source": {
+        "site": "Project Euler",
+        "title": "Problem 1: Multiples of 3 or 5",
+        "url": "https://projecteuler.net/problem=1",
+        "accessedAt": "2026-07-01"
+      },
+      "status": "solved-by-local-receipt",
+      "domain": "finite-combinatorics",
+      "suitePath": "packages/benchmarks/suites/public-problem-probes.json",
+      "suiteTaskIds": [
+        "project-euler-001-multiples-3-5",
+        "project-euler-001-wrong-answer-refutation"
+      ],
+      "verifierBackends": ["local-finite-sum-inclusion-exclusion"],
+      "trustOutcomes": ["exact-computed", "refuted"],
+      "resultSummary": "Exact finite multiple sum below 1000 is 233168; near-miss 233169 is refuted.",
+      "requiredEvidence": [
+        "finite multiple-sum certificate",
+        "inclusion-exclusion terms for 3, 5, and 15",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Explicit positive-integer multiple sums below a finite positive bound only."
+    },
+    {
+      "id": "project-euler-002",
+      "firstLoggedAt": "2026-07-01",
+      "source": {
+        "site": "Project Euler",
+        "title": "Problem 2: Even Fibonacci Numbers",
+        "url": "https://projecteuler.net/problem=2",
+        "accessedAt": "2026-07-01"
+      },
+      "status": "solved-by-local-receipt",
+      "domain": "finite-recurrence",
+      "suitePath": "packages/benchmarks/suites/public-problem-probes.json",
+      "suiteTaskIds": [
+        "project-euler-002-even-fibonacci",
+        "project-euler-002-wrong-answer-refutation"
+      ],
+      "verifierBackends": ["local-fibonacci-even-sum"],
+      "trustOutcomes": ["exact-computed", "refuted"],
+      "resultSummary": "Exact even Fibonacci sum not exceeding 4000000 is 4613732; near-miss 4613733 is refuted.",
+      "requiredEvidence": [
+        "finite Fibonacci recurrence certificate",
+        "even-term list under the explicit bound",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Standard Fibonacci sequence seeded by 1 and 2 under an explicit finite positive bound only."
+    },
+    {
+      "id": "project-euler-006",
+      "firstLoggedAt": "2026-07-01",
+      "source": {
+        "site": "Project Euler",
+        "title": "Problem 6: Sum Square Difference",
+        "url": "https://projecteuler.net/problem=6",
+        "accessedAt": "2026-07-01"
+      },
+      "status": "solved-by-local-receipt",
+      "domain": "finite-summation",
+      "suitePath": "packages/benchmarks/suites/public-problem-probes.json",
+      "suiteTaskIds": [
+        "project-euler-006-sum-square-difference",
+        "project-euler-006-wrong-answer-refutation"
+      ],
+      "verifierBackends": ["local-sum-square-difference"],
+      "trustOutcomes": ["exact-computed", "refuted"],
+      "resultSummary": "Exact square-of-sum minus sum-of-squares for the first 100 natural numbers is 25164150; near-miss 25164151 is refuted.",
+      "requiredEvidence": [
+        "sum-square difference certificate",
+        "closed-form integer formula trace",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Square-of-sum minus sum-of-squares for the first n natural numbers with explicit positive integer n only."
+    }
+  ],
+  "nextTargets": [
+    {
+      "id": "public-modular-arithmetic-queue",
+      "status": "source-needed",
+      "goal": "Find recent public modular arithmetic questions where Truth Harness can either refute a false universal claim or require Lean/SMT proof evidence."
+    },
+    {
+      "id": "public-inequality-bound-queue",
+      "status": "source-needed",
+      "goal": "Find bounded inequality or interval-estimation problems that exercise the interval and SMT lanes without requiring hidden internet context."
+    },
+    {
+      "id": "public-symbolic-identity-queue",
+      "status": "source-needed",
+      "goal": "Find symbolic identity questions that can be cross-checked by SymPy plus Maxima/Sage in Docker before being cataloged as solved."
+    }
+  ],
+  "honestyBoundary": "This catalog records Truth Harness behavior on public problems. It is not a claim that the project can solve arbitrary contest, forum, research, or theorem problems. Unsupported public problems become explicit verifier backlog."
+}

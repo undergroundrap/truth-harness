@@ -22,6 +22,9 @@ export interface BenchmarkRunTaskLike {
   reviewStatus?: BenchmarkTaskReviewStatus;
   requiredEvidence?: string[];
   checkerBoundary?: string;
+  sourceUrl?: string;
+  sourceTitle?: string;
+  firstLoggedAt?: string;
 }
 
 export interface BenchmarkRunTaskResultLike {
@@ -52,6 +55,9 @@ export interface BenchmarkRunCaseRecord {
   reviewStatus?: BenchmarkTaskReviewStatus;
   requiredEvidence?: string[];
   checkerBoundary?: string;
+  sourceUrl?: string;
+  sourceTitle?: string;
+  firstLoggedAt?: string;
   expectedTrust: TrustLabel;
   expectedSummaryIncludes?: string;
   expectedEvidenceKind?: Receipt["evidenceProfile"]["kind"];
@@ -254,6 +260,9 @@ export interface BenchmarkReviewContractSummary {
   reviewStatus: BenchmarkTaskReviewStatus;
   requiredEvidence: string[];
   checkerBoundary?: string;
+  sourceUrl?: string;
+  sourceTitle?: string;
+  firstLoggedAt?: string;
   passed: boolean;
   expectedTrust: TrustLabel;
   actualTrust: TrustLabel;
@@ -730,6 +739,13 @@ export function renderBenchmarkRunMarkdown(record: BenchmarkRunRecord): string {
       `actual-evidence=${result.evidenceKind}`
     ].filter((part): part is string => Boolean(part));
     lines.push(`- ${status} \`${result.taskId}\`: ${result.actualTrust} - ${result.receiptSummary}`);
+    if (result.sourceUrl) {
+      const sourceLabel = result.sourceTitle ?? result.sourceUrl;
+      lines.push(`  - source: [${sourceLabel}](${result.sourceUrl})`);
+    }
+    if (result.firstLoggedAt) {
+      lines.push(`  - first logged: ${result.firstLoggedAt}`);
+    }
     if (context.length > 0) {
       lines.push(`  - ${context.join("; ")}`);
     }
@@ -784,6 +800,9 @@ function toCaseRecord(result: BenchmarkRunTaskResultLike): BenchmarkRunCaseRecor
     reviewStatus: result.task.reviewStatus,
     requiredEvidence: normalizeStringList(result.task.requiredEvidence ?? []),
     checkerBoundary: normalizeOptionalText(result.task.checkerBoundary),
+    sourceUrl: normalizeOptionalText(result.task.sourceUrl),
+    sourceTitle: normalizeOptionalText(result.task.sourceTitle),
+    firstLoggedAt: normalizeOptionalText(result.task.firstLoggedAt),
     expectedTrust: result.task.expectTrust,
     expectedSummaryIncludes: normalizeOptionalText(result.task.expectSummaryIncludes),
     expectedEvidenceKind: result.task.expectEvidenceKind,
@@ -1243,6 +1262,9 @@ function summarizeBenchmarkReviewContracts(cases: BenchmarkRunCaseRecord[]): Ben
       reviewStatus: entry.reviewStatus ?? "unreviewed",
       requiredEvidence: entry.requiredEvidence ?? [],
       checkerBoundary: entry.checkerBoundary,
+      sourceUrl: entry.sourceUrl,
+      sourceTitle: entry.sourceTitle,
+      firstLoggedAt: entry.firstLoggedAt,
       passed: entry.passed,
       expectedTrust: entry.expectedTrust,
       actualTrust: entry.actualTrust,

@@ -79,6 +79,9 @@ describe("benchmark run records", () => {
       reviewStatus: "self-reviewed",
       requiredEvidence: ["exact arithmetic receipt", "receipt replay command"],
       checkerBoundary: "native exact-arithmetic parser",
+      sourceUrl: "https://example.test/math/tiny-case",
+      sourceTitle: "Tiny public math case",
+      firstLoggedAt: "2026-07-01",
       expectedEvidenceKind: "exact-arithmetic",
       evidenceKind: "exact-arithmetic"
     });
@@ -99,6 +102,8 @@ describe("benchmark run records", () => {
     expect(result.markdown).toContain("expected-evidence=exact-arithmetic");
     expect(result.markdown).toContain("review=self-reviewed");
     expect(result.markdown).toContain("boundary=native exact-arithmetic parser");
+    expect(result.markdown).toContain("source: [Tiny public math case](https://example.test/math/tiny-case)");
+    expect(result.markdown).toContain("first logged: 2026-07-01");
     expect(result.markdown).toContain("required evidence: exact arithmetic receipt; receipt replay command");
     expect(parseBenchmarkRunRecordJson(JSON.stringify(result.record), "roundtrip").benchmarkRunId).toBe(
       result.record.benchmarkRunId
@@ -116,6 +121,9 @@ describe("benchmark run records", () => {
           reviewStatus: "self-reviewed",
           requiredEvidence: ["exact arithmetic receipt", "receipt replay command"],
           checkerBoundary: "native exact-arithmetic parser",
+          sourceUrl: "https://example.test/math/tiny-case",
+          sourceTitle: "Tiny public math case",
+          firstLoggedAt: "2026-07-01",
           expectedTrust: "exact-computed",
           actualTrust: "exact-computed",
           evidenceKind: "exact-arithmetic"
@@ -307,7 +315,10 @@ function benchmarkRun(
           aiFailureMode: "wrong arithmetic",
           reviewStatus: "self-reviewed" as const,
           requiredEvidence: ["exact arithmetic receipt", "receipt replay command"],
-          checkerBoundary: "native exact-arithmetic parser"
+          checkerBoundary: "native exact-arithmetic parser",
+          sourceUrl: "https://example.test/math/tiny-case",
+          sourceTitle: "Tiny public math case",
+          firstLoggedAt: "2026-07-01"
         },
         receipt,
         passed,

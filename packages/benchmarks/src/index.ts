@@ -15,6 +15,9 @@ export interface BenchmarkTask {
   reviewStatus?: BenchmarkTaskReviewStatus;
   requiredEvidence?: string[];
   checkerBoundary?: string;
+  sourceUrl?: string;
+  sourceTitle?: string;
+  firstLoggedAt?: string;
 }
 
 export interface BenchmarkSuite {
@@ -147,7 +150,10 @@ function parseBenchmarkTask(raw: unknown, index: number): BenchmarkTask {
     aiFailureMode: parseOptionalString(task.aiFailureMode, `Task ${index} aiFailureMode`),
     reviewStatus: parseReviewStatus(task.reviewStatus, index),
     requiredEvidence: parseOptionalStringArray(task.requiredEvidence, `Task ${index} requiredEvidence`),
-    checkerBoundary: parseOptionalString(task.checkerBoundary, `Task ${index} checkerBoundary`)
+    checkerBoundary: parseOptionalString(task.checkerBoundary, `Task ${index} checkerBoundary`),
+    sourceUrl: parseOptionalString(task.sourceUrl, `Task ${index} sourceUrl`),
+    sourceTitle: parseOptionalString(task.sourceTitle, `Task ${index} sourceTitle`),
+    firstLoggedAt: parseOptionalString(task.firstLoggedAt, `Task ${index} firstLoggedAt`)
   };
 }
 

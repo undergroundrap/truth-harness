@@ -240,6 +240,15 @@
         "checkerBoundary": {
           "type": "string"
         },
+        "sourceUrl": {
+          "type": "string"
+        },
+        "sourceTitle": {
+          "type": "string"
+        },
+        "firstLoggedAt": {
+          "type": "string"
+        },
         "expectedTrust": {
           "$ref": "#/$defs/trust"
         },

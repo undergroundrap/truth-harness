@@ -163,6 +163,77 @@ describe("createReceipt", () => {
     expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
   });
 
+  it("computes Project Euler style even Fibonacci sums exactly", () => {
+    const receipt = createReceipt("Find the sum of even Fibonacci terms not exceeding 4000000.");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("4613732");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-fibonacci-even-sum");
+    expect(receipt.evidenceProfile.outputs).toEqual(expect.arrayContaining(["result=4613732", "finite-sequence=computed"]));
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "finite-fibonacci-even-sum-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      result?: string;
+      verdict?: string;
+      evenTerms?: string[];
+    };
+    expect(payload.result).toBe("4613732");
+    expect(payload.verdict).toBe("computed");
+    expect(payload.evenTerms).toContain("3524578");
+  });
+
+  it("refutes stated even Fibonacci sums when the exact recurrence result disagrees", () => {
+    const receipt = createReceipt("verify sum of even Fibonacci terms not exceeding 4000000 = 4613733");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("4613732");
+    expect(receipt.summary).toContain("4613733");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["result=4613732", "stated=4613733", "finite-sequence=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+  });
+
+  it("computes Project Euler style sum-square differences exactly", () => {
+    const receipt = createReceipt(
+      "Find the difference between the square of the sum and the sum of squares for the first 100 natural numbers."
+    );
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("25164150");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-sum-square-difference");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["difference=25164150", "sum-square-difference=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "sum-square-difference-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      difference?: string;
+      sum?: string;
+      sumOfSquares?: string;
+      sumSquared?: string;
+    };
+    expect(payload.sum).toBe("5050");
+    expect(payload.sumOfSquares).toBe("338350");
+    expect(payload.sumSquared).toBe("25502500");
+    expect(payload.difference).toBe("25164150");
+  });
+
+  it("refutes stated sum-square differences when the exact formula result disagrees", () => {
+    const receipt = createReceipt(
+      "verify difference between square of sum and sum of squares for first 100 natural numbers = 25164151"
+    );
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("25164150");
+    expect(receipt.summary).toContain("25164151");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["difference=25164150", "stated=25164151", "sum-square-difference=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+  });
   it("marks MVP receipts as local-only with no external disclosure", () => {
     const receipt = createReceipt("compute 2 + 2");
 

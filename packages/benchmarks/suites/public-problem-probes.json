@@ -1,10 +1,13 @@
 {
   "id": "public-problem-probes",
   "title": "Public Problem Probes",
-  "description": "Externally recognizable bounded math problems used to test whether Truth Harness can turn public prompts into local receipts without overclaiming. First source: Project Euler Problem 1 (https://projecteuler.net/problem=1).",
+  "description": "Externally recognizable bounded math problems used to test whether Truth Harness can turn public prompts into local receipts without overclaiming. Initial sources: Project Euler Problems 1, 2, and 6.",
   "tasks": [
     {
       "id": "project-euler-001-multiples-3-5",
+      "sourceUrl": "https://projecteuler.net/problem=1",
+      "sourceTitle": "Project Euler Problem 1: Multiples of 3 or 5",
+      "firstLoggedAt": "2026-07-01",
       "category": "finite-combinatorics",
       "level": "level-13-public-bounded-computation",
       "aiFailureMode": "Gives the known answer without a replayable local certificate or inclusion-exclusion trace.",
@@ -22,6 +25,9 @@
     },
     {
       "id": "project-euler-001-wrong-answer-refutation",
+      "sourceUrl": "https://projecteuler.net/problem=1",
+      "sourceTitle": "Project Euler Problem 1: Multiples of 3 or 5",
+      "firstLoggedAt": "2026-07-01",
       "category": "finite-combinatorics",
       "level": "level-13-public-bounded-computation",
       "aiFailureMode": "Accepts a near-miss public benchmark answer without recomputing the exact finite sum.",
@@ -36,6 +42,86 @@
         "receipt replay command"
       ],
       "checkerBoundary": "Only the stated finite multiple-sum equality is refuted; this does not evaluate unrelated Project Euler problems."
+    },
+    {
+      "id": "project-euler-002-even-fibonacci",
+      "sourceUrl": "https://projecteuler.net/problem=2",
+      "sourceTitle": "Project Euler Problem 2: Even Fibonacci Numbers",
+      "firstLoggedAt": "2026-07-01",
+      "category": "finite-recurrence",
+      "level": "level-13-public-bounded-computation",
+      "aiFailureMode": "Returns a memorized public answer without a replayable recurrence trace.",
+      "prompt": "Find the sum of even Fibonacci terms not exceeding 4000000.",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "4613732",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "finite Fibonacci recurrence certificate",
+        "even-term list under the explicit bound",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only the standard Fibonacci sequence seeded by 1 and 2 with an explicit finite positive bound is supported."
+    },
+    {
+      "id": "project-euler-002-wrong-answer-refutation",
+      "sourceUrl": "https://projecteuler.net/problem=2",
+      "sourceTitle": "Project Euler Problem 2: Even Fibonacci Numbers",
+      "firstLoggedAt": "2026-07-01",
+      "category": "finite-recurrence",
+      "level": "level-13-public-bounded-computation",
+      "aiFailureMode": "Accepts a near-miss recurrence sum without replaying the sequence.",
+      "prompt": "verify sum of even Fibonacci terms not exceeding 4000000 = 4613733",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "4613732",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "finite Fibonacci recurrence certificate",
+        "stated-answer mismatch",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only the stated bounded recurrence-sum equality is refuted; this does not evaluate arbitrary recurrence claims."
+    },
+    {
+      "id": "project-euler-006-sum-square-difference",
+      "sourceUrl": "https://projecteuler.net/problem=6",
+      "sourceTitle": "Project Euler Problem 6: Sum Square Difference",
+      "firstLoggedAt": "2026-07-01",
+      "category": "finite-summation",
+      "level": "level-13-public-bounded-computation",
+      "aiFailureMode": "Confuses sum of squares with square of sum or returns a known answer without formulas.",
+      "prompt": "Find the difference between the square of the sum and the sum of squares for the first 100 natural numbers.",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "25164150",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "sum-square difference certificate",
+        "closed-form integer formula trace",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only square-of-sum minus sum-of-squares for the first n natural numbers with explicit positive integer n is supported."
+    },
+    {
+      "id": "project-euler-006-wrong-answer-refutation",
+      "sourceUrl": "https://projecteuler.net/problem=6",
+      "sourceTitle": "Project Euler Problem 6: Sum Square Difference",
+      "firstLoggedAt": "2026-07-01",
+      "category": "finite-summation",
+      "level": "level-13-public-bounded-computation",
+      "aiFailureMode": "Accepts a one-off arithmetic slip in a public finite-sum problem.",
+      "prompt": "verify difference between square of sum and sum of squares for first 100 natural numbers = 25164151",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "25164150",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "sum-square difference certificate",
+        "stated-answer mismatch",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only the stated bounded finite-sum equality is refuted; this does not prove arbitrary summation identities."
     }
   ]
 }
