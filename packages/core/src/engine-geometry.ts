@@ -18,6 +18,18 @@ export interface Point2 {
   y: bigint;
 }
 
+export interface Circle2 {
+  center: Point2;
+  radius: bigint;
+}
+
+export interface Circle2AabbIntersectionClaim {
+  source: string;
+  circle: Circle2;
+  box: Aabb2;
+  statedIntersect?: boolean;
+}
+
 export interface Segment2 {
   from: Point2;
   to: Point2;
@@ -55,6 +67,7 @@ export interface PointInTriangle2Claim {
   statedInside?: boolean;
 }
 
+export type Circle2AabbClassification = "center-inside" | "overlap" | "tangent" | "separated";
 export type PointInTriangle2Classification = "inside" | "edge" | "vertex" | "outside";
 export type RaySlabEndpoint = Rational | "negative-infinity" | "positive-infinity";
 export type Ray2AabbClassification = "ray-hit" | "origin-inside" | "parallel-miss" | "behind-ray" | "slab-miss";
@@ -205,6 +218,132 @@ function stringifyAabb2(box: Aabb2): Record<keyof Aabb2, string> {
     maxX: box.maxX.toString(),
     maxY: box.maxY.toString()
   };
+}
+
+export function parseCircle2AabbIntersectionClaim(problem: string): Circle2AabbIntersectionClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.?]$/u, "");
+  const match = /^(?:do\s+)?circle\s+center\s*\(\s*(?<centerX>-?\d+)\s*,\s*(?<centerY>-?\d+)\s*\)\s+radius\s*(?<radius>\d+)\s+intersects?\s+aabb\s+min\s*\(\s*(?<minX>-?\d+)\s*,\s*(?<minY>-?\d+)\s*\)\s+max\s*\(\s*(?<maxX>-?\d+)\s*,\s*(?<maxY>-?\d+)\s*\)(?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  const requiredGroups = ["centerX", "centerY", "radius", "minX", "minY", "maxX", "maxY"];
+  if (requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18)) {
+    return undefined;
+  }
+
+  const radius = BigInt(match.groups.radius);
+  const circle: Circle2 = {
+    center: { x: BigInt(match.groups.centerX), y: BigInt(match.groups.centerY) },
+    radius
+  };
+  const box: Aabb2 = {
+    minX: BigInt(match.groups.minX),
+    minY: BigInt(match.groups.minY),
+    maxX: BigInt(match.groups.maxX),
+    maxY: BigInt(match.groups.maxY)
+  };
+  if (!isValidAabb2(box)) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    circle,
+    box,
+    statedIntersect: match.groups.stated === undefined ? undefined : match.groups.stated.toLowerCase() === "true"
+  };
+}
+
+export function circle2AabbIntersectionCertificate(claim: Circle2AabbIntersectionClaim): {
+  schemaVersion: "truth-harness.circle2-aabb-intersection.v0";
+  adapter: "local-circle2-aabb-intersection";
+  source: string;
+  convention: "closed-disk-closed-aabb-boundary-counts-as-intersection";
+  circle: { center: Record<keyof Point2, string>; radius: string };
+  box: Record<keyof Aabb2, string>;
+  statedIntersect?: boolean;
+  closestPoint: Record<keyof Point2, string>;
+  delta: { dx: string; dy: string };
+  distanceSquared: string;
+  radiusSquared: string;
+  intersect: boolean;
+  classification: Circle2AabbClassification;
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const closestPoint: Point2 = {
+    x: clampBigInt(claim.circle.center.x, claim.box.minX, claim.box.maxX),
+    y: clampBigInt(claim.circle.center.y, claim.box.minY, claim.box.maxY)
+  };
+  const dx = claim.circle.center.x - closestPoint.x;
+  const dy = claim.circle.center.y - closestPoint.y;
+  const distanceSquared = dx * dx + dy * dy;
+  const radiusSquared = claim.circle.radius * claim.circle.radius;
+  const intersect = distanceSquared <= radiusSquared;
+  const centerInside = pointInAabb2(claim.circle.center, claim.box);
+  const classification: Circle2AabbClassification = !intersect
+    ? "separated"
+    : centerInside
+      ? "center-inside"
+      : distanceSquared === radiusSquared
+        ? "tangent"
+        : "overlap";
+  const statedMatches = claim.statedIntersect === undefined || claim.statedIntersect === intersect;
+
+  return {
+    schemaVersion: "truth-harness.circle2-aabb-intersection.v0",
+    adapter: "local-circle2-aabb-intersection",
+    source: claim.source,
+    convention: "closed-disk-closed-aabb-boundary-counts-as-intersection",
+    circle: stringifyCircle2(claim.circle),
+    box: stringifyAabb2(claim.box),
+    statedIntersect: claim.statedIntersect,
+    closestPoint: stringifyPoint2(closestPoint),
+    delta: { dx: dx.toString(), dy: dy.toString() },
+    distanceSquared: distanceSquared.toString(),
+    radiusSquared: radiusSquared.toString(),
+    intersect,
+    classification,
+    checks: [
+      {
+        id: "valid-circle-aabb-inputs",
+        ok: true,
+        expected: "nonnegative integer circle radius and valid AABB min/max bounds",
+        observed: "circle radius is nonnegative and AABB bounds are valid"
+      },
+      {
+        id: "closed-disk-aabb-distance-result",
+        ok: statedMatches,
+        expected: String(intersect),
+        observed: claim.statedIntersect === undefined ? String(intersect) : String(claim.statedIntersect)
+      }
+    ],
+    trace: [
+      "Use a closed disk and closed AABB; boundary tangency counts as intersection.",
+      `Clamp the circle center (${claim.circle.center.x.toString()}, ${claim.circle.center.y.toString()}) to the box to get closest point (${closestPoint.x.toString()}, ${closestPoint.y.toString()}).`,
+      `Squared distance from center to closest point is ${distanceSquared.toString()}; radius squared is ${radiusSquared.toString()}.`,
+      `Exact circle/AABB result is ${String(intersect)} (${classification}).`
+    ],
+    verdict: claim.statedIntersect === undefined ? "computed" : statedMatches ? "accepted" : "refuted"
+  };
+}
+
+function stringifyCircle2(circle: Circle2): { center: Record<keyof Point2, string>; radius: string } {
+  return {
+    center: stringifyPoint2(circle.center),
+    radius: circle.radius.toString()
+  };
+}
+
+function clampBigInt(value: bigint, minimum: bigint, maximum: bigint): bigint {
+  return maxBigInt(minimum, minBigInt(value, maximum));
 }
 export function parseSegment2IntersectionClaim(problem: string): Segment2IntersectionClaim | undefined {
   const candidate = latexToReadableMath(problem)

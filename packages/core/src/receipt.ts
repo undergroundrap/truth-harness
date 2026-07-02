@@ -6,7 +6,9 @@ import { Rational } from "./rational.js";
 import { createArithmeticTrace } from "./arithmetic-trace.js";
 import {
   aabb2OverlapCertificate,
+  circle2AabbIntersectionCertificate,
   parseAabb2OverlapClaim,
+  parseCircle2AabbIntersectionClaim,
   parsePointInTriangle2Claim,
   parseRay2AabbIntersectionClaim,
   parseSegment2IntersectionClaim,
@@ -14,6 +16,7 @@ import {
   ray2AabbIntersectionCertificate,
   segment2IntersectionCertificate,
   type Aabb2OverlapClaim,
+  type Circle2AabbIntersectionClaim,
   type PointInTriangle2Claim,
   type Ray2AabbIntersectionClaim,
   type Segment2IntersectionClaim
@@ -338,6 +341,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const circle2AabbIntersection = parseCircle2AabbIntersectionClaim(normalizedProblem);
+  if (circle2AabbIntersection) {
+    return completeCircle2AabbIntersectionReceipt({
+      problem,
+      normalizedProblem,
+      claim: circle2AabbIntersection,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const segment2Intersection = parseSegment2IntersectionClaim(normalizedProblem);
   if (segment2Intersection) {
     return completeSegment2IntersectionReceipt({
@@ -407,7 +425,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate segment intersection predicates, integer-coordinate ray/AABB intersection predicates, integer-coordinate point-in-triangle predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate circle/AABB intersection predicates, integer-coordinate segment intersection predicates, integer-coordinate ray/AABB intersection predicates, integer-coordinate point-in-triangle predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -2440,6 +2458,128 @@ function completeAabb2OverlapReceipt(args: {
         "This adapter only checks 2D axis-aligned bounding boxes with integer coordinates.",
         "Closed intervals are used: touching edges or corners count as overlap.",
         "This is a deterministic geometry predicate, not a full collision simulation, swept test, or physics proof."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
+function completeCircle2AabbIntersectionReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: Circle2AabbIntersectionClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = circle2AabbIntersectionCertificate(args.claim);
+  const hasStatedIntersect = args.claim.statedIntersect !== undefined;
+  const statedMatches = !hasStatedIntersect || certificate.intersect === certificate.statedIntersect;
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const artifact = addArtifact(args.artifacts, {
+    kind: "circle2-aabb-intersection-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-circle2-aabb-intersection",
+      source: args.claim.source,
+      convention: certificate.convention,
+      circle: certificate.circle,
+      box: certificate.box,
+      statedIntersect: certificate.statedIntersect
+    },
+    trust,
+    summary: hasStatedIntersect
+      ? statedMatches
+        ? "Circle/AABB intersection claim matched exact squared-distance arithmetic."
+        : "Circle/AABB intersection claim disagreed with exact squared-distance arithmetic."
+      : "Circle/AABB intersection question parsed into exact integer squared-distance arithmetic.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedIntersect ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-circle2-aabb-intersection",
+      exactArithmetic: true,
+      operation: "2D circle versus axis-aligned bounding-box intersection predicate",
+      convention: certificate.convention,
+      classification: certificate.classification,
+      closestPoint: certificate.closestPoint,
+      distanceSquared: certificate.distanceSquared,
+      radiusSquared: certificate.radiusSquared
+    },
+    trust,
+    summary: "Checked 2D circle/AABB intersection with exact integer closest-point and squared-distance arithmetic.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact circle/AABB intersection result is ${String(certificate.intersect)} (${certificate.classification}).`
+      : `Exact circle/AABB intersection result is ${String(certificate.intersect)}, not ${String(certificate.statedIntersect)} (${certificate.classification}).`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The circle/AABB intersection result was computed by exact integer squared-distance arithmetic. This earns exact-computed, not a full physics proof."
+      : "The stated circle/AABB intersection result is refuted by exact integer squared-distance arithmetic under the recorded closed-boundary convention."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact circle/AABB intersection result: ${String(certificate.intersect)} (${certificate.classification}).`
+      : `Refuted circle/AABB intersection claim: exact result is ${String(certificate.intersect)}, stated ${String(certificate.statedIntersect)} (${certificate.classification}).`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-circle2-aabb-intersection",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedIntersect
+        ? [
+            `intersect=${String(certificate.intersect)}`,
+            `stated=${String(certificate.statedIntersect)}`,
+            `classification=${certificate.classification}`,
+            statedMatches ? "circle2-aabb-intersection=passed" : "circle2-aabb-intersection=failed"
+          ]
+        : [
+            `intersect=${String(certificate.intersect)}`,
+            `classification=${certificate.classification}`,
+            "circle2-aabb-intersection=computed"
+          ],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only checks 2D circles and AABBs with integer coordinates and integer radius.",
+        "The disk and AABB are closed: boundary tangency counts as intersection.",
+        "This is deterministic closest-point squared-distance arithmetic, not a full swept collision, physics, or rendering-engine proof."
       ]
     },
     nodes: args.nodes,

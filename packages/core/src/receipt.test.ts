@@ -355,6 +355,62 @@ describe("createReceipt", () => {
     );
     expect(receipt.evidenceProfile.limitations.join(" ")).toContain("touching edges or corners count as overlap");
   });
+  it("computes circle/AABB intersections with exact squared-distance arithmetic", () => {
+    const receipt = createReceipt("Do circle center(2,2) radius 2 intersect AABB min(3,0) max(6,4)?");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("true");
+    expect(receipt.summary).toContain("overlap");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-circle2-aabb-intersection");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "classification=overlap", "circle2-aabb-intersection=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "circle2-aabb-intersection-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      intersect?: boolean;
+      classification?: string;
+      closestPoint?: { x?: string; y?: string };
+      distanceSquared?: string;
+      radiusSquared?: string;
+    };
+    expect(payload).toMatchObject({
+      intersect: true,
+      classification: "overlap",
+      closestPoint: { x: "3", y: "2" },
+      distanceSquared: "1",
+      radiusSquared: "4"
+    });
+  });
+
+  it("treats circle/AABB tangency as intersection under the recorded closed-boundary convention", () => {
+    const receipt = createReceipt("verify circle center(0,0) radius 3 intersect AABB min(3,0) max(5,2) = true");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("tangent");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "stated=true", "classification=tangent", "circle2-aabb-intersection=passed"])
+    );
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("boundary tangency counts as intersection");
+  });
+
+  it("refutes wrong circle/AABB intersection claims with exact closest-point evidence", () => {
+    const receipt = createReceipt("verify circle center(0,0) radius 2 intersect AABB min(3,3) max(5,5) = true");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("false");
+    expect(receipt.summary).toContain("separated");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=false", "stated=true", "classification=separated", "circle2-aabb-intersection=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "circle2-aabb-intersection-certificate");
+    const payload = JSON.parse(certificate?.content ?? "{}") as { distanceSquared?: string; radiusSquared?: string };
+    expect(payload.distanceSquared).toBe("18");
+    expect(payload.radiusSquared).toBe("4");
+  });
+
   it("computes integer-coordinate segment intersections exactly", () => {
     const receipt = createReceipt("Do segment A from (0,0) to (4,4) and segment B from (0,4) to (4,0) intersect?");
 

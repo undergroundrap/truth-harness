@@ -1,7 +1,7 @@
 {
   "id": "engine-math-seed",
   "title": "Engine Math Seed Suite",
-  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap, segment intersection, ray/AABB, and point-in-triangle receipts before expanding to harder engine invariants.",
+  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap, circle/AABB intersection, segment intersection, ray/AABB, and point-in-triangle receipts before expanding to harder engine invariants.",
   "tasks": [
     {
       "id": "aabb-overlap-true",
@@ -59,6 +59,63 @@
         "receipt replay command"
       ],
       "checkerBoundary": "The result depends on the recorded closed-interval convention. A half-open or open-interval engine policy would need a different adapter and receipt."
+    },
+    {
+      "id": "circle-aabb-overlap",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Uses visual intuition for circle collisions without recording the exact closest-point distance check.",
+      "prompt": "Do circle center(2,2) radius 2 intersect AABB min(3,0) max(6,4)?",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "overlap",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate circle/AABB certificate",
+        "closest-point clamp trace",
+        "squared-distance comparison",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only 2D circles and AABBs with integer coordinates and integer radius are checked. This is not a swept collision, runtime physics, or rendering proof."
+    },
+    {
+      "id": "circle-aabb-tangent-counts-as-hit",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Forgets to define whether circle tangency counts as a collision boundary case.",
+      "prompt": "verify circle center(0,0) radius 3 intersect AABB min(3,0) max(5,2) = true",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "tangent",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate circle/AABB certificate",
+        "closed-boundary tangency convention",
+        "distance squared equals radius squared",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "The result depends on the recorded closed-boundary convention. Open-boundary or tolerance-based collision policies need separate adapters and receipts."
+    },
+    {
+      "id": "circle-aabb-separated-refuted",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Accepts a stated circle collision without checking the squared distance to the nearest AABB point.",
+      "prompt": "verify circle center(0,0) radius 2 intersect AABB min(3,3) max(5,5) = true",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "separated",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate circle/AABB certificate",
+        "closest-point clamp trace",
+        "distance squared greater than radius squared",
+        "stated-answer mismatch"
+      ],
+      "checkerBoundary": "Only the stated finite circle/AABB predicate is refuted. The receipt does not evaluate arbitrary collision scenes or runtime engine state."
     },
     {
       "id": "segment-proper-crossing",
