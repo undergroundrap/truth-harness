@@ -355,6 +355,55 @@ describe("createReceipt", () => {
     );
     expect(receipt.evidenceProfile.limitations.join(" ")).toContain("touching edges or corners count as overlap");
   });
+  it("computes integer-coordinate segment intersections exactly", () => {
+    const receipt = createReceipt("Do segment A from (0,0) to (4,4) and segment B from (0,4) to (4,0) intersect?");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.summary).toContain("true");
+    expect(receipt.summary).toContain("proper-crossing");
+    expect(receipt.evidenceProfile.kind).toBe("exact-arithmetic");
+    expect(receipt.evidenceProfile.backends[0]?.id).toBe("local-segment2-intersection");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "classification=proper-crossing", "segment2-intersection=computed"])
+    );
+    const certificate = receipt.artifacts.find((artifact) => artifact.kind === "segment2-intersection-certificate");
+    expect(certificate).toBeDefined();
+    const payload = JSON.parse(certificate?.content ?? "{}") as {
+      intersect?: boolean;
+      classification?: string;
+      orientations?: Array<{ sign?: string }>;
+    };
+    expect(payload.intersect).toBe(true);
+    expect(payload.classification).toBe("proper-crossing");
+    expect(payload.orientations?.map((item) => item.sign)).toEqual([
+      "counterclockwise",
+      "clockwise",
+      "clockwise",
+      "counterclockwise"
+    ]);
+  });
+
+  it("refutes wrong segment intersection claims with exact orientation evidence", () => {
+    const receipt = createReceipt("verify segment A from (0,0) to (1,1) and segment B from (2,2) to (3,3) intersect = true");
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("false");
+    expect(receipt.summary).toContain("collinear-disjoint");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=false", "stated=true", "classification=collinear-disjoint", "segment2-intersection=failed"])
+    );
+    expect(receipt.graph.nodes.some((node) => node.kind === "counterexample")).toBe(true);
+  });
+
+  it("treats collinear segment overlap as intersection under the recorded closed-segment convention", () => {
+    const receipt = createReceipt("verify segment A from (0,0) to (4,0) and segment B from (2,0) to (6,0) intersect = true");
+
+    expect(receipt.trust).toBe("exact-computed");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["intersect=true", "stated=true", "classification=collinear-overlap", "segment2-intersection=passed"])
+    );
+    expect(receipt.evidenceProfile.limitations.join(" ")).toContain("endpoint touches and collinear overlaps count as intersection");
+  });
   it("marks MVP receipts as local-only with no external disclosure", () => {
     const receipt = createReceipt("compute 2 + 2");
 

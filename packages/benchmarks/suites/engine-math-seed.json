@@ -1,7 +1,7 @@
 {
   "id": "engine-math-seed",
   "title": "Engine Math Seed Suite",
-  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap receipts before expanding to harder engine invariants.",
+  "description": "Bounded game-development math predicates for agents building or auditing geometry, physics, and engine code. This suite starts with exact integer-coordinate AABB overlap and segment intersection receipts before expanding to harder engine invariants.",
   "tasks": [
     {
       "id": "aabb-overlap-true",
@@ -59,6 +59,63 @@
         "receipt replay command"
       ],
       "checkerBoundary": "The result depends on the recorded closed-interval convention. A half-open or open-interval engine policy would need a different adapter and receipt."
+    },
+    {
+      "id": "segment-proper-crossing",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Guesses that two debug/editor line segments cross without preserving orientation evidence.",
+      "prompt": "Do segment A from (0,0) to (4,4) and segment B from (0,4) to (4,0) intersect?",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "proper-crossing",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate segment intersection certificate",
+        "orientation determinant trace",
+        "closed-segment endpoint convention",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only non-degenerate 2D line segments with integer coordinates are checked. This does not verify arbitrary curve, mesh, or physics-engine collision behavior."
+    },
+    {
+      "id": "segment-collinear-disjoint-refuted",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Sees collinearity and forgets to check closed segment bounds before claiming intersection.",
+      "prompt": "verify segment A from (0,0) to (1,1) and segment B from (2,2) to (3,3) intersect = true",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "collinear-disjoint",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate segment intersection certificate",
+        "orientation determinant trace",
+        "closed bounds check",
+        "stated-answer mismatch"
+      ],
+      "checkerBoundary": "Only the stated finite segment-intersection predicate is refuted. The receipt does not evaluate runtime engine state or broader geometry scenes."
+    },
+    {
+      "id": "segment-collinear-overlap",
+      "firstLoggedAt": "2026-07-02",
+      "category": "engine-geometry",
+      "level": "level-1-engine-geometry-predicate",
+      "aiFailureMode": "Misses boundary-policy details for collinear overlapping line segments.",
+      "prompt": "verify segment A from (0,0) to (4,0) and segment B from (2,0) to (6,0) intersect = true",
+      "expectTrust": "exact-computed",
+      "expectEvidenceKind": "exact-arithmetic",
+      "expectSummaryIncludes": "collinear-overlap",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "integer-coordinate segment intersection certificate",
+        "orientation determinant trace",
+        "closed-segment overlap convention",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "The result depends on the recorded closed-segment convention. Open-segment or tolerance-based policies need separate adapters and receipts."
     }
   ]
 }

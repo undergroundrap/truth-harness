@@ -109,6 +109,23 @@ interface Aabb2OverlapClaim {
   statedOverlap?: boolean;
 }
 
+interface Point2 {
+  x: bigint;
+  y: bigint;
+}
+
+interface Segment2 {
+  from: Point2;
+  to: Point2;
+}
+
+interface Segment2IntersectionClaim {
+  source: string;
+  a: Segment2;
+  b: Segment2;
+  statedIntersect?: boolean;
+}
+
 export interface CreateReceiptOptions {
   maximaCommand?: string;
   casRunner?: CasBackendCommandRunner;
@@ -338,6 +355,21 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     });
   }
 
+  const segment2Intersection = parseSegment2IntersectionClaim(normalizedProblem);
+  if (segment2Intersection) {
+    return completeSegment2IntersectionReceipt({
+      problem,
+      normalizedProblem,
+      claim: segment2Intersection,
+      createdAt,
+      nodes,
+      edges,
+      artifacts,
+      findings,
+      normalizedNode
+    });
+  }
+
   const arithmeticSource = parseArithmeticPrompt(normalizedProblem);
   if (arithmeticSource) {
     return completeArithmeticReceipt({
@@ -362,7 +394,7 @@ export function createReceipt(problem: string, options: CreateReceiptOptions = {
     kind: "plan",
     payload: {
       nextAdapters: ["lean", "z3", "rag"],
-      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
+      reason: "The MVP handles exact arithmetic, bounded finite multiple sums, bounded Fibonacci even-term sums, bounded sum-square differences, bounded self-power modular sums, bounded binomial threshold counts, integer-coordinate AABB overlap predicates, integer-coordinate segment intersection predicates, bounded one-variable integer solution checks, finite counterexample search, modular parity checks, interval bounds, dimensional analysis, and SymPy-backed symbolic prompts."
     },
     trust: "unverified",
     summary: "Future adapter plan for unsupported problem.",
@@ -2403,6 +2435,126 @@ function completeAabb2OverlapReceipt(args: {
     findings: args.findings
   });
 }
+function completeSegment2IntersectionReceipt(args: {
+  problem: string;
+  normalizedProblem: string;
+  claim: Segment2IntersectionClaim;
+  createdAt: string;
+  nodes: GraphNode[];
+  edges: EvidenceEdge[];
+  artifacts: Artifact[];
+  findings: Finding[];
+  normalizedNode: GraphNode;
+}): Receipt {
+  const certificate = segment2IntersectionCertificate(args.claim);
+  const hasStatedIntersect = args.claim.statedIntersect !== undefined;
+  const statedMatches = !hasStatedIntersect || certificate.intersect === certificate.statedIntersect;
+  const trust: TrustLabel = statedMatches ? "exact-computed" : "refuted";
+  const artifact = addArtifact(args.artifacts, {
+    kind: "segment2-intersection-certificate",
+    mimeType: "application/json",
+    content: JSON.stringify(certificate, null, 2)
+  });
+
+  const claimNode = addNode(args.nodes, args.createdAt, {
+    kind: "claim",
+    payload: {
+      adapter: "local-segment2-intersection",
+      source: args.claim.source,
+      convention: certificate.convention,
+      a: certificate.a,
+      b: certificate.b,
+      statedIntersect: certificate.statedIntersect
+    },
+    trust,
+    summary: hasStatedIntersect
+      ? statedMatches
+        ? "Segment intersection claim matched exact integer orientation tests."
+        : "Segment intersection claim disagreed with exact integer orientation tests."
+      : "Segment intersection question parsed into exact integer orientation tests.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: args.normalizedNode.id, to: claimNode.id, label: hasStatedIntersect ? "claims" : "asks" });
+
+  const toolNode = addNode(args.nodes, args.createdAt, {
+    kind: "tool_run",
+    payload: {
+      adapter: "local-segment2-intersection",
+      exactArithmetic: true,
+      operation: "2D line-segment intersection predicate",
+      convention: certificate.convention,
+      classification: certificate.classification,
+      orientations: certificate.orientations
+    },
+    trust,
+    summary: "Checked 2D segment intersection with exact integer orientation determinants and closed endpoints.",
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: claimNode.id, to: toolNode.id, label: "computed-by" });
+
+  const resultNode = addNode(args.nodes, args.createdAt, {
+    kind: statedMatches ? "computation" : "counterexample",
+    payload: certificate,
+    trust,
+    summary: statedMatches
+      ? `Exact segment intersection result is ${String(certificate.intersect)} (${certificate.classification}).`
+      : `Exact segment intersection result is ${String(certificate.intersect)}, not ${String(certificate.statedIntersect)} (${certificate.classification}).`,
+    artifactRefs: [artifact.id]
+  });
+  args.edges.push({ from: toolNode.id, to: resultNode.id, label: statedMatches ? "produced" : "refuted" });
+
+  args.findings.push({
+    level: statedMatches ? "info" : "warning",
+    message: statedMatches
+      ? "The segment intersection result was computed by exact integer orientation tests. This earns exact-computed, not a full geometry engine proof."
+      : "The stated segment intersection result is refuted by exact integer orientation tests under the closed-segment convention."
+  });
+
+  return buildReceipt({
+    problem: args.problem,
+    normalizedProblem: args.normalizedProblem,
+    createdAt: args.createdAt,
+    trust,
+    summary: statedMatches
+      ? `Exact segment intersection result: ${String(certificate.intersect)} (${certificate.classification}).`
+      : `Refuted segment intersection claim: exact result is ${String(certificate.intersect)}, stated ${String(certificate.statedIntersect)} (${certificate.classification}).`,
+    evidenceProfile: {
+      kind: "exact-arithmetic",
+      backends: [
+        {
+          id: "local-segment2-intersection",
+          role: "arithmetic",
+          version: "0",
+          acceptedProofChecker: false
+        }
+      ],
+      inputs: [args.claim.source],
+      outputs: hasStatedIntersect
+        ? [
+            `intersect=${String(certificate.intersect)}`,
+            `stated=${String(certificate.statedIntersect)}`,
+            `classification=${certificate.classification}`,
+            statedMatches ? "segment2-intersection=passed" : "segment2-intersection=failed"
+          ]
+        : [
+            `intersect=${String(certificate.intersect)}`,
+            `classification=${certificate.classification}`,
+            "segment2-intersection=computed"
+          ],
+      replayable: true,
+      proofCheckerBacked: false,
+      limitations: [
+        "This adapter only checks non-degenerate 2D line segments with integer coordinates.",
+        "Closed segments are used: endpoint touches and collinear overlaps count as intersection.",
+        "This is a deterministic geometry predicate, not a full mesh, physics, or rendering-engine proof."
+      ]
+    },
+    nodes: args.nodes,
+    edges: args.edges,
+    artifacts: args.artifacts,
+    findings: args.findings
+  });
+}
 function completeArithmeticReceipt(args: {
   problem: string;
   normalizedProblem: string;
@@ -3491,6 +3643,189 @@ function stringifyAabb2(box: Aabb2): Record<keyof Aabb2, string> {
     minY: box.minY.toString(),
     maxX: box.maxX.toString(),
     maxY: box.maxY.toString()
+  };
+}
+function parseSegment2IntersectionClaim(problem: string): Segment2IntersectionClaim | undefined {
+  const candidate = latexToReadableMath(problem)
+    .replace(/\$/gu, "")
+    .replace(/^(?:please\s+)?(?:verify|check|show)\s+/iu, "")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/[.?]$/u, "");
+  const match = /^(?:do\s+)?segment\s+a\s+from\s*\(\s*(?<aFromX>-?\d+)\s*,\s*(?<aFromY>-?\d+)\s*\)\s+to\s*\(\s*(?<aToX>-?\d+)\s*,\s*(?<aToY>-?\d+)\s*\)\s+and\s+segment\s+b\s+from\s*\(\s*(?<bFromX>-?\d+)\s*,\s*(?<bFromY>-?\d+)\s*\)\s+to\s*\(\s*(?<bToX>-?\d+)\s*,\s*(?<bToY>-?\d+)\s*\)\s+intersects?(?:\s*(?:=|is)\s*(?<stated>true|false))?$/iu.exec(candidate);
+  if (!match?.groups) {
+    return undefined;
+  }
+
+  const requiredGroups = [
+    "aFromX",
+    "aFromY",
+    "aToX",
+    "aToY",
+    "bFromX",
+    "bFromY",
+    "bToX",
+    "bToY"
+  ];
+  if (requiredGroups.some((key) => match.groups?.[key] === undefined || match.groups[key].length > 18)) {
+    return undefined;
+  }
+
+  const a: Segment2 = {
+    from: { x: BigInt(match.groups.aFromX), y: BigInt(match.groups.aFromY) },
+    to: { x: BigInt(match.groups.aToX), y: BigInt(match.groups.aToY) }
+  };
+  const b: Segment2 = {
+    from: { x: BigInt(match.groups.bFromX), y: BigInt(match.groups.bFromY) },
+    to: { x: BigInt(match.groups.bToX), y: BigInt(match.groups.bToY) }
+  };
+  if (!isNonDegenerateSegment2(a) || !isNonDegenerateSegment2(b)) {
+    return undefined;
+  }
+
+  return {
+    source: candidate,
+    a,
+    b,
+    statedIntersect: match.groups.stated === undefined ? undefined : match.groups.stated.toLowerCase() === "true"
+  };
+}
+
+function isNonDegenerateSegment2(segment: Segment2): boolean {
+  return segment.from.x !== segment.to.x || segment.from.y !== segment.to.y;
+}
+
+function segment2IntersectionCertificate(claim: Segment2IntersectionClaim): {
+  schemaVersion: "truth-harness.segment2-intersection.v0";
+  adapter: "local-segment2-intersection";
+  source: string;
+  convention: "closed-segments-endpoints-count-as-intersection";
+  a: { from: Record<keyof Point2, string>; to: Record<keyof Point2, string> };
+  b: { from: Record<keyof Point2, string>; to: Record<keyof Point2, string> };
+  statedIntersect?: boolean;
+  orientations: Array<{ id: string; value: string; sign: "clockwise" | "counterclockwise" | "collinear" }>;
+  intersect: boolean;
+  classification: "proper-crossing" | "endpoint-touch" | "collinear-overlap" | "collinear-disjoint" | "disjoint";
+  checks: Array<{ id: string; ok: boolean; expected: string; observed: string }>;
+  trace: string[];
+  verdict: "computed" | "accepted" | "refuted";
+} {
+  const o1 = orientationValue(claim.a.from, claim.a.to, claim.b.from);
+  const o2 = orientationValue(claim.a.from, claim.a.to, claim.b.to);
+  const o3 = orientationValue(claim.b.from, claim.b.to, claim.a.from);
+  const o4 = orientationValue(claim.b.from, claim.b.to, claim.a.to);
+  const properCrossing = oppositeSigns(o1, o2) && oppositeSigns(o3, o4);
+  const allCollinear = o1 === 0n && o2 === 0n && o3 === 0n && o4 === 0n;
+  const endpointTouch =
+    (o1 === 0n && pointOnSegment2(claim.b.from, claim.a)) ||
+    (o2 === 0n && pointOnSegment2(claim.b.to, claim.a)) ||
+    (o3 === 0n && pointOnSegment2(claim.a.from, claim.b)) ||
+    (o4 === 0n && pointOnSegment2(claim.a.to, claim.b));
+  const intersect = properCrossing || endpointTouch;
+  const classification = properCrossing
+    ? "proper-crossing"
+    : intersect && allCollinear
+      ? "collinear-overlap"
+      : intersect
+        ? "endpoint-touch"
+        : allCollinear
+          ? "collinear-disjoint"
+          : "disjoint";
+  const statedMatches = claim.statedIntersect === undefined || claim.statedIntersect === intersect;
+  const orientations = [
+    { id: "orient(a.from,a.to,b.from)", value: o1.toString(), sign: orientationSign(o1) },
+    { id: "orient(a.from,a.to,b.to)", value: o2.toString(), sign: orientationSign(o2) },
+    { id: "orient(b.from,b.to,a.from)", value: o3.toString(), sign: orientationSign(o3) },
+    { id: "orient(b.from,b.to,a.to)", value: o4.toString(), sign: orientationSign(o4) }
+  ];
+
+  return {
+    schemaVersion: "truth-harness.segment2-intersection.v0",
+    adapter: "local-segment2-intersection",
+    source: claim.source,
+    convention: "closed-segments-endpoints-count-as-intersection",
+    a: stringifySegment2(claim.a),
+    b: stringifySegment2(claim.b),
+    statedIntersect: claim.statedIntersect,
+    orientations,
+    intersect,
+    classification,
+    checks: [
+      {
+        id: "non-degenerate-segment-inputs",
+        ok: true,
+        expected: "each segment has distinct endpoints",
+        observed: "both segments are non-degenerate integer-coordinate segments"
+      },
+      {
+        id: "closed-segment-intersection-result",
+        ok: statedMatches,
+        expected: String(intersect),
+        observed: claim.statedIntersect === undefined ? String(intersect) : String(claim.statedIntersect)
+      }
+    ],
+    trace: [
+      "Use closed segments, so endpoint touches and collinear overlaps count as intersection.",
+      `Orientation values are ${orientations.map((item) => `${item.id}=${item.value} (${item.sign})`).join(", ")}.`,
+      properCrossing
+        ? "The segment endpoints are on opposite sides of each other, so the segments properly cross."
+        : endpointTouch
+          ? "At least one collinear endpoint lies on the opposite segment under closed-segment bounds."
+          : allCollinear
+            ? "The segments are collinear but their closed bounds do not overlap."
+            : "The orientation tests do not show opposite-sided crossing or endpoint contact.",
+      `Exact intersection result is ${String(intersect)} (${classification}).`
+    ],
+    verdict: claim.statedIntersect === undefined ? "computed" : statedMatches ? "accepted" : "refuted"
+  };
+}
+
+function orientationValue(origin: Point2, endpoint: Point2, point: Point2): bigint {
+  return (endpoint.x - origin.x) * (point.y - origin.y) - (endpoint.y - origin.y) * (point.x - origin.x);
+}
+
+function orientationSign(value: bigint): "clockwise" | "counterclockwise" | "collinear" {
+  if (value > 0n) {
+    return "counterclockwise";
+  }
+  if (value < 0n) {
+    return "clockwise";
+  }
+  return "collinear";
+}
+
+function oppositeSigns(left: bigint, right: bigint): boolean {
+  return (left > 0n && right < 0n) || (left < 0n && right > 0n);
+}
+
+function pointOnSegment2(point: Point2, segment: Segment2): boolean {
+  return (
+    point.x >= minBigInt(segment.from.x, segment.to.x) &&
+    point.x <= maxBigInt(segment.from.x, segment.to.x) &&
+    point.y >= minBigInt(segment.from.y, segment.to.y) &&
+    point.y <= maxBigInt(segment.from.y, segment.to.y)
+  );
+}
+
+function minBigInt(left: bigint, right: bigint): bigint {
+  return left < right ? left : right;
+}
+
+function maxBigInt(left: bigint, right: bigint): bigint {
+  return left > right ? left : right;
+}
+
+function stringifySegment2(segment: Segment2): { from: Record<keyof Point2, string>; to: Record<keyof Point2, string> } {
+  return {
+    from: stringifyPoint2(segment.from),
+    to: stringifyPoint2(segment.to)
+  };
+}
+
+function stringifyPoint2(point: Point2): Record<keyof Point2, string> {
+  return {
+    x: point.x.toString(),
+    y: point.y.toString()
   };
 }
 function parseArithmeticPrompt(problem: string): string | undefined {

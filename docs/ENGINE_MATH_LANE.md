@@ -2,9 +2,9 @@
 
 Truth Harness is starting an engine-math lane for game, simulation, robotics, and graphics-engine work. The goal is not to become a full engine inside the verifier. The goal is to make engine claims replayable: a human or agent can state a small geometry, physics, or scheduling claim, then route it to the smallest deterministic checker that can earn the right trust label.
 
-## First Supported Predicate
+## Supported Predicates
 
-The first slice is a 2D integer-coordinate AABB overlap adapter.
+The first slice is a 2D integer-coordinate AABB overlap adapter. The second slice is a 2D integer-coordinate segment intersection adapter backed by exact orientation determinants.
 
 Accepted prompt shape:
 
@@ -12,15 +12,26 @@ Accepted prompt shape:
 npm run cli -- ask "Do AABB A min(0,0) max(4,4) and AABB B min(3,1) max(6,5) overlap?"
 npm run cli -- ask "verify AABB A min(0,0) max(4,4) and AABB B min(5,1) max(7,3) overlap = true"
 npm run cli -- ask "verify AABB A min(0,0) max(4,4) and AABB B min(4,4) max(6,6) overlap = true"
+npm run cli -- ask "Do segment A from (0,0) to (4,4) and segment B from (0,4) to (4,0) intersect?"
+npm run cli -- ask "verify segment A from (0,0) to (1,1) and segment B from (2,2) to (3,3) intersect = true"
+npm run cli -- ask "verify segment A from (0,0) to (4,0) and segment B from (2,0) to (6,0) intersect = true"
 ```
 
-The adapter records:
+The AABB adapter records:
 
 - exact integer coordinates for both boxes
 - the convention `closed-intervals-touching-counts-as-overlap`
 - the four axis comparisons used by the predicate
 - whether each axis overlaps
 - separating-axis evidence when a stated overlap is false
+- the replay command and receipt artifact
+
+The segment adapter records:
+
+- exact integer endpoints for both non-degenerate segments
+- the convention `closed-segments-endpoints-count-as-intersection`
+- four orientation determinants and signs
+- whether the intersection is a proper crossing, endpoint touch, collinear overlap, collinear disjoint case, or disjoint case
 - the replay command and receipt artifact
 
 Trust labels are conservative:
@@ -49,6 +60,9 @@ The suite lives at `packages/benchmarks/suites/engine-math-seed.json` and curren
 - overlapping AABBs
 - a false stated overlap refuted by a separating axis
 - a touching-corner boundary case under the recorded closed-interval convention
+- proper crossing line segments
+- a false collinear-disjoint segment claim refuted by bounds checks
+- collinear overlapping segments under the recorded closed-segment convention
 
 ## Boundary
 
@@ -56,6 +70,7 @@ This lane currently does not verify:
 
 - swept collision
 - rotated boxes
+- zero-length point segments
 - circles, capsules, meshes, or convex polygons
 - floating-point tolerance policy
 - broadphase data structures
@@ -71,7 +86,7 @@ Good next slices:
 
 1. AABB half-open interval variant, so engines can compare closed vs half-open collision policy.
 2. Ray vs AABB intersection with exact rational parameters.
-3. Segment intersection orientation tests with integer determinants.
+3. Segment intersection variants for open or half-open endpoint policies.
 4. Barycentric point-in-triangle checks for rendering and collision picking.
 5. Fixed-timestep accumulator invariants and drift bounds.
 6. Broadphase grid bucket membership predicates.
