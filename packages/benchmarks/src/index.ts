@@ -459,7 +459,7 @@ export function selectPublicMathProblemCatalogNextAction(catalog: PublicMathProb
     .sort((left, right) => publicProblemPriority(right.status) - publicProblemPriority(left.status))[0];
 
   if (openProblem) {
-    const suitePath = openProblem.suitePath ?? catalog.suiteRefs[0]?.path;
+    const suitePath = openProblem.suitePath ?? ((openProblem.suiteTaskIds?.length ?? 0) > 0 ? catalog.suiteRefs[0]?.path : undefined);
     return {
       kind: "catalog-problem-gap",
       priority: publicProblemPriority(openProblem.status),

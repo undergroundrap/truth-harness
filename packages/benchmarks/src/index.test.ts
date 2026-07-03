@@ -223,7 +223,7 @@ describe("benchmark runner", () => {
       }
     ]);
   });
-  it("keeps the public math catalog linked to runnable suite tasks", () => {
+  it("tracks solved public tasks and open symbolic catalog gaps", () => {
     const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/public-problem-probes.json");
     const catalogPath = resolve(process.cwd(), "packages/benchmarks/catalog/public-math-problem-catalog.json");
     const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);
@@ -232,31 +232,40 @@ describe("benchmark runner", () => {
     const taskIds = new Set(suite.tasks.map((task) => task.id));
 
     expect(catalog.schemaVersion).toBe("truth-harness.public-math-problem-catalog.v0");
-    expect(catalog.updatedAt).toBe("2026-07-02");
-    expect(catalog.problems).toHaveLength(5);
+    expect(catalog.updatedAt).toBe("2026-07-03");
+    expect(catalog.problems).toHaveLength(6);
     expect(summary).toMatchObject({
-      totalProblems: 5,
+      totalProblems: 6,
       solved: 5,
-      openGaps: 0,
+      openGaps: 1,
       queued: 0,
-      sourceNeeded: 1,
-      warnings: []
+      sourceNeeded: 0
     });
+    expect(summary.warnings).toContain("wikipedia-pythagorean-trig-identity has no runnable suite task refs yet.");
     expect(summary.defaultCommands).toContain("npm run docker:public-probes");
     expect(summary.nextAction).toMatchObject({
-      kind: "catalog-target-search",
-      targetId: "public-symbolic-identity-queue",
-      status: "source-needed",
-      priority: 55
+      kind: "catalog-problem-gap",
+      targetId: "wikipedia-pythagorean-trig-identity",
+      status: "unsupported-adapter-gap",
+      priority: 100
     });
-    expect(summary.nextAction.requiredEvidence).toContain("Stable public source URL");
-    for (const problem of catalog.problems) {
-      expect(problem.status).toBe("solved-by-local-receipt");
+    expect(summary.nextAction.requiredEvidence).toContain("SymPy simplification receipt for sin(x)^2 + cos(x)^2 - 1");
+    const solvedProblems = catalog.problems.filter((problem) => problem.status === "solved-by-local-receipt");
+    expect(solvedProblems).toHaveLength(5);
+    for (const problem of solvedProblems) {
       expect(problem.source.url).toMatch(/^https:\/\/projecteuler\.net\/problem=\d+$/u);
       expect(problem.suitePath).toBe("packages/benchmarks/suites/public-problem-probes.json");
       expect(problem.suiteTaskIds?.length).toBe(2);
       expect(problem.suiteTaskIds?.every((taskId) => taskIds.has(taskId))).toBe(true);
     }
+    const symbolicProblem = catalog.problems.find((problem) => problem.id === "wikipedia-pythagorean-trig-identity");
+    expect(symbolicProblem).toMatchObject({
+      status: "unsupported-adapter-gap",
+      domain: "symbolic-trigonometry",
+      source: {
+        url: "https://en.wikipedia.org/wiki/Pythagorean_trigonometric_identity"
+      }
+    });
   });
 
   it("renders an agent handoff for the public math catalog next action", () => {
@@ -273,17 +282,18 @@ describe("benchmark runner", () => {
       generatedAt: "2026-07-03T00:00:00.000Z",
       catalogPath,
       nextAction: {
-        kind: "catalog-target-search",
-        targetId: "public-symbolic-identity-queue",
-        status: "source-needed"
+        kind: "catalog-problem-gap",
+        targetId: "wikipedia-pythagorean-trig-identity",
+        status: "unsupported-adapter-gap"
       }
     });
     expect(handoff.handoffCommands).toContain(`truth-harness bench catalog ${catalogPath} --handoff`);
     expect(handoff.handoffCommands).toContain("npm run docker:public-probes");
     expect(markdown).toContain("# Public Math Problem Catalog 2026 - Agent Handoff");
     expect(markdown).toContain("## Evidence Required");
-    expect(markdown).toContain("Stable public source URL");
-    expect(markdown).toContain("## Selected Catalog Target");
+    expect(markdown).toContain("SymPy simplification receipt for sin(x)^2 + cos(x)^2 - 1");
+    expect(markdown).toContain("## Selected Public Problem");
+    expect(markdown).toContain("Pythagorean trigonometric identity");
     expect(markdown).toContain("Do not promote this work beyond the listed trust labels");
   });
   it("prioritizes open catalog gaps before future public problem searches", () => {
@@ -315,10 +325,11 @@ describe("benchmark runner", () => {
       kind: "catalog-problem-gap",
       targetId: "needs-adapter",
       status: "unsupported-adapter-gap",
-      priority: 100,
-      suitePath: "packages/benchmarks/suites/gaps.json"
+      priority: 100
     });
     expect(summary.nextAction.requiredEvidence).toContain("Smallest verifier adapter that covers the normalized problem");
+    expect(summary.nextAction.suitePath).toBeUndefined();
+    expect(summary.nextAction.recommendedCommand).toBe("truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json");
     expect(summary.nextAction.honestyBoundary).toBe("unsupported fixture boundary");
   });
 

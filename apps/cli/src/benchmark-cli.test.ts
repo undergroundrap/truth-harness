@@ -53,10 +53,10 @@ describe("benchmark CLI", () => {
 
     expect(human.exitCode).toBe(0);
     expect(human.stdout).toContain("Public Math Problem Catalog 2026 - Agent Handoff");
-    expect(human.stdout).toContain("Selected Catalog Target");
+    expect(human.stdout).toContain("Selected Public Problem");
     expect(human.stdout).toContain("Wrote public math catalog handoff");
     expect(existsSync(outPath)).toBe(true);
-    expect(await readFile(outPath, "utf8")).toContain("Stable public source URL");
+    expect(await readFile(outPath, "utf8")).toContain("SymPy simplification receipt for sin(x)^2 + cos(x)^2 - 1");
 
     const json = JSON.parse((await runCli(["bench", "catalog", catalogPath, "--handoff", "--json"])).stdout) as {
       handoff: { schemaVersion: string; nextAction: { kind: string; targetId?: string }; handoffCommands: string[] };
@@ -64,8 +64,8 @@ describe("benchmark CLI", () => {
 
     expect(json.handoff.schemaVersion).toBe("truth-harness.public-math-catalog-handoff.v0");
     expect(json.handoff.nextAction).toMatchObject({
-      kind: "catalog-target-search",
-      targetId: "public-symbolic-identity-queue"
+      kind: "catalog-problem-gap",
+      targetId: "wikipedia-pythagorean-trig-identity"
     });
     expect(json.handoff.handoffCommands).toContain(`truth-harness bench catalog ${catalogPath} --handoff`);
   });

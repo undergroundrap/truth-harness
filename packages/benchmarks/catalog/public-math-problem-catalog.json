@@ -2,7 +2,7 @@
   "schemaVersion": "truth-harness.public-math-problem-catalog.v0",
   "catalogId": "public-math-problems-2026",
   "title": "Public Math Problem Catalog 2026",
-  "updatedAt": "2026-07-02",
+  "updatedAt": "2026-07-03",
   "purpose": "Track externally recognizable bounded math problems that Truth Harness can solve, refute, or honestly mark as unsupported with replayable local evidence.",
   "workflow": {
     "stages": [
@@ -42,8 +42,13 @@
         "project-euler-001-multiples-3-5",
         "project-euler-001-wrong-answer-refutation"
       ],
-      "verifierBackends": ["local-finite-sum-inclusion-exclusion"],
-      "trustOutcomes": ["exact-computed", "refuted"],
+      "verifierBackends": [
+        "local-finite-sum-inclusion-exclusion"
+      ],
+      "trustOutcomes": [
+        "exact-computed",
+        "refuted"
+      ],
       "resultSummary": "Exact finite multiple sum below 1000 is 233168; near-miss 233169 is refuted.",
       "requiredEvidence": [
         "finite multiple-sum certificate",
@@ -68,8 +73,13 @@
         "project-euler-002-even-fibonacci",
         "project-euler-002-wrong-answer-refutation"
       ],
-      "verifierBackends": ["local-fibonacci-even-sum"],
-      "trustOutcomes": ["exact-computed", "refuted"],
+      "verifierBackends": [
+        "local-fibonacci-even-sum"
+      ],
+      "trustOutcomes": [
+        "exact-computed",
+        "refuted"
+      ],
       "resultSummary": "Exact even Fibonacci sum not exceeding 4000000 is 4613732; near-miss 4613733 is refuted.",
       "requiredEvidence": [
         "finite Fibonacci recurrence certificate",
@@ -94,8 +104,13 @@
         "project-euler-006-sum-square-difference",
         "project-euler-006-wrong-answer-refutation"
       ],
-      "verifierBackends": ["local-sum-square-difference"],
-      "trustOutcomes": ["exact-computed", "refuted"],
+      "verifierBackends": [
+        "local-sum-square-difference"
+      ],
+      "trustOutcomes": [
+        "exact-computed",
+        "refuted"
+      ],
       "resultSummary": "Exact square-of-sum minus sum-of-squares for the first 100 natural numbers is 25164150; near-miss 25164151 is refuted.",
       "requiredEvidence": [
         "sum-square difference certificate",
@@ -120,8 +135,13 @@
         "project-euler-048-self-powers-last-digits",
         "project-euler-048-wrong-answer-refutation"
       ],
-      "verifierBackends": ["local-self-power-modular-sum"],
-      "trustOutcomes": ["exact-computed", "refuted"],
+      "verifierBackends": [
+        "local-self-power-modular-sum"
+      ],
+      "trustOutcomes": [
+        "exact-computed",
+        "refuted"
+      ],
       "resultSummary": "Exact last ten digits of the self-power sum through 1000 are 9110846700; near-miss 9110846701 is refuted.",
       "requiredEvidence": [
         "self-power modular-sum certificate",
@@ -146,8 +166,13 @@
         "project-euler-053-binomial-threshold-count",
         "project-euler-053-wrong-answer-refutation"
       ],
-      "verifierBackends": ["local-binomial-threshold-counter"],
-      "trustOutcomes": ["exact-computed", "refuted"],
+      "verifierBackends": [
+        "local-binomial-threshold-counter"
+      ],
+      "trustOutcomes": [
+        "exact-computed",
+        "refuted"
+      ],
       "resultSummary": "Exact count of binomial coefficients C(n,r) greater than one million for 1 <= n <= 100 is 4075; near-miss 4076 is refuted.",
       "requiredEvidence": [
         "binomial threshold-count certificate",
@@ -155,13 +180,33 @@
         "receipt replay command"
       ],
       "checkerBoundary": "Binomial coefficients C(n,r) over explicit finite n range and positive integer threshold only."
+    },
+    {
+      "id": "wikipedia-pythagorean-trig-identity",
+      "firstLoggedAt": "2026-07-03",
+      "source": {
+        "site": "Wikipedia",
+        "title": "Pythagorean trigonometric identity",
+        "url": "https://en.wikipedia.org/wiki/Pythagorean_trigonometric_identity",
+        "accessedAt": "2026-07-03"
+      },
+      "status": "unsupported-adapter-gap",
+      "domain": "symbolic-trigonometry",
+      "resultSummary": "Stable public source recorded for sin^2(x) + cos^2(x) = 1, but no native-safe public probe or Docker cross-check record has been attached yet.",
+      "requiredEvidence": [
+        "SymPy simplification receipt for sin(x)^2 + cos(x)^2 - 1",
+        "Independent Maxima or Sage Docker cross-check",
+        "Near-miss refutation such as sin(x)^2 + cos(x)^2 = 2",
+        "Benchmark-run record with replay command"
+      ],
+      "checkerBoundary": "Symbolic trigonometric identities over the accepted CAS domain; CAS output is cross-checked evidence, not a formal proof."
     }
   ],
   "nextTargets": [
     {
       "id": "public-symbolic-identity-queue",
-      "status": "source-needed",
-      "goal": "Find symbolic identity questions that can be cross-checked by SymPy plus Maxima/Sage in Docker before being cataloged as solved."
+      "status": "adapter-needed",
+      "goal": "Turn the sourced Pythagorean trig identity into native-safe and Docker symbolic public probes with independent CAS agreement before cataloging it as solved."
     }
   ],
   "honestyBoundary": "This catalog records Truth Harness behavior on public problems. It is not a claim that the project can solve arbitrary contest, forum, research, or theorem problems. Unsupported public problems become explicit verifier backlog."
