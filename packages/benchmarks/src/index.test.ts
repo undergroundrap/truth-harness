@@ -250,6 +250,8 @@ describe("benchmark runner", () => {
       priority: 100
     });
     expect(summary.nextAction.requiredEvidence).toContain("SymPy simplification receipt for sin(x)^2 + cos(x)^2 - 1");
+    expect(summary.nextAction.recommendedCommand).toBe("truth-harness cas check --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
+    expect(summary.nextAction.recommendedCommands).toContain("npm run docker:cli -- cas check -- --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
     const solvedProblems = catalog.problems.filter((problem) => problem.status === "solved-by-local-receipt");
     expect(solvedProblems).toHaveLength(5);
     for (const problem of solvedProblems) {
@@ -294,6 +296,8 @@ describe("benchmark runner", () => {
     expect(markdown).toContain("SymPy simplification receipt for sin(x)^2 + cos(x)^2 - 1");
     expect(markdown).toContain("## Selected Public Problem");
     expect(markdown).toContain("Pythagorean trigonometric identity");
+    expect(markdown).toContain("truth-harness cas check --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
+    expect(markdown).toContain("npm run docker:cli -- cas check -- --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
     expect(markdown).toContain("Do not promote this work beyond the listed trust labels");
   });
   it("prioritizes open catalog gaps before future public problem searches", () => {

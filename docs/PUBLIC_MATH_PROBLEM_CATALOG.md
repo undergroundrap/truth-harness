@@ -40,7 +40,7 @@ truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --
 | Project Euler 6: finite sum-square difference | [Project Euler Problem 6](https://projecteuler.net/problem=6) | solved by local receipt | `exact-computed`, `refuted` | `local-sum-square-difference` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
 | Project Euler 48: self-power last digits | [Project Euler Problem 48](https://projecteuler.net/problem=48) | solved by local receipt | `exact-computed`, `refuted` | `local-self-power-modular-sum` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
 | Project Euler 53: binomial threshold count | [Project Euler Problem 53](https://projecteuler.net/problem=53) | solved by local receipt | `exact-computed`, `refuted` | `local-binomial-threshold-counter` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
-| Pythagorean trig identity | [Wikipedia: Pythagorean trigonometric identity](https://en.wikipedia.org/wiki/Pythagorean_trigonometric_identity) | open adapter gap | needs SymPy plus Maxima/Sage cross-check | symbolic CAS | source recorded; benchmark probes pending |
+| Pythagorean trig identity | [Wikipedia: Pythagorean trigonometric identity](https://en.wikipedia.org/wiki/Pythagorean_trigonometric_identity) | open adapter gap | needs SymPy plus Maxima/Sage cross-check | symbolic CAS | `truth-harness cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write` |
 
 ## Publication Rule
 
@@ -48,5 +48,5 @@ If this repo is linked in a forum or classroom answer, cite the source problem, 
 
 ## Next Catalog Targets
 
-- Close the sourced Pythagorean trigonometric identity gap with SymPy plus Maxima/Sage Docker evidence, including a near-miss refutation probe.
+- Close the sourced Pythagorean trigonometric identity gap with `truth-harness cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write`, the Docker CAS route, and a near-miss refutation probe before marking the public problem solved.
 - Forum-style problems where the answer is less important than the transparent route: prompt, source, assumptions, receipt, replay, and limitation.

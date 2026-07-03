@@ -53,6 +53,7 @@ export interface PublicMathProblemCatalogEntry {
   trustOutcomes?: TrustLabel[];
   resultSummary?: string;
   requiredEvidence?: string[];
+  recommendedCommands?: string[];
   checkerBoundary?: string;
 }
 
@@ -77,6 +78,7 @@ export interface PublicMathProblemCatalogNextAction {
   suitePath?: string;
   suiteTaskIds: string[];
   recommendedCommand: string;
+  recommendedCommands: string[];
   requiredEvidence: string[];
   stopCondition: string;
   honestyBoundary: string;
@@ -119,6 +121,7 @@ export interface PublicMathProblemCatalogSummary {
     suiteTaskIds: string[];
     verifierBackends: string[];
     trustOutcomes: string[];
+    recommendedCommands: string[];
   }>;
   nextTargets: PublicMathProblemCatalogTarget[];
   nextAction: PublicMathProblemCatalogNextAction;
@@ -321,7 +324,8 @@ export function summarizePublicMathProblemCatalog(catalog: PublicMathProblemCata
       resultSummary: problem.resultSummary,
       suiteTaskIds: problem.suiteTaskIds ?? [],
       verifierBackends: problem.verifierBackends ?? [],
-      trustOutcomes: problem.trustOutcomes ?? []
+      trustOutcomes: problem.trustOutcomes ?? [],
+      recommendedCommands: problem.recommendedCommands ?? []
     })),
     nextTargets: catalog.nextTargets,
     nextAction: selectPublicMathProblemCatalogNextAction(catalog),
@@ -340,7 +344,7 @@ export function createPublicMathProblemCatalogHandoff(
   const handoffCommands = [
     `truth-harness bench catalog ${catalogPath} --handoff`,
     `truth-harness bench catalog ${catalogPath} --json`,
-    summary.nextAction.recommendedCommand,
+    ...summary.nextAction.recommendedCommands,
     ...summary.defaultCommands
   ];
 
@@ -460,6 +464,10 @@ export function selectPublicMathProblemCatalogNextAction(catalog: PublicMathProb
 
   if (openProblem) {
     const suitePath = openProblem.suitePath ?? ((openProblem.suiteTaskIds?.length ?? 0) > 0 ? catalog.suiteRefs[0]?.path : undefined);
+    const fallbackCommand = suitePath
+      ? `truth-harness bench run ${suitePath} --write --fail-on-failures`
+      : "truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json";
+    const recommendedCommands = [...new Set([...(openProblem.recommendedCommands ?? []), fallbackCommand])];
     return {
       kind: "catalog-problem-gap",
       priority: publicProblemPriority(openProblem.status),
@@ -469,9 +477,8 @@ export function selectPublicMathProblemCatalogNextAction(catalog: PublicMathProb
       sourceUrl: openProblem.source.url,
       suitePath,
       suiteTaskIds: openProblem.suiteTaskIds ?? [],
-      recommendedCommand: suitePath
-        ? `truth-harness bench run ${suitePath} --write --fail-on-failures`
-        : "truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json",
+      recommendedCommand: recommendedCommands[0] ?? fallbackCommand,
+      recommendedCommands,
       requiredEvidence: openProblem.requiredEvidence ?? requiredEvidenceForStatus(openProblem.status),
       stopCondition: stopConditionForStatus(openProblem.status),
       honestyBoundary: openProblem.checkerBoundary ?? catalog.honestyBoundary
@@ -488,6 +495,7 @@ export function selectPublicMathProblemCatalogNextAction(catalog: PublicMathProb
       goal: target.goal,
       suiteTaskIds: [],
       recommendedCommand: "truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json",
+      recommendedCommands: ["truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json"],
       requiredEvidence: requiredEvidenceForTargetStatus(target.status),
       stopCondition:
         "Stop when the target has a stable source URL, a narrow checker boundary, runnable benchmark tasks, and honest solved/gap metadata.",
@@ -501,6 +509,7 @@ export function selectPublicMathProblemCatalogNextAction(catalog: PublicMathProb
     goal: "No open public catalog targets are recorded. Add a new public problem only after identifying a stable source and verifier boundary.",
     suiteTaskIds: [],
     recommendedCommand: "truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json",
+    recommendedCommands: ["truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json"],
     requiredEvidence: ["Stable public source URL", "Narrow checker boundary", "Runnable local/Docker benchmark or explicit unsupported gap"],
     stopCondition: "Stop when a new catalog target is added or the catalog remains complete after review.",
     honestyBoundary: catalog.honestyBoundary
@@ -732,6 +741,7 @@ function parseCatalogProblem(value: unknown, index: number): PublicMathProblemCa
     trustOutcomes: parseOptionalTrustArray(problem.trustOutcomes, `Catalog problem ${index} trustOutcomes`),
     resultSummary: parseOptionalString(problem.resultSummary, `Catalog problem ${index} resultSummary`),
     requiredEvidence: parseOptionalStringArray(problem.requiredEvidence, `Catalog problem ${index} requiredEvidence`),
+    recommendedCommands: parseOptionalStringArray(problem.recommendedCommands, `Catalog problem ${index} recommendedCommands`),
     checkerBoundary: parseOptionalString(problem.checkerBoundary, `Catalog problem ${index} checkerBoundary`)
   };
 }

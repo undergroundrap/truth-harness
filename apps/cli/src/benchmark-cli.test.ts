@@ -56,10 +56,13 @@ describe("benchmark CLI", () => {
     expect(human.stdout).toContain("Selected Public Problem");
     expect(human.stdout).toContain("Wrote public math catalog handoff");
     expect(existsSync(outPath)).toBe(true);
-    expect(await readFile(outPath, "utf8")).toContain("SymPy simplification receipt for sin(x)^2 + cos(x)^2 - 1");
+    const handoffText = await readFile(outPath, "utf8");
+    expect(handoffText).toContain("SymPy simplification receipt for sin(x)^2 + cos(x)^2 - 1");
+    expect(handoffText).toContain("truth-harness cas check --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
+    expect(handoffText).toContain("npm run docker:cli -- cas check -- --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
 
     const json = JSON.parse((await runCli(["bench", "catalog", catalogPath, "--handoff", "--json"])).stdout) as {
-      handoff: { schemaVersion: string; nextAction: { kind: string; targetId?: string }; handoffCommands: string[] };
+      handoff: { schemaVersion: string; nextAction: { kind: string; targetId?: string; recommendedCommands: string[] }; handoffCommands: string[] };
     };
 
     expect(json.handoff.schemaVersion).toBe("truth-harness.public-math-catalog-handoff.v0");
@@ -67,6 +70,7 @@ describe("benchmark CLI", () => {
       kind: "catalog-problem-gap",
       targetId: "wikipedia-pythagorean-trig-identity"
     });
+    expect(json.handoff.nextAction.recommendedCommands).toContain("truth-harness cas check --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
     expect(json.handoff.handoffCommands).toContain(`truth-harness bench catalog ${catalogPath} --handoff`);
   });
   it("shows saved Docker reviewer evidence in engine plans without treating host-missing engines as runnable", async () => {

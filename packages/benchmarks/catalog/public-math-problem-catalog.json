@@ -199,7 +199,12 @@
         "Near-miss refutation such as sin(x)^2 + cos(x)^2 = 2",
         "Benchmark-run record with replay command"
       ],
-      "checkerBoundary": "Symbolic trigonometric identities over the accepted CAS domain; CAS output is cross-checked evidence, not a formal proof."
+      "checkerBoundary": "Symbolic trigonometric identities over the accepted CAS domain; CAS output is cross-checked evidence, not a formal proof.",
+      "recommendedCommands": [
+        "truth-harness cas check --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write",
+        "npm run docker:cli -- cas check -- --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write",
+        "truth-harness verify \"For real x, sin(x)^2 + cos(x)^2 = 1.\" --write --json"
+      ]
     }
   ],
   "nextTargets": [
