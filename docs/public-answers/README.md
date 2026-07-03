@@ -15,6 +15,7 @@ Each packet should follow [Public Answer Workflow](../PUBLIC_ANSWER_WORKFLOW.md)
 
 | Date | Packet | Status | Trust label | Source |
 | --- | --- | --- | --- | --- |
+| 2026-07-03 | [Binomial square identity](2026-07-03-binomial-square-identity.md) | self-reviewed, not posted | `cross-checked`; near-miss `refuted` | Wikipedia |
 | 2026-07-03 | [Pythagorean trig identity](2026-07-03-pythagorean-trig-identity.md) | self-reviewed, not posted | `cross-checked`; near-miss `refuted` | Wikipedia |
 
 Public answer packets are not proof by themselves. They are readable entry points into the local evidence ledger.

@@ -27,6 +27,7 @@ npm run demo:public-catalog
 npm run demo:public-probes
 npm run docker:public-catalog
 npm run docker:public-probes
+npm run docker:public-symbolic
 truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json
 truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json
 truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --handoff
@@ -34,7 +35,7 @@ truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --
 truth-harness bench run packages/benchmarks/suites/public-symbolic-probes.json --write --fail-on-failures
 ```
 
-## 2026-07-01 Public Probe Ledger
+## Public Probe Ledger
 
 | Problem | Source | Status | Trust outcomes | Local backend | Evidence metadata |
 | --- | --- | --- | --- | --- | --- |
@@ -43,6 +44,7 @@ truth-harness bench run packages/benchmarks/suites/public-symbolic-probes.json -
 | Project Euler 6: finite sum-square difference | [Project Euler Problem 6](https://projecteuler.net/problem=6) | solved by local receipt | `exact-computed`, `refuted` | `local-sum-square-difference` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
 | Project Euler 48: self-power last digits | [Project Euler Problem 48](https://projecteuler.net/problem=48) | solved by local receipt | `exact-computed`, `refuted` | `local-self-power-modular-sum` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
 | Project Euler 53: binomial threshold count | [Project Euler Problem 53](https://projecteuler.net/problem=53) | solved by local receipt | `exact-computed`, `refuted` | `local-binomial-threshold-counter` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
+| Binomial square identity | [Wikipedia: Binomial theorem](https://en.wikipedia.org/wiki/Binomial_theorem) | solved by Docker CAS receipts | `cross-checked`, `refuted` | `local-sympy-subprocess`, `local-maxima-symbolic-subprocess` | [symbolic suite tasks](../packages/benchmarks/suites/public-symbolic-probes.json); not proof-checker-backed |
 | Pythagorean trig identity | [Wikipedia: Pythagorean trigonometric identity](https://en.wikipedia.org/wiki/Pythagorean_trigonometric_identity) | solved by Docker CAS receipts | `cross-checked`, `refuted` | `local-sympy-subprocess`, `local-maxima-symbolic-subprocess` | [symbolic suite tasks](../packages/benchmarks/suites/public-symbolic-probes.json); not proof-checker-backed |
 
 ## Publication Rule

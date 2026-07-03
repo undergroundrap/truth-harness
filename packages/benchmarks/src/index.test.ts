@@ -238,10 +238,10 @@ describe("benchmark runner", () => {
 
     expect(catalog.schemaVersion).toBe("truth-harness.public-math-problem-catalog.v0");
     expect(catalog.updatedAt).toBe("2026-07-03");
-    expect(catalog.problems).toHaveLength(6);
+    expect(catalog.problems).toHaveLength(7);
     expect(summary).toMatchObject({
-      totalProblems: 6,
-      solved: 6,
+      totalProblems: 7,
+      solved: 7,
       openGaps: 0,
       queued: 0,
       sourceNeeded: 1
@@ -258,7 +258,7 @@ describe("benchmark runner", () => {
     expect(summary.nextAction.requiredEvidence).toContain("Stable public source URL");
 
     const solvedProblems = catalog.problems.filter((problem) => problem.status === "solved-by-local-receipt");
-    expect(solvedProblems).toHaveLength(6);
+    expect(solvedProblems).toHaveLength(7);
     for (const problem of solvedProblems) {
       expect(problem.suitePath).toBeTruthy();
       expect(problem.suiteTaskIds?.length).toBe(2);
@@ -271,6 +271,17 @@ describe("benchmark runner", () => {
     expect(eulerProblems).toHaveLength(5);
     expect(eulerProblems.every((problem) => problem.source.url.match(/^https:\/\/projecteuler\.net\/problem=\d+$/u))).toBe(true);
 
+    const polynomialProblem = catalog.problems.find((problem) => problem.id === "wikipedia-binomial-square-identity");
+    expect(polynomialProblem).toMatchObject({
+      status: "solved-by-local-receipt",
+      domain: "symbolic-polynomial",
+      suitePath: "packages/benchmarks/suites/public-symbolic-probes.json",
+      source: {
+        url: "https://en.wikipedia.org/wiki/Binomial_theorem"
+      },
+      trustOutcomes: ["cross-checked", "refuted"],
+      verifierBackends: expect.arrayContaining(["local-sympy-subprocess", "local-maxima-symbolic-subprocess"])
+    });
     const symbolicProblem = catalog.problems.find((problem) => problem.id === "wikipedia-pythagorean-trig-identity");
     expect(symbolicProblem).toMatchObject({
       status: "solved-by-local-receipt",

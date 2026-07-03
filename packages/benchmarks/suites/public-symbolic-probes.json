@@ -44,6 +44,48 @@
         "receipt replay command"
       ],
       "checkerBoundary": "Only the stated numeric right-hand-side mismatch is refuted inside the symbolic compiler boundary. This does not prove arbitrary trigonometric theorems."
+    },
+    {
+      "id": "wikipedia-binomial-square-identity",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Binomial_theorem",
+      "sourceTitle": "Wikipedia: Binomial theorem",
+      "firstLoggedAt": "2026-07-03",
+      "category": "symbolic-polynomial",
+      "level": "level-14-public-symbolic-cas",
+      "aiFailureMode": "Expands a familiar binomial pattern without a replayable symbolic residual check or independent CAS agreement.",
+      "prompt": "For all real x, (x + 1)^2 = x^2 + 2*x + 1.",
+      "expectTrust": "cross-checked",
+      "expectEvidenceKind": "symbolic-cas",
+      "expectSummaryIncludes": "Maxima independently agreed",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "compiled polynomial identity contract",
+        "SymPy residual simplification to zero",
+        "independent Maxima CAS agreement",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only the one-variable polynomial identity residual is compiled. Cross-checked CAS evidence is not a proof-checker-backed theorem."
+    },
+    {
+      "id": "wikipedia-binomial-square-wrong-constant-refutation",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Binomial_theorem",
+      "sourceTitle": "Wikipedia: Binomial theorem",
+      "firstLoggedAt": "2026-07-03",
+      "category": "symbolic-polynomial",
+      "level": "level-14-public-symbolic-cas",
+      "aiFailureMode": "Accepts a near-miss binomial expansion with the wrong constant term because the pattern looks familiar.",
+      "prompt": "For all real x, (x + 1)^2 = x^2 + 2*x + 2.",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "symbolic-cas",
+      "expectSummaryIncludes": "claim refuted",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "compiled polynomial identity contract",
+        "nonzero residual for the stated equality",
+        "independent Maxima agreement with the residual",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only the stated one-variable polynomial residual mismatch is refuted. This does not prove arbitrary binomial theorem instances."
     }
   ]
 }

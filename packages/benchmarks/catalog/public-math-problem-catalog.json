@@ -188,6 +188,46 @@
       "checkerBoundary": "Binomial coefficients C(n,r) over explicit finite n range and positive integer threshold only."
     },
     {
+      "id": "wikipedia-binomial-square-identity",
+      "firstLoggedAt": "2026-07-03",
+      "source": {
+        "site": "Wikipedia",
+        "title": "Binomial theorem",
+        "url": "https://en.wikipedia.org/wiki/Binomial_theorem",
+        "accessedAt": "2026-07-03"
+      },
+      "status": "solved-by-local-receipt",
+      "domain": "symbolic-polynomial",
+      "resultSummary": "CAS receipts confirm the n=2, y=1 binomial theorem specialization (x + 1)^2 = x^2 + 2*x + 1 and refute the near-miss constant term 2 inside the symbolic polynomial compiler boundary.",
+      "requiredEvidence": [
+        "compiled polynomial identity contract",
+        "SymPy residual simplification to zero",
+        "Independent Maxima Docker cross-check",
+        "Near-miss refutation for (x + 1)^2 = x^2 + 2*x + 2",
+        "Benchmark-run record with replay command"
+      ],
+      "checkerBoundary": "Single-variable polynomial identity residual against zero; cross-checked CAS evidence is not a proof-checker-backed theorem.",
+      "recommendedCommands": [
+        "npm run docker:public-symbolic",
+        "npm run docker:cli -- cas check -- --operation simplify --expression \"((x + 1)^2) - (x^2 + 2*x + 1)\" --result 0 --write",
+        "truth-harness verify \"For all real x, (x + 1)^2 = x^2 + 2*x + 1.\" --write --json"
+      ],
+      "suitePath": "packages/benchmarks/suites/public-symbolic-probes.json",
+      "suiteTaskIds": [
+        "wikipedia-binomial-square-identity",
+        "wikipedia-binomial-square-wrong-constant-refutation"
+      ],
+      "verifierBackends": [
+        "local-sympy-subprocess",
+        "local-maxima-symbolic-subprocess",
+        "docker-truth-harness"
+      ],
+      "trustOutcomes": [
+        "cross-checked",
+        "refuted"
+      ]
+    },
+    {
       "id": "wikipedia-pythagorean-trig-identity",
       "firstLoggedAt": "2026-07-03",
       "source": {
