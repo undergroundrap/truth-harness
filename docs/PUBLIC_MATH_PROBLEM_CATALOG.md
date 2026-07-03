@@ -6,6 +6,8 @@ This is the working ledger for public math problems that Truth Harness can solve
 
 Machine-readable metadata: [public-math-problem-catalog.json](../packages/benchmarks/catalog/public-math-problem-catalog.json)
 
+Public answer workflow: [PUBLIC_ANSWER_WORKFLOW.md](PUBLIC_ANSWER_WORKFLOW.md)
+
 Benchmark suites: [public-problem-probes.json](../packages/benchmarks/suites/public-problem-probes.json), [public-symbolic-probes.json](../packages/benchmarks/suites/public-symbolic-probes.json)
 
 ## Workflow
@@ -49,5 +51,5 @@ If this repo is linked in a forum or classroom answer, cite the source problem, 
 
 ## Next Catalog Targets
 
-- Close the sourced Pythagorean trigonometric identity gap with `truth-harness cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write`, the Docker CAS route, and a near-miss refutation probe before marking the public problem solved.
-- Forum-style problems where the answer is less important than the transparent route: prompt, source, assumptions, receipt, replay, and limitation.
+- Find the next stable public symbolic, forum, or applied math problem with a narrow verifier boundary and a near-miss refutation path.
+- Prefer problems where the transparent route matters: prompt, source, assumptions, receipt, replay, limitation, and a shareable answer packet.
