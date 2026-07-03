@@ -6,6 +6,8 @@ This workflow is for turning a solved, refuted, or bounded public math prompt in
 
 Use this when a researcher, teacher, agent, or maintainer wants to answer a public problem and link back to a reproducible evidence packet.
 
+The normal test suite checks every packet under `docs/public-answers/` for source metadata, review status, trust labels, replay commands, and boundary language.
+
 ## Posting Rule
 
 Post only when all of these are true:
