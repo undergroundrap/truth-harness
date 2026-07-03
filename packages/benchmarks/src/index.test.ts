@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseBenchmarkSuite, parsePublicMathProblemCatalog, runBenchmarkSuite, summarizePublicMathProblemCatalog } from "./index.js";
+import { createPublicMathProblemCatalogHandoff, parseBenchmarkSuite, parsePublicMathProblemCatalog, renderPublicMathProblemCatalogHandoffMarkdown, runBenchmarkSuite, summarizePublicMathProblemCatalog } from "./index.js";
 
 describe("benchmark runner", () => {
   it("scores trust-label expectations", () => {
@@ -259,6 +259,33 @@ describe("benchmark runner", () => {
     }
   });
 
+  it("renders an agent handoff for the public math catalog next action", () => {
+    const catalogPath = "packages/benchmarks/catalog/public-math-problem-catalog.json";
+    const catalog = parsePublicMathProblemCatalog(JSON.parse(readFileSync(resolve(process.cwd(), catalogPath), "utf8")) as unknown);
+    const handoff = createPublicMathProblemCatalogHandoff(catalog, {
+      catalogPath,
+      generatedAt: "2026-07-03T00:00:00.000Z"
+    });
+    const markdown = renderPublicMathProblemCatalogHandoffMarkdown(handoff);
+
+    expect(handoff).toMatchObject({
+      schemaVersion: "truth-harness.public-math-catalog-handoff.v0",
+      generatedAt: "2026-07-03T00:00:00.000Z",
+      catalogPath,
+      nextAction: {
+        kind: "catalog-target-search",
+        targetId: "public-symbolic-identity-queue",
+        status: "source-needed"
+      }
+    });
+    expect(handoff.handoffCommands).toContain(`truth-harness bench catalog ${catalogPath} --handoff`);
+    expect(handoff.handoffCommands).toContain("npm run docker:public-probes");
+    expect(markdown).toContain("# Public Math Problem Catalog 2026 - Agent Handoff");
+    expect(markdown).toContain("## Evidence Required");
+    expect(markdown).toContain("Stable public source URL");
+    expect(markdown).toContain("## Selected Catalog Target");
+    expect(markdown).toContain("Do not promote this work beyond the listed trust labels");
+  });
   it("prioritizes open catalog gaps before future public problem searches", () => {
     const catalog = parsePublicMathProblemCatalog({
       schemaVersion: "truth-harness.public-math-problem-catalog.v0",

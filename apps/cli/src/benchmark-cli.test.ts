@@ -45,6 +45,30 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.crossCheckedRequiresIndependentRun).toBe(true);
   });
 
+  it("prints and writes public math catalog handoff packets", async () => {
+    const root = await tempRoot();
+    const catalogPath = "packages/benchmarks/catalog/public-math-problem-catalog.json";
+    const outPath = join(root, "public-math-handoff.md");
+    const human = await runCli(["bench", "catalog", catalogPath, "--handoff", "--out", outPath]);
+
+    expect(human.exitCode).toBe(0);
+    expect(human.stdout).toContain("Public Math Problem Catalog 2026 - Agent Handoff");
+    expect(human.stdout).toContain("Selected Catalog Target");
+    expect(human.stdout).toContain("Wrote public math catalog handoff");
+    expect(existsSync(outPath)).toBe(true);
+    expect(await readFile(outPath, "utf8")).toContain("Stable public source URL");
+
+    const json = JSON.parse((await runCli(["bench", "catalog", catalogPath, "--handoff", "--json"])).stdout) as {
+      handoff: { schemaVersion: string; nextAction: { kind: string; targetId?: string }; handoffCommands: string[] };
+    };
+
+    expect(json.handoff.schemaVersion).toBe("truth-harness.public-math-catalog-handoff.v0");
+    expect(json.handoff.nextAction).toMatchObject({
+      kind: "catalog-target-search",
+      targetId: "public-symbolic-identity-queue"
+    });
+    expect(json.handoff.handoffCommands).toContain(`truth-harness bench catalog ${catalogPath} --handoff`);
+  });
   it("shows saved Docker reviewer evidence in engine plans without treating host-missing engines as runnable", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--name", "Engine Plan Lab"]);

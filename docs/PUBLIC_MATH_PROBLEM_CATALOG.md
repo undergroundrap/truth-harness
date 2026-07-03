@@ -14,8 +14,9 @@ Benchmark suite: [public-problem-probes.json](../packages/benchmarks/suites/publ
 2. Normalize it into the narrowest local verifier boundary.
 3. Add one correct task and one near-miss refutation task when possible.
 4. Run the public probe suite locally and in Docker.
-5. Record the source, date, receipt backend, trust label, required evidence, and checker boundary.
-6. If Truth Harness cannot solve it, add an explicit adapter or proof backlog item instead of overclaiming.
+5. Generate a handoff packet with `truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --handoff` before assigning the problem to an agent or reviewer.
+6. Record the source, date, receipt backend, trust label, required evidence, and checker boundary.
+7. If Truth Harness cannot solve it, add an explicit adapter or proof backlog item instead of overclaiming.
 
 ## Commands
 
@@ -26,6 +27,7 @@ npm run docker:public-catalog
 npm run docker:public-probes
 truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json
 truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json
+truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --handoff
 truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --write --fail-on-failures
 ```
 
@@ -41,7 +43,7 @@ truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --
 
 ## Publication Rule
 
-If this repo is linked in a forum or classroom answer, cite the source problem, the benchmark suite path, the generated benchmark-run record if one exists, and the receipt replay command. `truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json` is the quick human/agent entry point for finding the source URL, solved status, local backend, suite task ids, and next target queues. `--json` includes `summary.nextAction`, which tells an autonomous agent which catalog gap or public-problem search target to attack first, what evidence is required, and when to stop. Do not claim a result is `proved` unless an accepted proof-checking backend produced that label. Exact finite computation is valuable, but it is not the same thing as a formal proof of a general theorem.
+If this repo is linked in a forum or classroom answer, cite the source problem, the benchmark suite path, the generated benchmark-run record if one exists, and the receipt replay command. `truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json` is the quick human/agent entry point for finding the source URL, solved status, local backend, suite task ids, and next target queues. `--json` includes `summary.nextAction`, which tells an autonomous agent which catalog gap or public-problem search target to attack first, what evidence is required, and when to stop. `--handoff` renders the same next action as a Markdown packet with the source, required evidence, replay commands, and honesty boundary for agent handoffs or professor review. Do not claim a result is `proved` unless an accepted proof-checking backend produced that label. Exact finite computation is valuable, but it is not the same thing as a formal proof of a general theorem.
 
 ## Next Catalog Targets
 

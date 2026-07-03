@@ -3,7 +3,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { parseBenchmarkSuite, parsePublicMathProblemCatalog, runBenchmarkSuite, summarizePublicMathProblemCatalog, type BenchmarkRun, type PublicMathProblemCatalogSummary } from "@truth-harness/benchmarks";
+import { createPublicMathProblemCatalogHandoff, parseBenchmarkSuite, parsePublicMathProblemCatalog, renderPublicMathProblemCatalogHandoffMarkdown, runBenchmarkSuite, summarizePublicMathProblemCatalog, type BenchmarkRun, type PublicMathProblemCatalogSummary } from "@truth-harness/benchmarks";
 import {
   benchmarkComparisonFailsGate,
   benchmarkRunFailsGate,
@@ -1033,16 +1033,38 @@ bench
   .description("Inspect a public math problem catalog.")
   .argument("[catalog]", "Path to a public math problem catalog JSON file", "packages/benchmarks/catalog/public-math-problem-catalog.json")
   .option("--json", "Print the full catalog summary JSON")
-  .action(async (catalogPath: string, options: { json?: boolean }) => {
+  .option("--handoff", "Print a Markdown agent handoff packet for the recommended catalog action")
+  .option("--out <path>", "Write the summary JSON or handoff Markdown to a file")
+  .action(async (catalogPath: string, options: { json?: boolean; handoff?: boolean; out?: string }) => {
     const catalog = parsePublicMathProblemCatalog(JSON.parse(await readFile(resolve(catalogPath), "utf8")) as unknown);
     const summary = summarizePublicMathProblemCatalog(catalog);
+    const handoff = options.handoff ? createPublicMathProblemCatalogHandoff(catalog, { catalogPath }) : undefined;
+
+    if (options.out) {
+      if (handoff) {
+        await writeText(options.out, renderPublicMathProblemCatalogHandoffMarkdown(handoff));
+      } else {
+        await writeJson(options.out, { catalogPath, summary });
+      }
+    }
 
     if (options.json) {
-      printJson({ catalogPath, summary });
+      printJson(handoff ? { catalogPath, handoff } : { catalogPath, summary });
+      return;
+    }
+
+    if (handoff) {
+      console.log(renderPublicMathProblemCatalogHandoffMarkdown(handoff));
+      if (options.out) {
+        console.log(`Wrote public math catalog handoff: ${options.out}`);
+      }
       return;
     }
 
     printPublicMathProblemCatalog(summary, catalogPath);
+    if (options.out) {
+      console.log(`Wrote public math catalog summary JSON: ${options.out}`);
+    }
   });
 
 bench

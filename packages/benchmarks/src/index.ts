@@ -125,6 +125,22 @@ export interface PublicMathProblemCatalogSummary {
   warnings: string[];
 }
 
+export interface PublicMathProblemCatalogHandoff {
+  schemaVersion: "truth-harness.public-math-catalog-handoff.v0";
+  generatedAt: string;
+  catalogPath: string;
+  catalogId: string;
+  title: string;
+  updatedAt: string;
+  purpose: string;
+  honestyBoundary: string;
+  nextAction: PublicMathProblemCatalogNextAction;
+  selectedProblem?: PublicMathProblemCatalogSummary["problems"][number];
+  selectedTarget?: PublicMathProblemCatalogTarget;
+  defaultCommands: string[];
+  handoffCommands: string[];
+  warnings: string[];
+}
 export interface BenchmarkTaskResult {
   task: BenchmarkTask;
   receipt: Receipt;
@@ -313,6 +329,130 @@ export function summarizePublicMathProblemCatalog(catalog: PublicMathProblemCata
   };
 }
 
+export function createPublicMathProblemCatalogHandoff(
+  catalog: PublicMathProblemCatalog,
+  options: { catalogPath?: string; generatedAt?: string } = {}
+): PublicMathProblemCatalogHandoff {
+  const catalogPath = options.catalogPath ?? "packages/benchmarks/catalog/public-math-problem-catalog.json";
+  const summary = summarizePublicMathProblemCatalog(catalog);
+  const selectedProblem = summary.problems.find((problem) => problem.id === summary.nextAction.targetId);
+  const selectedTarget = catalog.nextTargets.find((target) => target.id === summary.nextAction.targetId);
+  const handoffCommands = [
+    `truth-harness bench catalog ${catalogPath} --handoff`,
+    `truth-harness bench catalog ${catalogPath} --json`,
+    summary.nextAction.recommendedCommand,
+    ...summary.defaultCommands
+  ];
+
+  return {
+    schemaVersion: "truth-harness.public-math-catalog-handoff.v0",
+    generatedAt: options.generatedAt ?? new Date().toISOString(),
+    catalogPath,
+    catalogId: summary.catalogId,
+    title: summary.title,
+    updatedAt: summary.updatedAt,
+    purpose: catalog.purpose,
+    honestyBoundary: catalog.honestyBoundary,
+    nextAction: summary.nextAction,
+    selectedProblem,
+    selectedTarget,
+    defaultCommands: summary.defaultCommands,
+    handoffCommands: [...new Set(handoffCommands)],
+    warnings: summary.warnings
+  };
+}
+
+export function renderPublicMathProblemCatalogHandoffMarkdown(handoff: PublicMathProblemCatalogHandoff): string {
+  const lines: string[] = [
+    `# ${handoff.title} - Agent Handoff`,
+    "",
+    `Generated: ${handoff.generatedAt}`,
+    `Catalog: \`${handoff.catalogPath}\``,
+    `Updated: ${handoff.updatedAt}`,
+    "",
+    "## Purpose",
+    "",
+    handoff.purpose,
+    "",
+    "## Next Action",
+    "",
+    `- Kind: \`${handoff.nextAction.kind}\``,
+    `- Priority: ${handoff.nextAction.priority}`,
+    `- Target: ${handoff.nextAction.targetId ? `\`${handoff.nextAction.targetId}\`` : "none recorded"}`,
+    `- Status: ${handoff.nextAction.status ? `\`${handoff.nextAction.status}\`` : "none recorded"}`,
+    `- Goal: ${handoff.nextAction.goal}`,
+    `- Stop condition: ${handoff.nextAction.stopCondition}`,
+    "",
+    "## Evidence Required",
+    ""
+  ];
+
+  for (const evidence of handoff.nextAction.requiredEvidence) {
+    lines.push(`- ${evidence}`);
+  }
+
+  if (handoff.selectedProblem) {
+    lines.push(
+      "",
+      "## Selected Public Problem",
+      "",
+      `- Problem: \`${handoff.selectedProblem.id}\``,
+      `- Source: [${handoff.selectedProblem.sourceTitle}](${handoff.selectedProblem.sourceUrl})`,
+      `- Domain: \`${handoff.selectedProblem.domain}\``,
+      `- Status: \`${handoff.selectedProblem.status}\``
+    );
+    if (handoff.selectedProblem.resultSummary) {
+      lines.push(`- Current result: ${handoff.selectedProblem.resultSummary}`);
+    }
+    if (handoff.selectedProblem.trustOutcomes.length > 0) {
+      lines.push(`- Trust outcomes: ${handoff.selectedProblem.trustOutcomes.map((trust) => `\`${trust}\``).join(", ")}`);
+    }
+    if (handoff.selectedProblem.suiteTaskIds.length > 0) {
+      lines.push(`- Suite tasks: ${handoff.selectedProblem.suiteTaskIds.map((task) => `\`${task}\``).join(", ")}`);
+    }
+  }
+
+  if (handoff.selectedTarget) {
+    lines.push(
+      "",
+      "## Selected Catalog Target",
+      "",
+      `- Target: \`${handoff.selectedTarget.id}\``,
+      `- Status: \`${handoff.selectedTarget.status}\``,
+      `- Goal: ${handoff.selectedTarget.goal}`
+    );
+  }
+
+  if (handoff.nextAction.sourceUrl || handoff.nextAction.suitePath || handoff.nextAction.suiteTaskIds.length > 0) {
+    lines.push("", "## Route Metadata", "");
+    if (handoff.nextAction.sourceUrl) {
+      lines.push(`- Source URL: ${handoff.nextAction.sourceUrl}`);
+    }
+    if (handoff.nextAction.suitePath) {
+      lines.push(`- Suite path: \`${handoff.nextAction.suitePath}\``);
+    }
+    if (handoff.nextAction.suiteTaskIds.length > 0) {
+      lines.push(`- Suite task ids: ${handoff.nextAction.suiteTaskIds.map((task) => `\`${task}\``).join(", ")}`);
+    }
+  }
+
+  lines.push("", "## Commands", "");
+  for (const command of handoff.handoffCommands) {
+    lines.push(`\`\`\`bash\n${command}\n\`\`\``);
+  }
+
+  lines.push("", "## Honesty Boundary", "", handoff.nextAction.honestyBoundary || handoff.honestyBoundary);
+
+  if (handoff.warnings.length > 0) {
+    lines.push("", "## Warnings", "");
+    for (const warning of handoff.warnings) {
+      lines.push(`- ${warning}`);
+    }
+  }
+
+  lines.push("", "Do not promote this work beyond the listed trust labels until the required evidence exists and replays locally.");
+  return `${lines.join("\n")}\n`;
+}
 export function selectPublicMathProblemCatalogNextAction(catalog: PublicMathProblemCatalog): PublicMathProblemCatalogNextAction {
   const openProblem = [...catalog.problems]
     .filter((problem) => problem.status !== "solved-by-local-receipt")
