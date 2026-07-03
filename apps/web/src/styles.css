@@ -910,6 +910,84 @@ button {
   padding: 8px 0 0;
 }
 
+.public-journey-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 0.92fr);
+  align-items: stretch;
+  gap: 10px;
+  margin: 10px clamp(14px, 2vw, 24px) 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(122, 214, 170, 0.08), rgba(231, 197, 119, 0.04)), #131313;
+  padding: 10px;
+  min-width: 0;
+}
+
+.public-journey-panel.loading {
+  border-color: rgba(231, 197, 119, 0.18);
+}
+
+.public-journey-panel.error {
+  border-color: rgba(255, 132, 132, 0.3);
+}
+
+.public-journey-copy {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.public-journey-copy strong {
+  color: #f2eee7;
+  font-size: 13px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.public-journey-copy p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.public-journey-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.public-journey-stats div {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 7px;
+  background: #10100f;
+  padding: 7px;
+}
+
+.public-journey-stats span,
+.public-journey-stats strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-journey-stats span {
+  color: var(--faint);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.public-journey-stats strong {
+  margin-top: 3px;
+  color: #e9dfc8;
+  font-size: 12px;
+}
+
 .workspace {
   position: relative;
   display: flex;

@@ -51,6 +51,30 @@ afterEach(async () => {
 });
 
 describe("local web route ledger API", () => {
+  it("serves the public math journey as a read-only local API", async () => {
+    const port = await getFreePort();
+    runningServer = await startWebServer(port, repoRoot);
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    const response = await fetch(`${baseUrl}/api/public-math-journey`);
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expectLocalApiSuccess(response, payload);
+    expect(payload).toMatchObject({
+      schemaVersion: "truth-harness.web-public-math-journey-response.v0",
+      localOnly: true,
+      externalCalls: [],
+      catalogPath: "packages/benchmarks/catalog/public-math-problem-catalog.json"
+    });
+    expect(payload.journey).toMatchObject({
+      schemaVersion: "truth-harness.public-math-journey.v0",
+      catalogId: "public-math-problems-2026"
+    });
+    expect(payload.journey.totals.totalProblems).toBeGreaterThanOrEqual(7);
+    expect(payload.journey.totals.solved).toBeGreaterThanOrEqual(7);
+    expect(payload.journey.byTrustOutcome).toContainEqual(expect.objectContaining({ trust: "refuted" }));
+    expect(payload.journey.nextAction).toMatchObject({ kind: "catalog-target-search", targetId: "public-symbolic-identity-queue" });
+  });
   it("persists verifier routes and reads them through local-only API endpoints", async () => {
     tempProjectRoot = await mkdtemp(join(tmpdir(), "truth-harness-web-api-"));
     process.env.TRUTH_HARNESS_GRAPHVIZ_DOT = "truth-harness-missing-graphviz-dot";
@@ -109,6 +133,7 @@ describe("local web route ledger API", () => {
       projectRoot: tempProjectRoot?.replace(/\\/gu, "/"),
       localOnly: true
     });
+    expect(statusPayload.capabilities).toContain("public-math-journey");
     expect(statusPayload.runtime.staleHint).toContain("local host repository runtime");
     expect(statusPayload.dockerVerifier).toMatchObject({
       schemaVersion: "truth-harness.docker-verifier-guidance.v0",
@@ -2728,7 +2753,9 @@ async function startWebServer(port: number, projectRoot: string): Promise<ChildP
     "--web-root",
     resolve(repoRoot, "apps/web"),
     "--core-module",
-    resolve(repoRoot, "packages/core/src/index.ts")
+    resolve(repoRoot, "packages/core/src/index.ts"),
+    "--benchmark-module",
+    resolve(repoRoot, "packages/benchmarks/src/index.ts")
   ], {
     cwd: repoRoot,
     env: {

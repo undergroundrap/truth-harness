@@ -380,6 +380,9 @@ const state = {
   maintenance: undefined,
   maintenanceLoading: false,
   maintenanceError: undefined,
+  publicMathJourney: undefined,
+  publicMathJourneyLoading: false,
+  publicMathJourneyError: undefined,
   selectedWorkspaceReviewItemId: undefined,
   selectedWorkspaceObligationId: undefined,
   selectedResearchSessionId: undefined
@@ -408,6 +411,10 @@ const maintenanceRepairApplyButton = document.querySelector("#maintenance-repair
 const maintenanceCleanPreviewButton = document.querySelector("#maintenance-clean-preview");
 const maintenanceArchiveScratchButton = document.querySelector("#maintenance-archive-scratch");
 const maintenanceCleanScratchButton = document.querySelector("#maintenance-clean-scratch");
+const publicJourneyPanel = document.querySelector("#public-journey-panel");
+const publicJourneyHeadline = document.querySelector("#public-journey-headline");
+const publicJourneySummary = document.querySelector("#public-journey-summary");
+const publicJourneyStats = document.querySelector("#public-journey-stats");
 const sessionList = document.querySelector("#session-list");
 const sidebarActionButtons = document.querySelectorAll("[data-sidebar-action]");
 const projectRows = document.querySelectorAll(".project-row");
@@ -1291,6 +1298,7 @@ void refreshReleaseAudit({ announce: false });
 void refreshWorkspaceReadiness();
 void refreshWorkspaceMaintenance({ announce: false });
 void refreshCatalogStatus();
+void refreshPublicMathJourney({ announce: false });
 void refreshClaimLedger();
 void refreshRouteLedger();
 void refreshResearchSessions();
@@ -1352,6 +1360,7 @@ function render() {
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
     .join("");
   renderRouteLedger(receipt);
+  renderPublicMathJourney();
 
   graphList.innerHTML = graphInspectorEntries(receipt)
     .map(([kind, summary]) => `<div class="graph-node"><span>${escapeHtml(kind)}</span><strong>${escapeHtml(summary)}</strong></div>`)
@@ -11539,6 +11548,128 @@ async function openReleaseAuditArtifactPreview(path) {
     state.releaseAuditArtifactPreviewLoading = false;
     renderReleaseAuditGate();
   }
+}
+
+async function refreshPublicMathJourney({ announce = true } = {}) {
+  if (!publicJourneyPanel) {
+    return;
+  }
+
+  state.publicMathJourneyLoading = true;
+  state.publicMathJourneyError = undefined;
+  renderPublicMathJourney();
+
+  try {
+    const response = await fetch("/api/public-math-journey", {
+      headers: {
+        Accept: "application/json"
+      },
+      cache: "no-store"
+    });
+    const payload = await readLocalApiJson(response, "Public math journey API failed.");
+    state.publicMathJourney = payload;
+    state.publicMathJourneyError = undefined;
+    if (announce) {
+      addActivity(
+        "local-api",
+        "Loaded public math journey",
+        localApiSuccessMessage(payload, publicMathJourneyActivitySummary(payload.journey)),
+        payload.journey?.totals?.openGaps === 0 ? "passed" : "waiting"
+      );
+    }
+  } catch (error) {
+    state.publicMathJourney = undefined;
+    state.publicMathJourneyError = error instanceof Error ? error.message : "Unknown public math journey failure.";
+    addActivity("local-api", "Public math journey unavailable", state.publicMathJourneyError, "waiting");
+  } finally {
+    state.publicMathJourneyLoading = false;
+    renderPublicMathJourney();
+  }
+}
+
+function renderPublicMathJourney() {
+  if (!publicJourneyPanel || !publicJourneyHeadline || !publicJourneySummary || !publicJourneyStats) {
+    return;
+  }
+
+  const payload = state.publicMathJourney;
+  const journey = payload?.journey;
+  publicJourneyPanel.classList.toggle("loading", state.publicMathJourneyLoading);
+  publicJourneyPanel.classList.toggle("error", Boolean(state.publicMathJourneyError));
+
+  if (state.publicMathJourneyError) {
+    publicJourneyHeadline.textContent = "Public problem ledger unavailable";
+    publicJourneySummary.textContent = state.publicMathJourneyError;
+    publicJourneyStats.innerHTML = publicMathJourneyStatsHtml([
+      ["Tracked", "--"],
+      ["Solved", "--"],
+      ["Next", "check catalog"]
+    ]);
+    return;
+  }
+
+  if (!journey) {
+    publicJourneyHeadline.textContent = state.publicMathJourneyLoading ? "Loading verified problem ledger" : "No public problem ledger loaded";
+    publicJourneySummary.textContent = "Reading the local benchmark catalog; no network request is made.";
+    publicJourneyStats.innerHTML = publicMathJourneyStatsHtml([
+      ["Tracked", "--"],
+      ["Solved", "--"],
+      ["Next", state.publicMathJourneyLoading ? "loading" : "open"]
+    ]);
+    return;
+  }
+
+  const totals = journey.totals ?? {};
+  const totalProblems = Number.isFinite(totals.totalProblems) ? totals.totalProblems : 0;
+  const solved = Number.isFinite(totals.solved) ? totals.solved : 0;
+  const openGaps = Number.isFinite(totals.openGaps) ? totals.openGaps : 0;
+  const sourceNeeded = Number.isFinite(totals.sourceNeededTargets) ? totals.sourceNeededTargets : 0;
+  const exactCount = publicMathJourneyTrustCount(journey, "exact-computed");
+  const crossCheckedCount = publicMathJourneyTrustCount(journey, "cross-checked");
+  const refutedCount = publicMathJourneyTrustCount(journey, "refuted");
+  const nextTarget = publicMathJourneyNextTarget(journey);
+
+  publicJourneyHeadline.textContent = `${solved}/${totalProblems} public math problems have replayable local evidence`;
+  publicJourneySummary.textContent = publicMathJourneyActivitySummary(journey);
+  publicJourneyStats.innerHTML = publicMathJourneyStatsHtml([
+    ["Solved", `${solved}/${totalProblems}`],
+    ["Open gaps", String(openGaps)],
+    ["Exact", String(exactCount)],
+    ["Cross", String(crossCheckedCount)],
+    ["Refuted", String(refutedCount)],
+    ["Source needed", String(sourceNeeded)],
+    ["Next", nextTarget]
+  ]);
+}
+
+function publicMathJourneyStatsHtml(rows) {
+  return rows
+    .map(([label, value]) => `<div title="${escapeHtml(String(value))}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`)
+    .join("");
+}
+
+function publicMathJourneyTrustCount(journey, trust) {
+  const row = (journey.byTrustOutcome ?? []).find((entry) => entry.trust === trust);
+  return Number.isFinite(row?.count) ? row.count : 0;
+}
+
+function publicMathJourneyNextTarget(journey) {
+  const target = journey.nextAction?.targetId ?? journey.nextAction?.kind ?? "none";
+  return String(target).replace(/^public-/u, "");
+}
+
+function publicMathJourneyActivitySummary(journey) {
+  if (!journey) {
+    return "No public math journey loaded yet.";
+  }
+
+  const totals = journey.totals ?? {};
+  const sourceSummary = (journey.bySourceSite ?? [])
+    .slice(0, 2)
+    .map((row) => `${row.site}: ${row.solved}/${row.total}`)
+    .join("; ");
+  const nextGoal = journey.nextAction?.goal ? ` Next: ${journey.nextAction.goal}` : "";
+  return `${journey.title} tracks ${totals.totalProblems ?? 0} problem(s), ${totals.solved ?? 0} solved by local receipts, ${totals.openGaps ?? 0} open verifier gap(s). ${sourceSummary || "No sources recorded."}.${nextGoal}`;
 }
 
 async function refreshWorkspaceReadiness({ announce = true } = {}) {

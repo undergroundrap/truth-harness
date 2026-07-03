@@ -518,6 +518,24 @@ describe("web UI action contracts", () => {
     expect(styles).toContain("overflow-wrap: anywhere;");
   });
 
+  it("keeps the public math journey tracker visible and local-only", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('id="public-journey-panel"');
+    expect(html).toContain('id="public-journey-headline"');
+    expect(html).toContain('id="public-journey-stats"');
+    expect(source).toContain('fetch("/api/public-math-journey"');
+    expect(source).toContain('function refreshPublicMathJourney({ announce = true } = {})');
+    expect(source).toContain('function renderPublicMathJourney()');
+    expect(source).toContain('publicMathJourneyActivitySummary(payload.journey)');
+    expect(styles).toContain('.public-journey-panel');
+    expect(styles).toContain('.public-journey-stats');
+    expect(styles).toContain('text-overflow: ellipsis;');
+  });
   it("keeps workspace maintenance visible and routed through local preview-first APIs", async () => {
     const [html, source, styles] = await Promise.all([
       readFile(appHtmlPath, "utf8"),

@@ -86,6 +86,7 @@ const VISUAL_SOURCE_KINDS = new Set([
   "manual"
 ]);
 let coreModulePromise;
+let benchmarkModulePromise;
 const args = new Map(
   process.argv.slice(2).flatMap((arg, index, values) => {
     if (!arg.startsWith("--")) {
@@ -98,6 +99,7 @@ const args = new Map(
 const root = resolve(args.get("web-root") ?? "apps/web");
 const projectRoot = resolve(args.get("project-root") ?? ".");
 const coreModulePath = args.get("core-module") ?? process.env.TRUTH_HARNESS_WEB_CORE_MODULE ?? "packages/core/dist/index.js";
+const benchmarkModulePath = args.get("benchmark-module") ?? process.env.TRUTH_HARNESS_WEB_BENCHMARK_MODULE ?? "packages/benchmarks/dist/index.js";
 const host = args.get("host") ?? "127.0.0.1";
 const port = Number(args.get("port") ?? "4180");
 const allowNonLocalWeb = isTruthyEnv(process.env.TRUTH_HARNESS_WEB_ALLOW_NONLOCAL);
@@ -260,7 +262,8 @@ async function handleApiRequest(request, response, requestUrl) {
         "web-runtime-identity",
         "sandbox-status",
         "safety-center",
-        "workspace-maintenance"
+        "workspace-maintenance",
+        "public-math-journey"
       ]
     });
     return;
@@ -659,6 +662,21 @@ async function handleApiRequest(request, response, requestUrl) {
       });
     } catch (error) {
       writeApiError(response, error instanceof HttpError ? error.status : 400, error instanceof Error ? error.message : "Workspace artifact preview failed.", request);
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/public-math-journey" && request.method === "GET") {
+    try {
+      const payload = await createWebPublicMathJourneyPayload();
+      writeJson(response, 200, {
+        schemaVersion: "truth-harness.web-public-math-journey-response.v0",
+        localOnly: true,
+        externalCalls: [],
+        ...payload
+      });
+    } catch (error) {
+      writeApiError(response, 409, error instanceof Error ? error.message : "Public math journey could not be read.", request);
     }
     return;
   }
@@ -4014,6 +4032,24 @@ function engineProbeRow(input) {
 function loadCoreModule() {
   coreModulePromise ??= import(pathToFileURL(resolve(coreModulePath)).href);
   return coreModulePromise;
+}
+
+function loadBenchmarkModule() {
+  benchmarkModulePromise ??= import(pathToFileURL(resolve(benchmarkModulePath)).href);
+  return benchmarkModulePromise;
+}
+
+async function createWebPublicMathJourneyPayload() {
+  const catalogPath = resolve(projectRoot, "packages/benchmarks/catalog/public-math-problem-catalog.json");
+  const raw = JSON.parse(await readFile(catalogPath, "utf8"));
+  const { createPublicMathProblemJourney, parsePublicMathProblemCatalog } = await loadBenchmarkModule();
+  const catalog = parsePublicMathProblemCatalog(raw);
+  const journey = createPublicMathProblemJourney(catalog);
+
+  return {
+    catalogPath: relative(projectRoot, catalogPath).replace(/\\/gu, "/"),
+    journey
+  };
 }
 
 function isTruthyEnv(value) {
