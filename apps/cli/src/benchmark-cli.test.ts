@@ -74,6 +74,34 @@ describe("benchmark CLI", () => {
     expect(json.handoff.nextAction.recommendedCommands).toContain("truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json");
     expect(json.handoff.handoffCommands).toContain(`truth-harness bench catalog ${catalogPath} --handoff`);
   });
+  it("prints and writes public math journey stats", async () => {
+    const root = await tempRoot();
+    const catalogPath = "packages/benchmarks/catalog/public-math-problem-catalog.json";
+    const outPath = join(root, "public-math-journey.md");
+    const human = await runCli(["bench", "catalog", catalogPath, "--journey", "--out", outPath]);
+
+    expect(human.exitCode).toBe(0);
+    expect(human.stdout).toContain("Public Math Journey");
+    expect(human.stdout).toContain("Top Stats");
+    expect(human.stdout).toContain("Problem Wiki Index");
+    expect(human.stdout).toContain("Wrote public math journey");
+    expect(existsSync(outPath)).toBe(true);
+    const journeyText = await readFile(outPath, "utf8");
+    expect(journeyText).toContain("| Problems tracked | 7 |");
+    expect(journeyText).toContain("`wikipedia-binomial-square-identity`");
+    expect(journeyText).toContain("This page is a tracker, not a proof certificate.");
+
+    const json = JSON.parse((await runCli(["bench", "catalog", catalogPath, "--journey", "--json"])).stdout) as {
+      journey: { schemaVersion: string; totals: { totalProblems: number; solved: number }; byTrustOutcome: Array<{ trust: string; count: number }> };
+    };
+
+    expect(json.journey.schemaVersion).toBe("truth-harness.public-math-journey.v0");
+    expect(json.journey.totals).toMatchObject({
+      totalProblems: 7,
+      solved: 7
+    });
+    expect(json.journey.byTrustOutcome).toContainEqual({ trust: "refuted", count: 7 });
+  });
   it("shows saved Docker reviewer evidence in engine plans without treating host-missing engines as runnable", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--name", "Engine Plan Lab"]);

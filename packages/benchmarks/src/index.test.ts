@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createPublicMathProblemCatalogHandoff, parseBenchmarkSuite, parsePublicMathProblemCatalog, renderPublicMathProblemCatalogHandoffMarkdown, runBenchmarkSuite, summarizePublicMathProblemCatalog } from "./index.js";
+import { createPublicMathProblemCatalogHandoff, createPublicMathProblemJourney, parseBenchmarkSuite, parsePublicMathProblemCatalog, renderPublicMathProblemCatalogHandoffMarkdown, renderPublicMathProblemJourneyMarkdown, runBenchmarkSuite, summarizePublicMathProblemCatalog } from "./index.js";
 
 describe("benchmark runner", () => {
   it("scores trust-label expectations", () => {
@@ -295,6 +295,56 @@ describe("benchmark runner", () => {
     });
   });
 
+  it("builds wiki-style journey stats from the public math catalog", () => {
+    const catalogPath = "packages/benchmarks/catalog/public-math-problem-catalog.json";
+    const catalog = parsePublicMathProblemCatalog(JSON.parse(readFileSync(resolve(process.cwd(), catalogPath), "utf8")) as unknown);
+    const journey = createPublicMathProblemJourney(catalog, { generatedAt: "2026-07-03T00:00:00.000Z" });
+    const markdown = renderPublicMathProblemJourneyMarkdown(journey, catalogPath);
+
+    expect(journey).toMatchObject({
+      schemaVersion: "truth-harness.public-math-journey.v0",
+      generatedAt: "2026-07-03T00:00:00.000Z",
+      totals: {
+        totalProblems: 7,
+        solved: 7,
+        openGaps: 0,
+        queued: 0,
+        sourceNeededTargets: 1
+      }
+    });
+    expect(journey.byTrustOutcome).toContainEqual({ trust: "exact-computed", count: 5 });
+    expect(journey.byTrustOutcome).toContainEqual({ trust: "cross-checked", count: 2 });
+    expect(journey.byTrustOutcome).toContainEqual({ trust: "refuted", count: 7 });
+    expect(journey.bySourceSite).toContainEqual({ site: "Project Euler", total: 5, solved: 5 });
+    expect(journey.bySourceSite).toContainEqual({ site: "Wikipedia", total: 2, solved: 2 });
+    expect(journey.timeline).toEqual([
+      {
+        date: "2026-07-01",
+        total: 3,
+        solved: 3,
+        problemIds: ["project-euler-001", "project-euler-002", "project-euler-006"]
+      },
+      {
+        date: "2026-07-02",
+        total: 2,
+        solved: 2,
+        problemIds: ["project-euler-048", "project-euler-053"]
+      },
+      {
+        date: "2026-07-03",
+        total: 2,
+        solved: 2,
+        problemIds: ["wikipedia-binomial-square-identity", "wikipedia-pythagorean-trig-identity"]
+      }
+    ]);
+    expect(journey.problemIndex).toHaveLength(7);
+    expect(journey.problemIndex.find((problem) => problem.id === "wikipedia-binomial-square-identity")?.replayCommands).toContain("npm run docker:public-symbolic");
+    expect(markdown).toContain("# Public Math Journey");
+    expect(markdown).toContain("| Problems tracked | 7 |");
+    expect(markdown).toContain("## Problem Wiki Index");
+    expect(markdown).toContain("`wikipedia-binomial-square-identity`");
+    expect(markdown).toContain("This page is a tracker, not a proof certificate.");
+  });
   it("renders an agent handoff for the public math catalog next action", () => {
     const catalogPath = "packages/benchmarks/catalog/public-math-problem-catalog.json";
     const catalog = parsePublicMathProblemCatalog(JSON.parse(readFileSync(resolve(process.cwd(), catalogPath), "utf8")) as unknown);

@@ -6,6 +6,8 @@ This is the working ledger for public math problems that Truth Harness can solve
 
 Machine-readable metadata: [public-math-problem-catalog.json](../packages/benchmarks/catalog/public-math-problem-catalog.json)
 
+Journey and stat tracker: [PUBLIC_MATH_JOURNEY.md](PUBLIC_MATH_JOURNEY.md)
+
 Public answer workflow: [PUBLIC_ANSWER_WORKFLOW.md](PUBLIC_ANSWER_WORKFLOW.md)
 
 Benchmark suites: [public-problem-probes.json](../packages/benchmarks/suites/public-problem-probes.json), [public-symbolic-probes.json](../packages/benchmarks/suites/public-symbolic-probes.json)
@@ -31,6 +33,7 @@ npm run docker:public-symbolic
 truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json
 truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json
 truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --handoff
+truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --journey --out docs/PUBLIC_MATH_JOURNEY.md
 truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --write --fail-on-failures
 truth-harness bench run packages/benchmarks/suites/public-symbolic-probes.json --write --fail-on-failures
 ```

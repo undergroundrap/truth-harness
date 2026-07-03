@@ -3,7 +3,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { createPublicMathProblemCatalogHandoff, parseBenchmarkSuite, parsePublicMathProblemCatalog, renderPublicMathProblemCatalogHandoffMarkdown, runBenchmarkSuite, summarizePublicMathProblemCatalog, type BenchmarkRun, type PublicMathProblemCatalogSummary } from "@truth-harness/benchmarks";
+import { createPublicMathProblemCatalogHandoff, createPublicMathProblemJourney, parseBenchmarkSuite, parsePublicMathProblemCatalog, renderPublicMathProblemCatalogHandoffMarkdown, renderPublicMathProblemJourneyMarkdown, runBenchmarkSuite, summarizePublicMathProblemCatalog, type BenchmarkRun, type PublicMathProblemCatalogSummary } from "@truth-harness/benchmarks";
 import {
   benchmarkComparisonFailsGate,
   benchmarkRunFailsGate,
@@ -1034,22 +1034,30 @@ bench
   .argument("[catalog]", "Path to a public math problem catalog JSON file", "packages/benchmarks/catalog/public-math-problem-catalog.json")
   .option("--json", "Print the full catalog summary JSON")
   .option("--handoff", "Print a Markdown agent handoff packet for the recommended catalog action")
-  .option("--out <path>", "Write the summary JSON or handoff Markdown to a file")
-  .action(async (catalogPath: string, options: { json?: boolean; handoff?: boolean; out?: string }) => {
+  .option("--journey", "Print a Markdown wiki-style public journey and stats page")
+  .option("--out <path>", "Write the summary JSON, handoff Markdown, or journey Markdown to a file")
+  .action(async (catalogPath: string, options: { json?: boolean; handoff?: boolean; journey?: boolean; out?: string }) => {
+    if (options.handoff && options.journey) {
+      throw new Error("Use either --handoff or --journey, not both.");
+    }
+
     const catalog = parsePublicMathProblemCatalog(JSON.parse(await readFile(resolve(catalogPath), "utf8")) as unknown);
     const summary = summarizePublicMathProblemCatalog(catalog);
     const handoff = options.handoff ? createPublicMathProblemCatalogHandoff(catalog, { catalogPath }) : undefined;
+    const journey = options.journey ? createPublicMathProblemJourney(catalog) : undefined;
 
     if (options.out) {
       if (handoff) {
         await writeText(options.out, renderPublicMathProblemCatalogHandoffMarkdown(handoff));
+      } else if (journey) {
+        await writeText(options.out, renderPublicMathProblemJourneyMarkdown(journey, catalogPath));
       } else {
         await writeJson(options.out, { catalogPath, summary });
       }
     }
 
     if (options.json) {
-      printJson(handoff ? { catalogPath, handoff } : { catalogPath, summary });
+      printJson(handoff ? { catalogPath, handoff } : journey ? { catalogPath, journey } : { catalogPath, summary });
       return;
     }
 
@@ -1057,6 +1065,14 @@ bench
       console.log(renderPublicMathProblemCatalogHandoffMarkdown(handoff));
       if (options.out) {
         console.log(`Wrote public math catalog handoff: ${options.out}`);
+      }
+      return;
+    }
+
+    if (journey) {
+      console.log(renderPublicMathProblemJourneyMarkdown(journey, catalogPath));
+      if (options.out) {
+        console.log(`Wrote public math journey: ${options.out}`);
       }
       return;
     }

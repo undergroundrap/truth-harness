@@ -144,6 +144,41 @@ export interface PublicMathProblemCatalogHandoff {
   handoffCommands: string[];
   warnings: string[];
 }
+
+export interface PublicMathProblemJourney {
+  schemaVersion: "truth-harness.public-math-journey.v0";
+  generatedAt: string;
+  catalogId: string;
+  title: string;
+  updatedAt: string;
+  totals: {
+    totalProblems: number;
+    solved: number;
+    openGaps: number;
+    queued: number;
+    sourceNeededTargets: number;
+  };
+  byDomain: Array<{ domain: string; total: number; solved: number }>;
+  bySourceSite: Array<{ site: string; total: number; solved: number }>;
+  byTrustOutcome: Array<{ trust: string; count: number }>;
+  byVerifierBackend: Array<{ backend: string; count: number }>;
+  timeline: Array<{ date: string; total: number; solved: number; problemIds: string[] }>;
+  problemIndex: Array<{
+    id: string;
+    firstLoggedAt: string;
+    status: PublicMathProblemStatus;
+    domain: string;
+    sourceTitle: string;
+    sourceUrl: string;
+    trustOutcomes: string[];
+    verifierBackends: string[];
+    replayCommands: string[];
+    resultSummary?: string;
+  }>;
+  nextAction: PublicMathProblemCatalogNextAction;
+  honestyBoundary: string;
+  warnings: string[];
+}
 export interface BenchmarkTaskResult {
   task: BenchmarkTask;
   receipt: Receipt;
@@ -456,6 +491,234 @@ export function renderPublicMathProblemCatalogHandoffMarkdown(handoff: PublicMat
 
   lines.push("", "Do not promote this work beyond the listed trust labels until the required evidence exists and replays locally.");
   return `${lines.join("\n")}\n`;
+}
+export function createPublicMathProblemJourney(
+  catalog: PublicMathProblemCatalog,
+  options: { generatedAt?: string } = {}
+): PublicMathProblemJourney {
+  const summary = summarizePublicMathProblemCatalog(catalog);
+  const problems = [...catalog.problems].sort(comparePublicProblemDates);
+
+  return {
+    schemaVersion: "truth-harness.public-math-journey.v0",
+    generatedAt: options.generatedAt ?? new Date().toISOString(),
+    catalogId: catalog.catalogId,
+    title: catalog.title,
+    updatedAt: catalog.updatedAt,
+    totals: {
+      totalProblems: summary.totalProblems,
+      solved: summary.solved,
+      openGaps: summary.openGaps,
+      queued: summary.queued,
+      sourceNeededTargets: summary.sourceNeeded
+    },
+    byDomain: countProblemGroups(problems, (problem) => problem.domain, "domain"),
+    bySourceSite: countProblemGroups(problems, (problem) => problem.source.site, "site"),
+    byTrustOutcome: countTrustOutcomes(problems),
+    byVerifierBackend: countVerifierBackends(problems),
+    timeline: createPublicProblemTimeline(problems),
+    problemIndex: problems.map((problem) => ({
+      id: problem.id,
+      firstLoggedAt: problem.firstLoggedAt,
+      status: problem.status,
+      domain: problem.domain,
+      sourceTitle: problem.source.title,
+      sourceUrl: problem.source.url,
+      trustOutcomes: problem.trustOutcomes ?? [],
+      verifierBackends: problem.verifierBackends ?? [],
+      replayCommands: publicProblemReplayCommands(problem),
+      ...(problem.resultSummary ? { resultSummary: problem.resultSummary } : {})
+    })),
+    nextAction: summary.nextAction,
+    honestyBoundary: catalog.honestyBoundary,
+    warnings: summary.warnings
+  };
+}
+
+export function renderPublicMathProblemJourneyMarkdown(
+  journey: PublicMathProblemJourney,
+  catalogPath = "packages/benchmarks/catalog/public-math-problem-catalog.json"
+): string {
+  const normalizedCatalogPath = catalogPath.replace(/\\/gu, "/");
+  const lines: string[] = [
+    "# Public Math Journey",
+    "",
+    `Generated: ${journey.generatedAt}`,
+    `Catalog: \`${normalizedCatalogPath}\``,
+    `Catalog updated: ${journey.updatedAt}`,
+    "",
+    "This is the public, wiki-style progress ledger for Truth Harness math work. The machine-readable catalog is the source of truth; this page is the human-readable story of what has been solved, refuted, or left as an honest gap.",
+    "",
+    "## Top Stats",
+    "",
+    "| Metric | Count |",
+    "| --- | ---: |",
+    `| Problems tracked | ${journey.totals.totalProblems} |`,
+    `| Solved by local receipt | ${journey.totals.solved} |`,
+    `| Open verifier gaps | ${journey.totals.openGaps} |`,
+    `| Queued catalog problems | ${journey.totals.queued} |`,
+    `| Source-needed targets | ${journey.totals.sourceNeededTargets} |`,
+    "",
+    "## Trust Outcomes",
+    "",
+    ...markdownTable(["Trust label", "Count"], journey.byTrustOutcome.map((row) => [inlineCode(row.trust), String(row.count)])),
+    "",
+    "## Domains",
+    "",
+    ...markdownTable(["Domain", "Tracked", "Solved"], journey.byDomain.map((row) => [inlineCode(row.domain), String(row.total), String(row.solved)])),
+    "",
+    "## Sources",
+    "",
+    ...markdownTable(["Source", "Tracked", "Solved"], journey.bySourceSite.map((row) => [row.site, String(row.total), String(row.solved)])),
+    "",
+    "## Verifier Backends",
+    "",
+    ...markdownTable(["Backend", "Problems"], journey.byVerifierBackend.map((row) => [inlineCode(row.backend), String(row.count)])),
+    "",
+    "## Timeline",
+    "",
+    ...markdownTable(
+      ["Date", "Added", "Solved", "Problems"],
+      journey.timeline.map((row) => [row.date, String(row.total), String(row.solved), inlineList(row.problemIds)])
+    ),
+    "",
+    "## Problem Wiki Index",
+    "",
+    ...markdownTable(
+      ["Logged", "Problem", "Source", "Domain", "Status", "Trust", "Replay"],
+      journey.problemIndex.map((problem) => [
+        problem.firstLoggedAt,
+        inlineCode(problem.id),
+        `[${escapeMarkdownCell(problem.sourceTitle)}](${problem.sourceUrl})`,
+        inlineCode(problem.domain),
+        inlineCode(problem.status),
+        inlineList(problem.trustOutcomes),
+        problem.replayCommands[0] ? inlineCode(problem.replayCommands[0]) : "none recorded"
+      ])
+    ),
+    "",
+    "## Next Catalog Action",
+    "",
+    `- Kind: \`${journey.nextAction.kind}\``,
+    `- Target: ${journey.nextAction.targetId ? inlineCode(journey.nextAction.targetId) : "none recorded"}`,
+    `- Goal: ${journey.nextAction.goal}`,
+    `- Command: \`${journey.nextAction.recommendedCommand}\``,
+    "",
+    "## Honesty Boundary",
+    "",
+    journey.honestyBoundary,
+    "",
+    "This page is a tracker, not a proof certificate. Every public result still needs its cited replay command, receipt, benchmark record, and trust boundary before anyone should rely on it."
+  ];
+
+  if (journey.warnings.length > 0) {
+    lines.push("", "## Warnings", "");
+    for (const warning of journey.warnings) {
+      lines.push(`- ${warning}`);
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+function publicProblemReplayCommands(problem: PublicMathProblemCatalogEntry): string[] {
+  const commands = [...(problem.recommendedCommands ?? [])];
+  if (problem.suitePath) {
+    commands.push(`truth-harness bench run ${problem.suitePath} --write --fail-on-failures`);
+  }
+  return [...new Set(commands)];
+}
+
+function countProblemGroups<T extends "domain" | "site">(
+  problems: PublicMathProblemCatalogEntry[],
+  key: (problem: PublicMathProblemCatalogEntry) => string,
+  property: T
+): Array<Record<T, string> & { total: number; solved: number }> {
+  const counts = new Map<string, { total: number; solved: number }>();
+  for (const problem of problems) {
+    const value = key(problem);
+    const current = counts.get(value) ?? { total: 0, solved: 0 };
+    current.total += 1;
+    if (problem.status === "solved-by-local-receipt") {
+      current.solved += 1;
+    }
+    counts.set(value, current);
+  }
+
+  return [...counts.entries()]
+    .map(([value, count]) => ({ [property]: value, ...count }) as Record<T, string> & { total: number; solved: number })
+    .sort(compareCountRows);
+}
+
+function countTrustOutcomes(problems: PublicMathProblemCatalogEntry[]): Array<{ trust: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const problem of problems) {
+    for (const trust of problem.trustOutcomes ?? []) {
+      counts.set(trust, (counts.get(trust) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()].map(([trust, count]) => ({ trust, count })).sort(compareCountRows);
+}
+
+function countVerifierBackends(problems: PublicMathProblemCatalogEntry[]): Array<{ backend: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const problem of problems) {
+    for (const backend of problem.verifierBackends ?? []) {
+      counts.set(backend, (counts.get(backend) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()].map(([backend, count]) => ({ backend, count })).sort(compareCountRows);
+}
+
+function createPublicProblemTimeline(problems: PublicMathProblemCatalogEntry[]): PublicMathProblemJourney["timeline"] {
+  const counts = new Map<string, { total: number; solved: number; problemIds: string[] }>();
+  for (const problem of problems) {
+    const current = counts.get(problem.firstLoggedAt) ?? { total: 0, solved: 0, problemIds: [] };
+    current.total += 1;
+    if (problem.status === "solved-by-local-receipt") {
+      current.solved += 1;
+    }
+    current.problemIds.push(problem.id);
+    counts.set(problem.firstLoggedAt, current);
+  }
+
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([date, summary]) => ({ date, ...summary }));
+}
+
+function comparePublicProblemDates(left: PublicMathProblemCatalogEntry, right: PublicMathProblemCatalogEntry): number {
+  const date = left.firstLoggedAt.localeCompare(right.firstLoggedAt);
+  return date === 0 ? left.id.localeCompare(right.id) : date;
+}
+
+function compareCountRows<T extends { count?: number; total?: number }>(left: T, right: T): number {
+  const leftCount = left.count ?? left.total ?? 0;
+  const rightCount = right.count ?? right.total ?? 0;
+  if (leftCount !== rightCount) {
+    return rightCount - leftCount;
+  }
+  return JSON.stringify(left).localeCompare(JSON.stringify(right));
+}
+
+function markdownTable(headers: string[], rows: string[][]): string[] {
+  return [
+    `| ${headers.map(escapeMarkdownCell).join(" | ")} |`,
+    `| ${headers.map(() => "---").join(" | ")} |`,
+    ...(rows.length > 0 ? rows.map((row) => `| ${row.map(escapeMarkdownCell).join(" | ")} |`) : [`| ${headers.map(() => "none").join(" | ")} |`])
+  ];
+}
+
+function inlineCode(value: string): string {
+  return `\`${value.replace(/`/gu, "'")}\``;
+}
+
+function inlineList(values: string[]): string {
+  return values.length > 0 ? values.map(inlineCode).join(", ") : "none";
+}
+
+function escapeMarkdownCell(value: string): string {
+  return value.replace(/\n/gu, " ").replace(/\|/gu, "\\|");
 }
 export function selectPublicMathProblemCatalogNextAction(catalog: PublicMathProblemCatalog): PublicMathProblemCatalogNextAction {
   const openProblem = [...catalog.problems]
