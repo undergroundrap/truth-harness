@@ -223,50 +223,64 @@ describe("benchmark runner", () => {
       }
     ]);
   });
-  it("tracks solved public tasks and open symbolic catalog gaps", () => {
-    const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/public-problem-probes.json");
+  it("tracks solved public tasks and the next public catalog target", () => {
+    const boundedSuitePath = resolve(process.cwd(), "packages/benchmarks/suites/public-problem-probes.json");
+    const symbolicSuitePath = resolve(process.cwd(), "packages/benchmarks/suites/public-symbolic-probes.json");
     const catalogPath = resolve(process.cwd(), "packages/benchmarks/catalog/public-math-problem-catalog.json");
-    const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);
+    const boundedSuite = parseBenchmarkSuite(JSON.parse(readFileSync(boundedSuitePath, "utf8")) as unknown);
+    const symbolicSuite = parseBenchmarkSuite(JSON.parse(readFileSync(symbolicSuitePath, "utf8")) as unknown);
     const catalog = parsePublicMathProblemCatalog(JSON.parse(readFileSync(catalogPath, "utf8")) as unknown);
     const summary = summarizePublicMathProblemCatalog(catalog);
-    const taskIds = new Set(suite.tasks.map((task) => task.id));
+    const taskIdsByPath = new Map([
+      ["packages/benchmarks/suites/public-problem-probes.json", new Set(boundedSuite.tasks.map((task) => task.id))],
+      ["packages/benchmarks/suites/public-symbolic-probes.json", new Set(symbolicSuite.tasks.map((task) => task.id))]
+    ]);
 
     expect(catalog.schemaVersion).toBe("truth-harness.public-math-problem-catalog.v0");
     expect(catalog.updatedAt).toBe("2026-07-03");
     expect(catalog.problems).toHaveLength(6);
     expect(summary).toMatchObject({
       totalProblems: 6,
-      solved: 5,
-      openGaps: 1,
+      solved: 6,
+      openGaps: 0,
       queued: 0,
-      sourceNeeded: 0
+      sourceNeeded: 1
     });
-    expect(summary.warnings).toContain("wikipedia-pythagorean-trig-identity has no runnable suite task refs yet.");
+    expect(summary.warnings).toEqual([]);
     expect(summary.defaultCommands).toContain("npm run docker:public-probes");
+    expect(summary.defaultCommands).toContain("npm run docker:public-symbolic");
     expect(summary.nextAction).toMatchObject({
-      kind: "catalog-problem-gap",
-      targetId: "wikipedia-pythagorean-trig-identity",
-      status: "unsupported-adapter-gap",
-      priority: 100
+      kind: "catalog-target-search",
+      targetId: "public-symbolic-identity-queue",
+      status: "source-needed",
+      priority: 55
     });
-    expect(summary.nextAction.requiredEvidence).toContain("SymPy simplification receipt for sin(x)^2 + cos(x)^2 - 1");
-    expect(summary.nextAction.recommendedCommand).toBe("truth-harness cas check --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
-    expect(summary.nextAction.recommendedCommands).toContain("npm run docker:cli -- cas check -- --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
+    expect(summary.nextAction.requiredEvidence).toContain("Stable public source URL");
+
     const solvedProblems = catalog.problems.filter((problem) => problem.status === "solved-by-local-receipt");
-    expect(solvedProblems).toHaveLength(5);
+    expect(solvedProblems).toHaveLength(6);
     for (const problem of solvedProblems) {
-      expect(problem.source.url).toMatch(/^https:\/\/projecteuler\.net\/problem=\d+$/u);
-      expect(problem.suitePath).toBe("packages/benchmarks/suites/public-problem-probes.json");
+      expect(problem.suitePath).toBeTruthy();
       expect(problem.suiteTaskIds?.length).toBe(2);
-      expect(problem.suiteTaskIds?.every((taskId) => taskIds.has(taskId))).toBe(true);
+      const taskIds = taskIdsByPath.get(problem.suitePath ?? "");
+      expect(taskIds).toBeDefined();
+      expect(problem.suiteTaskIds?.every((taskId) => taskIds?.has(taskId))).toBe(true);
     }
+
+    const eulerProblems = solvedProblems.filter((problem) => problem.source.site === "Project Euler");
+    expect(eulerProblems).toHaveLength(5);
+    expect(eulerProblems.every((problem) => problem.source.url.match(/^https:\/\/projecteuler\.net\/problem=\d+$/u))).toBe(true);
+
     const symbolicProblem = catalog.problems.find((problem) => problem.id === "wikipedia-pythagorean-trig-identity");
     expect(symbolicProblem).toMatchObject({
-      status: "unsupported-adapter-gap",
+      status: "solved-by-local-receipt",
       domain: "symbolic-trigonometry",
+      suitePath: "packages/benchmarks/suites/public-symbolic-probes.json",
       source: {
         url: "https://en.wikipedia.org/wiki/Pythagorean_trigonometric_identity"
-      }
+      },
+      trustOutcomes: ["cross-checked", "refuted"],
+      verifierBackends: expect.arrayContaining(["local-sympy-subprocess", "local-maxima-symbolic-subprocess"])
     });
   });
 
@@ -284,20 +298,19 @@ describe("benchmark runner", () => {
       generatedAt: "2026-07-03T00:00:00.000Z",
       catalogPath,
       nextAction: {
-        kind: "catalog-problem-gap",
-        targetId: "wikipedia-pythagorean-trig-identity",
-        status: "unsupported-adapter-gap"
+        kind: "catalog-target-search",
+        targetId: "public-symbolic-identity-queue",
+        status: "source-needed"
       }
     });
     expect(handoff.handoffCommands).toContain(`truth-harness bench catalog ${catalogPath} --handoff`);
     expect(handoff.handoffCommands).toContain("npm run docker:public-probes");
+    expect(handoff.handoffCommands).toContain("npm run docker:public-symbolic");
     expect(markdown).toContain("# Public Math Problem Catalog 2026 - Agent Handoff");
     expect(markdown).toContain("## Evidence Required");
-    expect(markdown).toContain("SymPy simplification receipt for sin(x)^2 + cos(x)^2 - 1");
-    expect(markdown).toContain("## Selected Public Problem");
-    expect(markdown).toContain("Pythagorean trigonometric identity");
-    expect(markdown).toContain("truth-harness cas check --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
-    expect(markdown).toContain("npm run docker:cli -- cas check -- --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
+    expect(markdown).toContain("Stable public source URL");
+    expect(markdown).toContain("## Selected Catalog Target");
+    expect(markdown).toContain("public-symbolic-identity-queue");
     expect(markdown).toContain("Do not promote this work beyond the listed trust labels");
   });
   it("prioritizes open catalog gaps before future public problem searches", () => {

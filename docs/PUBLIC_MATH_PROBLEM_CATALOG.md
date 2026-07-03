@@ -6,7 +6,7 @@ This is the working ledger for public math problems that Truth Harness can solve
 
 Machine-readable metadata: [public-math-problem-catalog.json](../packages/benchmarks/catalog/public-math-problem-catalog.json)
 
-Benchmark suite: [public-problem-probes.json](../packages/benchmarks/suites/public-problem-probes.json)
+Benchmark suites: [public-problem-probes.json](../packages/benchmarks/suites/public-problem-probes.json), [public-symbolic-probes.json](../packages/benchmarks/suites/public-symbolic-probes.json)
 
 ## Workflow
 
@@ -29,6 +29,7 @@ truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-cata
 truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json
 truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --handoff
 truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --write --fail-on-failures
+truth-harness bench run packages/benchmarks/suites/public-symbolic-probes.json --write --fail-on-failures
 ```
 
 ## 2026-07-01 Public Probe Ledger
@@ -40,7 +41,7 @@ truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --
 | Project Euler 6: finite sum-square difference | [Project Euler Problem 6](https://projecteuler.net/problem=6) | solved by local receipt | `exact-computed`, `refuted` | `local-sum-square-difference` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
 | Project Euler 48: self-power last digits | [Project Euler Problem 48](https://projecteuler.net/problem=48) | solved by local receipt | `exact-computed`, `refuted` | `local-self-power-modular-sum` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
 | Project Euler 53: binomial threshold count | [Project Euler Problem 53](https://projecteuler.net/problem=53) | solved by local receipt | `exact-computed`, `refuted` | `local-binomial-threshold-counter` | [suite tasks](../packages/benchmarks/suites/public-problem-probes.json) |
-| Pythagorean trig identity | [Wikipedia: Pythagorean trigonometric identity](https://en.wikipedia.org/wiki/Pythagorean_trigonometric_identity) | open adapter gap | needs SymPy plus Maxima/Sage cross-check | symbolic CAS | `truth-harness cas check --operation simplify --expression "sin(x)^2 + cos(x)^2" --result 1 --write` |
+| Pythagorean trig identity | [Wikipedia: Pythagorean trigonometric identity](https://en.wikipedia.org/wiki/Pythagorean_trigonometric_identity) | solved by Docker CAS receipts | `cross-checked`, `refuted` | `local-sympy-subprocess`, `local-maxima-symbolic-subprocess` | [symbolic suite tasks](../packages/benchmarks/suites/public-symbolic-probes.json); not proof-checker-backed |
 
 ## Publication Rule
 

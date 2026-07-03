@@ -36,15 +36,15 @@ const SYMBOLIC_CLAIM_COMPILER_CONTRACTS = [
     contractId: "symbolic.trig-pythagorean.v1",
     claimKind: "trig-pythagorean-identity",
     label: "Pythagorean trigonometric identity",
-    supportedClaimShape: "For real x, sin(x)^2 + cos(x)^2 = 1",
+    supportedClaimShape: "For real x, sin(x)^2 + cos(x)^2 = <numeric constant>",
     verifierEngine: "sympy",
     verifierOperation: "simplify",
-    expectedResult: "1",
-    expectedResultMeaning: "The supported left-hand side simplifies exactly to 1.",
+    expectedResult: "<right-hand side>",
+    expectedResultMeaning: "The supported left-hand side must simplify exactly to the stated right-hand side.",
     runNextAction: "truth-harness verify <claim> --write --json",
     refusalBoundary: [
-      "Only the sin^2(x)+cos^2(x)=1 identity over a single real variable is recognized.",
-      "Altered right-hand sides, other variables, broader trigonometric identities, and theorem-style generalizations stay outside this compiler.",
+      "Only the sin^2(x)+cos^2(x)=c equality over a single real variable and numeric constant c is recognized.",
+      "Other variables, broader trigonometric identities, and theorem-style generalizations stay outside this compiler.",
       "CAS agreement can support exact-computed or cross-checked, but not proved."
     ]
   },
@@ -77,14 +77,19 @@ export function compileSymbolicClaim(problem: string): CompiledSymbolicClaim | u
   const readable = readableSymbolicClaim(problem);
   const canonical = canonicalSymbolicClaim(problem);
 
-  if (
-    /^(?:forrealx|forallrealx|foreveryrealx)(?:sin\(x\)\^2\+cos\(x\)\^2|cos\(x\)\^2\+sin\(x\)\^2)=1$/u.test(
-      canonical
-    )
-  ) {
+  const trigIdentity = /^(?:forrealx|forallrealx|foreveryrealx)(?:sin\(x\)\^2\+cos\(x\)\^2|cos\(x\)\^2\+sin\(x\)\^2)=(-?\d+(?:\/\d+)?)$/u.exec(
+    canonical
+  );
+  if (trigIdentity) {
+    const expectedResult = trigIdentity[1] ?? "1";
     const contract = compilerContract("symbolic.trig-pythagorean.v1");
+    const expectedResultMeaning = `The supported left-hand side must simplify exactly to ${expectedResult}.`;
     return {
-      ...compiledContractFields(contract),
+      ...compiledContractFields(contract, {
+        expectedResult,
+        expectedResultMeaning,
+        boundarySummary: `For real x, sin(x)^2 + cos(x)^2 = ${expectedResult}; ${expectedResultMeaning}`
+      }),
       prompt: {
         operation: "simplify",
         expression: "sin(x)^2 + cos(x)^2",
@@ -105,14 +110,17 @@ export function isCompiledSymbolicClaim(problem: string): boolean {
   return compileSymbolicClaim(problem) !== undefined;
 }
 
-function compiledContractFields(contract: SymbolicClaimCompilerContract): Omit<CompiledSymbolicClaim, "prompt"> {
+function compiledContractFields(
+  contract: SymbolicClaimCompilerContract,
+  overrides: Partial<Pick<CompiledSymbolicClaim, "expectedResult" | "expectedResultMeaning" | "boundarySummary">> = {}
+): Omit<CompiledSymbolicClaim, "prompt"> {
   return {
     contractId: contract.contractId,
     contractLabel: contract.label,
     claimKind: contract.claimKind,
-    expectedResult: contract.expectedResult,
-    expectedResultMeaning: contract.expectedResultMeaning,
-    boundarySummary: `${contract.supportedClaimShape}; ${contract.expectedResultMeaning}`,
+    expectedResult: overrides.expectedResult ?? contract.expectedResult,
+    expectedResultMeaning: overrides.expectedResultMeaning ?? contract.expectedResultMeaning,
+    boundarySummary: overrides.boundarySummary ?? `${contract.supportedClaimShape}; ${contract.expectedResultMeaning}`,
     runNextAction: contract.runNextAction,
     refusalBoundary: contract.refusalBoundary
   };

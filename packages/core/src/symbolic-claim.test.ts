@@ -25,8 +25,8 @@ describe("symbolic claim compiler", () => {
         variable: "x"
       },
       expectedResult: "1",
-      expectedResultMeaning: "The supported left-hand side simplifies exactly to 1.",
-      boundarySummary: "For real x, sin(x)^2 + cos(x)^2 = 1; The supported left-hand side simplifies exactly to 1."
+      expectedResultMeaning: "The supported left-hand side must simplify exactly to 1.",
+      boundarySummary: "For real x, sin(x)^2 + cos(x)^2 = 1; The supported left-hand side must simplify exactly to 1."
     });
   });
 
@@ -58,6 +58,20 @@ describe("symbolic claim compiler", () => {
   it("keeps only safe polynomial identities inside the explicit residual boundary", () => {
     expect(isCompiledSymbolicClaim("For all real x, (x + 1)^2 = x^2 + 2*x + 2")).toBe(true);
     expect(isCompiledSymbolicClaim("For all real x, 1 / x = x^-1")).toBe(false);
-    expect(isCompiledSymbolicClaim("For all real x, sin(x)^2 + cos(x)^2 = 2")).toBe(false);
+  });
+
+  it("compiles false Pythagorean trig equality claims as refutable symbolic checks", () => {
+    expect(compileSymbolicClaim("For all real x, sin(x)^2 + cos(x)^2 = 2")).toMatchObject({
+      contractId: "symbolic.trig-pythagorean.v1",
+      claimKind: "trig-pythagorean-identity",
+      expectedResult: "2",
+      expectedResultMeaning: "The supported left-hand side must simplify exactly to 2.",
+      boundarySummary: "For real x, sin(x)^2 + cos(x)^2 = 2; The supported left-hand side must simplify exactly to 2.",
+      prompt: {
+        operation: "simplify",
+        expression: "sin(x)^2 + cos(x)^2",
+        variable: "x"
+      }
+    });
   });
 });

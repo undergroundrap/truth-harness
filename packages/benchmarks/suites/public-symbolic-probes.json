@@ -1,0 +1,49 @@
+{
+  "id": "public-symbolic-probes",
+  "title": "Public Symbolic CAS Probes",
+  "description": "Externally sourced symbolic identities and near-miss refutations that require the symbolic CAS route. These are expected to run in the Docker verifier image when host CAS tools are unavailable.",
+  "tasks": [
+    {
+      "id": "wikipedia-pythagorean-trig-identity",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Pythagorean_trigonometric_identity",
+      "sourceTitle": "Wikipedia: Pythagorean trigonometric identity",
+      "firstLoggedAt": "2026-07-03",
+      "category": "symbolic-trigonometry",
+      "level": "level-14-public-symbolic-cas",
+      "aiFailureMode": "States a standard symbolic identity without a replayable CAS trace or independent cross-check.",
+      "prompt": "For real x, sin(x)^2 + cos(x)^2 = 1.",
+      "expectTrust": "cross-checked",
+      "expectEvidenceKind": "symbolic-cas",
+      "expectSummaryIncludes": "Maxima independently agreed",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "compiled symbolic claim contract",
+        "SymPy simplification receipt",
+        "independent Maxima CAS agreement",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only the single-variable sin(x)^2 + cos(x)^2 equality against an explicit numeric constant is compiled. Cross-checked CAS evidence is not a proof-checker-backed theorem."
+    },
+    {
+      "id": "wikipedia-pythagorean-trig-wrong-rhs-refutation",
+      "sourceUrl": "https://en.wikipedia.org/wiki/Pythagorean_trigonometric_identity",
+      "sourceTitle": "Wikipedia: Pythagorean trigonometric identity",
+      "firstLoggedAt": "2026-07-03",
+      "category": "symbolic-trigonometry",
+      "level": "level-14-public-symbolic-cas",
+      "aiFailureMode": "Accepts a near-miss right-hand side for a famous identity because the statement looks familiar.",
+      "prompt": "For real x, sin(x)^2 + cos(x)^2 = 2.",
+      "expectTrust": "refuted",
+      "expectEvidenceKind": "symbolic-cas",
+      "expectSummaryIncludes": "claim refuted",
+      "reviewStatus": "self-reviewed",
+      "requiredEvidence": [
+        "compiled symbolic claim contract",
+        "CAS result mismatch against the stated right-hand side",
+        "independent Maxima agreement with the computed left-hand side",
+        "receipt replay command"
+      ],
+      "checkerBoundary": "Only the stated numeric right-hand-side mismatch is refuted inside the symbolic compiler boundary. This does not prove arbitrary trigonometric theorems."
+    }
+  ]
+}

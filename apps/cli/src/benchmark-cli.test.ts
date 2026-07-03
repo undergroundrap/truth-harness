@@ -53,24 +53,25 @@ describe("benchmark CLI", () => {
 
     expect(human.exitCode).toBe(0);
     expect(human.stdout).toContain("Public Math Problem Catalog 2026 - Agent Handoff");
-    expect(human.stdout).toContain("Selected Public Problem");
+    expect(human.stdout).toContain("Selected Catalog Target");
     expect(human.stdout).toContain("Wrote public math catalog handoff");
     expect(existsSync(outPath)).toBe(true);
     const handoffText = await readFile(outPath, "utf8");
-    expect(handoffText).toContain("SymPy simplification receipt for sin(x)^2 + cos(x)^2 - 1");
-    expect(handoffText).toContain("truth-harness cas check --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
-    expect(handoffText).toContain("npm run docker:cli -- cas check -- --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
+    expect(handoffText).toContain("Stable public source URL");
+    expect(handoffText).toContain("public-symbolic-identity-queue");
+    expect(handoffText).toContain("npm run docker:public-symbolic");
 
     const json = JSON.parse((await runCli(["bench", "catalog", catalogPath, "--handoff", "--json"])).stdout) as {
-      handoff: { schemaVersion: string; nextAction: { kind: string; targetId?: string; recommendedCommands: string[] }; handoffCommands: string[] };
+      handoff: { schemaVersion: string; nextAction: { kind: string; targetId?: string; status?: string; recommendedCommands: string[] }; handoffCommands: string[] };
     };
 
     expect(json.handoff.schemaVersion).toBe("truth-harness.public-math-catalog-handoff.v0");
     expect(json.handoff.nextAction).toMatchObject({
-      kind: "catalog-problem-gap",
-      targetId: "wikipedia-pythagorean-trig-identity"
+      kind: "catalog-target-search",
+      targetId: "public-symbolic-identity-queue",
+      status: "source-needed"
     });
-    expect(json.handoff.nextAction.recommendedCommands).toContain("truth-harness cas check --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write");
+    expect(json.handoff.nextAction.recommendedCommands).toContain("truth-harness bench catalog packages/benchmarks/catalog/public-math-problem-catalog.json --json");
     expect(json.handoff.handoffCommands).toContain(`truth-harness bench catalog ${catalogPath} --handoff`);
   });
   it("shows saved Docker reviewer evidence in engine plans without treating host-missing engines as runnable", async () => {

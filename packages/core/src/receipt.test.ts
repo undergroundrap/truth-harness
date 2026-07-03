@@ -1045,6 +1045,38 @@ describe("createReceipt", () => {
     expect(receipt.evidenceProfile.limitations.join(" ")).toContain("not a formal proof");
   });
 
+  it("refutes false human trig equality claims inside the symbolic compiler boundary", () => {
+    const receipt = createReceipt("For real x, sin(x)^2 + cos(x)^2 = 2.", {
+      maximaCommand: "maxima-test",
+      casRunner: (_command, args) => {
+        if (args[0] === "--version") {
+          return {
+            status: 0,
+            stdout: "Maxima 5.47.0\n",
+            stderr: ""
+          };
+        }
+
+        return {
+          status: 0,
+          stdout: "TRUTH_HARNESS_MAXIMA_STATUS:passed:0\n",
+          stderr: ""
+        };
+      }
+    });
+
+    if (receipt.trust === "unverified" && receipt.findings[0]?.message.includes("SymPy adapter")) {
+      return;
+    }
+
+    expect(receipt.trust).toBe("refuted");
+    expect(receipt.summary).toContain("expected 2");
+    expect(receipt.summary).toContain("claim refuted");
+    expect(receipt.evidenceProfile.kind).toBe("symbolic-cas");
+    expect(receipt.evidenceProfile.outputs).toEqual(
+      expect.arrayContaining(["1", "compilerContract=symbolic.trig-pythagorean.v1", "compiledClaim=trig-pythagorean-identity", "expectedResult=2", "expectedResultCheck=failed"])
+    );
+  });
   it("verifies compiled polynomial identities by checking the residual is zero", () => {
     const receipt = createReceipt("For all real x, (x + 1)^2 = x^2 + 2*x + 1", {
       maximaCommand: "truth-harness-missing-maxima-command"

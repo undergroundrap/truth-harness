@@ -15,7 +15,8 @@
     "defaultCommands": [
       "npm run demo:public-probes",
       "npm run docker:public-probes",
-      "truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --write --fail-on-failures"
+      "truth-harness bench run packages/benchmarks/suites/public-problem-probes.json --write --fail-on-failures",
+      "npm run docker:public-symbolic"
     ]
   },
   "suiteRefs": [
@@ -23,6 +24,11 @@
       "suiteId": "public-problem-probes",
       "path": "packages/benchmarks/suites/public-problem-probes.json",
       "description": "Replayable public bounded-problem probe suite."
+    },
+    {
+      "suiteId": "public-symbolic-probes",
+      "path": "packages/benchmarks/suites/public-symbolic-probes.json",
+      "description": "Docker-oriented public symbolic CAS probes with independent CAS agreement and near-miss refutation."
     }
   ],
   "problems": [
@@ -190,28 +196,43 @@
         "url": "https://en.wikipedia.org/wiki/Pythagorean_trigonometric_identity",
         "accessedAt": "2026-07-03"
       },
-      "status": "unsupported-adapter-gap",
+      "status": "solved-by-local-receipt",
       "domain": "symbolic-trigonometry",
-      "resultSummary": "Stable public source recorded for sin^2(x) + cos^2(x) = 1, but no native-safe public probe or Docker cross-check record has been attached yet.",
+      "resultSummary": "CAS receipts confirm sin(x)^2 + cos(x)^2 = 1 and refute the near-miss right-hand side 2 inside the symbolic compiler boundary.",
       "requiredEvidence": [
-        "SymPy simplification receipt for sin(x)^2 + cos(x)^2 - 1",
-        "Independent Maxima or Sage Docker cross-check",
-        "Near-miss refutation such as sin(x)^2 + cos(x)^2 = 2",
+        "compiled symbolic claim contract",
+        "SymPy simplification receipt for sin(x)^2 + cos(x)^2",
+        "Independent Maxima Docker cross-check",
+        "Near-miss refutation for sin(x)^2 + cos(x)^2 = 2",
         "Benchmark-run record with replay command"
       ],
-      "checkerBoundary": "Symbolic trigonometric identities over the accepted CAS domain; CAS output is cross-checked evidence, not a formal proof.",
+      "checkerBoundary": "Single-variable symbolic trigonometric equality against an explicit numeric constant; cross-checked CAS evidence is not a proof-checker-backed theorem.",
       "recommendedCommands": [
-        "truth-harness cas check --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write",
+        "npm run docker:public-symbolic",
         "npm run docker:cli -- cas check -- --operation simplify --expression \"sin(x)^2 + cos(x)^2\" --result 1 --write",
         "truth-harness verify \"For real x, sin(x)^2 + cos(x)^2 = 1.\" --write --json"
+      ],
+      "suitePath": "packages/benchmarks/suites/public-symbolic-probes.json",
+      "suiteTaskIds": [
+        "wikipedia-pythagorean-trig-identity",
+        "wikipedia-pythagorean-trig-wrong-rhs-refutation"
+      ],
+      "verifierBackends": [
+        "local-sympy-subprocess",
+        "local-maxima-symbolic-subprocess",
+        "docker-truth-harness"
+      ],
+      "trustOutcomes": [
+        "cross-checked",
+        "refuted"
       ]
     }
   ],
   "nextTargets": [
     {
       "id": "public-symbolic-identity-queue",
-      "status": "adapter-needed",
-      "goal": "Turn the sourced Pythagorean trig identity into native-safe and Docker symbolic public probes with independent CAS agreement before cataloging it as solved."
+      "status": "source-needed",
+      "goal": "Find the next stable public symbolic, forum, or applied math problem with a narrow verifier boundary and a near-miss refutation path."
     }
   ],
   "honestyBoundary": "This catalog records Truth Harness behavior on public problems. It is not a claim that the project can solve arbitrary contest, forum, research, or theorem problems. Unsupported public problems become explicit verifier backlog."
