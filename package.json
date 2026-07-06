@@ -118,7 +118,11 @@
     "proof:lean-suite": "npm run proof:lean-fixture && npm run proof:theorem-template && npm run proof:repair-fixture:gate",
     "proof:launch": "npm run demo:replay && npm run demo:render && npm run demo:parity && npm run demo:bench && npm run demo:physics && npm run demo:numeric && npm run demo:symbolic && npm run demo:check",
     "proof:launch:engines": "npm run proof:launch && npm run demo:cas && npm run demo:smt",
-    "test": "vitest run"
+    "test": "vitest run",
+    "demo:millennium-stress": "node apps/cli/dist/index.js bench run packages/benchmarks/suites/frontier-honesty-challenge.json --fail-on-failures",
+    "demo:millennium-catalog": "node apps/cli/dist/index.js bench catalog packages/benchmarks/catalog/millennium-stress-test-catalog.json --handoff",
+    "docker:millennium-stress": "docker compose run --rm truth-harness node apps/cli/dist/index.js bench run packages/benchmarks/suites/frontier-honesty-challenge.json --fail-on-failures",
+    "docker:millennium-catalog": "docker compose run --rm truth-harness node apps/cli/dist/index.js bench catalog packages/benchmarks/catalog/millennium-stress-test-catalog.json --handoff"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

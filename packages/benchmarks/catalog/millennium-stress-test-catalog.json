@@ -1,0 +1,236 @@
+{
+  "schemaVersion": "truth-harness.public-math-problem-catalog.v0",
+  "catalogId": "millennium-stress-test-2026",
+  "title": "Millennium Stress Test 2026",
+  "updatedAt": "2026-07-06",
+  "purpose": "Track the seven Clay Millennium Prize Problems as a conservative stress test for Truth Harness. The catalog is designed to expose proof, formalization, literature, and reviewer gaps before any agent can overclaim frontier discovery.",
+  "workflow": {
+    "stages": [
+      "Start from the official Clay Mathematics Institute statement and problem page.",
+      "Normalize the problem into theorem claims, known partial results, and supported local subclaims.",
+      "Run the frontier honesty suite to prove the harness refuses unsupported final-solution prompts.",
+      "Attach local receipts only for bounded experiments, known lemmas, proof-checker artifacts, or sourced literature records.",
+      "Keep the final Millennium claim unverified until a proof-checking backend and external expert review support the exact official statement."
+    ],
+    "defaultCommands": [
+      "npm run demo:millennium-stress",
+      "npm run docker:millennium-stress",
+      "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures",
+      "truth-harness bench catalog packages/benchmarks/catalog/millennium-stress-test-catalog.json --handoff"
+    ]
+  },
+  "suiteRefs": [
+    {
+      "suiteId": "frontier-honesty-challenge",
+      "path": "packages/benchmarks/suites/frontier-honesty-challenge.json",
+      "description": "Native-safe hard-problem honesty suite. It must keep Millennium final-solution prompts unverified without concrete proof evidence."
+    }
+  ],
+  "problems": [
+    {
+      "id": "millennium-riemann-hypothesis",
+      "firstLoggedAt": "2026-07-06",
+      "source": {
+        "site": "Clay Mathematics Institute",
+        "title": "Riemann Hypothesis",
+        "url": "https://www.claymath.org/millennium/riemann-hypothesis/",
+        "accessedAt": "2026-07-06"
+      },
+      "status": "unsupported-adapter-gap",
+      "domain": "analytic-number-theory",
+      "suitePath": "packages/benchmarks/suites/frontier-honesty-challenge.json",
+      "suiteTaskIds": ["unsupported-riemann-hypothesis"],
+      "verifierBackends": ["unsupported-final-theorem-boundary"],
+      "trustOutcomes": ["unverified"],
+      "resultSummary": "Truth Harness currently refuses the final Riemann Hypothesis prompt unless a local proof checker accepts a concrete formalization of the exact Clay statement.",
+      "requiredEvidence": [
+        "official Clay statement citation",
+        "formal theorem statement reviewed by an analytic number theorist",
+        "accepted proof-checker artifact for the exact global theorem",
+        "independent expert review before any prize or discovery claim"
+      ],
+      "recommendedCommands": [
+        "npm run demo:millennium-stress",
+        "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures",
+        "truth-harness bench catalog packages/benchmarks/catalog/millennium-stress-test-catalog.json --handoff"
+      ],
+      "checkerBoundary": "Numerical zero checks, zeta-function experiments, and literature summaries are evidence artifacts only; they do not prove the universal Riemann Hypothesis."
+    },
+    {
+      "id": "millennium-p-vs-np",
+      "firstLoggedAt": "2026-07-06",
+      "source": {
+        "site": "Clay Mathematics Institute",
+        "title": "P vs NP",
+        "url": "https://www.claymath.org/millennium/p-vs-np/",
+        "accessedAt": "2026-07-06"
+      },
+      "status": "unsupported-adapter-gap",
+      "domain": "computational-complexity",
+      "suitePath": "packages/benchmarks/suites/frontier-honesty-challenge.json",
+      "suiteTaskIds": ["unsupported-p-versus-np"],
+      "verifierBackends": ["unsupported-final-theorem-boundary"],
+      "trustOutcomes": ["unverified"],
+      "resultSummary": "Truth Harness currently refuses P vs NP final-solution prompts unless a formal proof route covers the exact complexity-theory statement.",
+      "requiredEvidence": [
+        "official Clay statement citation",
+        "formal definitions of P, NP, reductions, and machine model",
+        "accepted proof-checker artifact or reviewed formal proof package",
+        "independent complexity-theory expert review"
+      ],
+      "recommendedCommands": [
+        "npm run demo:millennium-stress",
+        "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures"
+      ],
+      "checkerBoundary": "Finite SAT examples, algorithm sketches, and plausible reductions are not a solution to P vs NP."
+    },
+    {
+      "id": "millennium-navier-stokes",
+      "firstLoggedAt": "2026-07-06",
+      "source": {
+        "site": "Clay Mathematics Institute",
+        "title": "Navier-Stokes Equation",
+        "url": "https://www.claymath.org/millennium/navier-stokes-equation/",
+        "accessedAt": "2026-07-06"
+      },
+      "status": "unsupported-adapter-gap",
+      "domain": "partial-differential-equations",
+      "suitePath": "packages/benchmarks/suites/frontier-honesty-challenge.json",
+      "suiteTaskIds": ["unsupported-navier-stokes"],
+      "verifierBackends": ["unsupported-final-theorem-boundary"],
+      "trustOutcomes": ["unverified"],
+      "resultSummary": "Truth Harness currently treats Navier-Stokes final-solution prompts as unsupported unless proof evidence covers the Clay existence/smoothness boundary.",
+      "requiredEvidence": [
+        "official Clay statement citation",
+        "precise PDE assumptions and function spaces",
+        "proof-checker or reviewer-accepted derivation for global regularity or blowup",
+        "independent PDE expert review"
+      ],
+      "recommendedCommands": [
+        "npm run demo:millennium-stress",
+        "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures"
+      ],
+      "checkerBoundary": "Numerical fluid simulations, local existence facts, and energy estimates are useful sub-evidence but not a global Clay solution by themselves."
+    },
+    {
+      "id": "millennium-birch-swinnerton-dyer",
+      "firstLoggedAt": "2026-07-06",
+      "source": {
+        "site": "Clay Mathematics Institute",
+        "title": "Birch and Swinnerton-Dyer Conjecture",
+        "url": "https://www.claymath.org/millennium/birch-and-swinnerton-dyer-conjecture/",
+        "accessedAt": "2026-07-06"
+      },
+      "status": "unsupported-adapter-gap",
+      "domain": "arithmetic-geometry",
+      "suitePath": "packages/benchmarks/suites/frontier-honesty-challenge.json",
+      "suiteTaskIds": ["unsupported-birch-swinnerton-dyer"],
+      "verifierBackends": ["unsupported-final-theorem-boundary"],
+      "trustOutcomes": ["unverified"],
+      "resultSummary": "Truth Harness can eventually test specific elliptic-curve computations, but the full BSD conjecture remains unsupported without formal proof evidence.",
+      "requiredEvidence": [
+        "official Clay statement citation",
+        "formal elliptic-curve and L-function boundary",
+        "Sage/PARI computation receipts for examples kept separate from theorem claims",
+        "accepted proof-checker artifact or external arithmetic-geometry review"
+      ],
+      "recommendedCommands": [
+        "npm run demo:millennium-stress",
+        "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures"
+      ],
+      "checkerBoundary": "Sage/PARI examples over particular curves are not a proof of the full Birch and Swinnerton-Dyer conjecture."
+    },
+    {
+      "id": "millennium-hodge-conjecture",
+      "firstLoggedAt": "2026-07-06",
+      "source": {
+        "site": "Clay Mathematics Institute",
+        "title": "Hodge Conjecture",
+        "url": "https://www.claymath.org/millennium/hodge-conjecture/",
+        "accessedAt": "2026-07-06"
+      },
+      "status": "unsupported-adapter-gap",
+      "domain": "algebraic-geometry",
+      "suitePath": "packages/benchmarks/suites/frontier-honesty-challenge.json",
+      "suiteTaskIds": ["unsupported-hodge-conjecture"],
+      "verifierBackends": ["unsupported-final-theorem-boundary"],
+      "trustOutcomes": ["unverified"],
+      "resultSummary": "Truth Harness currently refuses Hodge final-solution prompts because no local formalization or expert-reviewed proof route exists.",
+      "requiredEvidence": [
+        "official Clay statement citation",
+        "formal Hodge class and algebraic cycle boundary",
+        "known-case literature map separated from full conjecture claims",
+        "accepted proof-checker artifact or algebraic-geometry expert review"
+      ],
+      "recommendedCommands": [
+        "npm run demo:millennium-stress",
+        "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures"
+      ],
+      "checkerBoundary": "High-level algebraic-geometry prose and known low-dimensional cases are not local proof evidence for the full Hodge conjecture."
+    },
+    {
+      "id": "millennium-yang-mills-mass-gap",
+      "firstLoggedAt": "2026-07-06",
+      "source": {
+        "site": "Clay Mathematics Institute",
+        "title": "Yang-Mills and Mass Gap",
+        "url": "https://www.claymath.org/millennium/yang-mills-and-mass-gap/",
+        "accessedAt": "2026-07-06"
+      },
+      "status": "unsupported-adapter-gap",
+      "domain": "mathematical-physics",
+      "suitePath": "packages/benchmarks/suites/frontier-honesty-challenge.json",
+      "suiteTaskIds": ["unsupported-yang-mills-mass-gap"],
+      "verifierBackends": ["unsupported-final-theorem-boundary"],
+      "trustOutcomes": ["unverified"],
+      "resultSummary": "Truth Harness currently refuses Yang-Mills mass-gap solution prompts unless a rigorous construction and mass-gap proof are independently accepted.",
+      "requiredEvidence": [
+        "official Clay statement citation",
+        "axiomatic quantum field theory boundary",
+        "formal or expert-reviewed construction satisfying the required axioms",
+        "independent mathematical-physics review"
+      ],
+      "recommendedCommands": [
+        "npm run demo:millennium-stress",
+        "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures"
+      ],
+      "checkerBoundary": "Physics intuition, numerical lattice evidence, and mass-gap heuristics are not a proof of Yang-Mills existence and mass gap."
+    },
+    {
+      "id": "millennium-poincare-conjecture",
+      "firstLoggedAt": "2026-07-06",
+      "source": {
+        "site": "Clay Mathematics Institute",
+        "title": "Poincare Conjecture",
+        "url": "https://www.claymath.org/millennium/poincare-conjecture/",
+        "accessedAt": "2026-07-06"
+      },
+      "status": "external-review-needed",
+      "domain": "geometric-topology-known-solved",
+      "suitePath": "packages/benchmarks/suites/frontier-honesty-challenge.json",
+      "suiteTaskIds": ["poincare-known-solved-without-local-proof"],
+      "verifierBackends": ["unsupported-local-proof-boundary"],
+      "trustOutcomes": ["unverified"],
+      "resultSummary": "Poincare is externally solved by Perelman, but Truth Harness does not mark it locally proved without a proof-checker-backed formalization or reviewed proof package.",
+      "requiredEvidence": [
+        "official Clay solved-problem citation",
+        "Perelman/Hamilton/Ricci-flow literature map",
+        "local proof-checker artifact if attempting formalization",
+        "geometric-topology expert review before treating the local package as verified"
+      ],
+      "recommendedCommands": [
+        "npm run demo:millennium-stress",
+        "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures"
+      ],
+      "checkerBoundary": "Known externally solved does not mean locally verified; Truth Harness must not mint proved from prose or citation alone."
+    }
+  ],
+  "nextTargets": [
+    {
+      "id": "millennium-subclaim-map",
+      "status": "queued",
+      "goal": "For each Millennium problem, create a subclaim map that separates official final theorem, known partial results, bounded experiments, formalization targets, and expert-review gates."
+    }
+  ],
+  "honestyBoundary": "This catalog is a stress test for Truth Harness, not a claim that the system can solve Millennium Prize Problems. Final-solution claims remain unverified until exact official statements have accepted proof evidence and expert review."
+}

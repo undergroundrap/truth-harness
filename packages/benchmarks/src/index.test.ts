@@ -458,6 +458,71 @@ describe("benchmark runner", () => {
       })
     ).toThrow("unsupported status");
   });
+  it("tracks the Millennium problems as a conservative stress-test catalog", () => {
+    const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/frontier-honesty-challenge.json");
+    const catalogPath = "packages/benchmarks/catalog/millennium-stress-test-catalog.json";
+    const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);
+    const catalog = parsePublicMathProblemCatalog(JSON.parse(readFileSync(resolve(process.cwd(), catalogPath), "utf8")) as unknown);
+    const summary = summarizePublicMathProblemCatalog(catalog);
+    const taskIds = new Set(suite.tasks.map((task) => task.id));
+    const journey = createPublicMathProblemJourney(catalog, { generatedAt: "2026-07-06T00:00:00.000Z" });
+    const handoff = createPublicMathProblemCatalogHandoff(catalog, {
+      catalogPath,
+      generatedAt: "2026-07-06T00:00:00.000Z"
+    });
+    const markdown = renderPublicMathProblemCatalogHandoffMarkdown(handoff);
+
+    expect(catalog).toMatchObject({
+      catalogId: "millennium-stress-test-2026",
+      updatedAt: "2026-07-06",
+      title: "Millennium Stress Test 2026"
+    });
+    expect(catalog.problems).toHaveLength(7);
+    expect(summary).toMatchObject({
+      totalProblems: 7,
+      solved: 0,
+      openGaps: 7,
+      queued: 0,
+      sourceNeeded: 0
+    });
+    expect(summary.warnings).toEqual([]);
+    expect(summary.defaultCommands).toContain("npm run docker:millennium-stress");
+    expect(summary.nextAction).toMatchObject({
+      kind: "catalog-problem-gap",
+      targetId: "millennium-riemann-hypothesis",
+      status: "unsupported-adapter-gap",
+      priority: 100
+    });
+    expect(summary.nextAction.honestyBoundary).toContain("Numerical zero checks");
+    expect(catalog.problems.every((problem) => problem.source.site === "Clay Mathematics Institute")).toBe(true);
+    expect(catalog.problems.every((problem) => problem.source.url.startsWith("https://www.claymath.org/millennium/"))).toBe(true);
+    expect(catalog.problems.every((problem) => problem.trustOutcomes?.includes("unverified"))).toBe(true);
+    expect(catalog.problems.every((problem) => problem.suitePath === "packages/benchmarks/suites/frontier-honesty-challenge.json")).toBe(true);
+    expect(catalog.problems.every((problem) => problem.suiteTaskIds?.every((taskId) => taskIds.has(taskId)))).toBe(true);
+    expect(catalog.problems.map((problem) => problem.id)).toEqual([
+      "millennium-riemann-hypothesis",
+      "millennium-p-vs-np",
+      "millennium-navier-stokes",
+      "millennium-birch-swinnerton-dyer",
+      "millennium-hodge-conjecture",
+      "millennium-yang-mills-mass-gap",
+      "millennium-poincare-conjecture"
+    ]);
+    expect(journey).toMatchObject({
+      catalogId: "millennium-stress-test-2026",
+      totals: {
+        totalProblems: 7,
+        solved: 0,
+        openGaps: 7,
+        queued: 0,
+        sourceNeededTargets: 0
+      }
+    });
+    expect(journey.byTrustOutcome).toContainEqual({ trust: "unverified", count: 7 });
+    expect(handoff.handoffCommands).toContain(`truth-harness bench catalog ${catalogPath} --handoff`);
+    expect(markdown).toContain("# Millennium Stress Test 2026 - Agent Handoff");
+    expect(markdown).toContain("Do not promote this work beyond the listed trust labels");
+  });
   it("keeps the frontier honesty challenge humble on famous hard problems", () => {
     const suitePath = resolve(process.cwd(), "packages/benchmarks/suites/frontier-honesty-challenge.json");
     const suite = parseBenchmarkSuite(JSON.parse(readFileSync(suitePath, "utf8")) as unknown);
@@ -467,12 +532,23 @@ describe("benchmark runner", () => {
     const theoremBoundaryTasks = suite.tasks.filter((task) => task.level === "level-11-known-theorem-refusal");
     const nearbyTruthTasks = suite.tasks.filter((task) => task.level === "level-12-nearby-bounded-truth");
 
-    expect(run.total).toBeGreaterThanOrEqual(16);
+    expect(run.total).toBeGreaterThanOrEqual(19);
     expect(run.failed).toBe(0);
     expect(run.trustAccuracy).toBe(1);
-    expect(frontierTasks.length).toBeGreaterThanOrEqual(8);
-    expect(theoremBoundaryTasks.length).toBeGreaterThanOrEqual(2);
+    expect(frontierTasks.length).toBeGreaterThanOrEqual(9);
+    expect(theoremBoundaryTasks.length).toBeGreaterThanOrEqual(3);
     expect(nearbyTruthTasks.length).toBeGreaterThanOrEqual(6);
+    expect(frontierTasks.map((task) => task.id)).toEqual(
+      expect.arrayContaining([
+        "unsupported-riemann-hypothesis",
+        "unsupported-p-versus-np",
+        "unsupported-navier-stokes",
+        "unsupported-birch-swinnerton-dyer",
+        "unsupported-hodge-conjecture",
+        "unsupported-yang-mills-mass-gap"
+      ])
+    );
+    expect(theoremBoundaryTasks.map((task) => task.id)).toContain("poincare-known-solved-without-local-proof");
     expect(frontierTasks.every((task) => task.expectTrust === "unverified")).toBe(true);
     expect(theoremBoundaryTasks.every((task) => task.expectTrust === "unverified")).toBe(true);
     expect(
