@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/hum.math_obligation.v0.schema.json",
+  "title": "Hum Math Obligation",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "obligation_id",
+    "obligation_kind",
+    "source_span",
+    "graph_node_id",
+    "claim_text",
+    "normalized_formal_claim",
+    "assumptions",
+    "allowed_effects",
+    "program_shape",
+    "resource_model",
+    "confidence_requested",
+    "timeout_budget",
+    "privacy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "hum.math_obligation.v0"
+    },
+    "obligation_id": {
+      "type": "string",
+      "pattern": "^hum_obl_[a-z0-9_]{4,96}$"
+    },
+    "obligation_kind": {
+      "enum": ["allocation_freedom", "peak_memory_bound", "purity_replayability"]
+    },
+    "source_span": {
+      "$ref": "#/$defs/source_span"
+    },
+    "graph_node_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "claim_text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "normalized_formal_claim": {
+      "type": "object",
+      "required": ["representation", "expression", "variables"],
+      "properties": {
+        "representation": {
+          "enum": ["hum_static_claim_v0", "smtlib2", "json_logic", "plain_text"]
+        },
+        "expression": {
+          "type": "string",
+          "minLength": 1
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "sort"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sort": {
+                "type": "string",
+                "minLength": 1
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "expected_bound": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assumption"
+      }
+    },
+    "allowed_effects": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "none",
+          "read_memory",
+          "write_local_memory",
+          "heap_allocate",
+          "io",
+          "network",
+          "randomness",
+          "time",
+          "concurrency",
+          "unsafe_pointer",
+          "volatile_hardware"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "program_shape": {
+      "$ref": "#/$defs/program_shape"
+    },
+    "resource_model": {
+      "$ref": "#/$defs/resource_model"
+    },
+    "confidence_requested": {
+      "enum": ["machine_checkable", "counterexample_search", "bounded_static_analysis", "evidence_only"]
+    },
+    "timeout_budget": {
+      "type": "object",
+      "required": ["timeout_ms", "max_solver_memory_bytes"],
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_solver_memory_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_steps": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    }
+  },
+  "$defs": {
+    "source_span": {
+      "type": "object",
+      "required": ["file", "start_line", "start_column", "end_line", "end_column"],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "start_column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_column": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "assumption": {
+      "type": "object",
+      "required": ["assumption_id", "evidence_class", "text"],
+      "properties": {
+        "assumption_id": {
+          "type": "string",
+          "pattern": "^assume_[a-z0-9_]{4,96}$"
+        },
+        "evidence_class": {
+          "enum": ["theorem", "benchmark", "static_proof", "model_assumption", "heuristic", "compiler_fact"]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "program_shape": {
+      "type": "object",
+      "required": ["primary", "access_pattern", "mutation", "io", "concurrency", "hardware"],
+      "properties": {
+        "primary": {
+          "enum": [
+            "streaming_sequential",
+            "tree_dag_circuit",
+            "oblivious_random_access",
+            "arbitrary_random_access",
+            "pointer_mutation_heavy",
+            "io_effectful",
+            "concurrent",
+            "hardware_specific"
+          ]
+        },
+        "access_pattern": {
+          "enum": ["none", "sequential", "oblivious_random", "arbitrary_random", "hardware_bound"]
+        },
+        "mutation": {
+          "enum": ["none", "local", "bounded", "unbounded", "pointer_aliasing_unknown"]
+        },
+        "io": {
+          "enum": ["none", "declared", "ambient_unknown"]
+        },
+        "concurrency": {
+          "enum": ["none", "single_threaded", "structured", "unstructured"]
+        },
+        "hardware": {
+          "enum": ["abstract", "target_specific", "volatile_or_device_bound"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "resource_model": {
+      "type": "object",
+      "required": ["machine_model", "word_bits", "integer_overflow", "allocation_model"],
+      "properties": {
+        "machine_model": {
+          "enum": ["hum_abstract_machine_v0", "hum_word_ram_v0", "target_profile_v0"]
+        },
+        "word_bits": {
+          "type": "integer",
+          "minimum": 8
+        },
+        "integer_overflow": {
+          "enum": ["checked", "wrapping", "saturating", "undefined"]
+        },
+        "allocation_model": {
+          "enum": ["none", "stack", "region", "heap", "unknown"]
+        },
+        "peak_memory_unit": {
+          "enum": ["bytes", "words", "abstract_cells"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["local_first", "network_access", "cloud_access", "telemetry"],
+      "properties": {
+        "local_first": {
+          "const": true
+        },
+        "network_access": {
+          "const": "none"
+        },
+        "cloud_access": {
+          "const": "none"
+        },
+        "telemetry": {
+          "const": "none"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

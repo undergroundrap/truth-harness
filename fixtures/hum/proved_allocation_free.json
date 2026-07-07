@@ -1,0 +1,61 @@
+{
+  "schema_version": "hum.math_obligation.v0",
+  "obligation_id": "hum_obl_allocation_free_push_byte",
+  "obligation_kind": "allocation_freedom",
+  "source_span": {
+    "file": "src/buffer.hum",
+    "start_line": 12,
+    "start_column": 1,
+    "end_line": 19,
+    "end_column": 2
+  },
+  "graph_node_id": "hum_sem_node_push_byte",
+  "claim_text": "push_byte writes into a caller-provided fixed buffer and performs no heap allocation.",
+  "normalized_formal_claim": {
+    "representation": "hum_static_claim_v0",
+    "expression": "heap_allocations(push_byte) == 0",
+    "variables": [
+      {
+        "name": "heap_allocations",
+        "sort": "nat"
+      }
+    ],
+    "expected_bound": "0"
+  },
+  "assumptions": [
+    {
+      "assumption_id": "assume_fixed_buffer_capacity",
+      "evidence_class": "compiler_fact",
+      "text": "The destination buffer capacity is supplied by the caller and checked before the write.",
+      "source_ref": "hum_graph:hum_sem_node_push_byte"
+    }
+  ],
+  "allowed_effects": ["read_memory", "write_local_memory"],
+  "program_shape": {
+    "primary": "streaming_sequential",
+    "access_pattern": "sequential",
+    "mutation": "local",
+    "io": "none",
+    "concurrency": "single_threaded",
+    "hardware": "abstract"
+  },
+  "resource_model": {
+    "machine_model": "hum_abstract_machine_v0",
+    "word_bits": 64,
+    "integer_overflow": "checked",
+    "allocation_model": "none",
+    "peak_memory_unit": "bytes"
+  },
+  "confidence_requested": "machine_checkable",
+  "timeout_budget": {
+    "timeout_ms": 1000,
+    "max_solver_memory_bytes": 67108864,
+    "max_steps": 10000
+  },
+  "privacy": {
+    "local_first": true,
+    "network_access": "none",
+    "cloud_access": "none",
+    "telemetry": "none"
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "schema_version": "hum.math_result.v0",
+  "result_id": "hum_res_allocation_free_build_packet",
+  "obligation_id": "hum_obl_allocation_free_build_packet",
+  "created_at": "2026-07-07T00:00:00.000Z",
+  "status": "refuted",
+  "trust_label": "refuted",
+  "evidence_classes": ["counterexample", "checkable_trace"],
+  "proof_certificate": null,
+  "checkable_trace": {
+    "trace_kind": "static_analyzer_trace",
+    "steps": [
+      "Inspect semantic graph node hum_sem_node_build_packet.",
+      "Follow call edge to packet_vec_new.",
+      "Observe heap_allocate effect before return."
+    ],
+    "replay_command": "truth-harness hum verify fixtures/hum/refuted_allocation_free.json --out .hum/evidence/"
+  },
+  "counterexample": {
+    "description": "The exported graph contains a reachable heap allocation call.",
+    "witness": {
+      "graph_node_id": "hum_sem_node_build_packet",
+      "call_path": ["build_packet", "packet_vec_new"],
+      "effect": "heap_allocate"
+    },
+    "replay_command": "truth-harness hum verify fixtures/hum/refuted_allocation_free.json --out .hum/evidence/"
+  },
+  "assumptions_used": ["assume_packet_builder_calls_are_visible"],
+  "model_limitations": [
+    "This refutation is about the exported graph, not every possible future implementation of build_packet."
+  ],
+  "confidence_level": "machine_checked",
+  "source_spans_affected": [
+    {
+      "file": "src/packet.hum",
+      "start_line": 31,
+      "start_column": 1,
+      "end_line": 48,
+      "end_column": 2
+    }
+  ],
+  "suggested_hum_evidence_artifact": {
+    "artifact_kind": "hum_counterexample_report",
+    "path": ".hum/evidence/hum_obl_allocation_free_build_packet.json",
+    "summary": "Allocation freedom refuted by a reachable heap allocation effect."
+  },
+  "llm_proof_accepted": false,
+  "privacy": {
+    "local_first": true,
+    "network_access": "none",
+    "cloud_access": "none",
+    "telemetry": "none"
+  }
+}

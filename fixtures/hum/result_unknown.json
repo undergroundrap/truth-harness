@@ -1,0 +1,39 @@
+{
+  "schema_version": "hum.math_result.v0",
+  "result_id": "hum_res_purity_replayability_normalize_buffer",
+  "obligation_id": "hum_obl_purity_replayability_normalize_buffer",
+  "created_at": "2026-07-07T00:00:00.000Z",
+  "status": "unknown",
+  "trust_label": "unknown",
+  "evidence_classes": ["model_assumption", "none"],
+  "proof_certificate": null,
+  "checkable_trace": null,
+  "counterexample": null,
+  "assumptions_used": ["assume_raw_pointer_aliasing_unknown"],
+  "model_limitations": [
+    "Raw pointer aliasing is not proved absent.",
+    "The V0 engine does not prove replayability for pointer-mutation-heavy shapes."
+  ],
+  "confidence_level": "unknown",
+  "source_spans_affected": [
+    {
+      "file": "src/normalize.hum",
+      "start_line": 8,
+      "start_column": 1,
+      "end_line": 29,
+      "end_column": 2
+    }
+  ],
+  "suggested_hum_evidence_artifact": {
+    "artifact_kind": "hum_unknown_report",
+    "path": ".hum/evidence/hum_obl_purity_replayability_normalize_buffer.json",
+    "summary": "Replayability remains unknown until aliasing and mutation effects are proved."
+  },
+  "llm_proof_accepted": false,
+  "privacy": {
+    "local_first": true,
+    "network_access": "none",
+    "cloud_access": "none",
+    "telemetry": "none"
+  }
+}

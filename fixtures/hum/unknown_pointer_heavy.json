@@ -1,0 +1,65 @@
+{
+  "schema_version": "hum.math_obligation.v0",
+  "obligation_id": "hum_obl_purity_replayability_normalize_buffer",
+  "obligation_kind": "purity_replayability",
+  "source_span": {
+    "file": "src/normalize.hum",
+    "start_line": 8,
+    "start_column": 1,
+    "end_line": 29,
+    "end_column": 2
+  },
+  "graph_node_id": "hum_sem_node_normalize_buffer",
+  "claim_text": "normalize_buffer is replayable for the same input bytes.",
+  "normalized_formal_claim": {
+    "representation": "hum_static_claim_v0",
+    "expression": "same_input_bytes(normalize_buffer) -> same_output_bytes(normalize_buffer)",
+    "variables": [
+      {
+        "name": "input_bytes",
+        "sort": "byte_slice"
+      },
+      {
+        "name": "output_bytes",
+        "sort": "byte_slice"
+      }
+    ],
+    "expected_bound": null
+  },
+  "assumptions": [
+    {
+      "assumption_id": "assume_raw_pointer_aliasing_unknown",
+      "evidence_class": "model_assumption",
+      "text": "The current Hum graph does not prove that raw source and destination pointers do not alias.",
+      "source_ref": "hum_graph:hum_sem_node_normalize_buffer"
+    }
+  ],
+  "allowed_effects": ["read_memory", "write_local_memory", "unsafe_pointer"],
+  "program_shape": {
+    "primary": "pointer_mutation_heavy",
+    "access_pattern": "arbitrary_random",
+    "mutation": "pointer_aliasing_unknown",
+    "io": "none",
+    "concurrency": "single_threaded",
+    "hardware": "abstract"
+  },
+  "resource_model": {
+    "machine_model": "hum_abstract_machine_v0",
+    "word_bits": 64,
+    "integer_overflow": "checked",
+    "allocation_model": "unknown",
+    "peak_memory_unit": "bytes"
+  },
+  "confidence_requested": "bounded_static_analysis",
+  "timeout_budget": {
+    "timeout_ms": 1000,
+    "max_solver_memory_bytes": 67108864,
+    "max_steps": 10000
+  },
+  "privacy": {
+    "local_first": true,
+    "network_access": "none",
+    "cloud_access": "none",
+    "telemetry": "none"
+  }
+}
