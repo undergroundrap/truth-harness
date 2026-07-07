@@ -197,6 +197,7 @@ import {
   writeWebUiReview,
   writeClaimChart,
   validateEngineCaseBundleJson,
+  validateJsonSchema,
   createValidationPlan,
   type ClaimFileCheck,
   type BenchmarkArtifactSummary,
@@ -490,6 +491,30 @@ program
     }
   );
 
+const hum = program.command("hum").description("Validate Hum language contract artifacts without running solvers.");
+
+hum
+  .command("validate")
+  .description("Validate Hum math obligation/result JSON from files or stdin.")
+  .argument("[inputs...]", "JSON files to validate. Use '-' or no inputs to read stdin.")
+  .option("--kind <kind>", "obligation, result, or auto", "auto")
+  .option("--json", "Print stable machine-readable validation JSON")
+  .option("--allow-unknown-schema-version", "Validate compatible unknown Hum schema versions against the selected V0 shape")
+  .action(async (inputs: string[], options: { kind: string; json?: boolean; allowUnknownSchemaVersion?: boolean }) => {
+    const result = await validateHumContractInputs({
+      inputs: inputs.length > 0 ? inputs : ["-"],
+      kind: parseHumValidateKind(options.kind),
+      allowUnknownSchemaVersion: options.allowUnknownSchemaVersion === true
+    });
+
+    if (options.json) {
+      printJson(result);
+    } else {
+      printHumValidateSummary(result);
+    }
+
+    process.exitCode = result.exit_code;
+  });
 const route = program.command("route").description("Manage persisted verifier routes in the local workspace.");
 
 route
@@ -5518,7 +5543,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   await program.parseAsync(process.argv);
 }
 
-export { program };
+export { program, validateHumContractInputs };
 
 function parseAskArgs(tokens: string[]): { problem: string; json: boolean; out?: string } {
   const problemTokens: string[] = [];
@@ -11484,6 +11509,344 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
   return normalized ? normalized : undefined;
 }
 
+type HumValidateKind = "auto" | "obligation" | "result";
+type HumValidateStatus = "valid" | "invalid" | "tool_error";
+
+type HumValidateIssue = {
+  path: string;
+  message: string;
+  severity: "error";
+  rule: string;
+};
+
+type HumValidateInputResult = {
+  source: string;
+  kind: "obligation" | "result" | "unknown";
+  schema_version: string | null;
+  valid: boolean;
+  issues: HumValidateIssue[];
+  warnings: string[];
+  summary: string;
+};
+
+type HumValidateReport = {
+  schema_version: "truth-harness.hum_validate.v0";
+  status: HumValidateStatus;
+  exit_code: 0 | 1 | 2;
+  summary: {
+    total: number;
+    valid: number;
+    invalid: number;
+    tool_errors: number;
+  };
+  inputs: HumValidateInputResult[];
+  privacy: {
+    local_first: true;
+    network_access: "none";
+    cloud_access: "none";
+    telemetry: "none";
+  };
+};
+
+const HUM_OBLIGATION_SCHEMA_VERSION = "hum.math_obligation.v0";
+const HUM_RESULT_SCHEMA_VERSION = "hum.math_result.v0";
+const HUM_VALIDATE_SCHEMA_VERSION = "truth-harness.hum_validate.v0";
+const HUM_VALIDATE_PRIVACY = {
+  local_first: true,
+  network_access: "none",
+  cloud_access: "none",
+  telemetry: "none"
+} as const;
+
+function parseHumValidateKind(value: string): HumValidateKind {
+  if (value === "auto" || value === "obligation" || value === "result") {
+    return value;
+  }
+
+  throw new Error(`Unsupported Hum validate kind ${JSON.stringify(value)}. Expected auto, obligation, or result.`);
+}
+
+async function validateHumContractInputs(input: {
+  inputs: string[];
+  kind: HumValidateKind;
+  allowUnknownSchemaVersion: boolean;
+  stdinText?: string;
+}): Promise<HumValidateReport> {
+  const results: HumValidateInputResult[] = [];
+
+  for (const source of input.inputs) {
+    results.push(await validateHumContractInput(source, input.kind, input.allowUnknownSchemaVersion, input.stdinText));
+  }
+
+  const toolErrors = results.filter((result) => result.issues.some((issue) => issue.rule === "tool_io_failure")).length;
+  const invalid = results.filter((result) => !result.valid && !result.issues.some((issue) => issue.rule === "tool_io_failure")).length;
+  const valid = results.filter((result) => result.valid).length;
+  const status: HumValidateStatus = toolErrors > 0 ? "tool_error" : invalid > 0 ? "invalid" : "valid";
+  const exitCode = status === "valid" ? 0 : status === "invalid" ? 1 : 2;
+
+  return {
+    schema_version: HUM_VALIDATE_SCHEMA_VERSION,
+    status,
+    exit_code: exitCode,
+    summary: {
+      total: results.length,
+      valid,
+      invalid,
+      tool_errors: toolErrors
+    },
+    inputs: results,
+    privacy: HUM_VALIDATE_PRIVACY
+  };
+}
+
+async function validateHumContractInput(
+  source: string,
+  requestedKind: HumValidateKind,
+  allowUnknownSchemaVersion: boolean,
+  stdinText?: string
+): Promise<HumValidateInputResult> {
+  let raw: string;
+  try {
+    raw = await readHumValidateSource(source, stdinText);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return humValidateInputResult(source, "unknown", null, [humIssue("$", message, "tool_io_failure")], []);
+  }
+
+  if (raw.charCodeAt(0) === 0xfeff) {
+    return humValidateInputResult(source, "unknown", null, [humIssue("$", "UTF-8 BOM is not allowed for Hum contract JSON.", "utf8_no_bom")], []);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return humValidateInputResult(source, "unknown", null, [humIssue("$", `Invalid JSON: ${message}`, "json_parse")], []);
+  }
+
+  if (!isHumRecord(parsed)) {
+    return humValidateInputResult(source, "unknown", null, [humIssue("$", "Hum contract input must be a JSON object.", "json_object")], []);
+  }
+
+  const schemaVersion = typeof parsed.schema_version === "string" ? parsed.schema_version : null;
+  const kind = inferHumContractKind(parsed, requestedKind, allowUnknownSchemaVersion);
+  if (kind === "unknown") {
+    const issues = [
+      humIssue("$.schema_version", "Unknown Hum schema version. Use --allow-unknown-schema-version with --kind obligation or --kind result to validate against the V0 shape.", "schema_version")
+    ];
+    if (containsCamelCaseKey(parsed)) {
+      issues.push(humIssue("$", "Hum contract JSON must use snake_case fields only.", "snake_case_fields"));
+    }
+    return humValidateInputResult(source, kind, schemaVersion, issues, []);
+  }
+
+  const schema = await readHumSchema(kind);
+  const normalizedForSchema = normalizeHumSchemaVersionForValidation(parsed, kind, allowUnknownSchemaVersion);
+  const issues = validateJsonSchema(normalizedForSchema, schema).map((issue) => humIssue(issue.path, issue.message, "json_schema"));
+  issues.push(...validateHumSemanticRules(parsed, kind, allowUnknownSchemaVersion));
+
+  const warnings = schemaVersion !== expectedHumSchemaVersion(kind)
+    ? [`Validated unknown schema version ${JSON.stringify(schemaVersion)} against ${expectedHumSchemaVersion(kind)} shape because --allow-unknown-schema-version was set.`]
+    : [];
+  return humValidateInputResult(source, kind, schemaVersion, issues, warnings);
+}
+
+async function readHumValidateSource(source: string, stdinText?: string): Promise<string> {
+  if (source === "-") {
+    return stdinText ?? readStdinText();
+  }
+
+  return readFile(resolve(source), "utf8");
+}
+
+async function readStdinText(): Promise<string> {
+  process.stdin.setEncoding("utf8");
+  let raw = "";
+  for await (const chunk of process.stdin) {
+    raw += chunk;
+  }
+  return raw;
+}
+async function readHumSchema(kind: "obligation" | "result"): Promise<unknown> {
+  const schemaFile = kind === "obligation" ? "hum.math_obligation.v0.schema.json" : "hum.math_result.v0.schema.json";
+  return JSON.parse(await readFile(resolve(dirname(fileURLToPath(import.meta.url)), "../../../schemas", schemaFile), "utf8")) as unknown;
+}
+
+function inferHumContractKind(
+  value: Record<string, unknown>,
+  requestedKind: HumValidateKind,
+  allowUnknownSchemaVersion: boolean
+): "obligation" | "result" | "unknown" {
+  if (requestedKind !== "auto") {
+    return requestedKind;
+  }
+
+  if (value.schema_version === HUM_OBLIGATION_SCHEMA_VERSION) {
+    return "obligation";
+  }
+  if (value.schema_version === HUM_RESULT_SCHEMA_VERSION) {
+    return "result";
+  }
+
+  if (allowUnknownSchemaVersion && typeof value.schema_version === "string") {
+    if (value.schema_version.startsWith("hum.math_obligation.")) {
+      return "obligation";
+    }
+    if (value.schema_version.startsWith("hum.math_result.")) {
+      return "result";
+    }
+  }
+
+  return "unknown";
+}
+
+function normalizeHumSchemaVersionForValidation(
+  value: Record<string, unknown>,
+  kind: "obligation" | "result",
+  allowUnknownSchemaVersion: boolean
+): Record<string, unknown> {
+  if (!allowUnknownSchemaVersion || value.schema_version === expectedHumSchemaVersion(kind)) {
+    return value;
+  }
+
+  return {
+    ...value,
+    schema_version: expectedHumSchemaVersion(kind)
+  };
+}
+
+function expectedHumSchemaVersion(kind: "obligation" | "result"): string {
+  return kind === "obligation" ? HUM_OBLIGATION_SCHEMA_VERSION : HUM_RESULT_SCHEMA_VERSION;
+}
+
+function validateHumSemanticRules(value: Record<string, unknown>, kind: "obligation" | "result", allowUnknownSchemaVersion: boolean): HumValidateIssue[] {
+  const issues: HumValidateIssue[] = [];
+  const expectedVersion = expectedHumSchemaVersion(kind);
+  if (value.schema_version !== expectedVersion && !allowUnknownSchemaVersion) {
+    issues.push(humIssue("$.schema_version", `must equal ${JSON.stringify(expectedVersion)}`, "schema_version"));
+  }
+
+  if (containsCamelCaseKey(value)) {
+    issues.push(humIssue("$", "Hum contract JSON must use snake_case fields only.", "snake_case_fields"));
+  }
+
+  if (kind === "obligation") {
+    issues.push(...validateHumObligationSemanticRules(value));
+  } else {
+    issues.push(...validateHumResultSemanticRules(value));
+  }
+
+  return issues;
+}
+
+function validateHumObligationSemanticRules(value: Record<string, unknown>): HumValidateIssue[] {
+  const issues: HumValidateIssue[] = [];
+  const assumptions = Array.isArray(value.assumptions) ? value.assumptions : [];
+  assumptions.forEach((entry, index) => {
+    if (!isHumRecord(entry)) {
+      return;
+    }
+    if (entry.source_ref === undefined || entry.source_ref === null || entry.source_ref === "") {
+      issues.push(humIssue(`$.assumptions[${index}].source_ref`, "assumptions must cite a source_ref so they are not hidden.", "hidden_assumption"));
+    }
+  });
+
+  return issues;
+}
+
+function validateHumResultSemanticRules(value: Record<string, unknown>): HumValidateIssue[] {
+  const issues: HumValidateIssue[] = [];
+  const status = value.status;
+  const evidenceClasses = Array.isArray(value.evidence_classes) ? value.evidence_classes : [];
+  const hasCertificate = value.proof_certificate !== null && value.proof_certificate !== undefined;
+  const hasTrace = value.checkable_trace !== null && value.checkable_trace !== undefined;
+  const hasCounterexample = value.counterexample !== null && value.counterexample !== undefined;
+
+  if (status === "proved") {
+    if (!hasCertificate && !hasTrace) {
+      issues.push(humIssue("$", "proved requires a proof_certificate or independently checkable_trace.", "proved_requires_evidence"));
+    }
+    if (evidenceClasses.includes("benchmark") || evidenceClasses.includes("heuristic") || evidenceClasses.includes("model_assumption")) {
+      issues.push(humIssue("$.evidence_classes", "benchmarks, heuristics, and model assumptions cannot be treated as proof.", "benchmark_not_proof"));
+    }
+  }
+
+  if (status === "refuted" && !hasCounterexample) {
+    issues.push(humIssue("$.counterexample", "refuted results should include a counterexample witness.", "refuted_requires_counterexample"));
+  }
+
+  if (value.llm_proof_accepted !== false) {
+    issues.push(humIssue("$.llm_proof_accepted", "LLM proof text is never accepted as proof.", "llm_proof_not_proof"));
+  }
+
+  const privacy = isHumRecord(value.privacy) ? value.privacy : undefined;
+  if (privacy) {
+    if (privacy.network_access !== "none" || privacy.cloud_access !== "none" || privacy.telemetry !== "none") {
+      issues.push(humIssue("$.privacy", "Hum math results must not require network, cloud, or telemetry metadata.", "local_first_privacy"));
+    }
+  }
+
+  return issues;
+}
+
+function containsCamelCaseKey(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.some((entry) => containsCamelCaseKey(entry));
+  }
+  if (!isHumRecord(value)) {
+    return false;
+  }
+
+  return Object.entries(value).some(([key, entry]) => /[a-z][A-Z]/u.test(key) || containsCamelCaseKey(entry));
+}
+
+function humValidateInputResult(
+  source: string,
+  kind: "obligation" | "result" | "unknown",
+  schemaVersion: string | null,
+  issues: HumValidateIssue[],
+  warnings: string[]
+): HumValidateInputResult {
+  const valid = issues.length === 0;
+  return {
+    source,
+    kind,
+    schema_version: schemaVersion,
+    valid,
+    issues,
+    warnings,
+    summary: valid ? `${source}: valid ${kind}` : `${source}: ${issues.length} issue(s)`
+  };
+}
+
+function humIssue(path: string, message: string, rule: string): HumValidateIssue {
+  return {
+    path,
+    message,
+    severity: "error",
+    rule
+  };
+}
+
+function isHumRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function printHumValidateSummary(result: HumValidateReport): void {
+  console.log(`Hum validate: ${result.status}`);
+  console.log(`Inputs: ${result.summary.valid}/${result.summary.total} valid, ${result.summary.invalid} invalid, ${result.summary.tool_errors} tool error(s)`);
+  for (const input of result.inputs) {
+    console.log(`- ${input.summary}`);
+    for (const warning of input.warnings) {
+      console.log(`  warning: ${warning}`);
+    }
+    for (const issue of input.issues) {
+      console.log(`  ${issue.path}: ${issue.message} [${issue.rule}]`);
+    }
+  }
+  console.log(`Exit code: ${result.exit_code}`);
+}
 async function writeJson(path: string, value: unknown): Promise<void> {
   const target = resolve(path);
   await mkdir(dirname(target), { recursive: true });

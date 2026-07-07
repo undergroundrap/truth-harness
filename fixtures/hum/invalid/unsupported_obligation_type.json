@@ -1,0 +1,56 @@
+{
+  "schema_version": "hum.math_obligation.v0",
+  "obligation_id": "hum_obl_unsupported_hash_probe",
+  "obligation_kind": "hash_table_guarantee",
+  "source_span": {
+    "file": "src/map.hum",
+    "start_line": 1,
+    "start_column": 1,
+    "end_line": 8,
+    "end_column": 2
+  },
+  "graph_node_id": "hum_sem_node_hash_probe",
+  "claim_text": "Hash table probe count is bounded.",
+  "normalized_formal_claim": {
+    "representation": "hum_static_claim_v0",
+    "expression": "max_probe_count(map_lookup) <= 8",
+    "variables": [],
+    "expected_bound": "8"
+  },
+  "assumptions": [
+    {
+      "assumption_id": "assume_uniform_hashing_model",
+      "evidence_class": "model_assumption",
+      "text": "Hash output is uniform over buckets.",
+      "source_ref": "hum_graph:hum_sem_node_hash_probe"
+    }
+  ],
+  "allowed_effects": ["read_memory"],
+  "program_shape": {
+    "primary": "oblivious_random_access",
+    "access_pattern": "oblivious_random",
+    "mutation": "none",
+    "io": "none",
+    "concurrency": "single_threaded",
+    "hardware": "abstract"
+  },
+  "resource_model": {
+    "machine_model": "hum_abstract_machine_v0",
+    "word_bits": 64,
+    "integer_overflow": "checked",
+    "allocation_model": "none",
+    "peak_memory_unit": "bytes"
+  },
+  "confidence_requested": "machine_checkable",
+  "timeout_budget": {
+    "timeout_ms": 1000,
+    "max_solver_memory_bytes": 67108864,
+    "max_steps": 10000
+  },
+  "privacy": {
+    "local_first": true,
+    "network_access": "none",
+    "cloud_access": "none",
+    "telemetry": "none"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": "hum.math_result.v0",
+  "result_id": "hum_res_invalid_proved_missing_evidence",
+  "obligation_id": "hum_obl_allocation_free_push_byte",
+  "created_at": "2026-07-07T00:00:00.000Z",
+  "status": "proved",
+  "trust_label": "proved",
+  "evidence_classes": ["static_proof"],
+  "proof_certificate": null,
+  "checkable_trace": null,
+  "counterexample": null,
+  "assumptions_used": ["assume_fixed_buffer_capacity"],
+  "model_limitations": ["Invalid fixture: proof evidence was omitted."],
+  "confidence_level": "machine_checked",
+  "source_spans_affected": [
+    {
+      "file": "src/buffer.hum",
+      "start_line": 12,
+      "start_column": 1,
+      "end_line": 19,
+      "end_column": 2
+    }
+  ],
+  "suggested_hum_evidence_artifact": {
+    "artifact_kind": "hum_evidence_report",
+    "path": ".hum/evidence/invalid.json",
+    "summary": "Invalid fixture for proved without certificate."
+  },
+  "llm_proof_accepted": false,
+  "privacy": {
+    "local_first": true,
+    "network_access": "none",
+    "cloud_access": "none",
+    "telemetry": "none"
+  }
+}

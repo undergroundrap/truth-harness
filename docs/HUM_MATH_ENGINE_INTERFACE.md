@@ -152,6 +152,77 @@ Truth Harness must not:
 - treat an LLM answer as proof
 - merge theorem, benchmark, static proof, model assumption, and heuristic evidence into one vague confidence score
 
+## Contract Validation CLI
+
+The first CLI bridge is contract-only:
+
+```bash
+truth-harness hum validate .hum/obligations.json
+truth-harness hum validate .hum/result.json --kind result
+truth-harness hum validate - --json
+cat .hum/obligations.json | truth-harness hum validate --json
+```
+
+Inputs are file paths. `-` means stdin. If no input is provided, the command reads stdin. The command does not run solvers, does not infer truth, does not write evidence, and does not contact the network.
+
+Options:
+
+- `--kind auto`: infer from `schema_version`; this is the default.
+- `--kind obligation`: validate against the V0 obligation shape.
+- `--kind result`: validate against the V0 result shape.
+- `--json`: emit stable machine-readable JSON.
+- `--allow-unknown-schema-version`: allow a compatible future Hum schema version to be checked against the selected V0 shape. Without this flag, unknown schema versions are rejected.
+
+Exit codes:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | All inputs are valid. |
+| `1` | At least one input is schema-invalid or violates Hum honesty rules. |
+| `2` | Tool or I/O failure, such as a missing file or unreadable stdin. |
+
+JSON output shape:
+
+```json
+{
+  "schema_version": "truth-harness.hum_validate.v0",
+  "status": "valid",
+  "exit_code": 0,
+  "summary": {
+    "total": 1,
+    "valid": 1,
+    "invalid": 0,
+    "tool_errors": 0
+  },
+  "inputs": [
+    {
+      "source": ".hum/obligations.json",
+      "kind": "obligation",
+      "schema_version": "hum.math_obligation.v0",
+      "valid": true,
+      "issues": [],
+      "warnings": [],
+      "summary": ".hum/obligations.json: valid obligation"
+    }
+  ],
+  "privacy": {
+    "local_first": true,
+    "network_access": "none",
+    "cloud_access": "none",
+    "telemetry": "none"
+  }
+}
+```
+
+The validator also enforces semantic honesty rules that are intentionally stricter than plain JSON Schema:
+
+- all fields must be snake_case
+- `proved` requires a `proof_certificate` or `checkable_trace`
+- benchmarks, heuristics, and model assumptions cannot be treated as proof
+- assumptions must cite `source_ref`
+- LLM proof text is never accepted as proof
+- network, cloud, and telemetry metadata are rejected
+- UTF-8 BOM is rejected
 ## V0 Test Fixtures
 
 Fixtures live in `fixtures/hum/`:
@@ -164,6 +235,14 @@ Fixtures live in `fixtures/hum/`:
 - `result_unknown.json`
 
 These are contract fixtures, not Hum integration fixtures. They let both projects validate JSON shape and honesty rules before building a deeper bridge.
+Invalid fixtures live in `fixtures/hum/invalid/`:
+
+- `unsupported_obligation_type.json`
+- `proved_without_certificate.json`
+- `camel_case_fields.json`
+- `benchmark_treated_as_proof.json`
+- `hidden_assumptions.json`
+- `network_cloud_metadata.json`
 
 ## Roadmap
 

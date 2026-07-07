@@ -1,0 +1,56 @@
+{
+  "schema_version": "hum.math_obligation.v0",
+  "obligation_id": "hum_obl_hidden_assumption_fixture",
+  "obligation_kind": "purity_replayability",
+  "source_span": {
+    "file": "src/replay.hum",
+    "start_line": 4,
+    "start_column": 1,
+    "end_line": 11,
+    "end_column": 2
+  },
+  "graph_node_id": "hum_sem_node_replay",
+  "claim_text": "replay is deterministic if ambient state is stable.",
+  "normalized_formal_claim": {
+    "representation": "hum_static_claim_v0",
+    "expression": "same_input(replay) -> same_output(replay)",
+    "variables": [],
+    "expected_bound": null
+  },
+  "assumptions": [
+    {
+      "assumption_id": "assume_ambient_state_stable",
+      "evidence_class": "model_assumption",
+      "text": "Ambient state is stable, but no source evidence is attached.",
+      "source_ref": null
+    }
+  ],
+  "allowed_effects": ["read_memory"],
+  "program_shape": {
+    "primary": "streaming_sequential",
+    "access_pattern": "sequential",
+    "mutation": "none",
+    "io": "none",
+    "concurrency": "single_threaded",
+    "hardware": "abstract"
+  },
+  "resource_model": {
+    "machine_model": "hum_abstract_machine_v0",
+    "word_bits": 64,
+    "integer_overflow": "checked",
+    "allocation_model": "none",
+    "peak_memory_unit": "bytes"
+  },
+  "confidence_requested": "bounded_static_analysis",
+  "timeout_budget": {
+    "timeout_ms": 1000,
+    "max_solver_memory_bytes": 67108864,
+    "max_steps": 10000
+  },
+  "privacy": {
+    "local_first": true,
+    "network_access": "none",
+    "cloud_access": "none",
+    "telemetry": "none"
+  }
+}

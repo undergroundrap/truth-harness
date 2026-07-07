@@ -1,0 +1,5 @@
+{
+  "schemaVersion": "hum.math_obligation.v0",
+  "obligationId": "hum_obl_camel_case_fixture",
+  "obligation_kind": "allocation_freedom"
+}
