@@ -14,7 +14,9 @@ describe("Hum math engine contract", () => {
     const fixtures = [
       "proved_allocation_free.json",
       "refuted_allocation_free.json",
-      "unknown_pointer_heavy.json"
+      "unknown_pointer_heavy.json",
+      "generated/math-obligations/001_allocation_freedom_writer.json",
+      "generated/math-obligations/002_peak_memory_bound_window_sum.json"
     ];
 
     for (const fixture of fixtures) {

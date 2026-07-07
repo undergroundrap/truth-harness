@@ -1,0 +1,61 @@
+{
+  "schema_version": "hum.math_obligation.v0",
+  "obligation_id": "hum_obl_generated_writer_allocation_free",
+  "obligation_kind": "allocation_freedom",
+  "source_span": {
+    "file": "src/generated_writer.hum",
+    "start_line": 8,
+    "start_column": 1,
+    "end_line": 18,
+    "end_column": 2
+  },
+  "graph_node_id": "hum_sem_node_generated_writer",
+  "claim_text": "generated_writer appends into a caller-owned slice without heap allocation.",
+  "normalized_formal_claim": {
+    "representation": "hum_static_claim_v0",
+    "expression": "heap_allocations(generated_writer) == 0",
+    "variables": [
+      {
+        "name": "heap_allocations",
+        "sort": "nat"
+      }
+    ],
+    "expected_bound": "0"
+  },
+  "assumptions": [
+    {
+      "assumption_id": "assume_generated_slice_capacity",
+      "evidence_class": "compiler_fact",
+      "text": "Hum graph export records a caller-owned output slice and a checked length guard before writes.",
+      "source_ref": "hum_graph:hum_sem_node_generated_writer"
+    }
+  ],
+  "allowed_effects": ["read_memory", "write_local_memory"],
+  "program_shape": {
+    "primary": "streaming_sequential",
+    "access_pattern": "sequential",
+    "mutation": "local",
+    "io": "none",
+    "concurrency": "single_threaded",
+    "hardware": "abstract"
+  },
+  "resource_model": {
+    "machine_model": "hum_abstract_machine_v0",
+    "word_bits": 64,
+    "integer_overflow": "checked",
+    "allocation_model": "none",
+    "peak_memory_unit": "bytes"
+  },
+  "confidence_requested": "machine_checkable",
+  "timeout_budget": {
+    "timeout_ms": 1000,
+    "max_solver_memory_bytes": 67108864,
+    "max_steps": 10000
+  },
+  "privacy": {
+    "local_first": true,
+    "network_access": "none",
+    "cloud_access": "none",
+    "telemetry": "none"
+  }
+}

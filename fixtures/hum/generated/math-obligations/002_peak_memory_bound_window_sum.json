@@ -1,0 +1,62 @@
+{
+  "schema_version": "hum.math_obligation.v0",
+  "obligation_id": "hum_obl_generated_window_sum_peak_memory",
+  "obligation_kind": "peak_memory_bound",
+  "source_span": {
+    "file": "src/window_sum.hum",
+    "start_line": 21,
+    "start_column": 1,
+    "end_line": 34,
+    "end_column": 2
+  },
+  "graph_node_id": "hum_sem_node_window_sum",
+  "claim_text": "window_sum keeps at most three 64-bit words of scratch state while streaming input.",
+  "normalized_formal_claim": {
+    "representation": "hum_static_claim_v0",
+    "expression": "peak_scratch_bytes(window_sum) <= 24",
+    "variables": [
+      {
+        "name": "peak_scratch_bytes",
+        "sort": "nat",
+        "unit": "bytes"
+      }
+    ],
+    "expected_bound": "24 bytes"
+  },
+  "assumptions": [
+    {
+      "assumption_id": "assume_window_sum_streaming",
+      "evidence_class": "compiler_fact",
+      "text": "The Hum graph classifies the loop as streaming with no retained input buffer.",
+      "source_ref": "hum_graph:hum_sem_node_window_sum"
+    }
+  ],
+  "allowed_effects": ["read_memory", "write_local_memory"],
+  "program_shape": {
+    "primary": "streaming_sequential",
+    "access_pattern": "sequential",
+    "mutation": "local",
+    "io": "none",
+    "concurrency": "single_threaded",
+    "hardware": "abstract"
+  },
+  "resource_model": {
+    "machine_model": "hum_word_ram_v0",
+    "word_bits": 64,
+    "integer_overflow": "checked",
+    "allocation_model": "stack",
+    "peak_memory_unit": "bytes"
+  },
+  "confidence_requested": "bounded_static_analysis",
+  "timeout_budget": {
+    "timeout_ms": 1000,
+    "max_solver_memory_bytes": 67108864,
+    "max_steps": 10000
+  },
+  "privacy": {
+    "local_first": true,
+    "network_access": "none",
+    "cloud_access": "none",
+    "telemetry": "none"
+  }
+}

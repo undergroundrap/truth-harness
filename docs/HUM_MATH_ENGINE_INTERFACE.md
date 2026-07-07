@@ -157,13 +157,15 @@ Truth Harness must not:
 The first CLI bridge is contract-only:
 
 ```bash
+hum math-obligations --out-dir .hum/math-obligations
+truth-harness hum validate .hum/math-obligations --json
 truth-harness hum validate .hum/obligations.json
 truth-harness hum validate .hum/result.json --kind result
 truth-harness hum validate - --json
 cat .hum/obligations.json | truth-harness hum validate --json
 ```
 
-Inputs are file paths. `-` means stdin. If no input is provided, the command reads stdin. The command does not run solvers, does not infer truth, does not write evidence, and does not contact the network.
+Inputs are file paths or Hum out-directories containing direct `*.json` children. Directory entries are expanded in stable filename order. `-` means stdin. If no input is provided, the command reads stdin. The command does not run solvers, does not infer truth, does not write evidence, and does not contact the network.
 
 Options:
 

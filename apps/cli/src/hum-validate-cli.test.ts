@@ -44,6 +44,28 @@ describe("Hum validate CLI", () => {
     expect(json.inputs.every((input) => input.valid)).toBe(true);
   });
 
+  it("validates a Hum math-obligations out-dir with stable ordering", async () => {
+    const result = await runCli(["hum", "validate", "fixtures/hum/generated/math-obligations", "--json"]);
+    const json = JSON.parse(result.stdout) as HumValidateReport;
+    const sources = json.inputs.map((input) => input.source.replace(/\\/gu, "/"));
+
+    expect(result.exitCode).toBe(0);
+    expect(json).toMatchObject({
+      status: "valid",
+      exit_code: 0,
+      summary: {
+        total: 2,
+        valid: 2,
+        invalid: 0,
+        tool_errors: 0
+      }
+    });
+    expect(sources).toEqual([
+      "fixtures/hum/generated/math-obligations/001_allocation_freedom_writer.json",
+      "fixtures/hum/generated/math-obligations/002_peak_memory_bound_window_sum.json"
+    ]);
+    expect(json.inputs.map((input) => input.kind)).toEqual(["obligation", "obligation"]);
+  });
   it("prints a useful human summary", async () => {
     const result = await runCli(["hum", "validate", "fixtures/hum/proved_allocation_free.json"]);
 

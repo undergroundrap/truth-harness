@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { readFile, mkdir, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { readFile, mkdir, readdir, stat, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { createPublicMathProblemCatalogHandoff, createPublicMathProblemJourney, parseBenchmarkSuite, parsePublicMathProblemCatalog, renderPublicMathProblemCatalogHandoffMarkdown, renderPublicMathProblemJourneyMarkdown, runBenchmarkSuite, summarizePublicMathProblemCatalog, type BenchmarkRun, type PublicMathProblemCatalogSummary } from "@truth-harness/benchmarks";
@@ -496,7 +496,7 @@ const hum = program.command("hum").description("Validate Hum language contract a
 hum
   .command("validate")
   .description("Validate Hum math obligation/result JSON from files or stdin.")
-  .argument("[inputs...]", "JSON files to validate. Use '-' or no inputs to read stdin.")
+  .argument("[inputs...]", "JSON files or Hum out-directories to validate. Use '-' or no inputs to read stdin.")
   .option("--kind <kind>", "obligation, result, or auto", "auto")
   .option("--json", "Print stable machine-readable validation JSON")
   .option("--allow-unknown-schema-version", "Validate compatible unknown Hum schema versions against the selected V0 shape")
@@ -5538,12 +5538,6 @@ program
     console.log("");
     printEngineManifest(manifest);
   });
-
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  await program.parseAsync(process.argv);
-}
-
-export { program, validateHumContractInputs };
 
 function parseAskArgs(tokens: string[]): { problem: string; json: boolean; out?: string } {
   const problemTokens: string[] = [];
@@ -11548,6 +11542,11 @@ type HumValidateReport = {
   };
 };
 
+type HumValidateExpandedSource = {
+  source: string;
+  issue?: HumValidateIssue;
+};
+
 const HUM_OBLIGATION_SCHEMA_VERSION = "hum.math_obligation.v0";
 const HUM_RESULT_SCHEMA_VERSION = "hum.math_result.v0";
 const HUM_VALIDATE_SCHEMA_VERSION = "truth-harness.hum_validate.v0";
@@ -11575,7 +11574,14 @@ async function validateHumContractInputs(input: {
   const results: HumValidateInputResult[] = [];
 
   for (const source of input.inputs) {
-    results.push(await validateHumContractInput(source, input.kind, input.allowUnknownSchemaVersion, input.stdinText));
+    const expandedSources = await expandHumValidateSource(source);
+    for (const expandedSource of expandedSources) {
+      if (expandedSource.issue) {
+        results.push(humValidateInputResult(expandedSource.source, "unknown", null, [expandedSource.issue], []));
+        continue;
+      }
+      results.push(await validateHumContractInput(expandedSource.source, input.kind, input.allowUnknownSchemaVersion, input.stdinText));
+    }
   }
 
   const toolErrors = results.filter((result) => result.issues.some((issue) => issue.rule === "tool_io_failure")).length;
@@ -11597,6 +11603,45 @@ async function validateHumContractInputs(input: {
     inputs: results,
     privacy: HUM_VALIDATE_PRIVACY
   };
+}
+
+async function expandHumValidateSource(source: string): Promise<HumValidateExpandedSource[]> {
+  if (source === "-") {
+    return [{ source }];
+  }
+
+  let sourceStat;
+  try {
+    sourceStat = await stat(resolve(source));
+  } catch {
+    return [{ source }];
+  }
+
+  if (!sourceStat.isDirectory()) {
+    return [{ source }];
+  }
+
+  try {
+    const entries = await readdir(resolve(source), { withFileTypes: true });
+    const jsonFiles = entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+      .map((entry) => join(source, entry.name))
+      .sort((left, right) => left.localeCompare(right));
+
+    if (jsonFiles.length === 0) {
+      return [
+        {
+          source,
+          issue: humIssue("$", "Hum out-dir contains no direct JSON files to validate.", "tool_io_failure")
+        }
+      ];
+    }
+
+    return jsonFiles.map((jsonFile) => ({ source: jsonFile }));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return [{ source, issue: humIssue("$", message, "tool_io_failure") }];
+  }
 }
 
 async function validateHumContractInput(
@@ -11865,3 +11910,9 @@ async function writeBytes(path: string, value: Uint8Array): Promise<string> {
   await writeFile(target, value);
   return target;
 }
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await program.parseAsync(process.argv);
+}
+
+export { program, validateHumContractInputs };
