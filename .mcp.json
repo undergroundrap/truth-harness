@@ -1,13 +1,13 @@
 {
   "mcpServers": {
-    "theorem-workbench": {
+    "truth-harness": {
       "type": "stdio",
       "command": "node",
       "args": [
         "${CLAUDE_PROJECT_DIR:-.}/packages/mcp-server/dist/index.js"
       ],
       "env": {
-        "THEOREM_WORKBENCH_ROOT": "${CLAUDE_PROJECT_DIR:-.}"
+        "TRUTH_HARNESS_ROOT": "${CLAUDE_PROJECT_DIR:-.}"
       }
     }
   }

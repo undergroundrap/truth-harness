@@ -12478,10 +12478,11 @@ function compactRuntimePathForUi(value) {
   if (normalized === "/workspace" || normalized.startsWith("/workspace/")) {
     return normalized;
   }
-  const marker = "/AntigravityProjects/";
-  const markerIndex = normalized.indexOf(marker);
-  if (markerIndex >= 0) {
-    return `...${normalized.slice(markerIndex)}`;
+  const segments = normalized.split("/").filter(Boolean);
+  const repoIndex = segments.lastIndexOf("truth-harness");
+  if (repoIndex >= 0) {
+    const start = Math.max(0, repoIndex - 1);
+    return `.../${segments.slice(start).join("/")}`;
   }
   return normalized.length > 54 ? `...${normalized.slice(-51)}` : normalized;
 }

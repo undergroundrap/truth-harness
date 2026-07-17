@@ -1,6 +1,6 @@
 .git
 .github
-.theorem-workbench
+.truth-harness
 node_modules
 coverage
 dist

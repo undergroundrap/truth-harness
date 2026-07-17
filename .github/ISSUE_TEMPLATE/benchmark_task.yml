@@ -7,7 +7,7 @@ body:
     id: prompt
     attributes:
       label: Prompt
-      description: The exact prompt or claim Theorem Workbench should evaluate.
+      description: The exact prompt or claim Truth Harness should evaluate.
     validations:
       required: true
   - type: dropdown

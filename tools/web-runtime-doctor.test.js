@@ -88,7 +88,7 @@ describe("web runtime doctor", () => {
         runtime: {
           schemaVersion: "truth-harness.web-runtime.v0",
           runtimeKind: "windows-host",
-          projectRoot: "C:/Users/ocean/AntigravityProjects/truth-harness"
+          projectRoot: "C:/work/truth-harness"
         },
         safety: {
           codeRunSandbox: {
