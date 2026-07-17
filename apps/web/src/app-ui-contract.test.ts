@@ -7,6 +7,33 @@ const appHtmlPath = resolve("apps/web/index.html");
 const appStylesPath = resolve("apps/web/src/styles.css");
 
 describe("web UI action contracts", () => {
+  it("surfaces decisive continuous-collision certificate facts in the main result card", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('id="math-surface-evidence"');
+    expect(source).toContain("function receiptEvidenceHighlights(receipt)");
+    expect(source).toContain('["Impact window", `${tEnter} <= t <= ${tExit}`]');
+    expect(source).toContain("evidenceOutputs: outputs");
+    expect(source).toContain('workSurface.scrollIntoView({ block: "start", behavior: "smooth" })');
+    expect(styles).toContain(".math-overview-evidence");
+    expect(styles).toContain(".math-overview-expression > .math-inline");
+    expect(styles).toContain("overflow-wrap: anywhere;");
+  });
+
+  it("releases the verifier UI before ancillary workspace ledgers finish refreshing", async () => {
+    const source = await readFile(appSourcePath, "utf8");
+    const submitHandler = source.match(/composer\.addEventListener\("submit"[\s\S]*?\n\}\);/u)?.[0];
+
+    expect(submitHandler).toBeTruthy();
+    expect(submitHandler).toContain("void Promise.allSettled([");
+    expect(submitHandler).not.toContain("await refreshRouteLedger");
+    expect(submitHandler).not.toContain("await refreshWorkspaceEvents");
+  });
+
   it("opens project queue actions directly into the focused checks work order", async () => {
     const source = await readFile(appSourcePath, "utf8");
     const handler = source.match(/workspaceReviewList\.querySelectorAll\("\.open-workspace-action"\)[\s\S]*?workspaceReviewList\.querySelectorAll\("\.open-workspace-route"\)/u)?.[0];

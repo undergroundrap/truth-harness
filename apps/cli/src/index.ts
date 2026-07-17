@@ -5495,6 +5495,7 @@ engines
 program
   .command("demo")
   .description("Run the self-contained Truth Harness launch gauntlet and write a shareable HTML report.")
+  .option("--focus <name>", "Run one recording-focused demo (supported: build-week)")
   .option("--report <path>", "Write the HTML report to this path", "truth-harness-demo-report.html")
   .option("--maxima-command <command>", "Override Maxima executable for symbolic cross-check receipts")
   .option("--z3-command <command>", "Override Z3 executable for SMT demo checks")
@@ -5502,6 +5503,7 @@ program
   .option("--no-color", "Disable ANSI colors in terminal output")
   .action(
     async (options: {
+      focus?: string;
       report: string;
       maximaCommand?: string;
       z3Command?: string;
@@ -5509,6 +5511,7 @@ program
       color?: boolean;
     }) => {
     const result = await runDemoGauntlet({
+      focus: options.focus,
       reportPath: options.report,
       maximaCommand: options.maximaCommand,
       z3Command: options.z3Command,
@@ -5815,7 +5818,36 @@ function createDemoCases(): DemoCase[] {
   ];
 }
 
+function createBuildWeekDemoCases(): DemoCase[] {
+  return [
+    {
+      title: "Continuous collision tunneling",
+      category: "Applied Engine Math",
+      kind: "receipt",
+      problem:
+        "verify swept AABB A min(0,0) max(1,1) velocity(5,0) intersect AABB B min(3,0) max(4,1) over t in [0,1] = false",
+      chatbotClaim: "The boxes do not overlap at the start or end of the frame, so there is no collision.",
+      lesson:
+        "Exact continuous-time arithmetic refutes the endpoint-only conclusion and records the rational impact window.",
+      allowedTrust: ["refuted"]
+    }
+  ];
+}
+
+function selectDemoCases(focus?: string): DemoCase[] {
+  if (focus === undefined) {
+    return createDemoCases();
+  }
+
+  if (focus === "build-week") {
+    return createBuildWeekDemoCases();
+  }
+
+  throw new Error(`Unsupported demo focus ${JSON.stringify(focus)}. Use build-week.`);
+}
+
 async function runDemoGauntlet(options: {
+  focus?: string;
   reportPath: string;
   maximaCommand?: string;
   z3Command?: string;
@@ -5824,7 +5856,7 @@ async function runDemoGauntlet(options: {
 }): Promise<DemoGauntletResult> {
   const color = createDemoColorizer(options.color);
   const resolvedReportPath = resolve(options.reportPath);
-  const cases = createDemoCases();
+  const cases = selectDemoCases(options.focus);
   const tally: Record<DemoTrustBucket, number> = { verified: 0, refuted: 0, unverified: 0 };
   const results: DemoCaseResult[] = [];
   const unexpectedLabels: string[] = [];
@@ -5877,9 +5909,10 @@ async function runDemoGauntlet(options: {
         ? color.yellow(` preferred ${demoCase.preferredTrust}`)
         : "";
 
-    console.log(`${color.dim(`[${String(index + 1).padStart(2, "0")}]`)} ${color.bold(demoCase.problem)}`);
+    console.log(`${color.dim(`[${String(index + 1).padStart(2, "0")}]`)} ${color.bold(demoCase.title)}`);
+    console.log(`     ${color.bold(demoCase.problem)}`);
     console.log(`     ${color.dimItalic(`AI chatbot says: ${demoCase.chatbotClaim}`)}`);
-    console.log(`     ${trust}${marker}${preferred}  ${evidenceLines[0] ?? evaluation.summary}`);
+    console.log(`     ${trust}${marker}${preferred}  ${evidenceLines.slice(0, 2).join(" | ") || evaluation.summary}`);
     console.log(`     ${color.dim(`replay: ${evaluation.replay}`)}`);
     console.log("");
   }
@@ -6008,11 +6041,17 @@ function demoEvidenceLinesForReceipt(receipt: Receipt): string[] {
   const certificate = receipt.graph.nodes.find(
     (node) => node.kind === "computation" && node.summary.toLowerCase().includes("for every integer")
   );
-  const outputs = receipt.evidenceProfile.outputs.slice(0, 3);
+  const allOutputs = receipt.evidenceProfile.outputs;
+  const impactWindow = allOutputs.filter((output) => output.startsWith("tEnter=") || output.startsWith("tExit="));
+  const outputs = allOutputs.slice(0, 3);
   const backendSummary = receipt.evidenceProfile.backends
     .map((backend) => `${backend.id}${backend.version ? `@${backend.version}` : ""}`)
     .slice(0, 3)
     .join(", ");
+
+  if (impactWindow.length === 2) {
+    lines.push(`Exact impact window: ${impactWindow.join(", ")}`);
+  }
 
   if (counterexample) {
     lines.push(`Counterexample: ${counterexample.summary}`);

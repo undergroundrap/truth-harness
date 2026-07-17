@@ -31,6 +31,12 @@ npm run audit:release
 npm run docker:web
 ```
 
+For the short recorded submission demo, use the applied collision-math runbook in [BUILD_WEEK_DEMO_RUNBOOK.md](BUILD_WEEK_DEMO_RUNBOOK.md) and run:
+
+```bash
+npm run docker:build-week
+```
+
 Docker-first commands are preferred for public demos because they keep the verification stack isolated from the host and make engine availability easier to reproduce.
 
 ## Technical highlights

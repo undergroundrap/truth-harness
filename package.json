@@ -39,7 +39,7 @@
     "docker:mathlib-template:write": "npm run docker:mathlib-template:build && docker compose run --rm mathlib-proof npm run proof:mathlib-template:write",
     "docker:lean-suite": "docker compose run --build --rm lean-proof npm run proof:lean-suite",
     "docker:verify": "docker build --target verify -t truth-harness:verify .",
-    "docker:web": "docker compose up --build web",
+    "docker:web": "docker compose up --build web-gateway",
     "cli": "node apps/cli/dist/index.js",
     "dev:cli": "tsx apps/cli/src/index.ts",
     "web:serve": "node tools/serve-web.mjs",
@@ -65,6 +65,9 @@
     "demo": "node apps/cli/dist/index.js demo",
     "demo:recording": "node apps/cli/dist/index.js demo --require-symbolic-cross-check",
     "docker:demo": "docker compose run --rm truth-harness node apps/cli/dist/index.js demo --require-symbolic-cross-check",
+    "demo:build-week": "node apps/cli/dist/index.js demo --focus build-week --report .truth-harness/reports/build-week-demo-report.html",
+    "docker:build-week:prepare": "docker compose build truth-harness web",
+    "docker:build-week": "docker compose run --rm truth-harness node apps/cli/dist/index.js demo --focus build-week --report .truth-harness/reports/build-week-demo-report.html",
     "demo:bench": "node apps/cli/dist/index.js bench run packages/benchmarks/suites/foundations-seed.json",
     "demo:math-ladder": "node apps/cli/dist/index.js bench run packages/benchmarks/suites/math-credibility-ladder.json --fail-on-failures",
     "docker:math-ladder": "docker compose run --rm truth-harness node apps/cli/dist/index.js bench run packages/benchmarks/suites/math-credibility-ladder.json --fail-on-failures",
@@ -135,5 +138,8 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.10.1",
     "zod": "^4.4.3"
+  },
+  "overrides": {
+    "hono": "4.12.25"
   }
 }

@@ -599,10 +599,12 @@ const receiptSummary = document.querySelector(".receipt-summary");
 const mathSurfaceStatus = document.querySelector("#math-surface-status");
 const mathSurfaceProblem = document.querySelector("#math-surface-problem");
 const mathSurfaceResult = document.querySelector("#math-surface-result");
+const mathSurfaceEvidence = document.querySelector("#math-surface-evidence");
 const mathSurfaceFacts = document.querySelector("#math-surface-facts");
 const promptInput = document.querySelector("#prompt-input");
 const composer = document.querySelector("#composer");
 const verifyButton = document.querySelector("#verify-button");
+const workSurface = document.querySelector(".work-surface");
 const plotCanvas = document.querySelector("#plot-canvas");
 const plotKind = document.querySelector("#plot-kind");
 const plotTitle = document.querySelector("#plot-title");
@@ -1337,6 +1339,13 @@ function render() {
     mathSurfaceStatus.textContent = `${receipt.trust} / ${receipt.engine}`;
     mathSurfaceProblem.innerHTML = renderMathInline(receipt.math?.input ?? receipt.title);
     mathSurfaceResult.innerHTML = renderMathInline(receipt.math?.output ?? receipt.output);
+    if (mathSurfaceEvidence) {
+      const evidenceHighlights = receiptEvidenceHighlights(receipt);
+      mathSurfaceEvidence.hidden = evidenceHighlights.length === 0;
+      mathSurfaceEvidence.innerHTML = evidenceHighlights
+        .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`)
+        .join("");
+    }
     mathSurfaceFacts.innerHTML = [
       ["Trust", receipt.trust],
       ["Engine", receipt.engine],
@@ -18944,6 +18953,7 @@ function receiptToViewModel(receipt, route, routePaths, receiptPaths) {
     engine: backend,
     replay: receipt.replay,
     output: primaryOutput,
+    evidenceOutputs: outputs,
     tags: uniqueTags(["imported", receipt.evidenceProfile.kind, ...backendTags]),
     dependsOn: [],
     derivedBy: "Imported from local receipt API response.",
@@ -18955,6 +18965,26 @@ function receiptToViewModel(receipt, route, routePaths, receiptPaths) {
     routePaths,
     receiptPaths
   };
+}
+
+function receiptEvidenceHighlights(receipt) {
+  const outputs = Array.isArray(receipt.evidenceOutputs) ? receipt.evidenceOutputs : [];
+  const keyedOutputs = new Map(outputs
+    .map((output) => String(output).match(/^([^=]+)=(.*)$/u))
+    .filter(Boolean)
+    .map((match) => [match[1], match[2]]));
+  const tEnter = keyedOutputs.get("tEnter");
+  const tExit = keyedOutputs.get("tExit");
+
+  if (tEnter && tExit) {
+    return [
+      ["Exact result", keyedOutputs.get("intersect") ?? receipt.output],
+      ["Impact window", `${tEnter} <= t <= ${tExit}`],
+      ["Classification", keyedOutputs.get("classification") ?? "continuous-time check"]
+    ];
+  }
+
+  return [];
 }
 
 function extractPromptTags(problem) {
@@ -20320,6 +20350,7 @@ composer.addEventListener("submit", async (event) => {
 
   verifyButton.disabled = true;
   verifyButton.textContent = "Verifying";
+  let shouldFocusReceipt = false;
   addActivity("human", "Submitted prompt", promptTags.length > 0 ? `${problemForApi} (${promptTags.map((tag) => `#${tag}`).join(" ")})` : problemForApi, "passed");
   addActivity("web-ui", "Calling local API", "POST /api/receipt", "waiting");
 
@@ -20341,6 +20372,7 @@ composer.addEventListener("submit", async (event) => {
     promoteRecentReceiptKey(key);
     setReplayPlaying(false);
     state.receiptKey = key;
+    shouldFocusReceipt = true;
     state.level = "middle";
     state.selectedResearchMapSnapshotId = undefined;
     state.selectedResearchMapNodeId = undefined;
@@ -20349,13 +20381,15 @@ composer.addEventListener("submit", async (event) => {
     for (const item of payload.activity ?? []) {
       addActivity(item.actor, item.action, item.detail, "passed", item.at);
     }
-    await refreshRouteLedger({ announce: false });
-    await refreshWorkspaceReview({ announce: false });
-    await refreshWorkspaceRunNext({ announce: false });
-    await refreshWorkspaceGraph({ announce: false });
-    await refreshWorkspaceReadiness({ announce: false });
-    await refreshWorkspaceEvents({ announce: false });
     addActivity("web-ui", "Rendered receipt", `${payload.receipt.runId} displayed with trace and evidence graph.`, "passed");
+    void Promise.allSettled([
+      refreshRouteLedger({ announce: false }),
+      refreshWorkspaceReview({ announce: false }),
+      refreshWorkspaceRunNext({ announce: false }),
+      refreshWorkspaceGraph({ announce: false }),
+      refreshWorkspaceReadiness({ announce: false }),
+      refreshWorkspaceEvents({ announce: false })
+    ]);
   } catch (error) {
     updateLatestActivity("Calling local API", "refuted", "POST /api/receipt failed");
     addActivity("local-api", "Verification failed", error instanceof Error ? error.message : "Unknown API failure.", "refuted");
@@ -20363,5 +20397,8 @@ composer.addEventListener("submit", async (event) => {
     verifyButton.disabled = false;
     verifyButton.textContent = "Verify";
     render();
+    if (shouldFocusReceipt && workSurface) {
+      requestAnimationFrame(() => workSurface.scrollIntoView({ block: "start", behavior: "smooth" }));
+    }
   }
 });

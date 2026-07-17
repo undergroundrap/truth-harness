@@ -1679,14 +1679,52 @@ body.visual-focus-active[data-surface="plot"] .work-surface {
 
 .math-overview-expression {
   min-width: 0;
-  overflow: visible;
+  overflow: hidden;
   color: #f2eadc;
   font: 18px/1.35 Georgia, "Times New Roman", serif;
+}
+
+.math-overview-expression > .math-inline {
+  display: inline;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .math-overview-result .math-overview-expression {
   font-size: 22px;
   font-weight: 750;
+}
+
+.math-overview-evidence {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.math-overview-evidence[hidden] {
+  display: none;
+}
+
+.math-overview-evidence div {
+  display: grid;
+  grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.math-overview-evidence dt {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.math-overview-evidence dd {
+  min-width: 0;
+  margin: 0;
+  color: #f2eadc;
+  font: 600 12px/1.4 var(--font-mono);
+  overflow-wrap: anywhere;
 }
 
 .math-overview-facts {

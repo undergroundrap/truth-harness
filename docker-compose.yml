@@ -157,8 +157,29 @@ services:
       - truth_harness_node_modules:/workspace/node_modules
       - truth_harness_npm_cache:/home/truth/.npm
     command: ["npm", "run", "web:serve", "--", "--host", "0.0.0.0", "--port", "4180"]
+    networks:
+      - web_isolated
+
+  web-gateway:
+    <<: *truth-harness-security
+    build:
+      context: .
+      target: dev
+    image: truth-harness:dev
+    working_dir: /workspace
+    environment:
+      TRUTH_HARNESS_GATEWAY_HOST: "0.0.0.0"
+      TRUTH_HARNESS_GATEWAY_PORT: "4180"
+      TRUTH_HARNESS_WEB_HOST: "web"
+      TRUTH_HARNESS_WEB_PORT: "4180"
+    command: ["node", "tools/local-web-gateway.mjs"]
+    depends_on:
+      - web
     ports:
       - "127.0.0.1:4180:4180"
+    networks:
+      - web_isolated
+      - web_ingress
 
   lean-proof:
     <<: *truth-harness-security
@@ -195,3 +216,8 @@ services:
 volumes:
   truth_harness_node_modules:
   truth_harness_npm_cache:
+
+networks:
+  web_isolated:
+    internal: true
+  web_ingress:
