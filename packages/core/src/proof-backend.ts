@@ -896,6 +896,30 @@ function probeLeanBackend(args: {
   }
 
   const version = stdout || stderr || "version unavailable";
+  if (!/\bLean\s+\(version\s+\d+\.\d+\.\d+(?:,|\))/u.test(version)) {
+    return {
+      backendId: "lean",
+      displayName: "Lean proof checker",
+      adapter: "local-lean-subprocess",
+      role: "proof-checker",
+      acceptedProofChecker: true,
+      status: "error",
+      localOnly: true,
+      networkAccess: "none",
+      command: args.command,
+      args: probeArgs,
+      exitCode: result.status,
+      stdout,
+      stderr,
+      error: "Backend version output did not identify a Lean proof checker.",
+      canCheckProofs: false,
+      statusProbeMintedProof: false,
+      limitations: [
+        "The configured command exited successfully but did not report a recognized Lean version.",
+        "A non-Lean executable cannot support `proved` trust labels."
+      ]
+    };
+  }
 
   return {
     backendId: "lean",

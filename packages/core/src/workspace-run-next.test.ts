@@ -345,7 +345,18 @@ describe("workspace run-next", () => {
       throw new Error("Expected a proof gate in math validation plan.");
     }
     await mkdir(join(root, "proofs"), { recursive: true });
-    await writeFile(join(root, "proofs", "scoped.lean"), "process.exit(1);\n", "utf8");
+    await writeFile(
+      join(root, "proofs", "scoped.lean"),
+      "theorem scoped_fixture : True := by\n  exact False.elim\n",
+      "utf8"
+    );
+    const proofRunner: ProofBackendCommandRunner = (_command, args) => {
+      if (args[0] === "--version") {
+        return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
+      }
+
+      return { status: 1, stdout: "", stderr: "type mismatch" };
+    };
     const review = minimalReview({
       rootPath: root,
       command:
@@ -363,6 +374,7 @@ describe("workspace run-next", () => {
       rootPath: root,
       review,
       executeLocal: true,
+      proofRunner,
       now: "2026-06-18T00:02:00.000Z"
     });
     const plans = await listValidationPlans(root);

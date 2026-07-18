@@ -50,7 +50,11 @@ import {
   type ModelContextSection,
   type ModelContextTarget
 } from "./model-context.js";
-import { getProofBackendStatus, writeLeanProofCheckRecord } from "./proof-backend.js";
+import {
+  getProofBackendStatus,
+  writeLeanProofCheckRecord,
+  type ProofBackendCommandRunner
+} from "./proof-backend.js";
 import { readReportDraft } from "./report-draft.js";
 import { createReceipt } from "./receipt.js";
 import {
@@ -401,6 +405,7 @@ export async function createWorkspaceRunNextPlan(input: {
   executeLocal: boolean;
   now?: string;
   enginePlanOptions?: CreateEnginePlanOptions;
+  proofRunner?: ProofBackendCommandRunner;
 }): Promise<WorkspaceRunNextPlan> {
   const createdAt = input.now ?? new Date().toISOString();
   const planId = workspaceRunNextPlanId(createdAt, input.review.reviewId);
@@ -467,7 +472,10 @@ export async function createWorkspaceRunNextPlan(input: {
     });
   }
 
-  const execution = await executeWorkspaceRunNextItem(input.rootPath, nextItem);
+  const execution = await executeWorkspaceRunNextItem(input.rootPath, nextItem, {
+    proofRunner: input.proofRunner,
+    enginePlanOptions: input.enginePlanOptions
+  });
   return finalizeWorkspaceRunNextPlan(input.rootPath, {
     ...basePlan,
     status: execution.status,
@@ -2211,7 +2219,11 @@ function uniqueStrings(values: Array<string | undefined>): string[] {
 
 async function executeWorkspaceRunNextItem(
   rootPath: string,
-  item: WorkspaceReviewItem
+  item: WorkspaceReviewItem,
+  executionOptions: {
+    proofRunner?: ProofBackendCommandRunner;
+    enginePlanOptions?: CreateEnginePlanOptions;
+  } = {}
 ): Promise<WorkspaceRunNextPlan["execution"]> {
   const manualBoundary = manualContainerGateBoundary(item.command);
   if (manualBoundary) {
@@ -2231,7 +2243,10 @@ async function executeWorkspaceRunNextItem(
   const [group, action, ...rest] = parsed.args;
   const options = commandOptionMap(parsed.args);
   const workspace = rootPath;
-  const timeoutMs = parseOptionalPositiveIntegerOption(options["timeout-ms"], 3000);
+  const timeoutMs = parseOptionalPositiveIntegerOption(
+    options["timeout-ms"],
+    executionOptions.enginePlanOptions?.timeoutMs ?? 3000
+  );
 
   try {
     if (group === "model-context" && action === "prepare") {
@@ -2841,10 +2856,14 @@ async function executeWorkspaceRunNextItem(
       }
       const declarationName = typeof options.declaration === "string" ? options.declaration : undefined;
       const scope = proofCheckScopeFromOptions(options);
-      const leanCommand = typeof options["lean-command"] === "string" ? options["lean-command"] : undefined;
+      const leanCommand =
+        typeof options["lean-command"] === "string"
+          ? options["lean-command"]
+          : executionOptions.enginePlanOptions?.leanCommand;
       const backendStatus = getProofBackendStatus({
         leanCommand,
-        timeoutMs
+        timeoutMs,
+        runner: executionOptions.proofRunner
       }).backends.find((candidate) => candidate.backendId === "lean");
       if (!backendStatus?.canCheckProofs) {
         return {
@@ -2866,7 +2885,8 @@ async function executeWorkspaceRunNextItem(
         declarationName,
         scope,
         leanCommand,
-        timeoutMs
+        timeoutMs,
+        runner: executionOptions.proofRunner
       });
       const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
       const attachment = await attachRunNextVerifierEvidence(workspace, item, {
@@ -2928,13 +2948,20 @@ async function executeWorkspaceRunNextItem(
         return blockedPlaceholderCommand(item.command, "smt-check");
       }
       const backend = parseSmtBackendOption(options.backend);
-      const z3Command = typeof options["z3-command"] === "string" ? options["z3-command"] : undefined;
-      const cvc5Command = typeof options["cvc5-command"] === "string" ? options["cvc5-command"] : undefined;
+      const z3Command =
+        typeof options["z3-command"] === "string"
+          ? options["z3-command"]
+          : executionOptions.enginePlanOptions?.z3Command;
+      const cvc5Command =
+        typeof options["cvc5-command"] === "string"
+          ? options["cvc5-command"]
+          : executionOptions.enginePlanOptions?.cvc5Command;
       const selectedBackend = backend ?? "z3";
       const backendStatus = getSmtBackendStatus({
         z3Command,
         cvc5Command,
-        timeoutMs
+        timeoutMs,
+        runner: executionOptions.enginePlanOptions?.smtRunner
       }).backends.find((candidate) => candidate.backendId === selectedBackend);
       if (!backendStatus?.canCheckSmt) {
         return {
@@ -2957,7 +2984,8 @@ async function executeWorkspaceRunNextItem(
         backend,
         z3Command,
         cvc5Command,
-        timeoutMs
+        timeoutMs,
+        runner: executionOptions.enginePlanOptions?.smtRunner
       });
       const evidenceRef = workspaceLocalRef(workspace, result.jsonPath);
       const attachment = await attachRunNextVerifierEvidence(workspace, item, {
@@ -2990,8 +3018,14 @@ async function executeWorkspaceRunNextItem(
         };
       }
       const backend = parseSymbolicCasBackendOption(options.backend) ?? "maxima";
-      const maximaCommand = typeof options["maxima-command"] === "string" ? options["maxima-command"] : undefined;
-      const sageCommand = typeof options["sage-command"] === "string" ? options["sage-command"] : undefined;
+      const maximaCommand =
+        typeof options["maxima-command"] === "string"
+          ? options["maxima-command"]
+          : executionOptions.enginePlanOptions?.maximaCommand;
+      const sageCommand =
+        typeof options["sage-command"] === "string"
+          ? options["sage-command"]
+          : executionOptions.enginePlanOptions?.sageCommand;
       const variable = typeof options.variable === "string" ? options.variable : "x";
       const backendStatus = getCasBackendStatus({
         maximaCommand,

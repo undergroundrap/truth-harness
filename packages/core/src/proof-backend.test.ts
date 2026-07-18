@@ -64,6 +64,26 @@ describe("proof backend status", () => {
     expect(report.warnings.join(" ")).toContain("does not prove any claim");
   });
 
+  it("rejects a successful executable that does not identify itself as Lean", () => {
+    const runner: ProofBackendCommandRunner = () => ({
+      status: 0,
+      stdout: "v22.17.0\n",
+      stderr: ""
+    });
+
+    const report = getProofBackendStatus({ leanCommand: "node", runner });
+
+    expect(report.proofCheckersAvailable).toBe(0);
+    expect(report.backends[0]).toMatchObject({
+      backendId: "lean",
+      status: "error",
+      canCheckProofs: false,
+      statusProbeMintedProof: false,
+      error: "Backend version output did not identify a Lean proof checker."
+    });
+    expect(report.backends[0]?.limitations.join(" ")).toContain("non-Lean executable");
+  });
+
   it("keeps proved unavailable when Lean is missing", () => {
     const runner: ProofBackendCommandRunner = () => ({
       status: null,

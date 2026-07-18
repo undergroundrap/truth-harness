@@ -117,6 +117,7 @@ export interface CreateReleaseAuditInput
   requireSandbox?: boolean;
   requireSavedStrictEngineRun?: boolean;
   runner?: EngineVerificationCommandRunner;
+  sandboxStatus?: CodeRunSandboxStatus;
 }
 
 export interface ReleaseAudit {
@@ -220,7 +221,7 @@ export async function createReleaseAudit(input: CreateReleaseAuditInput): Promis
     requireSavedStrictEngineRun: input.requireSavedStrictEngineRun === true
   });
   const workspace = await getLocalWorkspaceStatus(rootPath);
-  const sandbox = getCodeRunSandboxStatus();
+  const sandbox = input.sandboxStatus ?? getCodeRunSandboxStatus();
   const sandboxEvidence = workspace.exists && workspace.manifest ? await latestPassingSandboxRun(rootPath) : undefined;
   const webUiReview = workspace.exists && workspace.manifest ? await latestWebUiReview(rootPath) : undefined;
   const reviewerBundleVerification = workspace.exists && workspace.manifest

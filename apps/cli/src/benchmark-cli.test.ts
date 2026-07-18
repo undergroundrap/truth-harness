@@ -8,6 +8,7 @@ import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "../..
 import type { EngineVerificationCommandRunner } from "../../../packages/core/src/engine-verification.js";
 import { writeReportDraft } from "../../../packages/core/src/report-draft.js";
 import { addResearchSessionCheckpoint } from "../../../packages/core/src/research-session.js";
+import { getCodeRunSandboxStatus } from "../../../packages/core/src/sandbox.js";
 import { verifierRouteStatementBoundaryHash } from "../../../packages/core/src/verifier-route.js";
 import { program } from "./index.js";
 
@@ -681,7 +682,7 @@ describe("benchmark CLI", () => {
     expect(json.trustBoundary.provedRequiresAcceptedProofCheckerRun).toBe(true);
   });
 
-  it("keeps saved-sandbox readiness lookup conservative when no saved measurement exists", async () => {
+  it("does not invent saved-sandbox readiness when no saved measurement exists", async () => {
     const root = await tempRoot();
     const result = await runCli([
       "engines",
@@ -710,10 +711,11 @@ describe("benchmark CLI", () => {
 
     expect(result.exitCode).toBe(0);
     expect(json.savedEvidence?.sandboxRun).toBeUndefined();
+    const measuredSandbox = getCodeRunSandboxStatus();
     expect(json.gates).toContainEqual(
       expect.objectContaining({
         id: "agent-autonomy",
-        status: "blocked"
+        status: measuredSandbox.available && measuredSandbox.canAttestNetworkNone ? "ready" : "blocked"
       })
     );
   });

@@ -1234,7 +1234,14 @@ describe("release audit", () => {
       smtSourceText: "(set-logic QF_LIA)\n(declare-const x Int)\n(assert (> x 0))\n(check-sat)\n",
       leanSourcePath: "Proof.lean",
       leanSourceText: "theorem smoke : True := by\n  trivial\n",
-      runner: passingEngineRunner
+      runner: passingEngineRunner,
+      sandboxStatus: detectCodeRunSandboxStatus({
+        platform: "win32",
+        env: {},
+        fileExists: () => false,
+        readFile: () => undefined,
+        readDir: () => undefined
+      })
     });
 
     expect(audit.status).toBe("ready");
