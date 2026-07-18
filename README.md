@@ -29,6 +29,21 @@ The name is intentional: it describes the product as a local harness for routing
 
 The public name is **Truth Harness**. The CLI command, package scope, schemas, Docker service, MCP tools, and local project store all use the `truth-harness` namespace. See [docs/PARITY_LEDGER.md](docs/PARITY_LEDGER.md) for the naming decision and parity gates against WolframAlpha, SageMath, Lean, JupyterLab, provenance tools, and scientific RAG.
 
+## OpenAI Build Week: Codex and GPT-5.6
+
+Truth Harness was built through an extended Codex engineering workflow with GPT-5.6 used for high-reasoning implementation, architecture review, failure analysis, and demo rehearsal. Codex inspected and edited the TypeScript monorepo, exercised the local web interface, ran Docker-isolated verification, added regression tests, reviewed trust and security boundaries, and prepared the replayable Build Week evidence package.
+
+The model is deliberately not the source of truth. Codex and GPT-5.6 can propose a claim, choose a candidate verifier route, critique a result, and explain the evidence. Deterministic local engines must perform the accepted computation or proof check before Truth Harness assigns a stronger trust label. In the submitted swept-AABB demo, exact rational arithmetic refutes the proposed claim and records the impact interval, backend, replay command, privacy boundary, and limitations in a local receipt. Model output by itself never counts as proof.
+
+The submitted workflow demonstrates the intended division of responsibility:
+
+1. Codex and GPT-5.6 translate a human problem into a bounded claim and verification plan.
+2. Truth Harness routes that claim to a deterministic local verifier inside Docker.
+3. The verifier returns checkable evidence, a conservative trust label, and a replay command.
+4. Codex presents the evidence and limitations without upgrading its own reasoning into proof.
+
+See [docs/BUILD_WEEK_SUBMISSION.md](docs/BUILD_WEEK_SUBMISSION.md) and [docs/BUILD_WEEK_DEMO_RUNBOOK.md](docs/BUILD_WEEK_DEMO_RUNBOOK.md) for the submitted story and exact reproduction steps.
+
 ## Why It Exists
 
 AI is already good at writing plausible math. The hard part is knowing when the math is true.
