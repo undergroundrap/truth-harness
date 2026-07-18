@@ -1133,6 +1133,120 @@ h1 {
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.26);
 }
 
+.build-week-brief {
+  display: grid;
+  gap: 9px;
+  max-width: 980px;
+  margin: clamp(28px, 7vh, 72px) auto 18px;
+  border: 1px solid rgba(122, 214, 170, 0.28);
+  border-radius: 8px;
+  background: #141715;
+  padding: clamp(18px, 3vw, 30px);
+}
+
+.build-week-brief h2 {
+  font-size: clamp(22px, 3vw, 34px);
+  line-height: 1.15;
+}
+
+.build-week-brief p,
+.build-week-brief blockquote {
+  max-width: 760px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.build-week-brief blockquote {
+  margin: 4px 0 0;
+  border-left: 2px solid var(--warn);
+  color: #eee8dc;
+  padding: 8px 0 8px 14px;
+}
+
+.build-week-brief-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.build-week-brief-meta span::before {
+  color: var(--exact);
+  content: "\2022";
+  margin-right: 6px;
+}
+
+body[data-presentation="build-week"] .app-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body[data-presentation="build-week"] .sidebar,
+body[data-presentation="build-week"] .sidebar-resizer,
+body[data-presentation="build-week"] .sidebar-restore,
+body[data-presentation="build-week"] .header-actions,
+body[data-presentation="build-week"] .public-journey-panel,
+body[data-presentation="build-week"] .project-start-panel,
+body[data-presentation="build-week"] .inspector,
+body[data-presentation="build-week"] .task-dock {
+  display: none !important;
+}
+
+body[data-presentation="build-week"] .session-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body[data-presentation="build-week"] .workspace-header {
+  padding-inline: clamp(18px, 4vw, 56px);
+}
+
+body[data-presentation="build-week"] .thread-panel {
+  padding: 18px clamp(18px, 5vw, 72px) 132px;
+}
+
+body[data-presentation="build-week"] .session-title,
+body[data-presentation="build-week"] .work-surface {
+  width: min(1100px, 100%);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+body[data-presentation="build-week"] .session-title {
+  scroll-margin-top: 18px;
+}
+
+body[data-presentation="build-week"] .message {
+  display: none;
+}
+
+body[data-presentation="build-week"][data-demo-state="ready"] .session-title,
+body[data-presentation="build-week"][data-demo-state="ready"] .message,
+body[data-presentation="build-week"][data-demo-state="ready"] .work-surface,
+body[data-presentation="build-week"][data-demo-state="verifying"] .session-title,
+body[data-presentation="build-week"][data-demo-state="verifying"] .message,
+body[data-presentation="build-week"][data-demo-state="verifying"] .work-surface {
+  display: none;
+}
+
+body[data-presentation="build-week"][data-demo-state="verified"] .build-week-brief {
+  display: none;
+}
+
+body[data-presentation="build-week"] .composer {
+  width: min(980px, calc(100% - 36px));
+}
+
+body[data-presentation="build-week"]:not([data-surface="trace"]) .composer {
+  display: none;
+}
+
+body[data-presentation="build-week"] .report-drafts-panel,
+body[data-presentation="build-week"] #credibility-pack-panel {
+  display: none;
+}
+
 .project-start-brand {
   display: grid;
   grid-template-columns: 58px minmax(0, 1fr);

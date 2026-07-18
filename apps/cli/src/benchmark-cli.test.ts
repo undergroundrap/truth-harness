@@ -368,7 +368,8 @@ describe("benchmark CLI", () => {
   it("runs the focused Build Week collision demo with an exact impact window", async () => {
     const root = await tempRoot();
     const reportPath = join(root, "truth-harness-build-week-report.html");
-    const result = await runCli(["demo", "--focus", "build-week", "--no-color", "--report", reportPath]);
+    const reportArgument = relative(process.cwd(), reportPath);
+    const result = await runCli(["demo", "--focus", "build-week", "--no-color", "--report", reportArgument]);
     const report = await readFile(reportPath, "utf8");
     const caseCards = report.match(/<section class="case-card">/g) ?? [];
 
@@ -376,6 +377,7 @@ describe("benchmark CLI", () => {
     expect(result.stdout).toContain("Continuous collision tunneling");
     expect(result.stdout).toContain("refuted");
     expect(result.stdout).toContain("Exact impact window: tEnter=2/5, tExit=4/5");
+    expect(result.stdout).toContain(`Report: ${reportArgument}`);
     expect(caseCards).toHaveLength(1);
     expect(report).toContain("local-swept-aabb2-intersection");
     expect(report).toContain("&quot;tEnter&quot;: &quot;2/5&quot;");

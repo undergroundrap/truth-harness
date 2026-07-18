@@ -18,7 +18,7 @@ describe("web UI action contracts", () => {
     expect(source).toContain("function receiptEvidenceHighlights(receipt)");
     expect(source).toContain('["Impact window", `${tEnter} <= t <= ${tExit}`]');
     expect(source).toContain("evidenceOutputs: outputs");
-    expect(source).toContain('workSurface.scrollIntoView({ block: "start", behavior: "smooth" })');
+    expect(source).toContain('receiptFocusTarget.scrollIntoView({ block: "start", behavior: "smooth" })');
     expect(styles).toContain(".math-overview-evidence");
     expect(styles).toContain(".math-overview-expression > .math-inline");
     expect(styles).toContain("overflow-wrap: anywhere;");
@@ -722,8 +722,8 @@ describe("web UI action contracts", () => {
     const graphEdgeCodeStyles = styles.match(/\.graph-edge-list code \{[\s\S]*?\r?\n\}/u)?.[0];
     const runbookPacketStyles = styles.match(/#runbook-packet \{[\s\S]*?\r?\n\}/u)?.[0];
 
-    expect(html).toContain('src="./src/app.js?v=2026-06-22-professor-handoff-packet"');
-    expect(html).toContain('href="./src/styles.css?v=2026-06-22-professor-handoff-packet"');
+    expect(html).toContain('src="./src/app.js?v=2026-07-18-build-week-demo"');
+    expect(html).toContain('href="./src/styles.css?v=2026-07-18-build-week-demo"');
     expect(html).toContain('<pre id="truth-harness-ui-audit-result"');
     expect(html).toContain('aria-hidden="true"');
     expect(source).toContain('const UI_AUDIT_SURFACES = ["trace", "plot", "runbook", "checks", "engine", "graph", "protocol", "notes", "replay", "report"];');
@@ -1239,5 +1239,32 @@ describe("web UI action contracts", () => {
     expect(styles).toContain(".visual-mode-bar[hidden]");
     expect(styles).toContain(".visual-renderer-source");
     expect(styles).toContain(".report-figure-citation");
+  });
+  it("offers a focused Build Week presentation without bypassing the real receipt route", async () => {
+    const [html, source, styles] = await Promise.all([
+      readFile(appHtmlPath, "utf8"),
+      readFile(appSourcePath, "utf8"),
+      readFile(appStylesPath, "utf8")
+    ]);
+
+    expect(html).toContain('id="build-week-brief"');
+    expect(html).toContain("Continuous collision tunneling");
+    expect(source).toContain('pageParams.get("demo") === "build-week"');
+    expect(source).toContain('document.body.dataset.presentation = "build-week"');
+    expect(source).toContain('document.body.dataset.demoState = "verified"');
+    expect(source).toContain('buildWeekPresentationMode ? "Continuous collision tunneling" : receipt.title');
+    expect(source).toContain("if (!buildWeekPresentationMode) {");
+    expect(source).toContain("if (buildWeekPresentationMode) {");
+    expect(source).toContain("return receiptFrames;");
+    expect(source).toContain('fetch("/api/receipt"');
+    expect(source).toContain("buildWeekPresentationMode ? sessionTitle : workSurface");
+    expect(styles).toContain('body[data-presentation="build-week"] .session-grid');
+    expect(styles).toContain('body[data-presentation="build-week"] .inspector');
+    expect(styles).toContain('body[data-presentation="build-week"] .message');
+    expect(styles).toContain("scroll-margin-top: 18px;");
+    expect(styles).toContain('body[data-presentation="build-week"]:not([data-surface="trace"]) .composer');
+    expect(styles).toContain('body[data-presentation="build-week"] .report-drafts-panel');
+    expect(styles).toContain('body[data-presentation="build-week"] #credibility-pack-panel');
+    expect(styles).toContain('body[data-presentation="build-week"][data-demo-state="verified"] .build-week-brief');
   });
 });

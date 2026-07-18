@@ -5924,7 +5924,7 @@ async function runDemoGauntlet(options: {
   printDemoScorecard({
     tally,
     total: results.length,
-    reportPath: resolvedReportPath,
+    reportPath: options.reportPath,
     color
   });
 

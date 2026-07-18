@@ -279,6 +279,10 @@ const recentReceiptKeys = ["rational", "denominator", "parity", "dimension"];
 const ACTIVITY_PAGE_SIZE = 12;
 const LEDGER_PAGE_SIZE = 8;
 const REPLAY_PAGE_SIZE = 8;
+const BUILD_WEEK_DEMO_PROBLEM =
+  "verify swept AABB A min(0,0) max(1,1) velocity(5,0) intersect AABB B min(3,0) max(4,1) over t in [0,1] = false";
+const pageParams = new URLSearchParams(window.location.search);
+const buildWeekPresentationMode = pageParams.get("demo") === "build-week";
 const NOTES_STORAGE_KEY = "truth-harness.session-notes.v0";
 const RESEARCHER_NAME_STORAGE_KEY = "truth-harness.researcher-name.v0";
 const SIDEBAR_WIDTH_STORAGE_KEY = "truth-harness.sidebar-width.v0";
@@ -604,6 +608,8 @@ const mathSurfaceFacts = document.querySelector("#math-surface-facts");
 const promptInput = document.querySelector("#prompt-input");
 const composer = document.querySelector("#composer");
 const verifyButton = document.querySelector("#verify-button");
+const buildWeekBrief = document.querySelector("#build-week-brief");
+const sessionTitle = document.querySelector(".session-title");
 const workSurface = document.querySelector(".work-surface");
 const plotCanvas = document.querySelector("#plot-canvas");
 const plotKind = document.querySelector("#plot-kind");
@@ -1289,33 +1295,41 @@ researchNotes.value = loadNotes();
 researcherNameInput.value = loadResearcherName();
 updateResearcherNameSummary();
 initSidebarLayout();
+if (buildWeekPresentationMode) {
+  document.body.dataset.presentation = "build-week";
+  document.body.dataset.demoState = "ready";
+  promptInput.value = BUILD_WEEK_DEMO_PROBLEM;
+  buildWeekBrief.hidden = false;
+}
 updateNotesStatus("local draft");
 addActivity("system", "Workbench opened", "Static shell loaded; no external service contacted.", "passed");
 addActivity("system", "Local API ready", "UI will submit prompts only to local receipt and claim ledger routes on this machine.", "waiting");
 render();
-void refreshWorkspaceEvents({ announce: false });
-void refreshSafetyStatus();
-void refreshEngineRuns({ announce: false });
-void refreshReleaseAudit({ announce: false });
-void refreshWorkspaceReadiness();
-void refreshWorkspaceMaintenance({ announce: false });
-void refreshCatalogStatus();
-void refreshPublicMathJourney({ announce: false });
-void refreshClaimLedger();
-void refreshRouteLedger();
-void refreshResearchSessions();
-void refreshResearchMap();
-void refreshVisualArtifacts();
-void refreshWorkspaceReview();
-void refreshLatestProfessorChallengeSeed({ announce: false });
-void refreshWorkspaceRunNext({ announce: false });
-void refreshWorkspaceResumeIndex({ announce: false });
-void refreshWorkspacePilotLoop({ announce: false });
-void refreshWorkspacePilotLoops({ announce: false });
-void refreshWorkspaceRunNextHandoffs({ announce: false });
-void refreshWorkspaceGraph();
-void refreshCasChecks();
-void refreshSmtChecks();
+if (!buildWeekPresentationMode) {
+  void refreshWorkspaceEvents({ announce: false });
+  void refreshSafetyStatus();
+  void refreshEngineRuns({ announce: false });
+  void refreshReleaseAudit({ announce: false });
+  void refreshWorkspaceReadiness();
+  void refreshWorkspaceMaintenance({ announce: false });
+  void refreshCatalogStatus();
+  void refreshPublicMathJourney({ announce: false });
+  void refreshClaimLedger();
+  void refreshRouteLedger();
+  void refreshResearchSessions();
+  void refreshResearchMap();
+  void refreshVisualArtifacts();
+  void refreshWorkspaceReview();
+  void refreshLatestProfessorChallengeSeed({ announce: false });
+  void refreshWorkspaceRunNext({ announce: false });
+  void refreshWorkspaceResumeIndex({ announce: false });
+  void refreshWorkspacePilotLoop({ announce: false });
+  void refreshWorkspacePilotLoops({ announce: false });
+  void refreshWorkspaceRunNextHandoffs({ announce: false });
+  void refreshWorkspaceGraph();
+  void refreshCasChecks();
+  void refreshSmtChecks();
+}
 
 function render() {
   const receipt = receiptStore.get(state.receiptKey);
@@ -1323,7 +1337,8 @@ function render() {
     return;
   }
 
-  document.querySelector(".session-title h2").textContent = receipt.title;
+  document.querySelector(".session-title h2").textContent =
+    buildWeekPresentationMode ? "Continuous collision tunneling" : receipt.title;
   document.querySelector(".session-title p").textContent = receipt.subtitle;
   document.querySelector(".status-pill").textContent = receipt.trust;
   document.querySelector(".status-pill").className = `status-pill ${trustClass(receipt.trust)}`;
@@ -15071,7 +15086,7 @@ function renderReplay(receipt) {
 }
 
 function replayFrames(receipt) {
-  return [
+  const receiptFrames = [
     {
       actor: "human",
       kind: "problem",
@@ -15085,7 +15100,15 @@ function replayFrames(receipt) {
       status: trustClass(receipt.trust),
       title: `Evidence ${index + 1}: ${kind}`,
       detail: summary
-    })),
+    }))
+  ];
+
+  if (buildWeekPresentationMode) {
+    return receiptFrames;
+  }
+
+  return [
+    ...receiptFrames,
     ...activityEvents.slice().reverse().map((event) => ({
       actor: event.actor,
       kind: "activity",
@@ -20345,6 +20368,9 @@ composer.addEventListener("submit", async (event) => {
   if (!problem) {
     return;
   }
+  if (buildWeekPresentationMode) {
+    document.body.dataset.demoState = "verifying";
+  }
   const promptTags = extractPromptTags(problem);
   const problemForApi = problem.replace(/(?:^|\s)#[a-z0-9][a-z0-9-]{1,40}/giu, " ").replace(/\s+/gu, " ").trim() || problem;
 
@@ -20373,6 +20399,9 @@ composer.addEventListener("submit", async (event) => {
     setReplayPlaying(false);
     state.receiptKey = key;
     shouldFocusReceipt = true;
+    if (buildWeekPresentationMode) {
+      document.body.dataset.demoState = "verified";
+    }
     state.level = "middle";
     state.selectedResearchMapSnapshotId = undefined;
     state.selectedResearchMapNodeId = undefined;
@@ -20391,14 +20420,18 @@ composer.addEventListener("submit", async (event) => {
       refreshWorkspaceEvents({ announce: false })
     ]);
   } catch (error) {
+    if (buildWeekPresentationMode) {
+      document.body.dataset.demoState = "ready";
+    }
     updateLatestActivity("Calling local API", "refuted", "POST /api/receipt failed");
     addActivity("local-api", "Verification failed", error instanceof Error ? error.message : "Unknown API failure.", "refuted");
   } finally {
     verifyButton.disabled = false;
     verifyButton.textContent = "Verify";
     render();
-    if (shouldFocusReceipt && workSurface) {
-      requestAnimationFrame(() => workSurface.scrollIntoView({ block: "start", behavior: "smooth" }));
+    const receiptFocusTarget = buildWeekPresentationMode ? sessionTitle : workSurface;
+    if (shouldFocusReceipt && receiptFocusTarget) {
+      requestAnimationFrame(() => receiptFocusTarget.scrollIntoView({ block: "start", behavior: "smooth" }));
     }
   }
 });

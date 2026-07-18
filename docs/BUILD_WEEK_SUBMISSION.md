@@ -58,9 +58,9 @@ Truth Harness is not a magic proof engine, medical discovery system, patent vali
 
 ## Current readiness snapshot
 
-As of 2026-07-17:
+As of 2026-07-18:
 
-- `npm run check`: passed, 86 test files and 748 tests.
+- `npm run check`: passed, 86 test files and 753 tests.
 - `npm run audit:release`: ready, 21 pass / 0 warn / 0 fail.
 - Public hygiene scan: no committed local workspace artifacts, no obvious API keys, old pre-rename product naming removed from public config/templates.
 - Remaining launch work: record a concise demo video, verify Docker demo on the target machine, and decide whether the repository should be public before submission or shared privately if the challenge allows private repositories.

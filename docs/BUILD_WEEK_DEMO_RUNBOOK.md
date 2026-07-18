@@ -54,9 +54,9 @@ The existing full launch gauntlet remains available through `npm run docker:demo
 
 ## Recording order
 
-1. Show Docker Desktop running and the Truth Harness web workbench at `http://127.0.0.1:4180`.
+1. Show Docker Desktop running and open the focused Truth Harness workbench at `http://127.0.0.1:4180/?demo=build-week`.
 2. State the endpoint-only claim in one sentence.
-3. Paste the exact claim into the workbench and select **Verify**.
+3. The exact claim is prefilled. Select **Verify**; this calls the normal local receipt API rather than a mocked demo route.
 4. Pause on the `refuted` trust label and exact `2/5` to `4/5` impact window.
 5. Point to the receipt inspector: backend `local-swept-aabb2-intersection`, network `none`, and trust `refuted` rather than `proved`.
 6. Open **Replay** and show the problem, exact tool run, and counterexample frames.
@@ -75,4 +75,4 @@ npm run audit:release
 
 The demo is invalid if the trust label, impact times, backend, privacy boundary, or replay command differ from the expected evidence above.
 
-The Docker web app runs on an internal-only network. A separate local gateway publishes `127.0.0.1:4180` without mounting the workspace; the verification process itself cannot reach the public internet.
+The focused demo runs with `network_mode: none` and mounts only `.truth-harness`, where it writes the report. The Docker web app runs on an internal-only network and also mounts only `.truth-harness`; the source tree is baked into the prepared image. A separate local gateway publishes `127.0.0.1:4180` without mounting the workspace.

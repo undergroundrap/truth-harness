@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="64x64" href="./assets/icon-64.png">
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/icon-180.png">
     <link rel="manifest" href="./manifest.webmanifest">
-    <link rel="stylesheet" href="./src/styles.css?v=2026-06-22-professor-handoff-packet">
+    <link rel="stylesheet" href="./src/styles.css?v=2026-07-18-build-week-demo">
   </head>
   <body>
     <div class="app-shell" id="app-shell">
@@ -210,6 +210,17 @@
         </section>
         <section class="session-grid">
           <section class="thread-panel" aria-label="Verification session">
+            <section class="build-week-brief" id="build-week-brief" aria-label="Build Week verification problem" hidden>
+              <span class="mini-label">applied engine math</span>
+              <h2>Continuous collision tunneling</h2>
+              <p>A unit box crosses a static box during one frame even though their endpoints never overlap.</p>
+              <blockquote>The boxes do not overlap at the start or end, so no collision occurred.</blockquote>
+              <div class="build-week-brief-meta" aria-label="Verification boundary">
+                <span>exact continuous time</span>
+                <span>local Docker</span>
+                <span>network none</span>
+              </div>
+            </section>
             <section class="project-start-panel" aria-label="Project start">
               <div class="project-start-brand">
                 <img src="./assets/icon-192.png" alt="" class="project-start-logo">
@@ -1093,6 +1104,6 @@
       </main>
     </div>
     <pre id="truth-harness-ui-audit-result" hidden aria-hidden="true"></pre>
-    <script src="./src/app.js?v=2026-06-22-professor-handoff-packet" type="module"></script>
+    <script src="./src/app.js?v=2026-07-18-build-week-demo" type="module"></script>
   </body>
 </html>
