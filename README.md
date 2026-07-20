@@ -42,6 +42,19 @@ The submitted workflow demonstrates the intended division of responsibility:
 3. The verifier returns checkable evidence, a conservative trust label, and a replay command.
 4. Codex presents the evidence and limitations without upgrading its own reasoning into proof.
 
+### What Changed During Build Week
+
+Truth Harness existed before OpenAI Build Week. The submission-period work is intentionally visible in the public `main` history:
+
+- `1a24c5e` prepared the repository for public review with launch-hygiene checks.
+- `a9376d1` added the isolated Build Week verification rehearsal.
+- `eb30ea9` patched dependency security issues and tightened Lean backend identity checks.
+- `bd06b03` hardened the Docker demo, exact swept-AABB evidence, replay, and report path.
+- `1c7b413` added the submission gallery assets generated from the working demo.
+- `50e8d64` documented the Codex and GPT-5.6 workflow and its trust boundary.
+
+These commits were produced during the July 2026 submission period through the primary Codex build task identified by the `/feedback` session ID in the Devpost submission. They are evidence of the Build Week contribution, not evidence that any model output is mathematically true.
+
 See [docs/BUILD_WEEK_SUBMISSION.md](docs/BUILD_WEEK_SUBMISSION.md) and [docs/BUILD_WEEK_DEMO_RUNBOOK.md](docs/BUILD_WEEK_DEMO_RUNBOOK.md) for the submitted story and exact reproduction steps.
 
 ## Why It Exists
