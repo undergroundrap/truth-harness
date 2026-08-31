@@ -2,7 +2,12 @@ import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { program, validateHumContractInputs } from "./index.js";
+import {
+  validateHumContractInputs,
+  type HumCapabilitiesReport,
+  type HumValidateReport
+} from "@truth-harness/core";
+import { program } from "./index.js";
 
 const roots: string[] = [];
 
@@ -158,6 +163,46 @@ describe("Hum validate CLI", () => {
     expect(json.exit_code).toBe(2);
     expect(json.inputs[0]?.issues[0]).toMatchObject({ rule: "tool_io_failure" });
   });
+
+  it("prints stable validation-only Hum capabilities as JSON", async () => {
+    const first = await runCli(["hum", "capabilities", "--json"]);
+    const second = await runCli(["hum", "capabilities", "--json"]);
+    const report = JSON.parse(first.stdout) as HumCapabilitiesReport;
+
+    expect(first.exitCode).toBe(0);
+    expect(second.exitCode).toBe(0);
+    expect(second.stdout).toBe(first.stdout);
+    expect(report.schema_version).toBe("truth-harness.hum_capabilities.v0");
+    expect(report.validation).toMatchObject({ available: true, scope: "schema_and_honesty_rules" });
+    expect(report.verification).toEqual({
+      available: false,
+      adapters: [],
+      reason: "Verification is unavailable until a concrete Hum verifier adapter is installed."
+    });
+    expect(report.obligation_kinds.every((entry) => entry.verification === "unavailable")).toBe(true);
+    expect(report.normalized_representations.every((entry) => entry.verification === "unavailable")).toBe(true);
+    expect(report.proof_policy).toMatchObject({
+      llm_prose_counts_as_proof: false,
+      compiler_fact_text_counts_as_proof: false,
+      unknown_is_valid: true
+    });
+    expect(report.privacy).toEqual({
+      local_first: true,
+      network_access: "none",
+      cloud_access: "none",
+      telemetry: "none"
+    });
+  });
+
+  it("prints a useful human capability summary without implying verification", async () => {
+    const result = await runCli(["hum", "capabilities"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Hum capabilities: truth-harness.hum_capabilities.v0");
+    expect(result.stdout).toContain("Validation: available (schema_and_honesty_rules)");
+    expect(result.stdout).toContain("Verification: unavailable");
+    expect(result.stdout).toContain("network=none; cloud=none; telemetry=none");
+  });
 });
 
 async function runCli(args: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
@@ -190,30 +235,4 @@ async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "truth-harness-hum-cli-"));
   roots.push(root);
   return root;
-}
-
-interface HumValidateReport {
-  schema_version: "truth-harness.hum_validate.v0";
-  status: "valid" | "invalid" | "tool_error";
-  exit_code: 0 | 1 | 2;
-  summary: {
-    total: number;
-    valid: number;
-    invalid: number;
-    tool_errors: number;
-  };
-  inputs: Array<{
-    source: string;
-    kind: "obligation" | "result" | "unknown";
-    schema_version: string | null;
-    valid: boolean;
-    warnings: string[];
-    issues: Array<{ path: string; message: string; severity: "error"; rule: string }>;
-  }>;
-  privacy: {
-    local_first: true;
-    network_access: "none";
-    cloud_access: "none";
-    telemetry: "none";
-  };
 }

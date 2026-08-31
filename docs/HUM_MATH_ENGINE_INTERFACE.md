@@ -1,6 +1,6 @@
 # Hum Math Engine Interface
 
-Truth Harness can serve as an external evidence producer for Hum, but it must not become an optimizer, a cloud dependency, or the source of truth for the compiler. Hum owns program semantics. Truth Harness receives exported obligations, attempts local verification, and returns evidence records Hum may attach to its own reports.
+Truth Harness can serve as an external evidence producer for Hum, but it must not become an optimizer, a cloud dependency, or the source of truth for the compiler. Hum owns program semantics. The current integration validates exported obligations and result records. Verification remains unavailable until a concrete local adapter is installed.
 
 The V0 contract is schema-first and intentionally small. It supports only:
 
@@ -12,18 +12,20 @@ Unknown is a valid result. A verifier that honestly says `unknown` is doing usef
 
 ## Integration Boundary
 
-The intended flow is:
+The intended future flow is:
 
 1. Hum compiles source into its semantic graph.
 2. Hum exports math obligations and existing evidence.
 3. Truth Harness verifies those exported obligations locally.
 4. Hum records the returned result as evidence.
 
-The CLI bridge can be:
+The reserved verification CLI bridge can be:
 
 ```bash
 truth-harness hum verify .hum/obligations.json --out .hum/evidence/
 ```
+
+`hum verify` is not implemented in V0. Capability discovery reports that boundary directly so Hum does not mistake contract validation for mathematical verification.
 
 Hum should not depend on Truth Harness for correctness. If Truth Harness is missing, unavailable, or returns `unknown`, Hum must preserve the conservative compiler behavior.
 
@@ -225,6 +227,79 @@ The validator also enforces semantic honesty rules that are intentionally strict
 - LLM proof text is never accepted as proof
 - network, cloud, and telemetry metadata are rejected
 - UTF-8 BOM is rejected
+
+### Capability discovery
+
+Hum and other local tools can inspect the contract before exporting work:
+
+```bash
+truth-harness hum capabilities
+truth-harness hum capabilities --json
+```
+
+The machine-readable report is stable and deterministic:
+
+```json
+{
+  "schema_version": "truth-harness.hum_capabilities.v0",
+  "contract": {
+    "obligation_schema_versions": ["hum.math_obligation.v0"],
+    "result_schema_versions": ["hum.math_result.v0"]
+  },
+  "obligation_kinds": [
+    { "kind": "allocation_freedom", "validation": "supported", "verification": "unavailable" },
+    { "kind": "peak_memory_bound", "validation": "supported", "verification": "unavailable" },
+    { "kind": "purity_replayability", "validation": "supported", "verification": "unavailable" }
+  ],
+  "normalized_representations": [
+    { "representation": "hum_static_claim_v0", "validation": "supported", "verification": "unavailable" },
+    { "representation": "smtlib2", "validation": "supported", "verification": "unavailable" },
+    { "representation": "json_logic", "validation": "supported", "verification": "unavailable" },
+    { "representation": "plain_text", "validation": "supported", "verification": "unavailable" }
+  ],
+  "validation": {
+    "available": true,
+    "scope": "schema_and_honesty_rules",
+    "inputs": ["file", "directory", "stdin"],
+    "unknown_schema_versions": "rejected_by_default"
+  },
+  "verification": {
+    "available": false,
+    "adapters": [],
+    "reason": "Verification is unavailable until a concrete Hum verifier adapter is installed."
+  },
+  "result_statuses": ["proved", "refuted", "unknown", "unsupported", "timeout"],
+  "proof_policy": {
+    "llm_prose_counts_as_proof": false,
+    "compiler_fact_text_counts_as_proof": false,
+    "proved_requires_one_of": ["proof_certificate", "checkable_trace"],
+    "unknown_is_valid": true
+  },
+  "privacy": {
+    "local_first": true,
+    "network_access": "none",
+    "cloud_access": "none",
+    "telemetry": "none"
+  }
+}
+```
+
+Accepted normalized representations describe contract validation only. Truth Harness does not parse `hum_static_claim_v0`, run SMT-LIB, evaluate JSON Logic, or infer truth from plain text in this slice. `compiler_fact` text and LLM prose never count as proof.
+
+### Reusable core API
+
+`@truth-harness/core` exports the same contract surface used by the CLI:
+
+```ts
+import {
+  createHumCapabilitiesReport,
+  parseHumValidateKind,
+  validateHumContractInputs
+} from "@truth-harness/core";
+```
+
+Consumers can validate file paths, directories, or supplied stdin text and can render their own interface from the capability report without importing the Truth Harness CLI. The core API performs local file access only and does not contact Hum, a solver, a network service, or a telemetry service.
+
 ## V0 Test Fixtures
 
 Fixtures live in `fixtures/hum/`:

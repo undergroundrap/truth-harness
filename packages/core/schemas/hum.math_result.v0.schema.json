@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://truth-harness.local/schemas/hum.math_result.v0.schema.json",
+  "title": "Hum Math Result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "result_id",
+    "obligation_id",
+    "created_at",
+    "status",
+    "trust_label",
+    "evidence_classes",
+    "proof_certificate",
+    "checkable_trace",
+    "counterexample",
+    "assumptions_used",
+    "model_limitations",
+    "confidence_level",
+    "source_spans_affected",
+    "suggested_hum_evidence_artifact",
+    "llm_proof_accepted",
+    "privacy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "hum.math_result.v0"
+    },
+    "result_id": {
+      "type": "string",
+      "pattern": "^hum_res_[a-z0-9_]{4,96}$"
+    },
+    "obligation_id": {
+      "type": "string",
+      "pattern": "^hum_obl_[a-z0-9_]{4,96}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": ["proved", "refuted", "unknown", "unsupported", "timeout"]
+    },
+    "trust_label": {
+      "enum": ["proved", "refuted", "unknown", "unsupported", "timeout"]
+    },
+    "evidence_classes": {
+      "type": "array",
+      "items": {
+        "enum": ["theorem", "benchmark", "static_proof", "model_assumption", "heuristic", "checkable_trace", "counterexample", "none"]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "proof_certificate": {
+      "type": ["object", "null"],
+      "required": ["certificate_kind", "checker", "artifact_ref"],
+      "properties": {
+        "certificate_kind": {
+          "enum": ["lean", "smt_unsat_core", "static_analysis_certificate", "manual_external_review"]
+        },
+        "checker": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "checkable_trace": {
+      "type": ["object", "null"],
+      "required": ["trace_kind", "steps", "replay_command"],
+      "properties": {
+        "trace_kind": {
+          "enum": ["static_analyzer_trace", "solver_trace", "bounded_execution_trace"]
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "replay_command": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "counterexample": {
+      "type": ["object", "null"],
+      "required": ["description", "witness"],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "witness": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "replay_command": {
+          "type": ["string", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "assumptions_used": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "model_limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "confidence_level": {
+      "enum": ["machine_checked", "bounded", "assumption_dependent", "unknown", "unsupported", "timeout"]
+    },
+    "source_spans_affected": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source_span"
+      }
+    },
+    "suggested_hum_evidence_artifact": {
+      "type": "object",
+      "required": ["artifact_kind", "path", "summary"],
+      "properties": {
+        "artifact_kind": {
+          "enum": ["hum_evidence_report", "hum_counterexample_report", "hum_unknown_report"]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "llm_proof_accepted": {
+      "const": false
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    }
+  },
+  "$defs": {
+    "source_span": {
+      "type": "object",
+      "required": ["file", "start_line", "start_column", "end_line", "end_column"],
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "start_column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "end_column": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["local_first", "network_access", "cloud_access", "telemetry"],
+      "properties": {
+        "local_first": {
+          "const": true
+        },
+        "network_access": {
+          "const": "none"
+        },
+        "cloud_access": {
+          "const": "none"
+        },
+        "telemetry": {
+          "const": "none"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

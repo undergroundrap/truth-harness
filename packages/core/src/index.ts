@@ -490,6 +490,31 @@ export {
 } from "./teaching-packet.js";
 export { assertReceipt, parseReceiptJson, ReceiptValidationError, validateReceipt } from "./receipt-validation.js";
 export { validateJsonSchema } from "./json-schema-validation.js";
+export {
+  createHumCapabilitiesReport,
+  HUM_CAPABILITIES_SCHEMA_VERSION,
+  HUM_CONTRACT_PRIVACY,
+  HUM_NORMALIZED_REPRESENTATIONS,
+  HUM_OBLIGATION_KINDS,
+  HUM_OBLIGATION_SCHEMA_VERSION,
+  HUM_RESULT_SCHEMA_VERSION,
+  HUM_RESULT_STATUSES,
+  HUM_VALIDATE_SCHEMA_VERSION,
+  parseHumValidateKind,
+  validateHumContractInputs
+} from "./hum-contract.js";
+export type {
+  HumCapabilitiesReport,
+  HumNormalizedRepresentation,
+  HumObligationKind,
+  HumResultStatus,
+  HumValidateContractInput,
+  HumValidateInputResult,
+  HumValidateIssue,
+  HumValidateKind,
+  HumValidateReport,
+  HumValidateStatus
+} from "./hum-contract.js";
 export { checkClaimBlock, checkClaimFile, parseClaimBlocks } from "./claim-file.js";
 export {
   createLocalWorkspaceManifest,
