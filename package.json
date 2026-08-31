@@ -16,7 +16,7 @@
     "verify:default": "npm run docker:engines && npm run docker:check",
     "verify:native": "npm run check:native",
     "docker:build": "docker compose build",
-    "docker:check": "docker compose run --rm truth-harness npm run check:native",
+    "docker:check": "docker compose run --build --rm check",
     "docker:cli": "docker compose run --rm truth-harness node apps/cli/dist/index.js",
     "docker:engines": "node tools/docker-engines.mjs",
     "docker:professor": "node tools/docker-professor.mjs",
@@ -132,14 +132,14 @@
     "@types/node": "^22.15.30",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.2"
+    "vitest": "^3.2.7"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "better-sqlite3": "^12.10.1",
     "zod": "^4.4.3"
   },
   "overrides": {
-    "hono": "4.12.25"
+    "hono": "4.13.5"
   }
 }

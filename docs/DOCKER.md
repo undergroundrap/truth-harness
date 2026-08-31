@@ -165,14 +165,15 @@ By default, MCP `truth_harness_code_run` is still disabled. To expose it to an a
 - `truth-harness code sandbox-status --json` can report the CLI/MCP no-network services as a measured `container` provider when the runtime has only loopback networking and no default route.
 - `truth-harness code sandbox-status --write --json` writes that measurement as a `truth-harness.sandbox-run.v0` finding. `npm run docker:sandbox:write` is the recommended reviewer command because it records the measurement from inside the no-network compose service.
 - The web compose service publishes `127.0.0.1:4180` for the browser and is not a code sandbox. Its local API currently creates receipts and claim-ledger records through `@truth-harness/core` without hosted model calls.
-- Node dependencies live in the `truth_harness_node_modules` Docker volume.
+- Live CLI and MCP development dependencies live in the `truth_harness_node_modules` Docker volume.
+- `npm run docker:check` rebuilds and tests the immutable `check` service without source or dependency-volume mounts, so its dependency graph comes from the current lockfile baked into the image.
 - npm cache lives in the `truth_harness_npm_cache` Docker volume.
 - Python, `sympy==1.14.0`, Maxima through `maxima-sage`, Z3, and cvc5 are installed inside the image.
 - `TRUTH_HARNESS_MAXIMA=maxima-sage`, `TRUTH_HARNESS_Z3=z3`, and `TRUTH_HARNESS_CVC5=cvc5` are set for compose services so local CAS and SMT probes use the containerized solvers.
 
 ## What Is Not Isolated
 
-- The compose dev services bind-mount the repository at `/workspace`, so commands can read and write project files, generated `dist/` outputs, receipts, and the local `.truth-harness/` store.
+- The `truth-harness` and `mcp` development services bind-mount the repository at `/workspace`, so commands can read and write project files, generated `dist/` outputs, receipts, and the local `.truth-harness/` store. The dedicated `check` service does not use these mounts.
 - The measured Docker provider attests the current container network namespace, not mathematical truth, code correctness, medical/scientific validity, or safety.
 - Loopback remains available inside the container. The measurement means no non-loopback interface/default route was observed.
 - Docker does not make AI-generated code safe. Keep executable allowlists narrow, prefer `--require-sandbox` for risky workflows, and review any command before running it.
