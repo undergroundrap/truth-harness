@@ -96,6 +96,10 @@ and the existing GitHub CI Python setup.
 
 ## Progress
 
+The next bounded baseline is the [sparse-class experiment](PIT_SPARSE_EXPERIMENT.md),
+which checks whether explicitly restricting support changes the required point set
+and tests the failure when that restriction is removed.
+
 - 2026-09-07 UTC: Defined the bounded class, four candidates, exact certificates,
   fresh-process checking, and local dated evidence workflow. Actual run conclusions
   are recorded in generated reports, not inferred from this document.

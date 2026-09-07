@@ -1,0 +1,10 @@
+{
+  "schema_version": "truth-harness.pit-experiment.v0",
+  "polynomial_class": "rational-bivariate-individual-degree-two-sparsity-two",
+  "cases": [
+    {"id": "grid-nine", "points": [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[2,2]], "expected": "hits-class"},
+    {"id": "encoded-two", "points": [[1,1],[2,8]], "expected": "hits-class"},
+    {"id": "diagonal-two", "points": [[1,1],[2,2]], "expected": "misses-class"},
+    {"id": "single-point", "points": [[1,1]], "expected": "misses-class"}
+  ]
+}

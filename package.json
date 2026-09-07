@@ -19,6 +19,7 @@
     "docker:check": "docker compose run --build --rm check",
     "pit:experiment": "node tools/pit-experiment.mjs",
     "docker:pit-experiment": "docker compose run --build --rm pit-experiment",
+    "docker:pit-sparse": "docker compose run --build --rm pit-experiment node tools/pit-experiment.mjs --sparse",
     "docker:cli": "docker compose run --rm truth-harness node apps/cli/dist/index.js",
     "docker:engines": "node tools/docker-engines.mjs",
     "docker:professor": "node tools/docker-professor.mjs",
