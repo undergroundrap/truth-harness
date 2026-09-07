@@ -1,0 +1,9 @@
+{
+  "schema_version": "truth-harness.pit-witness-request.v0",
+  "variables": 2,
+  "terms": [
+    { "coefficient": "1", "exponents": [3, 0] },
+    { "coefficient": "-1", "exponents": [0, 1] }
+  ],
+  "budget": { "max_samples": 8, "max_bits": 1024 }
+}

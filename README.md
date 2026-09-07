@@ -171,6 +171,11 @@ or explicit missed polynomials, checks them in a fresh process, and writes dated
 progress under `.truth-harness/experiments/`. This is an exact, bounded interpolation
 baseline, not general circuit PIT or a new derandomization theorem.
 See [the experiment and trust boundary](docs/PIT_EXPERIMENT.md).
+
+The [bounded sparse witness tool](docs/PIT_WITNESS.md) accepts rational sparse
+polynomial JSON, searches prime-power sample points within explicit budgets,
+and saves a fresh-process checked nonzero evaluation receipt. It reports
+`exact-computed` or `unknown`, never a new theorem or general solver claim.
 The follow-up `npm run docker:pit-sparse` checks every one- and two-monomial
 support in a bounded sparse class, including cases where dropping the sparsity
 assumption makes the same point set fail. See [the sparse baseline](docs/PIT_SPARSE_EXPERIMENT.md).
