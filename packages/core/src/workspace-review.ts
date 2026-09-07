@@ -877,7 +877,7 @@ function isSnapshotCandidateForValidationPlan(
 }
 
 function isMathlibDeclarationValidationPlan(plan: ValidationPlan): boolean {
-  return /^Lean mathlib declaration [A-Za-z0-9_.]+ in project .+? source .+\.lean$/u.test(plan.claim);
+  return /^Lean (?:mathlib )?declaration [A-Za-z0-9_.]+ in project .+? source .+\.lean$/u.test(plan.claim);
 }
 
 function isProofCheckCandidateForValidationPlan(
@@ -1248,7 +1248,7 @@ function concreteValidationGateProofCommand(plan: ValidationPlan, workspacePath?
     return `truth-harness proof check docs/examples/lean-fixture/TruthHarnessFixture/Trivial.lean --declaration smoke --statement ${quoteCommandArg(claim)} --write`;
   }
 
-  const mathlibDeclaration = /^Lean mathlib declaration (?<declaration>[A-Za-z0-9_.]+) in project (?<project>.+?) source (?<source>.+\.lean)$/u.exec(claim);
+  const mathlibDeclaration = /^Lean (?:mathlib )?declaration (?<declaration>[A-Za-z0-9_.]+) in project (?<project>.+?) source (?<source>.+\.lean)$/u.exec(claim);
   if (mathlibDeclaration?.groups) {
     return [
       "truth-harness proof check",

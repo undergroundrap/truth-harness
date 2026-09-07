@@ -1,0 +1,34 @@
+{
+  "schema_version": "truth-harness.proof-reuse-pilot.v0",
+  "package_id": "sequential-tree-scratch-v0",
+  "provenance": {
+    "origin": "local-authored",
+    "attribution": "Truth Harness scratch-reuse pilot, 2026-09-06. Original Lean encoding of a standard sequential evaluation recurrence; no imported Prove2Me contribution.",
+    "novelty": "known-model-bound-not-new-research"
+  },
+  "environment": { "lean": "4.12.0", "mathlib": null, "dependencies": [] },
+  "assumptions": [
+    "The input is a finite binary tree, not a cyclic graph or a shared DAG requiring memoization.",
+    "Children are evaluated sequentially and their scratch regions are reused, not retained concurrently.",
+    "Each active level, including a leaf, costs at most frame units; retained outputs and bookkeeping must fit that frame.",
+    "Persistent storage is accounted for separately. The caller establishes height(tree) <= depth and persistent + frame * depth <= budget.",
+    "Arithmetic is unbounded Nat arithmetic. Machine overflow, allocator overhead, alignment, threads, I/O and runtime implementation correspondence are not verified."
+  ],
+  "files": [
+    { "path": "lean-toolchain", "sha256": "e6930c662006db4d6dc76c651d60a608e4f6a18bcfd53e6b0167d70a125285d5" },
+    { "path": "lakefile.lean", "sha256": "267633c1029b01ba87e2598e558105f95e2a46b269833943e576506d6da7cd5f" },
+    { "path": "lake-manifest.json", "sha256": "b4e3596a734d367c0f9fa4da806b6da0881e91cbc149bc84026cd15525467cd6" },
+    { "path": "Scratch/Model.lean", "sha256": "c7795592069f920363bffc345d3d9668a04de20f59ab2aa1f3eed42664389b94" },
+    { "path": "Scratch/Bound.lean", "sha256": "3ca5a5fc83effc6100c8c5fb1c7361cabff76b68decff2d693c7755ade432a6b" },
+    { "path": "Scratch/Final.lean", "sha256": "ea1b65e82e1dbac61753b73c7dd4cca3ba97d63422c6c299d250ecc7453a50b3" }
+  ],
+  "nodes": [
+    { "id": "leaf_cost", "path": "Scratch/Model.lean", "declaration": "Scratch.leaf_cost", "formal_statement": "(frame : Nat) : scratch frame .leaf = frame", "depends_on": [] },
+    { "id": "branch_cost", "path": "Scratch/Model.lean", "declaration": "Scratch.branch_cost", "formal_statement": "(frame : Nat) (left right : Tree) : scratch frame (.branch left right) = frame + max (scratch frame left) (scratch frame right)", "depends_on": [] },
+    { "id": "reuse_step", "path": "Scratch/Bound.lean", "declaration": "Scratch.reuse_step", "formal_statement": "(frame left right depth : Nat) (hl : left <= frame * depth) (hr : right <= frame * depth) : frame + max left right <= frame * (depth + 1)", "depends_on": [] },
+    { "id": "scratch_bound", "path": "Scratch/Bound.lean", "declaration": "Scratch.scratch_bound", "formal_statement": "(frame : Nat) (tree : Tree) : scratch frame tree <= frame * height tree", "depends_on": ["reuse_step"] },
+    { "id": "budget_bound", "path": "Scratch/Final.lean", "declaration": "Scratch.budget_bound", "formal_statement": "(persistent frame depth budget : Nat) (tree : Tree) (hd : height tree <= depth) (hb : persistent + frame * depth <= budget) : persistent + scratch frame tree <= budget", "depends_on": ["scratch_bound"] },
+    { "id": "depth_free_bound_false", "path": "Scratch/Final.lean", "declaration": "Scratch.depth_free_bound_false", "formal_statement": "Not (scratch 1 (.branch .leaf .leaf) <= 1)", "depends_on": [] }
+  ],
+  "root": "budget_bound"
+}

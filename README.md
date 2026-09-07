@@ -142,6 +142,17 @@ Use `truth-harness engines validate docs/examples/engine-case-bundle.json` for t
 
 Hum integration currently begins at a deliberately narrow contract boundary. `truth-harness hum validate fixtures/hum/generated/math-obligations --json` validates Hum-generated `hum.math_obligation.v0` files, and the result contract rejects proof claims without a certificate or independently checkable trace. Run `truth-harness hum capabilities --json` for a deterministic handshake describing accepted schema versions, obligation kinds, representations, result statuses, privacy guarantees, and the explicit fact that verification is unavailable until a concrete adapter is installed. Validation checks schemas and honesty rules only; it does not parse Hum claims, infer truth, or run a solver. The same contract API is exported from `@truth-harness/core`. The next Hum milestone is a separate local verifier that consumes these valid obligations and emits `proved`, `refuted`, `unknown`, `unsupported`, or `timeout` evidence without making Hum depend on Truth Harness. See [docs/HUM_MATH_ENGINE_INTERFACE.md](docs/HUM_MATH_ENGINE_INTERFACE.md) for the capability JSON, schemas, exit codes, privacy boundary, and fixtures.
 
+### Local Proof-Reuse Pilot
+
+Run `npm run docker:proof-reuse` to replay a Lean proof of a sequential tree
+evaluator's scratch-space bound. The pilot withholds a dependency, checks that a
+fresh `workspace run-next` process selects the linked proof blocker, then restores
+the reviewed proof and records local Lean evidence for the budget theorem.
+Dated Markdown progress and JSON receipts stay under `.truth-harness/pilots/`.
+This is a known model theorem and recovery rehearsal, not new research, a Hum
+program proof, or a Prove2Me integration. See [the proof-reuse pilot](docs/PROOF_REUSE_PILOT.md)
+for assumptions, source pins, replay instructions, and limitations.
+
 ## Native Quickstart
 
 ```bash

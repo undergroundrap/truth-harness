@@ -2855,6 +2855,8 @@ async function executeWorkspaceRunNextItem(
         return unchangedAttempt;
       }
       const declarationName = typeof options.declaration === "string" ? options.declaration : undefined;
+      const projectPath = optionString(options.project);
+      const lakeCommand = optionString(options["lake-command"]);
       const scope = proofCheckScopeFromOptions(options);
       const leanCommand =
         typeof options["lean-command"] === "string"
@@ -2875,6 +2877,7 @@ async function executeWorkspaceRunNextItem(
           }). Use the Docker proof path instead: ${dockerProofCheckCommand({
             sourcePath,
             declarationName,
+            projectPath,
             scope
           })}`
         };
@@ -2883,6 +2886,8 @@ async function executeWorkspaceRunNextItem(
         rootPath: workspace,
         sourcePath,
         declarationName,
+        projectPath,
+        lakeCommand,
         scope,
         leanCommand,
         timeoutMs,
@@ -3177,11 +3182,13 @@ function dockerSmtCheckCommand(input: { sourcePath: string; backend: SmtBackendI
 function dockerProofCheckCommand(input: {
   sourcePath: string;
   declarationName?: string;
+  projectPath?: string;
   scope?: { routeId?: string; obligationId?: string; statementHash?: string; statement?: string };
 }): string {
   const args = [
     "docker compose run --build --rm lean-proof node apps/cli/dist/index.js proof check",
     quoteCommandArg(input.sourcePath),
+    input.projectPath ? `--project ${quoteCommandArg(input.projectPath)}` : "",
     input.declarationName ? `--declaration ${quoteCommandArg(input.declarationName)}` : "",
     input.scope?.routeId ? `--route ${quoteCommandArg(input.scope.routeId)}` : "",
     input.scope?.obligationId ? `--obligation ${quoteCommandArg(input.scope.obligationId)}` : "",
