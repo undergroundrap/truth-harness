@@ -1,5 +1,10 @@
 # Lean Mathlib Template
 
+First-time Docker setup: `npm run docker:mathlib` from the repository root.
+This provisions dependencies and runs a real offline smoke proof, not just a
+version probe. See [setup, disk usage, and troubleshooting](../../MATHLIB_SETUP.md).
+Then `npm run docker:moment` checks the general M1 lemma in `Moments.lean`.
+
 This fixture is the first Truth Harness mathlib-backed proof scaffold. It is a
 small, pinned Lake project used to rehearse how agent-generated theorem work
 becomes reviewer-grade evidence without pretending inspection is proof.

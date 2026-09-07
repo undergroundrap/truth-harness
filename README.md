@@ -144,6 +144,12 @@ Hum integration currently begins at a deliberately narrow contract boundary. `tr
 
 ### Local Proof-Reuse Pilot
 
+Mathlib is optional and separate from Lean. Run `npm run docker:mathlib` to install
+the pinned Mathlib proof image and check its smoke proof, then `npm run docker:moment`
+for the general moment-lemma check. Initial setup downloads dependencies and needs
+several GB of disk; subsequent proof runs are network-disabled.
+See [Mathlib setup and trust boundaries](docs/MATHLIB_SETUP.md).
+
 Run `npm run docker:proof-reuse` to replay a Lean proof of a sequential tree
 evaluator's scratch-space bound. The pilot withholds a dependency, checks that a
 fresh `workspace run-next` process selects the linked proof blocker, then restores
