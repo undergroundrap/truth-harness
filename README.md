@@ -176,6 +176,11 @@ The [bounded sparse witness tool](docs/PIT_WITNESS.md) accepts rational sparse
 polynomial JSON, searches prime-power sample points within explicit budgets,
 and saves a fresh-process checked nonzero evaluation receipt. It reports
 `exact-computed` or `unknown`, never a new theorem or general solver claim.
+
+The [general polynomial-equivalence tool](docs/POLYNOMIAL_EQUIVALENCE.md) compares
+two structured multivariate polynomials over the rationals. It checks every
+normalized coefficient for equality, or returns a checked counterexample when
+the evaluation budget permits; unresolved cases remain explicitly unverified.
 The follow-up `npm run docker:pit-sparse` checks every one- and two-monomial
 support in a bounded sparse class, including cases where dropping the sparsity
 assumption makes the same point set fail. See [the sparse baseline](docs/PIT_SPARSE_EXPERIMENT.md).

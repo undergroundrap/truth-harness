@@ -1,0 +1,7 @@
+{
+  "schema_version": "truth-harness.polynomial-equivalence.v0",
+  "variables": 1,
+  "left": [{"coefficient":"1","exponents":[1000000]}],
+  "right": [{"coefficient":"1","exponents":[0]}],
+  "budget": {"max_samples":8,"max_bits":128}
+}
