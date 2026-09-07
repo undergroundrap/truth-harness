@@ -77,6 +77,9 @@ from that proof, and its resource-bounded runs are not labeled `proved`.
 
 ## Regression Benchmark
 
+For a graphics-math application with a counterexample inside the curve interval,
+see the [cubic Bezier experiment](BEZIER_EXPERIMENT.md).
+
 ```sh
 docker compose run --build --rm -T pit-experiment node tools/pit-witness-benchmark.mjs
 ```
