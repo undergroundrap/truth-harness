@@ -72,3 +72,25 @@ the direct checker's source hash. Preserve the linked witness directory as well.
 Hashes identify artifacts, not their authenticity. The experiment uses the
 existing witness checker and its recorded helper hashes; no new general proof
 adapter or polynomial parser is introduced.
+
+## Automated Regression Gate
+
+```sh
+docker compose run --build --rm -T pit-experiment node tools/bezier-gate.mjs
+```
+
+The CI `bezier-gate` job runs this same command on pushes and pull requests.
+It requires the complete real-engine experiment, including fresh counterexample
+replay. It then runs a separate child process with `TRUTH_HARNESS_MAXIMA`
+pointing to a nonexistent executable in a fresh local directory. The second run
+must exit 2 with the specific unverified independent-CAS rejection. Crashes,
+timeouts, malformed output, unrelated errors, or a successful weak fallback do
+not pass this negative control. No installed executable is removed or changed.
+
+The gate allows 240 seconds per child and runs in the existing network-disabled
+Docker service. It writes both subprocess outputs, a report, and a dated journal
+under `.truth-harness/experiments/bezier-gate-*`. The positive output links the
+full experiment artifacts. CI artifacts are local to its ephemeral runner, not
+uploaded automatically. Exit 0 requires both cases; exit 1 means a failed case;
+exit 2 indicates gate setup or I/O failure. The gate does not strengthen the
+underlying mathematical trust labels or test every possible verifier failure.
