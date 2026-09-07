@@ -10,7 +10,7 @@ runs
 .vite
 *.log
 *.tsbuildinfo
-docs/examples/lean-proof-reuse/.lake
+**/.lake
 .env
 .env.*
 !.env.example

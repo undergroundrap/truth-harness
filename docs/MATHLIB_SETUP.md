@@ -41,6 +41,12 @@ Re-run the setup after pulling changes when you need an image containing the new
 sources. The build copies the checked-out repository into the image; it does not
 live-mount the source tree at runtime. A cached image is not evidence for newer files.
 
+Lean and Mathlib are provisioned before the full source copy. Ordinary source or
+documentation edits therefore reuse those dependency layers while rebuilding the
+application and rechecking the proof. Changes to dependency manifests, the base
+image, or provisioning instructions can still require expensive downloads. Local
+`.lake` directories are excluded from the Docker build context.
+
 ## General Moment Lemma
 
 After setup:
@@ -76,6 +82,14 @@ The image size is logical size, not additional disk consumption; Docker layers c
 be shared. Build cache can also consume space. Use the existing storage/cleanup
 documentation to inspect before removing anything. Do not put `.lake` or Docker
 cache content in Git, run a blanket prune, or reset Docker to fix missing Mathlib.
+
+To deliberately reclaim unused build cache while keeping images, containers,
+volumes, and evidence, preview `npm run docker:cleanup -- all-build-cache`, then
+add `--confirm-delete` to authorize it. This affects the shared Docker builder,
+including other projects' caches, and slows future uncached builds. It does not
+remove the installed Mathlib image. Docker's virtual disk may retain allocated
+host space after cleanup; reclaimed Docker space is not guaranteed immediate
+free space on the host drive.
 
 - Docker unreachable: start Docker Desktop and wait for the Linux engine.
 - Download failure during build: inspect the network/proxy error, then rerun setup.

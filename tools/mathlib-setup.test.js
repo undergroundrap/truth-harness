@@ -2,6 +2,23 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("Mathlib setup contract (not proof evidence)", () => {
+  it("isolates proof dependencies from application sources and excludes host Lake caches", async () => {
+    const dockerfile = await readFile("Dockerfile", "utf8");
+    const leanEnvironment = dockerfile.split("FROM dependencies AS lean-environment")[1].split("FROM lean-environment AS lean-proof")[0];
+    const mathlibDependencies = dockerfile.split("FROM lean-environment AS mathlib-dependencies")[1].split("FROM mathlib-dependencies AS mathlib-proof")[0];
+    expect(leanEnvironment).not.toContain("COPY --chown=truth:truth . .");
+    expect(leanEnvironment).toContain("elan toolchain install");
+    expect(mathlibDependencies).not.toContain("COPY --chown=truth:truth . .");
+    expect(mathlibDependencies).toContain("lake-manifest.json");
+    expect(mathlibDependencies).toContain("lake exe cache get");
+    const runtime = dockerfile.split("FROM mathlib-dependencies AS mathlib-proof")[1].split("FROM sage-math AS all-engines")[0];
+    expect(runtime).toContain("COPY --chown=truth:truth . .");
+    expect(runtime).toContain("npm run build");
+    expect(runtime).toContain("lake build");
+    expect(runtime).toContain("npm run proof:mathlib-template:check");
+    expect((await readFile(".dockerignore", "utf8")).split(/\r?\n/u)).toContain("**/.lake");
+  });
+
   it("provides an install-and-offline-check entry point with unchanged pins", async () => {
     const pkg = JSON.parse(await readFile("package.json", "utf8"));
     expect(pkg.scripts["docker:mathlib"]).toBe("npm run docker:mathlib-template:write");

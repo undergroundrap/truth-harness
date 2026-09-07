@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:22-bookworm-slim AS base
+FROM node:22-bookworm-slim AS dependencies
 
 ENV CI=true \
     NPM_CONFIG_UPDATE_NOTIFIER=false \
@@ -31,6 +31,8 @@ COPY --chown=truth:truth packages/core/package.json packages/core/package.json
 COPY --chown=truth:truth packages/mcp-server/package.json packages/mcp-server/package.json
 RUN npm ci
 
+FROM dependencies AS base
+
 COPY --chown=truth:truth . .
 RUN npm run build
 
@@ -57,7 +59,9 @@ RUN sage --version && npm run demo:sage && npm run engines:verify:sage
 
 CMD ["npm", "run", "engines:verify:sage"]
 
-FROM dev AS lean-proof
+FROM dependencies AS lean-environment
+
+ENTRYPOINT ["tini", "--"]
 
 USER root
 RUN apt-get update \
@@ -74,11 +78,17 @@ RUN curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-ini
   && elan toolchain install leanprover/lean4:v4.12.0 \
   && lean --version
 
-RUN npm run proof:lean-suite && npm run engines:verify:lean
+FROM lean-environment AS lean-proof
+
+COPY --chown=truth:truth . .
+RUN npm run build && npm run proof:lean-suite && npm run engines:verify:lean
 
 CMD ["npm", "run", "proof:lean-suite"]
 
-FROM lean-proof AS mathlib-proof
+FROM lean-environment AS mathlib-dependencies
+
+# Only dependency configuration invalidates the large Mathlib installation layer.
+COPY --chown=truth:truth docs/examples/lean-mathlib-template/lean-toolchain docs/examples/lean-mathlib-template/lakefile.lean docs/examples/lean-mathlib-template/lake-manifest.json ./docs/examples/lean-mathlib-template/
 
 RUN if [ ! -f docs/examples/lean-mathlib-template/lake-manifest.json ]; then \
       echo "docs/examples/lean-mathlib-template/lake-manifest.json is required before building the mathlib-proof target" >&2; \
@@ -86,8 +96,13 @@ RUN if [ ! -f docs/examples/lean-mathlib-template/lake-manifest.json ]; then \
       exit 1; \
     fi \
   && cd docs/examples/lean-mathlib-template \
-  && lake exe cache get \
-  && lake build
+  && lake exe cache get
+
+FROM mathlib-dependencies AS mathlib-proof
+
+COPY --chown=truth:truth . .
+RUN npm run build && npm run proof:lean-suite && npm run engines:verify:lean \
+  && cd docs/examples/lean-mathlib-template && lake build
 
 RUN npm run proof:mathlib-template:check
 
