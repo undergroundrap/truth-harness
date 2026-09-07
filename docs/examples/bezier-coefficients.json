@@ -1,0 +1,5 @@
+{
+  "schema_version": "truth-harness.bezier-coefficients.v0",
+  "controls": ["0", "1", "0", "0"],
+  "candidate_coefficients": ["0", "3", "-6", "3"]
+}

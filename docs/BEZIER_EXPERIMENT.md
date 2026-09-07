@@ -1,5 +1,8 @@
 # Cubic Bezier Formula Check
 
+For caller-supplied controls and coefficients rather than this fixed demonstration,
+use the [bounded coefficient contract](BEZIER_COEFFICIENT_CONTRACT.md).
+
 This fixed graphics-math experiment checks a familiar implementation rewrite:
 the scalar cubic Bezier Bernstein form versus its expanded coefficients. Each
 coordinate of a vector curve uses the same scalar weights. This is a deliberately
