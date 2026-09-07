@@ -71,6 +71,10 @@ unverified under the existing experiment reporting rules.
 
 ## Correct Order From Here
 
+The [research-selection decision](PIT_RESEARCH_SELECTION.md) now selects a general
+moment lemma as the next formalization target and explicitly rejects a novelty
+claim. It supersedes simply increasing the bounded fixture size.
+
 1. Reproduce a baseline and explicit failure cases: this experiment.
 2. Independently inspect certificates and the exact assumptions before expanding scope.
 3. Choose a literature-backed family with a real unresolved subclaim, after a
