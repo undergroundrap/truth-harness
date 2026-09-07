@@ -1,0 +1,6 @@
+{
+  "schema_version": "truth-harness.polynomial-sum.v0",
+  "summand": [{"coefficient":"1","exponents":[1]}],
+  "candidate": [{"coefficient":"1/2","exponents":[2]},{"coefficient":"1/2","exponents":[1]}],
+  "budget": {"max_n":13}
+}

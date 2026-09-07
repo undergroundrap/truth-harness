@@ -181,6 +181,11 @@ The [general polynomial-equivalence tool](docs/POLYNOMIAL_EQUIVALENCE.md) compar
 two structured multivariate polynomials over the rationals. It checks every
 normalized coefficient for equality, or returns a checked counterexample when
 the evaluation budget permits; unresolved cases remain explicitly unverified.
+
+The [polynomial summation checker](docs/POLYNOMIAL_SUMMATION.md) checks a candidate
+partial sum using its base value and full recurrence coefficients, with exact
+natural-number counterexamples for false formulas. It handles bounded-degree
+rational polynomial data, not arbitrary recurrences or program complexity claims.
 The follow-up `npm run docker:pit-sparse` checks every one- and two-monomial
 support in a bounded sparse class, including cases where dropping the sparsity
 assumption makes the same point set fail. See [the sparse baseline](docs/PIT_SPARSE_EXPERIMENT.md).
