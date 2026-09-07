@@ -307,7 +307,7 @@ describe("Lean project inspection", () => {
       "nat_le_add_right_mathlib_template",
       "real_sq_nonneg_mathlib_template"
     ]);
-    expect(inspection.declarations.total).toBe(9);
+    expect(inspection.declarations.total).toBe(17);
     expect(inspection.proofSafety.blocksProvedTrust).toBe(false);
     expect(inspection.warnings.join(" ")).not.toContain("No lake-manifest.json found");
     expect(inspection.nextActions.join(" ")).toContain("proof check");

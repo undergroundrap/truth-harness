@@ -2,6 +2,22 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("Mathlib setup contract (not proof evidence)", () => {
+  it("builds the imported moment module and exposes a fail-closed M2 replay", async () => {
+    const lakefile = await readFile("docs/examples/lean-mathlib-template/lakefile.lean", "utf8");
+    expect(lakefile).toContain("@[default_target]");
+    expect(lakefile).toContain("`TruthHarnessMathlib.Moments");
+    expect(lakefile).toContain("`TruthHarnessMathlib.SparseIdentity");
+    const compose = await readFile("docker-compose.yml", "utf8");
+    const replay = compose.split("  sparse-identity-proof:")[1].split("\nvolumes:")[0];
+    expect(replay).toContain("<<: *mathlib-proof");
+    expect(replay).toContain('"TruthHarnessMathlib.sparse_prime_identity"');
+    expect(replay).toContain('"--fail-on-unproved", "--write", "--json"');
+    const source = await readFile("docs/examples/lean-mathlib-template/TruthHarnessMathlib/SparseIdentity.lean", "utf8");
+    expect(source).toContain("import TruthHarnessMathlib.Moments");
+    expect(source).toContain("#print axioms sparse_prime_identity");
+    expect(source).toContain("#guard_msgs");
+  });
+
   it("isolates proof dependencies from application sources and excludes host Lake caches", async () => {
     const dockerfile = await readFile("Dockerfile", "utf8");
     const leanEnvironment = dockerfile.split("FROM dependencies AS lean-environment")[1].split("FROM lean-environment AS lean-proof")[0];

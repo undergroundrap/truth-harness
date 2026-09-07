@@ -68,8 +68,11 @@ The current lightweight declaration parser warns that it cannot locate the
 namespace-qualified declaration name. Lean still checks the whole source file,
 including the independently restated target; do not treat the receipt metadata
 alone as declaration-level statement matching.
-It does not establish the separate polynomial specialization M2, a new PIT result,
+The moment command alone does not establish the separate polynomial specialization M2, a new PIT result,
 a practical speedup, or a Hum program property. See [the selected scope](PIT_RESEARCH_SELECTION.md).
+
+For the separate M2 source, assumptions, and replay service, see
+[Sparse polynomial identity proof](SPARSE_IDENTITY_PROOF.md).
 
 ## Disk And Troubleshooting
 

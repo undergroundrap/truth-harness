@@ -151,6 +151,8 @@ several GB of disk; subsequent proof runs are network-disabled.
 See [Mathlib setup and trust boundaries](docs/MATHLIB_SETUP.md).
 Proof dependency layers are reused across ordinary source edits. The setup guide
 also covers explicit build-cache cleanup without deleting installed proof images.
+The [sparse polynomial identity proof](docs/SPARSE_IDENTITY_PROOF.md) specializes
+the moment lemma to rational polynomials with arbitrary finite support.
 
 Run `npm run docker:proof-reuse` to replay a Lean proof of a sequential tree
 evaluator's scratch-space bound. The pilot withholds a dependency, checks that a

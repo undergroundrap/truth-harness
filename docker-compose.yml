@@ -248,7 +248,7 @@ services:
       - ./docs/examples/lean-repair-fixture:/workspace/docs/examples/lean-repair-fixture
     command: ["npm", "run", "proof:lean-suite"]
 
-  mathlib-proof:
+  mathlib-proof: &mathlib-proof
     <<: *truth-harness-security
     image: truth-harness:mathlib-proof
     working_dir: /workspace
@@ -261,6 +261,10 @@ services:
     volumes:
       - ./.truth-harness:/workspace/.truth-harness
     command: ["npm", "run", "proof:mathlib-template:check"]
+
+  sparse-identity-proof:
+    <<: *mathlib-proof
+    command: ["node", "apps/cli/dist/index.js", "proof", "check", "docs/examples/lean-mathlib-template/TruthHarnessMathlib/SparseIdentity.lean", "--project", "docs/examples/lean-mathlib-template", "--declaration", "TruthHarnessMathlib.sparse_prime_identity", "--timeout-ms", "30000", "--fail-on-unproved", "--write", "--json"]
 
 volumes:
   truth_harness_node_modules:
