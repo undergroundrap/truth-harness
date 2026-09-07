@@ -1,0 +1,10 @@
+{
+  "schema_version": "truth-harness.pit-experiment.v0",
+  "polynomial_class": "rational-bivariate-total-degree-at-most-two",
+  "cases": [
+    {"id": "grid-nine", "points": [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2],[2,0],[2,1],[2,2]], "expected": "hits-class"},
+    {"id": "triangle-six", "points": [[0,0],[1,0],[2,0],[0,1],[1,1],[0,2]], "expected": "hits-class"},
+    {"id": "diagonal-three", "points": [[0,0],[1,1],[2,2]], "expected": "misses-class"},
+    {"id": "triangle-five", "points": [[0,0],[1,0],[2,0],[0,1],[1,1]], "expected": "misses-class"}
+  ]
+}

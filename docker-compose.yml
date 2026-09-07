@@ -60,6 +60,21 @@ services:
       TRUTH_HARNESS_CVC5: "cvc5"
     command: ["npm", "run", "cli", "--", "engines", "verify", "--require-maxima", "--require-z3", "--require-cvc5"]
 
+  pit-experiment:
+    <<: *truth-harness-security
+    build:
+      context: .
+      target: dev
+    image: truth-harness:dev
+    working_dir: /workspace
+    network_mode: "none"
+    environment:
+      TRUTH_HARNESS_CONTAINER: "1"
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
+    volumes:
+      - ./.truth-harness:/workspace/.truth-harness
+    command: ["npm", "run", "pit:experiment"]
+
   demo:
     <<: *truth-harness-security
     build:

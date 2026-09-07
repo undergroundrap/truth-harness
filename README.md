@@ -153,6 +153,15 @@ This is a known model theorem and recovery rehearsal, not new research, a Hum
 program proof, or a Prove2Me integration. See [the proof-reuse pilot](docs/PROOF_REUSE_PILOT.md)
 for assumptions, source pins, replay instructions, and limitations.
 
+### Exact Polynomial Hitting-Set Experiment
+
+Run `npm run docker:pit-experiment` to compare four point sets against all rational
+bivariate polynomials of total degree at most two. It saves left-inverse certificates
+or explicit missed polynomials, checks them in a fresh process, and writes dated
+progress under `.truth-harness/experiments/`. This is an exact, bounded interpolation
+baseline, not general circuit PIT or a new derandomization theorem.
+See [the experiment and trust boundary](docs/PIT_EXPERIMENT.md).
+
 ## Native Quickstart
 
 ```bash
