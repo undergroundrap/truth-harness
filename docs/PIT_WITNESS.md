@@ -74,3 +74,36 @@ certifies the displayed nonzero evaluation, not that it was the earliest sample.
 The generic [Lean theorem](SPARSE_IDENTITY_PROOF.md) explains why sufficiently
 many unbounded prime-power samples suffice. This executable is not extracted
 from that proof, and its resource-bounded runs are not labeled `proved`.
+
+## Regression Benchmark
+
+```sh
+docker compose run --build --rm -T pit-experiment node tools/pit-witness-benchmark.mjs
+```
+
+This runs the fixed [V0 synthetic suite](examples/pit-witness-benchmark.json),
+not arbitrary user-supplied benchmark definitions. Ten cases cover rational
+duplicates, near cancellation, five successive vanishing samples, eight-variable
+ordering, zero normalization, and sample/bit budgets. Paired budget cases test
+that limits remain explicit rather than silently changing the mathematical result.
+The suite expects six checked witnesses and four unresolved results. These are
+regression expectations, not a mathematical problem-solving success rate.
+
+Each case constructs a receipt, checks it, then reopens it for a fresh replay.
+The report compares outcomes against checked-in exact values and reasons, and
+separates `checked_witnesses`, `expected_unknowns`, and `failed`. An expected
+`unknown` matches a test expectation but remains unverified. Its reason is not
+certified. Benchmark matching of a sample index is likewise not a proof of
+earliest-witness minimality.
+
+A dated Markdown journal, exact suite snapshot and SHA-256, per-case requests,
+replay reports, and aggregate JSON are saved under a unique
+`.truth-harness/experiments/pit-witness-benchmark-*` directory. Receipts remain
+in the linked `.truth-harness/witnesses/` directories. Preserve both directories
+when retaining a run. Repeated runs append small local artifacts; no Mathlib
+download, solver run, or new service is needed. Timestamps and artifact paths
+vary between runs; expected mathematical outcomes and suite identity do not.
+
+Exit 0 means every regression expectation matched, not that every input was
+proved. Exit 1 means at least one case failed, including any per-case tool or
+checker failure. Exit 2 means benchmark setup, argument, or report I/O failure.
