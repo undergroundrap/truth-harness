@@ -24,6 +24,9 @@ Truth Harness is a verification-first mathematical workbench for humans, Claude,
 [Bounded polynomial recurrence checking](docs/POLYNOMIAL_RECURRENCE.md) is available
 through CLI/MCP: check initial values and full recurrence identities with exact
 rational arithmetic, or retain a checked counterexample or explicit unknown.
+The [exhaustive triple-count example](docs/CS_TRIPLE_COUNT.md) applies this to a
+CS operation-count model, including a false formula that passes the recurrence
+identity but fails its initial conditions.
 
 The project goal is not to replace WolframAlpha by rebuilding every math engine. The goal is to build the missing verification engine around AI-assisted work: problem normalization, verifier routing, receipts, trust labels, claim ledgers, replay, disclosures, benchmarks, and reports. Every answer should be backed by a replayable local tool run, proof check, cited source, counterexample search, workspace snapshot, or an explicit uncertainty label. Claude, Codex, and other frontier models can still help reason, plan, and critique, but the app is local-first: project data and artifacts stay in the local workspace unless the user explicitly sends selected context to a hosted model or network service, and that selected context plus disclosure is recorded locally.
 
