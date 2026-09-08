@@ -147,7 +147,32 @@ tree outputs, and rejects dropping the right sum or assigning zero leaf count.
 This proves functional correctness of the Lean aggregate, not a compiled Rust
 or C++ implementation. Integers and natural counts are unbounded mathematical
 values, not fixed-width machine arithmetic. No overflow or floating-point claim
-is made. The earlier `PairTree` definitions and cost proofs remain unchanged;
-there is not yet a proved mapping from `ValueTree` execution to that cost model.
-Thus output correctness and cost are separate results, not a combined verified
-runtime guarantee.
+is made. The earlier `PairTree` definitions and cost proofs remain unchanged.
+The evaluator below connects these models, without a real-runtime guarantee.
+
+## One Evaluator, Outputs And Costs
+
+`ValueTree.evaluate` computes a sum/count pair and logical work/span in the same
+recursive definition. `ValueTree.shape` erases values but preserves both children.
+`evaluate_refines` proves on every tree that the output equals `aggregate`, and
+the reported costs equal `PairTree` costs of the erased shape.
+`tree_evaluation_correct` combines this with the leaf-list output specification.
+
+`tree_evaluation_balanced` additionally takes a proved shape equality to the
+complete balanced tree of height h, then reuses the existing closed-form cost
+theorem. It yields the correct output, work 2*(2^h-1), and span h for the same
+evaluation. Unbalanced inputs cannot simply be assigned those formulas.
+
+```sh
+docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/ParallelReduction.lean --declaration tree_evaluation_correct --timeout-ms 30000 --fail-on-unproved --write --json
+docker compose run --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/ParallelReduction.lean --declaration tree_evaluation_balanced --timeout-ms 30000 --fail-on-unproved --write --json
+```
+
+The evaluator's cost fields are an explicit instrumented semantics, not timing
+measurements of Lean execution. Sequential evaluation by a runtime does not
+realize the parallel span automatically. Unit arithmetic, independent local
+additions, unlimited processors, no sharing, and omitted allocation/communication
+costs remain assumptions of the model. No extraction or compiler theorem is added.
+
+Required Lean tests check both scoped receipts, concrete evaluator outputs/costs,
+and rejection of incorrect work, span, output, and shape-erasure definitions.

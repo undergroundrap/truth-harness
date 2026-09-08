@@ -132,7 +132,63 @@ theorem aggregate_correct (t : Tree) :
   | leaf value => simp [aggregate, leaves, listSum]
   | fork l r hl hr => simp [aggregate, leaves, hl, hr, listSum_append]
 
+def shape : Tree -> PairTree.Tree
+  | .leaf _ => .leaf
+  | .fork l r => .fork (shape l) (shape r)
+
+structure Evaluation where
+  output : Int × Nat
+  work : Int
+  span : Nat
+
+def evaluate : Tree -> Evaluation
+  | .leaf value => { output := (value, 1), work := 0, span := 0 }
+  | .fork l r =>
+    let a := evaluate l
+    let b := evaluate r
+    { output := (a.output.1 + b.output.1, a.output.2 + b.output.2),
+      work := a.work + b.work + 2,
+      span := max a.span b.span + 1 }
+
+theorem evaluate_refines (t : Tree) :
+    (evaluate t).output = aggregate t /\
+    (evaluate t).work = PairTree.work (shape t) /\
+    (evaluate t).span = PairTree.span (shape t) := by
+  induction t with
+  | leaf value => simp [evaluate, aggregate, shape, PairTree.work, PairTree.span]
+  | fork l r hl hr =>
+    simp [evaluate, aggregate, shape, PairTree.work, PairTree.span,
+      hl.1, hl.2.1, hl.2.2, hr.1, hr.2.1, hr.2.2]
+
 end ValueTree
+
+theorem tree_evaluation_correct (t : ValueTree.Tree) :
+    (ValueTree.evaluate t).output =
+      (ValueTree.listSum (ValueTree.leaves t), (ValueTree.leaves t).length) /\
+    (ValueTree.evaluate t).work = PairTree.work (ValueTree.shape t) /\
+    (ValueTree.evaluate t).span = PairTree.span (ValueTree.shape t) := by
+  have r := ValueTree.evaluate_refines t
+  exact And.intro (r.1.trans (ValueTree.aggregate_correct t)) r.2
+
+theorem tree_evaluation_balanced (t : ValueTree.Tree) (h : Nat)
+    (balanced : ValueTree.shape t = PairTree.balanced h) :
+    (ValueTree.evaluate t).output =
+      (ValueTree.listSum (ValueTree.leaves t), (ValueTree.leaves t).length) /\
+    (ValueTree.evaluate t).work = 2 * (2 ^ h - 1) /\
+    ((ValueTree.evaluate t).span : Int) = (h : Int) := by
+  have r := tree_evaluation_correct t
+  have cost := PairTree.balanced_cost h
+  rw [balanced] at r
+  exact And.intro r.1 (And.intro (r.2.1.trans cost.1)
+    ((congrArg (fun n : Nat => (n : Int)) r.2.2).trans cost.2))
+
+/-- info: 'tree_evaluation_correct' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms tree_evaluation_correct
+
+/-- info: 'tree_evaluation_balanced' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms tree_evaluation_balanced
 
 theorem tree_aggregation_correct (t : ValueTree.Tree) :
     ValueTree.aggregate t = (ValueTree.listSum (ValueTree.leaves t),

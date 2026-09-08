@@ -13,6 +13,48 @@ const costs = JSON.parse(readFileSync(new URL("../docs/examples/cs-divide-conque
 const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean", import.meta.url));
 const branchingSource = readFileSync(branchingPath, "utf8");
 const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
+it("checks one evaluator for outputs and costs and rejects broken refinement", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
+  const text = readFileSync(file, "utf8");
+  const cli = fileURLToPath(new URL("../apps/cli/dist/index.js", import.meta.url));
+  for (const name of ["tree_evaluation_correct", "tree_evaluation_balanced"]) {
+    const checked = spawnSync(process.execPath, [cli, "proof", "check", file,
+      "--declaration", name, "--fail-on-unproved", "--json"],
+    { encoding: "utf8", timeout: 45000, windowsHide: true });
+    expect(checked.status, checked.stdout + checked.stderr).toBe(0);
+    expect(JSON.parse(checked.stdout)).toMatchObject({ trust: "proved", proofCheckerBacked: true,
+      source: { declarationName: name, declaration: { name, kind: "theorem" } } });
+  }
+  const root = mkdtempSync(join(tmpdir(), "evaluation refinement "));
+  try {
+    const probes = join(root, "Evaluate.lean");
+    writeFileSync(probes, text + "\n" + [
+      "def sample : ValueTree.Tree := .fork (.leaf (-5)) (.fork (.leaf 2) (.leaf 9))",
+      "example : (ValueTree.evaluate sample).output = (6, 3) := by decide",
+      "example : (ValueTree.evaluate sample).work = 4 := by decide",
+      "example : (ValueTree.evaluate sample).span = 2 := by decide",
+      "example : Not (ValueTree.shape sample = PairTree.balanced 2) := by intro h; cases h",
+      "example : (ValueTree.evaluate (.leaf 8)).work = 0 := by decide",
+      "example : (ValueTree.evaluate (.fork (.leaf 3) (.leaf (-1)))).output = (2, 2) := by decide"
+    ].join("\n"));
+    const evaluated = spawnSync("lean", [probes], { encoding: "utf8", timeout: 30000, windowsHide: true });
+    expect(evaluated.status, evaluated.stdout + evaluated.stderr).toBe(0);
+    for (const [i, wrong] of [
+      text.replace("work := a.work + b.work + 2", "work := a.work + b.work + 1"),
+      text.replace("span := max a.span b.span + 1", "span := max a.span b.span + 2"),
+      text.replace("output := (a.output.1 + b.output.1", "output := (a.output.1"),
+      text.replace(".fork (shape l) (shape r)", ".fork (shape l) (shape l)")
+    ].entries()) {
+      expect(wrong).not.toBe(text);
+      const bad = join(root, `Wrong${i}.lean`);
+      writeFileSync(bad, wrong);
+      const rejected = spawnSync("lean", [bad], { encoding: "utf8", timeout: 30000, windowsHide: true });
+      expect(rejected.status).toBe(1);
+      expect(rejected.stdout).toContain("error:");
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 180000);
 it("proves sum/count outputs for all trees and rejects dropped children and bad leaf counts", () => {
   if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
   const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
