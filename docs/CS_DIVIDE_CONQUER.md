@@ -23,8 +23,9 @@ equation from its one-step shift. Conversely, define the first-order defect
 `D(h+1)=2*D(h)`, and the two initial values give `D(0)=0`. Thus the reduction
 loses no condition under this model. The algebraic identity and initial defect
 now have separately replayable coefficient checks, as described below. The
-variable mapping and induction argument are still human-reviewed, not a
-proof-kernel certificate of this entire reduction.
+variable mapping is still human-reviewed. Those coefficient receipts alone do
+not kernel-check induction; a separate Lean theorem below checks the formal
+recurrence equivalence.
 
 ## Check The Reduction Algebra
 
@@ -54,6 +55,38 @@ expressions, the exponent shift is `q -> 2*q`, and ordinary induction propagates
 `D(0)=0` via `D(h+1)=2*D(h)`. There is no expression parser, automatic dependency
 link to the recurrence receipt, source-code verification, or complete formal
 proof here. These receipts narrow the unchecked algebra, not those boundaries.
+
+## Lean Recurrence Equivalence
+
+```sh
+npm run docker:divide-conquer-proof
+```
+
+This rebuilds the existing Lean image with the current sources, then checks
+`docs/examples/DivideConquer.lean` through the proof adapter and writes a scoped
+record to `.truth-harness/proofs/`. It uses pinned Lean 4.12.0 and `Std`, not
+Mathlib. Image construction may download dependencies; the proof runtime has
+no network. The historical pin is for reproducibility, not a security guarantee.
+
+The independently restated target `divide_conquer_reduction` says that for any
+integer sequence `A` with `A(0)=0` and `A(1)=1`, the second-order recurrence
+`A(h+2)=4*A(h+1)-4*A(h)+1` is equivalent to
+`A(h+1)=2*A(h)+2^(h+1)-1` for every natural height `h`. Lean checks both
+directions, the exponent shift, and the induction. A separate theorem supplies
+`A(h)=1-2^h` as a counterexample when the second initial value is omitted.
+Source axiom guards require exactly `propext` and `Quot.sound`, with no
+`sorryAx` or additional assumed mathematical axiom.
+
+The Docker Lean CI gate also compiles mutated sources with a wrong second
+initial value and a wrong residual constant and requires their rejection.
+Ordinary Node tests only inspect the wiring unless the explicit Lean-test flag
+is set; they are not substitutes for this compiler gate.
+
+The accepted formal theorem is not a proof that a sorting program implements
+the cost model, nor a Lean proof of the closed-form candidate. Mapping the
+JSON fixtures to the Lean statement remains reviewed transcription. The
+three-receipt bundle below is unchanged and does not automatically import this
+separate proof or upgrade its conservative trust labels.
 
 ## Replay The Evidence Bundle
 

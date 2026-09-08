@@ -36,6 +36,19 @@ jobs:
       - name: Run launch proof suite
         run: npm run proof:launch
 
+  lean-reduction-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Prepare non-root evidence directory
+        run: sudo install -d -o 10001 -g 10001 -m 0755 .truth-harness
+      - name: Pinned Lean reduction and negative controls
+        run: docker compose run --build --rm -T -e TRUTH_HARNESS_REQUIRE_LEAN_TESTS=1 lean-proof npm test -- tools/lean-divide-conquer.test.js
+
   bezier-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
