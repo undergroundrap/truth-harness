@@ -55,3 +55,23 @@ Do not change trust-label semantics lightly. In particular:
 - New behavior has tests or benchmark tasks.
 - Docs mention limitations honestly.
 - No generated receipts, logs, or `node_modules` are committed.
+
+## Test Resource Policy
+
+The shared Vitest configuration caps execution at two workers for local and CI
+runs, including `npm run check` and `npm run docker:check`. Many integration
+files launch additional CLI and verifier processes. CPU-count-based worker
+fan-out coincided with intermittent five-second test timeouts on the development Docker
+runtime, which exposed 28 CPUs. Two-worker runs passed the same assertions.
+This supports contention as a contributor, not a diagnosis of every timeout.
+
+Default test/hook timeouts, isolation, assertions and failure reporting remain
+unchanged. No retries or swallowed cleanup errors are added. A timed-out async
+test can continue writing while teardown removes its directory; an `ENOTEMPTY`
+after a timeout must remain visible rather than being treated as harmless.
+
+For an explicit diagnostic comparison, use `npm test -- --maxWorkers=4` inside
+the verification container. Record the command, failures and elapsed time; do
+not use a passing retry to hide an earlier failure. Use the default bounded run
+for acceptance. A repeated failure at two workers needs investigation, not a
+larger timeout by default.
