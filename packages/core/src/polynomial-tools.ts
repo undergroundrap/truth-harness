@@ -3,14 +3,16 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type PolynomialOperation = "compare" | "sum";
+export type PolynomialOperation = "compare" | "sum" | "recurrence";
 const scripts = {
   compare: new URL("../../../tools/polynomial-compare.mjs", import.meta.url),
-  sum: new URL("../../../tools/polynomial-sum.mjs", import.meta.url)
+  sum: new URL("../../../tools/polynomial-sum.mjs", import.meta.url),
+  recurrence: new URL("../../../tools/polynomial-recurrence.mjs", import.meta.url)
 };
 const schemas = {
   compare: "truth-harness.polynomial-equivalence-report.v0",
-  sum: "truth-harness.polynomial-sum-report.v0"
+  sum: "truth-harness.polynomial-sum-report.v0",
+  recurrence: "truth-harness.polynomial-recurrence-report.v0"
 };
 
 export interface PolynomialToolResult {
@@ -20,7 +22,7 @@ export interface PolynomialToolResult {
 
 export function polynomialCapabilities() {
   const assetsPresent = Object.values(scripts).every(existsSync) &&
-    ["polynomial_equivalence.py", "polynomial_sum.py", "pit_witness.py", "pit_certificate.py", "pit-witness.mjs"]
+    ["polynomial_equivalence.py", "polynomial_sum.py", "polynomial_recurrence.py", "pit_witness.py", "pit_certificate.py", "pit-witness.mjs"]
       .every(name => existsSync(new URL(`../../../tools/${name}`, import.meta.url)));
   return {
     schema_version: "truth-harness.polynomial-capabilities.v0",
@@ -29,7 +31,8 @@ export function polynomialCapabilities() {
     runtime: "Docker source checkout; Python and SymPy required; dependency health checked on execution",
     operations: [
       { operation: "compare", request_schema: "truth-harness.polynomial-equivalence.v0", max_variables: 8, max_terms_per_side: 64, max_degree_per_variable: 1000000 },
-      { operation: "sum", request_schema: "truth-harness.polynomial-sum.v0", max_variables: 1, max_terms_per_side: 32, max_degree: 12 }
+      { operation: "sum", request_schema: "truth-harness.polynomial-sum.v0", max_variables: 1, max_terms_per_side: 32, max_degree: 12 },
+      { operation: "recurrence", request_schema: "truth-harness.polynomial-recurrence.v0", max_variables: 1, max_terms_per_side: 32, max_degree: 12, max_order: 4, max_counterexample_index: 16 }
     ],
     replay: true,
     max_input_bytes: 65536,
@@ -51,7 +54,7 @@ export async function runPolynomialTool(input: {
   requestPath?: string;
   receiptPath?: string;
 }): Promise<PolynomialToolResult> {
-  if (input.operation !== "compare" && input.operation !== "sum") return failure("Unsupported polynomial operation");
+  if (input.operation !== "compare" && input.operation !== "sum" && input.operation !== "recurrence") return failure("Unsupported polynomial operation");
   if (polynomialCapabilities().execution !== "configured") return failure("Use the Docker pit-experiment source checkout with polynomial tool assets installed");
   if ((input.requestJson === undefined) === (input.requestPath === undefined)) return failure("Supply exactly one requestJson or requestPath");
   if (input.receiptPath !== undefined && input.requestPath === undefined) return failure("Replay requires requestPath and receiptPath");

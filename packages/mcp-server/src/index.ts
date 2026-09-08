@@ -130,12 +130,12 @@ export function createTruthHarnessMcpServer(): McpServer {
   );
 
   server.registerTool("truth_harness_polynomial_capabilities", {
-    description: "Discover bounded polynomial comparison, summation, and replay. Configuration is not dependency-health or formal-proof evidence.",
+    description: "Discover bounded polynomial comparison, summation, linear-recurrence checking, and replay. Configuration is not dependency-health or formal-proof evidence.",
     inputSchema: {}, annotations: { readOnlyHint: true, openWorldHint: false }
   }, async () => toolJson(polynomialCapabilities()));
   server.registerTool("truth_harness_polynomial_check", {
     description: "Check structured rational polynomial JSON in the offline Docker source checkout. Writes receipts under checkout/.truth-harness/witnesses. No expression parsing or formal proof. Nonaccepted outcomes set isError.",
-    inputSchema: { operation: z.enum(["compare", "sum"]), requestJson: z.string().min(1).max(65536) },
+    inputSchema: { operation: z.enum(["compare", "sum", "recurrence"]), requestJson: z.string().min(1).max(65536) },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false }
   }, async ({ operation, requestJson }) => {
     const result = await runPolynomialTool({ operation, requestJson });
@@ -143,7 +143,7 @@ export function createTruthHarnessMcpServer(): McpServer {
   });
   server.registerTool("truth_harness_polynomial_replay", {
     description: "Independently recheck a polynomial receipt against its original request using two workspace-local file paths (symlink escapes rejected). Does not write evidence. Requires the offline Docker source checkout.",
-    inputSchema: { operation: z.enum(["compare", "sum"]), requestPath: z.string().min(1), receiptPath: z.string().min(1) },
+    inputSchema: { operation: z.enum(["compare", "sum", "recurrence"]), requestPath: z.string().min(1), receiptPath: z.string().min(1) },
     annotations: { readOnlyHint: true, openWorldHint: false }
   }, async ({ operation, requestPath, receiptPath }) => {
     const result = await handlePolynomialReplay({ operation, requestPath, receiptPath });

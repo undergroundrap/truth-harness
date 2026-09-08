@@ -10,7 +10,7 @@ describe("polynomial tool adapter", () => {
     vi.stubEnv("TRUTH_HARNESS_CONTAINER", "");
     expect(polynomialCapabilities()).toEqual(polynomialCapabilities());
     expect(polynomialCapabilities()).toMatchObject({ execution: "unavailable", proof_checker_backed: false, replay: true });
-    expect(polynomialCapabilities().operations.map(op => op.operation)).toEqual(["compare", "sum"]);
+    expect(polynomialCapabilities().operations.map(op => op.operation)).toEqual(["compare", "sum", "recurrence"]);
   });
   it("refuses host execution and ambiguous or excessive inputs", async () => {
     vi.stubEnv("TRUTH_HARNESS_CONTAINER", "");
@@ -24,9 +24,9 @@ describe("polynomial tool adapter", () => {
       { operation: "sum" as const, requestPath: "-" }
     ]) expect((await runPolynomialTool(input)).exit_code).toBe(2);
   });
-  it("preserves accepted, refuted and unknown reports for both operations", async () => {
+  it("preserves accepted, refuted and unknown reports for all operations", async () => {
     vi.stubEnv("TRUTH_HARNESS_CONTAINER", "1");
-    for (const [operation, prefix, good] of [["compare", "polynomial", "equivalent"], ["sum", "polynomial-sum", "linear"]] as const) {
+    for (const [operation, prefix, good] of [["compare", "polynomial", "equivalent"], ["sum", "polynomial-sum", "linear"], ["recurrence", "polynomial-recurrence", "squares"]] as const) {
       for (const [suffix, exitCode] of [[good, 0], ["refuted", 1], ["unknown", 3]] as const) {
         const result = await runPolynomialTool({ operation, requestJson: await fixture(`${prefix}-${suffix}`) });
         expect(result.exit_code, JSON.stringify(result)).toBe(exitCode);

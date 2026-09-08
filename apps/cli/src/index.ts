@@ -502,9 +502,9 @@ const polynomial = program.command("polynomial").description("Check structured p
 polynomial.command("capabilities").option("--json", "Print capability JSON").action((options: { json?: boolean }) => {
   const report = polynomialCapabilities();
   if (options.json) printJson(report);
-  else console.log(`Polynomial tools: ${report.execution}\nOperations: compare, sum, replay\n${report.runtime}\nNo formal proof promotion.`);
+  else console.log(`Polynomial tools: ${report.execution}\nOperations: compare, sum, recurrence, replay\n${report.runtime}\nNo formal proof promotion.`);
 });
-for (const operation of ["compare", "sum"] as const) {
+for (const operation of ["compare", "sum", "recurrence"] as const) {
   polynomial.command(operation).argument("<input>", "Request JSON file, or '-' for stdin")
     .option("--json", "Print the unchanged tool report as JSON")
     .action(async (input: string, options: { json?: boolean }) => {
@@ -529,7 +529,7 @@ for (const operation of ["compare", "sum"] as const) {
       printPolynomialResult(result, options.json);
     });
 }
-polynomial.command("replay").argument("<operation>", "compare or sum")
+polynomial.command("replay").argument("<operation>", "compare, sum, or recurrence")
   .argument("<request>", "Original request JSON path").argument("<receipt>", "Saved receipt JSON path")
   .option("--json", "Print the unchanged check report as JSON")
   .action(async (operation: PolynomialOperation, request: string, receipt: string, options: { json?: boolean }) => {

@@ -1,8 +1,8 @@
 # Polynomial CLI And MCP Workflow
 
 The normal CLI and MCP surfaces now expose the existing structured polynomial
-comparison and summation tools. They do not add new mathematics or change either
-request/receipt contract. They reuse the same producer and independent checker,
+comparison, summation and bounded linear-recurrence tools. Each operation keeps
+its own explicit request/receipt contract. The interfaces reuse its producer and checker,
 persist the same evidence, and never promote results to `proved`.
 
 ## Deployment Boundary
@@ -40,7 +40,7 @@ To replay, substitute the directory from the report for `EXAMPLE`:
 docker compose run --rm -T pit-experiment node apps/cli/dist/index.js polynomial replay sum .truth-harness/witnesses/polynomial-sum-EXAMPLE/request.json .truth-harness/witnesses/polynomial-sum-EXAMPLE/receipt.json --json
 ```
 
-Replay takes `compare` or `sum` and two file paths, writes no artifacts, and
+Replay takes `compare`, `sum` or `recurrence` and two file paths, writes no artifacts, and
 recomputes against the original request. A receipt is not accepted merely because
 it parses or its hashes look plausible. JSON output is the existing tool report,
 not a new wrapper schema. Errors detected before tool execution return at least
@@ -60,7 +60,7 @@ docker compose run --rm -T pit-experiment node packages/mcp-server/dist/index.js
 
 - `truth_harness_polynomial_capabilities`: no arguments; discover contracts,
   bounds, deployment status, evidence store, and lack of formal proof support.
-- `truth_harness_polynomial_check`: `operation` (`compare` or `sum`) plus
+- `truth_harness_polynomial_check`: `operation` (`compare`, `sum` or `recurrence`) plus
   `requestJson` containing the original request JSON as a string. No expression
   parsing, arbitrary executable option, or shell command is accepted.
 - `truth_harness_polynomial_replay`: `operation`, `requestPath`, `receiptPath`.

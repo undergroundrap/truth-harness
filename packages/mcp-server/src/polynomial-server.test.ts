@@ -25,7 +25,10 @@ describe("polynomial MCP transport", () => {
         ["compare", "polynomial", "equivalent", false],
         ["sum", "polynomial-sum", "linear", false],
         ["sum", "polynomial-sum", "refuted", true],
-        ["sum", "polynomial-sum", "unknown", true]
+        ["sum", "polynomial-sum", "unknown", true],
+        ["recurrence", "polynomial-recurrence", "squares", false],
+        ["recurrence", "polynomial-recurrence", "refuted", true],
+        ["recurrence", "polynomial-recurrence", "unknown", true]
       ] as const) {
         const requestJson = await readFile(`docs/examples/${prefix}-${suffix}.json`, "utf8");
         const result = await client.callTool({ name: "truth_harness_polynomial_check", arguments: { operation, requestJson } });

@@ -13,10 +13,10 @@ describe("polynomial CLI", () => {
     const result = run(["capabilities", "--json"], undefined, "");
     expect(result.status).toBe(0);
     expect(JSON.parse(result.stdout).execution).toBe("unavailable");
-    expect(run(["capabilities"]).stdout).toContain("compare, sum, replay");
+    expect(run(["capabilities"]).stdout).toContain("compare, sum, recurrence, replay");
   });
-  it("runs both operations and replays the same receipt through normal commands", () => {
-    for (const [operation, file] of [["compare", "polynomial-equivalent"], ["sum", "polynomial-sum-linear"]]) {
+  it("runs all operations and replays the same receipt through normal commands", () => {
+    for (const [operation, file] of [["compare", "polynomial-equivalent"], ["sum", "polynomial-sum-linear"], ["recurrence", "polynomial-recurrence-squares"]]) {
       const result = run([operation, `docs/examples/${file}.json`, "--json"]);
       expect(result.status, result.stderr).toBe(0);
       const report = JSON.parse(result.stdout);
@@ -26,6 +26,9 @@ describe("polynomial CLI", () => {
     }
   }, 30000);
   it("preserves 0/1/2/3 exits with stdin and rejects bad bytes", () => {
+    for (const [suffix, code] of [["squares", 0], ["refuted", 1], ["unknown", 3]] as const) {
+      expect(run(["recurrence", "-", "--json"], readFileSync(`docs/examples/polynomial-recurrence-${suffix}.json`)).status).toBe(code);
+    }
     for (const [suffix, code] of [["linear", 0], ["refuted", 1], ["unknown", 3]] as const) {
       const result = run(["sum", "-", "--json"], readFileSync(`docs/examples/polynomial-sum-${suffix}.json`));
       expect(result.status, result.stderr).toBe(code);
