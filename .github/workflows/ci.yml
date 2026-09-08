@@ -49,4 +49,4 @@ jobs:
       - name: Real-engine Bezier checks and missing-verifier control
         run: docker compose run --build --rm -T pit-experiment node tools/bezier-gate.mjs
       - name: Docker recurrence verification and receipt replay
-        run: docker compose run --rm -T -e TRUTH_HARNESS_REQUIRE_DOCKER_TESTS=1 check npm test -- tools/cs-triples.test.js tools/exponential-recurrence.test.js tools/cs-recurrence-reuse.test.js tools/recurrence-reopen.test.js
+        run: docker compose run --rm -T -e TRUTH_HARNESS_REQUIRE_DOCKER_TESTS=1 check npm test -- tools/cs-triples.test.js tools/exponential-recurrence.test.js tools/cs-recurrence-reuse.test.js tools/recurrence-reopen.test.js tools/cs-divide-conquer.test.js

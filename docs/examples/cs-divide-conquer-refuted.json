@@ -1,0 +1,10 @@
+{
+  "schema_version": "truth-harness.exponential-recurrence.v0",
+  "recurrence_coefficients": ["-4", "4"],
+  "initial_values": ["0", "1"],
+  "forcing": [{"coefficient": "1", "exponents": [0]}],
+  "candidate": [
+    {"coefficient": "1", "exponents": [1], "base": "2"}
+  ],
+  "budget": {"max_index": 16}
+}
