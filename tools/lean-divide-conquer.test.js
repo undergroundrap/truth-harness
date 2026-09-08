@@ -12,6 +12,42 @@ const source = readFileSync(sourcePath, "utf8");
 const costs = JSON.parse(readFileSync(new URL("../docs/examples/cs-divide-conquer-costs.json", import.meta.url), "utf8"));
 const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean", import.meta.url));
 const branchingSource = readFileSync(branchingPath, "utf8");
+const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
+it("keeps versioned branching input bounded and rejects cross-version fields", () => {
+  expect(validateCosts(branchingCosts)).toEqual(branchingCosts);
+  const { branching_factor: omitted, ...missing } = branchingCosts;
+  for (const bad of [missing, { ...costs, branching_factor: "3" }, { ...branchingCosts, schema_version: "future" },
+    ...[0, "0", "1", "17", "03", "-3", "3.0", "3\n", "3; sorry"].map(branching_factor => ({ ...branchingCosts, branching_factor }))]) {
+    expect(() => validateCosts(bad)).toThrow();
+  }
+});
+it("creates and reopens bounded branching specializations without accepting another branching factor", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const tool = fileURLToPath(new URL("./divide-conquer-specialize.mjs", import.meta.url));
+  const run = (args, input) => spawnSync(process.execPath, [tool, ...args], {
+    input, encoding: "utf8", timeout: 60000, windowsHide: true
+  });
+  const reports = [];
+  for (const branching_factor of ["2", "3", "16"]) {
+    const request = { ...branchingCosts, branching_factor };
+    const created = run(["-"], JSON.stringify(request));
+    expect(created.status, created.stdout + created.stderr).toBe(0);
+    const report = JSON.parse(created.stdout);
+    expect(report).toMatchObject({ schema_version: branchingCosts.schema_version, status: "accepted", request, proof_checker_backed: true });
+    expect(readFileSync(join(report.artifact_directory, "Specialized.lean"), "utf8")).toBe(specializationSource(request, branchingSource));
+    const reopened = run(["--reopen", report.artifact_directory, "--expect-request-sha256", report.request_sha256]);
+    expect(reopened.status, reopened.stdout + reopened.stderr).toBe(0);
+    expect(JSON.parse(reopened.stdout)).toMatchObject({ status: "reopened", request, cached_report_used: false,
+      expected_request_sha256: report.request_sha256, proof_checker_backed: true });
+    reports.push(report);
+  }
+  const substituted = run(["--reopen", reports[1].artifact_directory, "--expect-request-sha256", reports[0].request_sha256]);
+  expect(substituted.status).toBe(2);
+  expect(JSON.parse(substituted.stdout).error).toContain("Saved request does not match expected request SHA-256");
+  const invalid = run(["-"], JSON.stringify({ ...branchingCosts, branching_factor: "17" }));
+  expect(invalid.status).toBe(2);
+  expect(JSON.parse(invalid.stdout).proof_checker_backed).toBe(false);
+}, 180000);
 it("keeps the arbitrary-branching theorem explicit and free of proof escape hatches", () => {
   expect(branchingSource).toContain("theorem divide_conquer_branching_cost");
   expect(branchingSource).toContain("theorem divide_conquer_three_way");

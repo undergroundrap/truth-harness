@@ -8,12 +8,17 @@ import { boundedInput } from "./pit-witness.mjs";
 
 const repo = fileURLToPath(new URL("../", import.meta.url));
 const version = "truth-harness.divide-conquer-specialization.v0";
+const branchingVersion = "truth-harness.divide-conquer-specialization.v1";
 const reopenVersion = "truth-harness.divide-conquer-reopen.v1";
 const declaration = "divide_conquer_specialized";
 const json = value => JSON.stringify(value, null, 2) + "\n";
 const sha = value => createHash("sha256").update(value).digest("hex");
 const assumptions = ["The application must establish the stated initial value and equal-split recurrence.",
   "Integer costs need not be nonnegative; no physical cost, source-code, timing, or asymptotic property is proved."];
+
+function libraryPath(request) {
+  return path.join(repo, "docs/examples", request.schema_version === branchingVersion ? "BranchingCost.lean" : "DivideConquer.lean");
+}
 
 function checkSpecializationSource(sourcePath, source, write = false) {
   const result = spawnSync(process.execPath, [path.join(repo, "apps/cli/dist/index.js"),
@@ -52,7 +57,7 @@ export async function reopenSpecialization(bundlePath, expectedRequestHash) {
   const raw = await bundleFile(directory, "request.json");
   assert.equal(sha(raw), expectedRequestHash, "Saved request does not match expected request SHA-256");
   const request = validateCosts(JSON.parse(raw));
-  const library = await boundedInput(path.join(repo, "docs/examples/DivideConquer.lean"));
+  const library = await boundedInput(libraryPath(request));
   const expected = specializationSource(request, library);
   const saved = await bundleFile(directory, "Specialized.lean");
   assert.equal(sha(saved), sha(expected), "Saved source does not match the request and current theorem library");
@@ -91,8 +96,13 @@ export function requireAdapterSuccess(result) {
 
 export function validateCosts(value) {
   assert.ok(value && typeof value === "object" && !Array.isArray(value), "Expected object");
-  assert.deepEqual(Object.keys(value).sort(), ["combine_offset", "combine_slope", "leaf_cost", "schema_version"]);
-  assert.equal(value.schema_version, version, "Unknown schema version");
+  assert.ok(value.schema_version === version || value.schema_version === branchingVersion, "Unknown schema version");
+  const branching = value.schema_version === branchingVersion;
+  assert.deepEqual(Object.keys(value).sort(), [...(branching ? ["branching_factor"] : []), "combine_offset", "combine_slope", "leaf_cost", "schema_version"]);
+  if (branching) {
+    assert.equal(typeof value.branching_factor, "string", "branching_factor must be an integer string");
+    assert.match(value.branching_factor, /^(?:[2-9]|1[0-6])(?![\s\S])/, "branching_factor must be a canonical integer from 2 to 16");
+  }
   for (const key of ["leaf_cost", "combine_slope", "combine_offset"]) {
     assert.equal(typeof value[key], "string", `${key} must be an integer string`);
     assert.match(value[key], /^(?:0|-?[1-9][0-9]{0,5})(?![\s\S])/, `${key} must be canonical and at most six digits`);
@@ -102,6 +112,16 @@ export function validateCosts(value) {
 
 export function specializationSource(request, library) {
   const { leaf_cost: c, combine_slope: a, combine_offset: b } = validateCosts(request);
+  if (request.schema_version === branchingVersion) {
+    const k = request.branching_factor;
+    return library + `\n\ntheorem ${declaration} (A : Nat -> Int)\n` +
+      `    (ha0 : A 0 = (${c} : Int))\n` +
+      `    (hs : forall h, A (h + 1) = (${k} : Int) * A h + (${a} : Int) * (${k} : Int) ^ (h + 1) + (${b} : Int)) :\n` +
+      `    forall h, A h = ((${c} : Int) + (${a} : Int) * (h : Int)) * (${k} : Int) ^ h + (${b} : Int) * BranchingCost.geometricSum (${k}) h :=\n` +
+      `  divide_conquer_branching_cost A (${k}) (${c}) (${a}) (${b}) ha0 hs\n\n` +
+      `/-- info: '${declaration}' depends on axioms: [propext, Quot.sound] -/\n` +
+      `#guard_msgs in\n#print axioms ${declaration}\n`;
+  }
   return library + `\n\ntheorem ${declaration} (A : Nat -> Int)\n` +
     `    (ha0 : A 0 = (${c} : Int))\n` +
     `    (hs : forall h, A (h + 1) = 2 * A h + (${a} : Int) * 2 ^ (h + 1) + (${b} : Int)) :\n` +
@@ -121,7 +141,7 @@ export async function specialize(args) {
   assert.ok(args.length === 1 && !args[0].startsWith("--"), "Usage: divide-conquer-specialize.mjs <request.json|-> OR --reopen <bundle-directory> --expect-request-sha256 <hash>");
   const raw = await boundedInput(args[0]);
   const request = validateCosts(JSON.parse(raw));
-  const library = await readFile(path.join(repo, "docs/examples/DivideConquer.lean"), "utf8");
+  const library = await readFile(libraryPath(request), "utf8");
   const source = specializationSource(request, library);
   await ensureSpecializationWorkspace(repo);
   const parent = path.join(repo, ".truth-harness/experiments");
@@ -131,7 +151,7 @@ export async function specialize(args) {
   await writeFile(path.join(directory, "request.json"), raw, "utf8");
   await writeFile(sourcePath, source, "utf8");
   const proof = checkSpecializationSource(sourcePath, source, true);
-  const report = { schema_version: version, status: "accepted", trust: "proved",
+  const report = { schema_version: request.schema_version, status: "accepted", trust: "proved",
     proof_checker_backed: true, evidence_scope: "explicit-recurrence-only",
     request, request_sha256: sha(raw), library_sha256: sha(library), source_sha256: sha(source),
     artifact_directory: path.relative(repo, directory).split(path.sep).join("/"),

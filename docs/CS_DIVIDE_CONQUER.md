@@ -283,9 +283,33 @@ closed form, asymptotic bound, uneven splitting, or program correctness is claim
 docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/BranchingCost.lean --declaration divide_conquer_branching_cost --timeout-ms 30000 --fail-on-unproved --write --json
 ```
 
-This separate source leaves the existing two-way source, JSON contract, generated
-specializations, and their hashes unchanged. Arbitrary branching is currently a
-reusable Lean theorem, not a new parameter accepted by the specialization CLI.
+This separate source leaves the existing two-way source, v0 JSON contract,
+generated specializations, and their hashes unchanged.
+
+### Versioned Branching Specializations
+
+```sh
+docker compose run --build --rm -T lean-proof node tools/divide-conquer-specialize.mjs docs/examples/cs-branching-costs.json
+```
+
+Input version `truth-harness.divide-conquer-specialization.v1` adds the required
+`branching_factor` field, a canonical integer string from `"2"` to `"16"`.
+The three cost fields retain the v0 integer-string bounds. The example uses
+branching factor 3, leaf cost 2, slope 4, and offset 5. Unknown versions, extra
+fields, missing factors, and out-of-range factors fail closed. Adding a branching
+field to v0 is rejected rather than silently changing its two-way meaning.
+
+The generator selects `BranchingCost.lean` for v1 and `DivideConquer.lean` for v0.
+V1 produces a scoped theorem using the finite geometric sum and the general
+branching proof. Successful creation reports mirror the request's schema version;
+creation failures retain the existing v0 `unverified` error envelope and exit 2.
+Both inputs support files and stdin and use the same request-hash-bound reopen
+command and `truth-harness.divide-conquer-reopen.v1` output. A v1 two-way input
+is not byte-identical to a v0 input or proof: they must not share expected hashes.
+
+The CLI's 2..16 bound is a deliberate interface limit, not a limitation of the
+Lean theorem. No recurrence detection, unequal splitting, resource guarantee,
+or claim about external code is introduced.
 
 ## Replay The Evidence Bundle
 

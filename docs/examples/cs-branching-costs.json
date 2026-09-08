@@ -1,0 +1,7 @@
+{
+  "schema_version": "truth-harness.divide-conquer-specialization.v1",
+  "branching_factor": "3",
+  "leaf_cost": "2",
+  "combine_slope": "4",
+  "combine_offset": "5"
+}
