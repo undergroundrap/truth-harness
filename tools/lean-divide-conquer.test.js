@@ -1,14 +1,21 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { ensureSpecializationWorkspace, requireAdapterSuccess, specializationSource, validateCosts } from "./divide-conquer-specialize.mjs";
+import { ensureSpecializationWorkspace, requireAdapterSuccess, specializationSource, validateCosts, validateExpectedRequestHash } from "./divide-conquer-specialize.mjs";
 
 const sourcePath = fileURLToPath(new URL("../docs/examples/DivideConquer.lean", import.meta.url));
 const source = readFileSync(sourcePath, "utf8");
 const costs = JSON.parse(readFileSync(new URL("../docs/examples/cs-divide-conquer-costs.json", import.meta.url), "utf8"));
+it("requires a canonical expected request hash", () => {
+  expect(validateExpectedRequestHash("ab".repeat(32))).toBe("ab".repeat(32));
+  for (const hash of [undefined, null, 1, "", "a".repeat(63), "a".repeat(65), "G".repeat(64), "A".repeat(64), "a".repeat(64) + "\n"]) {
+    expect(() => validateExpectedRequestHash(hash)).toThrow();
+  }
+});
 it("initializes a fresh specialization workspace without rewriting an existing or malformed manifest", async () => {
   const root = mkdtempSync(join(tmpdir(), "specialization workspace "));
   try {
@@ -71,7 +78,9 @@ it("reopens only a bound specialization with fresh Lean evidence and leaves save
   const scratchBefore = scratchNames();
   const requestPath = join(root, "request.json"), savedPath = join(root, "Specialized.lean");
   const raw = JSON.stringify(costs), generated = specializationSource(costs, source);
-  const run = (env = process.env) => spawnSync(process.execPath, [tool, "--reopen", root], {
+  const hash = value => createHash("sha256").update(value).digest("hex");
+  const expectedHash = hash(raw);
+  const run = (env = process.env, bindingArgs = ["--expect-request-sha256", expectedHash]) => spawnSync(process.execPath, [tool, "--reopen", root, ...bindingArgs], {
     env, encoding: "utf8", timeout: 60000, windowsHide: true
   });
   const rejected = () => {
@@ -87,17 +96,38 @@ it("reopens only a bound specialization with fresh Lean evidence and leaves save
     const before = readdirSync(root).map(name => [name, readFileSync(join(root, name), "utf8")]);
     const accepted = run();
     expect(accepted.status, accepted.stdout + accepted.stderr).toBe(0);
-    expect(JSON.parse(accepted.stdout)).toMatchObject({ schema_version: "truth-harness.divide-conquer-reopen.v0",
+    expect(JSON.parse(accepted.stdout)).toMatchObject({ schema_version: "truth-harness.divide-conquer-reopen.v1", expected_request_sha256: expectedHash,
       status: "reopened", trust: "proved", proof_checker_backed: true, cached_report_used: false, request: costs });
     expect(readdirSync(root).map(name => [name, readFileSync(join(root, name), "utf8")])).toEqual(before);
     expect(scratchNames()).toEqual(scratchBefore);
+    for (const args of [[], ["--expect-request-sha256", "bad"], ["--wrong", expectedHash],
+      ["--expect-request-sha256", expectedHash, "--extra"]]) {
+      expect(run(process.env, args).status).toBe(2);
+    }
+    const otherCosts = { ...costs, leaf_cost: "3" };
+    const otherRaw = JSON.stringify(otherCosts);
+    writeFileSync(requestPath, otherRaw);
+    writeFileSync(savedPath, specializationSource(otherCosts, source));
+    const substituted = run({ ...process.env, TRUTH_HARNESS_LEAN: "/no-such-specialization-checker" });
+    expect(substituted.status).toBe(2);
+    expect(JSON.parse(substituted.stdout).error).toContain("Saved request does not match expected request SHA-256");
+    const deliberatelyChanged = run(process.env, ["--expect-request-sha256", hash(otherRaw)]);
+    expect(deliberatelyChanged.status).toBe(0);
+    expect(JSON.parse(deliberatelyChanged.stdout).request).toEqual(otherCosts);
+    writeFileSync(requestPath, raw + "\n");
+    writeFileSync(savedPath, generated);
+    expect(JSON.parse(run().stdout).error).toContain("Saved request does not match expected request SHA-256");
+    writeFileSync(requestPath, raw);
     const missingLean = run({ ...process.env, TRUTH_HARNESS_LEAN: "/no-such-specialization-checker" });
     expect(missingLean.status).toBe(2);
     expect(JSON.parse(missingLean.stdout).proof_checker_backed).toBe(false);
     expect(scratchNames()).toEqual(scratchBefore);
     for (const bad of [JSON.stringify({ ...costs, leaf_cost: "3" }), JSON.stringify({ ...costs, schema_version: "future" }),
       "\ufeff" + raw, " ".repeat(65537)]) {
-      writeFileSync(requestPath, bad); rejected();
+      writeFileSync(requestPath, bad);
+      const invalid = run(process.env, ["--expect-request-sha256", hash(bad)]);
+      expect(invalid.status).toBe(2);
+      expect(JSON.parse(invalid.stdout).proof_checker_backed).toBe(false);
     }
     writeFileSync(requestPath, raw);
     for (const bad of [generated + "\n-- changed library or source\n", "theorem fake : True := True.intro", " ".repeat(65537)]) {

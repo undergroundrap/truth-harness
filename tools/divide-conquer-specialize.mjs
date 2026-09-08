@@ -8,7 +8,7 @@ import { boundedInput } from "./pit-witness.mjs";
 
 const repo = fileURLToPath(new URL("../", import.meta.url));
 const version = "truth-harness.divide-conquer-specialization.v0";
-const reopenVersion = "truth-harness.divide-conquer-reopen.v0";
+const reopenVersion = "truth-harness.divide-conquer-reopen.v1";
 const declaration = "divide_conquer_specialized";
 const json = value => JSON.stringify(value, null, 2) + "\n";
 const sha = value => createHash("sha256").update(value).digest("hex");
@@ -39,10 +39,18 @@ async function bundleFile(directory, name) {
   return boundedInput(target);
 }
 
-export async function reopenSpecialization(bundlePath) {
+export function validateExpectedRequestHash(hash) {
+  assert.equal(typeof hash, "string", "Expected request SHA-256 is required");
+  assert.match(hash, /^[a-f0-9]{64}(?![\s\S])/, "Expected request SHA-256 must be 64 lowercase hexadecimal characters");
+  return hash;
+}
+
+export async function reopenSpecialization(bundlePath, expectedRequestHash) {
   assert.equal(process.env.TRUTH_HARNESS_CONTAINER, "1", "Use the offline Docker lean-proof service");
+  validateExpectedRequestHash(expectedRequestHash);
   const directory = await realpath(bundlePath);
   const raw = await bundleFile(directory, "request.json");
+  assert.equal(sha(raw), expectedRequestHash, "Saved request does not match expected request SHA-256");
   const request = validateCosts(JSON.parse(raw));
   const library = await boundedInput(path.join(repo, "docs/examples/DivideConquer.lean"));
   const expected = specializationSource(request, library);
@@ -58,6 +66,7 @@ export async function reopenSpecialization(bundlePath) {
     const proof = checkSpecializationSource(sourcePath, expected);
     return { schema_version: reopenVersion, status: "reopened", trust: "proved", proof_checker_backed: true,
       evidence_scope: "explicit-recurrence-only", request, request_sha256: sha(raw),
+      expected_request_sha256: expectedRequestHash,
       library_sha256: sha(library), source_sha256: sha(expected),
       artifact_directory: path.relative(repo, directory).split(path.sep).join("/"),
       cached_report_used: false, assumptions, proof };
@@ -105,10 +114,11 @@ export function specializationSource(request, library) {
 export async function specialize(args) {
   assert.equal(process.env.TRUTH_HARNESS_CONTAINER, "1", "Use the offline Docker lean-proof service");
   if (args[0] === "--reopen") {
-    assert.ok(args.length === 2 && args[1] !== "-", "Usage: divide-conquer-specialize.mjs --reopen <bundle-directory>");
-    return reopenSpecialization(args[1]);
+    assert.ok(args.length === 4 && args[1] !== "-" && args[2] === "--expect-request-sha256",
+      "Usage: divide-conquer-specialize.mjs --reopen <bundle-directory> --expect-request-sha256 <hash>");
+    return reopenSpecialization(args[1], args[3]);
   }
-  assert.ok(args.length === 1 && !args[0].startsWith("--"), "Usage: divide-conquer-specialize.mjs <request.json|-> OR --reopen <bundle-directory>");
+  assert.ok(args.length === 1 && !args[0].startsWith("--"), "Usage: divide-conquer-specialize.mjs <request.json|-> OR --reopen <bundle-directory> --expect-request-sha256 <hash>");
   const raw = await boundedInput(args[0]);
   const request = validateCosts(JSON.parse(raw));
   const library = await readFile(path.join(repo, "docs/examples/DivideConquer.lean"), "utf8");

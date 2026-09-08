@@ -191,10 +191,19 @@ meets its premises, and does not upgrade the older three-receipt bundle.
 ### Reopen A Saved Specialization
 
 ```sh
-docker compose run --rm -T lean-proof node tools/divide-conquer-specialize.mjs --reopen .truth-harness/experiments/divide-conquer-specialization-REPLACE_WITH_SAVED_ID
+docker compose run --rm -T lean-proof node tools/divide-conquer-specialize.mjs --reopen .truth-harness/experiments/divide-conquer-specialization-REPLACE_WITH_SAVED_ID --expect-request-sha256 REPLACE_WITH_PREVIOUSLY_RECORDED_REQUEST_HASH
 ```
 
-Pass the saved `artifact_directory`. Reopen reads only the bounded UTF-8
+Pass the saved `artifact_directory` and the expected `request_sha256` retained
+in your trusted task state when selecting or creating the intended request.
+The hash must be exactly 64 lowercase hexadecimal characters. Do not obtain it
+from the candidate bundle or its cached report at reopen time: that would not
+protect against substituting a different valid request. Missing or malformed
+hashes fail before bundle access; a mismatch fails before Lean runs. This binds
+exact bytes, so even a whitespace-only request change requires an intentional
+new expected hash. Creation syntax and its v0 input/output remain unchanged.
+
+Reopen reads only the bounded UTF-8
 `request.json` and `Specialized.lean`, rejecting file links that escape the bundle.
 It validates the request version and costs, reconstructs the source with the
 current theorem library, and requires an exact source-byte hash match. A changed
@@ -207,15 +216,19 @@ returned source hash and named declaration. It leaves the saved bundle unchanged
 does not initialize a workspace or write a proof record, and removes its temporary
 scratch directory under `.truth-harness/experiments`. The returned proof's source
 path refers to that temporary snapshot; use `--reopen` again for future checks.
-Successful stdout uses `truth-harness.divide-conquer-reopen.v0`, `status: reopened`,
+Successful stdout uses `truth-harness.divide-conquer-reopen.v1`, `status: reopened`,
 `trust: proved`, `cached_report_used: false`, request/library/source hashes, the
-fresh proof, and the same explicit assumptions. Exit 0 means freshly accepted;
+fresh proof, matching `expected_request_sha256`, and the same explicit assumptions.
+This replaces unbound v0 reopening; old invocations without the flag now fail
+closed with exit 2. Exit 0 means freshly accepted;
 exit 2 means unresolved, including missing Lean or mismatched artifacts.
 
 These checks establish internal consistency with the current library, not original
 authorship or immutable history. Replacing both input and source with another valid
-specialization yields evidence for that new input only. Review the returned costs
-and request hash against the problem you intend to solve. No source-code claim or
+specialization fails against the original expected hash. A caller can intentionally
+select that new request by supplying its hash, yielding evidence for the new input
+only. The tool cannot determine whether the caller's chosen hash represents the
+right human problem. No source-code claim or
 automatic discovery of applicable theorems is added.
 
 ## Replay The Evidence Bundle
