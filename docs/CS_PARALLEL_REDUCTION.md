@@ -125,3 +125,29 @@ subtrees represent separate logical tasks, not memoized shared work.
 The required Lean test evaluates balanced trees at heights 0..6 and an unbalanced
 tree, and rejects changes charging one operation per fork or two span units.
 Those finite probes supplement the universal theorem; they do not replace it.
+
+## Output Correctness
+
+`ValueTree` adds a separate executable tree with arbitrary integer-valued leaves.
+Its `aggregate` function combines child sums and counts. The specification
+instead flattens leaves left-to-right, applies a list sum, and takes list length.
+`tree_aggregation_correct` proves the aggregate equals that specification for
+every finite tree, including unbalanced trees, negative values, and duplicates.
+There is no empty-tree constructor; a single leaf has count one.
+
+```sh
+docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/ParallelReduction.lean --declaration tree_aggregation_correct --timeout-ms 30000 --fail-on-unproved --write --json
+```
+
+The proof proceeds by structural induction and a list-sum append lemma. No
+recurrence or correctness premise is supplied by a caller. The required Lean
+test checks targeted receipt metadata, evaluates representative leaf and skewed
+tree outputs, and rejects dropping the right sum or assigning zero leaf count.
+
+This proves functional correctness of the Lean aggregate, not a compiled Rust
+or C++ implementation. Integers and natural counts are unbounded mathematical
+values, not fixed-width machine arithmetic. No overflow or floating-point claim
+is made. The earlier `PairTree` definitions and cost proofs remain unchanged;
+there is not yet a proved mapping from `ValueTree` execution to that cost model.
+Thus output correctness and cost are separate results, not a combined verified
+runtime guarantee.

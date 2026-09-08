@@ -99,6 +99,50 @@ theorem balanced_cost (h : Nat) :
 
 end PairTree
 
+namespace ValueTree
+
+inductive Tree where
+  | leaf : Int -> Tree
+  | fork : Tree -> Tree -> Tree
+
+def aggregate : Tree -> Int × Nat
+  | .leaf value => (value, 1)
+  | .fork l r =>
+    let a := aggregate l
+    let b := aggregate r
+    (a.1 + b.1, a.2 + b.2)
+
+def leaves : Tree -> List Int
+  | .leaf value => [value]
+  | .fork l r => leaves l ++ leaves r
+
+def listSum : List Int -> Int
+  | [] => 0
+  | x :: xs => x + listSum xs
+
+theorem listSum_append (xs ys : List Int) :
+    listSum (xs ++ ys) = listSum xs + listSum ys := by
+  induction xs with
+  | nil => simp [listSum]
+  | cons x xs ih => simp [listSum, ih, Int.add_assoc]
+
+theorem aggregate_correct (t : Tree) :
+    aggregate t = (listSum (leaves t), (leaves t).length) := by
+  induction t with
+  | leaf value => simp [aggregate, leaves, listSum]
+  | fork l r hl hr => simp [aggregate, leaves, hl, hr, listSum_append]
+
+end ValueTree
+
+theorem tree_aggregation_correct (t : ValueTree.Tree) :
+    ValueTree.aggregate t = (ValueTree.listSum (ValueTree.leaves t),
+      (ValueTree.leaves t).length) := by
+  exact ValueTree.aggregate_correct t
+
+/-- info: 'tree_aggregation_correct' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms tree_aggregation_correct
+
 theorem pair_tree_balanced_cost (h : Nat) :
     PairTree.work (PairTree.balanced h) = 2 * (2 ^ h - 1) /\
     (PairTree.span (PairTree.balanced h) : Int) = (h : Int) := by
