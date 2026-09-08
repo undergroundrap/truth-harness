@@ -56,10 +56,11 @@ expressions, the exponent shift is `q -> 2*q`, and ordinary induction propagates
 link to the recurrence receipt, source-code verification, or complete formal
 proof here. These receipts narrow the unchecked algebra, not those boundaries.
 
-## Lean Recurrence Equivalence
+## Lean Recurrence And Closed Form
 
 ```sh
 npm run docker:divide-conquer-proof
+docker compose run --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/DivideConquer.lean --declaration divide_conquer_closed_form --timeout-ms 30000 --fail-on-unproved --write --json
 ```
 
 This rebuilds the existing Lean image with the current sources, then checks
@@ -67,6 +68,8 @@ This rebuilds the existing Lean image with the current sources, then checks
 record to `.truth-harness/proofs/`. It uses pinned Lean 4.12.0 and `Std`, not
 Mathlib. Image construction may download dependencies; the proof runtime has
 no network. The historical pin is for reproducibility, not a security guarantee.
+The first command selects the recurrence-equivalence declaration; the second
+selects the closed-form declaration from that same rebuilt source file.
 
 The independently restated target `divide_conquer_reduction` says that for any
 integer sequence `A` with `A(0)=0` and `A(1)=1`, the second-order recurrence
@@ -77,13 +80,30 @@ directions, the exponent shift, and the induction. A separate theorem supplies
 Source axiom guards require exactly `propext` and `Quot.sound`, with no
 `sorryAx` or additional assumed mathematical axiom.
 
+The separately spelled-out target `divide_conquer_closed_form` reuses that
+recurrence connection and proves for all natural `h` that
+`A(h)=((h : Int)-1)*2^h+1`. The subtraction is in the integers, so the leaf
+case `h=0` gives zero rather than a truncated-natural-subtraction artifact.
+The proof also constructs this formula as a sequence satisfying both initials
+and the recurrence. Thus the premises have a concrete model, and any sequence
+with those premises has the stated answer. Another theorem rejects `h*2^h`
+as an exact count by instantiating height 1. It does not refute an upper bound
+or asymptotic estimate.
+
+The closed-form target's guarded axiom list is `propext, Quot.sound`; the
+incorrect-candidate theorem uses only `propext`. This is standard-library Lean
+arithmetic and induction, not a new result in complexity theory.
+
 The Docker Lean CI gate also compiles mutated sources with a wrong second
-initial value and a wrong residual constant and requires their rejection.
+initial value, a wrong residual constant, a wrong closed-form constant, and a
+wrong exponential base and requires their rejection. It also requires the
+Truth Harness adapter to accept the named closed-form theorem as `proved`.
 Ordinary Node tests only inspect the wiring unless the explicit Lean-test flag
 is set; they are not substitutes for this compiler gate.
 
-The accepted formal theorem is not a proof that a sorting program implements
-the cost model, nor a Lean proof of the closed-form candidate. Mapping the
+The accepted formal theorems are not proofs that a sorting program implements
+the cost model. They state the answer in height coordinates, without formalizing
+the change of variables to `n*log2(n)-n+1`. Mapping the
 JSON fixtures to the Lean statement remains reviewed transcription. The
 three-receipt bundle below is unchanged and does not automatically import this
 separate proof or upgrade its conservative trust labels.

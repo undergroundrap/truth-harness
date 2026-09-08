@@ -40,7 +40,7 @@ discovery and fresh replay without generating replacement evidence.
 The [divide-and-conquer count](docs/CS_DIVIDE_CONQUER.md) applies these tools to
 an exact merge-style cost model, including a false exact-count alternative and
 replayable checks of its reduction algebra, linked in a portable evidence bundle,
-and a separate Lean proof of the recurrence equivalence.
+and separate Lean proofs of the recurrence equivalence and closed-form count.
 
 The project goal is not to replace WolframAlpha by rebuilding every math engine. The goal is to build the missing verification engine around AI-assisted work: problem normalization, verifier routing, receipts, trust labels, claim ledgers, replay, disclosures, benchmarks, and reports. Every answer should be backed by a replayable local tool run, proof check, cited source, counterexample search, workspace snapshot, or an explicit uncertainty label. Claude, Codex, and other frontier models can still help reason, plan, and critique, but the app is local-first: project data and artifacts stay in the local workspace unless the user explicitly sends selected context to a hosted model or network service, and that selected context plus disclosure is recorded locally.
 

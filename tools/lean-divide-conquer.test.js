@@ -13,7 +13,10 @@ it("keeps the Lean reduction target, axiom guards and fail-closed command (struc
   expect(source).not.toContain("?_");
   expect(source).toContain("theorem divide_conquer_reduction");
   expect(source).toContain("theorem missing_second_initial_fails");
-  expect(source.match(/#guard_msgs/g)).toHaveLength(2);
+  expect(source).toContain("theorem divide_conquer_closed_form");
+  expect(source).toContain("theorem closedCount_realizes_model");
+  expect(source).toContain("theorem tempting_candidate_false");
+  expect(source.match(/#guard_msgs/g)).toHaveLength(4);
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   expect(pkg.scripts["proof:divide-conquer"]).toContain("--declaration divide_conquer_reduction");
   expect(pkg.scripts["proof:divide-conquer"]).toContain("--fail-on-unproved");
@@ -26,11 +29,20 @@ it("kernel-checks the reduction and rejects corrupted statements when the Lean g
   const valid = run(sourcePath);
   expect(valid.status, valid.stdout + valid.stderr).toBe(0);
   expect(valid.stdout).not.toMatch(/warning:|error:|sorryAx/);
+  const cli = fileURLToPath(new URL("../apps/cli/dist/index.js", import.meta.url));
+  const adapter = spawnSync(process.execPath, [cli, "proof", "check", sourcePath,
+    "--declaration", "divide_conquer_closed_form", "--timeout-ms", "30000", "--fail-on-unproved", "--json"],
+  { encoding: "utf8", timeout: 30000, windowsHide: true });
+  expect(adapter.status, adapter.stdout + adapter.stderr).toBe(0);
+  expect(JSON.parse(adapter.stdout)).toMatchObject({ status: "accepted", trust: "proved", proofCheckerBacked: true,
+    source: { declarationName: "divide_conquer_closed_form" } });
   const root = mkdtempSync(join(tmpdir(), "lean reduction "));
   try {
     for (const [name, changed] of [
       ["WrongInitial", source.replaceAll("ha1 : A 1 = 1", "ha1 : A 1 = 2")],
-      ["WrongResidual", source.replaceAll("4 * A (h + 1) - 4 * A h + 1", "4 * A (h + 1) - 4 * A h - 1")]
+      ["WrongResidual", source.replaceAll("4 * A (h + 1) - 4 * A h + 1", "4 * A (h + 1) - 4 * A h - 1")],
+      ["WrongClosedConstant", source.replace("forall h, A h = ((h : Int) - 1) * 2 ^ h + 1 :=", "forall h, A h = ((h : Int) - 1) * 2 ^ h + 2 :=")],
+      ["WrongClosedBase", source.replace("forall h, A h = ((h : Int) - 1) * 2 ^ h + 1 :=", "forall h, A h = ((h : Int) - 1) * 3 ^ h + 1 :=")]
     ]) {
       expect(changed).not.toBe(source);
       const file = join(root, `${name}.lean`); writeFileSync(file, changed);

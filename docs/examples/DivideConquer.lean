@@ -53,6 +53,49 @@ theorem missing_second_initial_fails :
 
 end DivideConquer
 
+namespace DivideConquer
+
+def closedCount (h : Nat) : Int := ((h : Int) - 1) * 2 ^ h + 1
+
+theorem closedCount_step (h : Nat) :
+    closedCount (h + 1) = 2 * closedCount h + 2 ^ (h + 1) - 1 := by
+  have hc : ((h + 1 : Nat) : Int) = (h : Int) + 1 := by omega
+  have hm : (h : Int) * (2 ^ h * 2) = 2 * ((h : Int) * 2 ^ h) := by
+    rw [<- Int.mul_assoc, Int.mul_comm _ 2]
+  dsimp [closedCount]
+  rw [hc, Int.pow_succ]
+  simp only [Int.add_sub_cancel, Int.sub_mul, Int.one_mul, Int.mul_add, Int.mul_sub]
+  omega
+
+theorem firstOrder_closed_form (A : Nat -> Int) (ha0 : A 0 = 0)
+    (hf : firstOrder A) : forall h, A h = closedCount h := by
+  intro h
+  induction h with
+  | zero => simp [closedCount, ha0]
+  | succ h ih =>
+    calc
+      A (h + 1) = 2 * A h + 2 ^ (h + 1) - 1 := hf h
+      _ = 2 * closedCount h + 2 ^ (h + 1) - 1 := by rw [ih]
+      _ = closedCount (h + 1) := (closedCount_step h).symm
+
+theorem closedCount_realizes_model :
+    closedCount 0 = 0 /\ closedCount 1 = 1 /\ secondOrder closedCount :=
+  And.intro (by decide) (And.intro (by decide) (first_to_second closedCount closedCount_step))
+
+theorem tempting_candidate_false :
+    Not (forall h : Nat, (h : Int) * 2 ^ h = closedCount h) := by
+  intro hf
+  have bad := hf 1
+  simp [closedCount] at bad
+
+end DivideConquer
+
+-- The public target spells out both the recurrence and the answer.
+theorem divide_conquer_closed_form (A : Nat -> Int) (ha0 : A 0 = 0) (ha1 : A 1 = 1)
+    (hs : forall h, A (h + 2) = 4 * A (h + 1) - 4 * A h + 1) :
+    forall h, A h = ((h : Int) - 1) * 2 ^ h + 1 :=
+  DivideConquer.firstOrder_closed_form A ha0 (DivideConquer.second_to_first A ha0 ha1 hs)
+
 -- Restate the target independently of the named recurrence definitions.
 theorem divide_conquer_reduction (A : Nat -> Int) (ha0 : A 0 = 0) (ha1 : A 1 = 1) :
     (forall h, A (h + 2) = 4 * A (h + 1) - 4 * A h + 1) <->
@@ -66,3 +109,11 @@ theorem divide_conquer_reduction (A : Nat -> Int) (ha0 : A 0 = 0) (ha1 : A 1 = 1
 /-- info: 'DivideConquer.missing_second_initial_fails' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms DivideConquer.missing_second_initial_fails
+
+/-- info: 'divide_conquer_closed_form' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms divide_conquer_closed_form
+
+/-- info: 'DivideConquer.tempting_candidate_false' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms DivideConquer.tempting_candidate_false
