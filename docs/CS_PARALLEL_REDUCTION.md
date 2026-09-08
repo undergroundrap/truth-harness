@@ -58,3 +58,40 @@ computes longest paths, and checks sums on small exact integer inputs. That test
 is supporting evidence, not the universal Lean proof or a performance benchmark.
 
 All earlier branching source files and specialization schemas remain unchanged.
+
+## Reuse: Sum And Count Aggregation
+
+A binary tree can aggregate a pair (sum, count). Each leaf provides its input
+and count 1 at zero arithmetic cost. An internal node independently adds the
+two child sums and the two child counts. This is another application of the
+reduction family, not a fundamentally new algorithm.
+
+```text
+X(0)=Y(0)=S(0)=0
+X(h+1)=2*X(h)+1          Y(h+1)=2*Y(h)+1
+S(h+1)=S(h)+1
+W(h)=X(h)+Y(h)=2*(2^h-1) S(h)=h
+```
+
+The named `binary_pair_aggregation` theorem reuses `parallel_reduction_work`
+twice and `parallel_reduction_span` once. Thus reuse is checked within Lean,
+not merely asserted by matching prose. At height 3, eight leaves require
+14 additions with critical path 3 under the model. Serializing the two
+independent additions is a different scheduling model, not this theorem.
+
+```sh
+docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/ParallelReduction.lean --declaration binary_pair_aggregation --timeout-ms 30000 --fail-on-unproved --write --json
+```
+
+X and Y count sum and count additions respectively, not the aggregate values.
+The theorem is conditional on their recurrences and the span recurrence; it
+does not verify executable aggregation code or derive those premises from it.
+Tests construct both dependency chains for heights 0..8 and check their
+outputs on small exact integers. These finite tests are supporting evidence,
+not a universal functional-correctness proof. Lean negative controls reject
+halving the claimed work or doubling the claimed span.
+
+The model assumes independent scalar additions, unlimited parallelism, and
+unit cost. Tuple allocation, communication, overflow, floating-point behavior,
+and actual elapsed time are excluded. The existing work-specialization schema
+is unchanged and does not encode pair-output semantics or certify span.

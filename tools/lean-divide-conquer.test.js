@@ -13,6 +13,55 @@ const costs = JSON.parse(readFileSync(new URL("../docs/examples/cs-divide-conque
 const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean", import.meta.url));
 const branchingSource = readFileSync(branchingPath, "utf8");
 const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
+it("counts independent sum and count dependencies in a binary pair aggregate", () => {
+  for (let height = 0; height <= 8; height++) {
+    let work = 0, leaf = 0, expectedSum = 0;
+    const build = h => {
+      if (h === 0) {
+        const value = (leaf++ % 11) - 5;
+        expectedSum += value;
+        return { sum: value, count: 1, sumDepth: 0, countDepth: 0 };
+      }
+      const left = build(h - 1), right = build(h - 1);
+      work += 2;
+      return { sum: left.sum + right.sum, count: left.count + right.count,
+        sumDepth: Math.max(left.sumDepth, right.sumDepth) + 1,
+        countDepth: Math.max(left.countDepth, right.countDepth) + 1 };
+    };
+    const result = build(height);
+    expect(result.sum).toBe(expectedSum);
+    expect(result.count).toBe(2 ** height);
+    expect(leaf).toBe(result.count);
+    expect(work).toBe(2 * (2 ** height - 1));
+    expect(Math.max(result.sumDepth, result.countDepth)).toBe(height);
+  }
+});
+it("reuses reduction lemmas for pair aggregation and rejects doubled span", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
+  const cli = fileURLToPath(new URL("../apps/cli/dist/index.js", import.meta.url));
+  const checked = spawnSync(process.execPath, [cli, "proof", "check", file,
+    "--declaration", "binary_pair_aggregation", "--fail-on-unproved", "--json"],
+  { encoding: "utf8", timeout: 45000, windowsHide: true });
+  expect(checked.status, checked.stdout + checked.stderr).toBe(0);
+  expect(JSON.parse(checked.stdout)).toMatchObject({ trust: "proved", proofCheckerBacked: true,
+    source: { declarationName: "binary_pair_aggregation" } });
+  const text = readFileSync(file, "utf8");
+  const root = mkdtempSync(join(tmpdir(), "pair aggregate negatives "));
+  try {
+    for (const [i, wrong] of [
+      text.replace("X h + Y h = 2 * (2 ^ h - 1)", "X h + Y h = (2 ^ h - 1)"),
+      text.replace("/\\ S h = (h : Int)", "/\\ S h = 2 * (h : Int)")
+    ].entries()) {
+      expect(wrong).not.toBe(text);
+      const bad = join(root, `Wrong${i}.lean`);
+      writeFileSync(bad, wrong);
+      const result = spawnSync("lean", [bad], { encoding: "utf8", timeout: 30000, windowsHide: true });
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("error:");
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 120000);
 it("enumerates work and longest dependency paths for a balanced four-way reduction", () => {
   for (let height = 0; height <= 5; height++) {
     let work = 0, leaf = 0, expectedSum = 0;

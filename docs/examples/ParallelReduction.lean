@@ -35,6 +35,21 @@ theorem parallel_reduction_four_way (W S : Nat -> Int)
 theorem parallel_reduction_span_not_work : Not ((4 : Int) ^ 2 - 1 = 3 * (2 : Int)) := by
   decide
 
+theorem binary_pair_aggregation (X Y S : Nat -> Int)
+    (x0 : X 0 = 0) (xs : forall h, X (h + 1) = 2 * X h + 1)
+    (y0 : Y 0 = 0) (ys : forall h, Y (h + 1) = 2 * Y h + 1)
+    (s0 : S 0 = 0) (ss : forall h, S (h + 1) = S h + 1) :
+    forall h, X h + Y h = 2 * (2 ^ h - 1) /\ S h = (h : Int) := by
+  intro h
+  have hx := parallel_reduction_work X 2 x0 xs h
+  have hy := parallel_reduction_work Y 2 y0 ys h
+  have hs := parallel_reduction_span S 2 s0 ss h
+  constructor <;> omega
+
+/-- info: 'binary_pair_aggregation' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms binary_pair_aggregation
+
 /-- info: 'parallel_reduction_work' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms parallel_reduction_work
