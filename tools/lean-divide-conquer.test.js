@@ -13,6 +13,68 @@ const costs = JSON.parse(readFileSync(new URL("../docs/examples/cs-divide-conque
 const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean", import.meta.url));
 const branchingSource = readFileSync(branchingPath, "utf8");
 const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
+it("enumerates work and longest dependency paths for a balanced four-way reduction", () => {
+  for (let height = 0; height <= 5; height++) {
+    let work = 0, leaf = 0, expectedSum = 0;
+    const build = h => {
+      if (h === 0) {
+        const value = (leaf++ % 7) - 3;
+        expectedSum += value;
+        return { value, depth: 0 };
+      }
+      const children = Array.from({ length: 4 }, () => build(h - 1));
+      let result = children[0];
+      for (const child of children.slice(1)) {
+        work++;
+        result = { value: result.value + child.value, depth: Math.max(result.depth, child.depth) + 1 };
+      }
+      return result;
+    };
+    const result = build(height);
+    expect(leaf).toBe(4 ** height);
+    expect(work).toBe(4 ** height - 1);
+    expect(result.depth).toBe(3 * height);
+    expect(result.value).toBe(expectedSum);
+  }
+});
+it("checks parallel reduction work/span proofs and reuses the existing v1 work lane", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
+  const text = readFileSync(file, "utf8");
+  expect(text).not.toMatch(/\b(sorry|admit|axiom|native_decide)\b/);
+  expect(text).not.toContain("?_");
+  const cli = fileURLToPath(new URL("../apps/cli/dist/index.js", import.meta.url));
+  const checked = spawnSync(process.execPath, [cli, "proof", "check", file,
+    "--declaration", "parallel_reduction_four_way", "--fail-on-unproved", "--json"],
+  { encoding: "utf8", timeout: 45000, windowsHide: true });
+  expect(checked.status, checked.stdout + checked.stderr).toBe(0);
+  expect(JSON.parse(checked.stdout)).toMatchObject({ trust: "proved", proofCheckerBacked: true,
+    source: { declarationName: "parallel_reduction_four_way" } });
+  const root = mkdtempSync(join(tmpdir(), "parallel negatives "));
+  try {
+    for (const [i, corrupted] of [text.replace("W h = 4 ^ h - 1 /\\", "W h = 4 ^ h + 1 /\\"),
+      text.replace("S h = 3 * (h : Int)", "S h = (h : Int)")].entries()) {
+      expect(corrupted).not.toBe(text);
+      const bad = join(root, `Wrong${i}.lean`);
+      writeFileSync(bad, corrupted);
+      const result = spawnSync("lean", [bad], { encoding: "utf8", timeout: 30000, windowsHide: true });
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("error:");
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+  const tool = fileURLToPath(new URL("./divide-conquer-specialize.mjs", import.meta.url));
+  const fixture = fileURLToPath(new URL("../docs/examples/cs-parallel-reduction-work.json", import.meta.url));
+  const created = spawnSync(process.execPath, [tool, fixture], { encoding: "utf8", timeout: 60000, windowsHide: true });
+  expect(created.status, created.stdout + created.stderr).toBe(0);
+  const report = JSON.parse(created.stdout);
+  expect(report).toMatchObject({ trust: "proved", proof_checker_backed: true,
+    request: { branching_factor: "4", leaf_cost: "0", combine_slope: "0", combine_offset: "3" } });
+  const reopened = spawnSync(process.execPath, [tool, "--reopen", report.artifact_directory,
+    "--expect-request-sha256", report.request_sha256], { encoding: "utf8", timeout: 60000, windowsHide: true });
+  expect(reopened.status, reopened.stdout + reopened.stderr).toBe(0);
+  expect(JSON.parse(reopened.stdout)).toMatchObject({ status: "reopened", proof_checker_backed: true,
+    expected_request_sha256: report.request_sha256 });
+}, 180000);
 it("keeps versioned branching input bounded and rejects cross-version fields", () => {
   expect(validateCosts(branchingCosts)).toEqual(branchingCosts);
   const { branching_factor: omitted, ...missing } = branchingCosts;

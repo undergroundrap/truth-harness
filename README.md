@@ -46,6 +46,8 @@ arbitrary integer branching via finite geometric sums. Versioned JSON specializa
 let agents use the original two-way model or branching factors 2 through 16 and obtain a scoped Lean proof
 record, then reopen inputs bound to an expected request hash with a fresh Lean check rather than trusting cached
 labels; see [the specialization workflow](docs/CS_DIVIDE_CONQUER.md#check-a-concrete-specialization).
+The [parallel reduction model](docs/CS_PARALLEL_REDUCTION.md) applies this work
+lane to a four-way reduction and separately proves its critical-path cost in Lean.
 
 The project goal is not to replace WolframAlpha by rebuilding every math engine. The goal is to build the missing verification engine around AI-assisted work: problem normalization, verifier routing, receipts, trust labels, claim ledgers, replay, disclosures, benchmarks, and reports. Every answer should be backed by a replayable local tool run, proof check, cited source, counterexample search, workspace snapshot, or an explicit uncertainty label. Claude, Codex, and other frontier models can still help reason, plan, and critique, but the app is local-first: project data and artifacts stay in the local workspace unless the user explicitly sends selected context to a hosted model or network service, and that selected context plus disclosure is recorded locally.
 
