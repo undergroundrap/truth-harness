@@ -4,9 +4,43 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
+import { specializationSource, validateCosts } from "./divide-conquer-specialize.mjs";
 
 const sourcePath = fileURLToPath(new URL("../docs/examples/DivideConquer.lean", import.meta.url));
 const source = readFileSync(sourcePath, "utf8");
+const costs = JSON.parse(readFileSync(new URL("../docs/examples/cs-divide-conquer-costs.json", import.meta.url), "utf8"));
+it("validates specialization inputs without accepting expressions or hidden fields", () => {
+  expect(validateCosts(costs)).toEqual(costs);
+  for (const bad of [null, [], { ...costs, schema_version: "future" }, { ...costs, proof: "trust me" },
+    ...[2, "01", "-0", "+1", "1000000", "1.5", "1\n", "0); axiom bad : False"].map(leaf_cost => ({ ...costs, leaf_cost }))]) {
+    expect(() => validateCosts(bad)).toThrow();
+  }
+  expect(specializationSource(costs, source)).toBe(specializationSource(costs, source));
+});
+it("checks generated specializations through the real adapter and fails closed on invalid input", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const tool = fileURLToPath(new URL("./divide-conquer-specialize.mjs", import.meta.url));
+  const run = input => spawnSync(process.execPath, [tool, "-"], {
+    input, encoding: "utf8", timeout: 60000, windowsHide: true
+  });
+  for (const request of [costs, { ...costs, leaf_cost: "0", combine_slope: "0", combine_offset: "0" },
+    { ...costs, leaf_cost: "-999999", combine_slope: "999999", combine_offset: "-999999" }]) {
+    const result = run(JSON.stringify(request));
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report).toMatchObject({ status: "accepted", trust: "proved", proof_checker_backed: true,
+      evidence_scope: "explicit-recurrence-only", request });
+    expect(report.proof.source.declarationName).toBe("divide_conquer_specialized");
+    const generated = readFileSync(join(report.artifact_directory, "Specialized.lean"), "utf8");
+    expect(generated).toBe(specializationSource(request, source));
+  }
+  for (const bad of ["{}", "{", "\ufeff" + JSON.stringify(costs), " ".repeat(65537),
+    JSON.stringify({ ...costs, leaf_cost: "2 + 1" })]) {
+    const result = run(bad);
+    expect(result.status).toBe(2);
+    expect(JSON.parse(result.stdout)).toMatchObject({ status: "unverified", proof_checker_backed: false });
+  }
+}, 180000);
 it("keeps the Lean reduction target, axiom guards and fail-closed command (structural only)", () => {
   expect(source).toContain("import Std");
   expect(source).not.toMatch(/\b(sorry|admit|axiom|native_decide)\b/);

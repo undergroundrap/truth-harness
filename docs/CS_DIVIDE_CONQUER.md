@@ -130,8 +130,8 @@ specialization uses `c=3,a=0,b=5` and obtains `8*2^h-5`.
 docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/DivideConquer.lean --declaration divide_conquer_cost_family --timeout-ms 30000 --fail-on-unproved --write --json
 ```
 
-This is reusable as a Lean theorem, not a new CLI parser for arbitrary
-recurrences or runtime parameters. Its axiom guard and both specializations
+This is reusable as a Lean theorem, not a parser for arbitrary
+recurrences. Its axiom guard and both specializations
 require exactly `propext, Quot.sound`. The required Lean test gate checks named
 adapter acceptance and rejects formulas omitting leaf cost, doubling the slope,
 or flipping the offset sign, alongside the existing four negative controls.
@@ -145,6 +145,41 @@ the equal-split model. No rational/real parameters, unequal splits, floors,
 ceilings, probabilistic costs, timing, asymptotic bounds, source-code properties,
 or JSON-to-Lean translation are established here. The fixed three-receipt bundle
 still covers only its original inputs, not every member of this family.
+
+### Check A Concrete Specialization
+
+Agents can supply the three costs using the versioned example below. Values
+are canonical decimal integer strings from -999999 to 999999. Unknown versions,
+extra fields, expressions, noncanonical integers, invalid UTF-8, BOMs, and inputs
+over 64 KiB fail closed. The tool does not accept user-supplied Lean code.
+
+```sh
+docker compose run --build --rm -T lean-proof node tools/divide-conquer-specialize.mjs docs/examples/cs-divide-conquer-costs.json
+```
+
+Use `-` instead of the path for stdin. Input fields are `schema_version`
+(`truth-harness.divide-conquer-specialization.v0`), `leaf_cost`,
+`combine_slope`, and `combine_offset`. The example supplies 2, 3, and -2.
+The generated theorem proves `A(h)=3*h*2^h+2` under its explicit recurrence
+premises, retaining the unsimplified parameter expression in the formal statement.
+
+The tool embeds the current theorem library in a self-contained `Specialized.lean`,
+applies `divide_conquer_cost_family`, checks the named declaration through the
+existing Lean adapter, and writes the request and JSON report under the local
+`.truth-harness/experiments/divide-conquer-specialization-*` directory. The adapter
+also writes its normal scoped proof record. Nothing is uploaded. Use the offline
+`lean-proof` service; a container marker is a guard, not a security sandbox itself.
+
+Stdout is JSON. Exit 0 means adapter-accepted proof; exit 2 means invalid input
+or an unavailable/failed check, reported as `unverified`. Success includes request,
+request/library/generated-source SHA-256 hashes, artifact directory, explicit
+assumptions, and the adapter's proof result. Paths and record identifiers vary
+per run; source generation is deterministic for fixed parameters and library.
+Recheck the saved source with `proof check --declaration divide_conquer_specialized`;
+do not trust a cached report merely because it says `proved`. Partial failure
+directories are not successful receipts. Hashes bind bytes, not authorship.
+This proves the conditional recurrence theorem only, not that external code
+meets its premises, and does not upgrade the older three-receipt bundle.
 
 ## Replay The Evidence Bundle
 
