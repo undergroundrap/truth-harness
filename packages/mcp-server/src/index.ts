@@ -135,10 +135,10 @@ export function createTruthHarnessMcpServer(): McpServer {
   }, async () => toolJson(polynomialCapabilities()));
   server.registerTool("truth_harness_polynomial_lookup", {
     description: "Find local candidate receipts by exact request-byte SHA-256. Read-only, bounded, no verification. Fresh polynomial replay is required before trust.",
-    inputSchema: { requestSha256: z.string().regex(/^[a-f0-9]{64}$/) },
+    inputSchema: { requestSha256: z.string().regex(/^[a-f0-9]{64}$/), cursor: z.string().min(1).max(256).optional() },
     annotations: { readOnlyHint: true, openWorldHint: false }
-  }, async ({ requestSha256 }) => {
-    try { return toolJson(await lookupPolynomialReceipts(process.env.TRUTH_HARNESS_ROOT ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd(), requestSha256)); }
+  }, async ({ requestSha256, cursor }) => {
+    try { return toolJson(await lookupPolynomialReceipts(process.env.TRUTH_HARNESS_ROOT ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd(), requestSha256, cursor)); }
     catch { return toolJson({ status: "unverified", checked: false, error: "Local receipt lookup failed" }, { isError: true }); }
   });
   server.registerTool("truth_harness_polynomial_check", {

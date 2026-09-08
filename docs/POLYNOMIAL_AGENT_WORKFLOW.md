@@ -10,18 +10,29 @@ bytes, not the receipt's canonical-JSON request digest. MCP exposes
 workspace root. Lookup is available without Docker; mathematical replay still
 requires the Docker source checkout.
 
-The versioned `truth-harness.polynomial-lookup.v0` report always says
+The versioned `truth-harness.polynomial-lookup.v1` report always says
 `checked: false`, `trust: "unverified"`, and `requires_replay: true`. Matches
 contain `request_path`, `receipt_path`, and a freshly computed `receipt_sha256`.
 Saved reports and claimed receipt statuses are not trusted or parsed. Even a
 malformed receipt may be a candidate: invoke `polynomial replay` (or the MCP
 replay tool) before using it. Lookup does not establish source-code assumptions.
 
-V0 scans at most 256 immediate store entries and reads at most 65536 bytes per
-request/receipt. Too many entries is an error with no partial results. Missing
+V1 lists at most 8192 immediate store names, sorts them, then inspects at most
+256 entries per page and reads at most 65536 bytes per request/receipt. More than
+8192 entries is an error with no partial results. Missing
 stores return no matches; unreadable, missing, oversized or linked candidate
 files/directories are skipped and counted. Results are sorted by directory name.
 Linked store roots are rejected. Paths returned are workspace-relative.
+`complete: false` requires another call, even when `matches` is empty. Pass
+`next_cursor` as CLI `--cursor TOKEN` or MCP `cursor` with the same request hash
+and workspace. `complete: true` and `next_cursor: null` end the scan. Each page
+reports its own `scanned`/`skipped` counts and the total `inventory_entries`.
+The cursor binds the root, query and sorted names. Added or removed directory
+entries invalidate it; restart from the first page. Changed file contents are
+read afresh; missing files are skipped. Cursors are not signed credentials and
+the inventory binding is not a snapshot or integrity guarantee for file contents.
+Pagination does not automatically aggregate results or replay them. V0 clients
+must handle V1 pagination explicitly rather than assuming one call is exhaustive.
 This is a bounded local discovery tool, not a hostile-concurrent-writer sandbox.
 Files can change after lookup; replay remains necessary. Exact-byte matching
 intentionally misses reformatted or semantically equivalent requests. No index,

@@ -500,15 +500,16 @@ const hum = program.command("hum").description("Inspect and validate Hum languag
 
 const polynomial = program.command("polynomial").description("Check structured polynomial data with Docker-isolated exact arithmetic.");
 polynomial.command("lookup").argument("<request-sha256>", "SHA-256 of exact request bytes")
-  .option("--root <path>", "Workspace to search", ".").option("--json", "Print candidate metadata")
-  .action(async (hash: string, options: { root: string; json?: boolean }) => {
+  .option("--root <path>", "Workspace to search", ".").option("--cursor <token>", "Continue a lookup page").option("--json", "Print candidate metadata")
+  .action(async (hash: string, options: { root: string; cursor?: string; json?: boolean }) => {
     try {
-      const report = await lookupPolynomialReceipts(options.root, hash);
+      const report = await lookupPolynomialReceipts(options.root, hash, options.cursor);
       if (options.json) printJson(report);
       else {
         console.log(`${report.matches.length} candidate receipt(s); unverified, fresh replay required.`);
         for (const match of report.matches) console.log(`${match.request_path} -> ${match.receipt_path}`);
         console.log(`Scanned ${report.scanned}; skipped ${report.skipped}.`);
+        if (report.next_cursor) console.log(`More entries remain. Continue with --cursor ${report.next_cursor}`);
       }
     } catch (error) {
       process.exitCode = 2;

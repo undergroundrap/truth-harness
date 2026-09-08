@@ -49,6 +49,15 @@ describe("polynomial MCP transport", () => {
           expect(Boolean(lookup.isError)).toBe(false);
           expect(payload(lookup)).toMatchObject({ checked: false, trust: "unverified", requires_replay: true });
           expect(payload(lookup).matches).toContainEqual({ request_path: `${localDirectory}/request.json`, receipt_path: `${localDirectory}/receipt.json`, receipt_sha256: payload(result).receipt_sha256 });
+          if (operation === "compare") {
+            for (let i = 0; i < 256; i++) await writeFile(join(lookupRoot, ".truth-harness/witnesses", `a${i}`), "");
+            const first = payload(await client.callTool({ name: "truth_harness_polynomial_lookup", arguments: { requestSha256: payload(result).request_sha256 } }));
+            expect(first).toMatchObject({ complete: false, matches: [] });
+            const last = await client.callTool({ name: "truth_harness_polynomial_lookup", arguments: { requestSha256: payload(result).request_sha256, cursor: first.next_cursor } });
+            expect(Boolean(last.isError)).toBe(false);
+            expect(payload(last)).toMatchObject({ complete: true, next_cursor: null, checked: false });
+            expect(payload(last).matches).toEqual(payload(lookup).matches);
+          }
         } finally {
           vi.stubEnv("TRUTH_HARNESS_ROOT", fileURLToPath(new URL("../../../", import.meta.url)));
           await rm(lookupRoot, { recursive: true, force: true });
