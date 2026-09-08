@@ -1,5 +1,37 @@
 # Polynomial CLI And MCP Workflow
 
+## Find Saved Candidates
+
+`truth-harness polynomial lookup REQUEST_SHA256 --root . --json` searches the
+workspace's `.truth-harness/witnesses` without running mathematics or writing files.
+Use the `request_sha256` from a polynomial report, which hashes exact request
+bytes, not the receipt's canonical-JSON request digest. MCP exposes
+`truth_harness_polynomial_lookup` with `requestSha256`, using the configured
+workspace root. Lookup is available without Docker; mathematical replay still
+requires the Docker source checkout.
+
+The versioned `truth-harness.polynomial-lookup.v0` report always says
+`checked: false`, `trust: "unverified"`, and `requires_replay: true`. Matches
+contain `request_path`, `receipt_path`, and a freshly computed `receipt_sha256`.
+Saved reports and claimed receipt statuses are not trusted or parsed. Even a
+malformed receipt may be a candidate: invoke `polynomial replay` (or the MCP
+replay tool) before using it. Lookup does not establish source-code assumptions.
+
+V0 scans at most 256 immediate store entries and reads at most 65536 bytes per
+request/receipt. Too many entries is an error with no partial results. Missing
+stores return no matches; unreadable, missing, oversized or linked candidate
+files/directories are skipped and counted. Results are sorted by directory name.
+Linked store roots are rejected. Paths returned are workspace-relative.
+This is a bounded local discovery tool, not a hostile-concurrent-writer sandbox.
+Files can change after lookup; replay remains necessary. Exact-byte matching
+intentionally misses reformatted or semantically equivalent requests. No index,
+network, telemetry, or automatic trust promotion is introduced.
+
+CLI exit 0 means lookup completed (including no matches), not verified math;
+exit 2 means invalid input or lookup failure. MCP failures set `isError`.
+
+## Check And Replay
+
 The normal CLI and MCP surfaces now expose the existing structured polynomial
 comparison, summation and bounded linear-recurrence tools. Each operation keeps
 its own explicit request/receipt contract. The interfaces reuse its producer and checker,

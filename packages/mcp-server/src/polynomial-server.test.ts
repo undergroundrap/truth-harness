@@ -1,4 +1,6 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -37,6 +39,20 @@ describe("polynomial MCP transport", () => {
         const result = await client.callTool({ name: "truth_harness_polynomial_check", arguments: { operation, requestJson } });
         expect(Boolean(result.isError)).toBe(fails);
         const directory = payload(result).artifact_directory;
+        const lookupRoot = await mkdtemp(join(tmpdir(), "mcp lookup "));
+        try {
+          const localDirectory = `.truth-harness/witnesses/${basename(directory)}`;
+          await mkdir(join(lookupRoot, ".truth-harness/witnesses"), { recursive: true });
+          await cp(directory, join(lookupRoot, localDirectory), { recursive: true });
+          vi.stubEnv("TRUTH_HARNESS_ROOT", lookupRoot);
+          const lookup = await client.callTool({ name: "truth_harness_polynomial_lookup", arguments: { requestSha256: payload(result).request_sha256 } });
+          expect(Boolean(lookup.isError)).toBe(false);
+          expect(payload(lookup)).toMatchObject({ checked: false, trust: "unverified", requires_replay: true });
+          expect(payload(lookup).matches).toContainEqual({ request_path: `${localDirectory}/request.json`, receipt_path: `${localDirectory}/receipt.json`, receipt_sha256: payload(result).receipt_sha256 });
+        } finally {
+          vi.stubEnv("TRUTH_HARNESS_ROOT", fileURLToPath(new URL("../../../", import.meta.url)));
+          await rm(lookupRoot, { recursive: true, force: true });
+        }
         const replay = await client.callTool({ name: "truth_harness_polynomial_replay", arguments: { operation, requestPath: `${directory}/request.json`, receiptPath: `${directory}/receipt.json` } });
         expect(Boolean(replay.isError)).toBe(fails);
         expect(payload(replay).receipt_sha256).toBe(payload(result).receipt_sha256);

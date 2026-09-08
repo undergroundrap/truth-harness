@@ -3,7 +3,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { polynomialCapabilities, runPolynomialTool, type PolynomialOperation, type PolynomialToolResult } from "@truth-harness/core";
+import { lookupPolynomialReceipts, polynomialCapabilities, runPolynomialTool, type PolynomialOperation, type PolynomialToolResult } from "@truth-harness/core";
 import { createPublicMathProblemCatalogHandoff, createPublicMathProblemJourney, parseBenchmarkSuite, parsePublicMathProblemCatalog, renderPublicMathProblemCatalogHandoffMarkdown, renderPublicMathProblemJourneyMarkdown, runBenchmarkSuite, summarizePublicMathProblemCatalog, type BenchmarkRun, type PublicMathProblemCatalogSummary } from "@truth-harness/benchmarks";
 import {
   benchmarkComparisonFailsGate,
@@ -499,6 +499,23 @@ program
 const hum = program.command("hum").description("Inspect and validate Hum language contract artifacts without running solvers.");
 
 const polynomial = program.command("polynomial").description("Check structured polynomial data with Docker-isolated exact arithmetic.");
+polynomial.command("lookup").argument("<request-sha256>", "SHA-256 of exact request bytes")
+  .option("--root <path>", "Workspace to search", ".").option("--json", "Print candidate metadata")
+  .action(async (hash: string, options: { root: string; json?: boolean }) => {
+    try {
+      const report = await lookupPolynomialReceipts(options.root, hash);
+      if (options.json) printJson(report);
+      else {
+        console.log(`${report.matches.length} candidate receipt(s); unverified, fresh replay required.`);
+        for (const match of report.matches) console.log(`${match.request_path} -> ${match.receipt_path}`);
+        console.log(`Scanned ${report.scanned}; skipped ${report.skipped}.`);
+      }
+    } catch (error) {
+      process.exitCode = 2;
+      if (options.json) printJson({ status: "unverified", checked: false, error: String(error) });
+      else console.error(`Lookup failed: ${String(error)}`);
+    }
+  });
 polynomial.command("capabilities").option("--json", "Print capability JSON").action((options: { json?: boolean }) => {
   const report = polynomialCapabilities();
   if (options.json) printJson(report);

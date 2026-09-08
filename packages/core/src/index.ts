@@ -1135,4 +1135,5 @@ export type {
 } from "./workspace-maintenance.js";
 export type { ReplayResult } from "./replay.js";
 export { polynomialCapabilities, runPolynomialTool } from "./polynomial-tools.js";
+export { lookupPolynomialReceipts } from "./polynomial-lookup.js";
 export type { PolynomialOperation, PolynomialToolResult } from "./polynomial-tools.js";

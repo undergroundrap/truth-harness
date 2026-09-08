@@ -2,7 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
-import { polynomialCapabilities, runPolynomialTool } from "@truth-harness/core";
+import { lookupPolynomialReceipts, polynomialCapabilities, runPolynomialTool } from "@truth-harness/core";
 import {
   handlePolynomialReplay,
   handleTruthHarnessAsk,
@@ -133,6 +133,14 @@ export function createTruthHarnessMcpServer(): McpServer {
     description: "Discover bounded polynomial comparison, summation, linear-recurrence checking, and replay. Configuration is not dependency-health or formal-proof evidence.",
     inputSchema: {}, annotations: { readOnlyHint: true, openWorldHint: false }
   }, async () => toolJson(polynomialCapabilities()));
+  server.registerTool("truth_harness_polynomial_lookup", {
+    description: "Find local candidate receipts by exact request-byte SHA-256. Read-only, bounded, no verification. Fresh polynomial replay is required before trust.",
+    inputSchema: { requestSha256: z.string().regex(/^[a-f0-9]{64}$/) },
+    annotations: { readOnlyHint: true, openWorldHint: false }
+  }, async ({ requestSha256 }) => {
+    try { return toolJson(await lookupPolynomialReceipts(process.env.TRUTH_HARNESS_ROOT ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd(), requestSha256)); }
+    catch { return toolJson({ status: "unverified", checked: false, error: "Local receipt lookup failed" }, { isError: true }); }
+  });
   server.registerTool("truth_harness_polynomial_check", {
     description: "Check structured rational polynomial JSON in the offline Docker source checkout. Writes receipts under checkout/.truth-harness/witnesses. No expression parsing or formal proof. Nonaccepted outcomes set isError.",
     inputSchema: { operation: z.enum(["compare", "sum", "recurrence"]), requestJson: z.string().min(1).max(65536) },

@@ -35,6 +35,7 @@ export function polynomialCapabilities() {
       { operation: "recurrence", request_schema: "truth-harness.polynomial-recurrence.v0", accepted_request_schemas: ["truth-harness.polynomial-recurrence.v0", "truth-harness.exponential-recurrence.v0"], max_variables: 1, max_terms_per_side: 32, max_degree: 12, max_order: 4, max_counterexample_index: 16, max_candidate_bases: 4, min_base_magnitude: "1/16", max_base_magnitude: "16" }
     ],
     replay: true,
+    lookup: { match_basis: "exact-request-bytes-sha256", max_entries: 256, requires_replay: true },
     max_input_bytes: 65536,
     exit_codes: { accepted: 0, refuted: 1, tool_error: 2, unknown: 3 },
     proof_checker_backed: false,

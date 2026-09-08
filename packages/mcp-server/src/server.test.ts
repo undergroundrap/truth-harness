@@ -116,6 +116,7 @@ describe("Truth Harness MCP server", () => {
         "truth_harness_notebook_run_log",
         "truth_harness_polynomial_capabilities",
         "truth_harness_polynomial_check",
+        "truth_harness_polynomial_lookup",
         "truth_harness_polynomial_replay",
         "truth_harness_proof_backends",
         "truth_harness_proof_check",
