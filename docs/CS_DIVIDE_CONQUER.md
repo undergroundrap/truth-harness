@@ -55,6 +55,41 @@ expressions, the exponent shift is `q -> 2*q`, and ordinary induction propagates
 link to the recurrence receipt, source-code verification, or complete formal
 proof here. These receipts narrow the unchecked algebra, not those boundaries.
 
+## Replay The Evidence Bundle
+
+```sh
+docker compose run --build --rm -T pit-experiment node tools/cs-divide-conquer-bundle.mjs
+docker compose run --rm -T pit-experiment node tools/cs-divide-conquer-bundle.mjs --check .truth-harness/experiments/cs-divide-conquer-bundle-EXAMPLE/bundle.json
+```
+
+Replace `EXAMPLE` with the directory reported by the first command. Creation
+checks the three fixtures, copies their requests and receipts into one directory,
+and writes `bundle.json`, `report.json`, and a dated `PROGRESS.md`. Construction
+also leaves the normal individual witness artifacts. A failed construction can
+leave a partial directory; directory existence never establishes success.
+
+The manifest contract is `truth-harness.cs-divide-conquer-bundle.v0` with exactly
+three ordered steps: `reduction`, `initial-defect`, `recurrence`. Each records its
+operation, fixed relative request/receipt filenames, raw byte SHA-256 hashes,
+and `depends_on` links. The recurrence step links to the other two as the
+human-reviewed argument order, not a machine-certified inference rule.
+
+Replay is read-only and does not trust saved reports. It requires the exact
+example inputs from the running checkout, checks every receipt again, rejects
+missing/duplicate steps, unknown fields/versions, altered hashes and escaping
+file links, and emits its own fixed list of remaining assumptions. The directory
+can be moved with all its files; changing fixture bytes or using another version
+of the example can require rebuilding the bundle. Each input is limited to
+65536 UTF-8 bytes; underlying checker timeouts still apply. File containment is
+not a guarantee against a hostile concurrent filesystem writer.
+
+Exit 0 means all three supplied requests replayed successfully, with bundle
+status `replayed`, `checked: true`, and `proof_checker_backed: false`. It does
+not mean the whole mathematical argument or an implementation is proved.
+Any missing, invalid, unknown or refuted evidence blocks the bundle with exit 2,
+`unverified`, and `checked: false`. No partial-success result is returned.
+This is an example-specific script, not a general theorem-DAG or CLI/MCP API.
+
 ## Candidates
 
 ```text
