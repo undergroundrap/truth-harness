@@ -3,6 +3,7 @@ import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
+import { polynomialCapabilities, runPolynomialTool, type PolynomialOperation, type PolynomialToolResult } from "@truth-harness/core";
 import { createPublicMathProblemCatalogHandoff, createPublicMathProblemJourney, parseBenchmarkSuite, parsePublicMathProblemCatalog, renderPublicMathProblemCatalogHandoffMarkdown, renderPublicMathProblemJourneyMarkdown, runBenchmarkSuite, summarizePublicMathProblemCatalog, type BenchmarkRun, type PublicMathProblemCatalogSummary } from "@truth-harness/benchmarks";
 import {
   benchmarkComparisonFailsGate,
@@ -496,6 +497,55 @@ program
   );
 
 const hum = program.command("hum").description("Inspect and validate Hum language contract artifacts without running solvers.");
+
+const polynomial = program.command("polynomial").description("Check structured polynomial data with Docker-isolated exact arithmetic.");
+polynomial.command("capabilities").option("--json", "Print capability JSON").action((options: { json?: boolean }) => {
+  const report = polynomialCapabilities();
+  if (options.json) printJson(report);
+  else console.log(`Polynomial tools: ${report.execution}\nOperations: compare, sum, replay\n${report.runtime}\nNo formal proof promotion.`);
+});
+for (const operation of ["compare", "sum"] as const) {
+  polynomial.command(operation).argument("<input>", "Request JSON file, or '-' for stdin")
+    .option("--json", "Print the unchanged tool report as JSON")
+    .action(async (input: string, options: { json?: boolean }) => {
+      let result: PolynomialToolResult;
+      if (input === "-") {
+        const chunks: Buffer[] = [];
+        let length = 0;
+        try {
+          for await (const chunk of process.stdin) {
+            const bytes = Buffer.from(chunk);
+            length += bytes.length;
+            if (length > 65536) throw new Error("Input exceeds 65536 bytes");
+            chunks.push(bytes);
+          }
+          const bytes = Buffer.concat(chunks);
+          if (bytes.subarray(0, 3).equals(Buffer.from([239, 187, 191]))) throw new Error("UTF-8 BOM is not accepted");
+          result = await runPolynomialTool({ operation, requestJson: new TextDecoder("utf-8", { fatal: true }).decode(bytes) });
+        } catch (error) {
+          result = { exit_code: 2, report: { status: "unverified", checked: false, error: String(error) } };
+        }
+      } else result = await runPolynomialTool({ operation, requestPath: input });
+      printPolynomialResult(result, options.json);
+    });
+}
+polynomial.command("replay").argument("<operation>", "compare or sum")
+  .argument("<request>", "Original request JSON path").argument("<receipt>", "Saved receipt JSON path")
+  .option("--json", "Print the unchanged check report as JSON")
+  .action(async (operation: PolynomialOperation, request: string, receipt: string, options: { json?: boolean }) => {
+    printPolynomialResult(await runPolynomialTool({ operation, requestPath: request, receiptPath: receipt }), options.json);
+  });
+
+function printPolynomialResult(result: PolynomialToolResult, json?: boolean): void {
+  if (json) printJson(result.report);
+  else {
+    console.log(`Polynomial check: ${result.report.status}; trust: ${result.report.trust ?? "unverified"}`);
+    if (result.report.counterexample) console.log(`Counterexample: ${JSON.stringify(result.report.counterexample)}`);
+    if (result.report.artifact_directory) console.log(`Evidence: ${result.report.artifact_directory}`);
+    if (result.report.error) console.log(`Error: ${result.report.error}`);
+  }
+  process.exitCode = result.exit_code;
+}
 
 hum
   .command("validate")

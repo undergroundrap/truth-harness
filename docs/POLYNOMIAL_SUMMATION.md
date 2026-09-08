@@ -54,6 +54,8 @@ Tool errors and timeouts block acceptance and return exit 2.
 
 ## Docker Commands
 
+Agents can also use the [normal CLI/MCP workflow](POLYNOMIAL_AGENT_WORKFLOW.md).
+
 ```sh
 docker compose run --build --rm -T pit-experiment node tools/polynomial-sum.mjs docs/examples/polynomial-sum-linear.json
 docker compose run --rm -T pit-experiment node tools/polynomial-sum.mjs docs/examples/polynomial-sum-squares.json

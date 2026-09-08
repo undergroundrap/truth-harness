@@ -186,6 +186,9 @@ The [polynomial summation checker](docs/POLYNOMIAL_SUMMATION.md) checks a candid
 partial sum using its base value and full recurrence coefficients, with exact
 natural-number counterexamples for false formulas. It handles bounded-degree
 rational polynomial data, not arbitrary recurrences or program complexity claims.
+
+Both are available through the [polynomial CLI/MCP workflow](docs/POLYNOMIAL_AGENT_WORKFLOW.md)
+with capability discovery, Docker-only execution, and independent receipt replay.
 The follow-up `npm run docker:pit-sparse` checks every one- and two-monomial
 support in a bounded sparse class, including cases where dropping the sparsity
 assumption makes the same point set fail. See [the sparse baseline](docs/PIT_SPARSE_EXPERIMENT.md).

@@ -1,0 +1,56 @@
+import { readFile, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createTruthHarnessMcpServer } from "./index.js";
+
+afterEach(() => vi.unstubAllEnvs());
+describe("polynomial MCP transport", () => {
+  it("discovers, executes, and replays with conservative error signaling", async () => {
+    vi.stubEnv("TRUTH_HARNESS_CONTAINER", "1");
+    vi.stubEnv("TRUTH_HARNESS_ROOT", fileURLToPath(new URL("../../../", import.meta.url)));
+    const server = createTruthHarnessMcpServer();
+    const client = new Client({ name: "polynomial-test", version: "0.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const payload = (result: unknown) => JSON.parse((result as { content: { text: string }[] }).content[0].text);
+    try {
+      const listed = await client.listTools();
+      expect(listed.tools.map(tool => tool.name)).toContain("truth_harness_polynomial_replay");
+      const cap = await client.callTool({ name: "truth_harness_polynomial_capabilities", arguments: {} });
+      expect(payload(cap).proof_checker_backed).toBe(false);
+      for (const [operation, prefix, suffix, fails] of [
+        ["compare", "polynomial", "equivalent", false],
+        ["sum", "polynomial-sum", "linear", false],
+        ["sum", "polynomial-sum", "refuted", true],
+        ["sum", "polynomial-sum", "unknown", true]
+      ] as const) {
+        const requestJson = await readFile(`docs/examples/${prefix}-${suffix}.json`, "utf8");
+        const result = await client.callTool({ name: "truth_harness_polynomial_check", arguments: { operation, requestJson } });
+        expect(Boolean(result.isError)).toBe(fails);
+        const directory = payload(result).artifact_directory;
+        const replay = await client.callTool({ name: "truth_harness_polynomial_replay", arguments: { operation, requestPath: `${directory}/request.json`, receiptPath: `${directory}/receipt.json` } });
+        expect(Boolean(replay.isError)).toBe(fails);
+        expect(payload(replay).receipt_sha256).toBe(payload(result).receipt_sha256);
+        if (operation === "sum" && suffix === "linear") {
+          const raw = JSON.parse(await readFile(`${directory}/receipt.json`, "utf8"));
+          raw.base_value = "99";
+          await writeFile(`${directory}/tampered.json`, JSON.stringify(raw));
+          const tampered = await client.callTool({ name: "truth_harness_polynomial_replay", arguments: { operation, requestPath: `${directory}/request.json`, receiptPath: `${directory}/tampered.json` } });
+          expect(tampered.isError).toBe(true);
+          expect(payload(tampered).checked).toBe(false);
+        }
+      }
+      const outside = await client.callTool({ name: "truth_harness_polynomial_replay", arguments: { operation: "sum", requestPath: "../outside.json", receiptPath: "../outside.json" } });
+      expect(outside.isError).toBe(true);
+      vi.stubEnv("TRUTH_HARNESS_CONTAINER", "");
+      const host = await client.callTool({ name: "truth_harness_polynomial_check", arguments: { operation: "sum", requestJson: "{}" } });
+      expect(host.isError).toBe(true);
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  }, 30000);
+});

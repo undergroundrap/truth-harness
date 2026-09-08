@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
+import { runPolynomialTool, type PolynomialOperation, type PolynomialToolResult } from "@truth-harness/core";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseBenchmarkSuite, runBenchmarkSuite, type BenchmarkRun } from "@truth-harness/benchmarks";
@@ -3180,6 +3181,17 @@ export async function handleTruthHarnessRenderReceipt(input: TruthHarnessRenderR
     format,
     rendered: renderReceipt(receipt, format)
   };
+}
+
+export async function handlePolynomialReplay(input: { operation: PolynomialOperation; requestPath: string; receiptPath: string }): Promise<PolynomialToolResult> {
+  try {
+    const root = await realpath(getWorkspaceRoot());
+    const requestPath = resolvePathUnderRoot(root, await realpath(resolveWorkspacePath(input.requestPath)));
+    const receiptPath = resolvePathUnderRoot(root, await realpath(resolveWorkspacePath(input.receiptPath)));
+    return runPolynomialTool({ operation: input.operation, requestPath, receiptPath });
+  } catch (error) {
+    return { exit_code: 2, report: { status: "unverified", checked: false, error: String(error) } };
+  }
 }
 
 export function toolJson(value: unknown, options: { isError?: boolean } = {}) {

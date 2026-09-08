@@ -62,6 +62,8 @@ older witness tool alone is never used to establish equivalence here.
 
 ## Offline Commands
 
+Agents can also use the [normal CLI/MCP workflow](POLYNOMIAL_AGENT_WORKFLOW.md).
+
 ```sh
 docker compose run --build --rm -T pit-experiment node tools/polynomial-compare.mjs docs/examples/polynomial-equivalent.json
 docker compose run --rm -T pit-experiment node tools/polynomial-compare.mjs docs/examples/polynomial-refuted.json
