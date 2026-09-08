@@ -108,6 +108,44 @@ JSON fixtures to the Lean statement remains reviewed transcription. The
 three-receipt bundle below is unchanged and does not automatically import this
 separate proof or upgrade its conservative trust labels.
 
+## Reusable Integer Cost Family
+
+The Lean theorem `divide_conquer_cost_family` generalizes the answer to any
+integer leaf cost `c`, slope `a`, and combine offset `b`:
+
+```text
+A(0) = c
+A(h+1) = 2*A(h) + a*2^(h+1) + b
+A(h) = (c+b+a*h)*2^h - b, for every natural h
+```
+
+For a two-way equal split at size `n=2^h`, an internal call contributes
+`a*n+b`. Lean checks the candidate's initial value, its recurrence step, and
+induction for every integer parameter choice. The candidate itself supplies
+a model of these premises. The original `c=0,a=1,b=-1` count is recovered by
+`divide_conquer_merge_specialization`, reusing the general theorem. A second
+specialization uses `c=3,a=0,b=5` and obtains `8*2^h-5`.
+
+```sh
+docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/DivideConquer.lean --declaration divide_conquer_cost_family --timeout-ms 30000 --fail-on-unproved --write --json
+```
+
+This is reusable as a Lean theorem, not a new CLI parser for arbitrary
+recurrences or runtime parameters. Its axiom guard and both specializations
+require exactly `propext, Quot.sound`. The required Lean test gate checks named
+adapter acceptance and rejects formulas omitting leaf cost, doubling the slope,
+or flipping the offset sign, alongside the existing four negative controls.
+Separate finite tree enumeration checks representative parameters at heights
+0..10, including zero and negative values; that is supporting test evidence,
+not the universal proof.
+
+Negative parameters are allowed algebraically but are not automatically valid
+physical operation counts. An application must justify nonnegative costs and
+the equal-split model. No rational/real parameters, unequal splits, floors,
+ceilings, probabilistic costs, timing, asymptotic bounds, source-code properties,
+or JSON-to-Lean translation are established here. The fixed three-receipt bundle
+still covers only its original inputs, not every member of this family.
+
 ## Replay The Evidence Bundle
 
 ```sh
