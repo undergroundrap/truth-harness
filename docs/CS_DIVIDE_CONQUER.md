@@ -188,6 +188,36 @@ directories are not successful receipts. Hashes bind bytes, not authorship.
 This proves the conditional recurrence theorem only, not that external code
 meets its premises, and does not upgrade the older three-receipt bundle.
 
+### Reopen A Saved Specialization
+
+```sh
+docker compose run --rm -T lean-proof node tools/divide-conquer-specialize.mjs --reopen .truth-harness/experiments/divide-conquer-specialization-REPLACE_WITH_SAVED_ID
+```
+
+Pass the saved `artifact_directory`. Reopen reads only the bounded UTF-8
+`request.json` and `Specialized.lean`, rejecting file links that escape the bundle.
+It validates the request version and costs, reconstructs the source with the
+current theorem library, and requires an exact source-byte hash match. A changed
+library or generated file fails closed; regenerate intentionally after reviewing
+the change. A missing, malformed, or misleading `report.json` cannot mint trust:
+that cached file is never read.
+
+Reopen checks a private matched source snapshot through Lean and verifies its
+returned source hash and named declaration. It leaves the saved bundle unchanged,
+does not initialize a workspace or write a proof record, and removes its temporary
+scratch directory under `.truth-harness/experiments`. The returned proof's source
+path refers to that temporary snapshot; use `--reopen` again for future checks.
+Successful stdout uses `truth-harness.divide-conquer-reopen.v0`, `status: reopened`,
+`trust: proved`, `cached_report_used: false`, request/library/source hashes, the
+fresh proof, and the same explicit assumptions. Exit 0 means freshly accepted;
+exit 2 means unresolved, including missing Lean or mismatched artifacts.
+
+These checks establish internal consistency with the current library, not original
+authorship or immutable history. Replacing both input and source with another valid
+specialization yields evidence for that new input only. Review the returned costs
+and request hash against the problem you intend to solve. No source-code claim or
+automatic discovery of applicable theorems is added.
+
 ## Replay The Evidence Bundle
 
 ```sh

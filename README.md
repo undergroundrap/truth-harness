@@ -43,7 +43,8 @@ replayable checks of its reduction algebra, linked in a portable evidence bundle
 and separate Lean proofs of the recurrence equivalence, closed-form count, and
 a reusable integer leaf/combine-cost family. A bounded JSON specialization tool
 lets agents reuse that theorem with concrete costs and obtain a scoped Lean proof
-record; see [the specialization workflow](docs/CS_DIVIDE_CONQUER.md#check-a-concrete-specialization).
+record, then reopen saved inputs with a fresh Lean check rather than trusting cached
+labels; see [the specialization workflow](docs/CS_DIVIDE_CONQUER.md#check-a-concrete-specialization).
 
 The project goal is not to replace WolframAlpha by rebuilding every math engine. The goal is to build the missing verification engine around AI-assisted work: problem normalization, verifier routing, receipts, trust labels, claim ledgers, replay, disclosures, benchmarks, and reports. Every answer should be backed by a replayable local tool run, proof check, cited source, counterexample search, workspace snapshot, or an explicit uncertainty label. Claude, Codex, and other frontier models can still help reason, plan, and critique, but the app is local-first: project data and artifacts stay in the local workspace unless the user explicitly sends selected context to a hosted model or network service, and that selected context plus disclosure is recorded locally.
 

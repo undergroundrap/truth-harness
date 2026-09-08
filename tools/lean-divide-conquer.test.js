@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,6 +60,64 @@ it("checks generated specializations through the real adapter and fails closed o
     const result = run(bad);
     expect(result.status).toBe(2);
     expect(JSON.parse(result.stdout)).toMatchObject({ status: "unverified", proof_checker_backed: false });
+  }
+}, 180000);
+it("reopens only a bound specialization with fresh Lean evidence and leaves saved files untouched", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const tool = fileURLToPath(new URL("./divide-conquer-specialize.mjs", import.meta.url));
+  const root = mkdtempSync(join(tmpdir(), "reopen specialization "));
+  const outside = mkdtempSync(join(tmpdir(), "outside specialization "));
+  const scratchNames = () => readdirSync(".truth-harness/experiments").filter(name => name.startsWith("specialization-recheck-")).sort();
+  const scratchBefore = scratchNames();
+  const requestPath = join(root, "request.json"), savedPath = join(root, "Specialized.lean");
+  const raw = JSON.stringify(costs), generated = specializationSource(costs, source);
+  const run = (env = process.env) => spawnSync(process.execPath, [tool, "--reopen", root], {
+    env, encoding: "utf8", timeout: 60000, windowsHide: true
+  });
+  const rejected = () => {
+    const result = run();
+    expect(result.status, result.stdout + result.stderr).toBe(2);
+    expect(JSON.parse(result.stdout)).toMatchObject({ status: "unverified", proof_checker_backed: false });
+  };
+  try {
+    writeFileSync(requestPath, raw);
+    writeFileSync(savedPath, generated);
+    // A report is neither required nor consulted, including malformed cached claims.
+    writeFileSync(join(root, "report.json"), "{not a proof");
+    const before = readdirSync(root).map(name => [name, readFileSync(join(root, name), "utf8")]);
+    const accepted = run();
+    expect(accepted.status, accepted.stdout + accepted.stderr).toBe(0);
+    expect(JSON.parse(accepted.stdout)).toMatchObject({ schema_version: "truth-harness.divide-conquer-reopen.v0",
+      status: "reopened", trust: "proved", proof_checker_backed: true, cached_report_used: false, request: costs });
+    expect(readdirSync(root).map(name => [name, readFileSync(join(root, name), "utf8")])).toEqual(before);
+    expect(scratchNames()).toEqual(scratchBefore);
+    const missingLean = run({ ...process.env, TRUTH_HARNESS_LEAN: "/no-such-specialization-checker" });
+    expect(missingLean.status).toBe(2);
+    expect(JSON.parse(missingLean.stdout).proof_checker_backed).toBe(false);
+    expect(scratchNames()).toEqual(scratchBefore);
+    for (const bad of [JSON.stringify({ ...costs, leaf_cost: "3" }), JSON.stringify({ ...costs, schema_version: "future" }),
+      "\ufeff" + raw, " ".repeat(65537)]) {
+      writeFileSync(requestPath, bad); rejected();
+    }
+    writeFileSync(requestPath, raw);
+    for (const bad of [generated + "\n-- changed library or source\n", "theorem fake : True := True.intro", " ".repeat(65537)]) {
+      writeFileSync(savedPath, bad); rejected();
+    }
+    unlinkSync(savedPath); rejected();
+    const externalSource = join(outside, "Specialized.lean");
+    writeFileSync(externalSource, generated);
+    symlinkSync(externalSource, savedPath);
+    const escaped = run();
+    expect(escaped.status).toBe(2);
+    expect(JSON.parse(escaped.stdout).error).toContain("Bundle file escapes directory");
+    unlinkSync(savedPath);
+    writeFileSync(savedPath, generated);
+    unlinkSync(join(root, "report.json"));
+    expect(run().status).toBe(0);
+    expect(scratchNames()).toEqual(scratchBefore);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   }
 }, 180000);
 it("keeps the Lean reduction target, axiom guards and fail-closed command (structural only)", () => {
