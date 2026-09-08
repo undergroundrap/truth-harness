@@ -10,6 +10,64 @@ import { ensureSpecializationWorkspace, requireAdapterSuccess, specializationSou
 const sourcePath = fileURLToPath(new URL("../docs/examples/DivideConquer.lean", import.meta.url));
 const source = readFileSync(sourcePath, "utf8");
 const costs = JSON.parse(readFileSync(new URL("../docs/examples/cs-divide-conquer-costs.json", import.meta.url), "utf8"));
+const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean", import.meta.url));
+const branchingSource = readFileSync(branchingPath, "utf8");
+it("keeps the arbitrary-branching theorem explicit and free of proof escape hatches", () => {
+  expect(branchingSource).toContain("theorem divide_conquer_branching_cost");
+  expect(branchingSource).toContain("theorem divide_conquer_three_way");
+  expect(branchingSource).not.toMatch(/\b(sorry|admit|axiom|native_decide)\b/);
+  expect(branchingSource).not.toContain("?_");
+  expect(branchingSource.match(/#guard_msgs/g)).toHaveLength(2);
+});
+it("checks the branching theorem and rejects corrupted public conclusions in pinned Lean", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const cli = fileURLToPath(new URL("../apps/cli/dist/index.js", import.meta.url));
+  for (const declaration of ["divide_conquer_branching_cost", "divide_conquer_three_way"]) {
+    const checked = spawnSync(process.execPath, [cli, "proof", "check", branchingPath,
+      "--declaration", declaration, "--timeout-ms", "30000", "--fail-on-unproved", "--json"],
+    { encoding: "utf8", timeout: 45000, windowsHide: true });
+    expect(checked.status, checked.stdout + checked.stderr).toBe(0);
+    expect(JSON.parse(checked.stdout)).toMatchObject({ trust: "proved", proofCheckerBacked: true,
+      source: { declarationName: declaration } });
+  }
+  const root = mkdtempSync(join(tmpdir(), "branching negatives "));
+  const conclusion = "forall h, A h = (leaf + slope * (h : Int)) * branch ^ h + extra * BranchingCost.geometricSum branch h := by";
+  try {
+    for (const [index, wrong] of [
+      conclusion.replace("leaf + slope", "slope"),
+      conclusion.replace("branch ^ h", "2 ^ h"),
+      conclusion.replace("+ extra *", "- extra *")
+    ].entries()) {
+      const corrupted = branchingSource.replace(conclusion, wrong);
+      expect(corrupted).not.toBe(branchingSource);
+      const file = join(root, `Wrong${index}.lean`);
+      writeFileSync(file, corrupted);
+      const result = spawnSync("lean", [file], { encoding: "utf8", timeout: 30000, windowsHide: true });
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("error:");
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 120000);
+it("enumerates zero through four-way cost trees as finite supporting evidence", () => {
+  for (const b of [0n, 1n, 2n, 3n, 4n]) {
+    for (const [leaf, slope, extra] of [[2n, 4n, 5n], [0n, 0n, 0n], [-2n, 3n, -1n]]) {
+      for (let h = 0; h <= 5; h++) {
+        let total = 0n, sum = 0n;
+        const stack = [h];
+        while (stack.length) {
+          const level = stack.pop();
+          if (level === 0) total += leaf;
+          else {
+            total += slope * b ** BigInt(level) + extra;
+            for (let child = 0n; child < b; child++) stack.push(level - 1);
+          }
+        }
+        for (let j = 0; j < h; j++) sum += b ** BigInt(j);
+        expect(total).toBe((leaf + slope * BigInt(h)) * b ** BigInt(h) + extra * sum);
+      }
+    }
+  }
+});
 it("requires a canonical expected request hash", () => {
   expect(validateExpectedRequestHash("ab".repeat(32))).toBe("ab".repeat(32));
   for (const hash of [undefined, null, 1, "", "a".repeat(63), "a".repeat(65), "G".repeat(64), "A".repeat(64), "a".repeat(64) + "\n"]) {

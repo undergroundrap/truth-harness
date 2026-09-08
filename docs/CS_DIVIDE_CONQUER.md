@@ -255,6 +255,38 @@ remains a caller-controlled trust anchor: if an attacker can also replace truste
 task state, this workflow does not authenticate it. The test validates reuse and
 substitution rejection for the explicit recurrence, not external source code.
 
+## Arbitrary Branching
+
+The separate [BranchingCost.lean](examples/BranchingCost.lean) theorem
+`divide_conquer_branching_cost` extends the mathematics beyond two-way splits:
+
+```text
+S(b,0) = 0
+S(b,h+1) = S(b,h) + b^h
+A(0) = c
+A(h+1) = b*A(h) + a*b^(h+1) + e
+A(h) = (c+a*h)*b^h + e*S(b,h)
+```
+
+Lean proves the result for all integer b,c,a,e and natural heights h. The finite
+geometric sum avoids division and includes b=0 and b=1 algebraically. A physical
+equal-split recursion normally needs a natural branching factor b>=2 and sizes
+b^h; those application assumptions remain external. Negative costs or branching
+factors are algebra, not automatic physical interpretations.
+
+The three-way specialization sets b=3,c=2,a=4,e=5. Required Lean tests check both
+named declarations and reject three altered conclusions. Finite tree enumeration
+for b=0..4 and h=0..5 is supporting evidence, not the universal proof. No division
+closed form, asymptotic bound, uneven splitting, or program correctness is claimed.
+
+```sh
+docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/BranchingCost.lean --declaration divide_conquer_branching_cost --timeout-ms 30000 --fail-on-unproved --write --json
+```
+
+This separate source leaves the existing two-way source, JSON contract, generated
+specializations, and their hashes unchanged. Arbitrary branching is currently a
+reusable Lean theorem, not a new parameter accepted by the specialization CLI.
+
 ## Replay The Evidence Bundle
 
 ```sh

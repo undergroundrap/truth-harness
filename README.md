@@ -41,8 +41,9 @@ The [divide-and-conquer count](docs/CS_DIVIDE_CONQUER.md) applies these tools to
 an exact merge-style cost model, including a false exact-count alternative and
 replayable checks of its reduction algebra, linked in a portable evidence bundle,
 and separate Lean proofs of the recurrence equivalence, closed-form count, and
-a reusable integer leaf/combine-cost family. A bounded JSON specialization tool
-lets agents reuse that theorem with concrete costs and obtain a scoped Lean proof
+a reusable integer leaf/combine-cost family. A separate Lean theorem covers
+arbitrary integer branching via finite geometric sums. A bounded two-way JSON specialization tool
+lets agents reuse the two-way cost-family theorem with concrete costs and obtain a scoped Lean proof
 record, then reopen inputs bound to an expected request hash with a fresh Lean check rather than trusting cached
 labels; see [the specialization workflow](docs/CS_DIVIDE_CONQUER.md#check-a-concrete-specialization).
 
