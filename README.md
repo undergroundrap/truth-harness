@@ -30,6 +30,9 @@ identity but fails its initial conditions.
 The [exponential recurrence extension](docs/EXPONENTIAL_RECURRENCE.md) also checks
 bounded rational-base formulas such as perfect binary-tree node counts, with
 independent coefficient checking, counterexamples, and receipt replay.
+The [checked-reuse demonstration](docs/CS_RECURRENCE_REUSE.md) replays that evidence
+for a matching recursive-call model, rejects changed initial conditions, and
+checks a corrected formula without treating the modeling argument as verified code.
 
 The project goal is not to replace WolframAlpha by rebuilding every math engine. The goal is to build the missing verification engine around AI-assisted work: problem normalization, verifier routing, receipts, trust labels, claim ledgers, replay, disclosures, benchmarks, and reports. Every answer should be backed by a replayable local tool run, proof check, cited source, counterexample search, workspace snapshot, or an explicit uncertainty label. Claude, Codex, and other frontier models can still help reason, plan, and critique, but the app is local-first: project data and artifacts stay in the local workspace unless the user explicitly sends selected context to a hosted model or network service, and that selected context plus disclosure is recorded locally.
 
