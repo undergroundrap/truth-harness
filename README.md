@@ -189,6 +189,10 @@ rational polynomial data, not arbitrary recurrences or program complexity claims
 
 Both are available through the [polynomial CLI/MCP workflow](docs/POLYNOMIAL_AGENT_WORKFLOW.md)
 with capability discovery, Docker-only execution, and independent receipt replay.
+
+The [pair-comparison counting example](docs/CS_PAIR_COUNT_MCP.md) exercises the
+complete MCP stdio workflow on a known CS problem, including a false formula,
+dated evidence, and independent replay. It does not claim arbitrary code verification.
 The follow-up `npm run docker:pit-sparse` checks every one- and two-monomial
 support in a bounded sparse class, including cases where dropping the sparsity
 assumption makes the same point set fail. See [the sparse baseline](docs/PIT_SPARSE_EXPERIMENT.md).
