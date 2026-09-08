@@ -64,6 +64,19 @@ MCP clients can submit the same JSON using `truth_harness_polynomial_check` with
 `operation: "recurrence"`, then reopen it with `truth_harness_polynomial_replay`.
 See the [recurrence contract](POLYNOMIAL_RECURRENCE.md) for bounds and deployment.
 
+## CI Coverage
+
+The host CI check asserts that the CLI refuses these requests without the
+container marker. The existing Docker CI job separately runs
+`npm test -- tools/cs-triples.test.js` in the offline `check` service, requiring
+the successful identity check, checked refutation and both receipt replays.
+That step sets `TRUTH_HARNESS_REQUIRE_DOCKER_TESTS=1`, making a missing container
+marker fail the suite rather than silently exercising only the host branch.
+The same suite also removes the marker from a child process to check refusal
+inside Docker. No test is skipped and the host marker is never forged.
+The marker is a deployment guard, not an operating-system isolation attestation;
+the Docker service supplies the actual isolation.
+
 This is a known counting problem used to exercise a reusable verifier. It is
 not a newly solved open problem, verified program, performance benchmark,
 autonomous discovery claim, or Lean proof. No new mathematical adapter is added.
