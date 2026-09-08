@@ -231,6 +231,30 @@ only. The tool cannot determine whether the caller's chosen hash represents the
 right human problem. No source-code claim or
 automatic discovery of applicable theorems is added.
 
+### Agent Handoff Regression
+
+The required Lean gate includes a process-level handoff regression using the
+existing creation and reopen commands:
+
+1. A creator process checks a specialization and returns its request hash.
+2. The test saves that hash in a separate trusted handoff fixture and copies the
+   bundle into a candidate directory whose path contains spaces.
+3. A fresh consumer process reads only the saved handoff, from a different working
+   directory, and invokes request-bound reopen to obtain fresh Lean evidence.
+4. A second creator produces another valid, Lean-accepted specialization. Replacing
+   all three candidate files with that bundle must fail against the original hash.
+5. Restoring the original bundle succeeds again without changing the handoff.
+
+```sh
+docker compose run --build --rm -T -e TRUTH_HARNESS_REQUIRE_LEAN_TESTS=1 lean-proof npm test -- tools/lean-divide-conquer.test.js
+```
+
+This is a deterministic integration test, not a new handoff API, LLM experiment,
+or proof that every autonomous agent will preserve intent. The expected hash
+remains a caller-controlled trust anchor: if an attacker can also replace trusted
+task state, this workflow does not authenticate it. The test validates reuse and
+substitution rejection for the explicit recurrence, not external source code.
+
 ## Replay The Evidence Bundle
 
 ```sh

@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,6 +68,71 @@ it("checks generated specializations through the real adapter and fails closed o
     expect(result.status).toBe(2);
     expect(JSON.parse(result.stdout)).toMatchObject({ status: "unverified", proof_checker_backed: false });
   }
+}, 180000);
+it("hands off created evidence to a fresh process without accepting a substituted valid bundle", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const tool = fileURLToPath(new URL("./divide-conquer-specialize.mjs", import.meta.url));
+  const root = mkdtempSync(join(tmpdir(), "specialization handoff "));
+  const candidate = join(root, "candidate bundle");
+  const handoffPath = join(root, "trusted-handoff.json");
+  const create = request => {
+    const raw = JSON.stringify(request) + "\n";
+    const result = spawnSync(process.execPath, [tool, "-"], {
+      input: raw, encoding: "utf8", timeout: 60000, windowsHide: true
+    });
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report).toMatchObject({ status: "accepted", trust: "proved", proof_checker_backed: true, request });
+    expect(report.request_sha256).toBe(createHash("sha256").update(raw).digest("hex"));
+    return report;
+  };
+  const installCandidate = report => {
+    for (const name of ["request.json", "Specialized.lean", "report.json"]) {
+      copyFileSync(join(report.artifact_directory, name), join(candidate, name));
+    }
+  };
+  // This consumer has no in-memory access to the creator's request or hash.
+  const consumer = `
+    const { readFileSync } = require('node:fs');
+    const { spawnSync } = require('node:child_process');
+    const handoff = JSON.parse(readFileSync(process.argv[1], 'utf8'));
+    const result = spawnSync(process.execPath, [process.argv[2], '--reopen', handoff.artifact_directory,
+      '--expect-request-sha256', handoff.request_sha256],
+      { encoding: 'utf8', timeout: 60000, windowsHide: true, shell: false });
+    process.stdout.write(result.stdout || '');
+    process.stderr.write(result.stderr || '');
+    process.exitCode = result.status === 0 ? 0 : 2;
+  `;
+  const resume = () => spawnSync(process.execPath, ["-e", consumer, handoffPath, tool], {
+    cwd: root, encoding: "utf8", timeout: 70000, windowsHide: true
+  });
+  try {
+    mkdirSync(candidate);
+    const original = create(costs);
+    installCandidate(original);
+    const handoff = JSON.stringify({ artifact_directory: candidate, request_sha256: original.request_sha256 }) + "\n";
+    writeFileSync(handoffPath, handoff);
+    const accepted = resume();
+    expect(accepted.status, accepted.stdout + accepted.stderr).toBe(0);
+    expect(JSON.parse(accepted.stdout)).toMatchObject({ status: "reopened", request: costs,
+      request_sha256: original.request_sha256, expected_request_sha256: original.request_sha256,
+      proof_checker_backed: true, cached_report_used: false });
+
+    const other = create({ ...costs, leaf_cost: "7" });
+    expect(other.request_sha256).not.toBe(original.request_sha256);
+    installCandidate(other);
+    const rejected = resume();
+    expect(rejected.status).toBe(2);
+    expect(JSON.parse(rejected.stdout)).toMatchObject({ status: "unverified", proof_checker_backed: false });
+    expect(JSON.parse(rejected.stdout).error).toContain("Saved request does not match expected request SHA-256");
+    expect(readFileSync(handoffPath, "utf8")).toBe(handoff);
+
+    installCandidate(original);
+    const recovered = resume();
+    expect(recovered.status, recovered.stdout + recovered.stderr).toBe(0);
+    expect(JSON.parse(recovered.stdout).request_sha256).toBe(original.request_sha256);
+    expect(readFileSync(handoffPath, "utf8")).toBe(handoff);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 }, 180000);
 it("reopens only a bound specialization with fresh Lean evidence and leaves saved files untouched", () => {
   if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
