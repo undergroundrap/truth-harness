@@ -58,3 +58,38 @@ it("enumerates the cost model separately and checks both recurrence formulations
   }
   expect(counts.slice(0, 4)).toEqual([0n, 1n, 5n, 17n]);
 });
+
+for (const name of ["reduction", "initial-defect"]) {
+  it(`checks and replays the ${name} algebra`, () => {
+    const result = run([cli, "polynomial", "compare", fixture(name), "--json"]);
+    if (process.env.TRUTH_HARNESS_CONTAINER !== "1") {
+      expect(result.status).toBe(2);
+      expect(JSON.parse(result.stdout)).toMatchObject({ checked: false, status: "unverified" });
+      return;
+    }
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report).toMatchObject({ status: "equivalent", checked: true, trust: "exact-computed", proof_checker_backed: false });
+    const directory = report.artifact_directory;
+    expect(readFileSync(`${directory}/request.json`, "utf8")).toBe(readFileSync(fixture(name), "utf8"));
+    const replay = run([cli, "polynomial", "replay", "compare", `${directory}/request.json`, `${directory}/receipt.json`, "--json"]);
+    expect(replay.status, replay.stdout + replay.stderr).toBe(0);
+    expect(JSON.parse(replay.stdout).receipt_sha256).toBe(report.receipt_sha256);
+
+    // Flip the claimed residual constant, or replace the initial zero by one.
+    const changed = JSON.parse(readFileSync(fixture(name), "utf8"));
+    changed.right = name === "reduction"
+      ? changed.right.map(term => term.exponents.every(power => power === 0) ? { ...term, coefficient: "1" } : term)
+      : [{ coefficient: "1", exponents: [0] }];
+    const refuted = spawnSync(process.execPath, [cli, "polynomial", "compare", "-", "--json"], {
+      input: JSON.stringify(changed), encoding: "utf8", timeout: 30000, windowsHide: true
+    });
+    expect(refuted.status, refuted.stdout + refuted.stderr).toBe(1);
+    const negative = JSON.parse(refuted.stdout);
+    expect(negative).toMatchObject({ status: "refuted", checked: true, proof_checker_backed: false });
+    expect(negative.counterexample).not.toBeNull();
+    const failedReplay = run([cli, "polynomial", "replay", "compare", `${negative.artifact_directory}/request.json`, `${directory}/receipt.json`, "--json"]);
+    expect(failedReplay.status).toBe(2);
+    expect(JSON.parse(failedReplay.stdout)).toMatchObject({ status: "unverified", checked: false });
+  }, 30000);
+}

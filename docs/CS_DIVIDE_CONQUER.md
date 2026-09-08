@@ -21,8 +21,39 @@ The last relation follows by subtracting twice the preceding first-order
 equation from its one-step shift. Conversely, define the first-order defect
 `D(h)=A(h+1)-2*A(h)-2^(h+1)+1`. The second-order relation implies
 `D(h+1)=2*D(h)`, and the two initial values give `D(0)=0`. Thus the reduction
-loses no condition under this model. This paragraph is an inspectable human
-algebra argument, not a separately machine-checked certificate of the reduction.
+loses no condition under this model. The algebraic identity and initial defect
+now have separately replayable coefficient checks, as described below. The
+variable mapping and induction argument are still human-reviewed, not a
+proof-kernel certificate of this entire reduction.
+
+## Check The Reduction Algebra
+
+In `cs-divide-conquer-reduction.json`, variables in order are
+`a=A(h)`, `b=A(h+1)`, `c=A(h+2)`, and `q=2^(h+1)`. The supplied left side is
+the distributed form of `(c-2*b-2*q+1)-2*(b-2*a-q+1)`, preserving duplicate
+terms. The right side is `c-4*b+4*a-1`. Coefficient comparison checks this
+identity for every rational `a,b,c,q`, without sample-based inference.
+
+`cs-divide-conquer-initial-defect.json` checks `1-2*0-2+1=0` using the stated
+initial values. Its required variable slot is unused because this is constant
+arithmetic. Tests also refute a wrong-sign residual constant and a nonzero
+initial defect, and reject using the original receipts for changed requests.
+
+```sh
+docker compose run --build --rm -T pit-experiment node apps/cli/dist/index.js polynomial compare docs/examples/cs-divide-conquer-reduction.json --json
+docker compose run --rm -T pit-experiment node apps/cli/dist/index.js polynomial compare docs/examples/cs-divide-conquer-initial-defect.json --json
+```
+
+These commands save their own requests, receipts, reports and dated journals.
+Use `polynomial replay compare REQUEST_PATH RECEIPT_PATH --json` inside the
+same Docker service to check them again. Results are `equivalent` with
+`exact-computed` trust, never `proved`.
+
+Remaining assumptions: the sparse inputs faithfully transcribe the displayed
+expressions, the exponent shift is `q -> 2*q`, and ordinary induction propagates
+`D(0)=0` via `D(h+1)=2*D(h)`. There is no expression parser, automatic dependency
+link to the recurrence receipt, source-code verification, or complete formal
+proof here. These receipts narrow the unchecked algebra, not those boundaries.
 
 ## Candidates
 

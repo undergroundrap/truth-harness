@@ -1,0 +1,21 @@
+{
+  "schema_version": "truth-harness.polynomial-equivalence.v0",
+  "variables": 4,
+  "left": [
+    {"coefficient":"1","exponents":[0,0,1,0]},
+    {"coefficient":"-2","exponents":[0,1,0,0]},
+    {"coefficient":"-2","exponents":[0,0,0,1]},
+    {"coefficient":"1","exponents":[0,0,0,0]},
+    {"coefficient":"-2","exponents":[0,1,0,0]},
+    {"coefficient":"4","exponents":[1,0,0,0]},
+    {"coefficient":"2","exponents":[0,0,0,1]},
+    {"coefficient":"-2","exponents":[0,0,0,0]}
+  ],
+  "right": [
+    {"coefficient":"1","exponents":[0,0,1,0]},
+    {"coefficient":"-4","exponents":[0,1,0,0]},
+    {"coefficient":"4","exponents":[1,0,0,0]},
+    {"coefficient":"-1","exponents":[0,0,0,0]}
+  ],
+  "budget": {"max_samples":8,"max_bits":1024}
+}
