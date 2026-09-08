@@ -1,4 +1,7 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -9,6 +12,7 @@ const tree = fixture("tree");
 const term = (coefficient, degree, base) => ({ coefficient, exponents: [degree], base });
 const make = r => contract("construct", JSON.stringify(r));
 const check = (r, c) => contract("check", JSON.stringify({ request_json: JSON.stringify(r), receipt_json: JSON.stringify(c) }));
+const largeRational = i => `${100000000000000000001n + BigInt(i)}/${100000000000000000000n + BigInt(i)}`;
 
 describe("bounded exponential recurrence candidates", () => {
   beforeAll(() => {
@@ -54,6 +58,67 @@ describe("bounded exponential recurrence candidates", () => {
     const r = { ...tree, recurrence_coefficients: ["1"], initial_values: ["0"], forcing, candidate: [term("1", 12, "1")] };
     expect(check(r, make(r)).status).toBe("identity-checked");
   });
+  it("checks full term capacity and degree with 21-digit rational encodings", () => {
+    const bases = ["-16", "-1/16", "1/16", "16"];
+    const candidate = [], forcing = [];
+    for (let i = 0; i < 16; i++) {
+      const c = largeRational(i);
+      candidate.push(term(c, 12, bases[i % 4]), term(`-${c}`, 12, bases[i % 4]));
+      forcing.push({ coefficient: c, exponents: [12] }, { coefficient: `-${c}`, exponents: [12] });
+    }
+    const r = { ...tree, recurrence_coefficients: [0, 1, 2, 3].map(largeRational), initial_values: ["0", "0", "0", "0"], candidate, forcing };
+    const receipt = make(r);
+    expect(receipt.residual_by_base).toHaveLength(5);
+    expect(check(r, receipt)).toMatchObject({ status: "identity-checked", proof_checker_backed: false });
+    for (const field of ["candidate", "forcing"]) expect(() => make({ ...r, [field]: [...r[field], r[field][0]] })).toThrow();
+    expect(() => make({ ...r, candidate: [term("1000000000000000000000", 0, "1")] })).toThrow();
+    expect(() => make({ ...r, candidate: [term("1/1000000000000000000000", 0, "1")] })).toThrow();
+  });
+  it("checks a nonzero candidate with a 21-digit rational base", () => {
+    const b = largeRational(0);
+    const r = { ...tree, recurrence_coefficients: [b], forcing: [], candidate: [term("1", 0, b)] };
+    expect(check(r, make(r))).toMatchObject({ status: "identity-checked", checked: true });
+  });
+  it("recomputes large non-cancelling residuals and rejects their corruption", () => {
+    const r = { ...tree, recurrence_coefficients: [0, 1, 2, 3].map(largeRational), initial_values: ["0", "0", "0", "0"],
+      forcing: Array.from({ length: 32 }, (_, i) => ({ coefficient: largeRational(i + 40), exponents: [i % 13] })),
+      candidate: Array.from({ length: 32 }, (_, i) => term(largeRational(i + 10), i % 13, largeRational(i % 4))) };
+    const receipt = make(r);
+    expect(make(r)).toEqual(receipt);
+    expect(Buffer.byteLength(JSON.stringify(receipt))).toBeLessThanOrEqual(65536);
+    expect(receipt.residual_by_base.some(row => row.coefficients.some(c => c.length > 48))).toBe(true);
+    expect(check(r, receipt)).toMatchObject({ status: "refuted", counterexample: { index: 0, sequence_value: "0" } });
+    receipt.residual_by_base[0].coefficients[12] = "0";
+    expect(() => check(r, receipt)).toThrow();
+  });
+  it("replays receipt byte boundaries and rejects oversized or malformed files", () => {
+    const cli = fileURLToPath(new URL("../apps/cli/dist/index.js", import.meta.url));
+    const directory = mkdtempSync(join(tmpdir(), "truth recurrence boundary "));
+    const requestPath = join(directory, "request with spaces.json"), receiptPath = join(directory, "receipt with spaces.json");
+    const serialized = JSON.stringify(make(tree));
+    const exact = serialized.padEnd(65536, " ");
+    const run = () => spawnSync(process.execPath, [cli, "polynomial", "replay", "recurrence", requestPath, receiptPath, "--json"],
+      { encoding: "utf8", timeout: 30000, windowsHide: true });
+    try {
+      writeFileSync(requestPath, JSON.stringify(tree), "utf8");
+      writeFileSync(receiptPath, exact, "utf8");
+      const result = run();
+      if (process.env.TRUTH_HARNESS_CONTAINER !== "1") {
+        expect(result.status).toBe(2);
+        expect(JSON.parse(result.stdout)).toMatchObject({ status: "unverified", checked: false });
+        return;
+      }
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "identity-checked", proof_checker_backed: false,
+        receipt_sha256: createHash("sha256").update(exact).digest("hex") });
+      for (const invalid of [exact + " ", "\ufeff" + serialized, Buffer.from([255]), serialized.slice(0, -1)]) {
+        writeFileSync(receiptPath, invalid);
+        const rejected = run();
+        expect(rejected.status).toBe(2);
+        expect(JSON.parse(rejected.stdout)).toMatchObject({ status: "unverified", checked: false });
+      }
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  }, 30000);
   for (const [name, mutate] of [
     ["base", c => { c.residual_by_base[0].base = "3"; }],
     ["coefficient", c => { c.residual_by_base[0].coefficients[12] = "1"; }],

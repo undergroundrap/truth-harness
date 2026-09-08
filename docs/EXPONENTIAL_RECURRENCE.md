@@ -69,3 +69,17 @@ Receipt content is deterministic. Artifact paths and dated progress records are
 per-run metadata under `.truth-harness/witnesses/`. Replay checks receipts afresh,
 not saved reports. Execution is offline in Docker; image builds may fetch
 dependencies. No cloud or telemetry is added.
+
+## Boundary Regression Coverage
+
+The focused test suite exercises 32 candidate and forcing terms, degree 12,
+order four, 21-digit rational encodings, cancellation and nonzero large residuals.
+It also checks fresh CLI replay at exactly 65536 receipt bytes, one byte above
+the limit, corrupt traces, malformed UTF-8, BOM, and truncated JSON. These are
+regression cases, not a claim that every worst-case resource combination has
+been benchmarked. The serialized receipt limit is separate from input algebraic
+bounds; an oversized receipt must fail without a trusted result.
+
+```sh
+docker compose run --build --rm -T -e TRUTH_HARNESS_REQUIRE_DOCKER_TESTS=1 check npm test -- tools/exponential-recurrence.test.js
+```
