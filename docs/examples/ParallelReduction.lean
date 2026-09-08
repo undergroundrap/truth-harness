@@ -50,6 +50,68 @@ theorem binary_pair_aggregation (X Y S : Nat -> Int)
 #guard_msgs in
 #print axioms binary_pair_aggregation
 
+namespace PairTree
+
+inductive Tree where
+  | leaf : Tree
+  | fork : Tree -> Tree -> Tree
+
+def additions : Tree -> Int
+  | .leaf => 0
+  | .fork l r => additions l + additions r + 1
+
+def work : Tree -> Int
+  | .leaf => 0
+  | .fork l r => work l + work r + 2
+
+def span : Tree -> Nat
+  | .leaf => 0
+  | .fork l r => max (span l) (span r) + 1
+
+def balanced : Nat -> Tree
+  | 0 => .leaf
+  | h + 1 => .fork (balanced h) (balanced h)
+
+theorem work_components (t : Tree) : work t = additions t + additions t := by
+  induction t with
+  | leaf => rfl
+  | fork l r hl hr =>
+    simp only [work, additions]
+    omega
+
+theorem additions_step (h : Nat) :
+    additions (balanced (h + 1)) = 2 * additions (balanced h) + 1 := by
+  simp only [balanced, additions]
+  omega
+
+theorem span_step (h : Nat) :
+    (span (balanced (h + 1)) : Int) = (span (balanced h) : Int) + 1 := by
+  simp [balanced, span]
+
+theorem balanced_cost (h : Nat) :
+    work (balanced h) = 2 * (2 ^ h - 1) /\ (span (balanced h) : Int) = (h : Int) := by
+  have result := binary_pair_aggregation
+    (fun k => additions (balanced k)) (fun k => additions (balanced k))
+    (fun k => (span (balanced k) : Int))
+    rfl additions_step rfl additions_step rfl span_step h
+  rw [work_components]
+  exact result
+
+end PairTree
+
+theorem pair_tree_balanced_cost (h : Nat) :
+    PairTree.work (PairTree.balanced h) = 2 * (2 ^ h - 1) /\
+    (PairTree.span (PairTree.balanced h) : Int) = (h : Int) := by
+  exact PairTree.balanced_cost h
+
+/-- info: 'pair_tree_balanced_cost' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms pair_tree_balanced_cost
+
+/-- info: 'PairTree.balanced_cost' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms PairTree.balanced_cost
+
 /-- info: 'parallel_reduction_work' depends on axioms: [propext, Quot.sound] -/
 #guard_msgs in
 #print axioms parallel_reduction_work

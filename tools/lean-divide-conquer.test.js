@@ -13,6 +13,42 @@ const costs = JSON.parse(readFileSync(new URL("../docs/examples/cs-divide-conque
 const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean", import.meta.url));
 const branchingSource = readFileSync(branchingPath, "utf8");
 const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
+it("derives balanced costs from executable trees and rejects changed cost semantics", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
+  const text = readFileSync(file, "utf8");
+  const cli = fileURLToPath(new URL("../apps/cli/dist/index.js", import.meta.url));
+  const checked = spawnSync(process.execPath, [cli, "proof", "check", file,
+    "--declaration", "pair_tree_balanced_cost", "--fail-on-unproved", "--json"],
+  { encoding: "utf8", timeout: 45000, windowsHide: true });
+  expect(checked.status, checked.stdout + checked.stderr).toBe(0);
+  expect(JSON.parse(checked.stdout)).toMatchObject({ trust: "proved", proofCheckerBacked: true,
+    source: { declarationName: "pair_tree_balanced_cost",
+      declaration: { name: "pair_tree_balanced_cost", kind: "theorem" } } });
+  const root = mkdtempSync(join(tmpdir(), "tree cost semantics "));
+  try {
+    const probes = join(root, "Probes.lean");
+    const examples = Array.from({ length: 7 }, (_, h) =>
+      `example : PairTree.work (PairTree.balanced ${h}) = ${2 * (2 ** h - 1)} := by decide\n` +
+      `example : PairTree.span (PairTree.balanced ${h}) = ${h} := by decide`).join("\n");
+    writeFileSync(probes, text + "\n" + examples + "\n" +
+      "example : PairTree.work (.fork .leaf (.fork .leaf (.fork .leaf .leaf))) = 6 := by decide\n" +
+      "example : PairTree.span (.fork .leaf (.fork .leaf (.fork .leaf .leaf))) = 3 := by decide\n");
+    const evaluated = spawnSync("lean", [probes], { encoding: "utf8", timeout: 30000, windowsHide: true });
+    expect(evaluated.status, evaluated.stdout + evaluated.stderr).toBe(0);
+    for (const [i, wrong] of [
+      text.replace("work l + work r + 2", "work l + work r + 1"),
+      text.replace("max (span l) (span r) + 1", "max (span l) (span r) + 2")
+    ].entries()) {
+      expect(wrong).not.toBe(text);
+      const bad = join(root, `Wrong${i}.lean`);
+      writeFileSync(bad, wrong);
+      const result = spawnSync("lean", [bad], { encoding: "utf8", timeout: 30000, windowsHide: true });
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain("error:");
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 120000);
 it("counts independent sum and count dependencies in a binary pair aggregate", () => {
   for (let height = 0; height <= 8; height++) {
     let work = 0, leaf = 0, expectedSum = 0;

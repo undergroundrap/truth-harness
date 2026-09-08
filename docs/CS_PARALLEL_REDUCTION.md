@@ -95,3 +95,33 @@ The model assumes independent scalar additions, unlimited parallelism, and
 unit cost. Tuple allocation, communication, overflow, floating-point behavior,
 and actual elapsed time are excluded. The existing work-specialization schema
 is unchanged and does not encode pair-output semantics or certify span.
+
+## Deriving The Recurrences From Trees
+
+`PairTree` in the same Lean file defines executable leaf/fork trees, balanced
+tree construction, per-component addition counts, total work, and span. Work
+adds both child costs and two operations; span takes the maximum child span
+plus one for two independent local additions. Leaves cost zero.
+
+`PairTree.work_components` proves that total work equals the sum of the two
+component costs on every tree, including unbalanced trees. `additions_step`
+and `span_step` derive the balanced recurrences by unfolding the definitions.
+`PairTree.balanced_cost` then applies `binary_pair_aggregation` with those
+proved premises. Its only input is the natural height, not assumed recurrences.
+The top-level wrapper `pair_tree_balanced_cost` exposes that result for the
+existing receipt declaration parser, which does not resolve namespace prefixes.
+
+```sh
+docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/ParallelReduction.lean --declaration pair_tree_balanced_cost --timeout-ms 30000 --fail-on-unproved --write --json
+```
+
+This closes the recurrence-premise gap for this executable Lean cost model.
+It is not an implementation of sum/count values or a verified compiler mapping:
+the chosen cost semantics still encode unit-cost independent additions and
+unlimited processors. The balanced formulas do not apply to arbitrary shapes.
+The tree constructor's own execution/allocation cost is not included, and equal
+subtrees represent separate logical tasks, not memoized shared work.
+
+The required Lean test evaluates balanced trees at heights 0..6 and an unbalanced
+tree, and rejects changes charging one operation per fork or two span units.
+Those finite probes supplement the universal theorem; they do not replace it.
