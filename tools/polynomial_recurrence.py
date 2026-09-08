@@ -48,6 +48,9 @@ def sequence_values(request):
 
 
 def construct(request):
+    if type(request) is dict and request.get("schema_version") == "truth-harness.exponential-recurrence.v0":
+        import exponential_recurrence
+        return exponential_recurrence.construct(request)
     import sympy as sp
     validate(request)
     n = sp.Symbol("n")
@@ -78,6 +81,9 @@ def construct(request):
 def check(envelope):
     common.base.keys(envelope, ["request_json", "receipt_json"])
     request, receipt = [common.decode(envelope[key]) for key in ("request_json", "receipt_json")]
+    if type(request) is dict and request.get("schema_version") == "truth-harness.exponential-recurrence.v0":
+        import exponential_recurrence
+        return exponential_recurrence.check(request, receipt)
     validate(request)
     common.base.keys(receipt, ["schema_version", "request", "request_sha256", "status", "candidate_initial_values",
                                "recurrence_residual_coefficients", "counterexample"])

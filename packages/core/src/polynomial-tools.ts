@@ -22,7 +22,7 @@ export interface PolynomialToolResult {
 
 export function polynomialCapabilities() {
   const assetsPresent = Object.values(scripts).every(existsSync) &&
-    ["polynomial_equivalence.py", "polynomial_sum.py", "polynomial_recurrence.py", "pit_witness.py", "pit_certificate.py", "pit-witness.mjs"]
+    ["polynomial_equivalence.py", "polynomial_sum.py", "polynomial_recurrence.py", "exponential_recurrence.py", "pit_witness.py", "pit_certificate.py", "pit-witness.mjs"]
       .every(name => existsSync(new URL(`../../../tools/${name}`, import.meta.url)));
   return {
     schema_version: "truth-harness.polynomial-capabilities.v0",
@@ -32,7 +32,7 @@ export function polynomialCapabilities() {
     operations: [
       { operation: "compare", request_schema: "truth-harness.polynomial-equivalence.v0", max_variables: 8, max_terms_per_side: 64, max_degree_per_variable: 1000000 },
       { operation: "sum", request_schema: "truth-harness.polynomial-sum.v0", max_variables: 1, max_terms_per_side: 32, max_degree: 12 },
-      { operation: "recurrence", request_schema: "truth-harness.polynomial-recurrence.v0", max_variables: 1, max_terms_per_side: 32, max_degree: 12, max_order: 4, max_counterexample_index: 16 }
+      { operation: "recurrence", request_schema: "truth-harness.polynomial-recurrence.v0", accepted_request_schemas: ["truth-harness.polynomial-recurrence.v0", "truth-harness.exponential-recurrence.v0"], max_variables: 1, max_terms_per_side: 32, max_degree: 12, max_order: 4, max_counterexample_index: 16, max_candidate_bases: 4, min_base_magnitude: "1/16", max_base_magnitude: "16" }
     ],
     replay: true,
     max_input_bytes: 65536,

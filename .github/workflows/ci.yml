@@ -48,5 +48,5 @@ jobs:
         run: sudo install -d -o 10001 -g 10001 -m 0755 .truth-harness
       - name: Real-engine Bezier checks and missing-verifier control
         run: docker compose run --build --rm -T pit-experiment node tools/bezier-gate.mjs
-      - name: Docker triple-count verification and receipt replay
-        run: docker compose run --rm -T -e TRUTH_HARNESS_REQUIRE_DOCKER_TESTS=1 check npm test -- tools/cs-triples.test.js
+      - name: Docker recurrence verification and receipt replay
+        run: docker compose run --rm -T -e TRUTH_HARNESS_REQUIRE_DOCKER_TESTS=1 check npm test -- tools/cs-triples.test.js tools/exponential-recurrence.test.js

@@ -1,7 +1,8 @@
 # Bounded Polynomial Recurrences
 
 This lane checks a supplied polynomial candidate, not arbitrary recursive code.
-It does not discover formulas or handle exponential candidates.
+It does not discover formulas. A separate request version supports
+[bounded exponential-polynomial candidates](EXPONENTIAL_RECURRENCE.md).
 
 ## Contract
 

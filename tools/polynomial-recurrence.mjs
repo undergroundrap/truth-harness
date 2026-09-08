@@ -40,12 +40,15 @@ export async function checkRecurrence(args) {
   }
   const checked = recurrenceContract("check", JSON.stringify({ request_json: raw, receipt_json: receiptRaw }));
   const report = { schema_version: "truth-harness.polynomial-recurrence-report.v0", ...checked,
+    ...(checked.candidate_class ? { exponential_checker_sha256: sha(await readFile(new URL("./exponential_recurrence.py", import.meta.url))) } : {}),
     request_sha256: sha(raw), receipt_sha256: sha(receiptRaw), checker_sha256: sha(await readFile(bridge)),
     polynomial_helper_sha256: sha(await readFile(new URL("./polynomial_sum.py", import.meta.url))),
     helper_sha256: sha(await readFile(new URL("./pit_witness.py", import.meta.url))),
     rational_helper_sha256: sha(await readFile(new URL("./pit_certificate.py", import.meta.url))),
     artifact_directory: directory ? path.relative(repo, directory).split(path.sep).join("/") : null,
-    limitations: "Constant rational coefficients, order 1..4, polynomial forcing/candidate degree <=12. No exponential formula parsing, source-code verification, asymptotic bound or Lean-proof guarantee." };
+    limitations: checked.candidate_class
+      ? "Constant rational coefficients, order 1..4, polynomial forcing and exponential-polynomial candidate degree <=12, at most four nonzero rational bases with magnitude 1/16..16. No arbitrary expression parsing, source-code verification, asymptotic bound or Lean-proof guarantee."
+      : "Constant rational coefficients, order 1..4, polynomial forcing/candidate degree <=12. No exponential formula parsing, source-code verification, asymptotic bound or Lean-proof guarantee." };
   if (directory) {
     await writeFile(path.join(directory, "report.json"), json(report), "utf8");
     await writeFile(path.join(directory, "PROGRESS.md"), `# Polynomial Recurrence\n\nRecorded: ${new Date().toISOString()}\n\n` +
