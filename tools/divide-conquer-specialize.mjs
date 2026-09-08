@@ -12,6 +12,19 @@ const declaration = "divide_conquer_specialized";
 const json = value => JSON.stringify(value, null, 2) + "\n";
 const sha = value => createHash("sha256").update(value).digest("hex");
 
+export async function ensureSpecializationWorkspace(root) {
+  const { getLocalWorkspaceStatus, initLocalWorkspace } = await import("../packages/core/dist/index.js");
+  const status = await getLocalWorkspaceStatus(root);
+  if (!status.exists) await initLocalWorkspace(root);
+}
+
+export function requireAdapterSuccess(result) {
+  if (result.error || result.status !== 0) {
+    const detail = result.error?.message || result.stderr?.trim() || result.stdout?.trim() || "No adapter diagnostics";
+    throw new Error(`Lean adapter did not accept the specialization (exit ${result.status ?? "none"}): ${detail.slice(0, 2000)}`);
+  }
+}
+
 export function validateCosts(value) {
   assert.ok(value && typeof value === "object" && !Array.isArray(value), "Expected object");
   assert.deepEqual(Object.keys(value).sort(), ["combine_offset", "combine_slope", "leaf_cost", "schema_version"]);
@@ -41,6 +54,7 @@ export async function specialize(args) {
   const request = validateCosts(JSON.parse(raw));
   const library = await readFile(path.join(repo, "docs/examples/DivideConquer.lean"), "utf8");
   const source = specializationSource(request, library);
+  await ensureSpecializationWorkspace(repo);
   const parent = path.join(repo, ".truth-harness/experiments");
   await mkdir(parent, { recursive: true });
   const directory = await mkdtemp(path.join(parent, "divide-conquer-specialization-"));
@@ -51,7 +65,7 @@ export async function specialize(args) {
     "proof", "check", sourcePath, "--declaration", declaration, "--timeout-ms", "30000",
     "--fail-on-unproved", "--write", "--json"],
   { cwd: repo, encoding: "utf8", timeout: 45000, maxBuffer: 1024 * 1024, windowsHide: true, shell: false });
-  assert.equal(result.status, 0, "Lean adapter did not accept the specialization");
+  requireAdapterSuccess(result);
   const written = JSON.parse(result.stdout);
   assert.equal(written.written, true);
   const proof = written.record;

@@ -48,6 +48,8 @@ jobs:
         run: sudo install -d -o 10001 -g 10001 -m 0755 .truth-harness
       - name: Pinned Lean reduction and negative controls
         run: docker compose run --build --rm -T -e TRUTH_HARNESS_REQUIRE_LEAN_TESTS=1 lean-proof npm test -- tools/lean-divide-conquer.test.js
+      - name: Specialization with a fresh temporary evidence store
+        run: docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --tmpfs /workspace/.truth-harness:uid=10001,gid=10001 -e TRUTH_HARNESS_CONTAINER=1 truth-harness:lean-proof node tools/divide-conquer-specialize.mjs docs/examples/cs-divide-conquer-costs.json
 
   bezier-gate:
     runs-on: ubuntu-latest

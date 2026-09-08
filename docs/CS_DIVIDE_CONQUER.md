@@ -169,9 +169,16 @@ existing Lean adapter, and writes the request and JSON report under the local
 `.truth-harness/experiments/divide-conquer-specialization-*` directory. The adapter
 also writes its normal scoped proof record. Nothing is uploaded. Use the offline
 `lean-proof` service; a container marker is a guard, not a security sandbox itself.
+After input validation, the tool initializes missing local workspace storage using
+the existing core initializer. Existing manifests are not rewritten; malformed
+manifests fail closed. No separate `workspace init` command is required for a
+fresh checkout. CI exercises both the proof tests and the documented command
+with an empty temporary evidence store.
 
 Stdout is JSON. Exit 0 means adapter-accepted proof; exit 2 means invalid input
-or an unavailable/failed check, reported as `unverified`. Success includes request,
+or an unavailable/failed check, reported as `unverified`. Adapter failures include
+up to 2000 characters of local diagnostics, which may contain local paths; review
+them before sharing externally. Success includes request,
 request/library/generated-source SHA-256 hashes, artifact directory, explicit
 assumptions, and the adapter's proof result. Paths and record identifiers vary
 per run; source generation is deterministic for fixed parameters and library.

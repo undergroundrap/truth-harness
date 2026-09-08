@@ -4,11 +4,32 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import { specializationSource, validateCosts } from "./divide-conquer-specialize.mjs";
+import { ensureSpecializationWorkspace, requireAdapterSuccess, specializationSource, validateCosts } from "./divide-conquer-specialize.mjs";
 
 const sourcePath = fileURLToPath(new URL("../docs/examples/DivideConquer.lean", import.meta.url));
 const source = readFileSync(sourcePath, "utf8");
 const costs = JSON.parse(readFileSync(new URL("../docs/examples/cs-divide-conquer-costs.json", import.meta.url), "utf8"));
+it("initializes a fresh specialization workspace without rewriting an existing or malformed manifest", async () => {
+  const root = mkdtempSync(join(tmpdir(), "specialization workspace "));
+  try {
+    await ensureSpecializationWorkspace(root);
+    const manifest = join(root, ".truth-harness", "project.json");
+    const original = readFileSync(manifest, "utf8");
+    await ensureSpecializationWorkspace(root);
+    expect(readFileSync(manifest, "utf8")).toBe(original);
+    writeFileSync(manifest, "{broken", "utf8");
+    await expect(ensureSpecializationWorkspace(root)).rejects.toThrow();
+    expect(readFileSync(manifest, "utf8")).toBe("{broken");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+it("preserves bounded adapter failure diagnostics without treating errors as accepted", () => {
+  expect(() => requireAdapterSuccess({ status: 0 })).not.toThrow();
+  expect(() => requireAdapterSuccess({ status: 1, stderr: "Workspace unavailable" })).toThrow("Workspace unavailable");
+  expect(() => requireAdapterSuccess({ status: null, error: new Error("spawn failed") })).toThrow("spawn failed");
+  expect(() => requireAdapterSuccess({ status: 1, stdout: "unverified proof" })).toThrow("unverified proof");
+  try { requireAdapterSuccess({ status: 1, stderr: "x".repeat(10000) }); }
+  catch (error) { expect(error.message.length).toBeLessThan(2100); }
+});
 it("validates specialization inputs without accepting expressions or hidden fields", () => {
   expect(validateCosts(costs)).toEqual(costs);
   for (const bad of [null, [], { ...costs, schema_version: "future" }, { ...costs, proof: "trust me" },
