@@ -211,3 +211,11 @@ checking. There is no cached-report acceptance or reopen mode in this slice.
 Save the request hash separately when handing work to another agent; rerunning a
 different request proves a different concrete tree. The environment marker is a
 usage guard, not a security sandbox: isolation comes from the Docker service.
+
+Adapter-boundary tests inject timeouts, missing executables, failed exits,
+malformed JSON, incomplete receipts, and source/declaration mismatches. They
+require the unverified failure envelope and no successful report write. These
+synthetic tests check orchestration only; real mathematical acceptance remains
+covered by the separate required Lean gate. A verifier may have written its own
+receipt before a later workflow failure, and diagnostic request/source files
+may remain; neither means this workflow returned an accepted report.

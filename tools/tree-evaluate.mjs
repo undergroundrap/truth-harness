@@ -90,11 +90,15 @@ export async function evaluateTree(args) {
   return report;
 }
 
+export function treeFailure(error) {
+  return { schema_version: version, status: "unverified", proof_checker_backed: false,
+    error: error instanceof Error ? error.message : "Tree evaluation failed" };
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { process.stdout.write(json(await evaluateTree(process.argv.slice(2)))); }
   catch (error) {
-    process.stdout.write(json({ schema_version: version, status: "unverified", proof_checker_backed: false,
-      error: error instanceof Error ? error.message : "Tree evaluation failed" }));
+    process.stdout.write(json(treeFailure(error)));
     process.exitCode = 2;
   }
 }
