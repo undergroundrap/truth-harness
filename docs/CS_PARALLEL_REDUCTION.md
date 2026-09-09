@@ -274,3 +274,29 @@ instead of inclusive leaf outputs.
 The shared Lean source hash changes with this addition. Old tree-evaluation
 bundles remain historical evidence but their replay against the new library
 fails closed; verify the retained request again to create a current bundle.
+
+## Cached Prefix Scan Equivalence
+
+`CachedScan.build` traverses the value tree and stores each internal subtree's
+total. `build_total` proves the constructed total equals the existing aggregate
+sum for every input tree. `CachedScan.scan` uses the stored left total when
+setting the right offset instead of calling `ValueTree.aggregate` repeatedly.
+
+`scan_build` proves this traversal equals `TreeScan.scan` at every integer offset.
+`cached_prefix_scan_correct` composes that equivalence with the existing list
+specification theorem. The guarantee applies to `scan offset (build t)`, not raw
+cached trees constructed by a caller. A forged cache can produce incorrect
+prefixes; an explicit test demonstrates this even when its root total is correct.
+
+```sh
+docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/ParallelReduction.lean --declaration cached_prefix_scan_correct --timeout-ms 30000 --fail-on-unproved --write --json
+```
+
+This verifies preservation of outputs for the cache-based transformation.
+It does not yet prove a work/span bound or measured improvement. List
+concatenation, cache storage/allocation, processor limits, and runtime arithmetic
+cost still require separate accounting. No untrusted-cache import or scan JSON
+operation is added. Tests cover skewed trees and nonzero offsets and reject
+missing cache contributions, using the wrong child's total, and dropping the
+incoming offset. This addition again changes the shared source hash; old saved
+bundles require deliberate fresh creation against the updated library.

@@ -188,6 +188,53 @@ theorem scan_correct (t : ValueTree.Tree) (offset : Int) :
 
 end TreeScan
 
+namespace CachedScan
+
+inductive Tree where
+  | leaf : Int -> Tree
+  | fork : Int -> Tree -> Tree -> Tree
+
+def total : Tree -> Int
+  | .leaf value => value
+  | .fork value _ _ => value
+
+def build : ValueTree.Tree -> Tree
+  | .leaf value => .leaf value
+  | .fork l r =>
+    let a := build l
+    let b := build r
+    .fork (total a + total b) a b
+
+theorem build_total (t : ValueTree.Tree) :
+    total (build t) = (ValueTree.aggregate t).1 := by
+  induction t with
+  | leaf value => rfl
+  | fork l r hl hr =>
+    change total (build l) + total (build r) =
+      (ValueTree.aggregate l).1 + (ValueTree.aggregate r).1
+    rw [hl, hr]
+
+def scan (offset : Int) : Tree -> List Int
+  | .leaf value => [offset + value]
+  | .fork _ l r => scan offset l ++ scan (offset + total l) r
+
+theorem scan_build (t : ValueTree.Tree) (offset : Int) :
+    scan offset (build t) = TreeScan.scan offset t := by
+  induction t generalizing offset with
+  | leaf value => rfl
+  | fork l r hl hr => simp [build, scan, TreeScan.scan, hl, hr, build_total]
+
+end CachedScan
+
+theorem cached_prefix_scan_correct (t : ValueTree.Tree) (offset : Int) :
+    CachedScan.scan offset (CachedScan.build t) =
+      TreeScan.prefixes offset (ValueTree.leaves t) := by
+  exact (CachedScan.scan_build t offset).trans (TreeScan.scan_correct t offset)
+
+/-- info: 'cached_prefix_scan_correct' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms cached_prefix_scan_correct
+
 theorem tree_prefix_scan_correct (t : ValueTree.Tree) (offset : Int) :
     TreeScan.scan offset t = TreeScan.prefixes offset (ValueTree.leaves t) := by
   exact TreeScan.scan_correct t offset

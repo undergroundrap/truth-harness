@@ -15,6 +15,46 @@ const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean
 const branchingSource = readFileSync(branchingPath, "utf8");
 const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
 const treeFixture = JSON.parse(readFileSync(new URL("../docs/examples/tree-evaluation.json", import.meta.url), "utf8"));
+it("proves cached prefix scans equivalent and rejects incorrect caches or offsets", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
+  const text = readFileSync(file, "utf8");
+  const cli = fileURLToPath(new URL("../apps/cli/dist/index.js", import.meta.url));
+  const checked = spawnSync(process.execPath, [cli, "proof", "check", file,
+    "--declaration", "cached_prefix_scan_correct", "--fail-on-unproved", "--json"],
+  { encoding: "utf8", timeout: 45000, windowsHide: true });
+  expect(checked.status, checked.stdout + checked.stderr).toBe(0);
+  expect(JSON.parse(checked.stdout)).toMatchObject({ trust: "proved", proofCheckerBacked: true,
+    source: { declarationName: "cached_prefix_scan_correct",
+      declaration: { name: "cached_prefix_scan_correct", kind: "theorem" } } });
+  const root = mkdtempSync(join(tmpdir(), "cached prefix checks "));
+  try {
+    const probes = join(root, "Cached.lean");
+    writeFileSync(probes, text + "\n" + [
+      "def cachedSample : ValueTree.Tree := .fork (.fork (.leaf 1) (.leaf 2)) (.leaf 3)",
+      "example : CachedScan.scan 0 (CachedScan.build cachedSample) = [1, 3, 6] := by decide",
+      "example : CachedScan.scan (-4) (CachedScan.build cachedSample) = [-3, -1, 2] := by decide",
+      "example : CachedScan.scan 10 (CachedScan.build (.fork (.leaf (-5)) (.fork (.leaf 2) (.leaf 9)))) = [5, 7, 16] := by decide",
+      "example : CachedScan.scan 0 (CachedScan.build (.leaf 0)) = [0] := by decide",
+      "def forgedCache : CachedScan.Tree := .fork 6 (.fork 100 (.leaf 1) (.leaf 2)) (.leaf 3)",
+      "example : CachedScan.scan 0 forgedCache = [1, 3, 103] := by decide"
+    ].join("\n"));
+    const evaluated = spawnSync("lean", [probes], { encoding: "utf8", timeout: 30000, windowsHide: true });
+    expect(evaluated.status, evaluated.stdout + evaluated.stderr).toBe(0);
+    for (const [i, wrong] of [
+      text.replace(".fork (total a + total b) a b", ".fork (total a) a b"),
+      text.replace("scan (offset + total l) r", "scan (offset + total r) r"),
+      text.replace("scan (offset + total l) r", "scan (total l) r")
+    ].entries()) {
+      expect(wrong).not.toBe(text);
+      const bad = join(root, `Wrong${i}.lean`);
+      writeFileSync(bad, wrong);
+      const rejected = spawnSync("lean", [bad], { encoding: "utf8", timeout: 30000, windowsHide: true });
+      expect(rejected.status).toBe(1);
+      expect(rejected.stdout).toContain("error:");
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 150000);
 it("proves inclusive tree prefixes and rejects incorrect offsets and subtree totals", () => {
   if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
   const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
