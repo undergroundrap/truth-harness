@@ -300,3 +300,32 @@ operation is added. Tests cover skewed trees and nonzero offsets and reject
 missing cache contributions, using the wrong child's total, and dropping the
 incoming offset. This addition again changes the shared source hash; old saved
 bundles require deliberate fresh creation against the updated library.
+
+## Cached Scan Arithmetic Work
+
+`CachedScan.buildWork` charges one addition per internal cache node and zero at
+leaves. `scanWork` charges one right-offset addition per fork and one inclusive
+output addition per leaf. Both children are charged, regardless of scheduling.
+The definitions are explicit logical counters, not runtime instruction traces.
+
+For n leaves, Lean proves build work n-1, scan work 2n-1, and combined work 3n-2
+in `cached_prefix_arithmetic_work`. This exact arithmetic count holds for every
+tree shape, not just balanced trees. A single leaf costs one addition; no
+zero-offset or compiler constant-folding discount is assumed.
+
+```sh
+docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/ParallelReduction.lean --declaration cached_prefix_arithmetic_work --timeout-ms 30000 --fail-on-unproved --write --json
+```
+
+Finite supporting tests independently instrument both phases for 1..32 leaves
+on balanced and skewed trees, checking outputs as well as counts. Lean negative
+controls reject omitting construction work, skipping leaf additions, and claiming
+scan-only work as the total. Earlier cached-scan output proofs remain unchanged.
+
+This is a linear count of unit-cost additions, not an overall linear-time claim.
+List concatenation can repeatedly copy prefixes; allocation, tree traversal,
+cache access, integer bit complexity, and scheduling are not charged. These
+counters are a reviewed model alongside the algorithm, not a proved compiler
+cost semantics. No uncached-versus-cached speedup or span bound is established.
+As with other additions here, retained bundles must be recreated when the shared
+theorem source hash changes.

@@ -226,6 +226,49 @@ theorem scan_build (t : ValueTree.Tree) (offset : Int) :
 
 end CachedScan
 
+namespace CachedScan
+
+def buildWork : ValueTree.Tree -> Int
+  | .leaf _ => 0
+  | .fork l r => buildWork l + buildWork r + 1
+
+def scanWork : Tree -> Int
+  | .leaf _ => 1
+  | .fork _ l r => scanWork l + scanWork r + 1
+
+theorem build_work (t : ValueTree.Tree) :
+    buildWork t = ((ValueTree.leaves t).length : Int) - 1 := by
+  induction t with
+  | leaf value => simp [buildWork, ValueTree.leaves]
+  | fork l r hl hr =>
+    change buildWork l + buildWork r + 1 =
+      ((ValueTree.leaves (.fork l r)).length : Int) - 1
+    simp only [ValueTree.leaves, List.length_append]
+    omega
+
+theorem scan_work (t : ValueTree.Tree) :
+    scanWork (build t) = 2 * ((ValueTree.leaves t).length : Int) - 1 := by
+  induction t with
+  | leaf value => simp [build, scanWork, ValueTree.leaves]
+  | fork l r hl hr =>
+    change scanWork (build l) + scanWork (build r) + 1 =
+      2 * ((ValueTree.leaves (.fork l r)).length : Int) - 1
+    simp only [ValueTree.leaves, List.length_append]
+    omega
+
+end CachedScan
+
+theorem cached_prefix_arithmetic_work (t : ValueTree.Tree) :
+    CachedScan.buildWork t + CachedScan.scanWork (CachedScan.build t) =
+      3 * ((ValueTree.leaves t).length : Int) - 2 := by
+  have hb := CachedScan.build_work t
+  have hs := CachedScan.scan_work t
+  omega
+
+/-- info: 'cached_prefix_arithmetic_work' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms cached_prefix_arithmetic_work
+
 theorem cached_prefix_scan_correct (t : ValueTree.Tree) (offset : Int) :
     CachedScan.scan offset (CachedScan.build t) =
       TreeScan.prefixes offset (ValueTree.leaves t) := by

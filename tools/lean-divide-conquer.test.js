@@ -15,6 +15,63 @@ const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean
 const branchingSource = readFileSync(branchingPath, "utf8");
 const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
 const treeFixture = JSON.parse(readFileSync(new URL("../docs/examples/tree-evaluation.json", import.meta.url), "utf8"));
+it("counts both cached scan phases on balanced and skewed integer trees", () => {
+  for (let n = 1; n <= 32; n++) {
+    const values = Array.from({ length: n }, (_, i) => (i % 9) - 4);
+    const tree = (xs, skew) => xs.length === 1 ? { value: xs[0] } : {
+      left: tree(xs.slice(0, skew ? 1 : Math.floor(xs.length / 2)), skew),
+      right: tree(xs.slice(skew ? 1 : Math.floor(xs.length / 2)), skew)
+    };
+    for (const skew of [false, true]) {
+      let buildAdds = 0, scanAdds = 0;
+      const build = t => {
+        if ("value" in t) return { value: t.value, total: t.value };
+        const left = build(t.left), right = build(t.right);
+        buildAdds++;
+        return { left, right, total: left.total + right.total };
+      };
+      const scan = (t, offset) => {
+        scanAdds++;
+        if ("value" in t) return [offset + t.value];
+        return scan(t.left, offset).concat(scan(t.right, offset + t.left.total));
+      };
+      let sum = 7;
+      const expected = values.map(value => (sum += value));
+      expect(scan(build(tree(values, skew)), 7)).toEqual(expected);
+      expect(buildAdds).toBe(n - 1);
+      expect(scanAdds).toBe(2 * n - 1);
+      expect(buildAdds + scanAdds).toBe(3 * n - 2);
+    }
+  }
+});
+it("proves cached scan arithmetic work including construction and leaf additions", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
+  const text = readFileSync(file, "utf8");
+  const cli = fileURLToPath(new URL("../apps/cli/dist/index.js", import.meta.url));
+  const checked = spawnSync(process.execPath, [cli, "proof", "check", file,
+    "--declaration", "cached_prefix_arithmetic_work", "--fail-on-unproved", "--json"],
+  { encoding: "utf8", timeout: 45000, windowsHide: true });
+  expect(checked.status, checked.stdout + checked.stderr).toBe(0);
+  expect(JSON.parse(checked.stdout)).toMatchObject({ trust: "proved", proofCheckerBacked: true,
+    source: { declarationName: "cached_prefix_arithmetic_work",
+      declaration: { name: "cached_prefix_arithmetic_work", kind: "theorem" } } });
+  const root = mkdtempSync(join(tmpdir(), "scan arithmetic checks "));
+  try {
+    for (const [i, wrong] of [
+      text.replace("buildWork l + buildWork r + 1", "buildWork l + buildWork r"),
+      text.replace("| .leaf _ => 1", "| .leaf _ => 0"),
+      text.replace("3 * ((ValueTree.leaves t).length : Int) - 2", "2 * ((ValueTree.leaves t).length : Int) - 1")
+    ].entries()) {
+      expect(wrong).not.toBe(text);
+      const bad = join(root, `Wrong${i}.lean`);
+      writeFileSync(bad, wrong);
+      const rejected = spawnSync("lean", [bad], { encoding: "utf8", timeout: 30000, windowsHide: true });
+      expect(rejected.status).toBe(1);
+      expect(rejected.stdout).toContain("error:");
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 150000);
 it("proves cached prefix scans equivalent and rejects incorrect caches or offsets", () => {
   if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
   const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
