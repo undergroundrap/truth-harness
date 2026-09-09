@@ -329,3 +329,33 @@ counters are a reviewed model alongside the algorithm, not a proved compiler
 cost semantics. No uncached-versus-cached speedup or span bound is established.
 As with other additions here, retained bundles must be recreated when the shared
 theorem source hash changes.
+
+## Append-Free Cached Scan
+
+`CachedScan.scanInto offset tree tail` constructs each leaf output with list
+cons and threads an existing tail through the right subtree and then the left.
+Its implementation has no list append. The resulting order is still left to
+right; the supplied tail is preserved without applying the offset to it.
+Passing `[]` yields the ordinary inclusive prefix list.
+
+`scanInto_eq` proves equality to `CachedScan.scan offset tree ++ tail` for every
+cached tree, even a malformed one. This is equivalence, not cache validation.
+`cached_prefix_scan_into_correct` restricts to `build t` and composes the prior
+proofs to establish equality to the list specification followed by the tail.
+The proof covers all finite tree shapes, integer offsets, and integer tails.
+
+```sh
+docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/ParallelReduction.lean --declaration cached_prefix_scan_into_correct --timeout-ms 30000 --fail-on-unproved --write --json
+```
+
+Lean probes cover single leaves, both skew directions, signed values, empty
+and nonempty tails. Negative controls drop the tail, use the wrong subtotal,
+and reverse output order. A structural test checks the append-free definition.
+
+This removes explicit repeated list concatenation from this model, but is not
+a measured speedup, a stack-safety proof, or a parallel-span theorem. The nested
+recursive calls are not a tail-recursive traversal. No compiler allocation or
+bit-cost semantics is established, and the existing arithmetic counters are not
+newly proved operational counters for this variant. No production adapter or
+JSON format changes. The shared library hash changes, so old bundles require
+fresh creation rather than silent replay against a different theorem source.

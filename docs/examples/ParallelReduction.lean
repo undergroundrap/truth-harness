@@ -258,6 +258,30 @@ theorem scan_work (t : ValueTree.Tree) :
 
 end CachedScan
 
+namespace CachedScan
+
+def scanInto (offset : Int) : Tree -> List Int -> List Int
+  | .leaf value, tail => (offset + value) :: tail
+  | .fork _ l r, tail => scanInto offset l (scanInto (offset + total l) r tail)
+
+theorem scanInto_eq (t : Tree) (offset : Int) (tail : List Int) :
+    scanInto offset t tail = scan offset t ++ tail := by
+  induction t generalizing offset tail with
+  | leaf value => rfl
+  | fork value l r hl hr => simp [scanInto, scan, hl, hr, List.append_assoc]
+
+end CachedScan
+
+theorem cached_prefix_scan_into_correct (t : ValueTree.Tree) (offset : Int)
+    (tail : List Int) :
+    CachedScan.scanInto offset (CachedScan.build t) tail =
+      TreeScan.prefixes offset (ValueTree.leaves t) ++ tail := by
+  rw [CachedScan.scanInto_eq, CachedScan.scan_build, TreeScan.scan_correct]
+
+/-- info: 'cached_prefix_scan_into_correct' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms cached_prefix_scan_into_correct
+
 theorem cached_prefix_arithmetic_work (t : ValueTree.Tree) :
     CachedScan.buildWork t + CachedScan.scanWork (CachedScan.build t) =
       3 * ((ValueTree.leaves t).length : Int) - 2 := by

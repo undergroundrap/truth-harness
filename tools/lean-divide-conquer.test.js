@@ -15,6 +15,50 @@ const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean
 const branchingSource = readFileSync(branchingPath, "utf8");
 const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
 const treeFixture = JSON.parse(readFileSync(new URL("../docs/examples/tree-evaluation.json", import.meta.url), "utf8"));
+it("checks append-free scan equivalence, tails, and rejected corruptions in Lean", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
+  const text = readFileSync(file, "utf8");
+  const cli = fileURLToPath(new URL("../apps/cli/dist/index.js", import.meta.url));
+  const checked = spawnSync(process.execPath, [cli, "proof", "check", file,
+    "--declaration", "cached_prefix_scan_into_correct", "--fail-on-unproved", "--json"],
+  { encoding: "utf8", timeout: 45000, windowsHide: true });
+  expect(checked.status, checked.stdout + checked.stderr).toBe(0);
+  expect(JSON.parse(checked.stdout)).toMatchObject({ status: "accepted", trust: "proved", proofCheckerBacked: true,
+    source: { declarationName: "cached_prefix_scan_into_correct",
+      declaration: { name: "cached_prefix_scan_into_correct", kind: "theorem" } } });
+  const root = mkdtempSync(join(tmpdir(), "scan into checks "));
+  const run = path => spawnSync("lean", [path], { encoding: "utf8", timeout: 30000, windowsHide: true });
+  try {
+    const probes = join(root, "Into.lean");
+    writeFileSync(probes, text + "\n" + [
+      "example : CachedScan.scanInto 10 (CachedScan.build (.fork (.leaf (-5)) (.fork (.leaf 2) (.leaf 9)))) [77, -8] = [5, 7, 16, 77, -8] := by decide",
+      "example : CachedScan.scanInto (-4) (CachedScan.build (.fork (.fork (.leaf 1) (.leaf 2)) (.leaf 3))) [] = [-3, -1, 2] := by decide",
+      "example : CachedScan.scanInto 0 (CachedScan.build (.leaf 0)) [9] = [0, 9] := by decide"
+    ].join("\n"));
+    const valid = run(probes);
+    expect(valid.status, valid.stdout + valid.stderr).toBe(0);
+    for (const [i, wrong] of [
+      text.replace("(offset + value) :: tail", "[offset + value]"),
+      text.replace("scanInto (offset + total l) r tail", "scanInto (offset + total r) r tail"),
+      text.replace("scanInto offset l (scanInto (offset + total l) r tail)",
+        "scanInto (offset + total l) r (scanInto offset l tail)")
+    ].entries()) {
+      expect(wrong).not.toBe(text);
+      const bad = join(root, `Wrong${i}.lean`);
+      writeFileSync(bad, wrong);
+      const rejected = run(bad);
+      expect(rejected.status).toBe(1);
+      expect(rejected.stdout).toContain("error:");
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 150000);
+it("keeps the scanInto implementation free of list append (structural only)", () => {
+  const text = readFileSync(new URL("../docs/examples/ParallelReduction.lean", import.meta.url), "utf8");
+  const implementation = text.split("def scanInto ")[1].split("theorem scanInto_eq")[0];
+  expect(implementation).toContain(":: tail");
+  expect(implementation).not.toMatch(/\+\+|List\.append/);
+});
 it("counts both cached scan phases on balanced and skewed integer trees", () => {
   for (let n = 1; n <= 32; n++) {
     const values = Array.from({ length: n }, (_, i) => (i % 9) - 4);
