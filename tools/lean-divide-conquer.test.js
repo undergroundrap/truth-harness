@@ -119,6 +119,75 @@ it("reopens bound prefix bundles with fresh Lean evidence and rejects substituti
     expect(scratch()).toEqual(before);
   } finally { rmSync(root, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
 }, 180000);
+it("hands off real prefix evidence without accepting another valid scan bundle", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const tool = fileURLToPath(new URL("./prefix-scan.mjs", import.meta.url));
+  const request = JSON.parse(readFileSync(new URL("../docs/examples/prefix-scan.json", import.meta.url), "utf8"));
+  const root = mkdtempSync(join(tmpdir(), "prefix agent handoff "));
+  const candidate = join(root, "candidate bundle"), handoffPath = join(root, "trusted-handoff.json");
+  const files = ["request.json", "Scan.lean", "report.json"];
+  const create = input => {
+    const result = spawnSync(process.execPath, [tool, "-"], {
+      input: JSON.stringify(input), encoding: "utf8", timeout: 60000, windowsHide: true, shell: false
+    });
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report).toMatchObject({ status: "accepted", trust: "proved", proof_checker_backed: true });
+    return report;
+  };
+  const install = report => {
+    for (const file of files) copyFileSync(join(report.artifact_directory, file), join(candidate, file));
+  };
+  const snapshot = () => files.map(file => [file, readFileSync(join(candidate, file), "utf8")]);
+  const consumer = `
+    const fs = require('node:fs');
+    const { spawnSync } = require('node:child_process');
+    const handoff = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    const result = spawnSync(process.execPath, [process.argv[2], '--reopen', handoff.artifact_directory,
+      '--expect-request-sha256', handoff.request_sha256],
+      { encoding: 'utf8', timeout: 60000, windowsHide: true, shell: false });
+    process.stdout.write(result.stdout || '');
+    process.stderr.write(result.stderr || '');
+    process.exitCode = result.status === 0 ? 0 : 2;
+  `;
+  const resume = () => spawnSync(process.execPath, ["-e", consumer, handoffPath, tool], {
+    cwd: root, encoding: "utf8", timeout: 70000, windowsHide: true, shell: false
+  });
+  try {
+    mkdirSync(candidate);
+    const original = create(request);
+    install(original);
+    const handoff = JSON.stringify({ artifact_directory: candidate, request_sha256: original.request_sha256 }) + "\n";
+    writeFileSync(handoffPath, handoff);
+    const originals = snapshot();
+    const accepted = resume();
+    expect(accepted.status, accepted.stdout + accepted.stderr).toBe(0);
+    expect(JSON.parse(accepted.stdout)).toMatchObject({ schema_version: "truth-harness.prefix-scan-reopen.v0",
+      status: "reopened", trust: "proved", proof_checker_backed: true, cached_report_used: false,
+      request_sha256: original.request_sha256, expected_request_sha256: original.request_sha256, results: original.results });
+    expect(snapshot()).toEqual(originals);
+    const other = create({ ...request, offset: "11" });
+    expect(other.request_sha256).not.toBe(original.request_sha256);
+    expect(other.results.prefixes).toEqual(["6", "8", "17"]);
+    install(other);
+    const substituted = snapshot();
+    const rejected = resume();
+    expect(rejected.status).toBe(2);
+    const failure = JSON.parse(rejected.stdout);
+    expect(failure).toMatchObject({ status: "unverified", proof_checker_backed: false });
+    expect(failure).not.toHaveProperty("results");
+    expect(failure.error).toContain("Saved request does not match expected request SHA-256");
+    expect(snapshot()).toEqual(substituted);
+    expect(readFileSync(handoffPath, "utf8")).toBe(handoff);
+    install(original);
+    const recovered = resume();
+    expect(recovered.status, recovered.stdout + recovered.stderr).toBe(0);
+    expect(JSON.parse(recovered.stdout)).toMatchObject({ status: "reopened", results: original.results,
+      request_sha256: original.request_sha256 });
+    expect(snapshot()).toEqual(originals);
+    expect(readFileSync(handoffPath, "utf8")).toBe(handoff);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 180000);
 it("checks instrumented linked-list scan counts without charging the supplied tail (finite only)", () => {
   const makeTree = (xs, shape) => {
     if (xs.length === 1) return { value: xs[0], total: xs[0] };

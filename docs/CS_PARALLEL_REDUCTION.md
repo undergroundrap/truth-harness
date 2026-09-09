@@ -456,3 +456,19 @@ temporary source path no longer exists afterward; rerun this command to replay.
 Failure exits 2 with the replay version, `status: unverified`,
 `proof_checker_backed: false`, and `error`, with no results. Missing or malformed
 hashes fail closed. Creation output remains unchanged.
+
+### Fresh-Process Handoff
+
+The required Lean gate also tests creation-to-resume handoff end to end. It
+creates two genuinely accepted bundles with offsets 10 and 11, stores the first
+request hash outside the candidate directory, then starts a separate consumer
+process from another working directory. That process reads only the handoff's
+bundle location and retained hash before invoking replay.
+
+The original bundle reopens with fresh proof-backed results. Replacing all three
+candidate files with the other valid bundle is rejected without results, even
+though its own proof is valid. Restoring the original bundle recovers the original
+prefixes. Both the handoff and candidate files are checked for unintended writes.
+This tests process-level evidence continuity, not an LLM's reasoning or a general
+agent memory system. The caller must still protect the handoff itself; an attacker
+who can replace both the bundle and its trusted hash is outside this guarantee.
