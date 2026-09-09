@@ -1,0 +1,10 @@
+{
+  "schema_version": "truth-harness.tree-evaluation.v0",
+  "tree": {
+    "left": { "value": "-5" },
+    "right": {
+      "left": { "value": "2" },
+      "right": { "value": "9" }
+    }
+  }
+}

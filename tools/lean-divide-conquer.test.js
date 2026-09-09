@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
+import { treeRequest, treeSource } from "./tree-evaluate.mjs";
 import { ensureSpecializationWorkspace, requireAdapterSuccess, specializationSource, validateCosts, validateExpectedRequestHash } from "./divide-conquer-specialize.mjs";
 
 const sourcePath = fileURLToPath(new URL("../docs/examples/DivideConquer.lean", import.meta.url));
@@ -13,6 +14,55 @@ const costs = JSON.parse(readFileSync(new URL("../docs/examples/cs-divide-conque
 const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean", import.meta.url));
 const branchingSource = readFileSync(branchingPath, "utf8");
 const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
+const treeFixture = JSON.parse(readFileSync(new URL("../docs/examples/tree-evaluation.json", import.meta.url), "utf8"));
+it("validates bounded tree requests and generates deterministic literal-only proofs", () => {
+  expect(treeRequest(treeFixture).results).toEqual({ sum: "6", count: "3", work: "4", span: "2" });
+  expect(treeSource(treeFixture, "import Std")).toBe(treeSource(treeFixture, "import Std"));
+  for (const value of [0, "-0", "01", "1\n", "1000000", "0); sorry"]) {
+    expect(() => treeRequest({ ...treeFixture, tree: { value } })).toThrow();
+  }
+  for (const tree of [null, [], {}, { value: "1", extra: true }, { left: { value: "1" } }]) {
+    expect(() => treeRequest({ ...treeFixture, tree })).toThrow();
+  }
+  expect(() => treeRequest({ ...treeFixture, schema_version: "future" })).toThrow();
+  let deep = { value: "1" };
+  for (let i = 0; i < 9; i++) deep = { left: deep, right: { value: "0" } };
+  expect(() => treeRequest({ ...treeFixture, tree: deep })).toThrow();
+  const full = h => h ? { left: full(h - 1), right: full(h - 1) } : { value: "1" };
+  expect(treeRequest({ ...treeFixture, tree: full(6) }).results.count).toBe("64");
+  expect(() => treeRequest({ ...treeFixture, tree: full(7) })).toThrow();
+});
+it("verifies JSON trees from file and stdin and rejects a corrupted concrete result", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const tool = fileURLToPath(new URL("./tree-evaluate.mjs", import.meta.url));
+  const fixture = fileURLToPath(new URL("../docs/examples/tree-evaluation.json", import.meta.url));
+  const run = (args, input) => spawnSync(process.execPath, [tool, ...args], { input, encoding: "utf8", timeout: 60000, windowsHide: true });
+  for (const [args, input] of [[[fixture], undefined], [["-"], JSON.stringify(treeFixture)]]) {
+    const checked = run(args, input);
+    expect(checked.status, checked.stdout + checked.stderr).toBe(0);
+    const report = JSON.parse(checked.stdout);
+    expect(report).toMatchObject({ status: "accepted", proof_checker_backed: true,
+      results: { sum: "6", count: "3", work: "4", span: "2" } });
+    expect(report.request_sha256).toBe(createHash("sha256").update(input ?? readFileSync(fixture)).digest("hex"));
+  }
+  for (const input of ["\ufeff{}", "x".repeat(65537), JSON.stringify({ ...treeFixture, schema_version: "future" })]) {
+    const bad = run(["-"], input);
+    expect(bad.status).toBe(2);
+    expect(JSON.parse(bad.stdout)).toMatchObject({ status: "unverified", proof_checker_backed: false });
+  }
+  const root = mkdtempSync(join(tmpdir(), "concrete tree negatives "));
+  try {
+    const library = readFileSync(new URL("../docs/examples/ParallelReduction.lean", import.meta.url), "utf8");
+    const generated = treeSource(treeFixture, library);
+    const wrong = generated.replace("= ((6 : Int), 3)", "= ((7 : Int), 3)");
+    expect(wrong).not.toBe(generated);
+    const file = join(root, "Wrong.lean");
+    writeFileSync(file, wrong);
+    const rejected = spawnSync("lean", [file], { encoding: "utf8", timeout: 30000, windowsHide: true });
+    expect(rejected.status).toBe(1);
+    expect(rejected.stdout).toContain("error:");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 180000);
 it("checks one evaluator for outputs and costs and rejects broken refinement", () => {
   if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
   const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));

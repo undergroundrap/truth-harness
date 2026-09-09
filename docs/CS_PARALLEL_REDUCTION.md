@@ -176,3 +176,38 @@ costs remain assumptions of the model. No extraction or compiler theorem is adde
 
 Required Lean tests check both scoped receipts, concrete evaluator outputs/costs,
 and rejection of incorrect work, span, output, and shape-erasure definitions.
+
+## Concrete JSON Requests
+
+The bounded `tools/tree-evaluate.mjs` workflow accepts
+`truth-harness.tree-evaluation.v0`: exactly `schema_version` and `tree`.
+A leaf is `{ "value": "-5" }`; a branch has exactly `left` and `right` nodes.
+Values are canonical integer strings from -999999 to 999999. Requests are
+UTF-8 without BOM, at most 64 KiB, 127 nodes, and depth 8 (root depth zero).
+Unknown versions, extra fields, and expression text are rejected.
+
+```sh
+docker compose run --build --rm -T lean-proof node tools/tree-evaluate.mjs docs/examples/tree-evaluation.json
+docker compose run --rm -T lean-proof node tools/tree-evaluate.mjs - < docs/examples/tree-evaluation.json
+```
+
+The second command uses POSIX shell redirection; Windows callers can pipe UTF-8
+JSON to stdin or use a file path. Input files must be available inside Docker.
+The fixture yields sum 6, count 3, work 4, span 2. The script computes a candidate
+with exact integer arithmetic, then Lean checks those concrete values plus an
+application of `tree_evaluation_correct`. No user proof code is interpolated.
+
+Success exits 0 with JSON fields `schema_version`, `status: accepted`,
+`trust: proved`, `proof_checker_backed: true`, `evidence_scope`, `results`
+(sum/count/work/span integer strings), request/library/source SHA-256 hashes,
+`artifact_directory`, `limitations`, and the scoped adapter `proof`.
+Invalid input, unavailable verifier, timeout, or rejected proof exits 2 with
+`status: unverified`, `proof_checker_backed: false`, and `error`; never results
+labeled proved. Timeout is not a mathematical refutation.
+
+Request, generated Lean source, and report stay under `.truth-harness/experiments`;
+the existing adapter saves a proof receipt. Every invocation performs fresh Lean
+checking. There is no cached-report acceptance or reopen mode in this slice.
+Save the request hash separately when handing work to another agent; rerunning a
+different request proves a different concrete tree. The environment marker is a
+usage guard, not a security sandbox: isolation comes from the Docker service.
