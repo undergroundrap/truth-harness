@@ -18,7 +18,7 @@ import { mkdir, mkdtemp, readFile, writeFile, realpath, rm } from "node:fs/promi
 import { boundedInput } from "./pit-witness.mjs";
 import { ensureSpecializationWorkspace } from "./divide-conquer-specialize.mjs";
 import { evaluateTree, reopenTree, treeFailure, treeSource } from "./tree-evaluate.mjs";
-import { evaluateScan, scanFailure, scanSource } from "./prefix-scan.mjs";
+import { evaluateScan, reopenScan, scanFailure, scanSource } from "./prefix-scan.mjs";
 
 const request = { schema_version: "truth-harness.tree-evaluation.v0", tree: { value: "7" } };
 const library = "import Std\n";
@@ -117,6 +117,33 @@ it.each(cases)("prefix scan fails closed on %s without a successful report", asy
   expect(scanFailure(error)).not.toHaveProperty("results");
   expect(reports()).toHaveLength(0);
 });
+it.each(cases.filter(([name]) => name !== "unwritten receipt"))(
+  "prefix replay fails closed and removes scratch on %s", async (_name, result) => {
+    const raw = JSON.stringify(scanInput);
+    boundedInput.mockImplementation(async file => {
+      if (path.basename(file) === "request.json") return raw;
+      if (path.basename(file) === "Scan.lean") return scanSource(scanInput, library);
+      return library;
+    });
+    const adapter = scanResponse(result());
+    try {
+      const body = JSON.parse(adapter.stdout);
+      if (body?.record) adapter.stdout = JSON.stringify(body.record);
+    } catch { /* Deliberately malformed response. */ }
+    spawnSync.mockReturnValue(adapter);
+    let error;
+    try { await reopenScan(directory, createHash("sha256").update(raw).digest("hex")); }
+    catch (caught) { error = caught; }
+    expect(error).toBeInstanceOf(Error);
+    expect(scanFailure(error, true)).toMatchObject({ schema_version: "truth-harness.prefix-scan-reopen.v0",
+      status: "unverified", proof_checker_backed: false });
+    expect(scanFailure(error, true)).not.toHaveProperty("results");
+    expect(reports()).toHaveLength(0);
+    expect(ensureSpecializationWorkspace).not.toHaveBeenCalled();
+    expect(spawnSync.mock.calls[0][1]).not.toContain("--write");
+    expect(writeFile.mock.calls.map(([file]) => path.basename(file))).toEqual(["Scan.lean"]);
+    expect(rm).toHaveBeenCalledWith(directory, { recursive: true, force: true });
+  });
 it("prefix scan requires matching evidence and a successfully saved report", async () => {
   prepareScan();
   spawnSync.mockReturnValue(scanResponse(success(response())));

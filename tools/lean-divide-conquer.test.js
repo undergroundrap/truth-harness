@@ -60,6 +60,65 @@ it("verifies concrete prefix JSON from file and stdin and refuses unsupported or
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
 }, 180000);
+it("reopens bound prefix bundles with fresh Lean evidence and rejects substitutions", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const tool = fileURLToPath(new URL("./prefix-scan.mjs", import.meta.url));
+  const raw = readFileSync(new URL("../docs/examples/prefix-scan.json", import.meta.url), "utf8");
+  const library = readFileSync(new URL("../docs/examples/ParallelReduction.lean", import.meta.url), "utf8");
+  const source = scanSource(JSON.parse(raw), library);
+  const hash = x => createHash("sha256").update(x).digest("hex");
+  const root = mkdtempSync(join(tmpdir(), "prefix replay "));
+  const outside = mkdtempSync(join(tmpdir(), "outside prefix "));
+  const requestPath = join(root, "request.json"), sourceFile = join(root, "Scan.lean");
+  mkdirSync(".truth-harness/experiments", { recursive: true });
+  const scratch = () => readdirSync(".truth-harness/experiments").filter(x => x.startsWith("prefix-scan-recheck-")).sort();
+  const before = scratch();
+  const run = (binding = hash(raw), env = process.env) => spawnSync(process.execPath,
+    [tool, "--reopen", root, "--expect-request-sha256", binding],
+    { env, encoding: "utf8", timeout: 60000, windowsHide: true });
+  const reject = (result, message) => {
+    expect(result.status, result.stdout + result.stderr).toBe(2);
+    const report = JSON.parse(result.stdout);
+    expect(report).toMatchObject({ schema_version: "truth-harness.prefix-scan-reopen.v0", status: "unverified", proof_checker_backed: false });
+    expect(report).not.toHaveProperty("results");
+    if (message) expect(report.error).toContain(message);
+    expect(scratch()).toEqual(before);
+  };
+  try {
+    writeFileSync(requestPath, raw); writeFileSync(sourceFile, source);
+    writeFileSync(join(root, "report.json"), "{corrupt cached report");
+    const originals = readdirSync(root).map(x => [x, readFileSync(join(root, x), "utf8")]);
+    const accepted = run();
+    expect(accepted.status, accepted.stdout + accepted.stderr).toBe(0);
+    expect(JSON.parse(accepted.stdout)).toMatchObject({ status: "reopened", trust: "proved", proof_checker_backed: true,
+      expected_request_sha256: hash(raw), cached_report_used: false, results: { prefixes: ["5", "7", "16"] } });
+    expect(readdirSync(root).map(x => [x, readFileSync(join(root, x), "utf8")])).toEqual(originals);
+    expect(scratch()).toEqual(before);
+    unlinkSync(join(root, "report.json")); expect(run().status).toBe(0);
+    reject(run("bad")); reject(run("0".repeat(64)));
+    reject(run(hash(raw), { ...process.env, TRUTH_HARNESS_LEAN: "/missing-prefix-lean" }));
+    const other = JSON.stringify({ ...JSON.parse(raw), offset: "11" });
+    writeFileSync(requestPath, other); writeFileSync(sourceFile, scanSource(JSON.parse(other), library));
+    reject(run(hash(raw), { ...process.env, TRUTH_HARNESS_LEAN: "/missing-prefix-lean" }), "Saved request does not match");
+    writeFileSync(requestPath, raw);
+    reject(run(), "Saved source does not match");
+    writeFileSync(sourceFile, source + "\n-- changed\n"); reject(run(), "Saved source does not match");
+    writeFileSync(sourceFile, source);
+    for (const bad of ["\ufeff" + raw, "{", raw.replace("prefix-scan.v0", "future"), " ".repeat(65537)]) {
+      writeFileSync(requestPath, bad); reject(run(hash(bad)));
+    }
+    writeFileSync(requestPath, raw);
+    for (const file of [requestPath, sourceFile]) {
+      const contents = readFileSync(file, "utf8"), external = join(outside, file === requestPath ? "request.json" : "Scan.lean");
+      writeFileSync(external, contents); unlinkSync(file);
+      reject(run());
+      symlinkSync(external, file); reject(run(), "Bundle file escapes directory");
+      unlinkSync(file); writeFileSync(file, contents);
+    }
+    expect(run().status).toBe(0);
+    expect(scratch()).toEqual(before);
+  } finally { rmSync(root, { recursive: true, force: true }); rmSync(outside, { recursive: true, force: true }); }
+}, 180000);
 it("checks instrumented linked-list scan counts without charging the supplied tail (finite only)", () => {
   const makeTree = (xs, shape) => {
     if (xs.length === 1) return { value: xs[0], total: xs[0] };

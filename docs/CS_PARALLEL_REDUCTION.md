@@ -425,6 +425,34 @@ artifacts can remain after failure, but no successful report is returned.
 
 The command requires the offline Docker environment. Its environment marker is
 a usage guard, not a security boundary; container configuration provides isolation.
-Rerun the saved request for fresh verification. This slice does not implement
-saved-bundle replay, CLI/MCP registration, cache-construction counts, or runtime
+Rerun the saved request for fresh creation or use the bound replay below. This
+workflow does not add CLI/MCP registration, cache-construction counts, or runtime
 guarantees. Existing tree-evaluation JSON behavior remains unchanged.
+
+## Prefix Scan Replay
+
+Retain the original `request_sha256` in trusted task state outside the bundle.
+Supply it explicitly when reopening; never derive the expected hash from the
+candidate bundle itself. Hashes bind bytes, not authorship or mathematical truth.
+
+```sh
+docker compose run --rm -T lean-proof node tools/prefix-scan.mjs --reopen <bundle-directory> --expect-request-sha256 <trusted-request-hash>
+```
+
+Replay bounds and validates the original request, checks its exact byte hash,
+regenerates the source using the current library, and compares it with saved
+`Scan.lean`. It checks a private regenerated snapshot with Lean, not the mutable
+saved file. It ignores `report.json`, even if corrupt or absent, leaves the
+original files unchanged, and does not save another proof receipt. Temporary
+source is removed on success or failure. Escaping request/source symlinks are
+rejected. This is not a general sandbox against concurrent privileged filesystem
+mutation. Changed source or library bytes require deliberate fresh creation.
+
+Success exits 0 using `truth-harness.prefix-scan-reopen.v0`, `status: reopened`,
+`trust: proved`, `proof_checker_backed: true`, the same results/evidence scope,
+request/library/source hashes, `expected_request_sha256`, `artifact_directory`,
+`cached_report_used: false`, limitations, and fresh proof metadata. That proof's
+temporary source path no longer exists afterward; rerun this command to replay.
+Failure exits 2 with the replay version, `status: unverified`,
+`proof_checker_backed: false`, and `error`, with no results. Missing or malformed
+hashes fail closed. Creation output remains unchanged.
