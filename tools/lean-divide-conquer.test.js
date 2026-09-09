@@ -4,9 +4,13 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, it } from "vitest";
+import { setImmediate } from "node:timers/promises";
+import { afterEach, expect, it } from "vitest";
 import { treeRequest, treeSource } from "./tree-evaluate.mjs";
 import { ensureSpecializationWorkspace, requireAdapterSuccess, specializationSource, validateCosts, validateExpectedRequestHash } from "./divide-conquer-specialize.mjs";
+
+// Synchronous checker subprocesses must not starve Vitest's worker RPC replies.
+afterEach(async () => { await setImmediate(); });
 
 const sourcePath = fileURLToPath(new URL("../docs/examples/DivideConquer.lean", import.meta.url));
 const source = readFileSync(sourcePath, "utf8");
