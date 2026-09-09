@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { setImmediate } from "node:timers/promises";
 import { afterEach, expect, it } from "vitest";
 import { treeRequest, treeSource } from "./tree-evaluate.mjs";
+import { scanSource } from "./prefix-scan.mjs";
 import { ensureSpecializationWorkspace, requireAdapterSuccess, specializationSource, validateCosts, validateExpectedRequestHash } from "./divide-conquer-specialize.mjs";
 
 // Synchronous checker subprocesses must not starve Vitest's worker RPC replies.
@@ -19,6 +20,46 @@ const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean
 const branchingSource = readFileSync(branchingPath, "utf8");
 const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
 const treeFixture = JSON.parse(readFileSync(new URL("../docs/examples/tree-evaluation.json", import.meta.url), "utf8"));
+it("verifies concrete prefix JSON from file and stdin and refuses unsupported or unproved results", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const tool = fileURLToPath(new URL("./prefix-scan.mjs", import.meta.url));
+  const raw = readFileSync(new URL("../docs/examples/prefix-scan.json", import.meta.url), "utf8");
+  const root = mkdtempSync(join(tmpdir(), "prefix scan input "));
+  const run = (args, input = raw, env = process.env) => spawnSync(process.execPath, [tool, ...args],
+    { input, env, encoding: "utf8", timeout: 60000, windowsHide: true });
+  try {
+    const file = join(root, "request with spaces.json");
+    writeFileSync(file, raw);
+    for (const args of [[file], ["-"]]) {
+      const checked = run(args);
+      expect(checked.status, checked.stdout + checked.stderr).toBe(0);
+      const report = JSON.parse(checked.stdout);
+      expect(report).toMatchObject({ schema_version: "truth-harness.prefix-scan.v0", status: "accepted", trust: "proved",
+        proof_checker_backed: true, results: { prefixes: ["5", "7", "16"], count: "3", scan_additions: "5", scan_cons_cells: "3" },
+        request_sha256: createHash("sha256").update(raw).digest("hex"),
+        proof: { source: { declarationName: "concrete_prefix_scan" } } });
+      expect(readFileSync(join(report.artifact_directory, "request.json"), "utf8")).toBe(raw);
+    }
+    for (const input of ["\ufeff" + raw, " ".repeat(65537), "{", raw.replace("prefix-scan.v0", "prefix-scan.future")]) {
+      const rejected = run(["-"], input);
+      expect(rejected.status).toBe(2);
+      expect(JSON.parse(rejected.stdout)).toMatchObject({ status: "unverified", proof_checker_backed: false });
+    }
+    for (const args of [[], ["--reopen", root], [file, "extra"], [join(root, "missing.json")]]) expect(run(args).status).toBe(2);
+    const missing = run(["-"], raw, { ...process.env, TRUTH_HARNESS_LEAN: "/no-such-prefix-checker" });
+    expect(missing.status).toBe(2);
+    expect(JSON.parse(missing.stdout)).not.toHaveProperty("results");
+    expect(run(["-"], raw, { ...process.env, TRUTH_HARNESS_CONTAINER: "0" }).status).toBe(2);
+    const library = readFileSync(new URL("../docs/examples/ParallelReduction.lean", import.meta.url), "utf8");
+    const source = scanSource(JSON.parse(raw), library);
+    for (const [i, changed] of [source.replace("[(5 : Int), (7 : Int), (16 : Int)]", "[(5 : Int), (7 : Int), (17 : Int)]"),
+      source.replace("submittedScan.additions = (5 : Int)", "submittedScan.additions = (4 : Int)")].entries()) {
+      expect(changed).not.toBe(source);
+      const bad = join(root, `Wrong${i}.lean`); writeFileSync(bad, changed);
+      expect(spawnSync("lean", [bad], { encoding: "utf8", timeout: 30000, windowsHide: true }).status).toBe(1);
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 180000);
 it("checks instrumented linked-list scan counts without charging the supplied tail (finite only)", () => {
   const makeTree = (xs, shape) => {
     if (xs.length === 1) return { value: xs[0], total: xs[0] };

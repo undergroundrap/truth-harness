@@ -18,6 +18,7 @@ import { mkdir, mkdtemp, readFile, writeFile, realpath, rm } from "node:fs/promi
 import { boundedInput } from "./pit-witness.mjs";
 import { ensureSpecializationWorkspace } from "./divide-conquer-specialize.mjs";
 import { evaluateTree, reopenTree, treeFailure, treeSource } from "./tree-evaluate.mjs";
+import { evaluateScan, scanFailure, scanSource } from "./prefix-scan.mjs";
 
 const request = { schema_version: "truth-harness.tree-evaluation.v0", tree: { value: "7" } };
 const library = "import Std\n";
@@ -90,6 +91,41 @@ it.each(cases)("fails closed on %s without persisting a successful report", asyn
   expect(writeFile.mock.calls.map(([file]) => path.basename(file))).toEqual(["request.json", "Evaluation.lean"]);
 });
 
+const scanInput = { schema_version: "truth-harness.prefix-scan.v0", offset: "3", tree: { value: "7" } };
+const scanHash = createHash("sha256").update(scanSource(scanInput, library)).digest("hex");
+const scanResponse = result => {
+  try {
+    const body = JSON.parse(result.stdout);
+    if (body?.record?.source) {
+      const s = body.record.source;
+      if (s.sha256 === hash) s.sha256 = scanHash;
+      if (s.declarationName === "concrete_tree_evaluation") s.declarationName = "concrete_prefix_scan";
+      if (s.declaration?.name === "concrete_tree_evaluation") s.declaration.name = "concrete_prefix_scan";
+    }
+    return { ...result, stdout: JSON.stringify(body) };
+  } catch { return result; }
+};
+const prepareScan = () => boundedInput.mockImplementation(async file =>
+  path.basename(file) === "ParallelReduction.lean" ? library : JSON.stringify(scanInput));
+it.each(cases)("prefix scan fails closed on %s without a successful report", async (_name, result) => {
+  prepareScan();
+  spawnSync.mockReturnValue(scanResponse(result()));
+  let error;
+  try { await evaluateScan(["-"]); } catch (caught) { error = caught; }
+  expect(error).toBeInstanceOf(Error);
+  expect(scanFailure(error)).toMatchObject({ schema_version: scanInput.schema_version, status: "unverified", proof_checker_backed: false });
+  expect(scanFailure(error)).not.toHaveProperty("results");
+  expect(reports()).toHaveLength(0);
+});
+it("prefix scan requires matching evidence and a successfully saved report", async () => {
+  prepareScan();
+  spawnSync.mockReturnValue(scanResponse(success(response())));
+  expect((await evaluateScan(["request with spaces.json"])).results.prefixes).toEqual(["10"]);
+  expect(spawnSync.mock.calls[0][1]).toContain("concrete_prefix_scan");
+  expect(spawnSync.mock.calls[0][2]).toMatchObject({ shell: false, timeout: 45000 });
+  writeFile.mockImplementation(async file => { if (path.basename(file) === "report.json") throw new Error("ENOSPC"); });
+  await expect(evaluateScan(["-"])).rejects.toThrow("ENOSPC");
+});
 it("does not return success if saving the final report fails", async () => {
   spawnSync.mockReturnValue(success(response()));
   writeFile.mockImplementation(async file => {

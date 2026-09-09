@@ -1,0 +1,8 @@
+{
+  "schema_version": "truth-harness.prefix-scan.v0",
+  "offset": "10",
+  "tree": {
+    "left": { "value": "-5" },
+    "right": { "left": { "value": "2" }, "right": { "value": "9" } }
+  }
+}

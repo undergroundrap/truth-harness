@@ -391,3 +391,40 @@ the Lean compiler or a machine-code trace. List cons counts are not allocated
 bytes or peak live memory. Runtime, stack use, integer bit costs, cache storage,
 scheduling, and hardware speedup remain outside the claim. No JSON interface or
 adapter changes. Updating the shared source again requires fresh bundle creation.
+
+## Concrete Prefix Scan Requests
+
+The repository tool `tools/prefix-scan.mjs` accepts a file or `-` for stdin:
+
+```sh
+docker compose run --build --rm -T lean-proof node tools/prefix-scan.mjs docs/examples/prefix-scan.json
+```
+
+Input version `truth-harness.prefix-scan.v0` requires exactly `schema_version`,
+`offset`, and `tree`. The offset and leaf values are canonical signed integer
+strings in [-999999, 999999], with no leading zeros, plus signs, or negative zero.
+Trees use `{ "value": "2" }` leaves or `{ "left": ..., "right": ... }` forks,
+with at most 127 nodes and depth 8 (root depth zero). Extra fields and versions
+fail closed. Input is limited to 64 KiB of strict UTF-8 without BOM. The output
+tail is fixed to empty; raw cached trees and Lean expressions are not accepted.
+
+The fixture yields prefixes `["5", "7", "16"]`, count `"3"`, scan additions
+`"5"`, and scan cons cells `"3"`. All numerical results are decimal strings.
+JS proposes the results; a generated `concrete_prefix_scan` theorem combines the
+general correctness/cost theorem with Lean evaluation of those concrete results.
+Only matching accepted proof evidence permits a successful report.
+
+Success exits 0 with `schema_version`, `status: accepted`, `trust: proved`,
+`proof_checker_backed: true`, `evidence_scope: concrete-lean-prefix-scan-model`,
+`results` (prefixes, count, scan_additions, scan_cons_cells), request/library/source
+SHA-256 hashes, `artifact_directory`, `limitations`, and the proof record.
+The directory contains `request.json`, `Scan.lean`, and `report.json`; identifiers
+and timestamps vary between runs. Failure exits 2 with version, `status: unverified`,
+`proof_checker_backed: false`, and `error`, without results. Partial diagnostic
+artifacts can remain after failure, but no successful report is returned.
+
+The command requires the offline Docker environment. Its environment marker is
+a usage guard, not a security boundary; container configuration provides isolation.
+Rerun the saved request for fresh verification. This slice does not implement
+saved-bundle replay, CLI/MCP registration, cache-construction counts, or runtime
+guarantees. Existing tree-evaluation JSON behavior remains unchanged.

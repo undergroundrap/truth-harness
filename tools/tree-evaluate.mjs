@@ -14,6 +14,12 @@ const declaration = "concrete_tree_evaluation";
 const sha = text => createHash("sha256").update(text).digest("hex");
 const json = value => JSON.stringify(value, null, 2) + "\n";
 
+export function treeInteger(value) {
+  assert.equal(typeof value, "string", "Leaf value must be an integer string");
+  assert.match(value, /^(?:0|-?[1-9][0-9]{0,5})(?![\s\S])/, "Leaf value must be a canonical integer with at most six digits");
+  return value;
+}
+
 export function treeRequest(value) {
   const object = node => assert.ok(node && typeof node === "object" && !Array.isArray(node), "Expected object");
   object(value);
@@ -25,8 +31,7 @@ export function treeRequest(value) {
     object(node);
     if (Object.hasOwn(node, "value")) {
       assert.deepEqual(Object.keys(node), ["value"]);
-      assert.equal(typeof node.value, "string", "Leaf value must be an integer string");
-      assert.match(node.value, /^(?:0|-?[1-9][0-9]{0,5})(?![\s\S])/, "Leaf value must be a canonical integer with at most six digits");
+      treeInteger(node.value);
       return { term: `(.leaf (${node.value} : Int))`, sum: BigInt(node.value), count: 1n, work: 0n, span: 0 };
     }
     assert.deepEqual(Object.keys(node).sort(), ["left", "right"]);
@@ -53,9 +58,9 @@ export function treeSource(request, library) {
     `  constructor\n  · exact tree_evaluation_correct submittedTree\n  · decide\n`;
 }
 
-function checkTree(file, source, write) {
+export function checkTree(file, source, write, target = declaration) {
   const checked = spawnSync(process.execPath, [path.join(repo, "apps/cli/dist/index.js"), "proof", "check", file,
-    "--declaration", declaration, "--timeout-ms", "30000", "--fail-on-unproved", ...(write ? ["--write"] : []), "--json"],
+    "--declaration", target, "--timeout-ms", "30000", "--fail-on-unproved", ...(write ? ["--write"] : []), "--json"],
   { cwd: repo, encoding: "utf8", timeout: 45000, maxBuffer: 1024 * 1024, windowsHide: true, shell: false });
   requireAdapterSuccess(checked);
   const response = JSON.parse(checked.stdout), proof = write ? response.record : response;
@@ -64,8 +69,8 @@ function checkTree(file, source, write) {
   assert.equal(proof.trust, "proved");
   assert.equal(proof.proofCheckerBacked, true);
   assert.equal(proof.source.sha256, sha(source));
-  assert.equal(proof.source.declarationName, declaration);
-  assert.equal(proof.source.declaration?.name, declaration);
+  assert.equal(proof.source.declarationName, target);
+  assert.equal(proof.source.declaration?.name, target);
   return proof;
 }
 
