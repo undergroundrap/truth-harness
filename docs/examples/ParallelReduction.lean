@@ -162,6 +162,40 @@ theorem evaluate_refines (t : Tree) :
 
 end ValueTree
 
+namespace TreeScan
+
+def prefixes (offset : Int) : List Int -> List Int
+  | [] => []
+  | x :: xs => (offset + x) :: prefixes (offset + x) xs
+
+theorem prefixes_append (xs ys : List Int) (offset : Int) :
+    prefixes offset (xs ++ ys) =
+      prefixes offset xs ++ prefixes (offset + ValueTree.listSum xs) ys := by
+  induction xs generalizing offset with
+  | nil => simp [prefixes, ValueTree.listSum]
+  | cons x xs ih => simp [prefixes, ValueTree.listSum, ih, Int.add_assoc]
+
+def scan (offset : Int) : ValueTree.Tree -> List Int
+  | .leaf value => [offset + value]
+  | .fork l r => scan offset l ++ scan (offset + (ValueTree.aggregate l).1) r
+
+theorem scan_correct (t : ValueTree.Tree) (offset : Int) :
+    scan offset t = prefixes offset (ValueTree.leaves t) := by
+  induction t generalizing offset with
+  | leaf value => simp [scan, prefixes, ValueTree.leaves]
+  | fork l r hl hr =>
+    simp [scan, ValueTree.leaves, prefixes_append, hl, hr, ValueTree.aggregate_correct]
+
+end TreeScan
+
+theorem tree_prefix_scan_correct (t : ValueTree.Tree) (offset : Int) :
+    TreeScan.scan offset t = TreeScan.prefixes offset (ValueTree.leaves t) := by
+  exact TreeScan.scan_correct t offset
+
+/-- info: 'tree_prefix_scan_correct' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms tree_prefix_scan_correct
+
 theorem tree_evaluation_correct (t : ValueTree.Tree) :
     (ValueTree.evaluate t).output =
       (ValueTree.listSum (ValueTree.leaves t), (ValueTree.leaves t).length) /\

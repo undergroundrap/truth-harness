@@ -15,6 +15,46 @@ const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean
 const branchingSource = readFileSync(branchingPath, "utf8");
 const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
 const treeFixture = JSON.parse(readFileSync(new URL("../docs/examples/tree-evaluation.json", import.meta.url), "utf8"));
+it("proves inclusive tree prefixes and rejects incorrect offsets and subtree totals", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
+  const text = readFileSync(file, "utf8");
+  const cli = fileURLToPath(new URL("../apps/cli/dist/index.js", import.meta.url));
+  const checked = spawnSync(process.execPath, [cli, "proof", "check", file,
+    "--declaration", "tree_prefix_scan_correct", "--fail-on-unproved", "--json"],
+  { encoding: "utf8", timeout: 45000, windowsHide: true });
+  expect(checked.status, checked.stdout + checked.stderr).toBe(0);
+  expect(JSON.parse(checked.stdout)).toMatchObject({ trust: "proved", proofCheckerBacked: true,
+    source: { declarationName: "tree_prefix_scan_correct",
+      declaration: { name: "tree_prefix_scan_correct", kind: "theorem" } } });
+  const root = mkdtempSync(join(tmpdir(), "prefix scan checks "));
+  try {
+    const probes = join(root, "Prefixes.lean");
+    writeFileSync(probes, text + "\n" + [
+      "def scanSample : ValueTree.Tree := .fork (.leaf (-5)) (.fork (.leaf 2) (.leaf 9))",
+      "example : TreeScan.scan 0 scanSample = [-5, -3, 6] := by decide",
+      "example : TreeScan.scan 10 scanSample = [5, 7, 16] := by decide",
+      "example : TreeScan.scan (-2) (.leaf 7) = [5] := by decide",
+      "example : TreeScan.scan 3 (.fork (.leaf 0) (.leaf 0)) = [3, 3] := by decide",
+      "example : TreeScan.scan 0 (.fork (.fork (.leaf (-5)) (.leaf 2)) (.leaf 9)) = [-5, -3, 6] := by decide",
+      "example : TreeScan.prefixes 8 [] = [] := by decide"
+    ].join("\n"));
+    const evaluated = spawnSync("lean", [probes], { encoding: "utf8", timeout: 30000, windowsHide: true });
+    expect(evaluated.status, evaluated.stdout + evaluated.stderr).toBe(0);
+    for (const [i, wrong] of [
+      text.replace("scan (offset + (ValueTree.aggregate l).1) r", "scan offset r"),
+      text.replace("scan (offset + (ValueTree.aggregate l).1) r", "scan (offset + (ValueTree.aggregate r).1) r"),
+      text.replace(".leaf value => [offset + value]", ".leaf value => [offset]")
+    ].entries()) {
+      expect(wrong).not.toBe(text);
+      const bad = join(root, `Wrong${i}.lean`);
+      writeFileSync(bad, wrong);
+      const rejected = spawnSync("lean", [bad], { encoding: "utf8", timeout: 30000, windowsHide: true });
+      expect(rejected.status).toBe(1);
+      expect(rejected.stdout).toContain("error:");
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 150000);
 it("replays hash-bound tree bundles without trusting cached reports or changed files", () => {
   if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
   const tool = fileURLToPath(new URL("./tree-evaluate.mjs", import.meta.url));

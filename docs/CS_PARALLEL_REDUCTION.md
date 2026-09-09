@@ -244,3 +244,33 @@ as creation, but the replay version. Missing hashes fail closed. Changed library
 or request bytes require deliberate new verification, not silently reused trust.
 The returned proof's temporary path no longer exists; use this replay command
 for future checks instead of calling Lean on that path.
+
+## Inclusive Prefix Sums
+
+`TreeScan.scan` returns one cumulative sum per leaf, in left-to-right order,
+including that leaf's value. It supports an arbitrary integer starting offset.
+For leaves [-5, 2, 9], offset zero yields [-5, -3, 6]; offset ten yields [5, 7, 16].
+
+The separate list specification `TreeScan.prefixes` updates an accumulator for
+each list element. Its append lemma relates a concatenation to two scans with
+the appropriate second offset. The tree algorithm scans the left child, then
+uses `ValueTree.aggregate` of that child to determine the right offset.
+`tree_prefix_scan_correct` proves equality to the list specification for every
+finite value tree and integer offset, reusing `ValueTree.aggregate_correct`.
+Balanced shape is not required; the tree type still has no empty constructor.
+
+```sh
+docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/ParallelReduction.lean --declaration tree_prefix_scan_correct --timeout-ms 30000 --fail-on-unproved --write --json
+```
+
+This first slice establishes output correctness only. It recomputes subtree
+aggregates and uses list concatenation; it is not claimed to be a work-efficient
+parallel scan. Earlier reduction cost formulas do not describe this traversal.
+No scan cost theorem, JSON scan request, cached-total optimization, machine
+overflow guarantee, or measured speedup is added. Negative controls reject
+missing right offsets, use of the right rather than left subtotal, and exclusive
+instead of inclusive leaf outputs.
+
+The shared Lean source hash changes with this addition. Old tree-evaluation
+bundles remain historical evidence but their replay against the new library
+fails closed; verify the retained request again to create a current bundle.
