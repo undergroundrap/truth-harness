@@ -15,6 +15,79 @@ const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean
 const branchingSource = readFileSync(branchingPath, "utf8");
 const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
 const treeFixture = JSON.parse(readFileSync(new URL("../docs/examples/tree-evaluation.json", import.meta.url), "utf8"));
+it("checks instrumented linked-list scan counts without charging the supplied tail (finite only)", () => {
+  const makeTree = (xs, shape) => {
+    if (xs.length === 1) return { value: xs[0], total: xs[0] };
+    const split = shape === "left" ? xs.length - 1 : shape === "right" ? 1 : Math.floor(xs.length / 2);
+    const left = makeTree(xs.slice(0, split), shape), right = makeTree(xs.slice(split), shape);
+    return { left, right, total: left.total + right.total };
+  };
+  for (let n = 1; n <= 32; n++) {
+    const values = Array.from({ length: n }, (_, i) => BigInt(i % 9 - 4));
+    for (const shape of ["left", "right", "balanced"]) {
+      for (const offset of [-7n, 0n, 10n]) {
+        const tail = { value: 77n, next: { value: -8n, next: null } };
+        let additions = 0, cells = 0;
+        const scan = (t, start, rest) => {
+          additions++;
+          if ("value" in t) { cells++; return { value: start + t.value, next: rest }; }
+          const right = scan(t.right, start + t.left.total, rest);
+          return scan(t.left, start, right);
+        };
+        let output = scan(makeTree(values, shape), offset, tail), sum = offset;
+        for (const value of values) {
+          sum += value;
+          expect(output.value).toBe(sum);
+          output = output.next;
+        }
+        expect(output).toBe(tail);
+        expect(additions).toBe(2 * n - 1);
+        expect(cells).toBe(n);
+      }
+    }
+  }
+});
+it("proves instrumented scan output and counts and rejects corrupted instrumentation", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
+  const text = readFileSync(file, "utf8");
+  const cli = fileURLToPath(new URL("../apps/cli/dist/index.js", import.meta.url));
+  const checked = spawnSync(process.execPath, [cli, "proof", "check", file,
+    "--declaration", "cached_prefix_evaluation_correct", "--fail-on-unproved", "--json"],
+  { encoding: "utf8", timeout: 45000, windowsHide: true });
+  expect(checked.status, checked.stdout + checked.stderr).toBe(0);
+  expect(JSON.parse(checked.stdout)).toMatchObject({ status: "accepted", trust: "proved", proofCheckerBacked: true,
+    source: { declarationName: "cached_prefix_evaluation_correct",
+      declaration: { name: "cached_prefix_evaluation_correct", kind: "theorem" } } });
+  const root = mkdtempSync(join(tmpdir(), "scan evaluation checks "));
+  const run = path => spawnSync("lean", [path], { encoding: "utf8", timeout: 30000, windowsHide: true });
+  try {
+    const probes = join(root, "Evaluate.lean");
+    writeFileSync(probes, text + "\n" + [
+      "def scanEval := CachedScan.evaluateInto 10 (CachedScan.build (.fork (.leaf (-5)) (.fork (.leaf 2) (.leaf 9)))) [77, -8]",
+      "example : scanEval.output = [5, 7, 16, 77, -8] := by decide",
+      "example : scanEval.additions = 5 := by decide",
+      "example : scanEval.consCells = 3 := by decide",
+      "example : (CachedScan.evaluateInto 0 (CachedScan.build (.leaf 0)) []).consCells = 1 := by decide"
+    ].join("\n"));
+    const valid = run(probes);
+    expect(valid.status, valid.stdout + valid.stderr).toBe(0);
+    for (const [i, wrong] of [
+      text.replace("output := (offset + value) :: tail", "output := offset :: tail"),
+      text.replace("additions := 1, consCells", "additions := 0, consCells"),
+      text.replace("left.additions + right.additions + 1", "left.additions + 1"),
+      text.replace("consCells := 1 }", "consCells := tail.length + 1 }"),
+      text.replace("consCells := left.consCells + right.consCells", "consCells := left.consCells")
+    ].entries()) {
+      expect(wrong).not.toBe(text);
+      const bad = join(root, `Wrong${i}.lean`);
+      writeFileSync(bad, wrong);
+      const rejected = run(bad);
+      expect(rejected.status).toBe(1);
+      expect(rejected.stdout).toContain("error:");
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 180000);
 it("checks append-free scan equivalence, tails, and rejected corruptions in Lean", () => {
   if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
   const file = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));

@@ -359,3 +359,35 @@ bit-cost semantics is established, and the existing arithmetic counters are not
 newly proved operational counters for this variant. No production adapter or
 JSON format changes. The shared library hash changes, so old bundles require
 fresh creation rather than silent replay against a different theorem source.
+
+## Instrumented Append-Free Scan
+
+`CachedScan.evaluateInto` returns a `ScanEvaluation` containing output, integer
+addition count, and list-cons count in one recursive evaluation. A leaf charges
+one inclusive-sum addition and one cons; a fork charges one right-offset addition
+and combines both children's counts. The incoming tail is not traversed or
+charged. Counter arithmetic and the instrumentation record itself are uncharged.
+
+`evaluateInto_refines` connects the returned output to `scanInto`, additions to
+the existing `scanWork`, and cons counts to `consWork`. For a tree constructed
+with `build`, `cached_prefix_evaluation_correct` proves all three together:
+correct prefixes followed by the supplied tail, exactly 2n-1 scan additions,
+and exactly n new list cons operations for n leaves. This holds at every integer
+offset, for every tail and finite nonempty tree shape. Cache construction is
+excluded from this scan count; the earlier build theorem counts n-1 additions.
+
+```sh
+docker compose run --build --rm -T lean-proof node apps/cli/dist/index.js proof check docs/examples/ParallelReduction.lean --declaration cached_prefix_evaluation_correct --timeout-ms 30000 --fail-on-unproved --write --json
+```
+
+Lean negative controls corrupt outputs, omit leaf or right-child additions,
+charge the preexisting tail, and omit right-child cons operations. Finite JS
+supporting tests use linked lists with both skew directions and balanced shapes
+(1..32 leaves, three offsets), checking outputs, counts, and tail identity.
+Those JS tests are not a cross-language equivalence proof.
+
+This is a proved instrumented source model, not a verified cost semantics for
+the Lean compiler or a machine-code trace. List cons counts are not allocated
+bytes or peak live memory. Runtime, stack use, integer bit costs, cache storage,
+scheduling, and hardware speedup remain outside the claim. No JSON interface or
+adapter changes. Updating the shared source again requires fresh bundle creation.

@@ -282,6 +282,64 @@ theorem cached_prefix_scan_into_correct (t : ValueTree.Tree) (offset : Int)
 #guard_msgs in
 #print axioms cached_prefix_scan_into_correct
 
+namespace CachedScan
+
+structure ScanEvaluation where
+  output : List Int
+  additions : Int
+  consCells : Nat
+
+def evaluateInto (offset : Int) : Tree -> List Int -> ScanEvaluation
+  | .leaf value, tail => { output := (offset + value) :: tail, additions := 1, consCells := 1 }
+  | .fork _ l r, tail =>
+    let right := evaluateInto (offset + total l) r tail
+    let left := evaluateInto offset l right.output
+    { output := left.output,
+      additions := left.additions + right.additions + 1,
+      consCells := left.consCells + right.consCells }
+
+def consWork : Tree -> Nat
+  | .leaf _ => 1
+  | .fork _ l r => consWork l + consWork r
+
+theorem evaluateInto_refines (t : Tree) (offset : Int) (tail : List Int) :
+    (evaluateInto offset t tail).output = scanInto offset t tail /\
+    (evaluateInto offset t tail).additions = scanWork t /\
+    (evaluateInto offset t tail).consCells = consWork t := by
+  induction t generalizing offset tail with
+  | leaf value => simp [evaluateInto, scanInto, scanWork, consWork]
+  | fork _ l r hl hr =>
+    simp only [evaluateInto, scanInto, scanWork, consWork]
+    have right := hr (offset + total l) tail
+    have left := hl offset (evaluateInto (offset + total l) r tail).output
+    exact And.intro (left.1.trans (congrArg (scanInto offset l) right.1))
+      (And.intro (by rw [left.2.1, right.2.1]) (by rw [left.2.2, right.2.2]))
+
+theorem cons_work_build (t : ValueTree.Tree) :
+    consWork (build t) = (ValueTree.leaves t).length := by
+  induction t with
+  | leaf value => rfl
+  | fork l r hl hr => simp [build, consWork, ValueTree.leaves, hl, hr]
+
+end CachedScan
+
+theorem cached_prefix_evaluation_correct (t : ValueTree.Tree) (offset : Int)
+    (tail : List Int) :
+    (CachedScan.evaluateInto offset (CachedScan.build t) tail).output =
+      TreeScan.prefixes offset (ValueTree.leaves t) ++ tail /\
+    (CachedScan.evaluateInto offset (CachedScan.build t) tail).additions =
+      2 * ((ValueTree.leaves t).length : Int) - 1 /\
+    (CachedScan.evaluateInto offset (CachedScan.build t) tail).consCells =
+      (ValueTree.leaves t).length := by
+  have r := CachedScan.evaluateInto_refines (CachedScan.build t) offset tail
+  exact And.intro (r.1.trans (cached_prefix_scan_into_correct t offset tail))
+    (And.intro (r.2.1.trans (CachedScan.scan_work t))
+      (r.2.2.trans (CachedScan.cons_work_build t)))
+
+/-- info: 'cached_prefix_evaluation_correct' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms cached_prefix_evaluation_correct
+
 theorem cached_prefix_arithmetic_work (t : ValueTree.Tree) :
     CachedScan.buildWork t + CachedScan.scanWork (CachedScan.build t) =
       3 * ((ValueTree.leaves t).length : Int) - 2 := by
