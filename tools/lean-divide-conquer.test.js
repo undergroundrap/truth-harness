@@ -15,6 +15,60 @@ const branchingPath = fileURLToPath(new URL("../docs/examples/BranchingCost.lean
 const branchingSource = readFileSync(branchingPath, "utf8");
 const branchingCosts = JSON.parse(readFileSync(new URL("../docs/examples/cs-branching-costs.json", import.meta.url), "utf8"));
 const treeFixture = JSON.parse(readFileSync(new URL("../docs/examples/tree-evaluation.json", import.meta.url), "utf8"));
+it("replays hash-bound tree bundles without trusting cached reports or changed files", () => {
+  if (process.env.TRUTH_HARNESS_REQUIRE_LEAN_TESTS !== "1") return;
+  const tool = fileURLToPath(new URL("./tree-evaluate.mjs", import.meta.url));
+  const run = (args, input) => spawnSync(process.execPath, [tool, ...args], { input, encoding: "utf8", timeout: 60000, windowsHide: true });
+  const created = run(["-"], JSON.stringify(treeFixture));
+  expect(created.status, created.stdout + created.stderr).toBe(0);
+  const original = JSON.parse(created.stdout);
+  const root = mkdtempSync(join(tmpdir(), "tree replay bundle "));
+  try {
+    for (const name of ["request.json", "Evaluation.lean", "report.json"]) copyFileSync(join(original.artifact_directory, name), join(root, name));
+    const requestFile = join(root, "request.json"), sourceFile = join(root, "Evaluation.lean"), reportFile = join(root, "report.json");
+    const raw = readFileSync(requestFile, "utf8"), source = readFileSync(sourceFile, "utf8");
+    const args = ["--reopen", root, "--expect-request-sha256", original.request_sha256];
+    const check = () => {
+      const result = run(args);
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+      const report = JSON.parse(result.stdout);
+      expect(report).toMatchObject({ schema_version: "truth-harness.tree-evaluation-reopen.v0", status: "reopened",
+        proof_checker_backed: true, cached_report_used: false, expected_request_sha256: original.request_sha256,
+        results: original.results });
+      expect(report.proof.source.sha256).toBe(original.source_sha256);
+      expect(() => readFileSync(report.proof.source.path)).toThrow();
+      expect(readFileSync(requestFile, "utf8")).toBe(raw);
+      expect(readFileSync(sourceFile, "utf8")).toBe(source);
+    };
+    writeFileSync(reportFile, "not JSON");
+    check();
+    expect(readFileSync(reportFile, "utf8")).toBe("not JSON");
+    unlinkSync(reportFile);
+    check();
+    for (const badArgs of [["--reopen", root], ["--reopen", root, "--expect-request-sha256", "bad"],
+      ["--reopen", root, "--expect-request-sha256", "0".repeat(64)]]) {
+      const rejected = run(badArgs);
+      expect(rejected.status).toBe(2);
+      expect(JSON.parse(rejected.stdout)).toMatchObject({ status: "unverified", proof_checker_backed: false });
+    }
+    const changed = { ...treeFixture, tree: { value: "8" } };
+    const library = readFileSync(new URL("../docs/examples/ParallelReduction.lean", import.meta.url), "utf8");
+    writeFileSync(requestFile, JSON.stringify(changed));
+    writeFileSync(sourceFile, treeSource(changed, library));
+    expect(run(args).status).toBe(2);
+    writeFileSync(requestFile, raw);
+    expect(run(args).status).toBe(2);
+    writeFileSync(sourceFile, source);
+    const outside = fileURLToPath(new URL("../docs/examples/ParallelReduction.lean", import.meta.url));
+    try {
+      unlinkSync(sourceFile);
+      symlinkSync(outside, sourceFile);
+      const escaped = run(args);
+      expect(escaped.status).toBe(2);
+      expect(JSON.parse(escaped.stdout).error).toContain("escapes directory");
+    } finally { unlinkSync(sourceFile); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 180000);
 it("validates bounded tree requests and generates deterministic literal-only proofs", () => {
   expect(treeRequest(treeFixture).results).toEqual({ sum: "6", count: "3", work: "4", span: "2" });
   expect(treeSource(treeFixture, "import Std")).toBe(treeSource(treeFixture, "import Std"));

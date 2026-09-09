@@ -207,7 +207,7 @@ labeled proved. Timeout is not a mathematical refutation.
 
 Request, generated Lean source, and report stay under `.truth-harness/experiments`;
 the existing adapter saves a proof receipt. Every invocation performs fresh Lean
-checking. There is no cached-report acceptance or reopen mode in this slice.
+checking. Cached reports are never accepted as fresh verification.
 Save the request hash separately when handing work to another agent; rerunning a
 different request proves a different concrete tree. The environment marker is a
 usage guard, not a security sandbox: isolation comes from the Docker service.
@@ -219,3 +219,28 @@ synthetic tests check orchestration only; real mathematical acceptance remains
 covered by the separate required Lean gate. A verifier may have written its own
 receipt before a later workflow failure, and diagnostic request/source files
 may remain; neither means this workflow returned an accepted report.
+
+## Hash-Bound Tree Replay
+
+```sh
+docker compose run --rm -T lean-proof node tools/tree-evaluate.mjs --reopen .truth-harness/experiments/tree-evaluation-EXAMPLE --expect-request-sha256 EXPECTED_SHA256
+```
+
+Replace the placeholders with the bundle path and the request hash retained in
+trusted task state at creation. Do not obtain the expected hash from the bundle
+you are trying to authenticate. This checks input identity, not authorship.
+
+Replay requires that hash, validates the saved request, and matches saved source
+against regenerated source using the current theorem library. It reruns Lean on
+a private snapshot and removes that snapshot afterward, including on failure.
+It ignores `report.json`, even if missing or corrupt, and does not rewrite the
+bundle or save another proof record. Escaping file symlinks are rejected. This
+is not a general hostile-filesystem sandbox against concurrent privileged edits.
+
+Success exits 0 with `truth-harness.tree-evaluation-reopen.v0`, `status: reopened`,
+the freshly checked results/proof and hashes, `expected_request_sha256`, and
+`cached_report_used: false`. Failures exit 2 with the same unverified envelope
+as creation, but the replay version. Missing hashes fail closed. Changed library
+or request bytes require deliberate new verification, not silently reused trust.
+The returned proof's temporary path no longer exists; use this replay command
+for future checks instead of calling Lean on that path.

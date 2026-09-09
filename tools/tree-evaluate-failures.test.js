@@ -5,7 +5,8 @@ import { beforeEach, afterEach, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", () => ({ spawnSync: vi.fn() }));
 vi.mock("node:fs/promises", async importOriginal => ({
-  ...await importOriginal(), mkdir: vi.fn(), mkdtemp: vi.fn(), readFile: vi.fn(), writeFile: vi.fn()
+  ...await importOriginal(), mkdir: vi.fn(), mkdtemp: vi.fn(), readFile: vi.fn(), writeFile: vi.fn(),
+  realpath: vi.fn(), rm: vi.fn()
 }));
 vi.mock("./pit-witness.mjs", () => ({ boundedInput: vi.fn() }));
 vi.mock("./divide-conquer-specialize.mjs", async importOriginal => ({
@@ -13,10 +14,10 @@ vi.mock("./divide-conquer-specialize.mjs", async importOriginal => ({
 }));
 
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile, realpath, rm } from "node:fs/promises";
 import { boundedInput } from "./pit-witness.mjs";
 import { ensureSpecializationWorkspace } from "./divide-conquer-specialize.mjs";
-import { evaluateTree, treeFailure, treeSource } from "./tree-evaluate.mjs";
+import { evaluateTree, reopenTree, treeFailure, treeSource } from "./tree-evaluate.mjs";
 
 const request = { schema_version: "truth-harness.tree-evaluation.v0", tree: { value: "7" } };
 const library = "import Std\n";
@@ -39,6 +40,8 @@ beforeEach(() => {
   mkdtemp.mockResolvedValue(directory);
   writeFile.mockResolvedValue(undefined);
   ensureSpecializationWorkspace.mockResolvedValue(undefined);
+  realpath.mockImplementation(async file => path.resolve(file));
+  rm.mockResolvedValue(undefined);
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -94,3 +97,30 @@ it("does not return success if saving the final report fails", async () => {
   });
   await expect(evaluateTree(["-"])).rejects.toThrow("ENOSPC");
 });
+
+it.each(cases.filter(([name]) => name !== "unwritten receipt"))(
+  "replay fails closed and removes its private source on %s", async (_name, result) => {
+    const raw = JSON.stringify(request);
+    boundedInput.mockImplementation(async file => {
+      if (path.basename(file) === "request.json") return raw;
+      if (path.basename(file) === "Evaluation.lean") return treeSource(request, library);
+      return library;
+    });
+    const adapter = result();
+    try {
+      const parsed = JSON.parse(adapter.stdout);
+      if (parsed?.record) adapter.stdout = JSON.stringify(parsed.record);
+    } catch { /* Deliberately malformed adapter output. */ }
+    spawnSync.mockReturnValue(adapter);
+    let error;
+    try { await reopenTree(directory, createHash("sha256").update(raw).digest("hex")); }
+    catch (caught) { error = caught; }
+    expect(error).toBeInstanceOf(Error);
+    expect(treeFailure(error, true)).toMatchObject({ schema_version: "truth-harness.tree-evaluation-reopen.v0",
+      status: "unverified", proof_checker_backed: false });
+    expect(reports()).toHaveLength(0);
+    expect(ensureSpecializationWorkspace).not.toHaveBeenCalled();
+    expect(spawnSync.mock.calls[0][1]).not.toContain("--write");
+    expect(writeFile.mock.calls.map(([file]) => path.basename(file))).toEqual(["Evaluation.lean"]);
+    expect(rm).toHaveBeenCalledWith(directory, { recursive: true, force: true });
+  });
