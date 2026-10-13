@@ -29,7 +29,8 @@ afterEach(async () => {
   roots.length = 0;
 });
 
-describe("release audit", () => {
+// This suite assembles persisted reviewer workspaces rather than isolated units.
+describe("release audit", { timeout: 15000 }, () => {
   it("aggregates a reviewer-ready workspace while keeping public launch warnings separate", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Release Audit Lab", now: "2026-06-17T00:00:00.000Z" });

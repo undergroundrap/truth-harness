@@ -18,9 +18,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@truth-harness/benchmarks": "0.0.0",
     "@truth-harness/core": "0.0.0",
-    "zod": "^4.1.13"
+    "zod": "^4.6.7"
   }
 }

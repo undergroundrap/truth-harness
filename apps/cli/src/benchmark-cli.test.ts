@@ -19,7 +19,8 @@ afterEach(async () => {
   roots.length = 0;
 });
 
-describe("benchmark CLI", () => {
+// Release/reviewer integration commands can exceed the unit-test budget in Docker.
+describe("benchmark CLI", { timeout: 15000 }, () => {
   it("reports CAS backend status without requiring Maxima to be installed", async () => {
     const result = await runCli([
       "cas",
