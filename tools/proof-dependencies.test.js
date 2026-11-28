@@ -10,6 +10,7 @@ import { findProofDependency } from "./proof-dependencies.mjs";
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 const catalogName = "proof-dependencies.json";
 const script = fileURLToPath(new URL("./proof-dependencies.mjs", import.meta.url));
+const lookup = (...args) => spawnSync(process.execPath, [script, "find", root, ...args], { encoding: "utf8", timeout: 4000 });
 let root;
 
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), "proof catalog ")); });
@@ -102,6 +103,79 @@ describe("local proof dependency lookup", () => {
     }
   });
 
+  it("reports missing records with deduplicated direct and transitive blockers in the selected branch", async () => {
+    const target = await record("root", "Range.adjacent", ["right", "left"]);
+    const left = await record("left", "Range.left", ["missing-base"]);
+    const right = await record("right", "Range.right", ["missing-extra", "missing-base"]);
+    const unrelated = await record("a-other", "Other.lemma", ["outside"]);
+    const catalog_sha256 = await writeCatalog([target, right, unrelated, left]);
+    await rm(join(root, left.solution.file));
+    const result = lookup(target.declaration);
+    expect(result.status).toBe(2);
+    const body = JSON.parse(result.stdout);
+    const ref = row => ({ id: row.id, declaration: row.declaration, challenge_sha256: row.challenge.sha256 });
+    expect(body).toEqual({
+      schema_version: "truth-harness.proof-dependency-lookup.v0",
+      status: "invalid", error: "Unknown dependency: outside",
+      handoff: {
+        schema_version: "truth-harness.proof-dependency-handoff.v0", status: "blocked",
+        catalog_sha256, lean_version: "4.36.0", target: ref(target),
+        missing_prerequisites: [
+          { id: "missing-base", required_by: ["left", "right"], blocks: ["left", "right", "root"] },
+          { id: "missing-extra", required_by: ["right"], blocks: ["right", "root"] }
+        ],
+        blocked_records: [ref(left), ref(right), ref(target)],
+        next_checks: [
+          "confirm_and_restore_missing_records", "rerun_catalog_lookup", "replay_exact_proofs_with_trusted_checker"
+        ]
+      }
+    });
+    expect(lookup(target.declaration).stdout).toBe(result.stdout);
+    await expect(findProofDependency(root, target.declaration)).rejects.toMatchObject({ handoff: body.handoff });
+  });
+
+  it("does not choose a handoff for an ambiguous, missing or unaffected target", async () => {
+    const a = await record("a", "Range.adjacent", ["missing-base"]);
+    const b = await record("b", "Range.adjacent");
+    await writeCatalog([a, b]);
+    for (const args of [ [a.declaration], ["Missing.lemma"], [b.declaration, "--challenge-sha256", b.challenge.sha256] ]) {
+      const result = lookup(...args);
+      expect(result.status).toBe(2);
+      expect(JSON.parse(result.stdout)).toMatchObject({ status: "invalid", error: "Unknown dependency: missing-base" });
+      expect(JSON.parse(result.stdout)).not.toHaveProperty("handoff");
+    }
+    const selected = lookup(a.declaration, "--challenge-sha256", a.challenge.sha256);
+    expect(selected.status).toBe(2);
+    expect(JSON.parse(selected.stdout).handoff.target.id).toBe("a");
+  });
+
+  it("does not emit a handoff when there is also a cycle", async () => {
+    await writeCatalog([
+      await record("a", "Range.adjacent", ["a-missing", "b"]),
+      await record("b", "Range.right", ["a"])
+    ]);
+    const result = lookup("Range.adjacent");
+    expect(result.status).toBe(2);
+    expect(JSON.parse(result.stdout)).toEqual({
+      schema_version: "truth-harness.proof-dependency-lookup.v0",
+      status: "invalid", error: "Dependency cycle: a"
+    });
+  });
+
+  it("resumes ordinary hash-checked lookup after the records are restored", async () => {
+    const target = await record("root", "Range.adjacent", ["prefix"]);
+    await writeCatalog([target]);
+    expect(JSON.parse(lookup(target.declaration).stdout).handoff.status).toBe("blocked");
+    const base = await record("prefix", "Prefix.sum");
+    await writeCatalog([target, base]);
+    const resumed = lookup(target.declaration);
+    expect(resumed.status).toBe(0);
+    const body = JSON.parse(resumed.stdout);
+    expect(body.replay_order.map(row => row.id)).toEqual(["prefix", "root"]);
+    expect(body.fresh_replay_required).toBe(true);
+    expect(body).not.toHaveProperty("handoff");
+  });
+
   it("rejects misplaced trust fields, unknown versions, and unportable artifact paths", async () => {
     const row = await record("base", "Prefix.sum");
     await writeCatalog([row], { schema_version: "truth-harness.proof-dependencies.v1" });
@@ -168,7 +242,6 @@ describe("local proof dependency lookup", () => {
   it("gives fresh CLI processes stable JSON and distinct exit statuses", async () => {
     const base = await record("base", "Prefix.sum");
     await writeCatalog([base, await record("alternate", "Prefix.sum")]);
-    const lookup = (...args) => spawnSync(process.execPath, [script, "find", root, ...args], { encoding: "utf8", timeout: 4000 });
     const args = ["Prefix.sum", "--challenge-sha256", base.challenge.sha256];
     const found = lookup(...args);
     expect(found.status).toBe(0);
