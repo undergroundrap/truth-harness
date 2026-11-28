@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import {
@@ -10,7 +10,8 @@ import {
   type ProofBackendCommandRunner
 } from "@truth-harness/core";
 import { verifierRouteStatementBoundaryHash } from "../../core/src/verifier-route.js";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import * as toolHandlers from "./tools.js";
 import {
   handleTruthHarnessAsk,
   handleTruthHarnessBenchmarkCompare,
@@ -130,6 +131,14 @@ const originalUnsandboxedCodeRunOptIn = process.env.TRUTH_HARNESS_ALLOW_UNSANDBO
 const originalGraphvizDot = process.env.TRUTH_HARNESS_GRAPHVIZ_DOT;
 const vaultKeyEnv = "TRUTH_HARNESS_MCP_TEST_VAULT_KEY";
 const originalVaultKey = process.env[vaultKeyEnv];
+const verifierEnvironment = ["MAXIMA", "SAGE", "LEAN", "Z3", "CVC5"].map((name) => `TRUTH_HARNESS_${name}`);
+const originalVerifierEnvironment = new Map(verifierEnvironment.map((name) => [name, process.env[name]]));
+
+beforeEach(() => {
+  for (const name of verifierEnvironment) {
+    process.env[name] = `truth-harness-missing-${name.replace("TRUTH_HARNESS_", "").toLowerCase()}-command`;
+  }
+});
 
 afterEach(async () => {
   // Keep generated receipts ignored by git; replay tests overwrite them when needed.
@@ -139,11 +148,154 @@ afterEach(async () => {
   restoreUnsandboxedCodeRunOptIn();
   restoreGraphvizDot();
   restoreVaultKey();
+  for (const [name, value] of originalVerifierEnvironment) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
   tempRoots.length = 0;
 });
 
 describe("MCP tool handlers", () => {
+  it("rejects caller-selected executables across every JSON handler before side effects", async () => {
+    const handlers = Object.entries(toolHandlers).filter(([name]) => name.startsWith("handleTruthHarness") && name !== "handleTruthHarnessCodeSandboxStatus");
+    const keys = ["maximaCommand", "sageCommand", "leanCommand", "lakeCommand", "z3Command", "cvc5Command", "pythonCommand", "dotCommand"];
+    for (const [name, handler] of handlers) {
+      const invoke = handler as unknown as (input: Record<string, unknown>) => unknown;
+      for (const key of keys) {
+        await expect(Promise.resolve().then(() => invoke({ [key]: process.execPath })), `${name}: ${key}`).rejects.toThrow(`${key} executable override is not allowed`);
+      }
+    }
+    for (const value of [null, "", false]) {
+      await expect(handleTruthHarnessVerify({ problem: "compute 1", maximaCommand: value } as never)).rejects.toThrow("maximaCommand executable override is not allowed");
+    }
+    await expect(handleTruthHarnessCodeRun({ command: process.execPath, policy: { pythonCommand: process.execPath } } as never)).rejects.toThrow("pythonCommand executable override is not allowed");
+  });
+
+  it("uses trusted verifier environment commands without request overrides", () => {
+    const result = handleTruthHarnessCasBackends({ timeoutMs: 50 });
+    expect(result.backends[0]?.command).toBe(process.env.TRUTH_HARNESS_MAXIMA);
+    const smt = handleTruthHarnessSmtBackends({ timeoutMs: 50 });
+    expect(smt.backends[0]?.command).toBe(process.env.TRUTH_HARNESS_Z3);
+    const proof = handleTruthHarnessProofBackends({ timeoutMs: 50 });
+    expect(proof.backends[0]?.command).toBe(process.env.TRUTH_HARNESS_LEAN);
+  });
+
+  it("rejects ancestor links before root-relative reads, writes, and code-run cwd selection", async () => {
+    const root = await tempRoot();
+    const outside = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({});
+    await writeFile(join(outside, "receipt.json"), JSON.stringify(createReceipt("compute 1")));
+    await writeFile(join(outside, "source.lean"), "theorem outside : True := by trivial\n");
+    await writeFile(join(outside, "source.smt2"), "(check-sat)\n");
+    await symlink(outside, join(root, "escape"), process.platform === "win32" ? "junction" : "dir");
+    const reads = [
+      () => handleTruthHarnessReplay({ receiptPath: "escape/receipt.json" }),
+      () => handleTruthHarnessRenderReceipt({ receiptPath: "escape/receipt.json" }),
+      () => handleTruthHarnessBenchmarkRun({ suitePath: "escape/suite.json" }),
+      () => handleTruthHarnessBenchmarkCompare({ baselinePath: "escape/receipt.json", currentPath: "escape/receipt.json" }),
+      () => handleTruthHarnessSourceIngest({ paths: ["escape"] }),
+      () => handleTruthHarnessVaultSeal({ sourcePath: "escape/receipt.json" }),
+      () => handleTruthHarnessWorkspaceUiReview({ layoutAudit: "escape/receipt.json" }),
+      () => handleTruthHarnessWorkspaceInit({ workspacePath: "escape/new/deep" })
+    ];
+    for (const read of reads) await expect(read()).rejects.toThrow("Path escapes workspace root");
+    for (const write of [false, true]) {
+      await expect(handleTruthHarnessProofCheck({ sourcePath: "escape/source.lean", write })).rejects.toThrow("Path escapes workspace root");
+      await expect(handleTruthHarnessSmtCheck({ sourcePath: "escape/source.smt2", write })).rejects.toThrow("Path escapes workspace root");
+    }
+    process.env.TRUTH_HARNESS_ALLOW_CODE_RUN = "1";
+    process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN = "1";
+    await expect(handleTruthHarnessCodeRun({ purpose: "escape test", command: process.execPath, workingDirectory: "escape", policy: { allowedExecutables: [process.execPath] } })).rejects.toThrow("Path escapes workspace root");
+    expect((await readdir(outside)).sort()).toEqual(["receipt.json", "source.lean", "source.smt2"]);
+
+    await mkdir(join(root, "sources"));
+    await symlink(outside, join(root, "sources", "nested"), process.platform === "win32" ? "junction" : "dir");
+    await expect(handleTruthHarnessSourceIngest({ paths: ["sources"] })).rejects.toThrow("Path escapes workspace root");
+    await rm(join(root, ".truth-harness", "proofs"), { recursive: true });
+    await symlink(outside, join(root, ".truth-harness", "proofs"), process.platform === "win32" ? "junction" : "dir");
+    await expect(handleTruthHarnessWorkspaceRepair({})).rejects.toThrow("Path escapes workspace root");
+  });
+
+  it("rejects escaping ancestor links in nested tagged evidence refs before side effects", async () => {
+    const root = await tempRoot();
+    const outside = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({});
+    await writeFile(join(outside, "receipt.json"), JSON.stringify(createReceipt("compute 1")));
+    await symlink(outside, join(root, "escape"), process.platform === "win32" ? "junction" : "dir");
+    for (const ref of ["escape/receipt.json", "escape/new/deep/receipt.json", " escape/receipt.json "]) {
+      await expect(handleTruthHarnessRouteSatisfy({
+        routeRef: "route_missing123456",
+        obligationId: "obligation_missing",
+        evidenceRef: { kind: "receipt", ref }
+      })).rejects.toThrow("Path escapes workspace root");
+      await expect(handleTruthHarnessClaimAdd({
+        statement: "Nested receipt must stay local.",
+        domain: "math",
+        evidenceRefs: [{ kind: "receipt", ref }]
+      })).rejects.toThrow("Path escapes workspace root");
+      await expect(handleTruthHarnessValidationPlan({
+        claim: "Nested gate receipt must stay local.",
+        gates: [{ kind: "proof", description: "Local receipt only", evidenceRefs: [{ kind: "receipt", ref }] }],
+        write: true
+      })).rejects.toThrow("Path escapes workspace root");
+      await expect(handleTruthHarnessValidationGateAttach({
+        planRef: "validation_missing123456",
+        gateId: "gate_missing",
+        evidenceRef: { kind: "receipt", ref }
+      })).rejects.toThrow("Path escapes workspace root");
+    }
+    expect((await handleTruthHarnessClaimList({})).total).toBe(0);
+    expect((await handleTruthHarnessValidationPlanList({})).total).toBe(0);
+    expect(await readdir(outside)).toEqual(["receipt.json"]);
+  });
+
+  it("allows contained ancestor links in nested tagged evidence refs", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({});
+    const receipts = join(root, ".truth-harness", "receipts");
+    await writeFile(join(receipts, "nested-receipt.json"), JSON.stringify(createReceipt("compute 1")));
+    await symlink(receipts, join(root, "receipt-alias"), process.platform === "win32" ? "junction" : "dir");
+    const ref = "receipt-alias/nested-receipt.json";
+    const claim = await handleTruthHarnessClaimAdd({
+      statement: "1 is exactly 1.",
+      domain: "math",
+      evidenceRefs: [{ kind: "receipt", ref }]
+    });
+    expect(claim.claim.evidenceRefs).toContainEqual(expect.objectContaining({ kind: "receipt", ref, trust: "exact-computed" }));
+    const plan = await handleTruthHarnessValidationPlan({
+      claim: "1 is exactly 1.",
+      domains: ["math"],
+      gates: [{ kind: "proof", description: "Contained nested receipt", evidenceRefs: [{ kind: "receipt", ref }] }],
+      write: true
+    });
+    if (!plan.written) throw new Error("Expected written validation plan");
+    const proofGate = plan.result.plan.gates.find((gate) => gate.kind === "proof");
+    if (!proofGate) throw new Error("Expected proof gate");
+    const attached = await handleTruthHarnessValidationGateAttach({
+      planRef: plan.result.plan.planId,
+      gateId: proofGate.gateId,
+      evidenceRef: { kind: "receipt", ref }
+    });
+    expect(attached.gate.evidenceRefs).toContainEqual(expect.objectContaining({ kind: "receipt", ref, trust: "exact-computed" }));
+  });
+
+  it("rejects executable overrides embedded in saved run-next commands", async () => {
+    const root = await tempRoot();
+    process.env.TRUTH_HARNESS_ROOT = root;
+    await handleTruthHarnessWorkspaceInit({});
+    await expect(handleTruthHarnessResearchSessionStart({ objective: "Review candidate proof", tasks: ["truth-harness proof check candidate.lean --lean-command attacker"] })).rejects.toThrow("Executable override is not allowed");
+    const result = await handleTruthHarnessWorkspaceRunNext({ write: true });
+    if (!("written" in result)) throw new Error("Expected saved plan");
+    const saved = JSON.parse(await readFile(result.result.jsonPath, "utf8"));
+    saved.execution.command = "truth-harness proof check candidate.lean --lean-command attacker";
+    await writeFile(result.result.jsonPath, JSON.stringify(saved));
+    await expect(handleTruthHarnessWorkspacePilotLoop({ source: "saved-run-next", planRef: result.plan.planId, executeLocal: true })).rejects.toThrow("Executable override is not allowed");
+  });
+
   it("creates proof receipts for agents", () => {
     const result = handleTruthHarnessAsk({ problem: "for all integers n, n^2+n+1 is even" });
 
@@ -162,9 +314,6 @@ describe("MCP tool handlers", () => {
   it("routes verification for agents before they rely on a claim", async () => {
     const result = await handleTruthHarnessVerify({
       problem: "compute 3 / 4 + 5 / 8",
-      maximaCommand: "truth-harness-missing-maxima-command",
-      leanCommand: "truth-harness-missing-lean-command",
-      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
 
@@ -188,9 +337,6 @@ describe("MCP tool handlers", () => {
     const result = await handleTruthHarnessVerify({
       write: true,
       problem: "compute 3 / 4 + 5 / 8",
-      maximaCommand: "truth-harness-missing-maxima-command",
-      leanCommand: "truth-harness-missing-lean-command",
-      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const list = await handleTruthHarnessRouteList({});
@@ -254,16 +400,13 @@ describe("MCP tool handlers", () => {
     );
   });
 
-  it("satisfies verifier route obligations for agents", async () => {
+  it("rejects caller-labelled proof evidence when satisfying verifier route obligations", async () => {
     const root = await tempRoot();
     process.env.TRUTH_HARNESS_ROOT = root;
     await handleTruthHarnessWorkspaceInit({ name: "MCP Obligation Lab" });
     const result = await handleTruthHarnessVerify({
       write: true,
       problem: "prove the Riemann hypothesis",
-      maximaCommand: "truth-harness-missing-maxima-command",
-      leanCommand: "truth-harness-missing-lean-command",
-      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const obligation = result.route.proofObligations.find((candidate) => candidate.kind === "formal-proof");
@@ -313,43 +456,30 @@ describe("MCP tool handlers", () => {
       "utf8"
     );
 
-    const satisfied = await handleTruthHarnessRouteSatisfy({
+    await expect(handleTruthHarnessRouteSatisfy({
       routeRef: result.route.routeId,
       obligationId: obligation?.obligationId ?? "",
       evidenceRef: { kind: "proof", ref: proofRef }
-    });
+    })).rejects.toThrow("Formal statement binding is not verified");
     const shown = await handleTruthHarnessRouteShow({
       routeRef: result.route.routeId
     });
     const list = await handleTruthHarnessRouteList({});
 
-    expect(satisfied.obligation.status).toBe("satisfied");
-    expect(satisfied.evidence).toMatchObject({
-      kind: "proof",
-      ref: proofRef,
-      trust: "proved",
-      schemaVersion: "truth-harness.proof-check.v0",
-      scope: {
-        routeId: result.route.routeId,
-        obligationId: obligation?.obligationId
-      }
-    });
     expect(shown.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
-      status: "satisfied"
+      status: "open"
     });
     expect(list.routes[0]).toMatchObject({
       routeId: result.route.routeId,
       proofObligations: result.route.proofObligations.length,
-      openProofObligations: result.route.proofObligations.length - 1,
-      satisfiedProofObligations: 1,
-      criticalOpenProofObligations: result.route.proofObligations.length - 1
+      openProofObligations: result.route.proofObligations.length,
+      satisfiedProofObligations: 0,
+      criticalOpenProofObligations: result.route.proofObligations.length
     });
   });
 
   it("reports local CAS backend readiness for agents", () => {
     const result = handleTruthHarnessCasBackends({
-      maximaCommand: "truth-harness-missing-maxima-command",
-      sageCommand: "truth-harness-missing-sage-command",
       timeoutMs: 1000
     });
 
@@ -372,7 +502,6 @@ describe("MCP tool handlers", () => {
       expression: "sin(x)^2 + cos(x)^2",
       result: "1",
       variable: "x",
-      maximaCommand: "truth-harness-missing-maxima-command",
       timeoutMs: 50,
       failOnUnverified: true
     });
@@ -396,7 +525,6 @@ describe("MCP tool handlers", () => {
       expression: "sin(x)^2 + cos(x)^2",
       result: "1",
       variable: "x",
-      maximaCommand: "truth-harness-missing-maxima-command",
       timeoutMs: 50,
       write: true
     });
@@ -415,10 +543,6 @@ describe("MCP tool handlers", () => {
 
   it("reports the local engine capability manifest for agents", () => {
     const result = handleTruthHarnessEngineManifest({
-      maximaCommand: "truth-harness-missing-maxima-command",
-      sageCommand: "truth-harness-missing-sage-command",
-      leanCommand: "truth-harness-missing-lean-command",
-      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
 
@@ -494,11 +618,6 @@ describe("MCP tool handlers", () => {
 
   it("reports reviewer-facing engine readiness for agents without minting evidence", () => {
     const result = handleTruthHarnessEngineReadiness({
-      maximaCommand: "truth-harness-missing-maxima-command",
-      sageCommand: "truth-harness-missing-sage-command",
-      leanCommand: "truth-harness-missing-lean-command",
-      z3Command: "truth-harness-missing-z3-command",
-      cvc5Command: "truth-harness-missing-cvc5-command",
       timeoutMs: 50
     });
 
@@ -600,9 +719,6 @@ describe("MCP tool handlers", () => {
     const route = await handleTruthHarnessVerify({
       write: true,
       problem: "compute 3 / 4 + 5 / 8",
-      maximaCommand: "truth-harness-missing-maxima-command",
-      leanCommand: "truth-harness-missing-lean-command",
-      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
     const rebuild = await handleTruthHarnessCatalogRebuild({});
@@ -715,7 +831,6 @@ describe("MCP tool handlers", () => {
 
   it("reports local SMT backend readiness for agents", () => {
     const result = handleTruthHarnessSmtBackends({
-      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 1000
     });
 
@@ -741,7 +856,6 @@ describe("MCP tool handlers", () => {
     const result = await handleTruthHarnessSmtCheck({
       sourcePath: "constraints.smt2",
       queryName: "positive_integer_model",
-      z3Command: "truth-harness-missing-z3-command",
       failOnUnverified: true
     });
 
@@ -767,7 +881,6 @@ describe("MCP tool handlers", () => {
     const result = await handleTruthHarnessSmtCheck({
       sourcePath: "constraints.smt2",
       queryName: "positive_integer_model",
-      z3Command: "truth-harness-missing-z3-command",
       write: true
     });
     const list = await handleTruthHarnessSmtList({});
@@ -792,7 +905,6 @@ describe("MCP tool handlers", () => {
       queryName: "small_positive_integer",
       integerVariables: ["x"],
       constraints: ["x > 0", "x < 3"],
-      z3Command: "truth-harness-missing-z3-command",
       failOnUnverified: true
     });
     const list = await handleTruthHarnessSmtList({});
@@ -949,9 +1061,6 @@ describe("MCP tool handlers", () => {
     await handleTruthHarnessVerify({
       write: true,
       problem: "compute 3 / 4 + 5 / 8",
-      maximaCommand: "truth-harness-missing-maxima-command",
-      leanCommand: "truth-harness-missing-lean-command",
-      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
 
@@ -1113,9 +1222,6 @@ describe("MCP tool handlers", () => {
     const route = await handleTruthHarnessVerify({
       problem: "compute 3 / 4 + 5 / 8",
       write: true,
-      maximaCommand: "truth-harness-missing-maxima-command",
-      leanCommand: "truth-harness-missing-lean-command",
-      z3Command: "truth-harness-missing-z3-command",
       timeoutMs: 50
     });
 
@@ -1479,9 +1585,12 @@ describe("MCP tool handlers", () => {
       classifications: expect.arrayContaining(["formal-proof", "simulation-or-engineering"])
     });
     expect(plan.enginePlan?.savedReviewerEvidence).toMatchObject({
-      status: "available",
-      runId: savedRun.record.runId,
-      coveredCapabilityIds: expect.arrayContaining(["lean-proof-checker", "sage-cas"])
+      status: "none",
+      coveredCapabilityIds: []
+    });
+    expect(savedRun.record.report.cases.find((entry) => entry.id === "lean-proof-fixture")).toMatchObject({
+      trust: "unverified",
+      evidenceMinted: false
     });
     expect(plan.enginePlan?.steps.map((step) => step.capabilityId)).toEqual(
       expect.arrayContaining(["lean-proof-checker", "z3-smt-solver", "claim-ledger"])
@@ -1590,9 +1699,6 @@ describe("MCP tool handlers", () => {
       executeLocal: true,
       write: true,
       maxSteps: 2,
-      maximaCommand: "truth-harness-missing-maxima-command",
-      leanCommand: "truth-harness-missing-lean-command",
-      z3Command: "truth-harness-missing-z3-command"
     });
 
     if (!("written" in result)) {
@@ -1733,7 +1839,7 @@ describe("MCP tool handlers", () => {
     });
   });
 
-  it("executes candidate validation evidence through agent run-next calls", async () => {
+  it("keeps compilation diagnostics out of MCP run-next attachments", async () => {
     const root = await tempRoot();
     process.env.TRUTH_HARNESS_ROOT = root;
     await handleTruthHarnessWorkspaceInit({ name: "MCP Candidate Gate Run Next Lab" });
@@ -1764,45 +1870,21 @@ describe("MCP tool handlers", () => {
       now: new Date("2026-06-18T00:04:00.000Z")
     });
     const proofRef = relative(root, proof.jsonPath).replace(/\\/gu, "/");
+    expect(proof.record).toMatchObject({ status: "rejected", trust: "unverified", proofCheckerBacked: false });
     await handleTruthHarnessResearchSessionCheckpoint({
       sessionRef: harness.session.sessionId,
-      summary: "Accepted proof artifact is ready for validation gate attachment.",
-      evidenceRefs: [{ kind: "proof", ref: proofRef, trust: "proved" }],
-      nextChecks: ["Attach the proof artifact to the linked validation gate."]
+      summary: "Compilation diagnostics are ready for review, without trusted proof admission.",
+      evidenceRefs: [{ kind: "proof", ref: proofRef, trust: "unverified" }],
+      nextChecks: ["Attach compilation diagnostics to the linked validation gate for review."]
     });
 
-    const executed = await handleTruthHarnessWorkspaceRunNext({
-      maxRoutes: 0,
-      maxClaims: 0,
-      executeLocal: true
+    const plan = await handleTruthHarnessWorkspaceRunNext({ maxRoutes: 0, maxClaims: 0 });
+    if ("written" in plan) throw new Error("Expected plain run-next plan.");
+    expect(plan).toMatchObject({
+      dryRun: true,
+      item: { kind: "validation-gate", validationGateId: proofGate.gateId }
     });
-    if ("written" in executed) {
-      throw new Error("Expected plain run-next plan without write=true.");
-    }
-
-    expect(executed).toMatchObject({
-      status: "executed",
-      dryRun: false,
-      item: {
-        kind: "validation-gate",
-        validationGateId: proofGate.gateId,
-        command: `truth-harness validation attach ${validationPlan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`
-      },
-      execution: {
-        status: "executed",
-        kind: "validation-attach",
-        evidenceRef: `proof:${proofRef}`,
-        result: {
-          validationGate: {
-            satisfied: true,
-            gate: {
-              gateId: proofGate.gateId,
-              status: "satisfied"
-            }
-          }
-        }
-      }
-    });
+    expect(plan.item?.command).not.toContain(proofRef);
   });
 
   it("plans credibility reviewer actions through run-next", async () => {
@@ -1816,7 +1898,6 @@ describe("MCP tool handlers", () => {
       maxClaims: 0,
       maxSessions: 0,
       timeoutMs: 50,
-      maximaCommand: "truth-harness-missing-maxima-command",
       requireMaxima: true
     });
     const executed = await handleTruthHarnessWorkspaceRunNext({
@@ -1825,7 +1906,6 @@ describe("MCP tool handlers", () => {
       maxClaims: 0,
       maxSessions: 0,
       timeoutMs: 50,
-      maximaCommand: "truth-harness-missing-maxima-command",
       requireMaxima: true,
       executeLocal: true
     });
@@ -1836,7 +1916,7 @@ describe("MCP tool handlers", () => {
     expect(dryRun.item).toMatchObject({
       kind: "credibility-action",
       title: "Close required Maxima symbolic cross-check gate",
-      command: "truth-harness engines verify --write --require-maxima --timeout-ms 50 --maxima-command truth-harness-missing-maxima-command"
+      command: "truth-harness engines verify --write --require-maxima --timeout-ms 50"
     });
     expect(dryRun.execution.kind).toBe("dry-run");
     expect(executed.status).toBe("executed");
@@ -1882,11 +1962,6 @@ describe("MCP tool handlers", () => {
       maxClaims: 0,
       maxSessions: 0,
       timeoutMs: 50,
-      maximaCommand: "truth-harness-missing-maxima-command",
-      z3Command: "truth-harness-missing-z3-command",
-      cvc5Command: "truth-harness-missing-cvc5-command",
-      leanCommand: "truth-harness-missing-lean-command",
-      sageCommand: "truth-harness-missing-sage-command",
       requireAllEngines: true
     });
     const verification = await handleTruthHarnessWorkspaceCredibilityBundleVerify({
@@ -1925,11 +2000,6 @@ describe("MCP tool handlers", () => {
       maxClaims: 0,
       maxSessions: 0,
       timeoutMs: 50,
-      maximaCommand: "truth-harness-missing-maxima-command",
-      z3Command: "truth-harness-missing-z3-command",
-      cvc5Command: "truth-harness-missing-cvc5-command",
-      leanCommand: "truth-harness-missing-lean-command",
-      sageCommand: "truth-harness-missing-sage-command",
       requireAllEngines: true,
       category: "engine",
       priority: "critical"

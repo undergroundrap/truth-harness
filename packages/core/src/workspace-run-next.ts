@@ -2874,7 +2874,7 @@ async function executeWorkspaceRunNextItem(
           command: item.command,
           summary: `Local Lean proof checker backend is not available for run-next (${
             backendStatus?.error ?? backendStatus?.status ?? "unknown"
-          }). Use the Docker proof path instead: ${dockerProofCheckCommand({
+          }). Install an independent kernel/axiom checker and checked formal statement binding before proof admission. Docker compilation is diagnostic-only: ${dockerProofCheckCommand({
             sourcePath,
             declarationName,
             projectPath,

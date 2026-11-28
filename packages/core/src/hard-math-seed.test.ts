@@ -283,7 +283,7 @@ describe("hard-math seed workspace", () => {
     const gate = plan?.gates.find((candidate) => candidate.kind === "proof");
     expect(gate?.status).toBe("missing");
     expect(gate?.evidenceRefs).toEqual([]);
-    expect(gate?.nextChecks.join(" ")).toContain("Attach a trusted receipt");
+    expect(gate?.nextChecks.join(" ")).toContain("Attach claim-bound exact computation, SMT, CAS, or refuting evidence");
   });
 });
 

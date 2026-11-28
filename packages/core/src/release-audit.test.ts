@@ -31,7 +31,7 @@ afterEach(async () => {
 
 // This suite assembles persisted reviewer workspaces rather than isolated units.
 describe("release audit", { timeout: 15000 }, () => {
-  it("aggregates a reviewer-ready workspace while keeping public launch warnings separate", async () => {
+  it("blocks formal readiness after Lean compilation while keeping public launch warnings separate", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Release Audit Lab", now: "2026-06-17T00:00:00.000Z" });
     const benchmark = await writeBenchmarkRunRecord({
@@ -72,17 +72,17 @@ describe("release audit", { timeout: 15000 }, () => {
     const markdown = renderReleaseAuditMarkdown(audit);
 
     expect(audit.schemaVersion).toBe("truth-harness.release-audit.v0");
-    expect(audit.status).toBe("ready");
-    expect(audit.professorReady).toBe(true);
+    expect(audit.status).toBe("blocked");
+    expect(audit.professorReady).toBe(false);
     expect(audit.publicLaunchReady).toBe(false);
     expect(audit.frontierReadiness).toMatchObject({
       schemaVersion: "truth-harness.frontier-readiness.v0",
-      status: "bounded-hard-math-harness",
+      status: "credible-verification-harness",
       frontierDiscoveryReadiness: "not-ready",
       canClaimWorldHardestProblems: false,
-      nextMilestone: "Formal theorem workflows"
+      nextMilestone: "Independent engine stack"
     });
-    expect(audit.frontierReadiness.strongestHonestClaim).toContain("bounded, local-first hard-math verification harness");
+    expect(audit.frontierReadiness.strongestHonestClaim).toContain("credible local verification harness");
     expect(audit.frontierReadiness.stages).toContainEqual(
       expect.objectContaining({
         id: "autonomous-frontier-discovery",
@@ -93,11 +93,11 @@ describe("release audit", { timeout: 15000 }, () => {
     expect(audit.frontierReadiness.stages).toContainEqual(
       expect.objectContaining({
         id: "formal-theorem-workflows",
-        status: "partial",
-        nextAction: "Pin lake-manifest.json for docs/examples/lean-mathlib-template, then run npm run docker:mathlib-template:write for no-runtime-network proof evidence.",
+        status: "blocked",
+        nextAction: "npm run docker:proof",
         evidence: expect.arrayContaining([
           expect.stringContaining("Reusable theorem template: pass"),
-          expect.stringContaining("Lean repair rehearsal: pass"),
+          expect.stringContaining("Lean repair rehearsal: warn"),
           expect.stringContaining("Lean template gate: npm run docker:theorem-template"),
           expect.stringContaining("Lean mathlib gate: npm run docker:mathlib-template:write"),
           expect.stringContaining("Lean repair gate: npm run docker:proof-repair")
@@ -108,8 +108,8 @@ describe("release audit", { timeout: 15000 }, () => {
     expect(audit.summary).toMatchObject({
       validationPassed: true,
       catalogFresh: true,
-      requiredEngineGates: "5/5",
-      concreteEngineGates: "5/5",
+      requiredEngineGates: "4/5",
+      concreteEngineGates: "4/5",
       adversarialBenchmark: "passed",
       mathCredibilityLadder: "passed",
       professorMathChallenge: "passed",
@@ -118,16 +118,16 @@ describe("release audit", { timeout: 15000 }, () => {
       reportDraftsNeedingAttention: 0,
       researchSessions: 0,
       sessionContinuationItems: 0,
-      blockingFailures: 0
+      blockingFailures: 1
     });
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
         id: "engine-evidence",
-        status: "pass",
-        blocking: false,
+        status: "fail",
+        blocking: true,
         details: expect.arrayContaining([
-          expect.stringContaining("Gate Lean proof fixture (required): earned evidence; status passed; trust proved."),
-          expect.stringContaining("Concrete `proved` evidence earned for this fixture")
+          expect.stringContaining("Gate Lean proof fixture (required): failed evidence; status failed; trust unverified."),
+          expect.stringContaining("Required engine gate failed: Lean proof fixture (failed).")
         ])
       })
     );
@@ -161,12 +161,12 @@ describe("release audit", { timeout: 15000 }, () => {
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
         id: "lean-proof-repair-gate",
-        status: "pass",
+        status: "warn",
         blocking: false,
-        summary: expect.stringContaining("Saved repair rehearsal closed"),
+        summary: expect.stringContaining("No accepted scoped Lean proof-repair fixture proof was found"),
         details: expect.arrayContaining([
           expect.stringContaining("Fixture workspace: docs/examples/lean-repair-fixture."),
-          expect.stringContaining("Accepted proof-check:")
+          expect.stringContaining("Proof-check records inspected: 2.")
         ])
       })
     );
@@ -227,13 +227,13 @@ describe("release audit", { timeout: 15000 }, () => {
     expect(markdown).toContain("# Truth Harness Release Audit");
     expect(markdown).toContain("## Frontier Readiness");
     expect(markdown).toContain("Can claim world-hardest-problem solving: `false`");
-    expect(markdown).toContain("Required engine gates: 5/5");
+    expect(markdown).toContain("Required engine gates: 4/5");
     expect(markdown).toContain("Adversarial benchmark: passed");
     expect(markdown).toContain("Math credibility ladder: passed");
     expect(markdown).toContain("Professor math challenge: passed");
     expect(markdown).toContain("Frontier honesty challenge: passed");
     expect(markdown).toContain("### PASS Lean theorem template");
-    expect(markdown).toContain("### PASS Lean proof-repair rehearsal");
+    expect(markdown).toContain("### WARN Lean proof-repair rehearsal");
     expect(markdown).toContain("Report drafts: 0 saved, 0 needing attention");
     expect(markdown).toContain("Research sessions: 0 inspected, 0 continuation item(s)");
   });
@@ -475,18 +475,18 @@ describe("release audit", { timeout: 15000 }, () => {
     );
     expect(formalStage).toMatchObject({
       id: "formal-theorem-workflows",
-      status: "partial",
-      summary: expect.stringContaining("seeded mathlib proof gates exist"),
-      nextAction: "Run truth-harness workspace run-next . --json, then close the first open mathlib validation proof gate with scoped proof-check evidence.",
+      status: "blocked",
+      summary: "No accepted Lean proof fixture is cited in this audit scope.",
+      nextAction: "npm run docker:proof",
       blockers: expect.arrayContaining([
-        expect.stringContaining("Close the remaining seeded mathlib validation proof gates")
+        expect.stringContaining("review the produced proof-check receipt")
       ]),
       evidence: expect.arrayContaining([
         expect.stringContaining("Lean mathlib validation gates: pass")
       ])
     });
   });
-  it("marks formal theorem workflows ready after every mathlib validation proof gate is closed", async () => {
+  it("keeps Mathlib readiness open with historical and scoped compilation-only records", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Closed Mathlib Validation Audit", now: "2026-06-21T01:00:00.000Z" });
     await writeLeanTheoremTemplateFixture(root);
@@ -500,7 +500,7 @@ describe("release audit", { timeout: 15000 }, () => {
       join(root, "docs", "examples", "lean-mathlib-template"),
       { recursive: true }
     );
-    await writeLeanProofCheckRecord({
+    const legacy = await writeLeanProofCheckRecord({
       rootPath: root,
       sourcePath: "docs/examples/lean-mathlib-template/TruthHarnessMathlib/Algebra.lean",
       projectPath: "docs/examples/lean-mathlib-template",
@@ -508,6 +508,10 @@ describe("release audit", { timeout: 15000 }, () => {
       runner: passingProofRunner,
       now: new Date("2026-06-21T01:00:00.400Z")
     });
+    await writeFile(legacy.jsonPath, JSON.stringify({
+      ...legacy.record, status: "accepted", trust: "proved", proofCheckerBacked: true,
+      backend: { ...legacy.record.backend, acceptedProofChecker: true }
+    }), "utf8");
     const harness = await writeLeanMathlibValidationHarness({
       rootPath: root,
       projectPath: "docs/examples/lean-mathlib-template",
@@ -529,7 +533,7 @@ describe("release audit", { timeout: 15000 }, () => {
         runner: passingProofRunner,
         now: new Date(`2026-06-21T01:00:00.${offset}Z`)
       });
-      await attachValidationGateEvidence({
+      const attachment = await attachValidationGateEvidence({
         rootPath: root,
         planRef: plan.planId,
         gateId: proofGate!.gateId,
@@ -541,6 +545,8 @@ describe("release audit", { timeout: 15000 }, () => {
         },
         now: new Date(`2026-06-21T01:00:00.${offset + 1}Z`)
       });
+      expect(proof.record).toMatchObject({ trust: "unverified", proofCheckerBacked: false });
+      expect(attachment.gate.status).not.toBe("satisfied");
       offset += 10;
     }
     await rebuildWorkspaceCatalog({ rootPath: root, now: "2026-06-21T01:00:01.000Z" });
@@ -557,23 +563,26 @@ describe("release audit", { timeout: 15000 }, () => {
     const formalStage = audit.frontierReadiness.stages.find((stage) => stage.id === "formal-theorem-workflows");
 
     expect(harness.validationPlans).toHaveLength(5);
+    expect(audit.checks).toContainEqual(expect.objectContaining({
+      id: "lean-mathlib-template", status: "warn"
+    }));
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
         id: "lean-mathlib-validation-gates",
         status: "pass",
         details: expect.arrayContaining([
           "Declarations with seeded plans: 5/5.",
-          "Open proof gates: 0.",
-          "Satisfied proof gates: 5."
+          "Open proof gates: 5.",
+          "Satisfied proof gates: 0."
         ])
       })
     );
     expect(formalStage).toMatchObject({
       id: "formal-theorem-workflows",
-      status: "ready",
-      summary: expect.stringContaining("all seeded mathlib proof gates have accepted scoped proof evidence"),
-      blockers: [],
-      nextAction: undefined,
+      status: "blocked",
+      summary: "No accepted Lean proof fixture is cited in this audit scope.",
+      blockers: expect.arrayContaining([expect.stringContaining("review the produced proof-check receipt")]),
+      nextAction: "npm run docker:proof",
       evidence: expect.arrayContaining([
         expect.stringContaining("Lean mathlib validation gates: pass")
       ])
@@ -622,8 +631,8 @@ describe("release audit", { timeout: 15000 }, () => {
       runner: passingEngineRunner
     });
 
-    expect(audit.status).toBe("ready");
-    expect(audit.professorReady).toBe(true);
+    expect(audit.status).toBe("blocked");
+    expect(audit.professorReady).toBe(false);
     expect(audit.publicLaunchReady).toBe(false);
     expect(audit.summary.webUiReview).toBe("passed");
     expect(audit.webUiReview).toMatchObject({
@@ -824,11 +833,11 @@ describe("release audit", { timeout: 15000 }, () => {
     });
     const markdown = renderReleaseAuditMarkdown(audit);
 
-    expect(audit.status).toBe("ready");
+    expect(audit.status).toBe("blocked");
     expect(audit.summary).toMatchObject({
       researchSessions: 1,
       sessionContinuationItems: 3,
-      blockingFailures: 0
+      blockingFailures: 1
     });
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
@@ -906,7 +915,7 @@ describe("release audit", { timeout: 15000 }, () => {
       runner: passingEngineRunner
     });
 
-    expect(audit.status).toBe("ready");
+    expect(audit.status).toBe("blocked");
     expect(audit.summary.reviewItems).toBe(0);
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
@@ -964,8 +973,8 @@ describe("release audit", { timeout: 15000 }, () => {
     expect(audit.summary).toMatchObject({
       validationPassed: false,
       catalogFresh: true,
-      requiredEngineGates: "3/3",
-      concreteEngineGates: "3/3",
+      requiredEngineGates: "2/3",
+      concreteEngineGates: "2/3",
       adversarialBenchmark: "passed",
       reportDrafts: 1,
       reportDraftsNeedingAttention: 1
@@ -1081,7 +1090,7 @@ describe("release audit", { timeout: 15000 }, () => {
     expect(audit.nextActions[0]).toBe("npm run docker:engines");
   });
 
-  it("uses saved Docker professor evidence when host engine probes are unavailable", async () => {
+  it("keeps saved compilation-only Docker evidence from clearing unavailable required gates", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Saved Docker Audit", now: "2026-06-17T00:00:00.000Z" });
     const engineRun = await writeEngineVerificationRun({
@@ -1129,41 +1138,62 @@ describe("release audit", { timeout: 15000 }, () => {
     });
     const markdown = renderReleaseAuditMarkdown(audit);
 
-    expect(audit.status).toBe("ready");
-    expect(audit.professorReady).toBe(true);
+    expect(audit.status).toBe("blocked");
+    expect(audit.professorReady).toBe(false);
     expect(audit.summary).toMatchObject({
       validationPassed: true,
       catalogFresh: true,
       requiredEngineGates: "0/4",
       concreteEngineGates: "0/4",
-      savedEngineLadderLevel: "engine-level-3-formal-proof-fixture",
       adversarialBenchmark: "passed",
       professorMathChallenge: "passed",
-      blockingFailures: 0
+      blockingFailures: 1
     });
-    expect(audit.credibilityPack?.summary.latestProfessorEngineRunStatus).toBe("passed");
-    expect(formatReleaseAuditEngineSummary(audit)).toBe(
-      "Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking. (live host: 0/4 concrete, 0/4 required; saved ladder: engine-level-3-formal-proof-fixture)"
-    );
+    expect(audit.summary.savedEngineLadderLevel).toBeUndefined();
+    expect(engineRun.record.status).toBe("failed");
+    expect(audit.credibilityPack?.summary.latestProfessorEngineRunStatus).toBeUndefined();
+    expect(formatReleaseAuditEngineSummary(audit)).not.toContain("covers the required gates");
     expect(audit.checks).toContainEqual(
       expect.objectContaining({
         id: "engine-evidence",
-        status: "pass",
-        blocking: false,
-        command: "npm run docker:professor",
-        summary: "Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking.",
+        status: "fail",
+        blocking: true,
         details: expect.arrayContaining([
-          `Saved professor Docker run ${engineRun.record.runId} passed with 4/4 required gates; strongest level engine-level-3-formal-proof-fixture.`,
-          "Current host probes did not earn all required engine evidence, but the durable saved run covers the same required capabilities."
+          "Required gates: 0/4.",
+          expect.stringContaining("Gate Lean proof fixture (required): missing evidence")
         ])
       })
     );
     expect(audit.nextActions).not.toContain("truth-harness engines verify --write --require-all-concrete");
-    expect(markdown).toContain(
-      "Engine evidence: Saved no-network Docker engine evidence covers the required gates; live host probes remain non-blocking. (live host: 0/4 concrete, 0/4 required; saved ladder: engine-level-3-formal-proof-fixture)"
-    );
-    expect(markdown).toContain("Saved engine ladder: engine-level-3-formal-proof-fixture");
-    expect(markdown).toContain("Saved no-network Docker engine evidence covers the required gates");
+    expect(markdown).toContain("Saved engine ladder: missing");
+    expect(markdown).not.toContain("Saved no-network Docker engine evidence covers the required gates");
+  });
+
+  it("does not use a historical passing engine run to admit Lean evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const run = await writeEngineVerificationRun({
+      rootPath: root,
+      requirements: { maxima: true, z3: true, cvc5: true, lean: true, sage: true },
+      runner: passingEngineRunner
+    });
+    await writeFile(run.jsonPath, JSON.stringify({
+      ...run.record, status: "passed",
+      report: { ...run.record.report, status: "passed", requiredTotal: 5 }
+    }), "utf8");
+    const audit = await createReleaseAudit({
+      rootPath: root,
+      engineRequirements: { maxima: true, z3: true, cvc5: true, lean: true, sage: true },
+      requireSavedStrictEngineRun: true,
+      runner: () => ({ status: null, stdout: "", stderr: "", error: { name: "Error", message: "spawn ENOENT" } })
+    });
+    expect(audit.credibilityPack?.engineRunLedger.latestStrictReviewerRun?.runId).toBe(run.record.runId);
+    expect(audit.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "engine-evidence", status: "fail" }),
+      expect.objectContaining({ id: "saved-strict-engine-run", status: "fail" })
+    ]));
+    expect(audit.frontierReadiness.stages.find((stage) => stage.id === "independent-engine-stack")?.status)
+      .toBe("blocked");
   });
 
   it("orders release-audit reviewer next actions toward locally executable verifier work", async () => {
@@ -1245,7 +1275,7 @@ describe("release audit", { timeout: 15000 }, () => {
       })
     });
 
-    expect(audit.status).toBe("ready");
+    expect(audit.status).toBe("blocked");
     expect(audit.summary.sandboxAvailable).toBe(true);
     expect(audit.sandboxEvidence).toMatchObject({
       runId: sandboxRun.record.runId,

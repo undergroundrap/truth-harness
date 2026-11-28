@@ -1,9 +1,10 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeSymbolicCasCheckRecord, type CasBackendCommandRunner } from "./cas-backend.js";
 import { initLocalWorkspace } from "./local-workspace.js";
+import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { createReceipt } from "./receipt.js";
 import { validateWorkspaceArtifacts } from "./workspace-validation.js";
 import { writeVerifierRoute } from "./verifier-route.js";
@@ -23,6 +24,79 @@ afterEach(async () => {
 });
 
 describe("claim ledger", () => {
+  it("does not promote a fresh claim from stored historical proof-backed claim trust", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const written = await writeClaimLedgerRecord({ rootPath: root, statement: "Historical theorem", domain: "math" });
+    const legacy = {
+      ...written.claim, trust: "proved",
+      evidenceRefs: [{ kind: "proof", ref: "legacy-proof.json", trust: "proved" }],
+      finalization: { ...written.claim.finalization, strongestTrust: "proved", readyForNarrowClaim: true, openChecks: [] }
+    };
+    await writeFile(written.jsonPath, JSON.stringify(legacy) + "\n", "utf8");
+    const review = await createClaimReviewPacket({ rootPath: root, claimRef: written.claim.claimId });
+    expect(review).toMatchObject({ reviewStatus: "blocked", trust: "unverified", readyForNarrowClaim: false });
+    expect(review.blockingChecks.join(" ")).toContain("independent proof admission");
+    const fresh = await writeClaimLedgerRecord({
+      rootPath: root, statement: "Historical theorem", domain: "math",
+      evidenceRefs: [{ kind: "claim", ref: written.claim.claimId }]
+    });
+    expect(fresh.claim.trust).toBe("unverified");
+    expect(fresh.claim.evidenceRefs[0]?.trust).toBe("unverified");
+    expect(fresh.claim.finalization.readyForNarrowClaim).toBe(false);
+    expect(fresh.claim.finalization.openChecks.join(" ")).toContain("Historical proof-backed claim trust is inspection-only");
+    expect((await readClaimRecord(root, written.claim.claimId)).trust).toBe("proved");
+    const intermediary = await writeClaimLedgerRecord({ rootPath: root, statement: "Historical lower-label wrapper", domain: "math" });
+    await writeFile(intermediary.jsonPath, JSON.stringify({
+      ...intermediary.claim, trust: "exact-computed",
+      evidenceRefs: [{ kind: "claim", ref: written.claim.claimId, trust: "exact-computed" }]
+    }) + "\n", "utf8");
+    const indirect = await writeClaimLedgerRecord({
+      rootPath: root, statement: "Historical lower-label wrapper", domain: "math",
+      evidenceRefs: [{ kind: "claim", ref: intermediary.claim.claimId }]
+    });
+    expect(indirect.claim.trust).toBe("unverified");
+    expect(indirect.claim.finalization.readyForNarrowClaim).toBe(false);
+  });
+
+  it("writes and reopens a claim through a trusted linked workspace root", async () => {
+    const root = await tempRoot();
+    const alias = join(await tempRoot(), "alias");
+    await initLocalWorkspace(root);
+    await symlink(root, alias, process.platform === "win32" ? "junction" : "dir");
+    const { claim } = await writeClaimLedgerRecord({ rootPath: alias, statement: "Linked workspace claim" });
+    expect((await readClaimRecord(alias, claim.claimId)).claimId).toBe(claim.claimId);
+  });
+
+  it("does not promote a fresh claim from a legacy satisfied formal route", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const written = await writeVerifierRoute({ rootPath: root, problem: "compute 2 + 2", timeoutMs: 50 });
+    const formal = written.route.proofObligations.find((obligation) => obligation.kind === "formal-proof");
+    if (!formal) throw new Error("Expected a formal proof obligation.");
+    formal.status = "satisfied";
+    formal.severity = "critical";
+    formal.satisfiedBy = [{ kind: "proof", ref: "legacy-proof.json", trust: "proved" }];
+    await writeFile(written.jsonPath, JSON.stringify(written.route) + "\n", "utf8");
+    const fresh = await writeClaimLedgerRecord({
+      rootPath: root, statement: "2 + 2 is 4", domain: "math", evidenceRefs: [{ kind: "route", ref: written.route.routeId }]
+    });
+    expect(fresh.claim.trust).toBe("unverified");
+    expect(fresh.claim.finalization.readyForNarrowClaim).toBe(false);
+    expect(fresh.claim.finalization.openChecks.join(" ")).toContain("not ready for a narrow claim");
+  });
+
+  it.skipIf(process.platform === "win32")("rejects final-file claim links during listing and ID resolution", async () => {
+    const root = await tempRoot();
+    const outside = await tempRoot();
+    await initLocalWorkspace(root);
+    await initLocalWorkspace(outside);
+    const external = await writeClaimLedgerRecord({ rootPath: outside, statement: "Outside claim" });
+    await symlink(external.jsonPath, join(root, ".truth-harness/claims/linked.json"));
+    await expect(listClaimRecords(root)).rejects.toThrow("Path escapes workspace root");
+    await expect(readClaimRecord(root, external.claim.claimId)).rejects.toThrow("Path escapes workspace root");
+  });
+
   it("writes claim records with verification ladder and local workspace validation", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
@@ -343,7 +417,7 @@ describe("claim ledger", () => {
     );
   });
 
-  it("requires statement-boundary metadata before direct proof evidence is ready for publication", async () => {
+  it("keeps legacy proof-check v0 evidence inspection-only even with matching statement metadata", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-12T00:00:00.000Z" });
     const unscopedProofRef = ".truth-harness/proofs/accepted-unscoped-proof.json";
@@ -374,7 +448,7 @@ describe("claim ledger", () => {
       localOnly: true,
       networkAccess: "none",
       replay: "truth-harness proof check claim.lean --write --json",
-      limitations: ["Unit-test proof fixture."],
+      limitations: ["Explicit historical proof-check v0 reader fixture."],
       warnings: []
     };
     await writeFile(join(root, unscopedProofRef), `${JSON.stringify(acceptedProof, null, 2)}\n`, "utf8");
@@ -389,7 +463,7 @@ describe("claim ledger", () => {
             sha256: "3333333333333333333333333333333333333333333333333333333333333333"
           },
           scope: {
-            statement: "The Lean theorem in claim.lean states that the tested claim is true."
+            statement: "The accepted Lean proof proves the informal claim."
           }
         },
         null,
@@ -402,26 +476,37 @@ describe("claim ledger", () => {
       rootPath: root,
       statement: "The accepted Lean proof proves the informal claim.",
       trust: "proved",
-      evidenceRefs: [{ kind: "proof", ref: unscopedProofRef }],
+      evidenceRefs: [{ kind: "proof", ref: unscopedProofRef, trust: "proved" }],
       now: "2026-06-12T00:10:00.000Z"
     });
     const scopedClaim = await writeClaimLedgerRecord({
       rootPath: root,
       statement: "The accepted Lean proof proves the informal claim.",
       trust: "proved",
-      evidenceRefs: [{ kind: "proof", ref: scopedProofRef }],
+      evidenceRefs: [{ kind: "proof", ref: scopedProofRef, trust: "proved" }],
       now: "2026-06-12T00:11:00.000Z"
     });
 
-    const statementBoundary =
-      "Accepted proof-check evidence has no recorded statement boundary; a human must confirm the formal theorem matches the claim before final publication.";
-    expect(unscopedClaim.claim.trust).toBe("proved");
-    expect(unscopedClaim.claim.finalization.readyForNarrowClaim).toBe(false);
-    expect(unscopedClaim.claim.finalization.openChecks).toContain(statementBoundary);
-    expect(unscopedClaim.claim.warnings).toContain(statementBoundary);
-    expect(scopedClaim.claim.trust).toBe("proved");
-    expect(scopedClaim.claim.finalization.readyForNarrowClaim).toBe(true);
-    expect(scopedClaim.claim.warnings).not.toContain(statementBoundary);
+    for (const written of [unscopedClaim, scopedClaim]) {
+      expect(written.claim.trust).toBe("unverified");
+      expect(written.claim.evidenceRefs[0].trust).toBe("unverified");
+      expect(written.claim.finalization.readyForNarrowClaim).toBe(false);
+      expect(written.claim.finalization.strongestTrust).toBe("unverified");
+      expect(written.claim.verification.find((step) => step.stage === "formal-proof")?.status).not.toBe("satisfied");
+      for (const boundary of ["independent kernel", "axiom audit", "statement binding"]) {
+        expect(written.claim.warnings.join(" ")).toContain(boundary);
+        expect(written.claim.finalization.openChecks.join(" ")).toContain(boundary);
+      }
+    }
+    const unscopedJson = await readFile(join(root, unscopedProofRef), "utf8");
+    const scopedJson = await readFile(join(root, scopedProofRef), "utf8");
+    expect(JSON.parse(unscopedJson)).toEqual(acceptedProof);
+    expect(parseLeanProofCheckRecord(unscopedJson)).toMatchObject({ status: "accepted", trust: "proved" });
+    expect(parseLeanProofCheckRecord(scopedJson)).toMatchObject({
+      status: "accepted",
+      trust: "proved",
+      scope: { statement: scopedClaim.claim.statement }
+    });
   });
 
   it("does not derive engine claim trust from malformed CAS or SMT JSON", async () => {

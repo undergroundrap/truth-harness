@@ -47,12 +47,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Prepare non-root evidence directory
-        run: sudo install -d -o 10001 -g 10001 -m 0755 .truth-harness
-      - name: Pinned Lean reduction and negative controls
-        run: docker compose run --build --rm -T -e TRUTH_HARNESS_REQUIRE_LEAN_TESTS=1 lean-proof npm test -- tools/lean-divide-conquer.test.js
-      - name: Specialization with a fresh temporary evidence store
-        run: docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --tmpfs /workspace/.truth-harness:uid=10001,gid=10001 -e TRUTH_HARNESS_CONTAINER=1 truth-harness:lean-proof node tools/divide-conquer-specialize.mjs docs/examples/cs-divide-conquer-costs.json
+      # The lean-proof target embeds legacy success gates requiring `proved`.
+      # Compilation is diagnostic-only until an independent checker adapter exists.
+      - name: Build pinned Lean 4.12 compilation environment
+        run: docker build --target lean-environment -t truth-harness:lean-admission .
+      - name: Required Lean compilation, negative controls, and fail-closed proof admission
+        run: |
+          docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+            --mount "type=bind,source=$PWD,target=/repo,readonly" \
+            --tmpfs /workspace/.truth-harness:uid=10001,gid=10001 \
+            --workdir /workspace \
+            -e TRUTH_HARNESS_REQUIRE_LEAN_TESTS=1 -e TRUTH_HARNESS_TEST_REAL_LEAN=1 \
+            truth-harness:lean-admission sh -ec '
+              tar -C /repo --exclude=node_modules --exclude=.git --exclude=.truth-harness --exclude=dist --exclude="*.tsbuildinfo" -cf - . | tar -C /workspace -xf -
+              npm run build
+              npm test -- tools/lean-proof-admission.test.js packages/core/src/proof-backend.test.ts
+            '
 
   bezier-gate:
     runs-on: ubuntu-latest

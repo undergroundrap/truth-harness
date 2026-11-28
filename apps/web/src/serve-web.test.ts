@@ -1,6 +1,6 @@
 import { createServer, request as httpRequest } from "node:http";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -51,6 +51,84 @@ afterEach(async () => {
 });
 
 describe("local web route ledger API", () => {
+  it("rejects caller-selected executables in API JSON and query parameters", async () => {
+    tempProjectRoot = await mkdtemp(join(tmpdir(), "truth-harness-web-command-boundary-"));
+    const port = await getFreePort();
+    runningServer = await startWebServer(port, tempProjectRoot);
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const endpoints = ["/api/cas/check", "/api/smt/solve", "/api/receipt", "/api/engine-runs", "/api/credibility-pack", "/api/workspace-run-next", "/api/visuals/render"];
+    const keys = ["maximaCommand", "sageCommand", "leanCommand", "lakeCommand", "z3Command", "cvc5Command", "pythonCommand", "dotCommand"];
+    for (const endpoint of endpoints) {
+      for (const key of keys) {
+        const response = await fetch(`${baseUrl}${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [key]: process.execPath }) });
+        expect(response.status, `${endpoint}: ${key}`).toBe(400);
+        expect((await response.json()).error).toContain(`${key} executable override is not allowed`);
+      }
+    }
+    for (const value of [null, "", false]) {
+      const response = await fetch(`${baseUrl}/api/cas/check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ maximaCommand: value }) });
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toContain("maximaCommand executable override is not allowed");
+    }
+    const nested = await fetch(`${baseUrl}/api/workspace-run-next`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enginePlanOptions: { pythonCommand: process.execPath } }) });
+    expect(nested.status).toBe(400);
+    expect((await nested.json()).error).toContain("pythonCommand executable override is not allowed");
+    for (const endpoint of ["/api/status", "/api/workspace-run-next", "/api/workspace-pilot-loop", "/api/credibility-pack"]) {
+      const query = await fetch(`${baseUrl}${endpoint}?leanCommand=${encodeURIComponent(process.execPath)}`);
+      expect(query.status).toBe(400);
+      expect((await query.json()).error).toContain("leanCommand executable override is not allowed");
+    }
+    expect(await readdir(tempProjectRoot)).toEqual([]);
+  });
+
+  it("rejects artifact previews through escaping ancestor links and allows contained links", async () => {
+    tempProjectRoot = await mkdtemp(join(tmpdir(), "truth-harness-web-ancestor-link-"));
+    const project = join(tempProjectRoot, "workspace");
+    const outside = join(tempProjectRoot, "workspace-other");
+    await mkdir(project);
+    await mkdir(outside);
+    await initLocalWorkspace(project);
+    await writeFile(join(outside, "private.txt"), "outside-secret");
+    const artifacts = join(project, ".truth-harness", "artifacts");
+    await symlink(outside, join(artifacts, "escape"), process.platform === "win32" ? "junction" : "dir");
+    await mkdir(join(artifacts, "inside"));
+    await writeFile(join(artifacts, "inside", "public.txt"), "inside-artifact");
+    await symlink(join(artifacts, "inside"), join(artifacts, "alias"), process.platform === "win32" ? "junction" : "dir");
+    const port = await getFreePort();
+    runningServer = await startWebServer(port, project);
+    const baseUrl = `http://127.0.0.1:${port}`;
+    for (const path of [".truth-harness/artifacts/escape/private.txt", ".truth-harness/artifacts/escape/new/deep/private.txt"]) {
+      const response = await fetch(`${baseUrl}/api/workspace-artifact?path=${encodeURIComponent(path)}`);
+      expect(response.status).toBe(403);
+      const body = await response.text();
+      expect(body).toContain("Workspace artifact path escapes .truth-harness");
+      expect(body).not.toContain("outside-secret");
+    }
+    const inside = await fetch(`${baseUrl}/api/workspace-artifact?path=.truth-harness/artifacts/alias/public.txt`);
+    expect(inside.status).toBe(200);
+    expect((await inside.json()).artifact.content).toBe("inside-artifact");
+    await rm(join(project, ".truth-harness"), { recursive: true });
+    await symlink(outside, join(project, ".truth-harness"), process.platform === "win32" ? "junction" : "dir");
+    const linkedStore = await fetch(`${baseUrl}/api/workspace-artifact?path=.truth-harness/private.txt`);
+    expect(linkedStore.status).toBe(403);
+    expect(await readdir(outside)).toEqual(["private.txt"]);
+  });
+
+  it("uses trusted startup verifier commands for web CAS and SMT requests", async () => {
+    tempProjectRoot = await mkdtemp(join(tmpdir(), "truth-harness-web-trusted-commands-"));
+    const port = await getFreePort();
+    const maxima = "truth-harness-startup-missing-maxima";
+    const z3 = "truth-harness-startup-missing-z3";
+    runningServer = await startWebServer(port, tempProjectRoot, { TRUTH_HARNESS_MAXIMA: maxima, TRUTH_HARNESS_Z3: z3 });
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const cas = await fetch(`${baseUrl}/api/cas/check`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation: "simplify", expression: "x+x", result: "2*x", timeoutMs: 50 }) });
+    expect(cas.status).toBe(200);
+    expect((await cas.json()).record.backend.command).toBe(maxima);
+    const smt = await fetch(`${baseUrl}/api/smt/solve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ variables: ["x"], constraints: ["x > 0"], timeoutMs: 50 }) });
+    expect(smt.status).toBe(200);
+    expect((await smt.json()).record.backend.command).toBe(z3);
+  });
+
   it("serves the public math journey as a read-only local API", async () => {
     const port = await getFreePort();
     runningServer = await startWebServer(port, repoRoot);
@@ -2319,27 +2397,16 @@ describe("local web route ledger API", () => {
         }
       })
     });
-    expect(proofSatisfaction.status).toBe(200);
+    expect(proofSatisfaction.status).toBe(400);
     const proofSatisfactionPayload = await proofSatisfaction.json();
-    expectLocalApiSuccess(proofSatisfaction, proofSatisfactionPayload);
-    expect(proofSatisfactionPayload.obligation.status).toBe("satisfied");
-    expect(proofSatisfactionPayload.route.proofObligations.find((obligation: { obligationId: string }) =>
+    expect(proofSatisfactionPayload.error).toContain("Formal statement binding is not verified");
+    const proofRouteResponse = await fetch(`${baseUrl}/api/routes/${routePayload.route.routeId}`);
+    expect(proofRouteResponse.status).toBe(200);
+    const proofRoutePayload = await proofRouteResponse.json();
+    expect(proofRoutePayload.route.proofObligations.find((obligation: { obligationId: string }) =>
       obligation.obligationId === formalObligation.obligationId
     )).toMatchObject({
-      status: "satisfied"
-    });
-    const proofSatisfactionSummary = proofSatisfactionPayload.routes.find((route: { routeId: string }) =>
-      route.routeId === routePayload.route.routeId
-    );
-    expect(proofSatisfactionSummary).toMatchObject({
-      proofObligations: proofSatisfactionPayload.route.proofObligations.length,
-      openProofObligations: proofSatisfactionPayload.route.proofObligations.filter((obligation: { status: string }) => obligation.status === "open").length,
-      satisfiedProofObligations: proofSatisfactionPayload.route.proofObligations.filter((obligation: { status: string }) =>
-        obligation.status === "satisfied"
-      ).length,
-      criticalOpenProofObligations: proofSatisfactionPayload.route.proofObligations.filter((obligation: { status: string; severity: string }) =>
-        obligation.status === "open" && obligation.severity === "critical"
-      ).length
+      status: formalObligation.status
     });
     const rejectedSatisfaction = await fetch(`${baseUrl}/api/routes/${routePayload.route.routeId}/obligations/${formalObligation.obligationId}/satisfy`, {
       method: "POST",
@@ -2383,9 +2450,9 @@ describe("local web route ledger API", () => {
     expect(routeRef).toMatchObject({
       kind: "route",
       ref: receiptPayload.route.routeId,
-      trust: "proved"
+      trust: "exact-computed"
     });
-    expect(routeRef.summary).toContain("is ready for a narrow proved claim");
+    expect(routeRef.summary).not.toContain("is ready for a narrow proved claim");
     expect(claimPayload.claim.finalization.readyForNarrowClaim).toBe(true);
   }, 30_000);
 
@@ -2740,7 +2807,7 @@ function tarHeaderText(buffer: Buffer, offset: number, length: number): string {
   return buffer.subarray(offset, offset + length).toString("utf8").replace(/\0.*$/u, "");
 }
 
-async function startWebServer(port: number, projectRoot: string): Promise<ChildProcessWithoutNullStreams> {
+async function startWebServer(port: number, projectRoot: string, environment: NodeJS.ProcessEnv = {}): Promise<ChildProcessWithoutNullStreams> {
   const server = spawn(process.execPath, [
     tsxCli,
     webServerScript,
@@ -2760,6 +2827,13 @@ async function startWebServer(port: number, projectRoot: string): Promise<ChildP
     cwd: repoRoot,
     env: {
       ...process.env,
+      TRUTH_HARNESS_MAXIMA: "truth-harness-web-test-missing-maxima",
+      TRUTH_HARNESS_SAGE: "truth-harness-web-test-missing-sage",
+      TRUTH_HARNESS_LEAN: "truth-harness-web-test-missing-lean",
+      TRUTH_HARNESS_LAKE: "truth-harness-web-test-missing-lake",
+      TRUTH_HARNESS_Z3: "truth-harness-web-test-missing-z3",
+      TRUTH_HARNESS_CVC5: "truth-harness-web-test-missing-cvc5",
+      ...environment,
       NO_COLOR: "1"
     }
   });

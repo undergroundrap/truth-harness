@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { join, relative } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
@@ -10,6 +10,7 @@ import {
   type LocalArtifactRef
 } from "./local-artifact-ref.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { resolveContainedPath } from "./path-containment.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { parseReceiptJson } from "./receipt-validation.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
@@ -331,17 +332,17 @@ export async function writeClaimLedgerRecord(input: CreateClaimLedgerRecordInput
   const status = await requireLocalWorkspace(input.rootPath);
   const claim = await createClaimLedgerRecord(input);
   await assertClaimLedgerSchema(claim);
-  const claimsDir = resolve(status.root, status.manifest.directories.claims);
+  const claimsDir = resolveUnderRoot(status.root, status.manifest.directories.claims);
   const baseName = `${claim.createdAt.slice(0, 10)}-${claim.claimId}`;
-  const jsonPath = join(claimsDir, `${baseName}.json`);
-  const markdownPath = join(claimsDir, `${baseName}.md`);
+  const jsonPath = resolveUnderRoot(status.root, join(claimsDir, `${baseName}.json`));
+  const markdownPath = resolveUnderRoot(status.root, join(claimsDir, `${baseName}.md`));
 
   await mkdir(claimsDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, claim);
   await writeFileAtomic(markdownPath, claim.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
-    path: relative(status.root, jsonPath),
+    path: relative(resolveUnderRoot(status.root, "."), jsonPath),
     kind: "claims",
     now: claim.createdAt,
     staleReason: "claim ledger record written"
@@ -365,7 +366,7 @@ async function assertClaimLedgerSchema(claim: ClaimLedgerRecord): Promise<void> 
 
 export async function listClaimRecords(rootPath: string): Promise<ClaimLedgerRecord[]> {
   const status = await requireLocalWorkspace(rootPath);
-  const claimsDir = resolve(status.root, status.manifest.directories.claims);
+  const claimsDir = resolveUnderRoot(status.root, status.manifest.directories.claims);
 
   let files: string[];
   try {
@@ -382,7 +383,7 @@ export async function listClaimRecords(rootPath: string): Promise<ClaimLedgerRec
   const claims = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => parseJsonWithOptionalBom(await readFile(join(claimsDir, file), "utf8")) as ClaimLedgerRecord)
+      .map(async (file) => parseJsonWithOptionalBom(await readFile(resolveUnderRoot(status.root, join(claimsDir, file)), "utf8")) as ClaimLedgerRecord)
   );
 
   return claims
@@ -400,8 +401,9 @@ export async function createClaimReviewPacket(input: {
   claimRef: string;
 }): Promise<ClaimReviewPacket> {
   const status = await requireLocalWorkspace(input.rootPath);
-  const { claim, path } = await readClaimRecordRef(status, input.claimRef);
+  const { claim: savedClaim, path } = await readClaimRecordRef(status, input.claimRef);
   const allClaims = await listClaimRecords(status.root);
+  const claim = claimForCurrentReview(savedClaim, new Map(allClaims.map((entry) => [entry.claimId, entry])));
   const dependents = allClaims
     .filter((candidate) => candidate.dependsOn.includes(claim.claimId))
     .map((candidate) => candidate.claimId)
@@ -698,10 +700,10 @@ async function readClaimRecordRef(
   const ref = requireText(claimRef, "Claim ref is required.");
 
   if (isClaimId(ref)) {
-    const claimsDir = resolve(status.root, status.manifest.directories.claims);
+    const claimsDir = resolveUnderRoot(status.root, status.manifest.directories.claims);
     const files = await readdir(claimsDir);
     for (const file of files.filter((candidate) => candidate.endsWith(".json"))) {
-      const path = join(claimsDir, file);
+      const path = resolveUnderRoot(status.root, join(claimsDir, file));
       const claim = parseJsonWithOptionalBom(await readFile(path, "utf8")) as ClaimLedgerRecord;
       if (claim.schemaVersion === CLAIM_SCHEMA_VERSION && claim.claimId === ref) {
         return { claim, path };
@@ -1009,6 +1011,42 @@ interface EvidenceTrustResolution {
   finalizationChecks?: string[];
 }
 
+export function claimForCurrentReview(claim: ClaimLedgerRecord, knownClaims: Map<string, ClaimLedgerRecord>): ClaimLedgerRecord {
+  if (!hasHistoricalProofTrust(claim, knownClaims) || claim.trust === "refuted") return claim;
+
+  const check = "Recheck historical proof evidence with independent proof admission and formal statement binding.";
+  const openChecks = [...new Set([...claim.finalization.openChecks, check])];
+  const evidenceRefs = claim.evidenceRefs.map((ref) =>
+    ref.kind === "proof" || ref.trust === "proved" ? { ...ref, trust: "unverified" as const } : ref
+  );
+  return {
+    ...claim,
+    trust: "unverified",
+    evidenceRefs,
+    verification: verificationFor("unverified", evidenceRefs, openChecks),
+    finalization: finalizationFor("unverified", claim.status, openChecks)
+  };
+}
+
+function hasHistoricalProofTrust(claim: ClaimLedgerRecord, knownClaims: Map<string, ClaimLedgerRecord>): boolean {
+  const pending = [claim];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    if (visited.has(current.claimId)) continue;
+    visited.add(current.claimId);
+    if (current.trust === "proved" || current.finalization.strongestTrust === "proved") return true;
+    for (const ref of current.evidenceRefs) {
+      if (ref.kind === "proof" || ref.trust === "proved") return true;
+      if (ref.kind === "claim") {
+        const parent = knownClaims.get(ref.ref);
+        if (parent) pending.push(parent);
+      }
+    }
+  }
+  return false;
+}
+
 async function inferEvidenceRefTrust(input: {
   root: string;
   ref: ClaimLedgerEvidenceRef;
@@ -1016,6 +1054,10 @@ async function inferEvidenceRefTrust(input: {
 }): Promise<EvidenceTrustResolution | undefined> {
   if (input.ref.kind === "claim") {
     const claim = input.knownClaimsById.get(input.ref.ref);
+    if (claim && hasHistoricalProofTrust(claim, input.knownClaimsById)) {
+      const boundary = "Historical proof-backed claim trust is inspection-only; recheck direct evidence with independent proof admission and formal statement binding before reuse.";
+      return { trust: "unverified", summary: claim.title, supportsFinalization: false, warnings: [boundary], finalizationChecks: [boundary] };
+    }
     return claim ? { trust: claim.trust, summary: claim.title } : undefined;
   }
 
@@ -1062,6 +1104,10 @@ async function inferEvidenceRefTrust(input: {
   if (input.ref.kind === "receipt") {
     try {
       const receipt = parseReceiptJson(artifact.raw, input.ref.ref);
+      if (receipt.trust === "proved") {
+        const boundary = "Historical proved receipts require fresh independent proof admission and formal statement binding before claim reuse.";
+        return { trust: "unverified", supportsFinalization: false, warnings: [boundary], finalizationChecks: [boundary] };
+      }
       return { trust: receipt.trust, summary: receipt.summary };
     } catch {
       return undefined;
@@ -1084,14 +1130,16 @@ async function inferEvidenceRefTrust(input: {
   if (input.ref.kind === "proof" && artifact.parsed.schemaVersion === "truth-harness.proof-check.v0") {
     try {
       const record = parseLeanProofCheckRecord(artifact.raw, input.ref.ref);
-      const missingStatementBoundary =
-        record.trust === "proved" && (!record.scope?.statement || record.scope.statement.trim().length === 0);
+      const proofBoundary =
+        "Lean proof-check v0 evidence lacks a trusted independent kernel check and transitive axiom audit; legacy trust metadata is inspection-only and cannot support formal claim trust.";
       const statementBoundary =
-        "Accepted proof-check evidence has no recorded statement boundary; a human must confirm the formal theorem matches the claim before final publication.";
+        "Lean proof-check v0 scope metadata is not a checked statement binding between the formal declaration and this claim; independently verify the binding before final publication.";
       return {
-        trust: record.trust,
-        summary: `Lean proof check status: ${record.status}.`,
-        ...(missingStatementBoundary ? { warnings: [statementBoundary], finalizationChecks: [statementBoundary] } : {})
+        trust: "unverified",
+        summary: `Inspection-only Lean proof-check v0 record; recorded status: ${record.status}.`,
+        supportsFinalization: false,
+        warnings: [proofBoundary, statementBoundary],
+        finalizationChecks: [proofBoundary, statementBoundary]
       };
     } catch {
       return undefined;
@@ -1307,14 +1355,7 @@ function isClaimId(value: string): boolean {
 }
 
 function resolveUnderRoot(root: string, path: string): string {
-  const target = resolve(root, path);
-  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
-
-  if (target !== root && !target.startsWith(rootWithSep)) {
-    throw new Error(`Claim ledger path escapes workspace root: ${JSON.stringify(path)}`);
-  }
-
-  return target;
+  return resolveContainedPath(root, path);
 }
 
 function escapeMarkdownText(value: string): string {

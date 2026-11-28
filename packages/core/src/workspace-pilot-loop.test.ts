@@ -258,10 +258,10 @@ describe("workspace pilot-loop", () => {
     expect(continuation.resumeCommand).toContain("continue-pilot-loop");
     expect(continuation.warnings.join(" ")).toContain("provenance only");
   });
-  it("executes credibility-action review requests and stops after the reviewer queue clears", async () => {
+  it("keeps credibility review blocked when saved Lean evidence is compilation-only", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-21T00:00:00.000Z" });
-    await writeEngineVerificationRun({
+    const savedEngineRun = await writeEngineVerificationRun({
       rootPath: root,
       now: new Date("2026-06-21T00:00:20.000Z"),
       requirements: { maxima: true, z3: true, lean: true },
@@ -275,6 +275,10 @@ describe("workspace pilot-loop", () => {
       replayCommand: "npm run docker:professor",
       runner: passingEngineRunner
     });
+    expect(savedEngineRun.record.status).toBe("failed");
+    expect(savedEngineRun.record.report.cases).toContainEqual(
+      expect.objectContaining({ id: "lean-proof-fixture", trust: "unverified", evidenceMinted: false })
+    );
     await writeCoreBenchmarksWithFrontierContract(root);
     await writePassingHardMathClosures(root);
 
@@ -296,52 +300,30 @@ describe("workspace pilot-loop", () => {
     expect(result.loop).toMatchObject({
       source: "credibility-actions",
       dryRun: false,
-      status: "completed",
-      stopReason: "no-open-item"
+      status: "blocked",
+      stopReason: "repeated-run-next-target"
     });
     expect(result.loop.steps[0]).toMatchObject({
       item: {
         kind: "credibility-action",
-        title: "Prepare agent pre-review rehearsal for frontier-honesty-challenge/riemann-hypothesis",
-        command: expect.stringContaining("truth-harness model-context prepare")
+        title: "Close required Maxima symbolic cross-check gate",
+        command: expect.stringContaining("engines verify")
       },
       execution: {
         status: "executed",
-        kind: "model-context",
-        evidenceRef: expect.stringContaining("model-context:.truth-harness/model-contexts/")
+        kind: "engine-verify",
+        evidenceRef: expect.stringMatching(/^engine-run:/u),
+        result: { status: "failed" }
       }
     });
+    expect(result.loop.steps).toHaveLength(2);
     expect(result.loop.steps[1]).toMatchObject({
-      item: {
-        kind: "credibility-action",
-        title: "Record external review request for frontier-honesty-challenge/riemann-hypothesis",
-        command: expect.stringContaining("truth-harness review log")
-      },
-      execution: {
-        status: "executed",
-        kind: "expert-review",
-        evidenceRef: expect.stringContaining("review:.truth-harness/reviews/")
-      }
+      execution: { status: "blocked", kind: "repeated-run-next-target" }
     });
-    expect(result.loop.steps.at(-1)).toMatchObject({
-      execution: {
-        status: "blocked",
-        kind: "no-open-item"
-      }
-    });
-    expect(contexts).toHaveLength(1);
-    expect(contexts[0]).toMatchObject({
-      purpose: "Agent pre-review rehearsal frontier-honesty-challenge/riemann-hypothesis",
-      target: { kind: "local-model", service: "local-agent" }
-    });
-    expect(reviews).toHaveLength(1);
-    expect(reviews[0]).toMatchObject({
-      subject: "Benchmark contract frontier-honesty-challenge/riemann-hypothesis",
-      status: "requested",
-      evidenceRefs: [expect.objectContaining({ kind: "benchmark" })]
-    });
-    expect(result.loop.summary.evidenceRefs).toContainEqual(expect.stringContaining("model-context:.truth-harness/model-contexts/"));
-    expect(result.loop.summary.evidenceRefs).toContainEqual(expect.stringContaining("review:.truth-harness/reviews/"));
+    expect(result.loop.summary).toMatchObject({ executedSteps: 1, blockedSteps: 1, attachedEvidenceSteps: 0 });
+    expect(contexts).toHaveLength(0);
+    expect(reviews).toHaveLength(0);
+    expect(result.loop.summary.evidenceRefs).toEqual([result.loop.steps[0]?.execution.evidenceRef]);
   }, 15000);
   it("resumes a verified saved run-next handoff as the pilot-loop source", async () => {
     const root = await tempRoot();

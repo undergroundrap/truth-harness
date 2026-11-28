@@ -522,7 +522,8 @@ describe("workspace catalog", () => {
         path: normalizePath(proof.jsonPath, root),
         kind: "proofs",
         artifactId: proof.record.checkId,
-        trust: "proved"
+        trust: "unverified",
+        status: "rejected"
       })
     );
     expect(reviewSearch.results).toContainEqual(

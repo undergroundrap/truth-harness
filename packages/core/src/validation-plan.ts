@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { join, relative } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import { parseBenchmarkComparisonRecordJson, parseBenchmarkRunRecordJson } from "./benchmark-run.js";
 import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
@@ -7,13 +7,14 @@ import { createEvidenceAudit, type EvidenceAudit, type EvidenceAuditClaimType } 
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import type { InventionEvidenceRef } from "./invention-log.js";
 import { getLocalWorkspaceStatus, initLocalWorkspace, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { resolveContainedPath } from "./path-containment.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { parseReceiptJson } from "./receipt-validation.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import { parseSmtCheckRecord } from "./smt-backend.js";
 import { stableHash } from "./stable-hash.js";
 import type { PrivacyMetadata, TrustLabel } from "./types.js";
-import { readVerifierRoute, type VerifierRoute } from "./verifier-route.js";
+import { readVerifierRoute, verifierRouteReadiness, type VerifierRoute } from "./verifier-route.js";
 import { refreshWorkspaceCatalogArtifact } from "./workspace-catalog.js";
 
 export const VALIDATION_PLAN_DOMAINS = [
@@ -294,16 +295,16 @@ export async function writeValidationPlan(input: CreateValidationPlanInput): Pro
   const status = await requireLocalWorkspace(input.rootPath);
   const plan = await createValidationPlan(input);
   await assertValidationPlanSchema(plan);
-  const validationDir = resolve(status.root, status.manifest.directories.validation);
+  const validationDir = resolveContainedPath(status.root, status.manifest.directories.validation);
   const baseName = `${plan.createdAt.slice(0, 10)}-${plan.planId}`;
-  const jsonPath = join(validationDir, `${baseName}.json`);
-  const markdownPath = join(validationDir, `${baseName}.md`);
+  const jsonPath = resolveContainedPath(status.root, join(validationDir, `${baseName}.json`));
+  const markdownPath = resolveContainedPath(status.root, join(validationDir, `${baseName}.md`));
   await mkdir(validationDir, { recursive: true });
   await writeJsonFileAtomic(jsonPath, plan);
   await writeFileAtomic(markdownPath, plan.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
-    path: relative(status.root, jsonPath),
+    path: relative(resolveContainedPath(status.root, "."), jsonPath),
     kind: "validation",
     now: plan.createdAt,
     staleReason: "validation plan written"
@@ -327,7 +328,7 @@ async function assertValidationPlanSchema(plan: ValidationPlan): Promise<void> {
 
 export async function listValidationPlans(rootPath: string): Promise<ValidationPlan[]> {
   const status = await requireLocalWorkspace(rootPath);
-  const validationDir = resolve(status.root, status.manifest.directories.validation);
+  const validationDir = resolveContainedPath(status.root, status.manifest.directories.validation);
 
   let files: string[];
   try {
@@ -344,12 +345,16 @@ export async function listValidationPlans(rootPath: string): Promise<ValidationP
   const plans = await Promise.all(
     files
       .filter((file) => file.endsWith(".json"))
-      .map(async (file) => parseJsonWithOptionalBom(await readFile(join(validationDir, file), "utf8")) as ValidationPlan)
+      .map(async (file) => {
+        const path = resolveContainedPath(status.root, join(validationDir, file));
+        return parseJsonWithOptionalBom(await readFile(path, "utf8")) as ValidationPlan;
+      })
   );
 
-  return plans
+  const currentPlans = await Promise.all(plans
     .filter((plan) => plan.schemaVersion === VALIDATION_PLAN_SCHEMA_VERSION)
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    .map((plan) => validationPlanForCurrentReview(status.root, plan)));
+  return currentPlans.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
 export async function attachValidationGateEvidence(
@@ -357,10 +362,11 @@ export async function attachValidationGateEvidence(
 ): Promise<AttachValidationGateEvidenceResult> {
   const status = await requireLocalWorkspace(input.rootPath);
   const { jsonPath, markdownPath } = await resolveValidationPlanFile(status, input.planRef);
-  const plan = parseJsonWithOptionalBom(await readFile(jsonPath, "utf8")) as ValidationPlan;
-  if (plan.schemaVersion !== VALIDATION_PLAN_SCHEMA_VERSION) {
+  const savedPlan = parseJsonWithOptionalBom(await readFile(jsonPath, "utf8")) as ValidationPlan;
+  if (savedPlan.schemaVersion !== VALIDATION_PLAN_SCHEMA_VERSION) {
     throw new Error(`Validation plan ${input.planRef} has unsupported schema version.`);
   }
+  const plan = await validationPlanForCurrentReview(status.root, savedPlan);
 
   const gateIndex = plan.gates.findIndex((gate) => gate.gateId === input.gateId);
   if (gateIndex === -1) {
@@ -416,7 +422,7 @@ export async function attachValidationGateEvidence(
   await writeFileAtomic(markdownPath, updatedPlan.markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
-    path: relative(status.root, jsonPath),
+    path: relative(resolveContainedPath(status.root, "."), jsonPath),
     kind: "validation",
     now: updatedAt,
     staleReason: `validation gate ${updatedGate.status}`
@@ -532,7 +538,7 @@ function gatesFor(input: {
         blocking: true,
         evidenceRefs: refsByKind(input.evidenceRefs, ["receipt"]),
         rationale: "Mathematical claims need proof or exact/replayable computation before they should be stated as true.",
-        nextChecks: ["Attach a trusted receipt with `proved`, `exact-computed`, `smt-checked`, or `refuted` trust."]
+        nextChecks: ["Attach claim-bound exact computation, SMT, CAS, or refuting evidence. Formal proofs require independent admission."]
       })
     );
   }
@@ -790,18 +796,48 @@ function gate(input: Omit<ValidationGate, "gateId">): ValidationGate {
   };
 }
 
+const RECHECK_PROOF_GATE = "Recheck evidence against this claim. Formal proofs require independent admission and statement binding.";
+
 function normalizeManualGates(inputs: ValidationGateInput[]): ValidationGate[] {
-  return inputs.map((input) =>
-    gate({
+  return inputs.map((input) => {
+    const requestedProofClosure = input.kind === "proof" && input.status === "satisfied";
+    return gate({
       kind: input.kind ?? "other",
       description: requireText(input.description, "Validation gate description is required."),
-      status: input.status ?? "missing",
+      status: requestedProofClosure ? "in-progress" : input.status ?? "missing",
       blocking: input.blocking ?? true,
       evidenceRefs: normalizeEvidenceRefs(input.evidenceRefs ?? []),
       rationale: normalizeOptionalText(input.rationale) ?? "User-supplied validation gate.",
-      nextChecks: input.status === "satisfied" ? [] : ["Attach local evidence or mark why this gate is not applicable."]
-    })
-  );
+      nextChecks: requestedProofClosure
+        ? [RECHECK_PROOF_GATE]
+        : input.status === "satisfied" ? [] : ["Attach local evidence or mark why this gate is not applicable."]
+    });
+  });
+}
+
+async function validationPlanForCurrentReview(root: string, plan: ValidationPlan): Promise<ValidationPlan> {
+  const gates = await Promise.all(plan.gates.map(async (gate) => {
+    if (gate.kind !== "proof" || gate.status !== "satisfied") return gate;
+    const reopened = { ...gate, status: "in-progress" as const, nextChecks: [RECHECK_PROOF_GATE] };
+    for (const ref of gate.evidenceRefs) {
+      if (ref.kind !== "route" && ref.kind !== "receipt" && ref.kind !== "cas" && ref.kind !== "smt") continue;
+      // A saved closure is only a history entry until its evidence is resolved again.
+      const evidence = await resolveValidationGateEvidence(root, plan, ref).catch(() => undefined);
+      if (evidence && assessValidationGateEvidence(plan, reopened, evidence).status === "satisfied") return gate;
+    }
+    return reopened;
+  }));
+  if (gates.every((gate, index) => gate === plan.gates[index])) return plan;
+
+  const readiness = readinessFor(plan.audit, gates);
+  const updated = {
+    ...plan,
+    gates,
+    readiness,
+    recommendedClaimLanguage: recommendedClaimLanguageFor({ ...plan, readiness }),
+    warnings: warningsFor({ ...plan, gates, readiness })
+  };
+  return { ...updated, markdown: renderValidationPlanMarkdown(updated) };
 }
 
 function mergeGates(gates: ValidationGate[]): ValidationGate[] {
@@ -874,8 +910,9 @@ function statusForProof(audit: EvidenceAudit): ValidationGateStatus {
     return "blocked";
   }
 
-  return audit.reviews.some((review) => review.strength === "strong" || review.trust === "proved" || review.trust === "exact-computed")
-    ? "satisfied"
+  // Review metadata is not checked, claim-bound evidence admission.
+  return audit.reviews.length > 0
+    ? "in-progress"
     : "missing";
 }
 
@@ -1055,13 +1092,13 @@ async function resolveValidationPlanFile(
 ): Promise<{ jsonPath: string; markdownPath: string }> {
   let jsonPath: string;
   if (/^plan_[a-f0-9]{16}$/u.test(planRef)) {
-    const validationDir = resolve(status.root, status.manifest.directories.validation);
+    const validationDir = resolveContainedPath(status.root, status.manifest.directories.validation);
     const files = await readdir(validationDir);
     const matches = await Promise.all(
       files
         .filter((file) => file.endsWith(".json"))
         .map(async (file) => {
-          const path = join(validationDir, file);
+          const path = resolveContainedPath(status.root, join(validationDir, file));
           const plan = parseJsonWithOptionalBom(await readFile(path, "utf8")) as ValidationPlan;
           return plan.schemaVersion === VALIDATION_PLAN_SCHEMA_VERSION && plan.planId === planRef ? path : undefined;
         })
@@ -1071,7 +1108,7 @@ async function resolveValidationPlanFile(
       throw new Error(`No validation plan found for id ${planRef}.`);
     }
   } else {
-    jsonPath = resolveWorkspacePath(status.root, planRef);
+    jsonPath = resolveContainedPath(status.root, planRef);
   }
 
   if (!jsonPath.endsWith(".json")) {
@@ -1080,7 +1117,7 @@ async function resolveValidationPlanFile(
 
   return {
     jsonPath,
-    markdownPath: jsonPath.replace(/\.json$/u, ".md")
+    markdownPath: resolveContainedPath(status.root, jsonPath.replace(/\.json$/u, ".md"))
   };
 }
 
@@ -1091,10 +1128,13 @@ async function resolveValidationGateEvidence(
 ): Promise<ResolvedValidationGateEvidence> {
   if (evidenceRef.kind === "route") {
     const route = await readVerifierRoute(root, evidenceRef.ref);
+    const readiness = verifierRouteReadiness(route);
     return {
       ...evidenceRef,
-      trust: route.finalTrust,
-      summary: evidenceRef.summary ?? `Verifier route ${route.routeId} ended with ${route.finalTrust}.`,
+      trust: route.finalTrust === "refuted"
+        ? "refuted"
+        : readiness.readyForNarrowClaim ? readiness.strongestTrust : "unverified",
+      summary: evidenceRef.summary ?? readiness.summary,
       schemaVersion: route.schemaVersion,
       artifactId: route.routeId,
       status: route.status,
@@ -1106,7 +1146,7 @@ async function resolveValidationGateEvidence(
         evidenceKind: route.evidenceKind,
         nextActions: route.nextActions
       },
-      nextChecks: route.nextActions
+      nextChecks: [...new Set([readiness.summary, ...route.nextActions])]
     };
   }
 
@@ -1116,15 +1156,17 @@ async function resolveValidationGateEvidence(
       const receipt = parseReceiptJson(artifact.raw, evidenceRef.ref);
       return {
         ...evidenceRef,
-        trust: receipt.trust,
+        trust: receipt.trust === "proved" ? "unverified" : receipt.trust,
         summary: evidenceRef.summary ?? receipt.summary,
         schemaVersion: receipt.schemaVersion,
         artifactId: receipt.runId,
         status: receipt.trust,
         claimScope: validationClaimScopeFromText(plan, receipt.normalizedProblem, "Receipt problem"),
-        nextChecks: receipt.trust === "unverified"
-          ? ["Receipt is unverified; attach stronger proof, SMT, CAS, or route evidence before closing this gate."]
-          : []
+        nextChecks: receipt.trust === "proved"
+          ? ["Legacy proved receipts require an independent kernel/axiom audit and checked formal statement binding before proof admission."]
+          : receipt.trust === "unverified"
+            ? ["Receipt is unverified; attach stronger proof, SMT, CAS, or route evidence before closing this gate."]
+            : []
       };
     }
 
@@ -1132,15 +1174,17 @@ async function resolveValidationGateEvidence(
       const record = parseLeanProofCheckRecord(artifact.raw, evidenceRef.ref);
       return {
         ...evidenceRef,
-        trust: record.trust,
+        trust: "unverified",
         summary: evidenceRef.summary ?? `Lean proof check status: ${record.status}.`,
         schemaVersion: record.schemaVersion,
         artifactId: record.checkId,
         status: record.status,
-        claimScope: validationClaimScopeFromText(plan, record.scope?.statement, "Proof-check statement boundary"),
-        nextChecks: record.status === "accepted"
-          ? []
-          : ["Proof check was not accepted; attach an accepted proof-check record before closing this gate."]
+        claimScope: {
+          status: "missing",
+          expected: normalizeValidationClaimText(plan.claim),
+          reason: "Proof-check scope is caller-supplied metadata, not an independently checked formal statement binding."
+        },
+        nextChecks: ["Require an independent kernel/axiom audit and checked formal statement binding before proof admission."]
       };
     }
 
@@ -1220,6 +1264,16 @@ function assessValidationGateEvidence(
   evidence: ResolvedValidationGateEvidence
 ): { status: ValidationGateStatus; nextChecks: string[]; message: string } {
   if (gate.kind === "proof") {
+    if (
+      evidence.kind === "proof" ||
+      evidence.trust === "proved" ||
+      evidence.route?.finalTrust === "proved" ||
+      (evidence.kind === "receipt" && evidence.status === "proved")
+    ) {
+      return recordUnresolvedProofEvidence(gate, [
+        "Require an independent kernel/axiom audit and checked formal statement binding; legacy proof-check labels and copied scope text cannot close this gate."
+      ], `Validation proof gate ${gate.gateId} received historical or unadmitted proof evidence, but remains open pending independent proof admission and formal statement binding.`);
+    }
     const scopeCheck = validationClaimScopeCheck(plan, evidence);
     if (evidence.trust === "refuted" && scopeCheck.matches) {
       return {
@@ -1234,12 +1288,10 @@ function assessValidationGateEvidence(
     if (
       (evidence.kind === "route" ||
         evidence.kind === "receipt" ||
-        evidence.kind === "proof" ||
         evidence.kind === "smt" ||
         evidence.kind === "cas") &&
       scopeCheck.matches &&
-      (evidence.trust === "proved" ||
-        evidence.trust === "exact-computed" ||
+      (evidence.trust === "exact-computed" ||
         evidence.trust === "smt-checked" ||
         evidence.trust === "cross-checked")
     ) {
@@ -1251,29 +1303,19 @@ function assessValidationGateEvidence(
     }
 
     if (
-      evidence.trust === "proved" ||
       evidence.trust === "exact-computed" ||
       evidence.trust === "smt-checked" ||
       evidence.trust === "cross-checked" ||
       evidence.trust === "refuted"
     ) {
-      return {
-        status: gate.status === "missing" || gate.status === "planned" ? "in-progress" : gate.status,
-        nextChecks: [
-          scopeCheck.nextCheck,
-          ...evidence.nextChecks
-        ],
-        message: `Validation proof gate ${gate.gateId} received ${evidence.trust} ${evidence.kind} evidence, but the evidence is not scoped to this validation claim.`
-      };
+      return recordUnresolvedProofEvidence(gate, [scopeCheck.nextCheck, ...evidence.nextChecks],
+        `Validation proof gate ${gate.gateId} received ${evidence.trust} ${evidence.kind} evidence, but the evidence is not scoped to this validation claim.`);
     }
 
-    return {
-      status: gate.status === "missing" || gate.status === "planned" ? "in-progress" : gate.status,
-      nextChecks: evidence.nextChecks.length > 0
-        ? evidence.nextChecks
-        : ["Attach proved, exact-computed, SMT-checked, cross-checked, or refuting route evidence for this exact claim."],
-      message: `Validation proof gate ${gate.gateId} received ${evidence.trust ?? "untrusted"} evidence, but remains open.`
-    };
+    return recordUnresolvedProofEvidence(gate, evidence.nextChecks.length > 0
+      ? evidence.nextChecks
+      : ["Attach admitted exact-computed, SMT-checked, cross-checked, or refuting evidence for this exact claim; formal proofs require independent admission."],
+      `Validation proof gate ${gate.gateId} received ${evidence.trust ?? "untrusted"} evidence, but remains open.`);
   }
 
   if (gate.kind === "benchmark" && evidence.kind === "benchmark") {
@@ -1335,6 +1377,21 @@ function smtCheckClaimBoundary(record: ReturnType<typeof parseSmtCheckRecord>): 
 
 function symbolicCasClaimBoundary(record: ReturnType<typeof parseSymbolicCasCheckRecord>): string {
   return `symbolic ${record.operation} ${record.expression}`;
+}
+
+function recordUnresolvedProofEvidence(
+  gate: ValidationGate,
+  nextChecks: string[],
+  message: string
+): { status: ValidationGateStatus; nextChecks: string[]; message: string } {
+  if (gate.status === "satisfied" || gate.status === "blocked") {
+    return {
+      status: gate.status,
+      nextChecks: gate.nextChecks,
+      message: `Validation proof gate ${gate.gateId} preserved its current decision after receiving inconclusive evidence.`
+    };
+  }
+  return { status: "in-progress", nextChecks, message };
 }
 
 function validationClaimScopeCheck(
@@ -1441,7 +1498,7 @@ function exactArithmeticBoundaryParts(value: string): string[] | undefined {
 async function readValidationEvidenceArtifactJson(root: string, ref: string): Promise<{ raw: string } | undefined> {
   let path: string;
   try {
-    path = resolveWorkspacePath(root, ref);
+    path = resolveContainedPath(root, ref);
   } catch {
     return undefined;
   }
@@ -1478,17 +1535,6 @@ function normalizeDate(value: string | Date | undefined): string {
   }
 
   return value ?? new Date().toISOString();
-}
-
-function resolveWorkspacePath(root: string, path: string): string {
-  const target = resolve(root, path);
-  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
-
-  if (target !== root && !target.startsWith(rootWithSep)) {
-    throw new Error(`Validation plan path escapes workspace root: ${JSON.stringify(path)}`);
-  }
-
-  return target;
 }
 
 function titleFromClaim(claim: string): string {

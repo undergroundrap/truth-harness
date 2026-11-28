@@ -14,7 +14,7 @@ import {
   type CodeRunSandboxStatus
 } from "./sandbox.js";
 import { listValidationPlans, type ValidationPlan } from "./validation-plan.js";
-import { listVerifierRoutes, readVerifierRoute, type VerifierRouteSummary } from "./verifier-route.js";
+import { listVerifierRoutes, type VerifierRouteSummary } from "./verifier-route.js";
 import { listWebUiReviews, type WebUiReviewSummary } from "./web-ui-review.js";
 import { getWorkspaceCatalogStatus, type WorkspaceCatalogStatus } from "./workspace-catalog.js";
 
@@ -603,20 +603,14 @@ function frontierReadinessFor(input: {
   const leanMathlibTemplateCheck = input.checks.find((check) => check.id === "lean-mathlib-template");
   const leanMathlibManifestPinned = leanMathlibTemplateCheck?.details.some((detail) => detail.startsWith("Manifest: present")) === true;
   const leanProofRepairGateReady = checkPassed(input.checks, "lean-proof-repair-gate");
-  const strictAllEngineEvidenceReady =
-    input.credibilityPack?.summary.savedEngineLadderLevel === "engine-level-5-strict-all-engines" ||
-    input.credibilityPack?.summary.latestStrictEngineRunStatus === "passed" ||
-    (engineEvidenceReady &&
-      gateRatioAtLeast(input.requiredEngineGates, 5, 5) &&
-      gateRatioAtLeast(input.concreteEngineGates, 5, 5));
   const leanFixtureReady =
     input.credibilityPack?.engineEvidenceLadder.some(
-      (entry) =>
-        entry.status === "passed" &&
-        (entry.displayName.toLowerCase().includes("lean") || entry.trust === "proved")
-    ) === true ||
-    input.credibilityPack?.summary.latestStrictEngineRunStatus === "passed" ||
-    input.credibilityPack?.summary.latestProfessorEngineRunStatus === "passed";
+      (entry) => entry.caseId === "lean-proof-fixture" && entry.status === "passed" && entry.trust === "proved"
+    ) === true;
+  const strictAllEngineEvidenceReady =
+    leanFixtureReady && engineEvidenceReady &&
+    gateRatioAtLeast(input.requiredEngineGates, 5, 5) &&
+    gateRatioAtLeast(input.concreteEngineGates, 5, 5);
   const formalTheoremWorkflowReady =
     leanFixtureReady &&
     leanTheoremTemplateReady &&
@@ -1163,6 +1157,8 @@ function engineEvidenceHostGapsCoveredBySavedRun(pack: CredibilityPack, required
 }
 
 function savedEngineRunCoversCapability(pack: CredibilityPack, capabilityId: string): boolean {
+  // Historical run tags carry no independent Lean proof admission evidence.
+  if (capabilityId === "lean-proof-checker") return false;
   const runs = [
     pack.engineRunLedger.latestProfessorReviewerRun,
     pack.engineRunLedger.latestStrictReviewerRun,
@@ -1233,28 +1229,17 @@ function engineEvidenceDockerCommands(pack: CredibilityPack): string[] {
 
 function savedStrictEngineRunCheck(pack: CredibilityPack, required: boolean): ReleaseAuditCheck {
   const latest = pack.engineRunLedger.latestStrictReviewerRun;
-  if (latest?.status === "passed") {
-    return passCheck({
-      id: "saved-strict-engine-run",
-      title: "Saved strict engine run",
-      summary: `Latest strict reviewer run ${latest.runId} passed${formatSavedEngineRunLevel(latest)}.`,
-      command: "truth-harness engines verify --write --require-all-engines",
-      details: [
-        `Saved engine runs: ${pack.engineRunLedger.savedRuns}.`,
-        latest.strictAllEngineLevelPassed
-          ? "Explicit strict all-engine ladder level passed."
-          : "Legacy strict reviewer record inferred from its required gate count."
-      ]
-    });
-  }
+  const boundary = latest
+    ? `Saved run ${latest.runId} remains inspectable. Historical run status cannot satisfy the Lean proof requirement.`
+    : "The all-engine gate requires independent Lean proof admission.";
   if (required) {
     return failCheck({
       id: "saved-strict-engine-run",
       title: "Saved strict engine run",
       blocking: true,
-      summary: "No saved all-engine reviewer run has passed.",
+      summary: "A saved all-engine reviewer run with admitted Lean proof evidence is required.",
       command: "truth-harness engines verify --write --require-all-engines",
-      details: ["Write a durable engine-run record before treating release evidence as reviewer-ready."]
+      details: [boundary]
     });
   }
   return warnCheck({
@@ -1263,7 +1248,7 @@ function savedStrictEngineRunCheck(pack: CredibilityPack, required: boolean): Re
     blocking: false,
     summary: "No saved all-engine reviewer run has passed yet.",
     command: "truth-harness engines verify --write --require-all-engines",
-    details: ["This is not blocking for daily prototype work, but it should exist before serious public review."]
+    details: [boundary]
   });
 }
 
@@ -1907,14 +1892,6 @@ async function leanMathlibTemplateCheck(rootPath: string, command: string): Prom
       inspection.theoremCorpus.families.templateReady > 0 &&
       corpusCoverage?.complete === true &&
       corpusCoverage.templateReadyDeclarations > 0;
-    const proofChecks = await listLeanProofChecks(rootPath).catch((): LeanProofCheckSummary[] => []);
-    const acceptedProof = proofChecks.find((proof) =>
-      proof.status === "accepted" &&
-      proof.trust === "proved" &&
-      proof.proofCheckerBacked === true &&
-      normalizeProofPath(proof.sourcePath) === sourcePath &&
-      proof.sourceSha256 === currentSource?.sha256
-    );
 
     const sharedDetails = [
       `Project: ${projectPath}.`,
@@ -1925,33 +1902,9 @@ async function leanMathlibTemplateCheck(rootPath: string, command: string): Prom
       `Theorem corpus: ${inspection.theoremCorpus?.path ?? "missing"}.`,
       `Template-ready families: ${inspection.theoremCorpus?.families.templateReady ?? 0}.`,
       `Corpus declarations matched: ${corpusCoverage?.matchedTemplateReadyDeclarations ?? 0}/${corpusCoverage?.templateReadyDeclarations ?? 0}.`,
-      "Inspection and corpus metadata do not upgrade trust; only the accepted proof-check receipt can support `proved`."
+      "Proof admission requires independent kernel and axiom checks plus a checked formal statement."
     ];
 
-    if (
-      inspection.readiness === "ready" &&
-      pinnedToolchain &&
-      manifestPinned &&
-      scannerClean &&
-      completeScan &&
-      currentSource &&
-      corpusReady &&
-      acceptedProof
-    ) {
-      return passCheck({
-        id: "lean-mathlib-template",
-        title: "Lean mathlib scaffold",
-        summary: `Mathlib scaffold is manifest-pinned and has accepted Lake proof evidence ${acceptedProof.checkId}.`,
-        command,
-        details: [
-          ...sharedDetails,
-          `Accepted proof: ${acceptedProof.checkId}.`,
-          `Proof source SHA-256: ${acceptedProof.sourceSha256}.`,
-          `Proof backend: ${acceptedProof.backendId}${acceptedProof.backendVersion ? ` (${acceptedProof.backendVersion})` : ""}.`,
-          "This proves only the checked scaffold source under the pinned Lake project, not future theorem families."
-        ]
-      });
-    }
 
     if (inspection.readiness === "ready" && pinnedToolchain && manifestPinned && scannerClean && completeScan && currentSource && corpusReady) {
       return warnCheck({
@@ -1962,7 +1915,7 @@ async function leanMathlibTemplateCheck(rootPath: string, command: string): Prom
         command,
         details: [
           ...sharedDetails,
-          "Run the no-runtime-network Docker mathlib proof gate to write the accepted proof-check record."
+          "Existing proof receipts can provide audit history. The pinned mathlib image provides compilation diagnostics."
         ]
       });
     }
@@ -2134,82 +2087,19 @@ async function leanProofRepairGateCheck(rootPath: string, command: string): Prom
     });
   }
 
-  const acceptedProof = proofChecks.find((proof) =>
-    proof.status === "accepted" &&
-    proof.trust === "proved" &&
-    proof.proofCheckerBacked === true &&
-    Boolean(proof.scope?.routeId) &&
-    Boolean(proof.scope?.obligationId)
-  );
-
-  if (!acceptedProof) {
-    return warnCheck({
-      id: "lean-proof-repair-gate",
-      title: "Lean proof-repair rehearsal",
-      blocking: false,
-      summary: "No accepted scoped Lean proof-repair fixture proof was found.",
-      command,
-      details: [
-        `Fixture workspace: ${fixtureRef}.`,
-        `Proof-check records inspected: ${proofChecks.length}.`,
-        `Routes inspected: ${routeSummaries.length}.`,
-        "A passing rehearsal requires an accepted Lean proof-check record scoped to a route id and obligation id."
-      ]
-    });
-  }
-
-  try {
-    const route = await readVerifierRoute(fixtureRoot, acceptedProof.scope?.routeId ?? "");
-    const obligation = route.proofObligations.find(
-      (candidate) => candidate.obligationId === acceptedProof.scope?.obligationId
-    );
-    const proofAttached = obligation?.satisfiedBy?.some((evidence) =>
-      evidence.kind === "proof" && (evidence.ref === acceptedProof.path || evidence.ref.includes(acceptedProof.checkId))
-    ) ?? false;
-
-    if (obligation?.status === "satisfied" && proofAttached) {
-      return passCheck({
-        id: "lean-proof-repair-gate",
-        title: "Lean proof-repair rehearsal",
-        summary: `Saved repair rehearsal closed ${route.routeId}/${obligation.obligationId} with accepted Lean proof evidence.`,
-        command,
-        details: [
-          `Fixture workspace: ${fixtureRef}.`,
-          `Accepted proof-check: ${acceptedProof.checkId} (${acceptedProof.path}).`,
-          `Route status: ${route.status}; obligation status: ${obligation.status}.`,
-          "The rehearsal preserves the rejected attempt as a repair hint and trusts only the accepted proof-check record."
-        ]
-      });
-    }
-
-    return warnCheck({
-      id: "lean-proof-repair-gate",
-      title: "Lean proof-repair rehearsal",
-      blocking: false,
-      summary: "A scoped accepted Lean proof exists, but the matching route obligation is not closed.",
-      command,
-      details: [
-        `Fixture workspace: ${fixtureRef}.`,
-        `Accepted proof-check: ${acceptedProof.checkId} (${acceptedProof.path}).`,
-        `Route: ${route.routeId}.`,
-        `Obligation status: ${obligation?.status ?? "missing"}.`,
-        "Attach the accepted proof-check record to the route obligation before citing this as a closed repair rehearsal."
-      ]
-    });
-  } catch (error) {
-    return warnCheck({
-      id: "lean-proof-repair-gate",
-      title: "Lean proof-repair rehearsal",
-      blocking: false,
-      summary: "A scoped accepted Lean proof exists, but its route could not be inspected.",
-      command,
-      details: [
-        `Fixture workspace: ${fixtureRef}.`,
-        `Accepted proof-check: ${acceptedProof.checkId} (${acceptedProof.path}).`,
-        `Route inspection error: ${error instanceof Error ? error.message : String(error)}.`
-      ]
-    });
-  }
+  return warnCheck({
+    id: "lean-proof-repair-gate",
+    title: "Lean proof-repair rehearsal",
+    blocking: false,
+    summary: "No accepted scoped Lean proof-repair fixture proof was found under current admission policy.",
+    command,
+    details: [
+      `Fixture workspace: ${fixtureRef}.`,
+      `Proof-check records inspected: ${proofChecks.length}.`,
+      `Routes inspected: ${routeSummaries.length}.`,
+      "The stored rehearsal is inspection-only until an independently checked proof binds to the formal goal."
+    ]
+  });
 }
 function researchSessionContinuityCheck(pack: CredibilityPack): ReleaseAuditCheck {
   const sessions = pack.workspaceReview.summary.sessions;

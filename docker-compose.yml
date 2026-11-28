@@ -246,7 +246,8 @@ services:
     volumes:
       - ./.truth-harness:/workspace/.truth-harness
       - ./docs/examples/lean-repair-fixture:/workspace/docs/examples/lean-repair-fixture
-    command: ["npm", "run", "proof:lean-suite"]
+    # Compilation availability is not independent proof admission.
+    command: ["node", "apps/cli/dist/index.js", "proof", "backends", "--json"]
 
   mathlib-proof: &mathlib-proof
     <<: *truth-harness-security
@@ -260,7 +261,7 @@ services:
       TRUTH_HARNESS_LEAN: "lean"
     volumes:
       - ./.truth-harness:/workspace/.truth-harness
-    command: ["npm", "run", "proof:mathlib-template:check"]
+    command: ["sh", "-ec", "cd docs/examples/lean-mathlib-template && lake env lean TruthHarnessMathlib/Algebra.lean"]
 
   sparse-identity-proof:
     <<: *mathlib-proof

@@ -31,7 +31,10 @@ describe("Mathlib setup contract (not proof evidence)", () => {
     expect(runtime).toContain("COPY --chown=truth:truth . .");
     expect(runtime).toContain("npm run build");
     expect(runtime).toContain("lake build");
-    expect(runtime).toContain("npm run proof:mathlib-template:check");
+    expect(runtime).toContain("lake env lean TruthHarnessMathlib/Algebra.lean");
+    expect(runtime).toContain("TRUTH_HARNESS_REQUIRE_LEAN_TESTS=1 TRUTH_HARNESS_TEST_REAL_LEAN=1");
+    expect(runtime).toContain("tools/lean-proof-admission.test.js");
+    expect(runtime).not.toContain("npm run proof:lean-suite");
     expect((await readFile(".dockerignore", "utf8")).split(/\r?\n/u)).toContain("**/.lake");
   });
 

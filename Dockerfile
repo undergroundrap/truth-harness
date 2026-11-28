@@ -81,9 +81,10 @@ RUN curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-ini
 FROM lean-environment AS lean-proof
 
 COPY --chown=truth:truth . .
-RUN npm run build && npm run proof:lean-suite && npm run engines:verify:lean
+RUN npm run build \
+  && TRUTH_HARNESS_REQUIRE_LEAN_TESTS=1 TRUTH_HARNESS_TEST_REAL_LEAN=1 npm test -- tools/lean-proof-admission.test.js packages/core/src/proof-backend.test.ts
 
-CMD ["npm", "run", "proof:lean-suite"]
+CMD ["node", "apps/cli/dist/index.js", "proof", "backends", "--json"]
 
 FROM lean-environment AS mathlib-dependencies
 
@@ -101,12 +102,13 @@ RUN if [ ! -f docs/examples/lean-mathlib-template/lake-manifest.json ]; then \
 FROM mathlib-dependencies AS mathlib-proof
 
 COPY --chown=truth:truth . .
-RUN npm run build && npm run proof:lean-suite && npm run engines:verify:lean \
+RUN npm run build \
+  && TRUTH_HARNESS_REQUIRE_LEAN_TESTS=1 TRUTH_HARNESS_TEST_REAL_LEAN=1 npm test -- tools/lean-proof-admission.test.js packages/core/src/proof-backend.test.ts \
   && cd docs/examples/lean-mathlib-template && lake build
 
-RUN npm run proof:mathlib-template:check
+RUN cd docs/examples/lean-mathlib-template && lake env lean TruthHarnessMathlib/Algebra.lean
 
-CMD ["npm", "run", "proof:mathlib-template:check"]
+CMD ["sh", "-ec", "cd docs/examples/lean-mathlib-template && lake env lean TruthHarnessMathlib/Algebra.lean"]
 
 FROM sage-math AS all-engines
 
@@ -126,6 +128,8 @@ RUN curl -fsSL https://raw.githubusercontent.com/leanprover/elan/master/elan-ini
   && elan toolchain install leanprover/lean4:v4.12.0 \
   && lean --version
 
-RUN npm run proof:lean-suite && npm run engines:verify:all
+RUN node apps/cli/dist/index.js proof backends --json \
+  && TRUTH_HARNESS_REQUIRE_LEAN_TESTS=1 TRUTH_HARNESS_TEST_REAL_LEAN=1 npm test -- tools/lean-proof-admission.test.js packages/core/src/proof-backend.test.ts \
+  && npm run engines:verify -- --require-maxima --require-z3 --require-cvc5 --require-sage
 
 CMD ["npm", "run", "engines:verify:all"]

@@ -87,7 +87,7 @@ describe("credibility reviewer bundle", () => {
         value: expect.stringMatching(/^[a-f0-9]{64}$/u)
       })
     );
-    expect(result.manifest.packStatus).toBe("ready-for-review");
+    expect(result.manifest.packStatus).toBe("blocked");
     expect(result.manifest.summary.artifactFiles).toBeGreaterThan(0);
     expect(result.manifest.generatedFiles).toHaveLength(3);
     expect(result.manifest.summary.skippedEphemeralFiles).toBe(0);

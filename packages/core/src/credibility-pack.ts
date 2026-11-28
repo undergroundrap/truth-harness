@@ -1654,10 +1654,10 @@ export function formatCredibilityPackSavedEngineRunLedgerLabel(pack: Pick<Credib
 
 function savedEngineEvidenceCoverageLabel(pack: Pick<CredibilityPack, "summary">): string | undefined {
   if (pack.summary.latestStrictEngineRunStatus === "passed") {
-    return "saved strict Docker evidence covers these gates";
+    return "historical strict Docker run recorded; independent Lean admission required";
   }
   if (pack.summary.latestProfessorEngineRunStatus === "passed") {
-    return "saved Docker professor evidence covers these gates";
+    return "historical professor Docker run recorded; independent Lean admission required";
   }
   return undefined;
 }
@@ -1685,6 +1685,7 @@ function caseGapIsCoveredBySavedRun(
 }
 
 function hasPassedSavedRunForCapabilities(ledger: CredibilityPackEngineRunLedger, capabilities: readonly string[]): boolean {
+  if (capabilities.includes("lean-proof-checker")) return false;
   const candidates = [
     ledger.latestProfessorReviewerRun,
     ledger.latestStrictReviewerRun,

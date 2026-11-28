@@ -2,8 +2,8 @@ import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { PACKAGE_DIR, PROJECT, inspectPackage, stagePilot } from "./proof-reuse-pilot.mjs";
-import { createWorkspaceReview, createWorkspaceRunNextPlan, listValidationPlans } from "../packages/core/dist/index.js";
+import { PACKAGE_DIR, PROJECT, closeGate, inspectPackage, stagePilot } from "./proof-reuse-pilot.mjs";
+import { createWorkspaceReview, createWorkspaceRunNextPlan, listValidationPlans, writeLeanProofCheckRecord } from "../packages/core/dist/index.js";
 
 const roots = [];
 async function root() {
@@ -85,21 +85,35 @@ describe("proof reuse pilot contract (no solver in these unit tests)", () => {
     expect(plans[0].gates.find((gate) => gate.kind === "proof").status).not.toBe("satisfied");
     await expect(inspectPackage(join(path, PROJECT))).rejects.toThrow();
   });
-  it("forwards the project to Lake during run-next execution", async () => {
+  it("blocks run-next admission but forwards the project and exact bytes for diagnostic compilation", async () => {
     const path = await root();
     await stagePilot(path, "2026-09-06T00:00:00.000Z");
     await cp(join(PACKAGE_DIR, "Scratch/Bound.lean"), join(path, PROJECT, "Scratch/Bound.lean"));
     const review = await createWorkspaceReview({ rootPath: path });
     const calls = [];
-    const next = await createWorkspaceRunNextPlan({
-      rootPath: path, review, executeLocal: true,
-      proofRunner: (command, args, _timeout, options) => {
-        calls.push({ command, args, cwd: options?.cwd });
-        return { status: 0, stdout: args[0] === "--version" ? "Lean (version 4.12.0)" : "", stderr: "" };
-      }
+    const runner = (command, args, _timeout, options) => {
+      calls.push({ command, args, cwd: options?.cwd, input: options?.input });
+      return { status: 0, stdout: args[0] === "--version" ? "Lean (version 4.12.0)" : "", stderr: "" };
+    };
+    const next = await createWorkspaceRunNextPlan({ rootPath: path, review, executeLocal: true, proofRunner: runner });
+    expect(next.status).toBe("blocked");
+    expect(calls).toHaveLength(1);
+    const diagnostic = await writeLeanProofCheckRecord({
+      rootPath: path, projectPath: PROJECT, sourcePath: `${PROJECT}/Scratch/Bound.lean`, runner
     });
-    expect(calls).toContainEqual({ command: "lake", args: ["env", "lean", join(path, PROJECT, "Scratch/Bound.lean")], cwd: join(path, PROJECT) });
-    expect(next.execution.result.proof.backend.command).toBe("lake");
-    expect(next.execution.result.proof.replay).toContain(`--project "${PROJECT}"`);
+    expect(calls).toContainEqual({ command: "lake", args: ["env", "lean", "--stdin"], cwd: join(path, PROJECT), input: await readFile(join(path, PROJECT, "Scratch/Bound.lean"), "utf8") });
+    expect(diagnostic.record.backend.command).toBe("lake");
+    expect(diagnostic.record.replay).toContain(`--project "${PROJECT}"`);
+    expect(diagnostic.record.trust).toBe("unverified");
+  });
+  it("refuses to reuse a persisted satisfied proof gate without fresh admission", async () => {
+    const path = await root();
+    const staged = await stagePilot(path, "2026-09-06T00:00:00.000Z");
+    const plan = (await listValidationPlans(path)).find((candidate) => candidate.planId === staged.planId);
+    plan.gates.find((gate) => gate.kind === "proof").status = "satisfied";
+    await writeFile(join(path, ".truth-harness/validation", `${plan.createdAt.slice(0, 10)}-${plan.planId}.json`), JSON.stringify(plan) + "\n", "utf8");
+    const [reopened] = await listValidationPlans(path);
+    expect(reopened.gates.find((gate) => gate.kind === "proof").status).toBe("in-progress");
+    await expect(closeGate(path, staged.planId)).rejects.toThrow(/independent (kernel\/axiom checker|checker)/u);
   });
 });

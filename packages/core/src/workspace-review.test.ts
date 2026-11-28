@@ -5,7 +5,7 @@ import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeClaimLedgerRecord } from "./claim-ledger.js";
 import { initLocalWorkspace } from "./local-workspace.js";
-import { writeLeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
+import { writeLeanProofCheckRecord, type LeanProofCheckRecord, type ProofBackendCommandRunner } from "./proof-backend.js";
 import { writeReportDraft } from "./report-draft.js";
 import { addResearchSessionCheckpoint, writeResearchHarness, writeResearchSession } from "./research-session.js";
 import { writeSmtCheckRecord, type SmtBackendCommandRunner } from "./smt-backend.js";
@@ -23,6 +23,31 @@ afterEach(async () => {
 });
 
 describe("workspace review", () => {
+  it("reopens historical proof gates and flags passive route inspection", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const harness = await writeResearchHarness({ rootPath: root, objective: "Show that this theorem needs a proof", domains: ["math"] });
+    const validation = harness.validationPlan!;
+    const gate = validation.plan.gates.find((candidate) => candidate.kind === "proof")!;
+    gate.status = "satisfied";
+    await writeFile(validation.jsonPath, JSON.stringify(validation.plan), "utf8");
+
+    const route = await writeVerifierRoute({ rootPath: root, problem: "Show that every supported tree has a checked invariant", timeoutMs: 50 });
+    const obligation = route.route.proofObligations.find((candidate) => candidate.kind === "formal-proof")!;
+    const passiveCount = (review: Awaited<ReturnType<typeof createWorkspaceReview>>) =>
+      Number(review.warnings.join(" ").match(/(\d+) passive route obligation/u)?.[1] ?? "0");
+    obligation.status = "not-required";
+    await writeFile(route.jsonPath, JSON.stringify(route.route), "utf8");
+    const baseline = await createWorkspaceReview({ rootPath: root });
+    obligation.status = "satisfied";
+    await writeFile(route.jsonPath, JSON.stringify(route.route), "utf8");
+
+    const review = await createWorkspaceReview({ rootPath: root });
+    expect(review.items).toContainEqual(expect.objectContaining({
+      kind: "validation-gate", validationGateId: gate.gateId
+    }));
+    expect(passiveCount(review)).toBe(passiveCount(baseline) + 1);
+  });
   it("requires a local workspace", async () => {
     const root = await tempRoot();
 
@@ -225,7 +250,7 @@ describe("workspace review", () => {
     ]);
   });
 
-  it("renders concrete validation attach commands for candidate session evidence", async () => {
+  it("keeps explicit legacy accepted session evidence out of actionable candidates", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {
       now: "2026-06-18T00:00:00.000Z"
@@ -249,21 +274,40 @@ describe("workspace review", () => {
       now: "2026-06-18T00:01:30.000Z"
     });
     await writeFile(join(root, "scoped.lean"), "theorem scoped_fixture : True := by trivial\n", "utf8");
-    const proofRunner: ProofBackendCommandRunner = (_command, args) => {
-      if (args[0] === "--version") {
-        return { status: 0, stdout: "Lean (version 4.12.0)\n", stderr: "" };
-      }
-
-      return { status: 0, stdout: "", stderr: "" };
-    };
-    const proof = await writeLeanProofCheckRecord({
-      rootPath: root,
-      sourcePath: "scoped.lean",
+    const proofRef = ".truth-harness/proofs/legacy-accepted-session.json";
+    const sourceText = await readFile(join(root, "scoped.lean"), "utf8");
+    // Historical reader fixture, not evidence minted by the current compiler adapter.
+    const legacyProof: LeanProofCheckRecord = {
+      schemaVersion: "truth-harness.proof-check.v0",
+      checkId: "proof_0123456789abcdef",
+      createdAt: "2026-06-18T00:02:00.000Z",
+      backend: {
+        id: "lean",
+        displayName: "Lean proof checker",
+        adapter: "local-lean-subprocess",
+        role: "proof-checker",
+        acceptedProofChecker: true,
+        command: "lean",
+        args: ["scoped.lean"],
+        version: "Lean (version 4.12.0)",
+        exitCode: 0
+      },
+      source: {
+        path: "scoped.lean",
+        sha256: createHash("sha256").update(sourceText).digest("hex"),
+        byteLength: Buffer.byteLength(sourceText)
+      },
       scope: { statement: "3 / 4 + 5 / 8" },
-      runner: proofRunner,
-      now: new Date("2026-06-18T00:02:00.000Z")
-    });
-    const proofRef = relative(root, proof.jsonPath).replace(/\\/gu, "/");
+      status: "accepted",
+      trust: "proved",
+      proofCheckerBacked: true,
+      localOnly: true,
+      networkAccess: "none",
+      replay: "truth-harness proof check scoped.lean --write",
+      limitations: ["Legacy accepted record retained for reader compatibility only."],
+      warnings: []
+    };
+    await writeFile(join(root, proofRef), JSON.stringify(legacyProof, null, 2), "utf8");
     await addResearchSessionCheckpoint({
       rootPath: root,
       sessionRef: harness.session.sessionId,
@@ -285,23 +329,13 @@ describe("workspace review", () => {
       kind: "validation-gate",
       sessionId: harness.session.sessionId,
       validationGateId: proofGate.gateId,
-      command: `truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`,
-      evidenceSlots: expect.arrayContaining([
-        expect.objectContaining({
-          attachCommand: `truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`
-        })
-      ]),
-      agentPacket: expect.stringContaining(`Attach command: truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`)
+      candidateEvidenceRefs: []
     });
-    expect(item?.candidateEvidenceRefs?.[0]).toMatchObject({ kind: "proof", ref: proofRef, trust: "proved" });
-    expect(item?.candidateEvidenceRefs?.[1]).toMatchObject({
-      kind: "proof",
-      ref: ".truth-harness/proofs/unverified-attempt.json",
-      trust: "unverified"
-    });
+    expect(item?.command).not.toContain(proofRef);
+    expect(item?.agentPacket).not.toContain(`Attach command: truth-harness validation attach ${harness.validationPlan?.plan.planId} ${proofGate.gateId} --evidence proof:`);
   });
 
-  it("renders concrete validation attach commands for saved proof-check evidence", async () => {
+  it("does not offer saved successful Lean compilation as accepted proof-check evidence", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {
       now: "2026-06-18T00:00:00.000Z"
@@ -358,13 +392,12 @@ describe("workspace review", () => {
       sessionId: harness.session.sessionId,
       validationPlanId: plan.planId,
       validationGateId: proofGate.gateId,
-      command: `truth-harness validation attach ${plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`
+      command: expect.stringContaining("truth-harness proof check")
     });
-    expect(item?.candidateEvidenceRefs?.[0]).toMatchObject({
-      kind: "proof",
-      ref: proofRef,
-      trust: "proved"
-    });
+    expect(proof.record).toMatchObject({ status: "rejected", trust: "unverified", proofCheckerBacked: false });
+    expect(item?.candidateEvidenceRefs).not.toContainEqual(expect.objectContaining({ kind: "proof", ref: proofRef }));
+    expect(item?.command).not.toContain(`proof:${proofRef}`);
+    expect(item?.command).toContain("--declaration smoke");
   });
 
   it("renders concrete validation attach commands for saved SMT evidence", async () => {
