@@ -6,6 +6,7 @@ import { z } from "zod";
 
 const catalogVersion = "truth-harness.proof-dependencies.v0";
 const reportVersion = "truth-harness.proof-dependency-lookup.v0";
+const handoffVersion = "truth-harness.proof-dependency-handoff.v0";
 const catalogFile = "proof-dependencies.json";
 const byteLimit = 65536;
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -76,15 +77,19 @@ async function readBounded(root, name) {
   }
 }
 
-function dependencyOrder(records, roots) {
+function inspectDependencies(records, roots) {
   const visiting = new Set();
   const visited = new Set();
+  const missing = new Set();
   const order = [];
   function visit(key) {
     if (visiting.has(key)) throw new Error(`Dependency cycle: ${key}`);
     if (visited.has(key)) return;
     const value = records.get(key);
-    if (!value) throw new Error(`Unknown dependency: ${key}`);
+    if (!value) {
+      missing.add(key);
+      return;
+    }
     visiting.add(key);
     for (const dep of [...value.requires].sort()) visit(dep);
     visiting.delete(key);
@@ -92,7 +97,7 @@ function dependencyOrder(records, roots) {
     order.push(value);
   }
   for (const key of roots) visit(key);
-  return order;
+  return { order, missing };
 }
 
 function indexRecords(catalog) {
@@ -114,8 +119,52 @@ function indexRecords(catalog) {
     }
     records.set(entry.id, entry);
   }
-  dependencyOrder(records, [...records.keys()].sort());
   return records;
+}
+
+const recordRef = entry => ({
+  id: entry.id, declaration: entry.declaration, challenge_sha256: entry.challenge.sha256
+});
+
+class MissingDependencyError extends Error {
+  constructor(key, handoff) {
+    super(`Unknown dependency: ${key}`);
+    this.handoff = handoff;
+  }
+}
+
+function missingHandoff(records, target, context) {
+  const { order, missing } = inspectDependencies(records, [target.id]);
+  if (!missing.size) return undefined;
+  const dependents = new Map();
+  for (const entry of order) {
+    for (const key of entry.requires) {
+      if (!dependents.has(key)) dependents.set(key, []);
+      dependents.get(key).push(entry.id);
+    }
+  }
+  const missingPrerequisites = [...missing].sort().map(key => {
+    const requiredBy = dependents.get(key);
+    const blocked = new Set(requiredBy);
+    // Follow reverse edges to include transitive dependents once.
+    for (const blockedId of blocked) {
+      for (const dependent of dependents.get(blockedId) ?? []) blocked.add(dependent);
+    }
+    return { id: key, required_by: [...requiredBy].sort(), blocks: [...blocked].sort() };
+  });
+  const blockedIds = new Set(missingPrerequisites.flatMap(entry => entry.blocks));
+  return {
+    schema_version: handoffVersion, status: "blocked",
+    catalog_sha256: context.catalog_sha256, lean_version: context.lean_version,
+    target: recordRef(target),
+    missing_prerequisites: missingPrerequisites,
+    blocked_records: [...blockedIds].sort().map(key => recordRef(records.get(key))),
+    next_checks: [
+      "confirm_and_restore_missing_records",
+      "rerun_catalog_lookup",
+      "replay_exact_proofs_with_trusted_checker"
+    ]
+  };
 }
 
 export async function findProofDependency(directory, target, challengeHash) {
@@ -125,9 +174,15 @@ export async function findProofDependency(directory, target, challengeHash) {
   const raw = await readBounded(root, catalogFile);
   const catalog = parseCatalog(raw);
   const records = indexRecords(catalog);
-  const matches = [...records.keys()].sort().map(key => records.get(key)).filter(entry =>
+  const keys = [...records.keys()].sort();
+  const { missing } = inspectDependencies(records, keys);
+  const matches = keys.map(key => records.get(key)).filter(entry =>
     entry.declaration === target && (challengeHash === undefined || entry.challenge.sha256 === challengeHash));
   const context = { declaration: target, catalog_sha256: digest(raw), lean_version: catalog.lean_version };
+  if (missing.size) {
+    const handoff = matches.length === 1 ? missingHandoff(records, matches[0], context) : undefined;
+    throw new MissingDependencyError(missing.values().next().value, handoff);
+  }
   if (!matches.length) return report({ status: "not-found", ...context });
   if (matches.length > 1) {
     return report({
@@ -135,7 +190,7 @@ export async function findProofDependency(directory, target, challengeHash) {
       matches: matches.map(entry => ({ id: entry.id, challenge_sha256: entry.challenge.sha256 }))
     });
   }
-  const order = dependencyOrder(records, [matches[0].id]);
+  const { order } = inspectDependencies(records, [matches[0].id]);
   const checked = new Set();
   for (const entry of order) {
     for (const ref of [entry.challenge, entry.solution, entry.receipt]) {
@@ -165,7 +220,9 @@ if (main) {
     console.log(JSON.stringify(result, null, 2));
     process.exitCode = result.status === "found" ? 0 : 1;
   } catch (error) {
-    console.log(JSON.stringify(report({ status: "invalid", error: error.message }), null, 2));
+    const fields = { status: "invalid", error: error.message };
+    if (error instanceof MissingDependencyError && error.handoff) fields.handoff = error.handoff;
+    console.log(JSON.stringify(report(fields), null, 2));
     process.exitCode = 2;
   }
 }

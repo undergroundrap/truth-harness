@@ -24,8 +24,8 @@ Put `proof-dependencies.json` beside its artifacts, for example in a local
 
 Use a stable local directory. Each file, including the catalog, is capped at
 64 KiB. Lookup rejects repeated JSON fields, cycles, missing IDs, duplicate
-dependency edges, and conflicting file citations. A challenge digest identifies those exact
-source bytes. It does not identify every equivalent formal statement.
+dependency edges, and conflicting file citations. A challenge digest identifies
+those exact source bytes, not every equivalent formal statement.
 
 ## Lookup
 
@@ -52,3 +52,32 @@ execute a catalog-provided command. A saved receipt can be wrong or stale
 even when its bytes match. Before citing a result as proved, use a trusted,
 independently configured replay to check the exact challenge and actual
 proof dependencies. This catalog does not feed general proof admission.
+
+## Missing Prerequisite Handoff
+
+An incomplete catalog still returns `invalid` (exit 2) with no replay order.
+If the requested declaration identifies one record and its closure refers to
+a missing record, the response adds a `handoff` with schema
+`truth-harness.proof-dependency-handoff.v0` and status `blocked`. API callers
+can read the same packet on the rejected error's `handoff` property.
+
+The packet identifies the selected `target` and the catalog digest. Each
+entry in `missing_prerequisites` gives the missing ID, the direct dependents
+(`required_by`), and all blocked record IDs in the selected closure (`blocks`).
+The `blocked_records` table maps those IDs to declarations and challenge
+digests. It does not guess the missing record's theorem or artifacts.
+In an acyclic catalog the outer `error` still reports the first missing ID
+from the whole-catalog walk, which can be in a different branch. A cycle
+is reported instead if both issues are present.
+
+The ordered `next_checks` are instructions for a reviewer or agent, not
+executable commands: confirm the intended prerequisites and restore their
+records and artifacts, rerun lookup, then replay the exact proofs with a
+trusted checker. Restoring an ID or matching a saved digest is not proof.
+
+An ambiguous target, an invalid schema, a cycle, or missing records only
+outside the selected closure do not produce a handoff. An absent or changed artifact
+alone does not produce one either. Graph validation runs before artifact
+checks, so a blocked handoff says nothing about whether any artifact is
+present or intact. The whole catalog must pass graph validation before any
+replay order can be returned.
