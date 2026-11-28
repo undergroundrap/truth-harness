@@ -27,6 +27,10 @@ formal statement. Legacy proof receipts remain readable for audit. Commands
 that require `proved`, including `docker:lean-suite` and `engines:verify:all`,
 report that proof admission is unavailable until a trusted adapter is installed.
 
+The [prefix-sum proof pilot](docs/LEAN_PROOF_LANE.md#independent-checker-pilot)
+uses Lean and NanoDa to check one bundled theorem against a separate reference
+statement. Its receipts cannot close general workspace proof gates.
+
 `docker compose run --build --rm lean-proof` reports compilation availability.
 The `mathlib-proof` service compiles its pinned algebra example. Exact
 arithmetic, bounded recurrence, CAS and SMT checks can still run. Native
