@@ -5,6 +5,50 @@ Truth Harness currently uses Lean for local compilation diagnostics. The
 to the exact formal claim. The current adapter keeps successful compilation
 at `unverified` and preserves old proof records for audit.
 
+## Independent Checker Pilot
+
+The bundled `prefix_range_sum` theorem states that, for an integer list and
+indices `lo <= hi`, the sum of the first `hi` entries minus the sum of the
+first `lo` entries equals the sum of the half-open slice `[lo, hi)`. Lean's
+list functions clamp indices past the end. The theorem does not address
+machine integers, implementation equivalence, or performance.
+
+With a local Docker daemon and builder, build the optional Linux x86-64
+image (network needed once for the
+checksum-pinned Lean 4.36.0 toolchain, about 608 MB of download before
+extraction). It does not install Mathlib or replace the legacy Lean image.
+
+```sh
+docker build --platform linux/amd64 -f tools/lean-prefix-check.Dockerfile -t truth-harness:lean-prefix-check .
+docker run --pull=never --rm --init --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 512m --tmpfs /tmp:rw,nosuid,nodev,size=128m truth-harness:lean-prefix-check --self-test
+```
+
+`--self-test` checks the intended theorem and requires the comparator to reject
+a different statement with the same name and an unfinished proof of the right
+statement. Omit the flag to check just the intended theorem. Re-run the image
+for fresh evidence. Each run builds and exports the fixed fixture from scratch
+and prints one `truth-harness.lean-prefix-check.v0` JSON receipt. It includes
+SHA-256 identities of the challenge, solution, Lake project and comparator
+configuration. Failures caught by the verifier emit `unverified` and exit
+nonzero. Docker startup failures can exit before emitting a receipt.
+
+The [Lean comparator](https://lean-lang.org/doc/reference/latest/ValidatingProofs/)
+compares the solution export to the separately authored `Challenge.lean`,
+permits only Lean's three standard axioms (`propext`, `Quot.sound`, and
+`Classical.choice`), and requires both Lean's kernel and NanoDa to accept.
+The challenge's placeholder is never used as the proof. The only source
+compiled by this pilot is the reviewed fixture packaged in the image.
+It takes no source paths, workspace mounts, third-party exports, or agent
+submissions. Run the command above without host mounts. Its offline,
+non-root, read-only settings are required launch conditions, not properties
+attested by the receipt. This pilot does not use Comparator's inner Bubblewrap
+sandbox and must not be used to compile untrusted code.
+
+The receipt covers this formal theorem only. It is not a
+`truth-harness.proof-check.v0` artifact, does not enable the general proof
+adapter, and cannot close unrelated gates. Generic compilation stays
+`unverified`.
+
 ## Why Lean Belongs Here
 
 Truth Harness should use mature engines instead of pretending one AI model can be the engine. Lean is the right kind of dependency because it supplies a hard boundary that chat models, CAS output, notebooks, and simulations do not provide: a small-kernel proof checker with replayable source artifacts.
