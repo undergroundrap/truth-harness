@@ -1,0 +1,81 @@
+{
+  "schema_version": "truth-harness.cs-proof-reuse-suite.v3",
+  "protocol": {
+    "base": "49c5b21c2672fd104e2ca1671e600956e3c0b4e2",
+    "response_max_bytes": 2048,
+    "instructions": "Solve only the given case. Use the supplied packet only: no tools, browsing, other files, or retries. Return one JSON object of at most 2048 UTF-8 bytes. Use exactly these fields: verdict (solved, refuted for a claim you disprove, or unknown); values (ordered decimal strings or nulls); labels (all vertex distances in ID order as nonnegative JSON integers or nulls, or null if not a unit-edge instance); witness (ordered vertex IDs or null); model (unit_edge_walks, integer_slices, or none); artifact (one eligible candidate ID from your packet, or null); reason (one short sentence explaining the matching assumptions or why they fail). Classify the claim separately from proof applicability: use model none and artifact null if the supplied proof model does not fit, even when you can refute the claim by another method. Do not claim you ran anything. The offline evaluator will check the instance and only replay an applicable artifact you select. Output JSON only."
+  },
+  "catalog": [
+    {
+      "id": "C17",
+      "summary": "In an exact signed integer list, subtract the prefix sum through lo from the prefix sum through hi (both endpoints exclusive) to get the sum on [lo, hi), when lo <= hi. List take/drop semantics apply, not machine overflow.",
+      "preset": "prefix",
+      "theorem": "prefix_range_sum"
+    },
+    {
+      "id": "C42",
+      "summary": "For a directed unit-edge graph, a zero label exclusively at the source, closure and a plus-one bound along edges from labeled vertices, and a predecessor exactly one lower at every positive label imply exact minimum walk lengths and unreachability for missing labels.",
+      "preset": "bfs",
+      "theorem": "bfs_certificate_sound"
+    }
+  ],
+  "cases": [
+    {
+      "id": "relay-routes",
+      "area": "graph routing",
+      "kind": "single_source",
+      "task": "All brackets in edges are directed transfers costing one hop. Give minimum hop counts from source to the query vertices in order, null if unreachable, plus the labels for every vertex.",
+      "input": {
+        "vertex_count": 12, "source": 2,
+        "edges": [[2,4],[2,0],[0,1],[4,5],[5,7],[7,8],[1,6],[6,8],[8,1],[8,10],[4,4],[3,2],[9,11],[11,9]],
+        "queries": [8,10,3,9]
+      },
+      "expected": {"verdict":"solved","values":["4","5",null,null],"labels":[1,2,0,null,1,2,3,3,4,null,5,null],"model":"unit_edge_walks","artifact":"C42"}
+    },
+    {
+      "id": "nearest-depot",
+      "area": "graph routing",
+      "kind": "multi_source",
+      "task": "Find the fewest directed transfers to each query starting at either depot. A transfer costs one hop and starting at a depot is free. For the certificate append virtual vertex 9 with one outgoing edge to each depot and label all ten vertices from 9; report actual query distances with the virtual hop removed.",
+      "input": {
+        "vertex_count": 9, "depots": [1,4],
+        "edges": [[1,3],[3,2],[2,7],[4,5],[5,7],[7,6],[6,5],[0,4],[8,8],[1,3]],
+        "queries": [7,6,0,8]
+      },
+      "expected": {"verdict":"solved","values":["2","3",null,null],"labels":[null,1,3,2,1,2,4,3,null,0],"model":"unit_edge_walks","artifact":"C42"}
+    },
+    {
+      "id": "signed-trace-slices",
+      "area": "array query algorithms",
+      "kind": "ranges",
+      "task": "Compute each half-open range sum [lo, hi) in order over the exact signed integer trace. Decimal input strings are mathematical integers, not machine floats or wrapping integers.",
+      "input": {
+        "entries": ["9007199254740993","-9007199254740992","-8","13","-2","17","-20","11"],
+        "ranges": [[0,1],[0,2],[1,6],[2,7],[4,4],[6,8],[0,8]]
+      },
+      "expected": {"verdict":"solved","values":["9007199254740993","1","-9007199254740972","0","0","-9","12"],"labels":null,"model":"integer_slices","artifact":"C17"}
+    },
+    {
+      "id": "false-latency-floor",
+      "area": "graph routing",
+      "kind": "false_bound",
+      "task": "A report claims that any directed route from the source to the target needs at least the stated lower bound of unit-hop transfers. Check the claim. Give the actual minimum in values, all labels, and a counterexample route if the claim is false.",
+      "input": {
+        "vertex_count": 10, "source": 0, "target": 8, "claimed_minimum": 5,
+        "edges": [[0,1],[1,3],[3,5],[5,6],[6,8],[0,2],[2,4],[4,8],[8,3],[9,8]]
+      },
+      "expected": {"verdict":"refuted","values":["3"],"labels":[0,1,1,2,2,3,4,null,3,null],"model":"unit_edge_walks","artifact":"C42"}
+    },
+    {
+      "id": "weighted-transfer-mismatch",
+      "area": "weighted routing",
+      "kind": "weighted_decline",
+      "task": "A colleague cites the proposed route's minimum hop count to certify minimum total transfer cost. Each edge has [from, to, cost]. Assess whether the hop evidence establishes that weighted claim. If it does not, give a cheaper route as witness and its cost as the only value. Do not use a theorem outside its assumptions.",
+      "input": {
+        "vertex_count": 5, "source": 0, "target": 3, "proposed_route": [0,3],
+        "edges": [[0,3,20],[0,1,2],[1,2,2],[2,3,2],[3,0,1],[4,3,1]]
+      },
+      "expected": {"verdict":"refuted","values":["6"],"labels":null,"model":"none","artifact":null}
+    }
+  ]
+}
