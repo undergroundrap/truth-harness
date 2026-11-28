@@ -330,7 +330,7 @@ describe("workspace run-next", () => {
     expect(result.markdown).toContain("npm run docker:engine-math");
   });
 
-  it("attaches direct proof-check artifacts to linked validation gates without overclaiming", async () => {
+  it("blocks automated proof admission even when a Lean compilation backend is available", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
     const harness = await writeResearchHarness({
@@ -382,61 +382,17 @@ describe("workspace run-next", () => {
     const updatedGate = updatedPlan?.gates.find((gate) => gate.gateId === proofGate.gateId);
     const updatedSession = await readResearchSession(root, harness.session.sessionId);
 
-    expect(plan.status).toBe("executed");
+    expect(plan.status).toBe("blocked");
     expect(plan.execution).toMatchObject({
       kind: "proof-check",
-      attached: true,
-      result: {
-        proof: {
-          trust: "unverified",
-          scope: {
-            statement: "3 / 4 + 5 / 8"
-          }
-        },
-        attachment: {
-          validationGate: {
-            satisfied: false,
-            blocked: false,
-            gate: {
-              gateId: proofGate.gateId,
-              status: "in-progress"
-            },
-            evidence: {
-              kind: "proof",
-              trust: "unverified",
-              claimScope: {
-                status: "matched"
-              }
-            }
-          },
-          checkpoint: {
-            summary: `Ran proof checker evidence for ${proofGate.gateId}.`,
-            evidenceRefs: [expect.objectContaining({ kind: "proof", trust: "unverified" })]
-          }
-        }
-      }
+      status: "blocked"
     });
-    const proofStatus =
-      plan.execution.kind === "proof-check"
-        ? (plan.execution.result as { proof?: { status?: unknown } }).proof?.status
-        : undefined;
-    expect(proofStatus).toSatisfy((status: unknown) => status === "rejected" || status === "error");
-    expect(plan.execution.summary).toContain("remains open");
-    expect(updatedGate).toMatchObject({
-      status: "in-progress",
-      evidenceRefs: [expect.objectContaining({ kind: "proof", trust: "unverified" })],
-      nextChecks: expect.arrayContaining([
-        "Proof check was not accepted; attach an accepted proof-check record before closing this gate."
-      ])
-    });
-    expect(updatedSession.evidenceRefs).toContainEqual(expect.objectContaining({ kind: "proof", trust: "unverified" }));
-    expect(updatedSession.checkpoints).toContainEqual(
-      expect.objectContaining({
-        summary: `Ran proof checker evidence for ${proofGate.gateId}.`,
-        evidenceRefs: [expect.objectContaining({ kind: "proof", trust: "unverified" })],
-        decisions: [expect.stringContaining("remains open")]
-      })
-    );
+    expect(plan.execution.summary).toContain("independent kernel/axiom checker");
+    expect(plan.execution.summary).toContain("Docker compilation is diagnostic-only");
+    expect(updatedGate?.status).not.toBe("satisfied");
+    expect(updatedGate?.evidenceRefs).toEqual(proofGate.evidenceRefs);
+    expect(updatedSession.evidenceRefs.some((ref) => ref.kind === "proof")).toBe(false);
+    expect(await readdir(join(root, ".truth-harness", "proofs")).catch(() => [])).toEqual([]);
   });
 
   it("blocks unchanged failed Lean proof attempts before rerunning proof check", async () => {
@@ -517,7 +473,7 @@ describe("workspace run-next", () => {
     expect(proofRecords).toEqual([]);
   });
 
-  it("executes validation attach commands for existing scoped proof artifacts", async () => {
+  it("attaches compilation evidence without closing a proof gate from copied scope", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
     const harness = await writeResearchHarness({
@@ -580,44 +536,44 @@ describe("workspace run-next", () => {
       attached: true,
       result: {
         validationGate: {
-          satisfied: true,
+          satisfied: false,
           blocked: false,
           gate: {
             gateId: proofGate.gateId,
-            status: "satisfied",
-            evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })]
+            status: "in-progress",
+            evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "unverified" })]
           },
           evidence: {
             kind: "proof",
-            trust: "proved",
+            trust: "unverified",
             claimScope: {
-              status: "matched"
+              status: "missing"
             }
           }
         },
         checkpoint: {
           summary: `Ran proof checker evidence for ${proofGate.gateId}.`,
-          evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })]
+          evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "unverified" })]
         }
       }
     });
-    expect(plan.execution.summary).toContain("satisfied by proved proof evidence");
+    expect(plan.execution.summary).toContain("remains open");
     expect(plan.execution.summary).toContain(`Checkpointed research session ${harness.session.sessionId}.`);
     expect(updatedGate).toMatchObject({
-      status: "satisfied",
-      evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })]
+      status: "in-progress",
+      evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "unverified" })]
     });
-    expect(updatedSession.evidenceRefs).toContainEqual(expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" }));
+    expect(updatedSession.evidenceRefs).toContainEqual(expect.objectContaining({ kind: "proof", ref: proofRef, trust: "unverified" }));
     expect(updatedSession.checkpoints).toContainEqual(
       expect.objectContaining({
         summary: `Ran proof checker evidence for ${proofGate.gateId}.`,
-        evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })],
-        nextChecks: [expect.stringContaining("rerun workspace run-next")]
+        evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "unverified" })],
+        nextChecks: [expect.stringContaining("independent kernel/axiom audit")]
       })
     );
   });
 
-  it("executes generated candidate-evidence validation attach actions", async () => {
+  it("does not plan an attachment from legacy proof labels in a checkpoint", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-18T00:00:00.000Z" });
     const harness = await writeResearchHarness({
@@ -670,65 +626,19 @@ describe("workspace run-next", () => {
       now: "2026-06-18T00:04:00.000Z"
     });
 
-    const executed = await createWorkspaceRunNextPlan({
+    const next = await createWorkspaceRunNextPlan({
       rootPath: root,
       review,
-      executeLocal: true,
+      executeLocal: false,
       now: "2026-06-18T00:05:00.000Z"
     });
-    const plans = await listValidationPlans(root);
-    const updatedGate = plans
-      .find((candidate) => candidate.planId === validationPlan.planId)
-      ?.gates.find((gate) => gate.gateId === proofGate.gateId);
-
-    expect(review.items[0]).toMatchObject({
-      kind: "validation-gate",
-      command: `truth-harness validation attach ${validationPlan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`
-    });
-    expect(review.items[0]?.candidateEvidenceRefs?.[0]).toMatchObject({
-      kind: "proof",
-      ref: proofRef,
-      trust: "proved"
-    });
-    expect(review.items[0]?.candidateEvidenceRefs?.[1]).toMatchObject({
-      kind: "proof",
-      ref: ".truth-harness/proofs/unverified-attempt.json",
-      trust: "unverified"
-    });
-    expect(executed).toMatchObject({
-      status: "executed",
-      execution: {
-        kind: "validation-attach",
-        evidenceRef: `proof:${proofRef}`,
-        result: {
-          validationGate: {
-            satisfied: true,
-            gate: {
-              gateId: proofGate.gateId,
-              status: "satisfied"
-            }
-          }
-        }
-      }
-    });
-    expect(updatedGate).toMatchObject({
-      status: "satisfied",
-      evidenceRefs: [expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })]
-    });
-
-    const afterClosureReview = await createWorkspaceReview({
-      rootPath: root,
-      now: "2026-06-18T00:06:00.000Z"
-    });
-    const afterClosurePlan = await createWorkspaceRunNextPlan({
-      rootPath: root,
-      review: afterClosureReview,
-      executeLocal: false,
-      now: "2026-06-18T00:07:00.000Z"
-    });
-
-    expect(afterClosureReview.items).not.toContainEqual(expect.objectContaining({ validationGateId: proofGate.gateId }));
-    expect(afterClosurePlan.item?.validationGateId).not.toBe(proofGate.gateId);
+    expect(next.item?.validationGateId).toBe(proofGate.gateId);
+    expect(next.item?.command).not.toContain(proofRef);
+    expect(review.items[0]?.candidateEvidenceRefs).toEqual([]);
+    const saved = await readResearchSession(root, harness.session.sessionId);
+    expect(saved.checkpoints.at(-1)?.evidenceRefs).toContainEqual(
+      expect.objectContaining({ kind: "proof", ref: proofRef, trust: "proved" })
+    );
   });
 
   it("executes workspace snapshot gates without honoring command path overrides", async () => {

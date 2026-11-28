@@ -1,6 +1,8 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { initLocalWorkspace } from "./local-workspace.js";
@@ -26,7 +28,18 @@ afterEach(async () => {
 });
 
 describe("proof backend status", () => {
-  it("reports an available local Lean proof checker without minting proof", () => {
+  it.skipIf(process.platform === "win32")("checks proof entry containment before listing or direct lookup", async () => {
+    const root = await tempRoot();
+    const otherRoot = await tempRoot();
+    await initLocalWorkspace(root);
+    const other = join(otherRoot, "outside.json");
+    await writeFile(other, "{}", "utf8");
+    const ref = ".truth-harness/proofs/linked.json";
+    await symlink(other, join(root, ref));
+    await expect(listLeanProofChecks(root)).rejects.toThrow("Path escapes workspace root");
+    await expect(readLeanProofCheckRecord(root, ref)).rejects.toThrow("Path escapes workspace root");
+  });
+  it("reports runnable Lean but no trusted independent proof checker", () => {
     const calls: Array<{ command: string; args: string[]; timeoutMs: number }> = [];
     const runner: ProofBackendCommandRunner = (command, args, timeoutMs) => {
       calls.push({ command, args, timeoutMs });
@@ -47,7 +60,7 @@ describe("proof backend status", () => {
     expect(report.schemaVersion).toBe("truth-harness.proof-backends.v0");
     expect(report.localOnly).toBe(true);
     expect(report.networkAccess).toBe("none");
-    expect(report.proofCheckersAvailable).toBe(1);
+    expect(report.proofCheckersAvailable).toBe(0);
     expect(report.trustBoundary.statusProbeIsNotProof).toBe(true);
     expect(report.trustBoundary.provedRequiresSuccessfulProofRun).toBe(true);
     expect(report.backends[0]).toMatchObject({
@@ -56,11 +69,11 @@ describe("proof backend status", () => {
       role: "proof-checker",
       acceptedProofChecker: true,
       status: "available",
-      canCheckProofs: true,
+      canCheckProofs: false,
       statusProbeMintedProof: false,
       version: "Lean (version 4.12.0, x86_64-unknown-linux-gnu)"
     });
-    expect(report.backends[0]?.limitations.join(" ")).toContain("only after Lean accepts");
+    expect(report.backends[0]?.limitations.join(" ")).toContain("trusted independent kernel check and transitive axiom audit is missing");
     expect(report.warnings.join(" ")).toContain("does not prove any claim");
   });
 
@@ -128,10 +141,10 @@ describe("proof backend status", () => {
     expect(report.backends[0]?.limitations.join(" ")).toContain("cannot support `proved`");
   });
 
-  it("labels a Lean-accepted proof artifact as proved with proof-checker metadata", () => {
-    const calls: Array<{ command: string; args: string[]; timeoutMs: number }> = [];
-    const runner: ProofBackendCommandRunner = (command, args, timeoutMs) => {
-      calls.push({ command, args, timeoutMs });
+  it("records exit-zero compilation of exact hashed stdin without minting proved", () => {
+    const calls: Array<{ command: string; args: string[]; timeoutMs: number; input?: string }> = [];
+    const runner: ProofBackendCommandRunner = (command, args, timeoutMs, options) => {
+      calls.push({ command, args, timeoutMs, input: options?.input });
       if (args[0] === "--version") {
         return {
           status: 0,
@@ -147,26 +160,29 @@ describe("proof backend status", () => {
       };
     };
 
+    const sourceText = "theorem one_plus_one : 1 + 1 = 2 := by rfl\n";
     const record = checkLeanProofArtifact({
       sourcePath: "proofs/parity.lean",
-      sourceText: "theorem one_plus_one : 1 + 1 = 2 := by norm_num\n",
+      sourceText,
       declarationName: "one_plus_one",
       now: new Date("2026-06-10T00:00:00.000Z"),
       runner
     });
 
     expect(calls).toEqual([
-      { command: "lean", args: ["--version"], timeoutMs: 3000 },
-      { command: "lean", args: ["proofs/parity.lean"], timeoutMs: 3000 }
+      { command: "lean", args: ["--version"], timeoutMs: 3000, input: undefined },
+      { command: "lean", args: ["--stdin"], timeoutMs: 3000, input: sourceText }
     ]);
     expect(record.schemaVersion).toBe("truth-harness.proof-check.v0");
     expect(record.checkId).toMatch(/^proof_[a-f0-9]{16}$/);
-    expect(record.status).toBe("accepted");
-    expect(record.trust).toBe("proved");
-    expect(record.proofCheckerBacked).toBe(true);
+    expect(record.status).toBe("rejected");
+    expect(record.trust).toBe("unverified");
+    expect(record.proofCheckerBacked).toBe(false);
+    expect(record.backend.exitCode).toBe(0);
     expect(record.backend.acceptedProofChecker).toBe(true);
     expect(record.backend.version).toBe("Lean (version 4.12.0)");
-    expect(record.source.sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(record.source.sha256).toBe(createHash("sha256").update(sourceText).digest("hex"));
+    expect(record.source.byteLength).toBe(Buffer.byteLength(sourceText, "utf8"));
     expect(record.source.declarationName).toBe("one_plus_one");
     expect(record.source.declaration).toMatchObject({
       declarationId: expect.stringMatching(/^decl_[a-f0-9]{16}$/u),
@@ -179,13 +195,14 @@ describe("proof backend status", () => {
       signatureSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
       sourceSha256: record.source.sha256
     });
-    expect(record.limitations.join(" ")).toContain("formal statement checked by Lean");
+    expect(record.limitations.join(" ")).toContain("trusted independent kernel check and transitive axiom audit is missing");
+    expect(record.limitations.join(" ")).toContain("does not refute");
   });
 
   it("checks Lean artifacts through a Lake project environment when a project root is supplied", () => {
-    const calls: Array<{ command: string; args: string[]; timeoutMs: number; cwd?: string }> = [];
+    const calls: Array<{ command: string; args: string[]; timeoutMs: number; cwd?: string; input?: string }> = [];
     const runner: ProofBackendCommandRunner = (command, args, timeoutMs, options) => {
-      calls.push({ command, args, timeoutMs, cwd: options?.cwd });
+      calls.push({ command, args, timeoutMs, cwd: options?.cwd, input: options?.input });
       if (args[0] === "--version") {
         return {
           status: 0,
@@ -214,19 +231,21 @@ describe("proof backend status", () => {
     });
 
     expect(calls).toEqual([
-      { command: "lean-test", args: ["--version"], timeoutMs: 3000, cwd: undefined },
+      { command: "lean-test", args: ["--version"], timeoutMs: 3000, cwd: undefined, input: undefined },
       {
         command: "lake-test",
-        args: ["env", "lean-test", "C:/workspace/MathlibProofs/Algebra.lean"],
+        args: ["env", "lean-test", "--stdin"],
         timeoutMs: 3000,
-        cwd: "C:/workspace"
+        cwd: "C:/workspace",
+        input: "theorem add_comm_fixture (a b : Nat) : a + b = b + a := by exact Nat.add_comm a b\n"
       }
     ]);
-    expect(record.status).toBe("accepted");
-    expect(record.trust).toBe("proved");
+    expect(record.status).toBe("rejected");
+    expect(record.trust).toBe("unverified");
+    expect(record.proofCheckerBacked).toBe(false);
     expect(record.backend).toMatchObject({
       command: "lake-test",
-      args: ["env", "lean-test", "C:/workspace/MathlibProofs/Algebra.lean"]
+      args: ["env", "lean-test", "--stdin"]
     });
     expect(record.replay).toBe(
       "truth-harness proof check MathlibProofs/Algebra.lean --json --project C:/workspace --lean-command lean-test --lake-command lake-test"
@@ -367,10 +386,11 @@ describe("proof backend status", () => {
 
     expect(calls).toEqual([
       { command: "lean-test", args: ["--version"], timeoutMs: 3000, cwd: undefined },
-      { command: "lake-test", args: ["env", "lean-test", sourcePath], timeoutMs: 3000, cwd: projectRoot }
+      { command: "lake-test", args: ["env", "lean-test", "--stdin"], timeoutMs: 3000, cwd: projectRoot }
     ]);
-    expect(record.status).toBe("accepted");
-    expect(record.trust).toBe("proved");
+    expect(record.status).toBe("rejected");
+    expect(record.trust).toBe("unverified");
+    expect(record.proofCheckerBacked).toBe(false);
     expect(record.warnings.join(" ")).toContain("Lake dependency manifest detected");
   });
 
@@ -601,7 +621,8 @@ describe("proof backend status", () => {
     const list = await listLeanProofChecks(root);
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
-    expect(write.record.trust).toBe("proved");
+    expect(write.record.trust).toBe("unverified");
+    expect(write.record.status).toBe("rejected");
     expect(write.jsonPath).toContain(".truth-harness");
     expect(write.markdownPath).toContain(".truth-harness");
     expect(write.markdown).toContain("Lean Proof Check");
@@ -627,14 +648,14 @@ describe("proof backend status", () => {
         statementHash: "0123456789abcdef",
         statement: "example : True"
       },
-      trust: "proved",
-      proofCheckerBacked: true
+      trust: "unverified",
+      proofCheckerBacked: false
     });
     expect(validation.passed).toBe(true);
     expect(validation.summary.byKind.proofs).toBe(1);
   });
 
-  it("warns when a requested Lean declaration name is not found in the checked source", () => {
+  it("fails closed when a requested Lean declaration name is not found in the checked source", () => {
     const runner: ProofBackendCommandRunner = (_command, args) => {
       if (args[0] === "--version") {
         return {
@@ -658,12 +679,81 @@ describe("proof backend status", () => {
       runner
     });
 
-    expect(record.status).toBe("accepted");
-    expect(record.trust).toBe("proved");
+    expect(record.status).toBe("rejected");
+    expect(record.trust).toBe("unverified");
+    expect(record.proofCheckerBacked).toBe(false);
     expect(record.source.declarationName).toBe("requested_name");
     expect(record.source.declaration).toBeUndefined();
     expect(record.warnings.join(" ")).toContain("requested Lean declaration");
-    expect(record.warnings.join(" ")).toContain("whole source file");
+    expect(record.warnings.join(" ")).toContain("does not resolve or prove the requested declaration");
+  });
+
+  it.each([
+    { name: "named theorem", source: "theorem target : True := by trivial\n", target: "target" },
+    { name: "explicit sorryAx", source: "theorem target : False := sorryAx False true\n", target: "target" },
+    { name: "imported false axiom", source: "import FalseAxiom\ntheorem target : False := importedFalse\n", target: "target" },
+    { name: "whole-file named theorems", source: "theorem first : True := by trivial\ntheorem second : True := first\n" },
+    { name: "anonymous-only file", source: "example : True := by trivial\n" }
+  ])("never promotes generic exit-zero output for $name", ({ source, target }) => {
+    const runner: ProofBackendCommandRunner = (_command, args) => ({
+      status: 0,
+      stdout: args[0] === "--version"
+        ? "Lean (version 4.12.0)\n"
+        : "TRUTH_HARNESS_AXIOM_AUDIT: {\"target\":\"target\",\"axioms\":[],\"accepted\":true}\n",
+      stderr: args[0] === "--version" ? "" : "warning: audit accepted; no axioms found"
+    });
+
+    const record = checkLeanProofArtifact({
+      sourcePath: "proofs/target.lean",
+      sourceText: source,
+      declarationName: target,
+      runner
+    });
+
+    expect(record.status).toBe("rejected");
+    expect(record.trust).toBe("unverified");
+    expect(record.proofCheckerBacked).toBe(false);
+    expect(record.backend.exitCode).toBe(0);
+    expect(record.limitations.join(" ")).toContain("trusted independent kernel check and transitive axiom audit is missing");
+    expect(record.stdout).toContain("TRUTH_HARNESS_AXIOM_AUDIT");
+    expect(record.stderr).toContain("warning: audit accepted");
+  });
+
+  it("does not treat a selected local def as a theorem proof", () => {
+    const runner: ProofBackendCommandRunner = (_command, args) => ({
+      status: 0,
+      stdout: args[0] === "--version" ? "Lean (version 4.12.0)\n" : "",
+      stderr: ""
+    });
+
+    const record = checkLeanProofArtifact({
+      sourcePath: "proofs/definition.lean",
+      sourceText: "def target : True := True.intro\n",
+      declarationName: "target",
+      runner
+    });
+
+    expect(record.source.declaration?.kind).toBe("def");
+    expect(record.status).toBe("rejected");
+    expect(record.trust).toBe("unverified");
+    expect(record.proofCheckerBacked).toBe(false);
+    expect(record.warnings.join(" ")).toContain("is a def, not a theorem target");
+  });
+
+  it("passes exact UTF-8 source including comments and line endings to the runner", () => {
+    const sourceText = `-- a claimed audit is only source text\r\ntheorem target : True := by trivial\r\n#eval "${String.fromCodePoint(0x03bb)}"\r\n`;
+    let checkedInput: string | undefined;
+    const runner: ProofBackendCommandRunner = (_command, args, _timeoutMs, options) => {
+      if (args[0] !== "--version") checkedInput = options?.input;
+      return { status: 0, stdout: args[0] === "--version" ? "Lean (version 4.12.0)\n" : "", stderr: "" };
+    };
+
+    const record = checkLeanProofArtifact({ sourcePath: "not-read-from-disk.lean", sourceText, runner });
+
+    expect(checkedInput).toBe(sourceText);
+    expect(record.source.sha256).toBe(createHash("sha256").update(checkedInput!).digest("hex"));
+    expect(record.source.byteLength).toBe(Buffer.byteLength(sourceText, "utf8"));
+    expect(record.trust).toBe("unverified");
   });
 
   it("includes bounded diagnostics in listed proof-check summaries", async () => {
@@ -795,6 +885,90 @@ describe("proof backend status", () => {
     expect(validation.summary.byKind.proofs).toBe(1);
     expect(validation.summary.byKind.visuals).toBe(1);
   });
+});
+
+describe.runIf(process.env.TRUTH_HARNESS_TEST_REAL_LEAN === "1")("real Lean compilation-only boundary", () => {
+  it.each([
+    { name: "valid theorem", source: "theorem target : 1 + 1 = 2 := by rfl\n", target: "target", exitCode: 0 },
+    { name: "invalid theorem", source: "theorem target : False := True.intro\n", target: "target", exitCode: 1 },
+    { name: "explicit sorryAx", source: "theorem target : False := sorryAx False true\n", target: "target", exitCode: 0 },
+    { name: "missing requested theorem", source: "theorem actual : True := by trivial\n", target: "target", exitCode: 0 },
+    { name: "local def", source: "def target : True := True.intro\n", target: "target", exitCode: 0 },
+    { name: "whole-file theorems", source: "theorem first : True := by trivial\ntheorem second : True := first\n", exitCode: 0 },
+    { name: "anonymous-only file", source: "example : True := by trivial\n", exitCode: 0 },
+    { name: "theorem with compiler diagnostics", source: "theorem target : True := by trivial\n#check target\n", target: "target", exitCode: 0 }
+  ])("keeps $name unverified", ({ name, source, target, exitCode }) => {
+    const record = checkLeanProofArtifact({
+      sourcePath: "fixture-not-read-from-disk.lean",
+      sourceText: source,
+      declarationName: target,
+      timeoutMs: 10000
+    });
+
+    expect(record.backend.version).toContain("version 4.12.0");
+    expect(record.backend.exitCode, record.stdout || record.stderr || record.error).toBe(exitCode);
+    expect(record.backend.args).toEqual(["--stdin"]);
+    expect(record.source.sha256).toBe(createHash("sha256").update(source).digest("hex"));
+    expect(record.status).toBe("rejected");
+    expect(record.trust).toBe("unverified");
+    expect(record.proofCheckerBacked).toBe(false);
+    if (exitCode === 0) {
+      expect(record.limitations.join(" ")).toContain("trusted independent kernel check and transitive axiom audit is missing");
+    }
+    if (name === "theorem with compiler diagnostics") expect(record.stdout).toContain("target : True");
+  }, 30000);
+
+  it("keeps a theorem depending on an imported false axiom unverified", async () => {
+    const root = await tempRoot();
+    const leanCommand = process.env.TRUTH_HARNESS_LEAN?.trim() || "lean";
+    await writeFile(join(root, "FalseAxiom.lean"), "axiom importedFalse : False\n", "utf8");
+    const compile = spawnSync(leanCommand, ["-o", "FalseAxiom.olean", "FalseAxiom.lean"], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 10000,
+      windowsHide: true
+    });
+    expect(compile.error).toBeUndefined();
+    expect(compile.status, compile.stdout || compile.stderr).toBe(0);
+
+    const previousLeanPath = process.env.LEAN_PATH;
+    process.env.LEAN_PATH = [root, previousLeanPath].filter(Boolean).join(delimiter);
+    try {
+      const record = checkLeanProofArtifact({
+        sourcePath: "imported-false-not-read-from-disk.lean",
+        sourceText: "import FalseAxiom\ntheorem target : False := importedFalse\n#print axioms target\n",
+        declarationName: "target",
+        timeoutMs: 10000
+      });
+      expect(record.backend.exitCode, record.stdout || record.stderr || record.error).toBe(0);
+      expect(record.stdout).toContain("importedFalse");
+      expect(record.status).toBe("rejected");
+      expect(record.trust).toBe("unverified");
+      expect(record.proofCheckerBacked).toBe(false);
+    } finally {
+      if (previousLeanPath === undefined) delete process.env.LEAN_PATH;
+      else process.env.LEAN_PATH = previousLeanPath;
+    }
+  }, 30000);
+
+  it("runs a Lake project compile using the same exact stdin source", async () => {
+    const root = await tempRoot();
+    await writeFile(join(root, "lean-toolchain"), "leanprover/lean4:v4.12.0\n", "utf8");
+    await writeFile(join(root, "lakefile.lean"), "import Lake\nopen Lake DSL\npackage compile_only_fixture where\n", "utf8");
+    const record = checkLeanProofArtifact({
+      sourcePath: join(root, "not-read-from-disk.lean"),
+      sourceText: "theorem target : True := by trivial\n",
+      declarationName: "target",
+      projectRoot: root,
+      timeoutMs: 10000
+    });
+
+    expect(record.backend.args).toEqual(["env", process.env.TRUTH_HARNESS_LEAN?.trim() || "lean", "--stdin"]);
+    expect(record.backend.exitCode, record.stdout || record.stderr || record.error).toBe(0);
+    expect(record.status).toBe("rejected");
+    expect(record.trust).toBe("unverified");
+    expect(record.proofCheckerBacked).toBe(false);
+  }, 30000);
 });
 
 async function tempRoot(): Promise<string> {

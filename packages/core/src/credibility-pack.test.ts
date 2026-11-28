@@ -135,20 +135,17 @@ describe("professor credibility pack", () => {
 
     expect(result.pack.schemaVersion).toBe("truth-harness.credibility-pack.v0");
     expect(result.pack.packId).toMatch(/^cred_[a-f0-9]{16}$/u);
-    expect(result.pack.status).toBe("ready-for-review");
+    expect(result.pack.status).toBe("blocked");
     expect(result.pack.summary).toMatchObject({
       validationPassed: true,
       validationErrors: 0,
-      engineStatus: "passed",
-      concreteEngineGates: "3/3",
-      requiredEngineGates: "3/3",
-      engineEvidenceMinted: 3,
+      engineStatus: "failed",
+      concreteEngineGates: "2/3",
+      requiredEngineGates: "2/3",
+      engineEvidenceMinted: 2,
       savedEngineRuns: 1,
-      savedEngineLadderLevel: "engine-level-5-strict-all-engines",
-      savedEngineLadderLevelTitle: "Strict all-engine reviewer gate",
-      savedEngineLadderLevelRunId: strictEngineRun.record.runId,
-      latestStrictEngineRunStatus: "passed",
-      latestStrictEngineRunLevel: "engine-level-5-strict-all-engines",
+      latestStrictEngineRunStatus: "failed",
+      latestStrictEngineRunLevel: "engine-level-4-sage-breadth",
       savedBenchmarkRuns: 4,
       latestAdversarialBenchmarkStatus: "passed",
       latestAdversarialBenchmarkAccuracy: 1,
@@ -162,21 +159,25 @@ describe("professor credibility pack", () => {
       hardMathExactClosureStatus: "passed",
       hardMathSymbolicClosureStatus: "passed",
       hardMathSmtClosureStatus: "passed",
-      professorReady: true
+      professorReady: false
     });
+    expect(result.pack.summary.savedEngineLadderLevel).toBeUndefined();
+    expect(result.pack.summary.savedEngineLadderLevelTitle).toBeUndefined();
+    expect(result.pack.summary.savedEngineLadderLevelRunId).toBeUndefined();
+    expect(result.pack.engineRunLedger.strongestSavedLevelRun).toBeUndefined();
     expect(result.pack.embeddedSnapshot.entries.length).toBeGreaterThan(0);
     expect(result.pack.engineEvidence.cases).toContainEqual(
-      expect.objectContaining({ id: "lean-proof-fixture", trust: "proved", evidenceMinted: true })
+      expect.objectContaining({ id: "lean-proof-fixture", trust: "unverified", evidenceMinted: false })
     );
     expect(result.pack.engineEvidenceLadder).toContainEqual(
       expect.objectContaining({
         caseId: "lean-proof-fixture",
         gate: "required",
-        evidenceTier: "earned evidence",
-        reviewerMeaning: "Concrete `proved` evidence earned for this fixture; replay it before citing the engine gate."
+        evidenceTier: "failed evidence",
+        reviewerMeaning: "Required evidence was attempted and failed, so strict reviewer readiness fails closed."
       })
     );
-    expect(result.markdown).toContain("Professor ready: yes");
+    expect(result.markdown).toContain("Professor ready: no");
     expect(result.markdown).toContain("Saved engine-run ledger: 1 saved");
     expect(result.markdown).toContain("Adversarial benchmark: passed (100.0%)");
     expect(result.markdown).toContain("Math credibility ladder: passed (100.0%)");
@@ -185,7 +186,8 @@ describe("professor credibility pack", () => {
     expect(result.markdown).toContain("Hard-math closure: 3 saved (exact passed, symbolic passed, SMT passed)");
     expect(result.markdown).toContain("## Hard-Math Closure Ledger");
     expect(result.markdown).toContain("## Engine Evidence Ladder");
-    expect(result.markdown).toContain("| Lean proof fixture | required | `passed` | `proved` | earned evidence | Concrete `proved` evidence earned");
+    expect(result.markdown).toContain("| Lean proof fixture | required | `failed` | `unverified` | failed evidence |");
+    expect(result.markdown).not.toContain("Concrete `proved` evidence earned");
     expect(result.markdown).toContain("## Saved Engine Run Ledger");
     expect(result.markdown).toContain(strictEngineRun.record.runId);
     expect(result.markdown).toContain("## Benchmark Ledger");
@@ -197,9 +199,9 @@ describe("professor credibility pack", () => {
     expect(result.pack.engineRunLedger.latestStrictReviewerRun).toMatchObject({
       runId: strictEngineRun.record.runId,
       requiredTotal: 5,
-      strongestLevelId: "engine-level-5-strict-all-engines",
-      strictAllEngineLevelPassed: true,
-      status: "passed"
+      strongestLevelId: "engine-level-4-sage-breadth",
+      strictAllEngineLevelPassed: false,
+      status: "failed"
     });
     expect(result.pack.benchmarkLedger.latestAdversarialRun).toMatchObject({
       artifactId: adversarialBenchmark.record.benchmarkRunId,
@@ -229,15 +231,12 @@ describe("professor credibility pack", () => {
       replayCommand: "truth-harness bench run packages/benchmarks/suites/frontier-honesty-challenge.json --write --fail-on-failures",
       receiptReplays: expect.arrayContaining([frontierChallengeReceipt.replay])
     });
-    expect(result.pack.reviewerActionPlan).toMatchObject({
-      totalActions: 0,
-      criticalActions: 0,
-      highActions: 0,
-      actions: []
-    });
-    expect(result.markdown).toContain("Reviewer action plan: 0 actions");
+    expect(result.pack.reviewerActionPlan.totalActions).toBeGreaterThan(0);
+    expect(result.pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({ category: "engine", title: "Close required Lean proof fixture gate" })
+    );
     expect(result.markdown).toContain("## Reviewer Action Plan");
-    expect(result.markdown).toContain("No open reviewer actions were generated");
+    expect(result.markdown).toContain("Close required Lean proof fixture gate");
     expect(result.markdown).toContain(`Replay: \`${adversarialBenchmark.record.replay.command}\``);
     expect(result.markdown).toContain(`Receipt replay examples: \`${adversarialReceipt.replay}\``);
     expect(result.pack.reviewerCommands.verifyEngines).toBe(
@@ -654,7 +653,7 @@ describe("professor credibility pack", () => {
     });
   });
 
-  it("accepts saved Docker professor engine evidence when host probes are unavailable", async () => {
+  it("does not let saved Docker compilation-only evidence clear the Lean gate when host probes are unavailable", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-16T00:00:00.000Z" });
     const professorEngineRun = await writeEngineVerificationRun({
@@ -739,38 +738,40 @@ describe("professor credibility pack", () => {
       })
     });
 
-    expect(pack.status).toBe("ready-for-review");
+    expect(pack.status).toBe("blocked");
     expect(pack.summary).toMatchObject({
       engineStatus: "failed",
       concreteEngineGates: "0/4",
       requiredEngineGates: "0/4",
-      latestProfessorEngineRunStatus: "passed",
-      latestProfessorEngineRunLevel: "engine-level-3-formal-proof-fixture",
-      savedEngineLadderLevel: "engine-level-3-formal-proof-fixture",
       latestAdversarialBenchmarkStatus: "passed",
       latestMathCredibilityLadderStatus: "passed",
       latestProfessorMathChallengeStatus: "passed",
       hardMathExactClosureStatus: "passed",
       hardMathSymbolicClosureStatus: "passed",
       hardMathSmtClosureStatus: "passed",
-      professorReady: true
+      professorReady: false
     });
-    expect(pack.engineRunLedger.latestProfessorReviewerRun).toMatchObject({
-      runId: professorEngineRun.record.runId,
-      status: "passed",
-      strongestLevelId: "engine-level-3-formal-proof-fixture",
-      requiredTotal: 4
-    });
-    expect(pack.warnings).not.toContain("Required engine evidence gates are incomplete: 0/4 passed.");
-    expect(pack.warnings).not.toContain("Concrete engine smoke gates are incomplete: 0/4 passed.");
-    expect(pack.reviewerActionPlan.actions.filter((action) => action.category === "engine")).toEqual([]);
-    expect(pack.markdown).toContain(
-      "Engine evidence: saved Docker professor evidence covers these gates; live host smoke: failed (0/4 concrete gates, 0/4 required gates, 0 evidence records earned)"
+    expect(pack.summary.latestProfessorEngineRunStatus).toBeUndefined();
+    expect(pack.summary.latestProfessorEngineRunLevel).toBeUndefined();
+    expect(pack.summary.savedEngineLadderLevel).toBeUndefined();
+    expect(pack.engineRunLedger.latestProfessorReviewerRun).toBeUndefined();
+    expect(pack.engineRunLedger.latestRuns).toContainEqual(
+      expect.objectContaining({
+        runId: professorEngineRun.record.runId,
+        status: "failed",
+        strongestLevelId: "engine-level-2-smt-diversity",
+        requiredTotal: 4
+      })
     );
-    expect(pack.markdown).toContain(
-      "Saved engine-run ledger: 1 saved (strongest saved level: engine-level-3-formal-proof-fixture, latest professor Docker: passed (engine-level-3-formal-proof-fixture))"
+    expect(pack.warnings).toContain("Required engine evidence gates are incomplete: 0/4 passed.");
+    expect(pack.warnings).toContain("Concrete engine smoke gates are incomplete: 0/4 passed.");
+    expect(pack.reviewerActionPlan.actions).toContainEqual(
+      expect.objectContaining({ category: "engine", title: "Close required Lean proof fixture gate" })
     );
-    expect(pack.markdown).toContain("Strongest saved engine ladder: `engine-level-3-formal-proof-fixture`");
+    expect(pack.markdown).not.toContain("saved Docker professor evidence covers these gates");
+    expect(pack.markdown).toContain("Saved engine-run ledger: 1 saved");
+    expect(pack.markdown).toContain(professorEngineRun.record.runId);
+    expect(pack.markdown).not.toContain("Strongest saved engine ladder:");
   });
 
   it("orders reviewer actions toward evidence-writing commands before passive inspection", async () => {
@@ -906,7 +907,7 @@ describe("professor credibility pack", () => {
 
     expect(pack.status).toBe("blocked");
     expect(pack.summary).toMatchObject({
-      engineStatus: "passed",
+      engineStatus: "failed",
       savedReportDrafts: 2,
       reportDraftsNeedingAttention: 1,
       professorReady: false

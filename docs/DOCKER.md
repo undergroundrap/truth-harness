@@ -54,40 +54,31 @@ npm run docker:engines
 
 This command differs from `truth-harness engines`: the manifest reports availability and trust boundaries, while `engines verify` runs concrete checks and reports which scoped labels were actually earned. The npm script first checks that the Docker engine is reachable, then builds the `truth-harness` image and runs the `engine-smoke` service without the repo bind mount or `node_modules` named volume so stale dev dependencies cannot affect the result. Use `truth-harness engines verify --json` when an agent needs a machine-readable gate report.
 
-If `workspace credibility-pack`, `workspace credibility-actions`, or `workspace release-audit` reports `spawn EPERM` or `spawn ENOENT` for Maxima, Z3, cvc5, Lean, or SageMath on the host, use the Docker gates before assuming the engine itself is unavailable. `npm run docker:engines` replays the concrete Maxima/Z3/cvc5 checks inside the no-network image, `npm run docker:professor` writes a durable Maxima/Z3/cvc5/Lean professor evidence run plus benchmark and reviewer packet, and `npm run docker:professor:all` writes the stricter Maxima/Z3/cvc5/Lean/SageMath reviewer packet from the heavier all-engine image. Release audit can cite those saved no-network runs as reviewer evidence even when the Windows host has no matching engine binaries installed.
+Use `npm run docker:engines` to check Maxima, Z3, and cvc5 in the offline container when host binaries are unavailable. Release audit can use saved CAS and SMT runs as evidence for their recorded capabilities. Lean compilation provides diagnostics. The strict professor gates require a separate admitted proof.
 
-Run the pinned Lean proof suite in the separate Lean image:
+Build the pinned Lean compilation image and inspect backend availability:
 
 ```bash
 docker compose build lean-proof
 docker compose run --rm lean-proof
 ```
 
-The `lean-proof` target installs Lean through elan during image build, pins the default toolchain to `leanprover/lean4:v4.12.0`, and runs `npm run proof:lean-suite`. That suite checks the static Lean fixture and the proof-repair fixture that records a rejected scoped attempt, asks run-next for the repair handoff, writes the repaired source, and closes the exact route obligation only when Lean accepts the proof-check record. The compose service then checks the suite again with `network_mode: "none"` and fails if the repair obligation stays open. The service bind-mounts only the root `.truth-harness` evidence ledger so Docker proof checks can leave durable proof-check JSON for local review without giving the Lean container a writable full-repo mount. This is intentionally separate from the default dev image so proof-lane dependencies do not become silent bloat.
+The `lean-proof` image pins Lean 4.12 and checks compilation, rejection of
+incorrect statements, and the proof admission boundary. The Compose service
+runs without networking and reports availability. Strict proof commands
+such as `docker:proof-repair` currently exit nonzero because there is no
+independent proof admission adapter.
 
-For just the repair loop:
-
-```bash
-npm run docker:proof-repair
-```
-
-This command uses the strict repair gate and exits non-zero unless the repaired Lean proof closes the scoped route obligation.
-
-For the heavier mathlib scaffold, do not run an unpinned project. `truth-harness proof check --project` refuses to mint `proved` for Lake projects with external dependencies unless `lake-manifest.json` exists. Once the manifest is reviewed and committed, use the opt-in mathlib image route:
+The opt-in `mathlib-proof` image caches dependencies from the pinned
+`lake-manifest.json` during the build. Its Compose service compiles the
+algebra example offline:
 
 ```bash
-npm run docker:mathlib-template:write
+npm run docker:mathlib-template
 ```
 
-The `mathlib-proof` Dockerfile target resolves and caches mathlib during image build, then the compose `mathlib-proof` service runs `proof:mathlib-template:write` with `network_mode: "none"`. The service is image-only in `docker-compose.yml`, so default `docker compose build` does not build the large mathlib target.
-
-The same Lean fixture can be checked through the engine evidence report:
-
-```bash
-docker compose run --rm lean-proof npm run cli -- engines verify --require-lean
-```
-
-Credibility actions also use this command when host Lean execution is blocked by the OS or agent sandbox. A host launch failure does not earn or refute a proof label; only the accepted Lean run inside the pinned fixture can do that.
+Both services leave generic Lean compilation at `unverified`. See
+[Trust Labels](TRUST_LABELS.md) for the proof admission requirements.
 
 Run CLI commands:
 

@@ -14,6 +14,7 @@ export type {
 } from "./types.js";
 
 export { createArithmeticTrace } from "./arithmetic-trace.js";
+export { resolveContainedPath } from "./path-containment.js";
 export { evaluateExpression, parseExpression } from "./expression.js";
 export { Rational } from "./rational.js";
 export { checkDimensionEquation, formatDimension, parseDimensionPrompt } from "./dimension.js";

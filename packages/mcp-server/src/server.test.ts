@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { writeReportDraft } from "@truth-harness/core";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createTruthHarnessMcpServer } from "./index.js";
 
 const tempRoots: string[] = [];
@@ -14,6 +14,14 @@ const originalCodeRunOptIn = process.env.TRUTH_HARNESS_ALLOW_CODE_RUN;
 const originalUnsandboxedCodeRunOptIn = process.env.TRUTH_HARNESS_ALLOW_UNSANDBOXED_CODE_RUN;
 const vaultKeyEnv = "TRUTH_HARNESS_SERVER_TEST_VAULT_KEY";
 const originalVaultKey = process.env[vaultKeyEnv];
+const verifierEnvironment = ["MAXIMA", "SAGE", "LEAN", "LAKE", "Z3", "CVC5"].map((name) => `TRUTH_HARNESS_${name}`);
+const originalVerifierEnvironment = new Map(verifierEnvironment.map((name) => [name, process.env[name]]));
+
+beforeEach(() => {
+  for (const name of verifierEnvironment) {
+    process.env[name] = `truth-harness-missing-${name.replace("TRUTH_HARNESS_", "").toLowerCase()}-command`;
+  }
+});
 
 afterEach(async () => {
   restoreWorkspaceRoot();
@@ -21,6 +29,10 @@ afterEach(async () => {
   restoreCodeRunOptIn();
   restoreUnsandboxedCodeRunOptIn();
   restoreVaultKey();
+  for (const [name, value] of originalVerifierEnvironment) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
   tempRoots.length = 0;
 });
@@ -198,14 +210,20 @@ describe("Truth Harness MCP server", () => {
       const text = firstText(result.content);
       expect(text).toContain("\"trust\": \"refuted\"");
 
+      const refusedOverride = await client.callTool({
+        name: "truth_harness_verify",
+        arguments: {
+          problem: "compute 1",
+          maximaCommand: process.execPath
+        }
+      });
+      expect(refusedOverride.isError).toBe(true);
+      expect(firstText(refusedOverride.content)).toContain("maximaCommand executable override is not allowed");
+
       const verifyResult = await client.callTool({
         name: "truth_harness_verify",
         arguments: {
           problem: "compute 3 / 4 + 5 / 8",
-          maximaCommand: "truth-harness-missing-maxima-command",
-          sageCommand: "truth-harness-missing-sage-command",
-          leanCommand: "truth-harness-missing-lean-command",
-          z3Command: "truth-harness-missing-z3-command",
           timeoutMs: 50
         }
       });
@@ -218,8 +236,6 @@ describe("Truth Harness MCP server", () => {
       const casBackends = await client.callTool({
         name: "truth_harness_cas_backends",
         arguments: {
-          maximaCommand: "truth-harness-missing-maxima-command",
-          sageCommand: "truth-harness-missing-sage-command",
           timeoutMs: 1000
         }
       });
@@ -235,7 +251,6 @@ describe("Truth Harness MCP server", () => {
           expression: "sin(x)^2 + cos(x)^2",
           result: "1",
           variable: "x",
-          maximaCommand: "truth-harness-missing-maxima-command",
           timeoutMs: 50,
           failOnUnverified: true
         }
@@ -249,10 +264,6 @@ describe("Truth Harness MCP server", () => {
       const engineManifest = await client.callTool({
         name: "truth_harness_engine_manifest",
         arguments: {
-          maximaCommand: "truth-harness-missing-maxima-command",
-          sageCommand: "truth-harness-missing-sage-command",
-          leanCommand: "truth-harness-missing-lean-command",
-          z3Command: "truth-harness-missing-z3-command",
           timeoutMs: 50
         }
       });
@@ -275,11 +286,6 @@ describe("Truth Harness MCP server", () => {
         name: "truth_harness_engine_plan",
         arguments: {
           problem: "symbolic simplify sin(x)^2 + cos(x)^2",
-          maximaCommand: "truth-harness-missing-maxima-command",
-          sageCommand: "truth-harness-missing-sage-command",
-          leanCommand: "truth-harness-missing-lean-command",
-          z3Command: "truth-harness-missing-z3-command",
-          cvc5Command: "truth-harness-missing-cvc5-command",
           timeoutMs: 50
         }
       });
@@ -292,11 +298,6 @@ describe("Truth Harness MCP server", () => {
       const engineReadiness = await client.callTool({
         name: "truth_harness_engine_readiness",
         arguments: {
-          maximaCommand: "truth-harness-missing-maxima-command",
-          sageCommand: "truth-harness-missing-sage-command",
-          leanCommand: "truth-harness-missing-lean-command",
-          z3Command: "truth-harness-missing-z3-command",
-          cvc5Command: "truth-harness-missing-cvc5-command",
           timeoutMs: 50
         }
       });
@@ -378,7 +379,6 @@ describe("Truth Harness MCP server", () => {
           expression: "sin(x)^2 + cos(x)^2",
           result: "1",
           variable: "x",
-          maximaCommand: "truth-harness-missing-maxima-command",
           timeoutMs: 50,
           write: true
         }
@@ -399,9 +399,6 @@ describe("Truth Harness MCP server", () => {
         arguments: {
           problem: "compute 3 / 4 + 5 / 8",
           write: true,
-          maximaCommand: "truth-harness-missing-maxima-command",
-          leanCommand: "truth-harness-missing-lean-command",
-          z3Command: "truth-harness-missing-z3-command",
           timeoutMs: 50
         }
       });
@@ -656,7 +653,6 @@ describe("Truth Harness MCP server", () => {
       const smtBackends = await client.callTool({
         name: "truth_harness_smt_backends",
         arguments: {
-          z3Command: "truth-harness-missing-z3-command",
           timeoutMs: 1000
         }
       });
@@ -670,7 +666,6 @@ describe("Truth Harness MCP server", () => {
         arguments: {
           sourcePath: "constraints.smt2",
           queryName: "positive_integer_model",
-          z3Command: "truth-harness-missing-z3-command",
           write: true
         }
       });
@@ -692,7 +687,6 @@ describe("Truth Harness MCP server", () => {
           queryName: "small_positive_integer",
           integerVariables: ["x"],
           constraints: ["x > 0", "x < 3"],
-          z3Command: "truth-harness-missing-z3-command",
           failOnUnverified: true
         }
       });
@@ -741,10 +735,6 @@ describe("Truth Harness MCP server", () => {
           maxClaims: 0,
           maxSessions: 0,
           timeoutMs: 50,
-          maximaCommand: "truth-harness-missing-maxima-command",
-          z3Command: "truth-harness-missing-z3-command",
-          leanCommand: "truth-harness-missing-lean-command",
-          sageCommand: "truth-harness-missing-sage-command",
           requireDockerCore: true,
           requireSandbox: true,
           requireSavedStrictEngineRun: true
@@ -773,10 +763,6 @@ describe("Truth Harness MCP server", () => {
           maxClaims: 0,
           maxSessions: 0,
           timeoutMs: 50,
-          maximaCommand: "truth-harness-missing-maxima-command",
-          z3Command: "truth-harness-missing-z3-command",
-          leanCommand: "truth-harness-missing-lean-command",
-          sageCommand: "truth-harness-missing-sage-command",
           requireDockerCore: true
         }
       });
@@ -802,10 +788,6 @@ describe("Truth Harness MCP server", () => {
           maxClaims: 0,
           maxSessions: 0,
           timeoutMs: 50,
-          maximaCommand: "truth-harness-missing-maxima-command",
-          z3Command: "truth-harness-missing-z3-command",
-          leanCommand: "truth-harness-missing-lean-command",
-          sageCommand: "truth-harness-missing-sage-command",
           requireDockerCore: true,
           category: "engine"
         }
@@ -826,10 +808,6 @@ describe("Truth Harness MCP server", () => {
           maxClaims: 0,
           maxSessions: 0,
           timeoutMs: 50,
-          maximaCommand: "truth-harness-missing-maxima-command",
-          z3Command: "truth-harness-missing-z3-command",
-          leanCommand: "truth-harness-missing-lean-command",
-          sageCommand: "truth-harness-missing-sage-command"
         }
       });
       const credibilityBundleText = firstText(credibilityBundle.content);

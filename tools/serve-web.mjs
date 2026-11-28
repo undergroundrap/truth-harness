@@ -175,6 +175,7 @@ async function resolveRequestPath(pathname) {
 }
 
 async function handleApiRequest(request, response, requestUrl) {
+  assertNoExecutableOverrides(Object.fromEntries(requestUrl.searchParams));
   if (requestUrl.pathname === "/api/status" && request.method === "GET") {
     const codeRunSandbox = await readCodeRunSandboxStatus();
     const engineManifest = await readEngineManifest();
@@ -652,7 +653,6 @@ async function handleApiRequest(request, response, requestUrl) {
 
   if (requestUrl.pathname === "/api/workspace-artifact" && request.method === "GET") {
     try {
-      await ensureLocalWorkspace();
       const artifact = await readWorkspaceArtifactPreview(requestUrl.searchParams.get("path"));
       writeJson(response, 200, {
         schemaVersion: "truth-harness.web-workspace-artifact-preview.v0",
@@ -1633,7 +1633,6 @@ async function handleApiRequest(request, response, requestUrl) {
         variables,
         constraints,
         includeModel: input.includeModel === true,
-        z3Command: optionalText(input.z3Command),
         timeoutMs
       });
       const checks = await readSmtCheckSnapshot();
@@ -1684,7 +1683,6 @@ async function handleApiRequest(request, response, requestUrl) {
           variable
         },
         result,
-        maximaCommand: optionalText(input.maximaCommand),
         timeoutMs
       });
       const checks = await readCasCheckSnapshot();
@@ -3454,7 +3452,15 @@ function portablePath(value) {
 }
 
 async function readWorkspaceArtifactPreview(pathValue) {
-  const { absolutePath, relativePath } = resolveWorkspaceArtifactPreviewPath(pathValue);
+  let { absolutePath, relativePath } = resolveWorkspaceArtifactPreviewPath(pathValue);
+  const { resolveContainedPath } = await loadCoreModule();
+  let containedPath;
+  try {
+    resolveContainedPath(projectRoot, absolutePath);
+    containedPath = resolveContainedPath(resolve(projectRoot, ".truth-harness"), absolutePath);
+  } catch {
+    throw new HttpError(403, "Workspace artifact path escapes .truth-harness.");
+  }
   let info;
   try {
     info = await lstat(absolutePath);
@@ -3471,6 +3477,8 @@ async function readWorkspaceArtifactPreview(pathValue) {
   if (!info.isFile()) {
     throw new HttpError(404, "Workspace artifact preview path is not a file.");
   }
+
+  absolutePath = containedPath;
 
   const extension = extname(absolutePath).toLowerCase();
   if (!PREVIEWABLE_ARTIFACT_EXTENSIONS.has(extension)) {
@@ -4090,14 +4098,26 @@ function readJsonBody(request) {
 
       try {
         const raw = Buffer.concat(chunks).toString("utf8");
-        resolveBody(raw ? JSON.parse(raw) : {});
-      } catch {
-        rejectBody(new HttpError(400, "invalid JSON body"));
+        const body = raw ? JSON.parse(raw) : {};
+        assertNoExecutableOverrides(body);
+        resolveBody(body);
+      } catch (error) {
+        rejectBody(error instanceof HttpError ? error : new HttpError(400, "invalid JSON body"));
       }
     });
 
     request.on("error", rejectBody);
   });
+}
+
+function assertNoExecutableOverrides(value) {
+  if (!value || typeof value !== "object") return;
+  for (const [key, nested] of Object.entries(value)) {
+    if (/^(?:maxima|z3|cvc5|lean|lake|sage|python|dot)Command$/u.test(key)) {
+      throw new HttpError(400, `${key} executable override is not allowed in API requests. Configure verifier commands in the trusted server environment or CLI.`);
+    }
+    assertNoExecutableOverrides(nested);
+  }
 }
 
 function writeJson(response, status, payload) {

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -25,6 +25,56 @@ afterEach(async () => {
 });
 
 describe("verifier route", () => {
+  it("treats persisted proof-backed satisfaction as unresolved without modifying the historical route", () => {
+    const route = createVerifierRoute("compute 2 + 2", { timeoutMs: 50 });
+    const formal = route.proofObligations.find((obligation) => obligation.kind === "formal-proof");
+    if (!formal) throw new Error("Expected a formal proof obligation.");
+    formal.status = "satisfied";
+    formal.severity = "critical";
+    formal.satisfiedBy = [{ kind: "proof", ref: "legacy-proof.json", trust: "proved" }];
+    const before = JSON.stringify(route);
+    const readiness = verifierRouteReadiness(route);
+    expect(readiness.readyForNarrowClaim).toBe(false);
+    expect(readiness.strongestTrust).not.toBe("proved");
+    expect(readiness.blockingObligations.map((obligation) => obligation.obligationId)).toContain(formal.obligationId);
+    expect(JSON.stringify(route)).toBe(before);
+    route.finalTrust = "proved";
+    formal.satisfiedBy = [];
+    expect(verifierRouteReadiness(route).strongestTrust).toBe("unverified");
+  });
+
+  it.skipIf(process.platform === "win32")("rejects final-file route links during listing and ID resolution", async () => {
+    const root = await tempRoot();
+    const outside = await tempRoot();
+    await initLocalWorkspace(root);
+    await initLocalWorkspace(outside);
+    const external = await writeVerifierRoute({ rootPath: outside, problem: "compute 2 + 2", timeoutMs: 50 });
+    await symlink(external.jsonPath, join(root, ".truth-harness/routes/linked.json"));
+    await expect(listVerifierRoutes(root)).rejects.toThrow("Path escapes workspace root");
+    await expect(readVerifierRoute(root, external.route.routeId)).rejects.toThrow("Path escapes workspace root");
+  });
+
+  it("rejects nested evidence through an escaping ancestor link", async () => {
+    const root = await tempRoot();
+    const outside = await tempRoot();
+    await initLocalWorkspace(root);
+    await initLocalWorkspace(outside);
+    await writeFile(join(outside, "query.smt2"), "(set-logic QF_LIA)\n(check-sat)\n", "utf8");
+    const check = await writeSmtCheckRecord({
+      rootPath: outside, sourcePath: "query.smt2",
+      runner: (_command, args) => ({ status: 0, stdout: args[0] === "-version" ? "Z3 version 4.8.12\n" : "sat\n", stderr: "" })
+    });
+    await symlink(outside, join(root, "escape"), process.platform === "win32" ? "junction" : "dir");
+    const written = await writeVerifierRoute({ rootPath: root, problem: "prove an unresolved invariant", timeoutMs: 50 });
+    const obligation = written.route.proofObligations.find((candidate) => candidate.kind === "solver-encoding");
+    if (!obligation) throw new Error("Expected an SMT obligation.");
+    await expect(satisfyVerifierRouteObligation({
+      rootPath: root, routeRef: written.route.routeId, obligationId: obligation.obligationId,
+      evidenceRef: { kind: "smt", ref: `escape/${relative(outside, check.jsonPath).replaceAll("\\", "/")}` }
+    })).rejects.toThrow("Could not read evidence artifact");
+    expect((await readVerifierRoute(root, written.route.routeId)).proofObligations.find((candidate) => candidate.obligationId === obligation.obligationId)?.status).toBe("open");
+  });
+
   it("routes exact arithmetic through the native rational kernel without pretending proof", () => {
     const route = createVerifierRoute("compute 3 / 4 + 5 / 8", {
       now: new Date("2026-06-12T00:00:00.000Z"),
@@ -444,7 +494,7 @@ describe("verifier route", () => {
     expect(written.route.manifest.readyCount).toBe(expectedWithCvc5.manifest.readyCount);
   });
 
-  it("satisfies a formal proof obligation only with scoped accepted proof-check evidence", async () => {
+  it("rejects legacy proof labels even when copied metadata matches a formal obligation", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, {
       now: "2026-06-12T00:00:00.000Z"
@@ -488,6 +538,10 @@ describe("verifier route", () => {
       runner
     });
     const proofRef = relative(root, proofWrite.jsonPath);
+    const legacyAccepted = async (path: string, record: typeof proofWrite.record) => {
+      await writeFile(path, JSON.stringify({ ...record, status: "accepted", trust: "proved", proofCheckerBacked: true }), "utf8");
+    };
+    await legacyAccepted(proofWrite.jsonPath, proofWrite.record);
 
     await expect(
       satisfyVerifierRouteObligation({
@@ -511,6 +565,7 @@ describe("verifier route", () => {
       runner
     });
     const routeScopedOnlyProofRef = relative(root, routeScopedOnlyProofWrite.jsonPath);
+    await legacyAccepted(routeScopedOnlyProofWrite.jsonPath, routeScopedOnlyProofWrite.record);
 
     await expect(
       satisfyVerifierRouteObligation({
@@ -536,45 +591,23 @@ describe("verifier route", () => {
       runner
     });
     const scopedProofRef = relative(root, scopedProofWrite.jsonPath);
+    await legacyAccepted(scopedProofWrite.jsonPath, scopedProofWrite.record);
 
-    const satisfied = await satisfyVerifierRouteObligation({
+    await expect(satisfyVerifierRouteObligation({
       rootPath: root,
       routeRef: routeWrite.route.routeId,
       obligationId: obligation?.obligationId ?? "",
       evidenceRef: { kind: "proof", ref: scopedProofRef },
       now: new Date("2026-06-12T00:04:00.000Z")
-    });
+    })).rejects.toThrow("Formal statement binding is not verified");
     const readBack = await readVerifierRoute(root, routeWrite.route.routeId);
     const validation = await validateWorkspaceArtifacts({ rootPath: root });
 
-    expect(satisfied.obligation.status).toBe("satisfied");
-    expect(satisfied.obligation.satisfiedBy).toEqual([
-      expect.objectContaining({
-        kind: "proof",
-        ref: scopedProofRef,
-        trust: "proved",
-        scope: expect.objectContaining({
-          routeId: routeWrite.route.routeId,
-          obligationId: obligation?.obligationId
-        })
-      })
-    ]);
-    expect(satisfied.markdown).toContain("Satisfied by:");
-    expect(satisfied.markdown).toContain(`proof:${scopedProofRef}`);
-    const openObligations = satisfied.route.proofObligations.filter((candidate) => candidate.status === "open").length;
-    const criticalOpenObligations = satisfied.route.proofObligations.filter(
-      (candidate) => candidate.status === "open" && candidate.severity === "critical"
-    ).length;
-    expect(verifierRouteReadiness(satisfied.route)).toMatchObject({
-      readyForNarrowClaim: false,
-      strongestTrust: "proved",
-      openObligations,
-      criticalOpenObligations
-    });
+    expect(verifierRouteReadiness(readBack).readyForNarrowClaim).toBe(false);
     expect(readBack.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)).toMatchObject({
-      status: "satisfied",
-      satisfactionSummary: "Accepted scoped proof-check record supplies `proved` evidence for this obligation."
+      status: "open"
     });
+    expect(readBack.proofObligations.find((candidate) => candidate.obligationId === obligation?.obligationId)?.satisfiedBy ?? []).toEqual([]);
     expect(validation.passed).toBe(true);
   });
 
@@ -891,7 +924,7 @@ describe("verifier route", () => {
         evidenceRef: { kind: "route", ref: forgedRouteRef },
         now: new Date("2026-06-12T00:01:00.000Z")
       })
-    ).rejects.toThrow("formal-proof obligations require a scoped proof-check record");
+    ).rejects.toThrow("formal-proof obligations require `proved` evidence");
   });
 
   it("refuses malformed proof-check JSON even when it claims proved", async () => {

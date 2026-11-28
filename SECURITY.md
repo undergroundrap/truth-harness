@@ -49,7 +49,38 @@ The Docker no-network CLI and MCP services are the current measured sandbox prof
 
 Docker still bind-mounts the repo for day-to-day development, so containerized commands can change workspace files. Use the Docker `verify` target when you need a clean verification image without a runtime repo bind mount.
 
-## Not Security Claims
+## Proof and Evidence Boundaries
+
+The published dependency patch updates the lockfile and adds weekly Dependabot
+maintenance and a CI audit covering runtime and development dependencies.
+Zero known npm advisories is not a guarantee of absence of application bugs.
+
+Truth Harness rejects request-selected verifier executables
+on web/MCP surfaces, resolves workspace path containment through ancestor links,
+and compares trust-critical receipt payloads against fresh replay. CLI/operator
+startup configuration remains a trusted local execution boundary. Canonical
+path checks do not eliminate concurrent filesystem-link replacement races.
+
+Generic Lean subprocess success is compilation evidence, not independent proof
+admission. Submitted metaprograms, arbitrary imports and their output are not
+trusted certificates. Until an independent kernel/dependency/axiom checker and
+actual formal-goal binding are installed, generic compilation stays unverified
+and legacy scope metadata cannot close formal claim gates. This intentionally
+changes prior proof-admission behavior; it does not refute the theorem.
+Historical proof-backed claims and satisfied formal route obligations are also
+quarantined when deriving fresh claim trust. Stored JSON remains inspectable;
+its old label is not a new admission decision. Validation attachments use effective
+route readiness and reopen previously satisfied proof gates on unadmitted evidence.
+Route, claim and validation artifact reads check the resolved final file,
+including ID-based lookup and directory listings.
+
+Native verifier subprocess metadata is not an OS isolation attestation. The
+legacy proof-check V0 `networkAccess` field must not be relied on to infer that
+native Lean or Lake cannot perform I/O; use the actual offline Docker runtime.
+Builds and dependency installation can require network access. Docker Desktop
+itself must be kept updated independently of this repository.
+
+## Remaining Boundaries
 
 The workbench does not prove that code is correct, deterministic, medically safe, scientifically valid, patentable, regulatory-approved, or free of malicious intent. It records evidence, boundaries, checks, and gaps so humans and agents can review them without hallucinated certainty.
 

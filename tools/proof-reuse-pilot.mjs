@@ -121,11 +121,12 @@ function cli(root, args) {
   return JSON.parse(run(process.execPath, [CLI, ...args], root));
 }
 
-async function closeGate(root, planId) {
+export async function closeGate(root, planId) {
   const steps = [];
   for (let step = 0; step < 3; step += 1) {
     const plan = (await listValidationPlans(root)).find((plan) => plan.planId === planId);
-    if (plan?.gates.some((gate) => gate.kind === "proof" && gate.status === "satisfied")) return steps;
+    assert(!plan?.gates.some((gate) => gate.kind === "proof" && gate.status === "satisfied"),
+      "Persisted gate status is not fresh proof admission; recheck with an independent checker before reuse.");
     const next = cli(root, ["workspace", "run-next", root, "--json"]);
     assert.equal(next.item?.validationPlanId, planId, "run-next left the selected proof blocker");
     const result = cli(root, ["workspace", "run-next", root, "--execute-local", "--write", "--json"]);
@@ -133,8 +134,8 @@ async function closeGate(root, planId) {
     steps.push({ status: execution.status, kind: execution.kind, evidence_ref: execution.evidenceRef, summary: execution.summary });
     assert.equal(execution.status, "executed", execution.summary);
     const updated = (await listValidationPlans(root)).find((plan) => plan.planId === planId);
-    if (updated?.gates.some((gate) => gate.kind === "proof" && gate.status === "satisfied")) return steps;
     if (execution.result?.proof?.trust !== "proved") throw new Error(`Proof remains unverified: ${execution.summary}`);
+    if (updated?.gates.some((gate) => gate.kind === "proof" && gate.status === "satisfied")) return steps;
   }
   throw new Error("Proof gate did not close within the bounded three-step budget.");
 }

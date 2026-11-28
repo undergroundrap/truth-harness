@@ -20,6 +20,7 @@ import {
 } from "./artifact-record-validation.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { resolveContainedPath } from "./path-containment.js";
 import { assertJsonSchemaBeforeWrite } from "./schema-write-validation.js";
 import type { TrustLabel } from "./types.js";
 import { writeVisualArtifact, type VisualArtifactWriteResult } from "./visual-artifact.js";
@@ -41,6 +42,7 @@ export interface ProofBackendCommandResult {
 
 export interface ProofBackendCommandOptions {
   cwd?: string;
+  input?: string;
 }
 
 export type ProofBackendCommandRunner = (
@@ -224,7 +226,7 @@ export function getProofBackendStatus(options: ProofBackendStatusOptions = {}): 
     timeoutMs,
     runner
   });
-  const proofCheckersAvailable = lean.status === "available" ? 1 : 0;
+  const proofCheckersAvailable = lean.canCheckProofs ? 1 : 0;
 
   return {
     schemaVersion: "truth-harness.proof-backends.v0",
@@ -239,14 +241,11 @@ export function getProofBackendStatus(options: ProofBackendStatusOptions = {}): 
       provedRequiresSuccessfulProofRun: true,
       casOrSmtOutputIsNotLeanProof: true
     },
-    warnings:
-      proofCheckersAvailable > 0
-        ? [
-            "A detected proof checker can check proof artifacts, but this status report does not prove any claim or mint `proved` receipts."
-          ]
-        : [
-            "No accepted local proof checker was detected. Truth Harness must not label results `proved` on this machine until a proof-checking adapter succeeds."
-          ]
+    warnings: [
+      "This status report does not prove any claim or mint `proved` receipts.",
+      "The generic Lean subprocess is compilation-only: no trusted independent kernel and transitive axiom audit is available. Truth Harness must not label results `proved` from this adapter.",
+      "The legacy acceptedProofChecker metadata flag identifies the backend category, not a completed trusted proof check."
+    ]
   };
 }
 
@@ -255,7 +254,6 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
   const runner = input.runner ?? runCommand;
   const leanCommand = input.leanCommand?.trim() || process.env.TRUTH_HARNESS_LEAN?.trim() || "lean";
   const proofExecution = leanProofExecution({
-    sourcePath: input.sourcePath,
     leanCommand,
     lakeCommand: input.lakeCommand,
     projectRoot: input.projectRoot
@@ -278,7 +276,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
   const projectWarnings = proofExecution.projectRoot
     ? [
         `Proof check uses Lake project environment at ${quoteCommandArg(proofExecution.projectRoot)}.`,
-        "Lake resolves local project dependencies; this record still attests only the checked source and recorded command output."
+        "Lake resolves local project dependencies; this record contains only compilation diagnostics, not trusted proof evidence."
       ]
     : [];
   const dependencyBoundary = leanProjectDependencyBoundary(proofExecution.projectRoot);
@@ -361,7 +359,10 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       ]
     });
   }
-  const result = runner(proofExecution.command, proofArgs, timeoutMs, proofExecution.cwd ? { cwd: proofExecution.cwd } : undefined);
+  const result = runner(proofExecution.command, proofArgs, timeoutMs, {
+    ...(proofExecution.cwd ? { cwd: proofExecution.cwd } : {}),
+    input: input.sourceText
+  });
   const stdout = singleLine(result.stdout);
   const stderr = singleLine(result.stderr);
   const errorText = result.error ? `${result.error.name ? `${result.error.name}: ` : ""}${result.error.message}` : undefined;
@@ -417,7 +418,7 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
     });
   }
 
-  if (result.status === 0 && sourceSafetyFindings.length > 0) {
+  if (result.status === 0) {
     return withCheckId({
       ...base,
       backend: {
@@ -430,38 +431,17 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
       stdout,
       stderr,
       limitations: [
-        "Lean accepted the source file, but Truth Harness found proof placeholders or local assumptions in the checked source.",
-        "This record cannot support a `proved` trust label until the proof source removes those placeholders or assumptions.",
+        "Lean compilation exited successfully for the exact hashed source supplied through stdin; this is a compilation diagnostic, not proof acceptance.",
+        "A trusted independent kernel check and transitive axiom audit is missing. Generic Lean subprocess success cannot support a `proved` trust label.",
+        "Source-executed Lean commands can insert unchecked declarations or spoof audit output; stdout markers and warnings are not trusted proof evidence.",
+        "This rejection of proof trust does not refute the formal statement or surrounding human claim.",
         ...sourceSafetyFindings
       ],
       warnings: [
         ...declarationWarnings,
         ...proofEnvironmentWarnings,
-        "Lean success is necessary but not sufficient for Truth Harness `proved`: the checked source must not contain `sorry`, `admit`, Lean metavariable holes, local `axiom`, or local `constant` declarations."
-      ]
-    });
-  }
-
-  if (result.status === 0) {
-    return withCheckId({
-      ...base,
-      backend: {
-        ...base.backend,
-        exitCode: result.status
-      },
-      status: "accepted",
-      trust: "proved",
-      proofCheckerBacked: true,
-      stdout,
-      stderr,
-      limitations: [
-        "Lean accepted the provided local proof artifact under its imports and environment.",
-        "This proves only the formal statement checked by Lean, not surrounding informal, scientific, medical, safety, regulatory, or patent claims."
-      ],
-      warnings: [
-        ...declarationWarnings,
-        ...proofEnvironmentWarnings,
-        "Review the Lean statement and imports to confirm they match the intended human claim."
+        "Lean success is necessary but not sufficient for Truth Harness `proved`; an independent trusted checker adapter is required.",
+        "The legacy acceptedProofChecker metadata flag does not mean this compilation was a trusted proof check."
       ]
     });
   }
@@ -491,10 +471,11 @@ export function checkLeanProofArtifact(input: LeanProofCheckInput): LeanProofChe
 
 export async function writeLeanProofCheckRecord(input: WriteLeanProofCheckInput): Promise<LeanProofCheckWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
-  const resolvedSourcePath = resolveWorkspacePath(status.root, input.sourcePath);
-  const resolvedProjectRoot = input.projectPath ? resolveWorkspacePath(status.root, input.projectPath) : undefined;
-  const sourceRef = toPortablePath(relative(status.root, resolvedSourcePath));
-  const projectRef = resolvedProjectRoot ? toPortablePath(relative(status.root, resolvedProjectRoot)) || "." : undefined;
+  const canonicalRoot = resolveContainedPath(status.root, ".");
+  const resolvedSourcePath = resolveContainedPath(status.root, input.sourcePath);
+  const resolvedProjectRoot = input.projectPath ? resolveContainedPath(status.root, input.projectPath) : undefined;
+  const sourceRef = toPortablePath(relative(canonicalRoot, resolvedSourcePath));
+  const projectRef = resolvedProjectRoot ? toPortablePath(relative(canonicalRoot, resolvedProjectRoot)) || "." : undefined;
   const sourceText = await readFile(resolvedSourcePath, "utf8");
   const record = checkLeanProofArtifact({
     sourcePath: resolvedSourcePath,
@@ -514,11 +495,11 @@ export async function writeLeanProofCheckRecord(input: WriteLeanProofCheckInput)
       leanCommand: input.leanCommand
     }) + " --write"
   });
-  const proofsDir = resolve(status.root, status.manifest.directories.proofs);
+  const proofsDir = resolveContainedPath(status.root, status.manifest.directories.proofs);
   await assertProofCheckSchema(record);
   const baseName = `${record.createdAt.slice(0, 10)}-${record.checkId}`;
-  const jsonPath = join(proofsDir, `${baseName}.json`);
-  const markdownPath = join(proofsDir, `${baseName}.md`);
+  const jsonPath = resolveContainedPath(status.root, join(proofsDir, `${baseName}.json`));
+  const markdownPath = resolveContainedPath(status.root, join(proofsDir, `${baseName}.md`));
   const markdown = renderLeanProofCheckMarkdown(record);
 
   await mkdir(proofsDir, { recursive: true });
@@ -526,7 +507,7 @@ export async function writeLeanProofCheckRecord(input: WriteLeanProofCheckInput)
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
-    path: relative(status.root, jsonPath),
+    path: relative(canonicalRoot, jsonPath),
     kind: "proofs",
     now: record.createdAt,
     staleReason: "Lean proof check record written"
@@ -550,7 +531,8 @@ async function assertProofCheckSchema(record: LeanProofCheckRecord): Promise<voi
 
 export async function listLeanProofChecks(rootPath: string): Promise<LeanProofCheckSummary[]> {
   const status = await requireLocalWorkspace(rootPath);
-  const proofsDir = resolve(status.root, status.manifest.directories.proofs);
+  const canonicalRoot = resolveContainedPath(status.root, ".");
+  const proofsDir = resolveContainedPath(status.root, status.manifest.directories.proofs);
 
   let files: string[];
   try {
@@ -568,8 +550,8 @@ export async function listLeanProofChecks(rootPath: string): Promise<LeanProofCh
     files
       .filter((file) => file.endsWith(".json"))
       .map(async (file) => {
-        const path = join(proofsDir, file);
-        return summarizeLeanProofCheck(status.root, path, await readFile(path, "utf8"));
+        const path = resolveContainedPath(status.root, join(proofsDir, file));
+        return summarizeLeanProofCheck(canonicalRoot, path, await readFile(path, "utf8"));
       })
   );
 
@@ -936,11 +918,12 @@ function probeLeanBackend(args: {
     exitCode: result.status,
     stdout,
     stderr,
-    canCheckProofs: true,
+    canCheckProofs: false,
     statusProbeMintedProof: false,
     limitations: [
       "This is only a local backend availability probe.",
-      "A receipt may be labeled `proved` only after Lean accepts a concrete proof artifact in a replayable proof-check run."
+      "Lean is runnable for compilation diagnostics only; a trusted independent kernel check and transitive axiom audit is missing.",
+      "Generic Lean subprocess success cannot support `proved` trust labels."
     ]
   };
 }
@@ -953,6 +936,7 @@ function runCommand(
 ): ProofBackendCommandResult {
   const result = spawnSync(command, args, {
     cwd: options?.cwd,
+    input: options?.input,
     encoding: "utf8",
     timeout: timeoutMs,
     windowsHide: true,
@@ -979,10 +963,10 @@ async function readLeanProofCheckRecordWithPath(
   const status = await requireLocalWorkspace(rootPath);
 
   if (proofRef.endsWith(".json")) {
-    const directPath = resolveWorkspacePath(status.root, proofRef);
+    const directPath = resolveContainedPath(status.root, proofRef);
     return {
       record: parseLeanProofCheckRecord(await readFile(directPath, "utf8"), directPath),
-      path: toPortablePath(relative(status.root, directPath))
+      path: toPortablePath(relative(resolveContainedPath(status.root, "."), directPath))
     };
   }
 
@@ -992,7 +976,7 @@ async function readLeanProofCheckRecordWithPath(
     throw new Error(`Lean proof-check record not found: ${proofRef}`);
   }
 
-  const path = resolve(status.root, found.path);
+  const path = resolveContainedPath(status.root, found.path);
   return {
     record: parseLeanProofCheckRecord(await readFile(path, "utf8"), path),
     path: found.path
@@ -1136,13 +1120,21 @@ function leanProofCheckDeclarationWarnings(
   declarationName: string | undefined,
   declaration: LeanProofCheckDeclaration | undefined
 ): string[] {
-  if (!declarationName || declaration) {
-    return [];
+  if (declarationName && !declaration) {
+    return [
+      `The requested Lean declaration ${JSON.stringify(declarationName)} was not found by the local declaration parser. Whole-file compilation does not resolve or prove the requested declaration.`
+    ];
   }
 
-  return [
-    `The requested Lean declaration ${JSON.stringify(declarationName)} was not found by the local declaration parser. The proof-check result still reflects Lean checking the whole source file, but declaration-scoped reviewers should inspect the source before relying on this as a targeted proof.`
-  ];
+  if (declaration && declaration.kind !== "theorem" && declaration.kind !== "lemma") {
+    return [
+      declaration.kind === "example"
+        ? "The selected Lean declaration is an anonymous example, not a named theorem target; compilation alone cannot support proof trust."
+        : `The selected Lean declaration ${JSON.stringify(declaration.name)} is a ${declaration.kind}, not a theorem target; compilation alone cannot support proof trust.`
+    ];
+  }
+
+  return [];
 }
 
 function validateOptionalPattern(
@@ -1248,7 +1240,6 @@ function lakefileDeclaresExternalDependencies(lakefileText: string): boolean {
   return /^\s*require\s+\S+/mu.test(stripped);
 }
 function leanProofExecution(input: {
-  sourcePath: string;
   leanCommand: string;
   lakeCommand?: string;
   projectRoot?: string;
@@ -1257,13 +1248,13 @@ function leanProofExecution(input: {
   if (!projectRoot) {
     return {
       command: input.leanCommand,
-      args: [input.sourcePath]
+      args: ["--stdin"]
     };
   }
 
   return {
     command: input.lakeCommand?.trim() || process.env.TRUTH_HARNESS_LAKE?.trim() || "lake",
-    args: ["env", input.leanCommand, input.sourcePath],
+    args: ["env", input.leanCommand, "--stdin"],
     cwd: projectRoot,
     projectRoot
   };
@@ -1352,17 +1343,6 @@ async function requireLocalWorkspace(
   }
 
   return status as LocalWorkspaceStatus & { manifest: NonNullable<LocalWorkspaceStatus["manifest"]> };
-}
-
-function resolveWorkspacePath(root: string, path: string): string {
-  const target = resolve(root, path);
-  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
-
-  if (target !== root && !target.startsWith(rootWithSep)) {
-    throw new Error(`Path escapes workspace root: ${path}`);
-  }
-
-  return target;
 }
 
 function summarizeLeanProofCheck(

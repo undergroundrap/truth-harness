@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseJsonWithOptionalBom } from "./artifact-record-validation.js";
 import {
+  claimForCurrentReview,
   createClaimReviewPacket,
   isClaimLedgerDomain,
   listClaimRecords,
@@ -18,10 +19,12 @@ import {
   type LeanProjectProofMarkerRepairTarget
 } from "./lean-project.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { resolveContainedPath } from "./path-containment.js";
 import { listLeanProofChecks, type LeanProofCheckSummary } from "./proof-backend.js";
 import { listReportDrafts, type ReportDraftSummary } from "./report-draft.js";
 import {
   listVerifierRoutes,
+  openVerifierRouteObligations,
   readVerifierRoute,
   verifierRouteStatementBoundaryHash,
   verifierRouteReadiness,
@@ -253,7 +256,10 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
   const status = await requireLocalWorkspace(input.rootPath);
   const createdAt = input.now ?? new Date().toISOString();
   const routeSummaries = (await listVerifierRoutes(status.root)).slice(0, input.maxRoutes ?? 100);
-  const claims = (await listClaimRecords(status.root)).slice(0, input.maxClaims ?? 200);
+  const savedClaims = await listClaimRecords(status.root);
+  const claimsById = new Map(savedClaims.map((claim) => [claim.claimId, claim]));
+  const claims = savedClaims.slice(0, input.maxClaims ?? 200)
+    .map((claim) => claimForCurrentReview(claim, claimsById));
   const sessions = (await listResearchSessions(status.root)).slice(0, input.maxSessions ?? 100);
   const reportDrafts = await listReportDrafts({ rootPath: status.root, limit: input.maxReports ?? 50 });
   const validationPlans = await listValidationPlans(status.root);
@@ -284,7 +290,6 @@ export async function createWorkspaceReview(input: CreateWorkspaceReviewInput): 
         session,
         validationPlans,
         readyRoutesByStatementKey,
-        proofChecks,
         smtChecks,
         snapshots,
         claimsByStatementKey
@@ -677,7 +682,6 @@ function linkedValidationGateItems(
   session: ResearchSession,
   validationPlans: ValidationPlan[],
   readyRoutesByStatementKey: Map<string, VerifierRoute>,
-  proofChecks: ReviewLeanProofCheckSummary[],
   smtChecks: SmtCheckSummary[],
   snapshots: WorkspaceSnapshotSummary[],
   claimsByStatementKey: Map<string, ClaimLedgerRecord[]>
@@ -685,7 +689,7 @@ function linkedValidationGateItems(
   const plans = linkedValidationPlansForSession(session, validationPlans);
   return plans.flatMap((plan) =>
     openValidationGates(plan, claimsByStatementKey).map((gate) =>
-      validationGateItem(workspacePath, session, plan, gate, readyRoutesByStatementKey, proofChecks, smtChecks, snapshots)
+      validationGateItem(workspacePath, session, plan, gate, readyRoutesByStatementKey, smtChecks, snapshots)
     )
   );
 }
@@ -737,7 +741,6 @@ function validationGateItem(
   plan: ValidationPlan,
   gate: ValidationGate,
   readyRoutesByStatementKey: Map<string, VerifierRoute>,
-  proofChecks: ReviewLeanProofCheckSummary[],
   smtChecks: SmtCheckSummary[],
   snapshots: WorkspaceSnapshotSummary[]
 ): WorkspaceReviewItem {
@@ -746,7 +749,6 @@ function validationGateItem(
     plan,
     gate,
     readyRoutesByStatementKey,
-    proofChecks,
     smtChecks,
     snapshots
   );
@@ -783,7 +785,6 @@ function candidateEvidenceRefsForValidationGate(
   plan: ValidationPlan,
   gate: ValidationGate,
   readyRoutesByStatementKey: Map<string, VerifierRoute>,
-  proofChecks: ReviewLeanProofCheckSummary[],
   smtChecks: SmtCheckSummary[],
   snapshots: WorkspaceSnapshotSummary[]
 ): ValidationEvidenceRef[] {
@@ -806,9 +807,6 @@ function candidateEvidenceRefsForValidationGate(
     if (!candidate) {
       return;
     }
-    if (gate.kind === "proof" && candidate.kind === "proof" && isMathlibDeclarationValidationPlan(plan)) {
-      return;
-    }
     collectCandidate(candidate);
   };
 
@@ -826,17 +824,6 @@ function candidateEvidenceRefsForValidationGate(
       ref: route.routeId,
       trust: verifierRouteReadiness(route).strongestTrust,
       summary: `Ready verifier route ${route.routeId} matches validation claim ${JSON.stringify(plan.claim)}.`
-    });
-  }
-  for (const proof of proofChecks) {
-    if (!isProofCheckCandidateForValidationPlan(proof, plan, gate)) {
-      continue;
-    }
-    collectCandidate({
-      kind: "proof",
-      ref: proof.path,
-      trust: proof.trust,
-      summary: `Accepted Lean proof check ${proof.checkId} matches validation claim ${JSON.stringify(plan.claim)}.`
     });
   }
   for (const smt of smtChecks) {
@@ -876,32 +863,6 @@ function isSnapshotCandidateForValidationPlan(
   return snapshot.createdAt >= plan.updatedAt;
 }
 
-function isMathlibDeclarationValidationPlan(plan: ValidationPlan): boolean {
-  return /^Lean (?:mathlib )?declaration [A-Za-z0-9_.]+ in project .+? source .+\.lean$/u.test(plan.claim);
-}
-
-function isProofCheckCandidateForValidationPlan(
-  proof: ReviewLeanProofCheckSummary,
-  plan: ValidationPlan,
-  gate: ValidationGate
-): boolean {
-  if (gate.kind !== "proof" || proof.status !== "accepted" || proof.trust !== "proved" || !proof.proofCheckerBacked) {
-    return false;
-  }
-  if (proof.scope?.statement && equivalentRouteProblems(proof.scope.statement, plan.claim)) {
-    return true;
-  }
-  const concreteCommand = concreteValidationGateProofCommand(plan);
-  if (!concreteCommand || !concreteCommand.startsWith("truth-harness proof check ")) {
-    return false;
-  }
-  const expectedPath = commandArgumentAfterPrefix(concreteCommand, "truth-harness proof check");
-  if (!expectedPath || toPortablePath(proof.sourcePath) !== toPortablePath(expectedPath)) {
-    return false;
-  }
-  const expectedDeclaration = commandOptionValue(concreteCommand, "--declaration");
-  return !expectedDeclaration || proof.declarationName === expectedDeclaration;
-}
 
 function isSmtCheckCandidateForValidationPlan(
   smt: SmtCheckSummary,
@@ -1014,7 +975,7 @@ function validationEvidenceKindRank(ref: ValidationEvidenceRef, gate: Validation
 
 function isEvidenceCandidateForValidationGate(ref: ValidationEvidenceRef, gate: ValidationGate): boolean {
   if (gate.kind === "proof") {
-    return ref.kind === "proof" || ref.kind === "smt" || ref.kind === "cas" || ref.kind === "route" || ref.kind === "receipt";
+    return ref.trust !== "proved" && (ref.kind === "smt" || ref.kind === "cas" || ref.kind === "route" || ref.kind === "receipt");
   }
   if (gate.kind === "source-citation" || gate.kind === "literature-record" || gate.kind === "prior-art") {
     return ref.kind === "source" || ref.kind === "literature" || ref.kind === "review" || ref.kind === "audit";
@@ -1285,7 +1246,7 @@ function routeReviewItems(
   proofChecks: ReviewLeanProofCheckSummary[]
 ): WorkspaceReviewItem[] {
   const readiness = verifierRouteReadiness(route);
-  const openObligations = (route.proofObligations ?? []).filter((obligation) => obligation.status === "open");
+  const openObligations = openVerifierRouteObligations(route);
   const items = openObligations.map((obligation) =>
     routeObligationItem(workspacePath, route, obligation, leanInspection, proofChecks)
   );
@@ -1563,7 +1524,7 @@ async function enrichProofChecksWithSourceStatus(
 
       let bytes: Buffer;
       try {
-        bytes = await readFile(resolveUnderRoot(rootPath, proof.sourcePath));
+        bytes = await readFile(resolveContainedPath(rootPath, proof.sourcePath));
       } catch {
         return { ...proof, reviewSourceStatus: "missing" };
       }

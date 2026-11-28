@@ -130,6 +130,7 @@ interface BinomialThresholdCountClaim {
 export interface CreateReceiptOptions {
   maximaCommand?: string;
   casRunner?: CasBackendCommandRunner;
+  independentCasNow?: Date;
 }
 
 export function createReceipt(problem: string, options: CreateReceiptOptions = {}): Receipt {
@@ -755,7 +756,8 @@ function completeSymbolicReceipt(args: {
     prompt: args.symbolicPrompt,
     result: result.result,
     maximaCommand: args.options.maximaCommand,
-    runner: args.options.casRunner
+    runner: args.options.casRunner,
+    now: args.options.independentCasNow ?? new Date(args.createdAt)
   });
   const independentCasArtifact = addArtifact(args.artifacts, {
     kind: "independent-cas-check",

@@ -8,7 +8,7 @@ Truth Harness trust labels describe what local evidence currently supports. They
 
 | Label | Meaning | Boundary |
 | --- | --- | --- |
-| `proved` | Accepted by Lean or another accepted proof-checking backend. | Do not mint this from a homemade checker, CAS output, notebook output, RAG hit, simulation, or model answer. |
+| `proved` | Independently checked proof bound to an exact formal statement and its assumptions. | The current Lean compilation adapter cannot grant this label. |
 | `exact-computed` | Exact arithmetic, exact symbolic computation, or a narrow deterministic local check produced a replayable result. | This can support a narrow claim, but it is not a proof-checker-backed proof. |
 | `bounded-numeric` | A numeric result is bounded by explicit interval/error assumptions. | The true value must be inside the stated bound under the stated assumptions; it is not a physical or scientific validation. |
 | `smt-checked` | Z3 or cvc5 checked a concrete SMT-LIB artifact and returned a replayable `sat` or `unsat` result, with solver identity and output recorded. | This is solver evidence for the encoded constraints, not a Lean-style proof, not proof of the informal problem statement, and not evidence beyond the encoding. |
@@ -30,15 +30,19 @@ The same rational adapter accepts concrete LaTeX arithmetic equalities such as `
 
 `truth-harness proof project <path>` inspects local Lean/Lake project readiness without running Lean, Lake, dependency fetches, or network commands. It can report pinned toolchain files, Lake metadata, `lake-manifest.json`, `.lean` file samples, likely mathlib references, and static proof-safety markers such as `sorry`, `admit`, Lean metavariable holes such as `?_` or `?goal`, local `axiom`, and local `constant`, but it does not prove anything and cannot satisfy a proof gate.
 
-`truth-harness proof check <file>` and the MCP `truth_harness_proof_check` tool run a concrete local Lean source file through Lean when the backend is available. Use `--write` or MCP `write: true` to store a local `truth-harness.proof-check.v0` JSON record plus Markdown report under `.truth-harness/proofs/`; `truth-harness proof list` and `truth_harness_proof_list` expose those paths for audits and agent follow-up. Only `status: accepted` produces `trust: proved` and `proofCheckerBacked: true`. Missing Lean, execution errors, syntax errors, incomplete proofs, and rejected proof attempts remain `unverified`; they do not refute the claim by themselves.
+`truth-harness proof check <file>` and MCP `truth_harness_proof_check` run
+local Lean compilation when available. Use `--write` or MCP `write: true`
+to store the `truth-harness.proof-check.v0` record under
+`.truth-harness/proofs/`. Compilation success and failures remain
+`unverified`. Both the CLI and MCP retain diagnostics for review.
 
 When possible, proof-check records also include parser-derived declaration metadata for the checked theorem, lemma, example, or def: declaration id, source location, signature, signature SHA-256, and source SHA-256. This helps reviewers and repair agents target the intended Lean artifact. If a requested declaration name is not found, the record keeps the whole-file Lean result but warns that declaration-scoped review is required.
 
-Truth Harness also applies a source-level safety gate before minting `proved`: a Lean file that contains `sorry`, `admit`, Lean metavariable holes, or local `axiom` / `constant` declarations remains `unverified` even if Lean exits successfully. This prevents placeholder proofs or locally introduced assumptions from masquerading as checked evidence.
-
-Accepted proof-check records can carry optional route scope (`routeId`, `obligationId`, and statement boundary metadata). A verifier-route formal-proof obligation closes only when the accepted proof-check record is scoped to that exact route id and obligation id. This prevents a generic accepted Lean file, such as a trivial example theorem, from satisfying an unrelated route.
-
-Direct claim-ledger proof evidence can support a `proved` trust label only when the proof-check record itself parses as accepted proof-checker output. If that proof-check record has no statement boundary metadata, the claim remains blocked for final publication until a human confirms the formal theorem matches the informal claim.
+Source-level diagnostics can flag placeholders and declared assumptions.
+Proof admission requires independent kernel and transitive axiom checks,
+plus a checked binding to the formal goal. Route and obligation IDs record
+intent. Historical receipts remain available for inspection, and their
+stored proof labels and scope metadata cannot establish fresh claim trust.
 
 `truth-harness proof visual <proof_check_id>` turns a saved Lean proof-check record into a `truth-harness.visual-artifact.v0` proof-tree view under `.truth-harness/visuals/`. This is useful for teaching, review, reports, and UI inspection, but the visual is not the proof object. The source proof-check JSON remains authoritative and the visual artifact's trust boundary explicitly says it cannot upgrade trust labels.
 

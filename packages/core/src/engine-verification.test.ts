@@ -12,7 +12,7 @@ import {
 import { initLocalWorkspace } from "./local-workspace.js";
 
 describe("engine evidence verification", () => {
-  it("passes concrete Maxima, Z3, and Lean gates while skipping optional Sage evidence", async () => {
+  it("passes CAS and SMT gates but keeps successful Lean compilation unverified", async () => {
     const runner: EngineVerificationCommandRunner = (command, args) => {
       if (command === "maxima-test" && args[0] === "--version") {
         return { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" };
@@ -59,19 +59,19 @@ describe("engine evidence verification", () => {
     });
 
     expect(report.schemaVersion).toBe("truth-harness.engine-verification.v0");
-    expect(report.status).toBe("passed");
-    expect(report.requiredPassed).toBe(3);
+    expect(report.status).toBe("failed");
+    expect(report.requiredPassed).toBe(2);
     expect(report.requiredTotal).toBe(3);
-    expect(report.concretePassed).toBe(3);
-    expect(report.evidenceMinted).toBe(3);
+    expect(report.concretePassed).toBe(2);
+    expect(report.evidenceMinted).toBe(2);
     expect(report.trustBoundary.statusProbeIsNotEvidence).toBe(true);
     expect(report.trustBoundary.sageRequiredGateRunsConstrainedCas).toBe(true);
     expect(report.levels.map((level) => [level.levelId, level.status, level.passedCases, level.totalCases])).toEqual([
       ["engine-level-1-core-cas-smt", "passed", 2, 2],
       ["engine-level-2-smt-diversity", "blocked", 2, 3],
-      ["engine-level-3-formal-proof-fixture", "passed", 3, 3],
+      ["engine-level-3-formal-proof-fixture", "blocked", 2, 3],
       ["engine-level-4-sage-breadth", "blocked", 2, 3],
-      ["engine-level-5-strict-all-engines", "blocked", 3, 5]
+      ["engine-level-5-strict-all-engines", "blocked", 2, 5]
     ]);
 
     expect(report.cases).toContainEqual(
@@ -95,10 +95,10 @@ describe("engine evidence verification", () => {
     expect(report.cases).toContainEqual(
       expect.objectContaining({
         id: "lean-proof-fixture",
-        status: "passed",
-        trust: "proved",
-        evidenceMinted: true,
-        evidence: expect.objectContaining({ backendId: "lean", proofCheckerBacked: true, trust: "proved" })
+        status: "failed",
+        trust: "unverified",
+        evidenceMinted: false,
+        evidence: expect.objectContaining({ backendId: "lean", proofCheckerBacked: false, trust: "unverified" })
       })
     );
     expect(report.cases).toContainEqual(
@@ -109,7 +109,7 @@ describe("engine evidence verification", () => {
         evidenceMinted: false
       })
     );
-    expect(report.warnings).toEqual([]);
+    expect(report.warnings).toEqual(["Required engine gate failed: Lean proof fixture (failed)."]);
   });
 
   it("passes the required Sage gate only after constrained Sage CAS evidence is earned", async () => {
@@ -208,7 +208,7 @@ describe("engine evidence verification", () => {
     );
   });
 
-  it("summarizes the strict all-engine reviewer level only when every concrete gate earns evidence", async () => {
+  it("blocks the strict all-engine reviewer level when Lean only compiles", async () => {
     const runner: EngineVerificationCommandRunner = (command, args) => {
       if (command === "maxima-test" && args[0] === "--version") {
         return { status: 0, stdout: "Maxima 5.47.0\n", stderr: "" };
@@ -264,14 +264,14 @@ describe("engine evidence verification", () => {
       runner
     });
 
-    expect(report.status).toBe("passed");
-    expect(report.requiredPassed).toBe(5);
-    expect(report.evidenceMinted).toBe(5);
+    expect(report.status).toBe("failed");
+    expect(report.requiredPassed).toBe(4);
+    expect(report.evidenceMinted).toBe(4);
     expect(report.levels.find((level) => level.levelId === "engine-level-5-strict-all-engines")).toMatchObject({
-      status: "passed",
-      passedCases: 5,
+      status: "blocked",
+      passedCases: 4,
       totalCases: 5,
-      evidenceMinted: 5
+      evidenceMinted: 4
     });
   });
 
@@ -356,31 +356,32 @@ describe("engine evidence verification", () => {
     const parsed = parseEngineVerificationRunJson(await readFile(result.jsonPath, "utf8"), result.jsonPath);
     expect(parsed.schemaVersion).toBe("truth-harness.engine-run.v0");
     expect(parsed.runId).toBe(result.record.runId);
-    expect(parsed.status).toBe("passed");
-    expect(parsed.report.evidenceMinted).toBe(3);
+    expect(parsed.status).toBe("failed");
+    expect(parsed.report.evidenceMinted).toBe(2);
     expect(parsed.report.levels.find((level) => level.levelId === "engine-level-3-formal-proof-fixture")).toMatchObject({
-      status: "passed",
-      passedCases: 3,
+      status: "blocked",
+      passedCases: 2,
       totalCases: 3
     });
     expect(parsed.replay).toBe("truth-harness engines verify --write --require-all-concrete");
     expect(parsed.artifacts.json).toContain(".truth-harness/engine-runs/");
     expect(result.markdown).toContain("## Evidence Ladder");
     expect(result.markdown).toContain("## Engine Readiness Levels");
-    expect(result.markdown).toContain("| Formal proof fixture | passed | 3/3 | Core CAS/SMT evidence plus a Lean-accepted proof fixture are present. |");
+    expect(result.markdown).toContain("| Formal proof fixture | blocked | 2/3 |");
     expect(result.markdown).toContain("| Maxima symbolic cross-check | required | earned evidence | Concrete `cross-checked` evidence earned");
     expect(result.markdown).toContain("| cvc5 SMT-LIB check | optional | missing evidence | Optional evidence is missing;");
-    expect(result.markdown).toContain("- Reviewer meaning: Concrete `proved` evidence earned");
+    expect(result.markdown).toContain("- Reviewer meaning: Required evidence was attempted and failed");
+    expect(result.markdown).not.toContain("Concrete `proved` evidence earned");
     expect(result.markdown).toContain("Engine Gates");
 
     const runs = await listEngineVerificationRuns(root);
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({
       runId: result.record.runId,
-      status: "passed",
-      concretePassed: 3,
-      evidenceMinted: 3,
-      tags: expect.arrayContaining(["engine-level-1-core-cas-smt", "engine-level-3-formal-proof-fixture"])
+      status: "failed",
+      concretePassed: 2,
+      evidenceMinted: 2,
+      tags: expect.arrayContaining(["engine-level-1-core-cas-smt"])
     });
   });
 

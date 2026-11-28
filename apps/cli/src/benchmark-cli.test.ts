@@ -104,7 +104,7 @@ describe("benchmark CLI", { timeout: 15000 }, () => {
     });
     expect(json.journey.byTrustOutcome).toContainEqual({ trust: "refuted", count: 7 });
   });
-  it("shows saved Docker reviewer evidence in engine plans without treating host-missing engines as runnable", async () => {
+  it("does not promote compilation-only runs to saved strict reviewer evidence", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--name", "Engine Plan Lab"]);
     const savedRun = await writeEngineVerificationRun({
@@ -156,18 +156,18 @@ describe("benchmark CLI", { timeout: 15000 }, () => {
 
     expect(jsonResult.exitCode).toBe(0);
     expect(plan.savedReviewerEvidence).toMatchObject({
-      status: "available",
-      runId: savedRun.record.runId,
-      coveredCapabilityIds: expect.arrayContaining(["lean-proof-checker", "sage-cas"])
+      status: "none",
+      coveredCapabilityIds: []
     });
-    expect(plan.savedReviewerEvidence.trustBoundary).toContain("each new claim still needs its own concrete");
+    expect(savedRun.record.status).toBe("failed");
+    expect(plan.savedReviewerEvidence.trustBoundary).toContain("never mint trust");
     expect(leanStep).toMatchObject({
       status: "missing",
       canRunNow: false
     });
-    expect(leanStep?.limitation).toContain(`Saved reviewer Docker evidence ${savedRun.record.runId} covers this capability`);
-    expect(plan.nextActions.join("\n")).toContain(`Saved reviewer Docker evidence ${savedRun.record.runId} previously covered`);
-    expect(humanResult.stdout).toContain(`Saved reviewer evidence: Saved strict all-engine Docker reviewer run ${savedRun.record.runId}`);
+    expect(leanStep?.limitation).not.toContain("covers this capability");
+    expect(plan.nextActions.join("\n")).not.toContain("previously covered");
+    expect(humanResult.stdout).not.toContain("passed 5/5");
 
     const packSummaryResult = await runCli([
       "workspace",
@@ -195,9 +195,9 @@ describe("benchmark CLI", { timeout: 15000 }, () => {
 
     expect(packSummaryResult.exitCode).toBe(0);
     expect(packSummary.engine.hostProbeStatus).toBe("failed");
-    expect(packSummary.engine.effectiveStatus).toBe("satisfied-by-saved-strict-docker-evidence");
-    expect(packSummary.engine.latestStrictRunStatus).toBe("passed");
-    expect(packSummary.engine.strongestSavedLevel).toBe("engine-level-5-strict-all-engines");
+    expect(packSummary.engine.effectiveStatus).toBe("failed");
+    expect(packSummary.engine.latestStrictRunStatus).toBe("failed");
+    expect(packSummary.engine.strongestSavedLevel).toBeUndefined();
   });
 
   it("writes and reopens visual artifacts from the CLI", async () => {
@@ -1136,7 +1136,7 @@ describe("benchmark CLI", { timeout: 15000 }, () => {
     expect(humanList.stdout).toContain("Readiness: ready (exact-computed)");
   });
 
-  it("satisfies verifier route obligations from accepted local evidence", async () => {
+  it("refuses legacy formal-proof evidence with only self-attested scope", async () => {
     const root = await tempRoot();
     await runCli(["workspace", "init", root, "--json"]);
     const write = await runCli([
@@ -1211,7 +1211,7 @@ describe("benchmark CLI", { timeout: 15000 }, () => {
       )}\n`,
       "utf8"
     );
-    const satisfy = await runCli([
+    await expect(runCli([
       "route",
       "satisfy",
       written.route.routeId,
@@ -1221,56 +1221,13 @@ describe("benchmark CLI", { timeout: 15000 }, () => {
       "--evidence",
       `proof:${proofRef}`,
       "--json"
-    ]);
-    const result = JSON.parse(satisfy.stdout) as {
-      route: { proofObligations: Array<{ status: string; severity: string }> };
-      obligation: { status: string; satisfiedBy: Array<{ kind: string; ref: string; trust: string }> };
-      evidence: { trust: string; schemaVersion: string };
-    };
+    ])).rejects.toThrow("Formal statement binding is not verified");
     const shown = JSON.parse(
       (await runCli(["route", "show", written.route.routeId, "--workspace", root, "--json"])).stdout
     ) as { proofObligations: Array<{ obligationId: string; status: string }> };
-    const human = await runCli([
-      "route",
-      "satisfy",
-      written.route.routeId,
-      obligationId,
-      "--workspace",
-      root,
-      "--evidence",
-      `proof:${proofRef}`
-    ]);
-
-    expect(satisfy.exitCode).toBe(0);
-    expect(result.obligation.status).toBe("satisfied");
-    expect(result.obligation.satisfiedBy[0]).toMatchObject({
-      kind: "proof",
-      ref: proofRef,
-      trust: "proved"
-    });
-    expect(result.evidence).toMatchObject({
-      trust: "proved",
-      schemaVersion: "truth-harness.proof-check.v0",
-      scope: {
-        routeId: written.route.routeId,
-        obligationId
-      }
-    });
     expect(shown.proofObligations.find((candidate) => candidate.obligationId === obligationId)).toMatchObject({
-      status: "satisfied"
+      status: "open"
     });
-    const openObligations = result.route.proofObligations.filter((candidate) => candidate.status === "open").length;
-    const criticalOpenObligations = result.route.proofObligations.filter(
-      (candidate) => candidate.status === "open" && candidate.severity === "critical"
-    ).length;
-    const satisfiedObligations = result.route.proofObligations.filter(
-      (candidate) => candidate.status === "satisfied"
-    ).length;
-    expect(human.stdout).toContain(
-      `Proof obligations: ${result.route.proofObligations.length} total / ${openObligations} open / ${criticalOpenObligations} critical-open / ${satisfiedObligations} satisfied`
-    );
-    expect(human.stdout).toContain("Readiness: not-ready (proved)");
-    expect(human.stdout).toContain("Claim ledger follow-up:");
   });
 
   it("reports proof backend status without requiring Lean to be installed", async () => {
@@ -3053,15 +3010,15 @@ describe("benchmark CLI", { timeout: 15000 }, () => {
     });
     expect(plan.item?.command).toContain("truth-harness verify");
     expect(plan.enginePlan?.savedReviewerEvidence).toMatchObject({
-      status: "available",
-      runId: savedRun.record.runId,
-      coveredCapabilityIds: expect.arrayContaining(["lean-proof-checker", "sage-cas"])
+      status: "none",
+      coveredCapabilityIds: []
     });
     expect(leanStep).toMatchObject({
       status: "missing",
       canRunNow: false
     });
-    expect(leanStep?.limitation).toContain(`Saved reviewer Docker evidence ${savedRun.record.runId} covers this capability`);
+    expect(savedRun.record.status).toBe("failed");
+    expect(leanStep?.limitation).not.toContain("covers this capability");
   });
 
   it("executes candidate validation evidence through workspace run-next CLI", async () => {
@@ -3120,55 +3077,10 @@ describe("benchmark CLI", { timeout: 15000 }, () => {
       "0"
     ]);
 
-    const executed = await runCli([
-      "workspace",
-      "run-next",
-      root,
-      "--max-routes",
-      "0",
-      "--max-claims",
-      "0",
-      "--execute-local",
-      "--json"
-    ]);
-    const plan = JSON.parse(executed.stdout) as {
-      status: string;
-      item?: { command: string; validationGateId?: string };
-      execution: {
-        kind: string;
-        evidenceRef?: string;
-        result?: {
-          validationGate?: {
-            satisfied: boolean;
-            gate: { gateId: string; status: string };
-          };
-        };
-      };
-    };
-
     expect(humanDryRun.exitCode).toBe(0);
     expect(humanDryRun.stdout).toContain("Why this action:");
     expect(humanDryRun.stdout).toContain(`Target: validation proof ${proofGate.gateId}`);
-    expect(humanDryRun.stdout).toContain(`Candidate evidence: proof:${proofRef}`);
-    expect(executed.exitCode).toBe(0);
-    expect(plan.status).toBe("executed");
-    expect(plan.item).toMatchObject({
-      validationGateId: proofGate.gateId,
-      command: `truth-harness validation attach ${harnessJson.validationPlan.plan.planId} ${proofGate.gateId} --evidence proof:${proofRef} --json`
-    });
-    expect(plan.execution).toMatchObject({
-      kind: "validation-attach",
-      evidenceRef: `proof:${proofRef}`,
-      result: {
-        validationGate: {
-          satisfied: true,
-          gate: {
-            gateId: proofGate.gateId,
-            status: "satisfied"
-          }
-        }
-      }
-    });
+    expect(humanDryRun.stdout).not.toContain(`Candidate evidence: proof:${proofRef}`);
   });
 
   it("plans credibility reviewer actions through workspace run-next", async () => {

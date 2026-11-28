@@ -14,7 +14,7 @@ afterEach(async () => {
 });
 
 describe("proof repair fixture", () => {
-  it("creates a failed Lean attempt, repair handoff, accepted proof, and satisfied route obligation", async () => {
+  it("keeps the route open after a repair compiles without independent proof acceptance", async () => {
     const root = await tempRoot();
     let proofRuns = 0;
     const runner: ProofBackendCommandRunner = (_command, args) => {
@@ -54,9 +54,9 @@ describe("proof repair fixture", () => {
       },
       repairedProof: {
         record: {
-          status: "accepted",
-          trust: "proved",
-          proofCheckerBacked: true,
+          status: "rejected",
+          trust: "unverified",
+          proofCheckerBacked: false,
           scope: {
             routeId: result.route.route.routeId,
             obligationId: result.obligation.obligationId,
@@ -81,20 +81,11 @@ describe("proof repair fixture", () => {
         status: "planned"
       }
     });
-    expect(result.routeSatisfaction).toMatchObject({
-      obligation: {
-        obligationId: result.obligation.obligationId,
-        status: "satisfied"
-      },
-      evidence: {
-        kind: "proof",
-        trust: "proved",
-        status: "accepted",
-        proofCheckerBacked: true,
-        acceptedProofChecker: true
-      }
-    });
-    expect(result.finalReview.items).not.toContainEqual(
+    expect(result.repairedProof.record.backend.exitCode).toBe(0);
+    expect(result.repairedProof.record.limitations.join(" ")).toContain("independent kernel");
+    expect(result.routeSatisfaction).toBeUndefined();
+    expect(result.warnings.join(" ")).toContain("route obligation remains open");
+    expect(result.finalReview.items).toContainEqual(
       expect.objectContaining({
         kind: "route-obligation",
         routeId: result.route.route.routeId,

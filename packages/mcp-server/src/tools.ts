@@ -1,9 +1,10 @@
-import { readFile, realpath } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { runPolynomialTool, type PolynomialOperation, type PolynomialToolResult } from "@truth-harness/core";
-import { resolve, sep } from "node:path";
-import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
 import { parseBenchmarkSuite, runBenchmarkSuite, type BenchmarkRun } from "@truth-harness/benchmarks";
 import {
+  resolveContainedPath,
   attachValidationGateEvidence,
   benchmarkComparisonFailsGate,
   benchmarkRunFailsGate,
@@ -1403,6 +1404,7 @@ export interface TruthHarnessRenderReceiptOutput {
 }
 
 export function handleTruthHarnessAsk(input: TruthHarnessAskInput): TruthHarnessAskOutput {
+  assertMcpInput(input);
   const receipt = createReceipt(input.problem);
   const strictFailure = input.strict === true && receipt.trust === "unverified";
 
@@ -1416,16 +1418,12 @@ export function handleTruthHarnessAsk(input: TruthHarnessAskInput): TruthHarness
 }
 
 export async function handleTruthHarnessVerify(input: TruthHarnessVerifyInput): Promise<TruthHarnessVerifyOutput> {
+  assertMcpInput(input);
   const write = input.write === true
     ? await writeVerifierRoute({
         rootPath: resolveWorkspaceRoot(input.workspacePath),
         problem: input.problem,
         timeoutMs: input.timeoutMs,
-        maximaCommand: input.maximaCommand,
-        sageCommand: input.sageCommand,
-        leanCommand: input.leanCommand,
-        z3Command: input.z3Command,
-        cvc5Command: input.cvc5Command,
         smtReviewPolicy: input.requireIndependentSmt ? "independent" : "single"
       })
     : undefined;
@@ -1433,11 +1431,6 @@ export async function handleTruthHarnessVerify(input: TruthHarnessVerifyInput): 
     write?.route ??
     createVerifierRoute(input.problem, {
       timeoutMs: input.timeoutMs,
-      maximaCommand: input.maximaCommand,
-      sageCommand: input.sageCommand,
-      leanCommand: input.leanCommand,
-      z3Command: input.z3Command,
-      cvc5Command: input.cvc5Command,
       smtReviewPolicy: input.requireIndependentSmt ? "independent" : "single"
     });
   const strictFailure = input.strict === true && route.finalTrust === "unverified";
@@ -1457,6 +1450,7 @@ export async function handleTruthHarnessRouteList(input: TruthHarnessRouteListIn
   total: number;
   routes: VerifierRouteSummary[];
 }> {
+  assertMcpInput(input);
   const routes = await listVerifierRoutes(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: routes.length,
@@ -1465,12 +1459,14 @@ export async function handleTruthHarnessRouteList(input: TruthHarnessRouteListIn
 }
 
 export async function handleTruthHarnessRouteShow(input: TruthHarnessRouteShowInput): Promise<VerifierRoute> {
+  assertMcpInput(input);
   return readVerifierRoute(resolveWorkspaceRoot(input.workspacePath), input.routeRef);
 }
 
 export async function handleTruthHarnessRouteSatisfy(
   input: TruthHarnessRouteSatisfyInput
 ): Promise<SatisfyVerifierRouteObligationResult> {
+  assertMcpInput(input);
   return satisfyVerifierRouteObligation({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     routeRef: input.routeRef,
@@ -1480,45 +1476,35 @@ export async function handleTruthHarnessRouteSatisfy(
 }
 
 export function handleTruthHarnessEngineManifest(input: TruthHarnessEngineManifestInput = {}): EngineManifest {
+  assertMcpInput(input);
   return getEngineManifest({
     timeoutMs: input.timeoutMs,
-    maximaCommand: input.maximaCommand,
-    sageCommand: input.sageCommand,
-    leanCommand: input.leanCommand,
-    z3Command: input.z3Command,
-    cvc5Command: input.cvc5Command
   });
 }
 
 export function handleTruthHarnessEnginePacks(input: TruthHarnessEnginePacksInput = {}): EngineVerifierPackList {
+  assertMcpInput(input);
   return listEngineVerifierPacks({ packId: input.packId });
 }
 
 export async function handleTruthHarnessEnginePlan(input: TruthHarnessEnginePlanInput): Promise<EnginePlan> {
+  assertMcpInput(input);
   const rootPath = input.workspacePath ? resolveWorkspaceRoot(input.workspacePath) : resolveWorkspaceRoot(undefined);
   return createEnginePlan(input.problem, {
     timeoutMs: input.timeoutMs,
-    maximaCommand: input.maximaCommand,
-    sageCommand: input.sageCommand,
-    leanCommand: input.leanCommand,
-    z3Command: input.z3Command,
-    cvc5Command: input.cvc5Command,
     savedEngineRuns: await listEngineVerificationRunsIfWorkspace(rootPath)
   });
 }
 
 export function handleTruthHarnessEngineReadiness(input: TruthHarnessEngineReadinessInput = {}): EngineReadinessReport {
+  assertMcpInput(input);
   return createEngineReadinessReport({
     timeoutMs: input.timeoutMs,
-    maximaCommand: input.maximaCommand,
-    sageCommand: input.sageCommand,
-    leanCommand: input.leanCommand,
-    z3Command: input.z3Command,
-    cvc5Command: input.cvc5Command
   });
 }
 
 export async function handleTruthHarnessClaimAdd(input: TruthHarnessClaimAddInput): Promise<ClaimLedgerWriteResult> {
+  assertMcpInput(input);
   return writeClaimLedgerRecord({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -1537,6 +1523,7 @@ export async function handleTruthHarnessClaimAdd(input: TruthHarnessClaimAddInpu
 }
 
 export async function handleTruthHarnessClaimList(input: TruthHarnessClaimListInput): Promise<TruthHarnessClaimListOutput> {
+  assertMcpInput(input);
   const tag = input.tag?.replace(/^#/u, "").toLowerCase();
   const claims = (await listClaimRecords(resolveWorkspaceRoot(input.workspacePath))).filter((claim) => {
     if (input.domain && claim.domain !== input.domain) return false;
@@ -1554,10 +1541,12 @@ export async function handleTruthHarnessClaimList(input: TruthHarnessClaimListIn
 }
 
 export async function handleTruthHarnessClaimShow(input: TruthHarnessClaimShowInput): Promise<ClaimLedgerRecord> {
+  assertMcpInput(input);
   return readClaimRecord(resolveWorkspaceRoot(input.workspacePath), input.claimRef);
 }
 
 export async function handleTruthHarnessClaimReview(input: TruthHarnessClaimReviewInput) {
+  assertMcpInput(input);
   return createClaimReviewPacket({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     claimRef: input.claimRef
@@ -1567,12 +1556,14 @@ export async function handleTruthHarnessClaimReview(input: TruthHarnessClaimRevi
 export async function handleTruthHarnessCatalogStatus(
   input: TruthHarnessCatalogStatusInput
 ): Promise<WorkspaceCatalogStatus> {
+  assertMcpInput(input);
   return getWorkspaceCatalogStatus(resolveWorkspaceRoot(input.workspacePath), { checkFiles: true });
 }
 
 export async function handleTruthHarnessCatalogRebuild(
   input: TruthHarnessCatalogRebuildInput
 ): Promise<WorkspaceCatalogRebuildResult> {
+  assertMcpInput(input);
   return rebuildWorkspaceCatalog({
     rootPath: resolveWorkspaceRoot(input.workspacePath)
   });
@@ -1581,6 +1572,7 @@ export async function handleTruthHarnessCatalogRebuild(
 export async function handleTruthHarnessCatalogSearch(
   input: TruthHarnessCatalogSearchInput
 ): Promise<WorkspaceCatalogSearchResult> {
+  assertMcpInput(input);
   return searchWorkspaceCatalog({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     query: input.query,
@@ -1601,6 +1593,7 @@ export async function handleTruthHarnessBenchmarkRun(
 ): Promise<BenchmarkRun>;
 export async function handleTruthHarnessBenchmarkRun(input: TruthHarnessBenchmarkRunInput): Promise<TruthHarnessBenchmarkRunOutput>;
 export async function handleTruthHarnessBenchmarkRun(input: TruthHarnessBenchmarkRunInput): Promise<TruthHarnessBenchmarkRunOutput> {
+  assertMcpInput(input);
   const suitePath = input.suitePath ?? "packages/benchmarks/suites/foundations-seed.json";
   const resolvedSuitePath = resolveWorkspacePath(suitePath);
   const suite = parseBenchmarkSuite(JSON.parse(await readFile(resolvedSuitePath, "utf8")) as unknown);
@@ -1634,6 +1627,7 @@ export async function handleTruthHarnessBenchmarkCompare(
 ): Promise<BenchmarkComparisonRecord>;
 export async function handleTruthHarnessBenchmarkCompare(input: TruthHarnessBenchmarkCompareInput): Promise<TruthHarnessBenchmarkCompareOutput>;
 export async function handleTruthHarnessBenchmarkCompare(input: TruthHarnessBenchmarkCompareInput): Promise<TruthHarnessBenchmarkCompareOutput> {
+  assertMcpInput(input);
   const baseline = parseBenchmarkRunRecordJson(
     await readFile(resolveWorkspacePath(input.baselinePath), "utf8"),
     input.baselinePath
@@ -1667,6 +1661,7 @@ export async function handleTruthHarnessBenchmarkList(input: TruthHarnessBenchma
   total: number;
   artifacts: BenchmarkArtifactSummary[];
 }> {
+  assertMcpInput(input);
   const artifacts = await listBenchmarkArtifacts(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: artifacts.length,
@@ -1675,14 +1670,14 @@ export async function handleTruthHarnessBenchmarkList(input: TruthHarnessBenchma
 }
 
 export function handleTruthHarnessCasBackends(input: TruthHarnessCasBackendsInput): CasBackendStatusReport {
+  assertMcpInput(input);
   return getCasBackendStatus({
-    maximaCommand: input.maximaCommand,
-    sageCommand: input.sageCommand,
     timeoutMs: input.timeoutMs
   });
 }
 
 export async function handleTruthHarnessCasCheck(input: TruthHarnessCasCheckInput): Promise<TruthHarnessCasCheckOutput> {
+  assertMcpInput(input);
   const prompt = {
     operation: input.operation,
     expression: input.expression,
@@ -1694,8 +1689,6 @@ export async function handleTruthHarnessCasCheck(input: TruthHarnessCasCheckInpu
         prompt,
         result: input.result,
         backend: input.backend,
-        maximaCommand: input.maximaCommand,
-        sageCommand: input.sageCommand,
         timeoutMs: input.timeoutMs
       })
     : undefined;
@@ -1705,8 +1698,6 @@ export async function handleTruthHarnessCasCheck(input: TruthHarnessCasCheckInpu
       prompt,
       result: input.result,
       backend: input.backend,
-      maximaCommand: input.maximaCommand,
-      sageCommand: input.sageCommand,
       timeoutMs: input.timeoutMs
     });
   const error = input.failOnUnverified === true && record.trust !== "cross-checked";
@@ -1726,6 +1717,7 @@ export async function handleTruthHarnessCasList(input: TruthHarnessCasListInput)
   total: number;
   checks: SymbolicCasCheckSummary[];
 }> {
+  assertMcpInput(input);
   const checks = await listSymbolicCasChecks(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: checks.length,
@@ -1734,23 +1726,25 @@ export async function handleTruthHarnessCasList(input: TruthHarnessCasListInput)
 }
 
 export function handleTruthHarnessProofBackends(input: TruthHarnessProofBackendsInput): ProofBackendStatusReport {
+  assertMcpInput(input);
   return getProofBackendStatus({
     timeoutMs: input.timeoutMs
   });
 }
 
 export async function handleTruthHarnessProofCheck(input: TruthHarnessProofCheckInput): Promise<TruthHarnessProofCheckOutput> {
+  assertMcpInput(input);
   const workspaceRoot = resolveWorkspaceRoot(input.workspacePath);
+  const resolvedSourcePath = resolvePathUnderRoot(workspaceRoot, input.sourcePath);
   const write = input.write === true
     ? await writeLeanProofCheckRecord({
         rootPath: workspaceRoot,
-        sourcePath: input.sourcePath,
+        sourcePath: resolvedSourcePath,
         declarationName: input.declarationName,
         scope: proofCheckScopeFromInput(input),
         timeoutMs: input.timeoutMs
       })
     : undefined;
-  const resolvedSourcePath = resolvePathUnderRoot(workspaceRoot, input.sourcePath);
   const record =
     write?.record ??
     checkLeanProofArtifact({
@@ -1779,6 +1773,7 @@ export async function handleTruthHarnessProofList(input: TruthHarnessProofListIn
   total: number;
   checks: LeanProofCheckSummary[];
 }> {
+  assertMcpInput(input);
   const checks = await listLeanProofChecks(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: checks.length,
@@ -1787,27 +1782,25 @@ export async function handleTruthHarnessProofList(input: TruthHarnessProofListIn
 }
 
 export function handleTruthHarnessSmtBackends(input: TruthHarnessSmtBackendsInput): SmtBackendStatusReport {
+  assertMcpInput(input);
   return getSmtBackendStatus({
-    z3Command: input.z3Command,
-    cvc5Command: input.cvc5Command,
     timeoutMs: input.timeoutMs
   });
 }
 
 export async function handleTruthHarnessSmtCheck(input: TruthHarnessSmtCheckInput): Promise<TruthHarnessSmtCheckOutput> {
+  assertMcpInput(input);
   const workspaceRoot = resolveWorkspaceRoot(input.workspacePath);
+  const resolvedSourcePath = resolvePathUnderRoot(workspaceRoot, input.sourcePath);
   const write = input.write === true
     ? await writeSmtCheckRecord({
         rootPath: workspaceRoot,
-        sourcePath: input.sourcePath,
+        sourcePath: resolvedSourcePath,
         queryName: input.queryName,
         backend: input.backend,
-        z3Command: input.z3Command,
-        cvc5Command: input.cvc5Command,
         timeoutMs: input.timeoutMs
       })
     : undefined;
-  const resolvedSourcePath = resolvePathUnderRoot(workspaceRoot, input.sourcePath);
   const record =
     write?.record ??
     checkSmtLibArtifact({
@@ -1816,8 +1809,6 @@ export async function handleTruthHarnessSmtCheck(input: TruthHarnessSmtCheckInpu
       sourceText: await readFile(resolvedSourcePath, "utf8"),
       queryName: input.queryName,
       backend: input.backend,
-      z3Command: input.z3Command,
-      cvc5Command: input.cvc5Command,
       timeoutMs: input.timeoutMs,
       replayCommand: `truth-harness smt check ${quoteCommandArg(input.sourcePath)} --backend ${input.backend ?? "z3"} --json`
     });
@@ -1838,6 +1829,7 @@ export async function handleTruthHarnessSmtList(input: TruthHarnessSmtListInput)
   total: number;
   checks: SmtCheckSummary[];
 }> {
+  assertMcpInput(input);
   const checks = await listSmtChecks(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: checks.length,
@@ -1846,6 +1838,7 @@ export async function handleTruthHarnessSmtList(input: TruthHarnessSmtListInput)
 }
 
 export async function handleTruthHarnessSmtSolve(input: TruthHarnessSmtSolveInput): Promise<TruthHarnessSmtSolveOutput> {
+  assertMcpInput(input);
   const result = await solveSmtProblem({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     queryName: input.queryName,
@@ -1853,8 +1846,6 @@ export async function handleTruthHarnessSmtSolve(input: TruthHarnessSmtSolveInpu
     constraints: input.constraints,
     includeModel: input.includeModel,
     backend: input.backend,
-    z3Command: input.z3Command,
-    cvc5Command: input.cvc5Command,
     timeoutMs: input.timeoutMs
   });
   const error = input.failOnUnverified === true && result.check.record.trust !== "smt-checked";
@@ -1869,34 +1860,41 @@ export async function handleTruthHarnessSmtSolve(input: TruthHarnessSmtSolveInpu
 }
 
 export async function handleTruthHarnessWorkspaceInit(input: TruthHarnessWorkspaceInput): Promise<LocalWorkspaceInitResult> {
+  assertMcpInput(input);
   return initLocalWorkspace(resolveWorkspaceRoot(input.workspacePath), { displayName: input.name });
 }
 
 export async function handleTruthHarnessWorkspaceStatus(input: TruthHarnessWorkspaceInput): Promise<LocalWorkspaceStatus> {
+  assertMcpInput(input);
   return getLocalWorkspaceStatus(resolveWorkspaceRoot(input.workspacePath));
 }
 
 export async function handleTruthHarnessWorkspaceRepair(input: TruthHarnessWorkspaceInput): Promise<LocalWorkspaceRepairResult> {
+  assertMcpInput(input);
   return repairLocalWorkspace(resolveWorkspaceRoot(input.workspacePath));
 }
 
 export async function handleTruthHarnessWorkspaceValidate(input: TruthHarnessWorkspaceSnapshotInput): Promise<WorkspaceValidation> {
+  assertMcpInput(input);
   return validateWorkspaceArtifacts({
     rootPath: resolveWorkspaceRoot(input.workspacePath)
   });
 }
 
 export async function handleTruthHarnessWorkspaceGraph(input: TruthHarnessWorkspaceGraphInput): Promise<WorkspaceGraph> {
+  assertMcpInput(input);
   return createWorkspaceGraph({
     rootPath: resolveWorkspaceRoot(input.workspacePath)
   });
 }
 
 export async function handleTruthHarnessWorkspaceEvents(input: TruthHarnessWorkspaceEventsInput): Promise<WorkspaceEventListResult> {
+  assertMcpInput(input);
   return listWorkspaceEvents(resolveWorkspaceRoot(input.workspacePath), input.limit ?? 50);
 }
 
 export async function handleTruthHarnessVisualGraph(input: TruthHarnessVisualGraphInput): Promise<VisualArtifactWriteResult> {
+  assertMcpInput(input);
   return writeWorkspaceGraphVisualArtifact({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     renderer: input.renderer ?? "graphviz",
@@ -1906,6 +1904,7 @@ export async function handleTruthHarnessVisualGraph(input: TruthHarnessVisualGra
 }
 
 export async function handleTruthHarnessVisualPlot(input: TruthHarnessVisualPlotInput): Promise<VisualArtifactWriteResult> {
+  assertMcpInput(input);
   return writeReceiptPlotVisualArtifact({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     receiptPath: input.receiptPath,
@@ -1916,6 +1915,7 @@ export async function handleTruthHarnessVisualPlot(input: TruthHarnessVisualPlot
 }
 
 export async function handleTruthHarnessVisualCanvas(input: TruthHarnessVisualCanvasInput): Promise<VisualArtifactWriteResult> {
+  assertMcpInput(input);
   return writeResearchCanvasVisualArtifact({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -1927,6 +1927,7 @@ export async function handleTruthHarnessVisualList(input: TruthHarnessVisualList
   total: number;
   visuals: VisualArtifactSummary[];
 }> {
+  assertMcpInput(input);
   const visuals = await listVisualArtifacts(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: visuals.length,
@@ -1935,12 +1936,14 @@ export async function handleTruthHarnessVisualList(input: TruthHarnessVisualList
 }
 
 export async function handleTruthHarnessVisualShow(input: TruthHarnessVisualShowInput): Promise<VisualArtifact> {
+  assertMcpInput(input);
   return readVisualArtifact(resolveWorkspaceRoot(input.workspacePath), input.visualRef);
 }
 
 export async function handleTruthHarnessVisualRender(
   input: TruthHarnessVisualRenderInput
 ): Promise<TruthHarnessVisualRenderOutput> {
+  assertMcpInput(input);
   const engine = input.engine ?? "graphviz";
   if (engine !== "graphviz" && engine !== "plotly") {
     return {
@@ -1990,6 +1993,7 @@ export async function handleTruthHarnessVisualRender(
 export async function handleTruthHarnessWorkspaceReview(
   input: TruthHarnessWorkspaceReviewInput
 ): Promise<TruthHarnessWorkspaceReviewOutput> {
+  assertMcpInput(input);
   const reviewInput = {
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     maxRoutes: input.maxRoutes,
@@ -2013,6 +2017,7 @@ export async function handleTruthHarnessWorkspaceReview(
 export async function handleTruthHarnessWorkspaceSeedHardMath(
   input: TruthHarnessWorkspaceSeedHardMathInput
 ): Promise<HardMathSeedResult> {
+  assertMcpInput(input);
   return writeHardMathSeedWorkspace({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     caseIds: input.caseIds,
@@ -2031,6 +2036,7 @@ export async function handleTruthHarnessWorkspaceHardMathSeedList(input: TruthHa
   seed?: HardMathSeedResult;
   seeds: HardMathSeedResult[];
 }> {
+  assertMcpInput(input);
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
   if (input.latest || input.handoff) {
     const seed = await readLatestHardMathSeedWorkspace(rootPath, { preset: input.preset });
@@ -2056,6 +2062,7 @@ export async function handleTruthHarnessWorkspaceHardMathSeedList(input: TruthHa
 export async function handleTruthHarnessWorkspaceUiReview(
   input: TruthHarnessWorkspaceUiReviewInput
 ): Promise<TruthHarnessWorkspaceUiReviewOutput> {
+  assertMcpInput(input);
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
   const layoutAuditSummary = input.layoutAuditSummary ?? await readWebUiLayoutAuditSummary(rootPath, input.layoutAudit);
   const reviewInput = {
@@ -2084,8 +2091,10 @@ export async function handleTruthHarnessWorkspaceUiReview(
 export async function handleTruthHarnessWorkspaceRunNext(
   input: TruthHarnessWorkspaceRunNextInput
 ): Promise<TruthHarnessWorkspaceRunNextOutput> {
+  assertMcpInput(input);
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
   const review = await createRunNextReviewFromInput(rootPath, input);
+  assertNoRunNextExecutableOverrides(review);
 
   const plan = await createWorkspaceRunNextPlan({
     rootPath,
@@ -2093,11 +2102,6 @@ export async function handleTruthHarnessWorkspaceRunNext(
     executeLocal: input.executeLocal === true,
     enginePlanOptions: {
       timeoutMs: input.timeoutMs,
-      maximaCommand: input.maximaCommand,
-      sageCommand: input.sageCommand,
-      leanCommand: input.leanCommand,
-      z3Command: input.z3Command,
-      cvc5Command: input.cvc5Command,
       savedEngineRuns: await listEngineVerificationRunsIfWorkspace(rootPath)
     }
   });
@@ -2137,11 +2141,6 @@ async function createRunNextReviewFromInput(
       maxSessions: input.maxSessions,
       maxReports: input.maxReports,
       timeoutMs: input.timeoutMs,
-      maximaCommand: input.maximaCommand,
-      sageCommand: input.sageCommand,
-      leanCommand: input.leanCommand,
-      z3Command: input.z3Command,
-      cvc5Command: input.cvc5Command,
       smtSourcePath: input.smtSourcePath,
       leanSourcePath: input.leanSourcePath,
       engineRequirements: credibilityEngineRequirementsFromInput(input)
@@ -2157,6 +2156,7 @@ export async function handleTruthHarnessWorkspaceRunNextList(input: TruthHarness
   limit?: number;
   plans: WorkspaceRunNextSummary[];
 }> {
+  assertMcpInput(input);
   const plans = await listWorkspaceRunNextPlans(resolveWorkspaceRoot(input.workspacePath), {
     verifySnapshots: Boolean(input.verifySnapshots),
     limit: input.limit
@@ -2171,6 +2171,7 @@ export async function handleTruthHarnessWorkspaceRunNextList(input: TruthHarness
 export async function handleTruthHarnessWorkspaceRunNextShow(
   input: TruthHarnessWorkspaceRunNextShowInput
 ): Promise<WorkspaceRunNextPlan | WorkspaceRunNextInspection> {
+  assertMcpInput(input);
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
   if (input.verifySnapshot) {
     return inspectWorkspaceRunNextPlan(rootPath, input.planRef, { verifySnapshot: true });
@@ -2182,6 +2183,7 @@ export async function handleTruthHarnessWorkspaceRunNextShow(
 export async function handleTruthHarnessWorkspaceResumeIndex(
   input: TruthHarnessWorkspaceResumeIndexInput
 ): Promise<WorkspaceResumeIndex> {
+  assertMcpInput(input);
   return createWorkspaceResumeIndex({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     verifySnapshots: input.verifySnapshots,
@@ -2195,7 +2197,9 @@ export async function handleTruthHarnessWorkspaceResumeIndex(
 export async function handleTruthHarnessWorkspacePilotLoop(
   input: TruthHarnessWorkspacePilotLoopInput
 ): Promise<TruthHarnessWorkspacePilotLoopOutput> {
+  assertMcpInput(input);
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
+  await assertMcpPilotLoopCommands(rootPath, input.planRef);
   const run = await runWorkspacePilotLoop({
     rootPath,
     source: input.source,
@@ -2208,11 +2212,6 @@ export async function handleTruthHarnessWorkspacePilotLoop(
     maxSessions: input.maxSessions,
     maxReports: input.maxReports,
     timeoutMs: input.timeoutMs,
-    maximaCommand: input.maximaCommand,
-    sageCommand: input.sageCommand,
-    leanCommand: input.leanCommand,
-    z3Command: input.z3Command,
-    cvc5Command: input.cvc5Command,
     smtSourcePath: input.smtSourcePath,
     leanSourcePath: input.leanSourcePath,
     engineRequirements: credibilityEngineRequirementsFromInput(input)
@@ -2239,6 +2238,7 @@ export async function handleTruthHarnessWorkspacePilotLoopList(input: TruthHarne
   limit?: number;
   loops: WorkspacePilotLoopSummary[];
 }> {
+  assertMcpInput(input);
   const loops = await listWorkspacePilotLoopRecords(resolveWorkspaceRoot(input.workspacePath), {
     limit: input.limit
   });
@@ -2252,24 +2252,24 @@ export async function handleTruthHarnessWorkspacePilotLoopList(input: TruthHarne
 export async function handleTruthHarnessWorkspacePilotLoopShow(
   input: TruthHarnessWorkspacePilotLoopShowInput
 ): Promise<WorkspacePilotLoopInspection> {
+  assertMcpInput(input);
   return inspectWorkspacePilotLoopRecord(resolveWorkspaceRoot(input.workspacePath), input.loopRef);
 }
 
 export async function handleTruthHarnessWorkspacePilotLoopContinue(
   input: TruthHarnessWorkspacePilotLoopContinueInput
 ): Promise<Awaited<ReturnType<typeof continueWorkspacePilotLoopRecord>>> {
+  assertMcpInput(input);
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
+  const inspection = await inspectWorkspacePilotLoopRecord(rootPath, input.loopRef);
+  assertNoRunNextExecutableOverrides(inspection);
+  await assertMcpPilotLoopCommands(rootPath);
   return continueWorkspacePilotLoopRecord({
     rootPath,
     loopRef: input.loopRef,
     executeLocal: input.executeLocal === true,
     writeRunNextPlan: input.write === true,
     timeoutMs: input.timeoutMs,
-    maximaCommand: input.maximaCommand,
-    sageCommand: input.sageCommand,
-    leanCommand: input.leanCommand,
-    z3Command: input.z3Command,
-    cvc5Command: input.cvc5Command,
     enginePlanOptions: {
       savedEngineRuns: await listEngineVerificationRunsIfWorkspace(rootPath)
     }
@@ -2279,6 +2279,7 @@ export async function handleTruthHarnessWorkspaceReviewList(input: TruthHarnessW
   total: number;
   reviews: WorkspaceReviewSummary[];
 }> {
+  assertMcpInput(input);
   const reviews = await listWorkspaceReviews(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: reviews.length,
@@ -2289,6 +2290,7 @@ export async function handleTruthHarnessWorkspaceReviewList(input: TruthHarnessW
 export async function handleTruthHarnessWorkspaceReviewShow(
   input: TruthHarnessWorkspaceReviewShowInput
 ): Promise<WorkspaceReview> {
+  assertMcpInput(input);
   return readWorkspaceReview(resolveWorkspaceRoot(input.workspacePath), input.reviewRef);
 }
 
@@ -2296,6 +2298,7 @@ export async function handleTruthHarnessWorkspaceUiReviewList(input: TruthHarnes
   total: number;
   reviews: WebUiReviewSummary[];
 }> {
+  assertMcpInput(input);
   const reviews = await listWebUiReviews(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: reviews.length,
@@ -2307,6 +2310,7 @@ export async function handleTruthHarnessReportList(input: TruthHarnessReportList
   total: number;
   reports: ReportDraftSummary[];
 }> {
+  assertMcpInput(input);
   const reports = await listReportDrafts({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     limit: input.limit
@@ -2319,6 +2323,7 @@ export async function handleTruthHarnessReportList(input: TruthHarnessReportList
 }
 
 export async function handleTruthHarnessReportRead(input: TruthHarnessReportReadInput): Promise<ReportDraftReadResult> {
+  assertMcpInput(input);
   return readReportDraft({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     reportId: input.reportId
@@ -2328,6 +2333,7 @@ export async function handleTruthHarnessReportRead(input: TruthHarnessReportRead
 export async function handleTruthHarnessWorkspaceSnapshot(
   input: TruthHarnessWorkspaceSnapshotInput
 ): Promise<WorkspaceSnapshotWriteResult> {
+  assertMcpInput(input);
   return writeWorkspaceSnapshot({
     rootPath: resolveWorkspaceRoot(input.workspacePath)
   });
@@ -2337,6 +2343,7 @@ export async function handleTruthHarnessWorkspaceSnapshotList(input: TruthHarnes
   total: number;
   snapshots: WorkspaceSnapshotSummary[];
 }> {
+  assertMcpInput(input);
   const snapshots = await listWorkspaceSnapshots(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: snapshots.length,
@@ -2347,6 +2354,7 @@ export async function handleTruthHarnessWorkspaceSnapshotList(input: TruthHarnes
 export async function handleTruthHarnessWorkspaceSnapshotVerify(
   input: TruthHarnessWorkspaceSnapshotVerifyInput
 ): Promise<WorkspaceSnapshotVerification> {
+  assertMcpInput(input);
   return verifyWorkspaceSnapshot({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     snapshotRef: input.snapshotRef
@@ -2356,6 +2364,7 @@ export async function handleTruthHarnessWorkspaceSnapshotVerify(
 export async function handleTruthHarnessWorkspaceReleaseAuditSummary(
   input: TruthHarnessWorkspaceReleaseAuditSummaryInput
 ): Promise<ReleaseAuditCliSummary> {
+  assertMcpInput(input);
   const audit = await createReleaseAudit({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     mode: input.mode,
@@ -2364,11 +2373,6 @@ export async function handleTruthHarnessWorkspaceReleaseAuditSummary(
     maxSessions: input.maxSessions,
     maxReports: input.maxReports,
     timeoutMs: input.timeoutMs,
-    maximaCommand: input.maximaCommand,
-    sageCommand: input.sageCommand,
-    leanCommand: input.leanCommand,
-    z3Command: input.z3Command,
-    cvc5Command: input.cvc5Command,
     smtSourcePath: input.smtSourcePath,
     leanSourcePath: input.leanSourcePath,
     engineRequirements: credibilityEngineRequirementsFromInput(input),
@@ -2382,6 +2386,7 @@ export async function handleTruthHarnessWorkspaceReleaseAuditSummary(
 export async function handleTruthHarnessWorkspaceCredibilitySummary(
   input: TruthHarnessWorkspaceCredibilitySummaryInput
 ): Promise<CredibilityPackCliSummary> {
+  assertMcpInput(input);
   const pack = await createCredibilityPack({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     maxRoutes: input.maxRoutes,
@@ -2389,11 +2394,6 @@ export async function handleTruthHarnessWorkspaceCredibilitySummary(
     maxSessions: input.maxSessions,
     maxReports: input.maxReports,
     timeoutMs: input.timeoutMs,
-    maximaCommand: input.maximaCommand,
-    sageCommand: input.sageCommand,
-    leanCommand: input.leanCommand,
-    z3Command: input.z3Command,
-    cvc5Command: input.cvc5Command,
     smtSourcePath: input.smtSourcePath,
     leanSourcePath: input.leanSourcePath,
     engineRequirements: credibilityEngineRequirementsFromInput(input)
@@ -2405,6 +2405,7 @@ export async function handleTruthHarnessWorkspaceCredibilitySummary(
 export async function handleTruthHarnessWorkspaceCredibilityBundle(
   input: TruthHarnessWorkspaceCredibilityBundleInput
 ): Promise<CredibilityBundleWriteResult> {
+  assertMcpInput(input);
   return writeCredibilityBundle({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     maxRoutes: input.maxRoutes,
@@ -2412,11 +2413,6 @@ export async function handleTruthHarnessWorkspaceCredibilityBundle(
     maxSessions: input.maxSessions,
     maxReports: input.maxReports,
     timeoutMs: input.timeoutMs,
-    maximaCommand: input.maximaCommand,
-    sageCommand: input.sageCommand,
-    leanCommand: input.leanCommand,
-    z3Command: input.z3Command,
-    cvc5Command: input.cvc5Command,
     smtSourcePath: input.smtSourcePath,
     leanSourcePath: input.leanSourcePath,
     engineRequirements: credibilityEngineRequirementsFromInput(input)
@@ -2426,6 +2422,7 @@ export async function handleTruthHarnessWorkspaceCredibilityBundle(
 export async function handleTruthHarnessWorkspaceCredibilityActions(
   input: TruthHarnessWorkspaceCredibilityActionsInput
 ): Promise<TruthHarnessWorkspaceCredibilityActionsOutput> {
+  assertMcpInput(input);
   const pack = await createCredibilityPack({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     maxRoutes: input.maxRoutes,
@@ -2433,11 +2430,6 @@ export async function handleTruthHarnessWorkspaceCredibilityActions(
     maxSessions: input.maxSessions,
     maxReports: input.maxReports,
     timeoutMs: input.timeoutMs,
-    maximaCommand: input.maximaCommand,
-    sageCommand: input.sageCommand,
-    leanCommand: input.leanCommand,
-    z3Command: input.z3Command,
-    cvc5Command: input.cvc5Command,
     smtSourcePath: input.smtSourcePath,
     leanSourcePath: input.leanSourcePath,
     engineRequirements: credibilityEngineRequirementsFromInput(input)
@@ -2470,6 +2462,7 @@ export async function handleTruthHarnessWorkspaceCredibilityActions(
 export async function handleTruthHarnessWorkspaceCredibilityBundleVerify(
   input: TruthHarnessWorkspaceCredibilityBundleVerifyInput
 ): Promise<CredibilityBundleVerification> {
+  assertMcpInput(input);
   return verifyCredibilityBundle({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     bundleRef: input.bundleRef
@@ -2477,13 +2470,17 @@ export async function handleTruthHarnessWorkspaceCredibilityBundleVerify(
 }
 
 export async function handleTruthHarnessSourceIngest(input: TruthHarnessSourceIngestInput): Promise<LocalCorpusIngestResult> {
+  assertMcpInput(input);
+  const rootPath = resolveWorkspaceRoot(input.workspacePath);
+  for (const path of input.paths) assertContainedSourceTree(rootPath, path);
   return ingestLocalCorpus({
-    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    rootPath,
     paths: input.paths
   });
 }
 
 export async function handleTruthHarnessSourceSearch(input: TruthHarnessSourceSearchInput): Promise<LocalCorpusSearchResult> {
+  assertMcpInput(input);
   return searchLocalCorpus({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     query: input.query,
@@ -2492,6 +2489,7 @@ export async function handleTruthHarnessSourceSearch(input: TruthHarnessSourceSe
 }
 
 export async function handleTruthHarnessSourceCite(input: TruthHarnessSourceCiteInput): Promise<TruthHarnessSourceCiteOutput> {
+  assertMcpInput(input);
   const receipt = await createSourceCitationReceipt({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     claim: input.claim,
@@ -2510,6 +2508,7 @@ export async function handleTruthHarnessSourceCite(input: TruthHarnessSourceCite
 }
 
 export async function handleTruthHarnessLiteratureLog(input: TruthHarnessLiteratureLogInput): Promise<TruthHarnessLiteratureLogOutput> {
+  assertMcpInput(input);
   const literatureInput = {
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -2548,6 +2547,7 @@ export async function handleTruthHarnessLiteratureList(input: TruthHarnessLitera
   total: number;
   records: LiteratureRecord[];
 }> {
+  assertMcpInput(input);
   const records = await listLiteratureRecords(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: records.length,
@@ -2556,6 +2556,7 @@ export async function handleTruthHarnessLiteratureList(input: TruthHarnessLitera
 }
 
 export async function handleTruthHarnessNotebookRunLog(input: TruthHarnessNotebookRunLogInput): Promise<TruthHarnessNotebookRunLogOutput> {
+  assertMcpInput(input);
   const notebookRunInput = {
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -2601,6 +2602,7 @@ export async function handleTruthHarnessNotebookRunList(input: TruthHarnessNoteb
   total: number;
   records: NotebookRunRecord[];
 }> {
+  assertMcpInput(input);
   const records = await listNotebookRuns(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: records.length,
@@ -2609,14 +2611,17 @@ export async function handleTruthHarnessNotebookRunList(input: TruthHarnessNoteb
 }
 
 export async function handleTruthHarnessCodeRun(input: TruthHarnessCodeRunInput): Promise<TruthHarnessCodeRunOutput> {
+  assertMcpInput(input);
   assertMcpCodeRunAllowed(input.policy);
+  const rootPath = resolveWorkspaceRoot(input.workspacePath);
+  const workingDirectory = resolvePathUnderRoot(rootPath, input.workingDirectory ?? ".");
   const result = await writeCodeRun({
-    rootPath: resolveWorkspaceRoot(input.workspacePath),
+    rootPath,
     title: input.title,
     purpose: input.purpose,
     command: input.command,
     args: input.args,
-    workingDirectory: input.workingDirectory,
+    workingDirectory,
     codeRefs: input.codeRefs,
     inputRefs: input.inputRefs,
     outputRefs: input.outputRefs,
@@ -2669,6 +2674,7 @@ export async function handleTruthHarnessCodeRunList(input: TruthHarnessCodeRunLi
   total: number;
   records: CodeRunSummary[];
 }> {
+  assertMcpInput(input);
   const records = await listCodeRuns(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: records.length,
@@ -2677,6 +2683,7 @@ export async function handleTruthHarnessCodeRunList(input: TruthHarnessCodeRunLi
 }
 
 export async function handleTruthHarnessSimulationLog(input: TruthHarnessSimulationLogInput): Promise<SimulationLogWriteResult> {
+  assertMcpInput(input);
   return createSimulationLogEntry({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -2703,6 +2710,7 @@ export async function handleTruthHarnessSimulationList(input: TruthHarnessSimula
   total: number;
   entries: SimulationLogEntry[];
 }> {
+  assertMcpInput(input);
   const entries = await listSimulationLogEntries(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: entries.length,
@@ -2711,6 +2719,7 @@ export async function handleTruthHarnessSimulationList(input: TruthHarnessSimula
 }
 
 export async function handleTruthHarnessExperimentLog(input: TruthHarnessExperimentLogInput): Promise<ExperimentLogWriteResult> {
+  assertMcpInput(input);
   return createExperimentLogEntry({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -2738,6 +2747,7 @@ export async function handleTruthHarnessExperimentList(input: TruthHarnessExperi
   total: number;
   entries: ExperimentLogEntry[];
 }> {
+  assertMcpInput(input);
   const entries = await listExperimentLogEntries(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: entries.length,
@@ -2746,6 +2756,7 @@ export async function handleTruthHarnessExperimentList(input: TruthHarnessExperi
 }
 
 export async function handleTruthHarnessVaultSeal(input: TruthHarnessVaultSealInput): Promise<VaultSealResult> {
+  assertMcpInput(input);
   return sealVaultFile({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     sourcePath: input.sourcePath,
@@ -2758,6 +2769,7 @@ export async function handleTruthHarnessVaultList(input: TruthHarnessVaultListIn
   total: number;
   entries: VaultEnvelopeSummary[];
 }> {
+  assertMcpInput(input);
   const entries = await listVaultEntries(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: entries.length,
@@ -2766,6 +2778,7 @@ export async function handleTruthHarnessVaultList(input: TruthHarnessVaultListIn
 }
 
 export async function handleTruthHarnessVaultVerify(input: TruthHarnessVaultVerifyInput): Promise<VaultVerifyResult> {
+  assertMcpInput(input);
   return verifyVaultEntry({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     vaultRef: input.vaultRef,
@@ -2774,6 +2787,7 @@ export async function handleTruthHarnessVaultVerify(input: TruthHarnessVaultVeri
 }
 
 export async function handleTruthHarnessEvidenceAudit(input: TruthHarnessEvidenceAuditInput): Promise<TruthHarnessEvidenceAuditOutput> {
+  assertMcpInput(input);
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
   const auditInput = {
     rootPath,
@@ -2810,6 +2824,7 @@ export async function handleTruthHarnessEvidenceAuditList(input: TruthHarnessEvi
   total: number;
   audits: EvidenceAudit[];
 }> {
+  assertMcpInput(input);
   const audits = await listEvidenceAudits(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: audits.length,
@@ -2818,6 +2833,7 @@ export async function handleTruthHarnessEvidenceAuditList(input: TruthHarnessEvi
 }
 
 export async function handleTruthHarnessValidationPlan(input: TruthHarnessValidationPlanInput): Promise<TruthHarnessValidationPlanOutput> {
+  assertMcpInput(input);
   const planInput = {
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -2845,6 +2861,7 @@ export async function handleTruthHarnessValidationPlanList(input: TruthHarnessVa
   total: number;
   plans: ValidationPlan[];
 }> {
+  assertMcpInput(input);
   const plans = await listValidationPlans(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: plans.length,
@@ -2855,6 +2872,7 @@ export async function handleTruthHarnessValidationPlanList(input: TruthHarnessVa
 export async function handleTruthHarnessValidationGateAttach(
   input: TruthHarnessValidationGateAttachInput
 ): Promise<AttachValidationGateEvidenceResult> {
+  assertMcpInput(input);
   return attachValidationGateEvidence({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     planRef: input.planRef,
@@ -2866,6 +2884,7 @@ export async function handleTruthHarnessValidationGateAttach(
 export async function handleTruthHarnessResearchSessionStart(
   input: TruthHarnessResearchSessionStartInput
 ): Promise<ResearchSessionWriteResult> {
+  assertMcpInput(input);
   return writeResearchSession({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -2886,6 +2905,7 @@ export async function handleTruthHarnessResearchSessionStart(
 export async function handleTruthHarnessResearchHarnessStart(
   input: TruthHarnessResearchHarnessStartInput
 ): Promise<TruthHarnessResearchHarnessStartOutput> {
+  assertMcpInput(input);
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
   const result = await writeResearchHarness({
     rootPath,
@@ -2935,6 +2955,7 @@ export async function handleTruthHarnessResearchHarnessStart(
 export async function handleTruthHarnessResearchSessionCheckpoint(
   input: TruthHarnessResearchSessionCheckpointInput
 ): Promise<ResearchSessionCheckpointWriteResult> {
+  assertMcpInput(input);
   return addResearchSessionCheckpoint({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     sessionRef: input.sessionRef,
@@ -2949,6 +2970,7 @@ export async function handleTruthHarnessResearchSessionCheckpoint(
 export async function handleTruthHarnessResearchSessionTaskUpdate(
   input: TruthHarnessResearchSessionTaskUpdateInput
 ): Promise<ResearchSessionTaskUpdateWriteResult> {
+  assertMcpInput(input);
   return updateResearchSessionTask({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     sessionRef: input.sessionRef,
@@ -2963,6 +2985,7 @@ export async function handleTruthHarnessResearchSessionList(input: TruthHarnessR
   total: number;
   sessions: ResearchSession[];
 }> {
+  assertMcpInput(input);
   const sessions = await listResearchSessions(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: sessions.length,
@@ -2973,10 +2996,12 @@ export async function handleTruthHarnessResearchSessionList(input: TruthHarnessR
 export async function handleTruthHarnessResearchSessionShow(
   input: TruthHarnessResearchSessionShowInput
 ): Promise<ResearchSession> {
+  assertMcpInput(input);
   return readResearchSession(resolveWorkspaceRoot(input.workspacePath), input.sessionRef);
 }
 
 export async function handleTruthHarnessExpertReviewLog(input: TruthHarnessExpertReviewLogInput): Promise<ExpertReviewWriteResult> {
+  assertMcpInput(input);
   return writeExpertReview({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -3002,6 +3027,7 @@ export async function handleTruthHarnessExpertReviewList(input: TruthHarnessExpe
   total: number;
   reviews: ExpertReviewRecord[];
 }> {
+  assertMcpInput(input);
   const reviews = await listExpertReviews(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: reviews.length,
@@ -3010,6 +3036,7 @@ export async function handleTruthHarnessExpertReviewList(input: TruthHarnessExpe
 }
 
 export async function handleTruthHarnessInventionLog(input: TruthHarnessInventionLogInput): Promise<InventionLogWriteResult> {
+  assertMcpInput(input);
   return createInventionLogEntry({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -3028,6 +3055,7 @@ export async function handleTruthHarnessInventionList(input: TruthHarnessInventi
   total: number;
   entries: InventionLogEntry[];
 }> {
+  assertMcpInput(input);
   const entries = await listInventionLogEntries(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: entries.length,
@@ -3038,6 +3066,7 @@ export async function handleTruthHarnessInventionList(input: TruthHarnessInventi
 export async function handleTruthHarnessDiscoveryPackage(
   input: TruthHarnessDiscoveryPackageInput
 ): Promise<TruthHarnessDiscoveryPackageOutput> {
+  assertMcpInput(input);
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
   if (input.write) {
     return {
@@ -3053,6 +3082,7 @@ export async function handleTruthHarnessDiscoveryPackage(
 }
 
 export async function handleTruthHarnessClaimChart(input: TruthHarnessClaimChartInput): Promise<TruthHarnessClaimChartOutput> {
+  assertMcpInput(input);
   const rootPath = resolveWorkspaceRoot(input.workspacePath);
   const chartInput = {
     rootPath,
@@ -3082,6 +3112,7 @@ export async function handleTruthHarnessClaimChartList(input: TruthHarnessClaimC
   total: number;
   charts: ClaimChart[];
 }> {
+  assertMcpInput(input);
   const charts = await listClaimCharts(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: charts.length,
@@ -3092,6 +3123,7 @@ export async function handleTruthHarnessClaimChartList(input: TruthHarnessClaimC
 export async function handleTruthHarnessModelContextPrepare(
   input: TruthHarnessModelContextPrepareInput
 ): Promise<TruthHarnessModelContextPrepareOutput> {
+  assertMcpInput(input);
   const modelContextInput = {
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     title: input.title,
@@ -3129,6 +3161,7 @@ export async function handleTruthHarnessModelContextList(input: TruthHarnessMode
   total: number;
   packets: ModelContextPacket[];
 }> {
+  assertMcpInput(input);
   const packets = await listModelContexts(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: packets.length,
@@ -3139,6 +3172,7 @@ export async function handleTruthHarnessModelContextList(input: TruthHarnessMode
 export async function handleTruthHarnessExternalDisclosureLog(
   input: TruthHarnessExternalDisclosureLogInput
 ): Promise<ExternalDisclosureWriteResult> {
+  assertMcpInput(input);
   return createExternalDisclosureLogEntry({
     rootPath: resolveWorkspaceRoot(input.workspacePath),
     service: input.service,
@@ -3160,6 +3194,7 @@ export async function handleTruthHarnessExternalDisclosureList(input: TruthHarne
   total: number;
   entries: ExternalDisclosureLogEntry[];
 }> {
+  assertMcpInput(input);
   const entries = await listExternalDisclosureLogEntries(resolveWorkspaceRoot(input.workspacePath));
   return {
     total: entries.length,
@@ -3168,10 +3203,12 @@ export async function handleTruthHarnessExternalDisclosureList(input: TruthHarne
 }
 
 export async function handleTruthHarnessReplay(input: TruthHarnessReplayInput): Promise<ReplayResult> {
+  assertMcpInput(input);
   return replayReceipt(await readReceiptInput(input));
 }
 
 export async function handleTruthHarnessRenderReceipt(input: TruthHarnessRenderReceiptInput): Promise<TruthHarnessRenderReceiptOutput> {
+  assertMcpInput(input);
   const format = input.format ?? "markdown";
   const receipt = await readReceiptInput(input);
 
@@ -3185,9 +3222,9 @@ export async function handleTruthHarnessRenderReceipt(input: TruthHarnessRenderR
 
 export async function handlePolynomialReplay(input: { operation: PolynomialOperation; requestPath: string; receiptPath: string }): Promise<PolynomialToolResult> {
   try {
-    const root = await realpath(getWorkspaceRoot());
-    const requestPath = resolvePathUnderRoot(root, await realpath(resolveWorkspacePath(input.requestPath)));
-    const receiptPath = resolvePathUnderRoot(root, await realpath(resolveWorkspacePath(input.receiptPath)));
+    assertMcpInput(input);
+    const requestPath = resolveWorkspacePath(input.requestPath);
+    const receiptPath = resolveWorkspacePath(input.receiptPath);
     return runPolynomialTool({ operation: input.operation, requestPath, receiptPath });
   } catch (error) {
     return { exit_code: 2, report: { status: "unverified", checked: false, error: String(error) } };
@@ -3220,11 +3257,18 @@ async function readReceiptInput(input: TruthHarnessReplayInput): Promise<Receipt
 }
 
 function resolveWorkspaceRoot(path?: string): string {
-  if (!path) {
-    return getWorkspaceRoot();
+  const root = resolveWorkspacePath(path ?? ".");
+  resolvePathUnderRoot(root, ".truth-harness");
+  const manifestPath = resolvePathUnderRoot(root, ".truth-harness/project.json");
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { directories?: Record<string, string> };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return root;
+    throw error;
   }
-
-  return resolveWorkspacePath(path);
+  for (const directory of Object.values(manifest.directories ?? {})) resolvePathUnderRoot(root, directory);
+  return root;
 }
 
 async function listEngineVerificationRunsIfWorkspace(rootPath: string) {
@@ -3266,15 +3310,74 @@ function credibilityEngineRequirementsFromInput(input: TruthHarnessWorkspaceCred
 }
 
 function resolvePathUnderRoot(root: string, path: string): string {
-  const workspaceRoot = resolve(root);
-  const target = resolve(workspaceRoot, path);
-  const rootWithSep = workspaceRoot.endsWith(sep) ? workspaceRoot : `${workspaceRoot}${sep}`;
+  return resolveContainedPath(root, path);
+}
 
-  if (target !== workspaceRoot && !target.startsWith(rootWithSep)) {
-    throw new Error(`Path escapes workspace root: ${pathToFileURL(target).href}`);
+function assertMcpInput(input: object): void {
+  assertNoExecutableOverrides(input);
+  assertNoRunNextExecutableOverrides(input);
+  const value = input as Record<string, unknown>;
+  const paths = Object.entries(value).filter(([key, path]) => typeof path === "string" && (key.endsWith("Path") || key.endsWith("Ref") || key === "layoutAudit" || key === "workingDirectory"));
+  const evidencePaths = nestedEvidenceRefPaths(input);
+  if (paths.length === 0 && evidencePaths.length === 0) return;
+  const root = resolveWorkspaceRoot(typeof value.workspacePath === "string" ? value.workspacePath : undefined);
+  for (const [key, path] of paths) {
+    if (typeof path !== "string" || key === "workspacePath") continue;
+    if (key.endsWith("Path") || key === "layoutAudit" || key === "workingDirectory") {
+      const base = ["suitePath", "baselinePath", "currentPath"].includes(key) ? getWorkspaceRoot() : root;
+      resolvePathUnderRoot(base, path);
+    } else if (key.endsWith("Ref")) {
+      const localPath = path.replace(/^[a-z-]+:(?=\.truth-harness[/\\])/u, "");
+      if (localPath.includes("/") || localPath.includes("\\")) resolvePathUnderRoot(root, localPath);
+    }
   }
+  for (const path of evidencePaths) resolvePathUnderRoot(root, path);
+}
 
-  return target;
+function nestedEvidenceRefPaths(value: unknown): string[] {
+  if (!value || typeof value !== "object") return [];
+  const record = value as Record<string, unknown>;
+  const localPath = typeof record.kind === "string" && typeof record.ref === "string"
+    ? record.ref.trim().replace(/^[a-z-]+:(?=\.truth-harness[/\\])/u, "")
+    : "";
+  const paths = localPath.includes("/") || localPath.includes("\\") ? [localPath] : [];
+  for (const nested of Object.values(record)) paths.push(...nestedEvidenceRefPaths(nested));
+  return paths;
+}
+
+function assertNoExecutableOverrides(value: unknown): void {
+  if (!value || typeof value !== "object") return;
+  for (const [key, nested] of Object.entries(value)) {
+    if (nested !== undefined && /^(?:maxima|z3|cvc5|lean|lake|sage|python|dot)Command$/u.test(key)) {
+      throw new Error(`${key} executable override is not allowed in MCP requests. Configure verifier commands in the trusted server environment or CLI.`);
+    }
+    assertNoExecutableOverrides(nested);
+  }
+}
+
+function assertNoRunNextExecutableOverrides(value: unknown): void {
+  if (typeof value === "string") {
+    if (/--(?:maxima|z3|cvc5|lean|lake|sage|python|dot)-command(?:[=\s]|$)/u.test(value.replace(/["']/gu, ""))) {
+      throw new Error("Executable override is not allowed in MCP run-next commands. Configure verifier commands in the trusted server environment or CLI.");
+    }
+  } else if (value && typeof value === "object") {
+    for (const nested of Object.values(value)) assertNoRunNextExecutableOverrides(nested);
+  }
+}
+
+async function assertMcpPilotLoopCommands(rootPath: string, planRef?: string): Promise<void> {
+  assertNoRunNextExecutableOverrides(await createWorkspaceReview({ rootPath }));
+  if (planRef) {
+    resolvePathUnderRoot(rootPath, planRef);
+    assertNoRunNextExecutableOverrides(await readWorkspaceRunNextPlan(rootPath, planRef));
+  }
+}
+
+function assertContainedSourceTree(root: string, path: string, seen = new Set<string>()): void {
+  const target = resolvePathUnderRoot(root, path);
+  if (!statSync(target).isDirectory() || seen.has(target)) return;
+  seen.add(target);
+  for (const entry of readdirSync(target)) assertContainedSourceTree(root, resolve(target, entry), seen);
 }
 
 function quoteCommandArg(value: string): string {

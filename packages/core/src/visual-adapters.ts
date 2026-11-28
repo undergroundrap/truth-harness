@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import { createReceipt } from "./receipt.js";
 import { parseReceiptJson } from "./receipt-validation.js";
+import { resolveContainedPath } from "./path-containment.js";
 import { createWorkspaceGraph, type WorkspaceGraph, type WorkspaceGraphNode } from "./workspace-graph.js";
 import {
   writeVisualArtifact,
@@ -310,8 +311,8 @@ function workspaceGraphToCanvasShapes(nodes: WorkspaceGraphNode[], edges: Worksp
 
 async function loadReceiptForPlot(input: ReceiptPlotVisualInput) {
   if (input.receiptPath) {
-    const root = resolve(input.rootPath);
-    const receiptPath = resolveUnderRoot(root, input.receiptPath);
+    const root = resolveContainedPath(input.rootPath, ".");
+    const receiptPath = resolveContainedPath(input.rootPath, input.receiptPath);
     return {
       receipt: parseReceiptJson(await readFile(receiptPath, "utf8")),
       receiptRef: toPortablePath(relative(root, receiptPath))
@@ -478,17 +479,6 @@ function escapeMermaid(value: string): string {
 
 function escapeDot(value: string): string {
   return value.replace(/\\/gu, "\\\\").replace(/"/gu, "\\\"").replace(/\n/gu, " ").slice(0, 160);
-}
-
-function resolveUnderRoot(root: string, path: string): string {
-  const target = resolve(root, path);
-  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
-
-  if (target !== root && !target.startsWith(rootWithSep)) {
-    throw new Error(`Path escapes workspace root: ${path}`);
-  }
-
-  return target;
 }
 
 function toPortablePath(path: string): string {

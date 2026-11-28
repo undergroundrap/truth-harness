@@ -205,23 +205,23 @@ export function createTruthHarnessMcpServer(): McpServer {
         maximaCommand: z
           .string()
           .optional()
-          .describe("Maxima executable path or command for this route."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
         sageCommand: z
           .string()
           .optional()
-          .describe("SageMath executable path or command for this route."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
         leanCommand: z
           .string()
           .optional()
-          .describe("Lean executable path or command for this route."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_LEAN before starting the server."),
         z3Command: z
           .string()
           .optional()
-          .describe("Z3 executable path or command for this route."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
         cvc5Command: z
           .string()
           .optional()
-          .describe("cvc5 executable path or command for this route."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         requireIndependentSmt: z
           .boolean()
           .optional()
@@ -656,11 +656,11 @@ export function createTruthHarnessMcpServer(): McpServer {
         maximaCommand: z
           .string()
           .optional()
-          .describe("Maxima executable path or command. Defaults to TRUTH_HARNESS_MAXIMA or maxima."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
         sageCommand: z
           .string()
           .optional()
-          .describe("SageMath executable path or command. Defaults to TRUTH_HARNESS_SAGE or sage."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
         timeoutMs: z
           .number()
           .int()
@@ -701,11 +701,11 @@ export function createTruthHarnessMcpServer(): McpServer {
         maximaCommand: z
           .string()
           .optional()
-          .describe("Maxima executable path or command. Defaults to TRUTH_HARNESS_MAXIMA or maxima."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
         sageCommand: z
           .string()
           .optional()
-          .describe("SageMath executable path or command. Defaults to TRUTH_HARNESS_SAGE or sage."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
         timeoutMs: z
           .number()
           .int()
@@ -763,23 +763,23 @@ export function createTruthHarnessMcpServer(): McpServer {
         maximaCommand: z
           .string()
           .optional()
-          .describe("Maxima executable path or command for this manifest probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
         sageCommand: z
           .string()
           .optional()
-          .describe("SageMath executable path or command for this manifest probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
         leanCommand: z
           .string()
           .optional()
-          .describe("Lean executable path or command for this manifest probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_LEAN before starting the server."),
         z3Command: z
           .string()
           .optional()
-          .describe("Z3 executable path or command for this manifest probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
         cvc5Command: z
           .string()
           .optional()
-          .describe("cvc5 executable path or command for this manifest probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         timeoutMs: z
           .number()
           .int()
@@ -834,23 +834,23 @@ export function createTruthHarnessMcpServer(): McpServer {
         maximaCommand: z
           .string()
           .optional()
-          .describe("Maxima executable path or command for this planning probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
         sageCommand: z
           .string()
           .optional()
-          .describe("SageMath executable path or command for this planning probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
         leanCommand: z
           .string()
           .optional()
-          .describe("Lean executable path or command for this planning probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_LEAN before starting the server."),
         z3Command: z
           .string()
           .optional()
-          .describe("Z3 executable path or command for this planning probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
         cvc5Command: z
           .string()
           .optional()
-          .describe("cvc5 executable path or command for this planning probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         timeoutMs: z
           .number()
           .int()
@@ -877,23 +877,23 @@ export function createTruthHarnessMcpServer(): McpServer {
         maximaCommand: z
           .string()
           .optional()
-          .describe("Maxima executable path or command for this readiness probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
         sageCommand: z
           .string()
           .optional()
-          .describe("SageMath executable path or command for this readiness probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
         leanCommand: z
           .string()
           .optional()
-          .describe("Lean executable path or command for this readiness probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_LEAN before starting the server."),
         z3Command: z
           .string()
           .optional()
-          .describe("Z3 executable path or command for this readiness probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
         cvc5Command: z
           .string()
           .optional()
-          .describe("cvc5 executable path or command for this readiness probe."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         timeoutMs: z
           .number()
           .int()
@@ -936,9 +936,9 @@ export function createTruthHarnessMcpServer(): McpServer {
   server.registerTool(
     "truth_harness_proof_check",
     {
-      title: "Check Lean Proof Artifact",
+      title: "Compile Lean Source",
       description:
-        "Run a local Lean proof-check over a workspace-local source file. Only an accepted Lean run can return `proved`; rejected or unavailable checks remain unverified.",
+        "Compile a workspace-local Lean source file and retain unverified diagnostics. Independent proof admission is unavailable.",
       inputSchema: {
         sourcePath: z.string().min(1).describe("Workspace-local Lean source file to check."),
         workspacePath: z
@@ -976,7 +976,7 @@ export function createTruthHarnessMcpServer(): McpServer {
         failOnUnproved: z
           .boolean()
           .optional()
-          .describe("When true, mark the tool call as an error unless Lean accepts the proof artifact.")
+          .describe("When true, require independent proof admission. The current compile-only adapter returns an error.")
       },
       annotations: {
         readOnlyHint: false,
@@ -1041,11 +1041,11 @@ export function createTruthHarnessMcpServer(): McpServer {
         z3Command: z
           .string()
           .optional()
-          .describe("Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
         cvc5Command: z
           .string()
           .optional()
-          .describe("cvc5 executable path or command. Defaults to TRUTH_HARNESS_CVC5 or cvc5."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         timeoutMs: z
           .number()
           .int()
@@ -1079,11 +1079,11 @@ export function createTruthHarnessMcpServer(): McpServer {
         z3Command: z
           .string()
           .optional()
-          .describe("Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
         cvc5Command: z
           .string()
           .optional()
-          .describe("cvc5 executable path or command. Defaults to TRUTH_HARNESS_CVC5 or cvc5."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         timeoutMs: z
           .number()
           .int()
@@ -1166,11 +1166,11 @@ export function createTruthHarnessMcpServer(): McpServer {
         z3Command: z
           .string()
           .optional()
-          .describe("Z3 executable path or command. Defaults to TRUTH_HARNESS_Z3 or z3."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
         cvc5Command: z
           .string()
           .optional()
-          .describe("cvc5 executable path or command. Defaults to TRUTH_HARNESS_CVC5 or cvc5."),
+          .describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         timeoutMs: z
           .number()
           .int()
@@ -1678,11 +1678,11 @@ export function createTruthHarnessMcpServer(): McpServer {
           .max(300000)
           .optional()
           .describe("Concrete engine check timeout in milliseconds when source is credibility-actions."),
-        maximaCommand: z.string().optional().describe("Override Maxima executable for credibility-actions."),
-        sageCommand: z.string().optional().describe("Override SageMath executable for credibility-actions."),
-        leanCommand: z.string().optional().describe("Override Lean executable for credibility-actions."),
-        z3Command: z.string().optional().describe("Override Z3 executable for credibility-actions."),
-        cvc5Command: z.string().optional().describe("Override cvc5 executable for credibility-actions."),
+        maximaCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
+        sageCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
+        leanCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_LEAN before starting the server."),
+        z3Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
+        cvc5Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         smtSourcePath: z.string().optional().describe("Workspace-local SMT-LIB source for credibility-actions."),
         leanSourcePath: z.string().optional().describe("Workspace-local Lean source for credibility-actions."),
         requireMaxima: z.boolean().optional().describe("Require Maxima for credibility-actions."),
@@ -1856,11 +1856,11 @@ export function createTruthHarnessMcpServer(): McpServer {
           .max(300000)
           .optional()
           .describe("Concrete engine check timeout in milliseconds when source is credibility-actions."),
-        maximaCommand: z.string().optional().describe("Override Maxima executable for credibility-actions and engine plans."),
-        sageCommand: z.string().optional().describe("Override SageMath executable for credibility-actions and engine plans."),
-        leanCommand: z.string().optional().describe("Override Lean executable for credibility-actions and engine plans."),
-        z3Command: z.string().optional().describe("Override Z3 executable for credibility-actions and engine plans."),
-        cvc5Command: z.string().optional().describe("Override cvc5 executable for credibility-actions and engine plans."),
+        maximaCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
+        sageCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
+        leanCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_LEAN before starting the server."),
+        z3Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
+        cvc5Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         smtSourcePath: z.string().optional().describe("Workspace-local SMT-LIB source for credibility-actions."),
         leanSourcePath: z.string().optional().describe("Workspace-local Lean source for credibility-actions."),
         requireMaxima: z.boolean().optional().describe("Require Maxima for credibility-actions."),
@@ -1956,11 +1956,11 @@ export function createTruthHarnessMcpServer(): McpServer {
           .optional()
           .describe("When true, write the continuation run-next plan JSON/Markdown into .truth-harness/findings."),
         timeoutMs: z.number().int().min(1).max(300000).optional().describe("Concrete engine check timeout in milliseconds."),
-        maximaCommand: z.string().optional().describe("Override Maxima executable for engine plans."),
-        sageCommand: z.string().optional().describe("Override SageMath executable for engine plans."),
-        leanCommand: z.string().optional().describe("Override Lean executable for engine plans."),
-        z3Command: z.string().optional().describe("Override Z3 executable for engine plans."),
-        cvc5Command: z.string().optional().describe("Override cvc5 executable for engine plans.")
+        maximaCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
+        sageCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
+        leanCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_LEAN before starting the server."),
+        z3Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
+        cvc5Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server.")
       },
       annotations: {
         readOnlyHint: false,
@@ -2245,11 +2245,11 @@ export function createTruthHarnessMcpServer(): McpServer {
           .optional()
           .describe("Maximum saved report drafts to inspect. Defaults to 50; use 0 to skip report drafts."),
         timeoutMs: z.number().int().min(1).max(300000).optional().describe("Concrete engine check timeout in milliseconds."),
-        maximaCommand: z.string().optional().describe("Override Maxima executable for the symbolic cross-check."),
-        sageCommand: z.string().optional().describe("Override SageMath executable for the optional CAS readiness probe."),
-        leanCommand: z.string().optional().describe("Override Lean executable for the proof fixture."),
-        z3Command: z.string().optional().describe("Override Z3 executable for the SMT check."),
-        cvc5Command: z.string().optional().describe("Override cvc5 executable for the optional second SMT check."),
+        maximaCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
+        sageCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
+        leanCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_LEAN before starting the server."),
+        z3Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
+        cvc5Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         smtSourcePath: z.string().optional().describe("Workspace-local SMT-LIB source for SMT checks."),
         leanSourcePath: z.string().optional().describe("Workspace-local Lean source for the Lean fixture."),
         requireMaxima: z.boolean().optional().describe("Mark Maxima as required for reviewer readiness."),
@@ -2314,11 +2314,11 @@ export function createTruthHarnessMcpServer(): McpServer {
           .optional()
           .describe("Maximum saved report drafts to inspect. Defaults to 50; use 0 to skip report drafts."),
         timeoutMs: z.number().int().min(1).max(300000).optional().describe("Concrete engine check timeout in milliseconds."),
-        maximaCommand: z.string().optional().describe("Override Maxima executable for the symbolic cross-check."),
-        sageCommand: z.string().optional().describe("Override SageMath executable for the optional CAS readiness probe."),
-        leanCommand: z.string().optional().describe("Override Lean executable for the proof fixture."),
-        z3Command: z.string().optional().describe("Override Z3 executable for the SMT check."),
-        cvc5Command: z.string().optional().describe("Override cvc5 executable for the optional second SMT check."),
+        maximaCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
+        sageCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
+        leanCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_LEAN before starting the server."),
+        z3Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
+        cvc5Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         smtSourcePath: z.string().optional().describe("Workspace-local SMT-LIB source for SMT checks."),
         leanSourcePath: z.string().optional().describe("Workspace-local Lean source for the Lean fixture."),
         requireMaxima: z.boolean().optional().describe("Mark Maxima as required for reviewer readiness."),
@@ -2383,11 +2383,11 @@ export function createTruthHarnessMcpServer(): McpServer {
           .max(300000)
           .optional()
           .describe("Concrete engine check timeout in milliseconds."),
-        maximaCommand: z.string().optional().describe("Override Maxima executable for the symbolic cross-check."),
-        sageCommand: z.string().optional().describe("Override SageMath executable for the optional CAS readiness probe."),
-        leanCommand: z.string().optional().describe("Override Lean executable for the proof fixture."),
-        z3Command: z.string().optional().describe("Override Z3 executable for the SMT check."),
-        cvc5Command: z.string().optional().describe("Override cvc5 executable for the optional second SMT check."),
+        maximaCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
+        sageCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
+        leanCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_LEAN before starting the server."),
+        z3Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
+        cvc5Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         smtSourcePath: z
           .string()
           .optional()
@@ -2473,11 +2473,11 @@ export function createTruthHarnessMcpServer(): McpServer {
           .max(300000)
           .optional()
           .describe("Concrete engine check timeout in milliseconds."),
-        maximaCommand: z.string().optional().describe("Override Maxima executable for the symbolic cross-check."),
-        sageCommand: z.string().optional().describe("Override SageMath executable for the optional CAS readiness probe."),
-        leanCommand: z.string().optional().describe("Override Lean executable for the proof fixture."),
-        z3Command: z.string().optional().describe("Override Z3 executable for the SMT check."),
-        cvc5Command: z.string().optional().describe("Override cvc5 executable for the optional second SMT check."),
+        maximaCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_MAXIMA before starting the server."),
+        sageCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_SAGE before starting the server."),
+        leanCommand: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_LEAN before starting the server."),
+        z3Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_Z3 before starting the server."),
+        cvc5Command: z.string().optional().describe("Legacy field rejected by MCP. Configure TRUTH_HARNESS_CVC5 before starting the server."),
         smtSourcePath: z
           .string()
           .optional()

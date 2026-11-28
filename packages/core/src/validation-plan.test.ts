@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -27,6 +27,56 @@ afterEach(async () => {
 });
 
 describe("validation plans", () => {
+  it("keeps a manually pre-closed proof gate open until it admits evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const plan = await createValidationPlan({
+      rootPath: root,
+      claim: "Review a mathematical claim",
+      domains: ["general"],
+      gates: [{ kind: "proof", description: "Check the exact proposition", status: "satisfied" }]
+    });
+    expect(requiredProofGate(plan).status).toBe("in-progress");
+    expect(plan.readiness.status).not.toBe("ready-for-narrow-claim");
+  });
+
+  it("preserves a checked arithmetic gate after inconclusive attachments", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const claim = "compute 3 / 4 + 5 / 8";
+    const { plan } = await writeValidationPlan({ rootPath: root, claim, domains: ["math"] });
+    const gateId = requiredProofGate(plan).gateId;
+    const arithmeticRef = ".truth-harness/receipts/arithmetic.json";
+    const receipt = createReceipt(claim);
+    await writeFile(join(root, arithmeticRef), JSON.stringify(receipt), "utf8");
+    const admitted = await attachValidationGateEvidence({
+      rootPath: root, planRef: plan.planId, gateId, evidenceRef: { kind: "receipt", ref: arithmeticRef }
+    });
+    expect(admitted.satisfied).toBe(true);
+
+    const legacyRef = ".truth-harness/receipts/historical.json";
+    await writeFile(join(root, legacyRef), JSON.stringify({
+      ...receipt, trust: "proved",
+      evidenceProfile: {
+        ...receipt.evidenceProfile,
+        proofCheckerBacked: true,
+        backends: [{ id: "lean", role: "proof-checker", acceptedProofChecker: true }]
+      }
+    }), "utf8");
+    const updated = await attachValidationGateEvidence({
+      rootPath: root, planRef: plan.planId, gateId, evidenceRef: { kind: "receipt", ref: legacyRef }
+    });
+    expect(updated.evidence.trust).toBe("unverified");
+    expect(updated.satisfied).toBe(true);
+    const unrelatedRef = ".truth-harness/receipts/unrelated.json";
+    await writeFile(join(root, unrelatedRef), JSON.stringify(createReceipt("compute 2 + 2")), "utf8");
+    const unrelated = await attachValidationGateEvidence({
+      rootPath: root, planRef: plan.planId, gateId, evidenceRef: { kind: "receipt", ref: unrelatedRef }
+    });
+    expect(unrelated.evidence.claimScope?.status).toBe("mismatch");
+    expect(unrelated.satisfied).toBe(true);
+    expect(requiredProofGate((await listValidationPlans(root))[0]).status).toBe("satisfied");
+  });
   it("keeps cancer simulation claims behind wet-lab, clinical, safety, and regulatory gates", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);
@@ -105,6 +155,147 @@ describe("validation plans", () => {
     ).rejects.toThrow("Validation plan failed JSON Schema validation before write");
 
     await expect(listValidationPlans(root)).resolves.toEqual([]);
+  });
+
+  it("does not initialize a satisfied proof gate from caller-supplied trust on unresolved evidence", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    for (const kind of ["artifact", "receipt"] as const) {
+      const plan = await createValidationPlan({
+        rootPath: root,
+        claim: "Every recursive algorithm has a constant space bound.",
+        domains: ["math"],
+        evidenceRefs: [{ kind, ref: "missing-proof.json", trust: "proved" }]
+      });
+      expect(plan.gates.find((gate) => gate.kind === "proof")?.status).toBe("in-progress");
+      expect(plan.readiness.status).not.toBe("ready-for-narrow-claim");
+    }
+  });
+
+  it.each([
+    ["route", "missing"],
+    ["route", "satisfied"],
+    ["receipt", "missing"],
+    ["receipt", "satisfied"],
+    ["receipt", "blocked"]
+  ] as const)("keeps %s legacy proof evidence unadmitted for a %s proof gate", async (kind, initialStatus) => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const written = await writeValidationPlan({ rootPath: root, claim: "3 / 4 + 5 / 8", domains: ["math"] });
+    const gate = requiredProofGate(written.plan);
+    const route = await writeVerifierRoute({ rootPath: root, problem: written.plan.claim });
+    const receipt = {
+      ...route.route.receipt,
+      trust: "proved",
+      evidenceProfile: {
+        ...route.route.receipt.evidenceProfile,
+        proofCheckerBacked: true,
+        backends: [{ id: "lean", role: "proof-checker", acceptedProofChecker: true }]
+      }
+    };
+    const artifactPath = kind === "route" ? route.jsonPath : join(root, ".truth-harness", "legacy-proved-receipt.json");
+    await writeFile(artifactPath, JSON.stringify(kind === "route"
+      ? { ...route.route, status: "verified", finalTrust: "proved", receipt }
+      : receipt), "utf8");
+    await writeFile(written.jsonPath, JSON.stringify({
+      ...written.plan,
+      gates: written.plan.gates.map((candidate) => candidate.gateId === gate.gateId
+        ? { ...candidate, status: initialStatus, evidenceRefs: [{ kind, ref: toWorkspaceRef(root, artifactPath) }] }
+        : candidate)
+    }), "utf8");
+    const [current] = await listValidationPlans(root);
+    expect(requiredProofGate(current).status).toBe(initialStatus === "satisfied" ? "in-progress" : initialStatus);
+    expect(JSON.parse(await readFile(written.jsonPath, "utf8")).gates.find(
+      (candidate: { gateId: string }) => candidate.gateId === gate.gateId
+    ).status).toBe(initialStatus);
+
+    const attached = await attachValidationGateEvidence({
+      rootPath: root,
+      planRef: written.plan.planId,
+      gateId: gate.gateId,
+      evidenceRef: { kind, ref: toWorkspaceRef(root, artifactPath) }
+    });
+
+    expect(attached.evidence.claimScope?.status).toBe("matched");
+    expect(attached.evidence.trust).toBe("unverified");
+    expect(attached.satisfied).toBe(false);
+    expect(attached.closed).toBe(initialStatus === "blocked");
+    const currentStatus = initialStatus === "blocked" ? "blocked" : "in-progress";
+    expect(attached.gate.status).toBe(currentStatus);
+    if (initialStatus !== "blocked") {
+      expect(attached.gate.nextChecks.join(" ")).toContain("independent kernel/axiom audit");
+    }
+    expect((await listValidationPlans(root))[0]?.gates.find((candidate) => candidate.gateId === gate.gateId)?.status)
+      .toBe(currentStatus);
+    expect(JSON.parse(await readFile(artifactPath, "utf8"))[kind === "route" ? "finalTrust" : "trust"]).toBe("proved");
+  });
+
+  it("does not let a lower route label hide historical proof-backed satisfaction", async () => {
+    const root = await tempRoot();
+    await initLocalWorkspace(root);
+    const written = await writeValidationPlan({ rootPath: root, claim: "3 / 4 + 5 / 8", domains: ["math"] });
+    const gate = requiredProofGate(written.plan);
+    const route = await writeVerifierRoute({ rootPath: root, problem: written.plan.claim });
+    const attached = await attachValidationGateEvidence({
+      rootPath: root, planRef: written.plan.planId, gateId: gate.gateId,
+      evidenceRef: { kind: "route", ref: route.route.routeId }
+    });
+    expect(attached.satisfied).toBe(true);
+    await writeFile(route.jsonPath, JSON.stringify({
+      ...route.route,
+      proofObligations: [{
+        obligationId: "obl_0123456789abcdef",
+        kind: "formal-proof",
+        status: "satisfied",
+        severity: "critical",
+        sourceCapabilityId: "lean-proof-checker",
+        title: "Historical proof admission",
+        statement: written.plan.claim,
+        requiredBefore: "Strengthen this claim",
+        acceptanceCriteria: ["Independent proof admission"],
+        satisfiedBy: [{ kind: "proof", ref: "legacy-proof.json", trust: "proved" }]
+      }]
+    }), "utf8");
+
+    const reopened = await attachValidationGateEvidence({
+      rootPath: root, planRef: written.plan.planId, gateId: gate.gateId,
+      evidenceRef: { kind: "route", ref: route.route.routeId }
+    });
+    expect(reopened.evidence.route?.finalTrust).toBe("exact-computed");
+    expect(reopened.evidence.trust).toBe("unverified");
+    expect(reopened.satisfied).toBe(false);
+    expect(reopened.gate.status).toBe("in-progress");
+  });
+
+  it.skipIf(process.platform === "win32")("rejects final-file validation links during listing and ID resolution", async () => {
+    const root = await tempRoot();
+    const outside = await tempRoot();
+    await initLocalWorkspace(root);
+    await initLocalWorkspace(outside);
+    const external = await writeValidationPlan({ rootPath: outside, claim: "3 / 4 + 5 / 8", domains: ["math"] });
+    await symlink(external.jsonPath, join(root, ".truth-harness", "validation", "linked.json"));
+    await expect(listValidationPlans(root)).rejects.toThrow("escapes workspace root");
+    await expect(attachValidationGateEvidence({
+      rootPath: root, planRef: external.plan.planId, gateId: requiredProofGate(external.plan).gateId,
+      evidenceRef: { kind: "receipt", ref: "missing.json" }
+    })).rejects.toThrow("escapes workspace root");
+  });
+
+  it("does not read matching receipt evidence through an escaping directory link", async () => {
+    const root = await tempRoot();
+    const outside = await tempRoot();
+    await initLocalWorkspace(root);
+    const written = await writeValidationPlan({ rootPath: root, claim: "3 / 4 + 5 / 8", domains: ["math"] });
+    await writeFile(join(outside, "receipt.json"), JSON.stringify(createReceipt(written.plan.claim)), "utf8");
+    await symlink(outside, join(root, "escape"), process.platform === "win32" ? "junction" : "dir");
+    const attached = await attachValidationGateEvidence({
+      rootPath: root, planRef: written.plan.planId, gateId: requiredProofGate(written.plan).gateId,
+      evidenceRef: { kind: "receipt", ref: "escape/receipt.json" }
+    });
+    expect(attached.evidence.artifactId).toBeUndefined();
+    expect(attached.evidence.claimScope).toBeUndefined();
+    expect(attached.satisfied).toBe(false);
+    expect(attached.gate.status).toBe("in-progress");
   });
 
   it("updates proof gates from concrete verifier route evidence without trusting weak evidence", async () => {
@@ -254,7 +445,7 @@ describe("validation plans", () => {
     expect(mismatchAttachment.gate.nextChecks.join(" ")).toContain("does not match validation claim");
   });
 
-  it("does not close validation proof gates from unscoped direct proof artifacts", async () => {
+  it("does not close validation proof gates from legacy proof labels or copied scope text", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root);
     const unscopedProofRef = ".truth-harness/proofs/accepted-unscoped-proof.json";
@@ -328,10 +519,10 @@ describe("validation plans", () => {
       now: "2026-06-18T01:06:00.000Z"
     });
 
-    expect(unscopedAttachment.evidence.trust).toBe("proved");
+    expect(unscopedAttachment.evidence.trust).toBe("unverified");
     expect(unscopedAttachment.satisfied).toBe(false);
     expect(unscopedAttachment.gate.status).toBe("in-progress");
-    expect(unscopedAttachment.gate.nextChecks.join(" ")).toContain("no machine-checkable claim boundary");
+    expect(unscopedAttachment.gate.nextChecks.join(" ")).toContain("independent kernel/axiom audit");
 
     const scopedPlan = await writeValidationPlan({
       rootPath: root,
@@ -351,9 +542,9 @@ describe("validation plans", () => {
       now: "2026-06-18T01:08:00.000Z"
     });
 
-    expect(scopedAttachment.satisfied).toBe(true);
-    expect(scopedAttachment.gate.status).toBe("satisfied");
-    expect(scopedAttachment.evidence.claimScope).toMatchObject({ status: "matched" });
+    expect(scopedAttachment.satisfied).toBe(false);
+    expect(scopedAttachment.gate.status).toBe("in-progress");
+    expect(scopedAttachment.evidence.claimScope).toMatchObject({ status: "missing" });
   });
 
   it("closes proof gates from scoped SMT query evidence only when query boundaries match", async () => {
@@ -596,7 +787,7 @@ async function tempRoot(): Promise<string> {
   return root;
 }
 
-function requiredProofGate(plan: { gates: Array<{ kind: string; gateId: string }> }): { gateId: string } {
+function requiredProofGate<T extends { kind: string; gateId: string }>(plan: { gates: T[] }): T {
   const gate = plan.gates.find((candidate) => candidate.kind === "proof");
   if (!gate) {
     throw new Error("Expected a proof gate.");

@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve, sep } from "node:path";
+import { join, relative, sep } from "node:path";
 import {
   expectArray,
   expectConst,
@@ -17,6 +17,7 @@ import { parseSymbolicCasCheckRecord } from "./cas-backend.js";
 import { getEngineManifest, type EngineCapability, type EngineManifest, type EngineManifestOptions } from "./engine-manifest.js";
 import { writeFileAtomic, writeJsonFileAtomic } from "./fs-util.js";
 import { getLocalWorkspaceStatus, type LocalWorkspaceStatus } from "./local-workspace.js";
+import { resolveContainedPath } from "./path-containment.js";
 import { parseLeanProofCheckRecord } from "./proof-backend.js";
 import { createReceipt, type CreateReceiptOptions } from "./receipt.js";
 import { parseReceiptJson } from "./receipt-validation.js";
@@ -289,12 +290,13 @@ export function createVerifierRoute(problem: string, options: CreateVerifierRout
 }
 
 export function verifierRouteReadiness(route: VerifierRoute): VerifierRouteReadiness {
-  const obligations = route.proofObligations ?? [];
-  const openObligations = obligations.filter((obligation) => obligation.status === "open");
+  const legacyProofTrust = route.finalTrust === "proved" || route.receipt.trust === "proved";
+  const openObligations = openVerifierRouteObligations(route);
   const criticalOpenObligations = openObligations.filter((obligation) => obligation.severity === "critical");
   const blockingObligations = criticalOpenObligations;
   const strongestTrust = strongestTrustFromRoute(route);
   const readyForNarrowClaim =
+    !legacyProofTrust &&
     route.status !== "refuted" &&
     strongestTrust !== "unverified" &&
     strongestTrust !== "refuted" &&
@@ -325,6 +327,13 @@ export function verifierRouteReadiness(route: VerifierRoute): VerifierRouteReadi
   };
 }
 
+export function openVerifierRouteObligations(route: VerifierRoute): ProofObligation[] {
+  const legacyProofTrust = route.finalTrust === "proved" || route.receipt.trust === "proved";
+  return (route.proofObligations ?? [])
+    .filter((obligation) => isEffectivelyOpenObligation(obligation) || (legacyProofTrust && obligation.kind === "formal-proof"))
+    .map((obligation) => obligation.status === "open" ? obligation : { ...obligation, status: "open" });
+}
+
 export async function writeVerifierRoute(input: WriteVerifierRouteInput): Promise<VerifierRouteWriteResult> {
   const status = await requireLocalWorkspace(input.rootPath);
   const route = createVerifierRoute(input.problem, {
@@ -340,11 +349,11 @@ export async function writeVerifierRoute(input: WriteVerifierRouteInput): Promis
     casRunner: input.casRunner
   });
   await assertVerifierRouteSchema(route);
-  const routesDir = resolve(status.root, status.manifest.directories.routes);
+  const routesDir = resolveWorkspacePath(status.root, status.manifest.directories.routes);
 
   const baseName = `${route.createdAt.slice(0, 10)}-${route.routeId}`;
-  const jsonPath = join(routesDir, `${baseName}.json`);
-  const markdownPath = join(routesDir, `${baseName}.md`);
+  const jsonPath = resolveWorkspacePath(status.root, join(routesDir, `${baseName}.json`));
+  const markdownPath = resolveWorkspacePath(status.root, join(routesDir, `${baseName}.md`));
   const markdown = renderVerifierRouteMarkdown(route);
 
   await mkdir(routesDir, { recursive: true });
@@ -352,7 +361,7 @@ export async function writeVerifierRoute(input: WriteVerifierRouteInput): Promis
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
-    path: relative(status.root, jsonPath),
+    path: relative(resolveWorkspacePath(status.root, "."), jsonPath),
     kind: "routes",
     now: route.createdAt,
     staleReason: "verifier route written"
@@ -376,7 +385,7 @@ async function assertVerifierRouteSchema(route: VerifierRoute): Promise<void> {
 
 export async function listVerifierRoutes(rootPath: string): Promise<VerifierRouteSummary[]> {
   const status = await requireLocalWorkspace(rootPath);
-  const routesDir = resolve(status.root, status.manifest.directories.routes);
+  const routesDir = resolveWorkspacePath(status.root, status.manifest.directories.routes);
 
   let files: string[];
   try {
@@ -394,7 +403,7 @@ export async function listVerifierRoutes(rootPath: string): Promise<VerifierRout
     files
       .filter((file) => file.endsWith(".json"))
       .map(async (file) => {
-        const path = join(routesDir, file);
+        const path = resolveWorkspacePath(status.root, join(routesDir, file));
         return summarizeVerifierRoute(status.root, path, await readFile(path, "utf8"));
       })
   );
@@ -465,7 +474,7 @@ export async function satisfyVerifierRouteObligation(
   await writeFileAtomic(markdownPath, markdown, "utf8");
   await refreshWorkspaceCatalogArtifact({
     rootPath: status.root,
-    path: relative(status.root, jsonPath),
+    path: relative(resolveWorkspacePath(status.root, "."), jsonPath),
     kind: "routes",
     now: satisfiedAt,
     staleReason: "verifier route obligation satisfied"
@@ -1078,7 +1087,7 @@ function summarizeVerifierRoute(root: string, path: string, raw: string): Verifi
   const readiness = verifierRouteReadiness(route);
 
   return {
-    path: toPortablePath(relative(root, path)),
+    path: toPortablePath(relative(resolveWorkspacePath(root, "."), path)),
     routeId: route.routeId,
     createdAt: route.createdAt,
     problem: route.problem,
@@ -1090,12 +1099,10 @@ function summarizeVerifierRoute(root: string, path: string, raw: string): Verifi
     gaps: route.gaps.length,
     criticalGaps: route.gaps.filter((gap) => gap.severity === "critical").length,
     proofObligations: proofObligations.length,
-    openProofObligations: proofObligations.filter((obligation) => obligation.status === "open").length,
-    satisfiedProofObligations: proofObligations.filter((obligation) => obligation.status === "satisfied").length,
+    openProofObligations: readiness.openObligations,
+    satisfiedProofObligations: proofObligations.filter((obligation) => obligation.status === "satisfied" && !isEffectivelyOpenObligation(obligation)).length,
     notRequiredProofObligations: proofObligations.filter((obligation) => obligation.status === "not-required").length,
-    criticalOpenProofObligations: proofObligations.filter((obligation) =>
-      obligation.status === "open" && obligation.severity === "critical"
-    ).length,
+    criticalOpenProofObligations: readiness.criticalOpenObligations,
     readyForNarrowClaim: readiness.readyForNarrowClaim,
     strongestRouteTrust: readiness.strongestTrust,
     blockingObligations: readiness.blockingObligations.length,
@@ -1115,7 +1122,7 @@ async function resolveVerifierRouteFile(
     if (!route) {
       throw new Error(`No verifier route found for id ${routeRef}.`);
     }
-    jsonPath = resolve(status.root, route.path);
+    jsonPath = resolveWorkspacePath(status.root, route.path);
   } else {
     jsonPath = resolveWorkspacePath(status.root, routeRef);
   }
@@ -1126,7 +1133,7 @@ async function resolveVerifierRouteFile(
 
   return {
     jsonPath,
-    markdownPath: jsonPath.replace(/\.json$/u, ".md")
+    markdownPath: resolveWorkspacePath(status.root, jsonPath.replace(/\.json$/u, ".md"))
   };
 }
 
@@ -1136,9 +1143,10 @@ async function resolveVerifierRouteEvidence(
 ): Promise<ResolvedVerifierRouteEvidence> {
   if (evidenceRef.kind === "route") {
     const route = await readVerifierRoute(root, evidenceRef.ref);
+    const readiness = verifierRouteReadiness(route);
     return {
       ...evidenceRef,
-      trust: route.finalTrust,
+      trust: readiness.strongestTrust === "refuted" ? "refuted" : readiness.readyForNarrowClaim ? readiness.strongestTrust : "unverified",
       summary: evidenceRef.summary ?? `Verifier route ${route.routeId} ended with ${route.finalTrust}.`,
       schemaVersion: route.schemaVersion,
       artifactId: route.routeId,
@@ -1284,7 +1292,11 @@ function evidenceSatisfiesObligation(
         };
       }
 
-      return { satisfied: true, reason: "Accepted scoped proof-check record supplies `proved` evidence for this obligation." };
+      return {
+        satisfied: false,
+        reason:
+          "Formal statement binding is not verified: caller-supplied scope metadata cannot bind the checked Lean theorem to this obligation."
+      };
     }
 
     if (
@@ -1302,11 +1314,14 @@ function evidenceSatisfiesObligation(
     return { satisfied: false, reason: "formal-proof obligations require a scoped proof-check record." };
   }
 
-  if (obligation.kind === "solver-encoding") {
-    if (evidence.trust === "proved") {
-      return { satisfied: true, reason: "Proof evidence satisfies the solver-encoding obligation." };
-    }
+  if (evidence.kind === "proof" || evidence.trust === "proved") {
+    return {
+      satisfied: false,
+      reason: "Unbound proof-check artifacts cannot satisfy route obligations without an independently checked formal statement binding."
+    };
+  }
 
+  if (obligation.kind === "solver-encoding") {
     if (evidence.trust === "smt-checked") {
       const requiredBackend = smtBackendForCapability(obligation.sourceCapabilityId);
       if (requiredBackend && evidence.backendId !== requiredBackend) {
@@ -1328,7 +1343,7 @@ function evidenceSatisfiesObligation(
   }
 
   if (obligation.kind === "independent-check") {
-    if (evidence.trust === "cross-checked" || evidence.trust === "smt-checked" || evidence.trust === "proved") {
+    if (evidence.trust === "cross-checked" || evidence.trust === "smt-checked") {
       return { satisfied: true, reason: "Independent cross-check evidence satisfies this obligation." };
     }
 
@@ -1392,10 +1407,10 @@ function updateRouteNextActions(actions: string[], obligation: ProofObligation):
 }
 
 function strongestTrustFromRoute(route: VerifierRoute): TrustLabel {
-  const trusts: TrustLabel[] = [route.finalTrust];
+  const trusts: TrustLabel[] = route.finalTrust === "proved" ? [] : [route.finalTrust];
   for (const obligation of route.proofObligations ?? []) {
     for (const ref of obligation.satisfiedBy ?? []) {
-      if (ref.trust) {
+      if (ref.trust && ref.trust !== "proved" && ref.kind !== "proof") {
         trusts.push(ref.trust);
       }
     }
@@ -1406,7 +1421,6 @@ function strongestTrustFromRoute(route: VerifierRoute): TrustLabel {
   }
 
   const ranking: TrustLabel[] = [
-    "proved",
     "cross-checked",
     "smt-checked",
     "dimension-checked",
@@ -1424,6 +1438,13 @@ function strongestTrustFromRoute(route: VerifierRoute): TrustLabel {
   return "unverified";
 }
 
+function isEffectivelyOpenObligation(obligation: ProofObligation): boolean {
+  return obligation.status === "open" || (obligation.status === "satisfied" && (
+    obligation.kind === "formal-proof" ||
+    (obligation.satisfiedBy ?? []).some((ref) => ref.kind === "proof" || ref.trust === "proved")
+  ));
+}
+
 function routeReadinessSummary(input: {
   route: VerifierRoute;
   readyForNarrowClaim: boolean;
@@ -1432,6 +1453,9 @@ function routeReadinessSummary(input: {
   criticalOpenObligations: ProofObligation[];
   blockingObligations: ProofObligation[];
 }): string {
+  if (input.route.finalTrust === "proved" || input.route.receipt.trust === "proved") {
+    return "Historical proved route trust is inspection-only; independent proof admission and checked formal statement binding are required before reuse.";
+  }
   if (input.route.status === "refuted" || input.strongestTrust === "refuted") {
     return "This route is refuted under the recorded assumptions; cite it only as a refutation or supersession input.";
   }
@@ -1542,14 +1566,7 @@ async function requireLocalWorkspace(
 }
 
 function resolveWorkspacePath(root: string, path: string): string {
-  const target = resolve(root, path);
-  const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`;
-
-  if (target !== root && !target.startsWith(rootWithSep)) {
-    throw new Error(`Path escapes workspace root: ${path}`);
-  }
-
-  return target;
+  return resolveContainedPath(root, path);
 }
 
 function toPortablePath(path: string): string {

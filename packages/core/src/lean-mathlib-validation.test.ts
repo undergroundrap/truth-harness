@@ -82,7 +82,7 @@ describe("Lean mathlib validation harness", () => {
     expect(proofItems.map((item) => item.command)).toContain(runNext.item?.command);
     expect(runNext.execution.kind).toBe("dry-run");
   });
-  it("does not offer one scoped mathlib proof receipt for sibling declarations", async () => {
+  it("does not offer compilation-only mathlib evidence for the target or sibling declarations", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { now: "2026-06-30T00:00:00.000Z" });
     await cp(
@@ -113,13 +113,13 @@ describe("Lean mathlib validation harness", () => {
     await addResearchSessionCheckpoint({
       rootPath: root,
       sessionRef: harness.session.sessionId,
-      summary: "Recorded one scoped mathlib proof receipt.",
+      summary: "Recorded one scoped mathlib compilation diagnostic.",
       evidenceRefs: [
         {
           kind: "proof",
           ref: proofRef,
-          trust: "proved",
-          summary: "Scoped real analysis proof."
+          trust: "unverified",
+          summary: "Scoped real analysis compilation diagnostic."
         }
       ],
       now: "2026-06-30T00:03:00.000Z"
@@ -142,13 +142,15 @@ describe("Lean mathlib validation harness", () => {
     }
     const siblingItems = proofItems.filter((item) => item.validationPlanId !== realSqPlanId);
 
-    expect(realSqItem.candidateEvidenceRefs).toContainEqual(
+    expect(proof.record).toMatchObject({ status: "rejected", trust: "unverified", proofCheckerBacked: false });
+    expect(realSqItem.candidateEvidenceRefs).not.toContainEqual(
       expect.objectContaining({
         kind: "proof",
         ref: proofRef
       })
     );
-    expect(realSqItem.command).toContain(`proof:${proofRef}`);
+    expect(realSqItem.command).not.toContain(`proof:${proofRef}`);
+    expect(realSqItem.command).toContain("--declaration real_sq_nonneg_mathlib_template");
     expect(siblingItems).toHaveLength(4);
     for (const item of siblingItems) {
       expect(item.candidateEvidenceRefs).not.toContainEqual(

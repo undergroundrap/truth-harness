@@ -29,7 +29,7 @@ describe("professor evidence reviewer commands", () => {
     expect(compose).toContain("professor-evidence-all:");
     expect(compose).toContain("image: truth-harness:all-engines");
     expect(compose).toContain('command: ["npm", "run", "professor:evidence", "--", "--all-engines"]');
-    expect(compose).toContain('command: ["npm", "run", "proof:lean-suite"]');
+    expect(compose).toContain('command: ["node", "apps/cli/dist/index.js", "proof", "backends", "--json"]');
 
     expect(professorEvidence).toContain("const strictAllEngines");
     expect(professorEvidence).toContain('["--require-all-engines"]');

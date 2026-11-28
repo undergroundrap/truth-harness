@@ -1,6 +1,9 @@
 # Lean Proof Lane
 
-Lean is not a general answer engine inside Truth Harness. It is the formal proof-checking lane: the place where `proved` can mean that an accepted proof checker verified a concrete source artifact.
+Truth Harness currently uses Lean for local compilation diagnostics. The
+`proved` label requires independent kernel and axiom checks and a binding
+to the exact formal claim. The current adapter keeps successful compilation
+at `unverified` and preserves old proof records for audit.
 
 ## Why Lean Belongs Here
 
@@ -8,7 +11,7 @@ Truth Harness should use mature engines instead of pretending one AI model can b
 
 The product rule is simple:
 
-- Lean can support `proved`.
+- Lean provides source compilation and repair diagnostics.
 - CAS tools can support exact computation or independent cross-checks.
 - SMT solvers can support encoded constraint checks.
 - notebooks, simulations, and plots can support reproducible evidence.
@@ -171,30 +174,24 @@ run-next turn those gates into concrete scoped commands such as:
 truth-harness proof check <source.lean> --project <lean-project> --declaration <decl> --statement <claim> --write
 ```
 
-A seeded validation plan is an agenda item, not evidence. The gate closes only
-when an accepted proof-check, scoped SMT/CAS evidence, benchmark artifact, or
-other supported local evidence satisfies the exact gate through the normal
-validation attach path.
-Once dependencies are pinned and available, the concrete proof check must run
-through Lake so mathlib imports resolve from the project environment:
+A seeded plan records an agenda. To compile a mathlib source with its pinned
+dependencies and retain diagnostics, use the Lake project:
 
 ```bash
-npm run proof:mathlib-template:check
+truth-harness proof check docs/examples/lean-mathlib-template/TruthHarnessMathlib/Algebra.lean --project docs/examples/lean-mathlib-template --write
 ```
 
-The proof backend refuses to mint `proved` for a Lake project that declares external dependencies unless `lake-manifest.json` is present. After that manifest is reviewed and committed, use the opt-in Docker mathlib route for reviewer evidence:
+For offline compilation, use the opt-in Docker target with its committed
+`lake-manifest.json`:
 
 ```bash
-npm run docker:mathlib-template:write
+npm run docker:mathlib-template
 ```
 
-That command builds the `mathlib-proof` image target, where network access is allowed only during image build to resolve/cache mathlib. The compose runtime service then runs with `network_mode: "none"` and writes the proof-check artifact into `.truth-harness/proofs/`. The target is intentionally not part of default `docker compose build`; it is a heavy reviewer gate, not a normal dev dependency.
-
-Run only the template in the pinned Docker proof image:
-
-```bash
-npm run docker:theorem-template
-```
+The image build caches mathlib dependencies. The offline service compiles the
+algebra example. Strict commands that require `proved` (such as
+`proof:mathlib-template:check` and `docker:mathlib-template:write`) exit
+nonzero until independent proof admission is available.
 
 Run the Docker profile when you want the proof lane checked in a reproducible image:
 
@@ -203,7 +200,9 @@ docker compose build lean-proof
 docker compose run --rm lean-proof
 ```
 
-The Docker target installs Lean through elan during image build, then the compose service runs `npm run proof:lean-suite` with no runtime network route. The suite checks the static Lean fixture, the reusable theorem template, and the proof-repair fixture, so the pinned profile must prove both that Lean can accept a concrete proof and that Truth Harness can preserve a failed attempt, produce a run-next repair handoff, rerun the repaired proof, and close the exact route obligation only after an accepted proof-check record exists. The suite fails if the repair obligation stays open. This profile is deliberately separate from the default dev image so the proof lane can become strong without making every user carry a large proof environment.
+The Docker profile pins Lean 4.12. Its build tests compilation and
+diagnostic-only proof admission. The offline Compose service reports compiler
+availability and the current proof-admission capability.
 
 ## Agent Use
 
@@ -212,9 +211,9 @@ Claude, Codex, and other agents should use Lean through a narrow loop:
 1. Restate the informal claim as a proposed formal statement.
 2. Save the `.lean` artifact locally.
 3. Run `truth-harness proof check <file> --write`.
-4. If rejected, treat the result as unverified and preserve the error.
-5. If accepted, attach the proof-check record to the verifier route or claim ledger.
-6. Generate a proof visual only after the proof-check record exists.
+4. Preserve the compiler result and any errors as unverified diagnostics.
+5. Keep the formal gate open until a claim-bound independent check exists.
+6. Generate a visual from the saved compilation record when useful for review.
 
 When a rejected or errored proof-check record is scoped to a route id and obligation id, workspace review can reuse it as the next repair target. The next handoff points back to the same Lean file, declaration, route, obligation, statement, and statement hash so the agent repairs the actual failed artifact instead of starting a disconnected proof attempt. It also records a structured `proofAttempt` object and a `Lean proof repair artifact` evidence slot with the exact route/obligation attach target. Listed proof-check summaries include a bounded Lean stderr/stdout diagnostic preview when available; this is only a repair hint and does not prove or refute the scoped claim.
 

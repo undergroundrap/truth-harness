@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -20,6 +20,17 @@ afterEach(async () => {
 });
 
 describe("visual adapters", () => {
+  it("requires plotted receipt files to resolve inside the workspace", async () => {
+    const root = await tempRoot();
+    const otherRoot = await tempRoot();
+    await initLocalWorkspace(root);
+    await symlink(otherRoot, join(root, "other"), process.platform === "win32" ? "junction" : "dir");
+    await expect(writeReceiptPlotVisualArtifact({
+      rootPath: root,
+      receiptPath: "other/receipt.json",
+      renderer: "plotly"
+    })).rejects.toThrow("Path escapes workspace root");
+  });
   it("writes renderer-ready graph, plot, and canvas visual artifacts", async () => {
     const root = await tempRoot();
     await initLocalWorkspace(root, { displayName: "Visual Adapter Lab" });
