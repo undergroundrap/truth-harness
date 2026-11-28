@@ -20,9 +20,10 @@ extraction). It does not install Mathlib or replace the legacy Lean image.
 
 ```sh
 docker build --platform linux/amd64 -f tools/lean-prefix-check.Dockerfile -t truth-harness:lean-prefix-check .
-docker run --pull=never --rm --init --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 512m --tmpfs /tmp:rw,nosuid,nodev,size=128m truth-harness:lean-prefix-check --self-test
+docker run --pull=never --rm --init --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 1g --memory-swap 1g --tmpfs /tmp:rw,nosuid,nodev,size=128m truth-harness:lean-prefix-check --self-test
 ```
 
+The 1 GiB cap gives Lean's build and export processes room without using swap.
 `--self-test` checks the intended theorem and requires the comparator to reject
 a different statement with the same name and an unfinished proof of the right
 statement. Omit the flag to check just the intended theorem. Re-run the image
