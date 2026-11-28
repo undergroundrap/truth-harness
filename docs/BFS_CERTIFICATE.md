@@ -57,3 +57,26 @@ source ID, and vertex and edge counts. The `proof_checker_backed` field is
 always false. This checks the certificate conditions in JavaScript. It does
 not invoke Lean or certify the checker or the BFS implementation itself.
 This report is not admitted by the general proof gate.
+
+## Independent Producer Gate
+
+The [producer test](../tools/bfs-producer-gate.test.js) runs as part of
+`npm run check`. It starts a separate, standard-library
+[Python BFS program](../fixtures/bfs/produce_labels.py) on a fixed directed
+graph, then passes the program's stdout bytes unchanged to the Node checker.
+The test requires exact acceptance and rejects deliberately shortened,
+lengthened, and missing labels with the expected certificate failures.
+It also distinguishes an invalid producer payload from a bad distance
+claim. The Python program is a reference fixture, not an input adapter or
+a formally verified BFS implementation.
+
+Run only that test in the network-disabled Docker service:
+
+```sh
+docker compose run --build --rm -T check npm test -- tools/bfs-producer-gate.test.js
+```
+
+For another producer, check its exit status before passing the emitted
+certificate JSON to the checker. Fail the job if the checker does not exit
+0. A passing certificate check concerns the supplied graph and labels,
+not the producer's correctness on other inputs.
