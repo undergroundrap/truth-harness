@@ -58,6 +58,42 @@ always false. This checks the certificate conditions in JavaScript. It does
 not invoke Lean or certify the checker or the BFS implementation itself.
 This report is not admitted by the general proof gate.
 
+## Lean Soundness Theorem
+
+The [statement](examples/lean-bfs-check/Challenge.lean) and
+[proof](examples/lean-bfs-check/Solution.lean) formalize what the four
+conditions imply. For a directed unit-edge graph with a distinguished source,
+a natural-number label `n` certifies a walk of length `n` and rules out every
+shorter walk. A missing label rules out all walks from the source. The empty
+walk has length zero; each extension follows a directed edge and adds one.
+
+The proof follows predecessor edges to construct the claimed walk by induction
+on the label. In the other direction, induction along any walk uses `source_zero`
+and `edge_bound` to show the endpoint must have a label bounded by the walk's
+length. These arguments cover all four hypotheses, not just the producer fixture.
+
+Replay the theorem and its negative controls in the existing pinned Lean image:
+
+```sh
+docker build --platform linux/amd64 -f tools/lean-prefix-check.Dockerfile -t truth-harness:lean-bfs-soundness .
+docker run --pull=never --rm --init --network none --read-only --cap-drop ALL --security-opt no-new-privileges --pids-limit 64 --memory 1g --memory-swap 1g --tmpfs /tmp:rw,nosuid,nodev,size=128m truth-harness:lean-bfs-soundness --bfs --self-test
+```
+
+The [fixed-fixture checking setup](LEAN_PROOF_LANE.md#independent-checker-pilot)
+checks the reference statement, permits only Lean's standard axioms, and
+requires both Lean and NanoDa to accept. The two controls require rejection
+of a theorem with the same name but a different type, and of the reference
+statement without a proof. The network-disabled run emits a standalone
+`truth-harness.lean-bfs-check.v0` receipt that binds the statement, walk model,
+proof, and checker configuration by SHA-256. Image provisioning can require a
+download; no Mathlib or external Lake packages are required.
+
+This is a theorem about the mathematical certificate conditions. It does not
+establish that the JavaScript checker or JSON parser implements the model, or
+that the Python producer is correct on all inputs. Weighted edges are outside
+the theorem. The runtime certificate report remains non-kernel-backed, and the
+theorem receipt cannot close unrelated proof gates.
+
 ## Independent Producer Gate
 
 The [producer test](../tools/bfs-producer-gate.test.js) runs as part of

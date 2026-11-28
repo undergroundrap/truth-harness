@@ -24,6 +24,11 @@ COPY docs/examples/lean-prefix-check/Challenge.lean \
      docs/examples/lean-prefix-check/DifferentStatement.lean \
      docs/examples/lean-prefix-check/Unfinished.lean \
      docs/examples/lean-prefix-check/lakefile.toml /opt/prefix-proof/
+COPY docs/examples/lean-bfs-check/BfsModel.lean \
+     docs/examples/lean-bfs-check/Challenge.lean \
+     docs/examples/lean-bfs-check/Solution.lean \
+     docs/examples/lean-bfs-check/DifferentStatement.lean \
+     docs/examples/lean-bfs-check/lakefile.toml /opt/bfs-proof/
 COPY tools/lean-prefix-check.mjs /opt/prefix-proof/verify.mjs
 ENV PATH="/opt/lean/bin:${PATH}" LEAN_NUM_THREADS=2
 USER node

@@ -1,0 +1,16 @@
+name = "bfs_check"
+
+[[lean_lib]]
+name = "BfsModel"
+
+[[lean_lib]]
+name = "Challenge"
+
+[[lean_lib]]
+name = "Solution"
+
+[[lean_lib]]
+name = "DifferentStatement"
+
+[[lean_lib]]
+name = "Unfinished"

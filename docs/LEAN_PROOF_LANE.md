@@ -54,9 +54,10 @@ Use the [local proof dependency catalog](PROOF_DEPENDENCIES.md) to find a
 candidate by theorem name and resolve which saved artifacts to replay first.
 Lookup is read-only and does not promote evidence to `proved`.
 
-The [BFS distance certificate checker](BFS_CERTIFICATE.md) exercises a
-concrete graph-and-label certificate. Its executable checks are separate
-from formal proof admission.
+The same image supports the [BFS certificate soundness pilot](BFS_CERTIFICATE.md#lean-soundness-theorem)
+with `--bfs` (use `--bfs --self-test` for the negative controls). Its theorem
+is separate from the JavaScript certificate checker. It does not change the
+prefix proof's invocation or receipt format.
 
 ## Why Lean Belongs Here
 

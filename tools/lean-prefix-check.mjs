@@ -5,13 +5,35 @@ import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const schema = "truth-harness.lean-prefix-check.v0";
-const theorem = "prefix_range_sum";
 const leanVersion = "4.36.0";
-const fixtureDirectory = "/opt/prefix-proof";
 const permittedAxioms = ["propext", "Quot.sound", "Classical.choice"];
+const prefixPilot = {
+  schema: "truth-harness.lean-prefix-check.v0",
+  theorem: "prefix_range_sum",
+  fixtureDirectory: "/opt/prefix-proof",
+  scope: "bundled-lean-list-int-range-sum",
+  modelFiles: [],
+  unfinishedSource: "Unfinished",
+  limitations: [
+    "Only the bundled formal statement about Lean integer lists was checked.",
+    "No implementation equivalence, machine overflow, or performance guarantee."
+  ]
+};
+const bfsPilot = {
+  schema: "truth-harness.lean-bfs-check.v0",
+  theorem: "bfs_certificate_sound",
+  fixtureDirectory: "/opt/bfs-proof",
+  scope: "bundled-lean-directed-unit-edge-distance-certificate",
+  modelFiles: ["BfsModel.lean"],
+  unfinishedSource: "Challenge",
+  limitations: [
+    "The four certificate conditions imply the stated conclusion for the directed unit-edge walk model.",
+    "No proof of the JavaScript checker, JSON parser, Python producer, or weighted distances."
+  ]
+};
 const sha256 = file => createHash("sha256").update(readFileSync(file)).digest("hex");
-const report = value => process.stdout.write(JSON.stringify({ schema_version: schema, ...value }, null, 2) + "\n");
+const report = (pilot, value) =>
+  process.stdout.write(JSON.stringify({ schema_version: pilot.schema, ...value }, null, 2) + "\n");
 
 function run(cwd, program, args) {
   const child = spawnSync(`/opt/lean/bin/${program}`, args, {
@@ -27,12 +49,12 @@ function requireSuccess({ status, diagnostic }) {
   assert.equal(status, 0, diagnostic || "Lean command did not complete successfully");
 }
 
-function compare(work, solution) {
+function compare(pilot, work, solution) {
   const configPath = join(work, "comparator.json");
   writeFileSync(configPath, JSON.stringify({
     challenge_module: "Challenge",
     solution_module: solution,
-    theorem_names: [theorem],
+    theorem_names: [pilot.theorem],
     permitted_axioms: permittedAxioms,
     external_kernels: { nanoda: ["/opt/lean/bin/nanoda_bin"] }
   }) + "\n", { flag: "wx" });
@@ -47,21 +69,25 @@ function compare(work, solution) {
       challenge_sha256: sha256(join(work, "Challenge.lean")),
       solution_sha256: sha256(join(work, `${solution}.lean`)),
       lake_config_sha256: sha256(join(work, "lakefile.toml")),
-      comparator_config_sha256: sha256(configPath)
+      comparator_config_sha256: sha256(configPath),
+      ...(pilot.modelFiles.length ? {
+        model_file_sha256: Object.fromEntries(pilot.modelFiles.map(file => [file, sha256(join(work, file))]))
+      } : {})
     }
   };
 }
 
-function check(solution) {
-  const work = mkdtempSync(join(tmpdir(), "truth-harness-lean-prefix-"));
+function check(pilot, solution, source = solution) {
+  const work = mkdtempSync(join(tmpdir(), "truth-harness-lean-check-"));
   try {
-    for (const file of ["lakefile.toml", "Challenge.lean", `${solution}.lean`]) {
-      copyFileSync(join(fixtureDirectory, file), join(work, file));
+    for (const file of ["lakefile.toml", "Challenge.lean", ...pilot.modelFiles]) {
+      copyFileSync(join(pilot.fixtureDirectory, file), join(work, file));
     }
+    copyFileSync(join(pilot.fixtureDirectory, `${source}.lean`), join(work, `${solution}.lean`));
     const version = run(work, "lean", ["--version"]);
     requireSuccess(version);
     assert.match(version.diagnostic, /^Lean \(version 4\.36\.0,/);
-    return compare(work, solution);
+    return compare(pilot, work, solution);
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
@@ -72,32 +98,35 @@ function requireRejection(verdict, expectedError) {
   assert.ok(verdict.stderr.split(/\r?\n/).includes(expectedError), verdict.diagnostic);
 }
 
+const args = process.argv.slice(2);
+const pilot = args[0] === "--bfs" ? bfsPilot : prefixPilot;
+if (pilot === bfsPilot) args.shift();
+
 try {
-  const args = process.argv.slice(2);
   assert.ok(args.length === 0 || (args.length === 1 && args[0] === "--self-test"),
-    "Expected no arguments or --self-test");
+    "Expected [--bfs] [--self-test]");
   assert.ok(process.platform === "linux" && process.getuid() !== 0,
     "Use the non-root, offline Docker pilot");
 
-  const positive = check("Solution");
+  const positive = check(pilot, "Solution");
   requireSuccess(positive);
   for (const marker of ["Lean default kernel accepts the solution", "nanoda kernel accepts the solution"]) {
     assert.ok(positive.stdout.split(/\r?\n/).includes(marker), `Missing checker verdict: ${marker}`);
   }
   const tests = {};
   if (args.length) {
-    requireRejection(check("DifferentStatement"),
-      `error: Challenge and solution theorem statement do not match: '${theorem}'`);
+    requireRejection(check(pilot, "DifferentStatement"),
+      `error: Challenge and solution theorem statement do not match: '${pilot.theorem}'`);
     tests.different_statement = { status: "rejected", reason: "statement_mismatch" };
-    requireRejection(check("Unfinished"), "error: Illegal axiom detected: 'sorryAx'");
+    requireRejection(check(pilot, "Unfinished", pilot.unfinishedSource), "error: Illegal axiom detected: 'sorryAx'");
     tests.unfinished_proof = { status: "rejected", reason: "forbidden_axiom" };
   }
-  report({
+  report(pilot, {
     status: "accepted",
     trust: "proved",
     proof_checker_backed: true,
-    theorem,
-    evidence_scope: "bundled-lean-list-int-range-sum",
+    theorem: pilot.theorem,
+    evidence_scope: pilot.scope,
     lean_version: leanVersion,
     checker: "lake comparator",
     kernels: ["lean", "nanoda"],
@@ -105,13 +134,12 @@ try {
     ...positive.hashes,
     ...(args.length ? { negative_controls: tests } : {}),
     limitations: [
-      "Only the bundled formal statement about Lean integer lists was checked.",
-      "No implementation equivalence, machine overflow, or performance guarantee.",
+      ...pilot.limitations,
       "The Docker launch settings are required but are not attested by this receipt.",
       "Standalone pilot receipt; not admissible to the general workspace proof gate."
     ]
   });
 } catch (error) {
-  report({ status: "unverified", trust: "unverified", proof_checker_backed: false, error: error.message });
+  report(pilot, { status: "unverified", trust: "unverified", proof_checker_backed: false, error: error.message });
   process.exitCode = 2;
 }
