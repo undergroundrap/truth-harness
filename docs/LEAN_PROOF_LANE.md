@@ -50,6 +50,10 @@ The receipt covers this formal theorem only. It is not a
 adapter, and cannot close unrelated gates. Generic compilation stays
 `unverified`.
 
+Use the [local proof dependency catalog](PROOF_DEPENDENCIES.md) to find a
+candidate by theorem name and resolve which saved artifacts to replay first.
+Lookup is read-only and does not promote evidence to `proved`.
+
 ## Why Lean Belongs Here
 
 Truth Harness should use mature engines instead of pretending one AI model can be the engine. Lean is the right kind of dependency because it supplies a hard boundary that chat models, CAS output, notebooks, and simulations do not provide: a small-kernel proof checker with replayable source artifacts.
