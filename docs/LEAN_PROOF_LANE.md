@@ -54,6 +54,10 @@ Use the [local proof dependency catalog](PROOF_DEPENDENCIES.md) to find a
 candidate by theorem name and resolve which saved artifacts to replay first.
 Lookup is read-only and does not promote evidence to `proved`.
 
+The [BFS distance certificate checker](BFS_CERTIFICATE.md) exercises a
+concrete graph-and-label certificate. Its executable checks are separate
+from formal proof admission.
+
 ## Why Lean Belongs Here
 
 Truth Harness should use mature engines instead of pretending one AI model can be the engine. Lean is the right kind of dependency because it supplies a hard boundary that chat models, CAS output, notebooks, and simulations do not provide: a small-kernel proof checker with replayable source artifacts.

@@ -3,6 +3,7 @@ import { lstat, open, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { parseUniqueJson } from "./unique-json.mjs";
 
 const catalogVersion = "truth-harness.proof-dependencies.v0";
 const reportVersion = "truth-harness.proof-dependency-lookup.v0";
@@ -36,21 +37,7 @@ const report = fields => ({ schema_version: reportVersion, ...fields });
 
 function parseCatalog(raw) {
   const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(raw);
-  const value = JSON.parse(text);
-  // JSON.parse validates the grammar, but discards repeated object members.
-  // Inspect the original member tokens and compare the decoded key strings.
-  const keys = [];
-  for (const [, literal, colon, brace] of text.matchAll(/("(?:\\.|[^"\\])*")(\s*:)?|([{}])/gu)) {
-    if (brace === "{") keys.push(new Set());
-    else if (brace === "}") keys.pop();
-    else if (colon) {
-      const key = JSON.parse(literal);
-      const object = keys.at(-1);
-      if (object.has(key)) throw new Error(`Duplicate JSON member: ${key}`);
-      object.add(key);
-    }
-  }
-  return catalogSchema.parse(value);
+  return catalogSchema.parse(parseUniqueJson(text));
 }
 
 async function readBounded(root, name) {
